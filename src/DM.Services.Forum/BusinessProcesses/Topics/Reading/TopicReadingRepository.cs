@@ -24,14 +24,14 @@ internal class TopicReadingRepository(
     /// <inheritdoc />
     public Task<int> Count(Guid forumId) => dbContext.ForumTopics
         .TagWith("DM.Forum.TopicsCount")
-        .CountAsync(t => !t.IsRemoved && t.ForumId == forumId && !t.Attached);
+        .CountAsync(t => !t.IsRemoved && t.ForumId == forumId && !t.IsAttached);
 
     /// <inheritdoc />
     public async Task<IEnumerable<Topic>> Get(Guid forumId, PagingData pagingData, bool attached)
     {
         var query = dbContext.ForumTopics
             .TagWith("DM.Forum.TopicsList")
-            .Where(t => !t.IsRemoved && t.ForumId == forumId && t.Attached == attached)
+            .Where(t => !t.IsRemoved && t.ForumId == forumId && t.IsAttached == attached)
             .ProjectTo<Topic>(mapper.ConfigurationProvider);
 
         IOrderedQueryable<Topic> orderedQuery;
@@ -41,7 +41,7 @@ internal class TopicReadingRepository(
         }
         else if (forumId == ErrorsForumId)
         {
-            orderedQuery = query.OrderBy(q => q.Closed).ThenByDescending(q => q.LastActivityDate);
+            orderedQuery = query.OrderBy(q => q.IsClosed).ThenByDescending(q => q.LastActivityDate);
         }
         else
         {

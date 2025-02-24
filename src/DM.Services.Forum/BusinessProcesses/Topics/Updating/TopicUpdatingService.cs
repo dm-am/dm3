@@ -63,8 +63,8 @@ internal class TopicUpdatingService : ITopicUpdatingService
         if (intentionManager.IsAllowed(ForumIntention.AdministrateTopics, oldTopic.Forum))
         {
             changes
-                .MaybeField(t => t.Closed, updateTopic.Closed)
-                .MaybeField(t => t.Attached, updateTopic.Attached);
+                .MaybeField(t => t.IsClosed, updateTopic.IsClosed)
+                .MaybeField(t => t.IsAttached, updateTopic.IsAttached);
 
             if (updateTopic.ForumTitle != default &&
                 oldTopic.Forum.Title != updateTopic.ForumTitle)

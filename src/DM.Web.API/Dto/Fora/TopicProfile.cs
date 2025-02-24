@@ -13,7 +13,7 @@ internal class TopicProfile : Profile
     public TopicProfile()
     {
         CreateMap<DM.Services.Forum.Dto.Output.Topic, Topic>()
-            .ForMember(d => d.Created, s => s.MapFrom(t => t.CreateDate))
+            .ForMember(d => d.CreatedUtc, s => s.MapFrom(t => t.CreateDate))
             .ForMember(d => d.CommentsCount, s => s.MapFrom(t => t.TotalCommentsCount))
             .ForMember(d => d.Description, s => s.MapFrom(t => t.Text));
         CreateMap<LastComment, LastTopicComment>()

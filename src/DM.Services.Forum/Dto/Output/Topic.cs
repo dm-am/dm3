@@ -56,12 +56,12 @@ public class Topic : ILikable
     /// <summary>
     /// Attached
     /// </summary>
-    public bool Attached { get; set; }
+    public bool IsAttached { get; set; }
 
     /// <summary>
     /// Closed
     /// </summary>
-    public bool Closed { get; set; }
+    public bool IsClosed { get; set; }
 
     /// <summary>
     /// Last commentary creation moment or (if none) topic creation moment

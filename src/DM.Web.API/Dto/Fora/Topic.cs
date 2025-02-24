@@ -23,7 +23,12 @@ public class Topic
     /// <summary>
     /// Creation moment
     /// </summary>
-    public DateTimeOffset Created { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    /// <summary>
+    /// Edition moment
+    /// </summary>
+    public DateTimeOffset EditedUtc { get; set; }
 
     /// <summary>
     /// Title
@@ -38,12 +43,12 @@ public class Topic
     /// <summary>
     /// Attached
     /// </summary>
-    public bool? Attached { get; set; }
+    public bool? IsAttached { get; set; }
 
     /// <summary>
     /// Closed
     /// </summary>
-    public bool? Closed { get; set; }
+    public bool? IsClosed { get; set; }
 
     /// <summary>
     /// Last commentary

@@ -48,12 +48,12 @@ public class ForumTopic : IRemovable
     /// <summary>
     /// If true, the topic will always appear on top of the forum topics list
     /// </summary>
-    public bool Attached { get; set; }
+    public bool IsAttached { get; set; }
 
     /// <summary>
     /// Closed topics are available in read-only mode
     /// </summary>
-    public bool Closed { get; set; }
+    public bool IsClosed { get; set; }
 
     /// <summary>
     /// Last commentary identifier
