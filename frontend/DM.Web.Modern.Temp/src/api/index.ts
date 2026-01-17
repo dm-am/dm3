@@ -22,7 +22,7 @@ const defaultHeaders: { [key: string]: string } = {
   [renderKey]: "html",
 };
 
-const apiHost = import.meta.env.VITE_API_HOST || "http://localhost:5051"; // Config
+const apiHost = import.meta.env.VITE_API_HOST ?? "http://localhost:5051"; // Config - use ?? to allow empty string
 
 const configuration: AxiosRequestConfig = {
   baseURL: `${apiHost}/v1`,

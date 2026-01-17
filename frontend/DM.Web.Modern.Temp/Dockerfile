@@ -12,7 +12,8 @@ RUN npm ci
 # Copy source
 COPY . .
 
-# Build
+# Build with empty API host (will use relative URLs through nginx)
+ENV VITE_API_HOST=""
 RUN npm run build
 
 # Production stage
