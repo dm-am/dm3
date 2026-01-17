@@ -15,13 +15,13 @@ namespace DM.Web.API.Controllers.v1.Messaging;
 [ApiExplorerSettings(GroupName = "Messaging")]
 public class ConversationController : ControllerBase
 {
-    private readonly IMessagingApiService apiService;
+    private readonly IMessagingApiService _apiService;
 
     /// <inheritdoc />
     public ConversationController(
         IMessagingApiService apiService)
     {
-        this.apiService = apiService;
+        _apiService = apiService;
     }
 
     /// <summary>
@@ -34,24 +34,21 @@ public class ConversationController : ControllerBase
     [ProducesResponseType(typeof(ListEnvelope<Conversation>), 200)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     public async Task<IActionResult> GetConversations([FromQuery] PagingQuery q) =>
-        Ok(await apiService.GetConversations(q));
+        Ok(await _apiService.GetConversations(q));
 
     /// <summary>
-    /// Get conversation with user
+    /// Get 1-on-1 conversation of current user with another user
     /// </summary>
-    /// <response code="302"></response>
+    /// <response code="200"></response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="410">User not found</response>
-    [HttpGet("conversations/visavi/{login}", Name = nameof(GetVisaviConversation))]
+    [HttpGet("conversations/direct/{login}", Name = nameof(GetDirectConversation))]
     [AuthenticationRequired]
-    [ProducesResponseType(302)]
+    [ProducesResponseType(typeof(Envelope<Conversation>), 200)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> GetVisaviConversation(string login)
-    {
-        var conversation = await apiService.GetConversation(login);
-        return RedirectToRoute(nameof(GetConversation), new {id = conversation.Resource.Id});
-    }
+    public async Task<IActionResult> GetDirectConversation(string login) =>
+        Ok(await _apiService.GetConversation(login));
 
     /// <summary>
     /// Get conversation of current user (by id)
@@ -65,18 +62,22 @@ public class ConversationController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 410)]
     public async Task<IActionResult> GetConversation(Guid id) =>
-        Ok(await apiService.GetConversation(id));
+        Ok(await _apiService.GetConversation(id));
 
     /// <summary>
     /// Mark all messages in conversation as read
     /// </summary>
     /// <response code="204"></response>
+    /// <response code="401">User must be authenticated</response>
     /// <response code="410">Dialogue not found</response>
-    [HttpDelete("conversations/{id}/messages/unread")]
+    [HttpDelete("conversations/{id}/messages/unread", Name = nameof(MarkAsRead))]
     [AuthenticationRequired]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(typeof(GeneralError), 401)]
+    [ProducesResponseType(typeof(GeneralError), 410)]
     public async Task<IActionResult> MarkAsRead(Guid id)
     {
-        await apiService.MarkAsRead(id);
+        await _apiService.MarkAsRead(id);
         return NoContent();
     }
 }

@@ -9,15 +9,15 @@ defineProps<{ user: User }>();
     class="rating"
     :to="{ name: 'profile', params: { login: user.login } }"
   >
-    <template v-if="user.rating.enabled">
+    <template v-if="user.rating.isEnabled">
       <span
         :class="{
           quality: true,
-          positive: user.rating.quality > 0,
-          negative: user.rating.quality < 0,
+          positive: user.rating.totalRating > 0,
+          negative: user.rating.totalRating < 0,
         }"
-        >{{ user.rating.quality }}</span
-      >/{{ user.rating.quantity }}
+        >{{ user.rating.totalRating }}</span
+      >/{{ user.rating.totalPosts }}
     </template>
     <template v-else>скрыт</template>
   </router-link>

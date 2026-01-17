@@ -35,4 +35,13 @@ internal class PollVotingService : IPollVotingService
 
         return await repository.Vote(pollId, optionId, identityProvider.Current.User.UserId);
     }
+
+    /// <inheritdoc />
+    public async Task<Poll> Unvote(Guid pollId)
+    {
+        var poll = await readingService.Get(pollId);
+        intentionManager.ThrowIfForbidden(PollIntention.Unvote, poll);
+
+        return await repository.Unvote(pollId, identityProvider.Current.User.UserId);
+    }
 }

@@ -33,9 +33,9 @@
       <dropdown v-model="user.settings.colorSchema" :options="colorSchemaOptions" />
     </div>
 
-    <div v-if="userIsNanny" class="settings-block">
-      Приветственное письмо от няни
-      <text-area v-model="user.settings.nannyGreetingsMessage" />
+    <div v-if="userIsMentor" class="settings-block">
+      Приветственное письмо от ментора
+      <text-area v-model="user.settings.mentorGreetingsMessage" />
     </div>
 
     <action-button type="submit" :loading="saving" :disabled="unchanged">
@@ -51,7 +51,7 @@ import { Action, Getter } from 'vuex-class';
 import { cloneDeep, isEqual } from 'lodash';
 
 import { User, ColorSchema, UserSettings } from '@/api/models/community';
-import { userIsNanny } from '@/api/models/community/helpers';
+import { userIsMentor } from '@/api/models/community/helpers';
 
 const colorSchemaOptions = [{
   value: ColorSchema.Modern,
@@ -120,8 +120,8 @@ export default class ProfileSettings extends Vue {
       isEqual(this.savedSettings, this.user!.settings);
   }
 
-  private get userIsNanny(): boolean {
-    return userIsNanny(this.user);
+  private get userIsMentor(): boolean {
+    return userIsMentor(this.user);
   }
 
   private async save(): Promise<void> {

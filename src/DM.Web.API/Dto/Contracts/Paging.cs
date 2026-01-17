@@ -18,6 +18,15 @@ public class Paging
     }
 
     /// <summary>
+    /// Constructor for cursor-based pagination
+    /// </summary>
+    public Paging(bool hasMoreBefore, bool hasMoreAfter)
+    {
+        HasMoreBefore = hasMoreBefore;
+        HasMoreAfter = hasMoreAfter;
+    }
+
+    /// <summary>
     /// Total pages count
     /// </summary>
     public int Pages { get; }
@@ -41,4 +50,14 @@ public class Paging
     /// Total entity count
     /// </summary>
     public int Total { get; }
+
+    /// <summary>
+    /// Whether there are more messages before (older) the current set
+    /// </summary>
+    public bool? HasMoreBefore { get; }
+
+    /// <summary>
+    /// Whether there are more messages after (newer) the current set
+    /// </summary>
+    public bool? HasMoreAfter { get; }
 }

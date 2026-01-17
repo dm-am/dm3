@@ -53,7 +53,7 @@ public class Game : IRemovable
     /// <summary>
     /// Premoderation assistant identifier
     /// </summary>
-    public Guid? NannyId { get; set; }
+    public Guid? MentorId { get; set; }
 
     /// <summary>
     /// Character attribute schema identifier
@@ -143,8 +143,8 @@ public class Game : IRemovable
     /// <summary>
     /// Premoderation assistant
     /// </summary>
-    [ForeignKey(nameof(NannyId))]
-    public User Nanny { get; set; }
+    [ForeignKey(nameof(MentorId))]
+    public User Mentor { get; set; }
 
     /// <summary>
     /// Blacklist links

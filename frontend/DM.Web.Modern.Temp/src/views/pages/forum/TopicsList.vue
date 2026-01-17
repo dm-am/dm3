@@ -3,15 +3,13 @@ import { IconType } from "@/components/icons/iconType";
 import ThePaging from "@/components/ThePaging.vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
-import { useForumStore } from "@/stores";
-import SecondaryText from "@/components/layout/SecondaryText.vue";
-import TheIcon from "@/components/icons/TheIcon.vue";
+import { useBoardsStore } from "@/stores";
 import UserLink from "@/components/community/UserLink.vue";
 import HumanTimespan from "@/components/dates/HumanTimespan.vue";
 import HumanDate from "@/components/dates/HumanDate.vue";
 
 const route = useRoute();
-const { topics } = storeToRefs(useForumStore());
+const { topics } = storeToRefs(useBoardsStore());
 </script>
 
 <template>
@@ -21,94 +19,136 @@ const { topics } = storeToRefs(useForumStore());
     :to="{ name: 'forum', params: route.params }"
   />
 
-  <div class="topics-list_header">
-    <div>Тема</div>
-    <div>Дата</div>
-    <div>Автор</div>
-    <div>
-      <the-icon :font="IconType.CommentsNoUnread" />
+  <div class="topics-table">
+    <div class="topics-header">
+      <div class="col-title">Тема</div>
+      <div class="col-date">Дата</div>
+      <div class="col-author">Автор</div>
+      <div class="col-comments">
+        <the-icon :font="IconType.CommentsNoUnread" />
+      </div>
+      <div class="col-last">Последнее сообщение</div>
     </div>
-    <div>Последнее сообщение</div>
-  </div>
 
-  <the-loader v-if="!topics" :big="true" />
-  <secondary-text v-else-if="!topics.resources.length" class="topics-list_none"
-    >Еще не создано ни одной темы
-  </secondary-text>
-  <div
-    v-for="topic in topics.resources"
-    v-else
-    :key="topic.id"
-    :class="{
-      'topics-list_row': true,
-      closed: topic.closed,
-      attached: topic.attached,
-    }"
-  >
-    <router-link
-      :to="{
-        name: 'topic',
-        params: {
-          id: topic.id,
-          n: topic.commentsCount - topic.unreadCommentsCount,
-        },
-      }"
-      class="topics-list_row-title"
-    >
-      <the-icon v-if="topic.attached" :font="IconType.Attached" />
-      <the-icon v-if="topic.closed" :font="IconType.Closed" />
-      {{ topic.title }}
-    </router-link>
-    <div><human-date :date="topic.created!" format="DD.MM.YYYY" /></div>
-    <div><user-link :user="topic.author!" /></div>
-    <div>
-      {{ topic.commentsCount }}
-      <span class="topics-list_row-unread" v-if="topic.unreadCommentsCount"
-        >(+{{ topic.unreadCommentsCount }})</span
+    <the-loader v-if="!topics" :big="true" />
+    <secondary-text v-else-if="!topics.resources.length" class="topics-empty">
+      Еще не создано ни одной темы
+    </secondary-text>
+    <template v-else>
+      <div
+        v-for="topic in topics.resources"
+        :key="topic.id"
+        :class="['topics-row', { closed: topic.isClosed, attached: topic.isAttached }]"
       >
-    </div>
-    <div>
-      <template v-if="topic.lastComment">
-        <user-link :user="topic.lastComment.author" />,
-        <router-link
-          :to="{
-            name: 'topic',
-            params: { id: topic.id, n: topic.commentsCount },
-          }"
-        >
-          <human-timespan :date="topic.lastComment.created" />
-        </router-link>
-      </template>
-    </div>
+        <div class="col-title">
+          <router-link
+            :to="{
+              name: 'topic',
+              params: {
+                id: topic.id,
+                n: topic.commentsCount - topic.unreadCommentsCount,
+              },
+            }"
+          >
+            <the-icon v-if="topic.isAttached" :font="IconType.Attached" />
+            <the-icon v-if="topic.isClosed" :font="IconType.Closed" />
+            {{ topic.title }}
+          </router-link>
+        </div>
+        <div class="col-date">
+          <human-date :date="topic.createdUtc!" format="DD.MM.YYYY HH:mm" />
+        </div>
+        <div class="col-author">
+          <user-link :user="topic.author!" />
+        </div>
+        <div class="col-comments">
+          {{ topic.commentsCount }}
+          <span v-if="topic.unreadCommentsCount" class="unread">
+            (+{{ topic.unreadCommentsCount }})
+          </span>
+        </div>
+        <div class="col-last">
+          <template v-if="topic.lastComment">
+            <user-link :user="topic.lastComment.author" />,
+            <router-link
+              :to="{
+                name: 'topic',
+                params: { id: topic.id, n: topic.commentsCount },
+              }"
+            >
+              <human-timespan :date="topic.lastComment.createdUtc" />
+            </router-link>
+          </template>
+          <span v-else class="no-comments">—</span>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Grid"
-$grid-template: [title] 40% [date] 12% [author] 14% [count] auto [lastComment] 26%
+@import "@/assets/styles/Themes"
 
-.topics-list_header
-  +grid-head($grid-template)
+.topics-table
+  width: 100%
 
-.topics-list_row
-  +grid($grid-template)
+.topics-header,
+.topics-row
+  display: grid
+  grid-template-columns: 1fr 130px 140px 80px 200px
+  align-items: center
+
+.topics-header
+  padding: $small $medium
+  font-weight: normal
+  +theme(background-color, $panel-background)
+  +theme(border-bottom, $border, 1px solid)
+  +theme(color, $text)
+
+  .col-date,
+  .col-author,
+  .col-comments,
+  .col-last
+    text-align: center
+
+.topics-row
+  padding: $small $medium
+  +theme(border-bottom, $border, 1px solid)
+
   &:hover
     +theme(background-color, $panel-background-hover)
+
   &.closed
     opacity: 0.7
     &.attached
-      opacity: initial
+      opacity: 1
 
-.topics-list_row-title
-  display: block
-  position: relative
-  & .attached
+  &.attached .col-title a
     font-weight: bold
 
-.topics-list_row-unread
-  font-weight: bold
+  .col-title a
+    +theme(color, $active-text)
+    &:hover
+      +theme(color, $active-text-hover)
 
-.topics-list_none
-  margin: $medium 0
+  .col-date,
+  .col-comments
+    text-align: center
+
+  .col-author
+    text-align: center
+
+  .col-last
+    text-align: right
+    +theme(color, $secondary-text)
+
+.unread
+  +theme(color, $accent-text)
+
+.no-comments
+  +theme(color, $muted-text)
+
+.topics-empty
+  padding: $big
   text-align: center
 </style>

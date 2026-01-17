@@ -60,4 +60,11 @@ internal class PollApiService : IPollApiService
         var poll = await votingService.Vote(pollId, optionId);
         return new Envelope<Poll>(mapper.Map<Poll>(poll));
     }
+
+    /// <inheritdoc />
+    public async Task<Envelope<Poll>> Unvote(Guid pollId)
+    {
+        var poll = await votingService.Unvote(pollId);
+        return new Envelope<Poll>(mapper.Map<Poll>(poll));
+    }
 }

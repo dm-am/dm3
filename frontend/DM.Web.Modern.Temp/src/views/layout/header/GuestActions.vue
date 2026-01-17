@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { IconType } from "@/components/icons/iconType";
 import { useModal } from "vue-final-modal";
 import LoginForm from "@/views/account/LoginForm.vue";
 import RegistrationForm from "@/views/account/RegistrationForm.vue";
 import RegistrationSuccess from "@/views/account/RegistrationSuccess.vue";
+import PasswordReset from "@/views/account/PasswordReset.vue";
 
 const { open: openLogin, close: closeLogin } = useModal({
   component: LoginForm,
   attrs: {
     onSuccess: () => closeLogin(),
+    onCancel: () => closeLogin(),
   },
 });
 const { open: openRegistrar, close: closeRegistrar } = useModal({
@@ -18,6 +19,7 @@ const { open: openRegistrar, close: closeRegistrar } = useModal({
       closeRegistrar();
       openRegistrarSuccess();
     },
+    onCancel: () => closeRegistrar(),
   },
 });
 const { open: openRegistrarSuccess, close: closeRegistrarSuccess } = useModal({
@@ -26,13 +28,22 @@ const { open: openRegistrarSuccess, close: closeRegistrarSuccess } = useModal({
     onConfirm: () => closeRegistrarSuccess(),
   },
 });
+const { open: openPasswordReset, close: closePasswordReset } = useModal({
+  component: PasswordReset,
+  attrs: {
+    onSuccess: () => closePasswordReset(),
+    onCancel: () => closePasswordReset(),
+  },
+});
 </script>
 
 <template>
-  <div class="user-actions">
-    <a @click="openLogin"><the-icon :font="IconType.User" /> Вход</a>
+  <div class="guest-actions">
+    <a @click="openLogin">Вход</a>
     |
     <a @click="openRegistrar">Регистрация</a>
+    |
+    <a @click="openPasswordReset">Восстановить пароль</a>
   </div>
 </template>
 

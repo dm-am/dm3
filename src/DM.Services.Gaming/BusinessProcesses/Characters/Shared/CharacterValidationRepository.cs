@@ -16,8 +16,8 @@ namespace DM.Services.Gaming.BusinessProcesses.Characters.Shared;
 /// <inheritdoc />
 internal class CharacterValidationRepository : MongoCollectionRepository<DbSchema>, ICharacterValidationRepository
 {
-    private readonly IMapper mapper;
-    private readonly DmDbContext dbContext;
+    private readonly IMapper _mapper;
+    private readonly DmDbContext _dbContext;
 
     /// <inheritdoc />
     public CharacterValidationRepository(
@@ -25,13 +25,13 @@ internal class CharacterValidationRepository : MongoCollectionRepository<DbSchem
         DmDbContext dbContext,
         DmMongoClient client) : base(client)
     {
-        this.mapper = mapper;
-        this.dbContext = dbContext;
+        _mapper = mapper;
+        _dbContext = dbContext;
     }
 
     /// <inheritdoc />
     public Task<bool> GameRequiresAttributes(CreateCharacter createCharacter, CancellationToken cancellationToken) =>
-        dbContext.Games
+        _dbContext.Games
             .Where(g => g.GameId == createCharacter.GameId)
             .Select(g => g.AttributeSchemaId.HasValue)
             .FirstAsync(cancellationToken);
@@ -39,20 +39,20 @@ internal class CharacterValidationRepository : MongoCollectionRepository<DbSchem
     /// <inheritdoc />
     public async Task<AttributeSchema> GetGameSchema(Guid gameId)
     {
-        var schemaId = await dbContext.Games
+        var schemaId = await _dbContext.Games
             .Where(g => g.GameId == gameId)
             .Select(g => g.AttributeSchemaId)
             .FirstAsync();
         var schema = await Collection
             .Find(Filter.Eq(s => s.Id, schemaId.Value))
             .FirstAsync();
-        return mapper.Map<AttributeSchema>(schema);
+        return _mapper.Map<AttributeSchema>(schema);
     }
 
     /// <inheritdoc />
     public async Task<AttributeSchema> GetCharacterSchema(Guid characterId)
     {
-        var gameId = await dbContext.Characters
+        var gameId = await _dbContext.Characters
             .Where(c => c.CharacterId == characterId)
             .Select(c => c.GameId)
             .FirstAsync();

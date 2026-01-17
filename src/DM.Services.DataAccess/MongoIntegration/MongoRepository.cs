@@ -7,12 +7,12 @@ namespace DM.Services.DataAccess.MongoIntegration;
 /// </summary>
 public abstract class MongoRepository
 {
-    private readonly DmMongoClient client;
+    private readonly DmMongoClient _client;
 
     /// <inheritdoc />
     protected MongoRepository(DmMongoClient client)
     {
-        this.client = client;
+        _client = client;
     }
 
     /// <summary>
@@ -49,5 +49,5 @@ public abstract class MongoRepository
     /// </summary>
     /// <typeparam name="TEntity"></typeparam>
     /// <returns></returns>
-    protected IMongoCollection<TEntity> Collection<TEntity>() => client.GetCollection<TEntity>();
+    protected IMongoCollection<TEntity> Collection<TEntity>() => _client.GetCollection<TEntity>();
 }

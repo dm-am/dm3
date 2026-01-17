@@ -19,8 +19,8 @@ namespace DM.Services.Authentication.Repositories;
 /// <inheritdoc cref="IAuthenticationRepository" />
 internal class AuthenticationRepository : MongoRepository, IAuthenticationRepository
 {
-    private readonly DmDbContext dbContext;
-    private readonly IMapper mapper;
+    private readonly DmDbContext _dbContext;
+    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public AuthenticationRepository(
@@ -28,16 +28,16 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
         DmMongoClient mongoClient,
         IMapper mapper) : base(mongoClient)
     {
-        this.dbContext = dbContext;
-        this.mapper = mapper;
+        _dbContext = dbContext;
+        _mapper = mapper;
     }
 
     /// <inheritdoc />
     public async Task<(bool Success, AuthenticatedUser User)> TryFindUser(string login)
     {
-        var result = await dbContext.Users
+        var result = await _dbContext.Users
             .Where(u => u.Login.ToLower() == login.ToLower())
-            .ProjectTo<AuthenticatedUser>(mapper.ConfigurationProvider)
+            .ProjectTo<AuthenticatedUser>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
         return (result != null, result);
     }
@@ -45,9 +45,9 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
     /// <inheritdoc />
     public Task<AuthenticatedUser> FindUser(Guid userId)
     {
-        return dbContext.Users
+        return _dbContext.Users
             .Where(u => u.UserId == userId)
-            .ProjectTo<AuthenticatedUser>(mapper.ConfigurationProvider)
+            .ProjectTo<AuthenticatedUser>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
     }
 
@@ -61,7 +61,7 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
         var matchingSession = userSessions?.Sessions.FirstOrDefault(s => s.Id == sessionId);
         return matchingSession == null
             ? null
-            : mapper.Map<Session>(matchingSession);
+            : _mapper.Map<Session>(matchingSession);
     }
 
     /// <inheritdoc />
@@ -83,7 +83,7 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
                         TopicsPerPage = s.Paging.TopicsPerPage,
                         EntitiesPerPage = s.Paging.EntitiesPerPage
                     },
-                    NannyGreetingsMessage = s.NannyGreetingsMessage
+                    MentorGreetingsMessage = s.MentorGreetingsMessage
                 }))
             .FirstOrDefaultAsync();
         return settings ?? UserSettings.Default;
@@ -113,7 +113,7 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
             Filter<UserSessions>().Eq(u => u.Id, userId),
             Update<UserSessions>().Push(s => s.Sessions, session),
             new FindOneAndUpdateOptions<UserSessions> {IsUpsert = true});
-        return mapper.Map<Session>(session);
+        return _mapper.Map<Session>(session);
     }
 
     /// <inheritdoc />
@@ -128,7 +128,7 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
     /// <inheritdoc />
     public Task UpdateActivity(IUpdateBuilder<User> userUpdate)
     {
-        userUpdate.AttachTo(dbContext);
-        return dbContext.SaveChangesAsync();
+        userUpdate.AttachTo(_dbContext);
+        return _dbContext.SaveChangesAsync();
     }
 }

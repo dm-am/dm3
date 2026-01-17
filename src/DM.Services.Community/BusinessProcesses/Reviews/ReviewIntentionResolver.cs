@@ -13,8 +13,8 @@ internal class ReviewIntentionResolver :
     /// <inheritdoc />
     public bool IsAllowed(AuthenticatedUser user, ReviewIntention intention) => intention switch
     {
-        ReviewIntention.Create => user.QuantityRating >= 1000,
-        ReviewIntention.ReadUnapproved => user.Role.HasFlag(UserRole.Administrator),
+        ReviewIntention.Create => user.Role >= UserRole.SeniorModerator,
+        ReviewIntention.ReadUnapproved => user.Role >= UserRole.SeniorModerator,
         _ => false
     };
 
@@ -22,8 +22,8 @@ internal class ReviewIntentionResolver :
     public bool IsAllowed(AuthenticatedUser user, ReviewIntention intention, Review target) => intention switch
     {
         ReviewIntention.Edit => !target.Approved && user.UserId == target.Author.UserId,
-        ReviewIntention.Approve => !target.Approved && user.Role.HasFlag(UserRole.Administrator),
-        ReviewIntention.Delete => user.Role.HasFlag(UserRole.Administrator),
+        ReviewIntention.Approve => !target.Approved && user.Role >= UserRole.SeniorModerator,
+        ReviewIntention.Delete => user.Role >= UserRole.SeniorModerator,
         _ => false
     };
 }

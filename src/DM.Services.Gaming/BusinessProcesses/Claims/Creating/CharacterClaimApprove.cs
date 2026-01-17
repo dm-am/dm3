@@ -10,19 +10,19 @@ namespace DM.Services.Gaming.BusinessProcesses.Claims.Creating;
 /// <inheritdoc />
 internal class CharacterClaimApprove : ICharacterClaimApprove
 {
-    private readonly IRoomClaimsCreatingRepository repository;
+    private readonly IRoomClaimsCreatingRepository _repository;
 
     /// <inheritdoc />
     public CharacterClaimApprove(
         IRoomClaimsCreatingRepository repository)
     {
-        this.repository = repository;
+        _repository = repository;
     }
 
     /// <inheritdoc />
     public async Task<Guid> GetParticipantId(Guid characterId, RoomToUpdate room)
     {
-        var gameId = await repository.FindCharacterGameId(characterId);
+        var gameId = await _repository.FindCharacterGameId(characterId);
         if (!gameId.HasValue || room.Game.Id != gameId)
         {
             throw new HttpBadRequestException(new Dictionary<string, string>

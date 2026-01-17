@@ -1,6 +1,6 @@
 using DM.Services.DataAccess.BusinessObjects.Administration;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Fora;
+using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.DataAccess.BusinessObjects.Games;
 using DM.Services.DataAccess.BusinessObjects.Games.Characters;
 using DM.Services.DataAccess.BusinessObjects.Games.Characters.Attributes;
@@ -21,6 +21,18 @@ public class DmDbContext : DbContext
     /// <inheritdoc />
     public DmDbContext(DbContextOptions options) : base(options)
     {
+    }
+
+    /// <inheritdoc />
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // One active review per user
+        modelBuilder.Entity<Review>()
+            .HasIndex(r => r.UserId)
+            .HasFilter("\"IsRemoved\" = false")
+            .IsUnique();
     }
 
     #region Users
@@ -69,14 +81,19 @@ public class DmDbContext : DbContext
     /// </summary>
     public DbSet<Upload> Uploads { get; set; }
 
+    /// <summary>
+    /// Outbox events
+    /// </summary>
+    public DbSet<OutboxEvent> OutboxEvents { get; set; }
+
     #endregion
 
     #region Forum
 
     /// <summary>
-    /// Fora
+    /// Boards
     /// </summary>
-    public DbSet<Forum> Fora { get; set; }
+    public DbSet<Forum> Boards { get; set; }
 
     /// <summary>
     /// Topics

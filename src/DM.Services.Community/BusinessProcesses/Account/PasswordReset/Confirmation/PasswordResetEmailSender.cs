@@ -11,9 +11,9 @@ namespace DM.Services.Community.BusinessProcesses.Account.PasswordReset.Confirma
 /// <inheritdoc />
 internal class PasswordResetEmailSender : IPasswordResetEmailSender
 {
-    private readonly IRenderer renderer;
-    private readonly IMailSender mailSender;
-    private readonly IntegrationSettings integrationSettings;
+    private readonly IRenderer _renderer;
+    private readonly IMailSender _mailSender;
+    private readonly IntegrationSettings _integrationSettings;
 
     /// <inheritdoc />
     public PasswordResetEmailSender(
@@ -21,19 +21,19 @@ internal class PasswordResetEmailSender : IPasswordResetEmailSender
         IMailSender mailSender,
         IOptions<IntegrationSettings> integrationOptions)
     {
-        this.renderer = renderer;
-        this.mailSender = mailSender;
-        integrationSettings = integrationOptions.Value;
+        _renderer = renderer;
+        _mailSender = mailSender;
+        _integrationSettings = integrationOptions.Value;
     }
 
     /// <inheritdoc />
     public async Task Send(string email, string login, Guid token)
     {
-        var confirmationLinkUrl = new Uri(new Uri(integrationSettings.WebUrl), $"password/{token}");
-        var emailBody = await renderer.Render(new PasswordResetConfirmationViewModel(
+        var confirmationLinkUrl = new Uri(new Uri(_integrationSettings.WebUrl), $"password/{token}");
+        var emailBody = await _renderer.Render(new PasswordResetConfirmationViewModel(
             Login: login,
             ConfirmationLinkUrl: confirmationLinkUrl.ToString()));
-        await mailSender.Send(new MailLetter
+        await _mailSender.Send(new MailLetter
         {
             Address = email,
             Subject = $"Подтверждение сброса пароля на DM.AM для {login}",

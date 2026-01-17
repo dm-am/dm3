@@ -17,9 +17,9 @@ namespace DM.Services.Forum.BusinessProcesses.Likes;
 /// </summary>
 internal class LikeService : LikeServiceBase, ILikeService
 {
-    private readonly ITopicReadingService topicReadingService;
-    private readonly ICommentaryReadingService commentaryReadingService;
-    private readonly IIntentionManager intentionManager;
+    private readonly ITopicReadingService _topicReadingService;
+    private readonly ICommentaryReadingService _commentaryReadingService;
+    private readonly IIntentionManager _intentionManager;
 
     /// <inheritdoc />
     public LikeService(
@@ -32,40 +32,40 @@ internal class LikeService : LikeServiceBase, ILikeService
         IInvokedEventProducer invokedEventProducer)
         : base(identityProvider, likeFactory, likeRepository, invokedEventProducer)
     {
-        this.topicReadingService = topicReadingService;
-        this.commentaryReadingService = commentaryReadingService;
-        this.intentionManager = intentionManager;
+        _topicReadingService = topicReadingService;
+        _commentaryReadingService = commentaryReadingService;
+        _intentionManager = intentionManager;
     }
 
     /// <inheritdoc />
     public async Task<GeneralUser> LikeTopic(Guid topicId)
     {
-        var topic = await topicReadingService.GetTopic(topicId);
-        intentionManager.ThrowIfForbidden(TopicIntention.Like, topic);
+        var topic = await _topicReadingService.GetTopic(topicId);
+        _intentionManager.ThrowIfForbidden(TopicIntention.Like, topic);
         return await Like(topic, EventType.LikedTopic);
     }
 
     /// <inheritdoc />
     public async Task<GeneralUser> LikeComment(Guid commentId)
     {
-        var comment = await commentaryReadingService.Get(commentId);
-        intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
+        var comment = await _commentaryReadingService.Get(commentId);
+        _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
         return await Like(comment, EventType.LikedForumComment);
     }
 
     /// <inheritdoc />
     public async Task DislikeTopic(Guid topicId)
     {
-        var topic = await topicReadingService.GetTopic(topicId);
-        intentionManager.ThrowIfForbidden(TopicIntention.Like, topic);
+        var topic = await _topicReadingService.GetTopic(topicId);
+        _intentionManager.ThrowIfForbidden(TopicIntention.Like, topic);
         await Dislike(topic);
     }
 
     /// <inheritdoc />
     public async Task DislikeComment(Guid commentId)
     {
-        var comment = await commentaryReadingService.Get(commentId);
-        intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
+        var comment = await _commentaryReadingService.Get(commentId);
+        _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
         await Dislike(comment);
     }
 }

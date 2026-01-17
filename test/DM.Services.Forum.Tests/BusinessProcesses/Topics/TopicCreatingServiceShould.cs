@@ -7,9 +7,9 @@ using DM.Services.Common.Authorization;
 using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Fora;
+using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.Forum.Authorization;
-using DM.Services.Forum.BusinessProcesses.Fora;
+using DM.Services.Forum.BusinessProcesses.Boards;
 using DM.Services.Forum.BusinessProcesses.Topics.Creating;
 using DM.Services.Forum.Dto.Input;
 using DM.Services.Forum.Dto.Output;
@@ -60,7 +60,7 @@ public class TopicCreatingServiceShould : UnitTestBase
             It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CreateTopic>()));
 
         creatingRepository = Mock<ITopicCreatingRepository>();
-        saveTopicSetup = creatingRepository.Setup(r => r.Create(It.IsAny<ForumTopic>()));
+        saveTopicSetup = creatingRepository.Setup(r => r.Create(It.IsAny<ForumTopic>(), It.IsAny<CancellationToken>()));
 
         unreadCountersRepository = Mock<IUnreadCountersRepository>();
         unreadCountersRepository
@@ -111,7 +111,7 @@ public class TopicCreatingServiceShould : UnitTestBase
         var actual = await service.CreateTopic(createTopic);
 
         actual.Should().Be(expected);
-        creatingRepository.Verify(r => r.Create(forumTopic), Times.Once);
+        creatingRepository.Verify(r => r.Create(forumTopic, It.IsAny<CancellationToken>()), Times.Once);
         creatingRepository.VerifyNoOtherCalls();
     }
 

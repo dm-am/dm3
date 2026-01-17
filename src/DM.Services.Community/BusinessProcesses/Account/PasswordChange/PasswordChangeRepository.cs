@@ -14,41 +14,41 @@ namespace DM.Services.Community.BusinessProcesses.Account.PasswordChange;
 /// <inheritdoc />
 internal class PasswordChangeRepository : IPasswordChangeRepository
 {
-    private readonly DmDbContext dbContext;
-    private readonly IMapper mapper;
+    private readonly DmDbContext _dbContext;
+    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public PasswordChangeRepository(
         DmDbContext dbContext,
         IMapper mapper)
     {
-        this.dbContext = dbContext;
-        this.mapper = mapper;
+        _dbContext = dbContext;
+        _mapper = mapper;
     }
 
     /// <inheritdoc />
-    public Task<AuthenticatedUser> FindUser(string login) => dbContext.Users
+    public Task<AuthenticatedUser> FindUser(string login) => _dbContext.Users
         .Where(u => u.Login.ToLower() == login.ToLower())
-        .ProjectTo<AuthenticatedUser>(mapper.ConfigurationProvider)
+        .ProjectTo<AuthenticatedUser>(_mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
-    public Task<AuthenticatedUser> FindUser(Guid tokenId) => dbContext.Tokens
+    public Task<AuthenticatedUser> FindUser(Guid tokenId) => _dbContext.Tokens
         .Where(u => u.TokenId == tokenId)
         .Select(u => u.User)
-        .ProjectTo<AuthenticatedUser>(mapper.ConfigurationProvider)
+        .ProjectTo<AuthenticatedUser>(_mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
-    public Task<bool> TokenValid(Guid tokenId, DateTimeOffset createdSince) => dbContext.Tokens
+    public Task<bool> TokenValid(Guid tokenId, DateTimeOffset createdSince) => _dbContext.Tokens
         .AnyAsync(t => t.TokenId == tokenId &&
                        t.Type == TokenType.PasswordChange && t.CreateDate > createdSince);
 
     /// <inheritdoc />
     public Task UpdatePassword(IUpdateBuilder<User> userUpdate, IUpdateBuilder<Token> tokenUpdate)
     {
-        userUpdate.AttachTo(dbContext);
-        tokenUpdate?.AttachTo(dbContext);
-        return dbContext.SaveChangesAsync();
+        userUpdate.AttachTo(_dbContext);
+        tokenUpdate?.AttachTo(_dbContext);
+        return _dbContext.SaveChangesAsync();
     }
 }

@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
@@ -14,28 +15,28 @@ namespace DM.Services.Community.BusinessProcesses.Messaging.Creating;
 /// <inheritdoc />
 internal class MessageCreatingRepository : IMessageCreatingRepository
 {
-    private readonly DmDbContext dbContext;
-    private readonly IMapper mapper;
+    private readonly DmDbContext _dbContext;
+    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public MessageCreatingRepository(
         DmDbContext dbContext,
         IMapper mapper)
     {
-        this.dbContext = dbContext;
-        this.mapper = mapper;
+        _dbContext = dbContext;
+        _mapper = mapper;
     }
-        
-    /// <inheritdoc />
-    public async Task<Message> Create(DbMessage message, IUpdateBuilder<DbConversation> updateConversation)
-    {
-        dbContext.Messages.Add(message);
-        updateConversation.AttachTo(dbContext);
-        await dbContext.SaveChangesAsync();
 
-        return await dbContext.Messages
+    /// <inheritdoc />
+    public async Task<Message> Create(DbMessage message, IUpdateBuilder<DbConversation> updateConversation, CancellationToken ct = default)
+    {
+        _dbContext.Messages.Add(message);
+        updateConversation.AttachTo(_dbContext);
+        await _dbContext.SaveChangesAsync(ct);
+
+        return await _dbContext.Messages
             .Where(m => m.MessageId == message.MessageId)
-            .ProjectTo<Message>(mapper.ConfigurationProvider)
-            .FirstAsync();
+            .ProjectTo<Message>(_mapper.ConfigurationProvider)
+            .FirstAsync(ct);
     }
 }

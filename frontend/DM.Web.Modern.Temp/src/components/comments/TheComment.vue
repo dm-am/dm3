@@ -1,53 +1,60 @@
 <script setup lang="ts">
-import type { User } from "@/api/models/community";
+import { computed } from "vue";
+import type { Comment } from "@/api/models/forum";
+import ContentMessage from "@/components/content/ContentMessage.vue";
 
-defineProps<{
-  comment: string;
-  author: User;
-  created: string;
-  updated?: string | null;
+const props = defineProps<{
+  comment: Comment;
 }>();
+
+const emit = defineEmits<{
+  edit: [id: string, text: string];
+  delete: [id: string];
+  like: [id: string];
+  unlike: [id: string];
+  warn: [id: string];
+}>();
+
+// Transform Comment to ContentMessage format
+const messageData = computed(() => ({
+  id: props.comment.id,
+  createdUtc: props.comment.createdUtc,
+  modifiedUtc: props.comment.updatedUtc ?? null,
+  author: props.comment.author,
+  text: props.comment.text,
+  isRemoved: props.comment.isRemoved ?? false,
+  likes: props.comment.likes ?? [],
+}));
+
+function handleEdit(id: string, text: string) {
+  emit("edit", id, text);
+}
+
+function handleDelete(id: string) {
+  emit("delete", id);
+}
+
+function handleLike(id: string) {
+  emit("like", id);
+}
+
+function handleUnlike(id: string) {
+  emit("unlike", id);
+}
+
+function handleWarn(id: string) {
+  emit("warn", id);
+}
 </script>
 
 <template>
-  <div class="comment">
-    <router-link
-      :to="{ name: 'profile', params: { login: author.login } }"
-      class="comment_author"
-    >
-      <div
-        class="comment_author_picture"
-        :style="{ backgroundImage: `url(${author.mediumPictureUrl})` }"
-      />
-      <div class="comment_author_info">
-        <a>{{ author.login }}</a>
-        <secondary-text>
-          <human-timespan :date="created" /><template v-if="updated"
-            >, изменен <human-timespan :date="updated"
-          /></template>
-        </secondary-text>
-      </div>
-    </router-link>
-    <div class="comment_text" v-html="comment" />
-  </div>
+  <content-message
+    :message="messageData"
+    :is-public="true"
+    @edit="handleEdit"
+    @delete="handleDelete"
+    @like="handleLike"
+    @unlike="handleUnlike"
+    @warn="handleWarn"
+  />
 </template>
-
-<style scoped lang="sass">
-@import "src/assets/styles/Layout"
-
-.comment
-  margin: $medium 0 $big
-
-.comment_author
-  display: flex
-  margin-bottom: $small
-
-.comment_author_picture
-  margin-right: $small
-  +square($big)
-  border-radius: $big
-  background-size: contain
-
-.comment_text
-  padding-left: $big + $small
-</style>

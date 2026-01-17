@@ -8,8 +8,10 @@
 @import "src/assets/styles/Themes"
 
 h3
-  margin: $grid-step * 5 0 $grid-step
+  margin: $medium 0 $small
+  font-size: $font-size
   font-weight: bold
   text-transform: uppercase
-  +theme(color, $highlight-text)
+  letter-spacing: 0.5px
+  +theme(color, $accent-text)
 </style>

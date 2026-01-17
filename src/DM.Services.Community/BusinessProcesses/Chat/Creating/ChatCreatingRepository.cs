@@ -11,27 +11,27 @@ namespace DM.Services.Community.BusinessProcesses.Chat.Creating;
 /// <inheritdoc />
 internal class ChatCreatingRepository : IChatCreatingRepository
 {
-    private readonly DmDbContext dbContext;
-    private readonly IMapper mapper;
+    private readonly DmDbContext _dbContext;
+    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public ChatCreatingRepository(
         DmDbContext dbContext,
         IMapper mapper)
     {
-        this.dbContext = dbContext;
-        this.mapper = mapper;
+        _dbContext = dbContext;
+        _mapper = mapper;
     }
-        
+
     /// <inheritdoc />
     public async Task<ChatMessage> Create(DataAccess.BusinessObjects.Common.ChatMessage chatMessage)
     {
-        dbContext.ChatMessages.Add(chatMessage);
-        await dbContext.SaveChangesAsync();
+        _dbContext.ChatMessages.Add(chatMessage);
+        await _dbContext.SaveChangesAsync();
 
-        return await dbContext.ChatMessages
+        return await _dbContext.ChatMessages
             .Where(m => m.ChatMessageId == chatMessage.ChatMessageId)
-            .ProjectTo<ChatMessage>(mapper.ConfigurationProvider)
+            .ProjectTo<ChatMessage>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }
 }

@@ -9,9 +9,9 @@ namespace DM.Services.Common.Authorization;
 /// <inheritdoc />
 internal class IntentionManager : IIntentionManager
 {
-    private readonly IIdentityProvider identityProvider;
-    private readonly IEnumerable<IIntentionResolver> resolvers;
-    private readonly ILogger<IntentionManager> logger;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IEnumerable<IIntentionResolver> _resolvers;
+    private readonly ILogger<IntentionManager> _logger;
 
     /// <inheritdoc />
     public IntentionManager(
@@ -19,23 +19,23 @@ internal class IntentionManager : IIntentionManager
         IEnumerable<IIntentionResolver> resolvers,
         ILogger<IntentionManager> logger)
     {
-        this.identityProvider = identityProvider;
-        this.resolvers = resolvers;
-        this.logger = logger;
+        _identityProvider = identityProvider;
+        _resolvers = resolvers;
+        _logger = logger;
     }
 
     /// <inheritdoc />
     public bool IsAllowed<TIntention>(TIntention intention) where TIntention : struct
     {
-        var matchingResolver = resolvers
+        var matchingResolver = _resolvers
             .OfType<IIntentionResolver<TIntention>>()
             .FirstOrDefault();
         if (matchingResolver != null)
         {
-            return matchingResolver.IsAllowed(identityProvider.Current.User, intention);
+            return matchingResolver.IsAllowed(_identityProvider.Current.User, intention);
         }
 
-        logger.LogError("No matching resolver found for intention type {intentionType}", typeof(TIntention));
+        _logger.LogError("No matching resolver found for intention type {intentionType}", typeof(TIntention));
         return false;
     }
 
@@ -43,15 +43,15 @@ internal class IntentionManager : IIntentionManager
     public bool IsAllowed<TIntention, TTarget>(TIntention intention, TTarget target)
         where TIntention : struct
     {
-        var matchingResolver = resolvers
+        var matchingResolver = _resolvers
             .OfType<IIntentionResolver<TIntention, TTarget>>()
             .FirstOrDefault();
         if (matchingResolver != null)
         {
-            return matchingResolver.IsAllowed(identityProvider.Current.User, intention, target);
+            return matchingResolver.IsAllowed(_identityProvider.Current.User, intention, target);
         }
 
-        logger.LogError(
+        _logger.LogError(
             "No matching resolver found for intention type {intentionType} and target type {targetType}",
             typeof(TIntention), typeof(TTarget));
         return false;
@@ -62,7 +62,7 @@ internal class IntentionManager : IIntentionManager
     {
         if (!IsAllowed(intention))
         {
-            throw new IntentionManagerException(identityProvider.Current.User, GetIntentionEnum(intention));
+            throw new IntentionManagerException(_identityProvider.Current.User, GetIntentionEnum(intention));
         }
     }
 
@@ -72,7 +72,7 @@ internal class IntentionManager : IIntentionManager
     {
         if (!IsAllowed(intention, target))
         {
-            throw new IntentionManagerException(identityProvider.Current.User, GetIntentionEnum(intention), target);
+            throw new IntentionManagerException(_identityProvider.Current.User, GetIntentionEnum(intention), target);
         }
     }
 

@@ -10,6 +10,7 @@ import App from "./App.vue";
 import router from "./router";
 
 import "vue-final-modal/style.css";
+import "@/assets/styles/ThemeVariables.css";
 import "@/assets/styles/Reset.sass";
 import "@/assets/styles/Fonts.sass";
 import "@/assets/styles/Inputs.sass";
@@ -18,6 +19,7 @@ import { IconType } from "@/components/icons/iconType";
 
 import PageTitle from "@/components/layout/PageTitle.vue";
 import BlockTitle from "@/components/layout/BlockTitle.vue";
+import SidebarTitle from "@/components/layout/SidebarTitle.vue";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
 import TheLoader from "@/components/TheLoader.vue";
 import HumanDate from "@/components/dates/HumanDate.vue";
@@ -45,6 +47,7 @@ application
   .component("TheIcon", TheIcon)
   .component("PageTitle", PageTitle)
   .component("BlockTitle", BlockTitle)
+  .component("SidebarTitle", SidebarTitle)
   .component("SecondaryText", SecondaryText)
   .component("TheForm", TheForm)
   .component("FormField", FormField)

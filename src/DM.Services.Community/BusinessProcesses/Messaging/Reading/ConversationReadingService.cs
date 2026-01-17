@@ -15,10 +15,10 @@ namespace DM.Services.Community.BusinessProcesses.Messaging.Reading;
 /// <inheritdoc />
 internal class ConversationReadingService : IConversationReadingService
 {
-    private readonly IConversationFactory factory;
-    private readonly IConversationReadingRepository repository;
-    private readonly IUnreadCountersRepository unreadCountersRepository;
-    private readonly IIdentityProvider identityProvider;
+    private readonly IConversationFactory _factory;
+    private readonly IConversationReadingRepository _repository;
+    private readonly IUnreadCountersRepository _unreadCountersRepository;
+    private readonly IIdentityProvider _identityProvider;
 
     /// <inheritdoc />
     public ConversationReadingService(
@@ -27,21 +27,21 @@ internal class ConversationReadingService : IConversationReadingService
         IUnreadCountersRepository unreadCountersRepository,
         IIdentityProvider identityProvider)
     {
-        this.factory = factory;
-        this.repository = repository;
-        this.unreadCountersRepository = unreadCountersRepository;
-        this.identityProvider = identityProvider;
+        _factory = factory;
+        _repository = repository;
+        _unreadCountersRepository = unreadCountersRepository;
+        _identityProvider = identityProvider;
     }
 
     /// <inheritdoc />
     public async Task<(IEnumerable<Conversation> conversations, PagingResult paging)> Get(PagingQuery query)
     {
-        var identity = identityProvider.Current;
+        var identity = _identityProvider.Current;
         var currentUserId = identity.User.UserId;
-        var totalCount = await repository.Count(currentUserId);
+        var totalCount = await _repository.Count(currentUserId);
         var pagingData = new PagingData(query, identity.Settings.Paging.MessagesPerPage, totalCount);
-        var conversations = (await repository.Get(currentUserId, pagingData)).ToArray();
-        await unreadCountersRepository.FillEntityCounters(conversations, currentUserId,
+        var conversations = (await _repository.Get(currentUserId, pagingData)).ToArray();
+        await _unreadCountersRepository.FillEntityCounters(conversations, currentUserId,
             c => c.Id, c => c.UnreadMessagesCount);
 
         return (conversations, pagingData.Result);
@@ -50,14 +50,14 @@ internal class ConversationReadingService : IConversationReadingService
     /// <inheritdoc />
     public async Task<Conversation> Get(Guid conversationId)
     {
-        var currentUserId = identityProvider.Current.User.UserId;
-        var conversation = await repository.Get(conversationId, currentUserId);
+        var currentUserId = _identityProvider.Current.User.UserId;
+        var conversation = await _repository.Get(conversationId, currentUserId);
         if (conversation == null)
         {
             throw new HttpException(HttpStatusCode.Gone, "Conversation not found");
         }
 
-        await unreadCountersRepository.FillEntityCounters(new[] {conversation}, currentUserId,
+        await _unreadCountersRepository.FillEntityCounters(new[] {conversation}, currentUserId,
             c => c.Id, c => c.UnreadMessagesCount);
 
         return conversation;
@@ -66,25 +66,25 @@ internal class ConversationReadingService : IConversationReadingService
     /// <inheritdoc />
     public async Task<Conversation> GetOrCreate(string login)
     {
-        var visaviId = await repository.FindUser(login);
+        var visaviId = await _repository.FindUser(login);
         if (!visaviId.HasValue)
         {
             throw new HttpException(HttpStatusCode.Gone, "User not found");
         }
 
-        var currentUserId = identityProvider.Current.User.UserId;
-        var existingConversation = await repository.FindVisaviConversation(currentUserId, visaviId.Value);
+        var currentUserId = _identityProvider.Current.User.UserId;
+        var existingConversation = await _repository.FindVisaviConversation(currentUserId, visaviId.Value);
         if (existingConversation != null)
         {
-            await unreadCountersRepository.FillEntityCounters(new[] {existingConversation}, currentUserId,
+            await _unreadCountersRepository.FillEntityCounters(new[] {existingConversation}, currentUserId,
                 c => c.Id, c => c.UnreadMessagesCount);
             return existingConversation;
         }
 
-        var (conversation, conversationLinks) = factory.CreateVisavi(currentUserId, visaviId.Value);
-        var result = await repository.Create(conversation, conversationLinks);
+        var (conversation, conversationLinks) = _factory.CreateVisavi(currentUserId, visaviId.Value);
+        var result = await _repository.Create(conversation, conversationLinks);
 
-        await unreadCountersRepository.Create(result.Id, UnreadEntryType.Message,
+        await _unreadCountersRepository.Create(result.Id, UnreadEntryType.Message,
             new[] {currentUserId, visaviId.Value}.Distinct());
 
         return result;
@@ -93,12 +93,12 @@ internal class ConversationReadingService : IConversationReadingService
     /// <inheritdoc />
     public async Task<int> GetTotalUnreadCount()
     {
-        var userId = identityProvider.Current.User.UserId;
-        return (await unreadCountersRepository.SelectByParents(userId, UnreadEntryType.Message, userId))[userId];
+        var userId = _identityProvider.Current.User.UserId;
+        return (await _unreadCountersRepository.SelectByParents(userId, UnreadEntryType.Message, userId))[userId];
     }
 
     /// <inheritdoc />
     public Task MarkAsRead(Guid conversationId) =>
-        unreadCountersRepository.Flush(identityProvider.Current.User.UserId,
+        _unreadCountersRepository.Flush(_identityProvider.Current.User.UserId,
             UnreadEntryType.Message, conversationId);
 }

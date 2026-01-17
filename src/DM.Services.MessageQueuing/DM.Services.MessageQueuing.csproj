@@ -13,11 +13,13 @@
       <PackageReference Include="Jamq.Client.Rabbit" />
       <PackageReference Include="Microsoft.Extensions.Configuration" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+      <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
       <PackageReference Include="Polly" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\DM.Services.Core\DM.Services.Core.csproj" />
+      <ProjectReference Include="..\DM.Services.DataAccess\DM.Services.DataAccess.csproj" />
     </ItemGroup>
 
     <ItemGroup>

@@ -17,12 +17,12 @@ namespace DM.Web.API.Middleware;
 /// </summary>
 internal class ErrorHandlingMiddleware
 {
-    private readonly RequestDelegate next;
+    private readonly RequestDelegate _next;
 
     /// <inheritdoc />
     public ErrorHandlingMiddleware(RequestDelegate next)
     {
-        this.next = next;
+        _next = next;
     }
 
     /// <summary>
@@ -42,7 +42,7 @@ internal class ErrorHandlingMiddleware
     {
         try
         {
-            await next(httpContext);
+            await _next(httpContext);
         }
         catch (Exception e)
         {

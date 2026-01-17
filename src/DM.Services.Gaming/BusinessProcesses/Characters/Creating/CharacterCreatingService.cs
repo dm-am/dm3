@@ -17,14 +17,14 @@ namespace DM.Services.Gaming.BusinessProcesses.Characters.Creating;
 /// <inheritdoc />
 internal class CharacterCreatingService : ICharacterCreatingService
 {
-    private readonly IValidator<CreateCharacter> validator;
-    private readonly IGameReadingService gameReadingService;
-    private readonly IIntentionManager intentionManager;
-    private readonly ICharacterFactory factory;
-    private readonly ICharacterCreatingRepository creatingRepository;
-    private readonly IUnreadCountersRepository unreadCountersRepository;
-    private readonly IInvokedEventProducer producer;
-    private readonly IIdentityProvider identityProvider;
+    private readonly IValidator<CreateCharacter> _validator;
+    private readonly IGameReadingService _gameReadingService;
+    private readonly IIntentionManager _intentionManager;
+    private readonly ICharacterFactory _factory;
+    private readonly ICharacterCreatingRepository _creatingRepository;
+    private readonly IUnreadCountersRepository _unreadCountersRepository;
+    private readonly IInvokedEventProducer _producer;
+    private readonly IIdentityProvider _identityProvider;
 
     /// <inheritdoc />
     public CharacterCreatingService(
@@ -37,24 +37,24 @@ internal class CharacterCreatingService : ICharacterCreatingService
         IInvokedEventProducer producer,
         IIdentityProvider identityProvider)
     {
-        this.validator = validator;
-        this.gameReadingService = gameReadingService;
-        this.intentionManager = intentionManager;
-        this.factory = factory;
-        this.creatingRepository = creatingRepository;
-        this.unreadCountersRepository = unreadCountersRepository;
-        this.producer = producer;
-        this.identityProvider = identityProvider;
+        _validator = validator;
+        _gameReadingService = gameReadingService;
+        _intentionManager = intentionManager;
+        _factory = factory;
+        _creatingRepository = creatingRepository;
+        _unreadCountersRepository = unreadCountersRepository;
+        _producer = producer;
+        _identityProvider = identityProvider;
     }
-        
+
     /// <inheritdoc />
     public async Task<Character> Create(CreateCharacter createCharacter)
     {
-        await validator.ValidateAndThrowAsync(createCharacter);
-        var game = await gameReadingService.GetGame(createCharacter.GameId);
-        intentionManager.ThrowIfForbidden(GameIntention.CreateCharacter, game);
+        await _validator.ValidateAndThrowAsync(createCharacter);
+        var game = await _gameReadingService.GetGame(createCharacter.GameId);
+        _intentionManager.ThrowIfForbidden(GameIntention.CreateCharacter, game);
 
-        var currentUserId = identityProvider.Current.User.UserId;
+        var currentUserId = _identityProvider.Current.User.UserId;
         var gameParticipation = game.Participation(currentUserId);
 
         // Master and assistant characters should be created in Active status
@@ -65,11 +65,11 @@ internal class CharacterCreatingService : ICharacterCreatingService
         // Only master and assistant are allowed to create NPCs
         createCharacter.IsNpc = createCharacter.IsNpc && gameParticipation.HasFlag(GameParticipation.Authority);
 
-        var (character, attributes) = factory.Create(createCharacter, currentUserId, initialStatus);
-        var createdCharacter = await creatingRepository.Create(character, attributes);
+        var (character, attributes) = _factory.Create(createCharacter, currentUserId, initialStatus);
+        var createdCharacter = await _creatingRepository.Create(character, attributes);
 
-        await unreadCountersRepository.Increment(createCharacter.GameId, UnreadEntryType.Character);
-        await producer.Send(EventType.NewCharacter, createdCharacter.Id);
+        await _unreadCountersRepository.Increment(createCharacter.GameId, UnreadEntryType.Character);
+        await _producer.Send(EventType.NewCharacter, createdCharacter.Id);
 
         return createdCharacter;
     }

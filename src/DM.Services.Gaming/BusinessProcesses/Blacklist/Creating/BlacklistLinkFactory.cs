@@ -7,21 +7,21 @@ namespace DM.Services.Gaming.BusinessProcesses.Blacklist.Creating;
 /// <inheritdoc />
 internal class BlacklistLinkFactory : IBlacklistLinkFactory
 {
-    private readonly IGuidFactory guidFactory;
+    private readonly IGuidFactory _guidFactory;
 
     /// <inheritdoc />
     public BlacklistLinkFactory(
         IGuidFactory guidFactory)
     {
-        this.guidFactory = guidFactory;
+        _guidFactory = guidFactory;
     }
-        
+
     /// <inheritdoc />
     public BlackListLink Create(Guid gameId, Guid userId)
     {
         return new BlackListLink
         {
-            BlackListLinkId = guidFactory.Create(),
+            BlackListLinkId = _guidFactory.Create(),
             GameId = gameId,
             UserId = userId
         };

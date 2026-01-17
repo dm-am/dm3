@@ -61,7 +61,7 @@ public class Game
     /// <summary>
     /// Responsible for premoderation
     /// </summary>
-    public User Nanny { get; set; }
+    public User Mentor { get; set; }
 
     /// <summary>
     /// Game master's pending assistant

@@ -10,19 +10,19 @@ namespace DM.Services.Mail.Sender.Consumer;
 
 internal class ConsumerRetryMiddleware : IConsumerMiddleware
 {
-    private readonly AsyncRetryPolicy retryPolicy;
-    
+    private readonly AsyncRetryPolicy _retryPolicy;
+
     public ConsumerRetryMiddleware(
         ILogger<ConsumerRetryMiddleware> logger)
     {
-        retryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(5,
+        _retryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(5,
             attempt => TimeSpan.FromSeconds(1 << attempt),
             (exception, _) => logger.LogWarning(exception, "Something is wrong with mail sending"));
     }
-    
+
     public Task<ProcessResult> InvokeAsync(
         ConsumerContext context,
         ConsumerDelegate next,
         CancellationToken cancellationToken) =>
-        retryPolicy.ExecuteAsync(() => next.Invoke(context, cancellationToken));
+        _retryPolicy.ExecuteAsync(() => next.Invoke(context, cancellationToken));
 }

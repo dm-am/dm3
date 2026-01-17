@@ -9,6 +9,7 @@ import LightboxTitle from "@/components/layout/LightboxTitle.vue";
 
 const emit = defineEmits<{
   (e: "success"): void;
+  (e: "cancel"): void;
 }>();
 
 const { handleSubmit, defineInputBinds, meta, errorBag } =
@@ -55,6 +56,7 @@ const submit = handleSubmit(async (values, { setErrors }) => {
 
     <the-form
       @submit="submit"
+      @cancel="emit('cancel')"
       :valid="meta.valid"
       :loading="loading"
       action="Зарегистрироваться"

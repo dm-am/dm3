@@ -11,11 +11,11 @@ namespace DM.Services.Community.BusinessProcesses.Account.EmailChange;
 /// <inheritdoc />
 internal class EmailChangeService : IEmailChangeService
 {
-    private readonly IValidator<UserEmailChange> validator;
-    private readonly IUpdateBuilderFactory updateBuilderFactory;
-    private readonly IActivationTokenFactory tokenFactory;
-    private readonly IEmailChangeRepository repository;
-    private readonly IEmailChangeMailSender mailSender;
+    private readonly IValidator<UserEmailChange> _validator;
+    private readonly IUpdateBuilderFactory _updateBuilderFactory;
+    private readonly IActivationTokenFactory _tokenFactory;
+    private readonly IEmailChangeRepository _repository;
+    private readonly IEmailChangeMailSender _mailSender;
 
     /// <inheritdoc />
     public EmailChangeService(
@@ -25,26 +25,26 @@ internal class EmailChangeService : IEmailChangeService
         IEmailChangeRepository repository,
         IEmailChangeMailSender mailSender)
     {
-        this.validator = validator;
-        this.updateBuilderFactory = updateBuilderFactory;
-        this.tokenFactory = tokenFactory;
-        this.repository = repository;
-        this.mailSender = mailSender;
+        _validator = validator;
+        _updateBuilderFactory = updateBuilderFactory;
+        _tokenFactory = tokenFactory;
+        _repository = repository;
+        _mailSender = mailSender;
     }
 
     /// <inheritdoc />
     public async Task<GeneralUser> Change(UserEmailChange emailChange)
     {
-        await validator.ValidateAndThrowAsync(emailChange);
-        var user = await repository.FindUser(emailChange.Login);
+        await _validator.ValidateAndThrowAsync(emailChange);
+        var user = await _repository.FindUser(emailChange.Login);
 
-        var updateUser = updateBuilderFactory.Create<User>(user.UserId)
+        var updateUser = _updateBuilderFactory.Create<User>(user.UserId)
             .Field(u => u.Email, emailChange.Email)
             .Field(u => u.Activated, false);
-        var token = tokenFactory.Create(user.UserId);
+        var token = _tokenFactory.Create(user.UserId);
 
-        await repository.Update(updateUser, token);
-        await mailSender.Send(emailChange.Email, emailChange.Login, token.TokenId);
+        await _repository.Update(updateUser, token);
+        await _mailSender.Send(emailChange.Email, emailChange.Login, token.TokenId);
 
         return user;
     }

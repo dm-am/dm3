@@ -12,13 +12,13 @@ namespace DM.Services.Notifications.Consumer.Implementation.Notifiers.Gaming;
 /// <inheritdoc />
 internal class NewCharacterNotificationGenerator : BaseNotificationGenerator
 {
-    private readonly DmDbContext dbContext;
+    private readonly DmDbContext _dbContext;
 
     /// <inheritdoc />
     public NewCharacterNotificationGenerator(
         DmDbContext dbContext)
     {
-        this.dbContext = dbContext;
+        _dbContext = dbContext;
     }
 
     /// <inheritdoc />
@@ -27,7 +27,7 @@ internal class NewCharacterNotificationGenerator : BaseNotificationGenerator
     /// <inheritdoc />
     public override async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
-        var data = await dbContext.Characters
+        var data = await _dbContext.Characters
             .Where(c => c.CharacterId == entityId)
             .Select(c => new
             {

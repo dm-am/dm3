@@ -9,7 +9,7 @@ import { useUserStore } from "@/stores";
 import { usePollsStore } from "@/stores/polls";
 
 const { user } = storeToRefs(useUserStore());
-const { vote } = usePollsStore();
+const { vote, unvote } = usePollsStore();
 
 const props = defineProps<{ poll: Poll }>();
 const closed = computed(() => dayjs(props.poll.ends).isBefore(dayjs()));
@@ -21,25 +21,37 @@ const voted = computed(() => props.poll.options.some((option) => option.voted));
 async function voteForOption(optionId: PollOptionId) {
   await vote(props.poll.id!, optionId);
 }
+
+async function cancelVote() {
+  await unvote(props.poll.id!);
+}
 </script>
 <template>
   <div class="poll">
     <div class="poll-title">
       {{ poll.title }}
       <secondary-text v-if="closed">Голосование окончено</secondary-text>
+      <secondary-text v-if="!user">(войдите чтобы голосовать)</secondary-text>
     </div>
     <progress-bar
       v-for="option in poll.options"
       :key="option.id"
       :current="option.votesCount"
       :goal="totalVotes || 1"
+      :class="{ 'poll-option-voted': option.voted }"
     >
-      <the-icon :font="IconType.Tick" />
+      <the-icon v-if="option.voted" :font="IconType.Tick" />
       {{ option.text }}&nbsp;&ndash;&nbsp;{{ option.votesCount }}
       <a
         v-if="!closed && user && !voted"
         @click="voteForOption(option.id)"
         class="poll-option-vote"
+      />
+      <a
+        v-if="!closed && user && option.voted"
+        @click="cancelVote"
+        class="poll-option-vote"
+        title="Отменить голос"
       />
     </progress-bar>
   </div>
@@ -64,4 +76,6 @@ async function voteForOption(optionId: PollOptionId) {
   left: 0
   right: 0
   bottom: 0
+  cursor: pointer
+  z-index: 1
 </style>

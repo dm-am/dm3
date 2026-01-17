@@ -1,10 +1,11 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Services.Common.Authorization;
 using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Fora;
+using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Services.Forum.Authorization;
 using DM.Services.Forum.BusinessProcesses.Topics.Deleting;
@@ -33,7 +34,7 @@ public class TopicDeletingServiceShould : UnitTestBase
     public TopicDeletingServiceShould()
     {
         var readingService = Mock<ITopicReadingService>();
-        getTopicSetup = readingService.Setup(s => s.GetTopic(It.IsAny<Guid>()));
+        getTopicSetup = readingService.Setup(s => s.GetTopic(It.IsAny<Guid>(), It.IsAny<CancellationToken>()));
 
         intentionManager = Mock<IIntentionManager>();
         intentionManager

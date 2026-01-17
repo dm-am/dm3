@@ -28,7 +28,7 @@ internal class GameProfile : Profile
                 .FirstOrDefault()))
             .ForMember(d => d.ActiveCharacterUserIds, s => s.MapFrom(g => g.Characters
                 .Where(c => !c.IsRemoved && c.Status == CharacterStatus.Active)
-                .Select(c => c.CharacterId)))
+                .Select(c => c.UserId)))
             .ForMember(d => d.ReaderUserIds, s => s.MapFrom(g => g.Readers
                 .Select(r => r.UserId)))
             .ForMember(d => d.BlacklistedUsers, s => s.MapFrom(g => g.BlackList));

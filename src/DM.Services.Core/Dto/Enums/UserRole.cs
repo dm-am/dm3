@@ -1,11 +1,8 @@
-using System;
-
 namespace DM.Services.Core.Dto.Enums;
 
 /// <summary>
-/// User role
+/// User role on the platform (hierarchical, not flags)
 /// </summary>
-[Flags]
 public enum UserRole
 {
     /// <summary>
@@ -14,27 +11,27 @@ public enum UserRole
     Guest = 0,
 
     /// <summary>
-    /// Authenticated user with no privileges
+    /// Regular authenticated user
     /// </summary>
-    Player = 1,
+    RegularUser = 1,
 
     /// <summary>
-    /// Developer / Owner
+    /// Experienced user who helps newbies, can release games from premoderation
     /// </summary>
-    Administrator = 1 << 1,
+    Mentor = 2,
 
     /// <summary>
-    /// Helps newbies, can premoderate games
+    /// Junior moderator, can give warnings, release from premoderation
     /// </summary>
-    NannyModerator = 1 << 2,
+    Moderator = 3,
 
     /// <summary>
-    /// Moderates a certain forum or the chat, can give warnings, close inactive games
+    /// Senior moderator, can ban users, create polls, override other moderators
     /// </summary>
-    RegularModerator = 1 << 3,
+    SeniorModerator = 4,
 
     /// <summary>
-    /// Moderates the site, can give warnings, bans and deal with complaints on regular moderators
+    /// Administrator with full access
     /// </summary>
-    SeniorModerator = 1 << 4
+    Admin = 5
 }

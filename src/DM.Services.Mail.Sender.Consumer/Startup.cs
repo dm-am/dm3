@@ -18,19 +18,19 @@ namespace DM.Services.Mail.Sender.Consumer;
 /// </summary>
 public class Startup
 {
-    private readonly IConfiguration configuration;
+    private readonly IConfiguration _configuration;
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     /// <param name="configuration"></param>
     public Startup(IConfiguration configuration)
     {
-        this.configuration = configuration;
+        _configuration = configuration;
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     /// <param name="services"></param>
     /// <returns></returns>
@@ -38,10 +38,10 @@ public class Startup
     {
         services
             .AddOptions()
-            .Configure<EmailConfiguration>(configuration.GetSection(nameof(EmailConfiguration)).Bind)
-            .Configure<ConnectionStrings>(configuration.GetSection(nameof(ConnectionStrings)).Bind)
-            .Configure<RabbitMqConfiguration>(configuration.GetSection(nameof(RabbitMqConfiguration)).Bind)
-            .AddDmLogging("DM.MailSender.Consumer", configuration);
+            .Configure<EmailConfiguration>(_configuration.GetSection(nameof(EmailConfiguration)).Bind)
+            .Configure<ConnectionStrings>(_configuration.GetSection(nameof(ConnectionStrings)).Bind)
+            .Configure<RabbitMqConfiguration>(_configuration.GetSection(nameof(RabbitMqConfiguration)).Bind)
+            .AddDmLogging("DM.MailSender.Consumer", _configuration);
 
         services.AddJamqClient(
             config => config.UseRabbit(),

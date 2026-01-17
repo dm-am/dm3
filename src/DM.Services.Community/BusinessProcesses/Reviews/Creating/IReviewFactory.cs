@@ -13,6 +13,7 @@ internal interface IReviewFactory
     /// </summary>
     /// <param name="createReview"></param>
     /// <param name="userId"></param>
+    /// <param name="isApproved"></param>
     /// <returns></returns>
-    Review Create(CreateReview createReview, Guid userId);
+    Review Create(CreateReview createReview, Guid userId, bool isApproved);
 }

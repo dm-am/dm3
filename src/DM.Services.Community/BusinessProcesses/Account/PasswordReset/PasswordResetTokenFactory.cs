@@ -7,27 +7,27 @@ namespace DM.Services.Community.BusinessProcesses.Account.PasswordReset;
 /// <inheritdoc />
 internal class PasswordResetTokenFactory : IPasswordResetTokenFactory
 {
-    private readonly IGuidFactory guidFactory;
-    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public PasswordResetTokenFactory(
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider)
     {
-        this.guidFactory = guidFactory;
-        this.dateTimeProvider = dateTimeProvider;
+        _guidFactory = guidFactory;
+        _dateTimeProvider = dateTimeProvider;
     }
-        
+
     /// <inheritdoc />
     public Token Create(Guid userId)
     {
         return new Token
         {
-            TokenId = guidFactory.Create(),
+            TokenId = _guidFactory.Create(),
             UserId = userId,
             Type = TokenType.PasswordChange,
-            CreateDate = dateTimeProvider.Now,
+            CreateDate = _dateTimeProvider.Now,
             IsRemoved = false
         };
     }

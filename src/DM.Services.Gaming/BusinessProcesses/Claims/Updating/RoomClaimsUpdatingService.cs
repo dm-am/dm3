@@ -18,13 +18,13 @@ namespace DM.Services.Gaming.BusinessProcesses.Claims.Updating;
 /// <inheritdoc />
 internal class RoomClaimsUpdatingService : IRoomClaimsUpdatingService
 {
-    private readonly IValidator<UpdateRoomClaim> validator;
-    private readonly IRoomClaimsUpdatingRepository repository;
-    private readonly IRoomClaimsReadingRepository readingRepository;
-    private readonly IRoomUpdatingRepository roomUpdatingRepository;
-    private readonly IIntentionManager intentionManager;
-    private readonly IUpdateBuilderFactory updateBuilderFactory;
-    private readonly IIdentityProvider identityProvider;
+    private readonly IValidator<UpdateRoomClaim> _validator;
+    private readonly IRoomClaimsUpdatingRepository _repository;
+    private readonly IRoomClaimsReadingRepository _readingRepository;
+    private readonly IRoomUpdatingRepository _roomUpdatingRepository;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IUpdateBuilderFactory _updateBuilderFactory;
+    private readonly IIdentityProvider _identityProvider;
 
     /// <inheritdoc />
     public RoomClaimsUpdatingService(
@@ -36,23 +36,23 @@ internal class RoomClaimsUpdatingService : IRoomClaimsUpdatingService
         IUpdateBuilderFactory updateBuilderFactory,
         IIdentityProvider identityProvider)
     {
-        this.validator = validator;
-        this.repository = repository;
-        this.readingRepository = readingRepository;
-        this.roomUpdatingRepository = roomUpdatingRepository;
-        this.intentionManager = intentionManager;
-        this.updateBuilderFactory = updateBuilderFactory;
-        this.identityProvider = identityProvider;
+        _validator = validator;
+        _repository = repository;
+        _readingRepository = readingRepository;
+        _roomUpdatingRepository = roomUpdatingRepository;
+        _intentionManager = intentionManager;
+        _updateBuilderFactory = updateBuilderFactory;
+        _identityProvider = identityProvider;
     }
-        
+
     /// <inheritdoc />
     public async Task<RoomClaim> Update(UpdateRoomClaim updateRoomClaim)
     {
-        await validator.ValidateAndThrowAsync(updateRoomClaim);
-        var currentUserId = identityProvider.Current.User.UserId;
-        var oldClaim = await readingRepository.GetClaim(updateRoomClaim.ClaimId, currentUserId);
-        var room = await roomUpdatingRepository.GetRoom(oldClaim.RoomId, currentUserId);
-        intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
+        await _validator.ValidateAndThrowAsync(updateRoomClaim);
+        var currentUserId = _identityProvider.Current.User.UserId;
+        var oldClaim = await _readingRepository.GetClaim(updateRoomClaim.ClaimId, currentUserId);
+        var room = await _roomUpdatingRepository.GetRoom(oldClaim.RoomId, currentUserId);
+        _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
 
         if (oldClaim.User != null && updateRoomClaim.Policy == RoomAccessPolicy.Full)
         {
@@ -62,8 +62,8 @@ internal class RoomClaimsUpdatingService : IRoomClaimsUpdatingService
             });
         }
 
-        var updateBuilder = updateBuilderFactory.Create<DbRoomClaim>(updateRoomClaim.ClaimId)
+        var updateBuilder = _updateBuilderFactory.Create<DbRoomClaim>(updateRoomClaim.ClaimId)
             .Field(c => c.Policy, updateRoomClaim.Policy);
-        return await repository.Update(updateBuilder);
+        return await _repository.Update(updateBuilder);
     }
 }

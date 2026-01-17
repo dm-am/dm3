@@ -26,11 +26,11 @@ public class TopicIntentionResolverShould
     public void ForbidCreateCommentInClosedTopic()
     {
         var actual = resolver.IsAllowed(
-            Create.User().WithRole(UserRole.Player).Please(),
+            Create.User().WithRole(UserRole.RegularUser).Please(),
             TopicIntention.CreateComment,
             new Topic
             {
-                Closed = true
+                IsClosed = true
             });
         actual.Should().BeFalse();
     }
@@ -39,11 +39,11 @@ public class TopicIntentionResolverShould
     public void AllowCreateCommentInOpenTopic()
     {
         var actual = resolver.IsAllowed(
-            Create.User().WithRole(UserRole.Player).Please(),
+            Create.User().WithRole(UserRole.RegularUser).Please(),
             TopicIntention.CreateComment,
             new Topic
             {
-                Closed = false
+                IsClosed = false
             });
         actual.Should().BeTrue();
     }
@@ -52,12 +52,12 @@ public class TopicIntentionResolverShould
     public void ForbidEditWhenUserNotAuthorAndNotLocalModeratorAndNotAdministrator()
     {
         var actual = resolver.IsAllowed(
-            Create.User().WithRole(UserRole.RegularModerator).Please(),
+            Create.User().WithRole(UserRole.Moderator).Please(),
             TopicIntention.Edit,
             new Topic
             {
                 Author = Create.User().Please(),
-                Closed = false,
+                IsClosed = false,
                 Forum = new Dto.Output.Forum
                 {
                     ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
@@ -71,12 +71,12 @@ public class TopicIntentionResolverShould
     {
         var userId = Guid.NewGuid();
         var actual = resolver.IsAllowed(
-            Create.User(userId).WithRole(UserRole.RegularModerator).Please(),
+            Create.User(userId).WithRole(UserRole.Moderator).Please(),
             TopicIntention.Edit,
             new Topic
             {
                 Author = Create.User(userId).Please(),
-                Closed = false,
+                IsClosed = false,
                 Forum = new Dto.Output.Forum
                 {
                     ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
@@ -90,12 +90,12 @@ public class TopicIntentionResolverShould
     {
         var userId = Guid.NewGuid();
         var actual = resolver.IsAllowed(
-            Create.User(userId).WithRole(UserRole.RegularModerator).Please(),
+            Create.User(userId).WithRole(UserRole.Moderator).Please(),
             TopicIntention.Edit,
             new Topic
             {
                 Author = Create.User().Please(),
-                Closed = false,
+                IsClosed = false,
                 Forum = new Dto.Output.Forum
                 {
                     ModeratorIds = new[] {userId, Guid.NewGuid()}
@@ -108,12 +108,12 @@ public class TopicIntentionResolverShould
     public void AllowEditWhenUserIsAdministrator()
     {
         var actual = resolver.IsAllowed(
-            Create.User().WithRole(UserRole.Administrator).Please(),
+            Create.User().WithRole(UserRole.Admin).Please(),
             TopicIntention.Edit,
             new Topic
             {
                 Author = Create.User().Please(),
-                Closed = false,
+                IsClosed = false,
                 Forum = new Dto.Output.Forum
                 {
                     ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
@@ -127,12 +127,12 @@ public class TopicIntentionResolverShould
     {
         var userId = Guid.NewGuid();
         var actual = resolver.IsAllowed(
-            Create.User(userId).WithRole(UserRole.Administrator).Please(),
+            Create.User(userId).WithRole(UserRole.Admin).Please(),
             TopicIntention.Like,
             new Topic
             {
                 Author = Create.User(userId).Please(),
-                Closed = false,
+                IsClosed = false,
                 Forum = new Dto.Output.Forum
                 {
                     ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
@@ -145,12 +145,12 @@ public class TopicIntentionResolverShould
     public void ForbidLikeWhenUserIsNotAuthor()
     {
         var actual = resolver.IsAllowed(
-            Create.User().WithRole(UserRole.Administrator).Please(),
+            Create.User().WithRole(UserRole.Admin).Please(),
             TopicIntention.Like,
             new Topic
             {
                 Author = Create.User().Please(),
-                Closed = false,
+                IsClosed = false,
                 Forum = new Dto.Output.Forum
                 {
                     ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Services.Authentication.Dto;
 using DM.Services.Authentication.Implementation.UserIdentity;
@@ -37,7 +38,7 @@ public class LikeServiceForTopicsShould : UnitTestBase
     public LikeServiceForTopicsShould()
     {
         var topicReadingService = Mock<ITopicReadingService>();
-        topicReading = topicReadingService.Setup(s => s.GetTopic(It.IsAny<Guid>()));
+        topicReading = topicReadingService.Setup(s => s.GetTopic(It.IsAny<Guid>(), It.IsAny<CancellationToken>()));
 
         var intentionManager = Mock<IIntentionManager>();
         intentionManager

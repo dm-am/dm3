@@ -8,19 +8,19 @@ namespace DM.Services.Gaming.BusinessProcesses.Claims.Deleting;
 /// <inheritdoc />
 internal class RoomClaimsDeletingRepository : IRoomClaimsDeletingRepository
 {
-    private readonly DmDbContext dbContext;
+    private readonly DmDbContext _dbContext;
 
     /// <inheritdoc />
     public RoomClaimsDeletingRepository(
         DmDbContext dbContext)
     {
-        this.dbContext = dbContext;
+        _dbContext = dbContext;
     }
-        
+
     /// <inheritdoc />
     public Task Delete(IUpdateBuilder<RoomClaim> deleteLink)
     {
-        deleteLink.AttachTo(dbContext);
-        return dbContext.SaveChangesAsync();
+        deleteLink.AttachTo(_dbContext);
+        return _dbContext.SaveChangesAsync();
     }
 }

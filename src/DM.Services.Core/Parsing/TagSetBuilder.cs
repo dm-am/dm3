@@ -8,12 +8,12 @@ namespace DM.Services.Core.Parsing;
 /// </summary>
 internal class TagSetBuilder
 {
-    private readonly List<Tag> set;
+    private readonly List<Tag> _set;
 
     /// <inheritdoc />
     public TagSetBuilder(IEnumerable<Tag> defaultSet)
     {
-        set = new List<Tag>(defaultSet);
+        _set = new List<Tag>(defaultSet);
     }
 
     /// <summary>
@@ -22,7 +22,7 @@ internal class TagSetBuilder
     /// <returns></returns>
     public Tag[] Build()
     {
-        return set.ToArray();
+        return _set.ToArray();
     }
 
     /// <summary>
@@ -32,7 +32,7 @@ internal class TagSetBuilder
     /// <returns>Self</returns>
     public TagSetBuilder With(params Tag[] tags)
     {
-        set.AddRange(tags);
+        _set.AddRange(tags);
         return this;
     }
 
@@ -45,7 +45,7 @@ internal class TagSetBuilder
     {
         foreach (var tag in tags)
         {
-            set.Remove(tag);
+            _set.Remove(tag);
         }
         return this;
     }

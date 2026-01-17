@@ -7,12 +7,12 @@ namespace DM.Web.API.Validation;
 /// <inheritdoc />
 internal class FileSizeValidationAttribute : ValidationAttribute
 {
-    private readonly long maxSize;
+    private readonly long _maxSize;
 
     /// <inheritdoc />
     public FileSizeValidationAttribute(long maxSize)
     {
-        this.maxSize = maxSize;
+        _maxSize = maxSize;
     }
 
     /// <inheritdoc />
@@ -27,5 +27,5 @@ internal class FileSizeValidationAttribute : ValidationAttribute
         _ => new ValidationResult("Value must be a file")
     };
 
-    private bool IsValid(IFormFile formFile) => formFile.Length <= maxSize;
+    private bool IsValid(IFormFile formFile) => formFile.Length <= _maxSize;
 }

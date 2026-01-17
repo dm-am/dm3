@@ -11,19 +11,19 @@ namespace DM.Services.Community.BusinessProcesses.Account.Activation;
 /// <inheritdoc />
 internal class ActivationRepository : IActivationRepository
 {
-    private readonly DmDbContext dbContext;
+    private readonly DmDbContext _dbContext;
 
     /// <inheritdoc />
     public ActivationRepository(
         DmDbContext dbContext)
     {
-        this.dbContext = dbContext;
+        _dbContext = dbContext;
     }
         
     /// <inheritdoc />
     public async Task<Guid?> FindUserToActivate(Guid tokenId, DateTimeOffset createdSince)
     {
-        return (await dbContext.Tokens
+        return (await _dbContext.Tokens
             .Where(t => t.TokenId == tokenId && t.CreateDate > createdSince)
             .Select(t => new {t.UserId})
             .FirstOrDefaultAsync())?.UserId;
@@ -32,8 +32,8 @@ internal class ActivationRepository : IActivationRepository
     /// <inheritdoc />
     public Task ActivateUser(IUpdateBuilder<User> updateUser, IUpdateBuilder<Token> updateToken)
     {
-        updateUser.AttachTo(dbContext);
-        updateToken.AttachTo(dbContext);
-        return dbContext.SaveChangesAsync();
+        updateUser.AttachTo(_dbContext);
+        updateToken.AttachTo(_dbContext);
+        return _dbContext.SaveChangesAsync();
     }
 }

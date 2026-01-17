@@ -8,28 +8,28 @@ namespace DM.Services.Core.Implementation.CorrelationToken;
 /// </summary>
 internal class CorrelationTokenProvider : ICorrelationTokenProvider, ICorrelationTokenSetter
 {
-    private Lazy<Guid> token;
+    private Lazy<Guid> _token;
 
     /// <param name="guidFactory"></param>
     /// <inheritdoc />
     public CorrelationTokenProvider(IGuidFactory guidFactory)
     {
-        token = new Lazy<Guid>(guidFactory.Create);
+        _token = new Lazy<Guid>(guidFactory.Create);
     }
-        
+
     /// <inheritdoc cref="ICorrelationTokenProvider" />
     public Guid Current
     {
-        get => token.Value;
+        get => _token.Value;
         set
         {
-            if (token.IsValueCreated)
+            if (_token.IsValueCreated)
             {
                 return;
             }
 
             LogContext.PushProperty("CorrelationToken", value);
-            token = new Lazy<Guid>(() => value);
+            _token = new Lazy<Guid>(() => value);
         }
     }
 }

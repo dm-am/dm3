@@ -16,24 +16,24 @@ namespace DM.Services.Gaming.BusinessProcesses.Characters.Updating;
 /// <inheritdoc />
 internal class CharacterUpdatingRepository : ICharacterUpdatingRepository
 {
-    private readonly DmDbContext dbContext;
-    private readonly IMapper mapper;
+    private readonly DmDbContext _dbContext;
+    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public CharacterUpdatingRepository(
         DmDbContext dbContext,
         IMapper mapper)
     {
-        this.dbContext = dbContext;
-        this.mapper = mapper;
+        _dbContext = dbContext;
+        _mapper = mapper;
     }
 
     /// <inheritdoc />
     public Task<CharacterToUpdate> Get(Guid characterId)
     {
-        return dbContext.Characters
+        return _dbContext.Characters
             .Where(c => c.CharacterId == characterId)
-            .ProjectTo<CharacterToUpdate>(mapper.ConfigurationProvider)
+            .ProjectTo<CharacterToUpdate>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }
 
@@ -42,23 +42,23 @@ internal class CharacterUpdatingRepository : ICharacterUpdatingRepository
         IUpdateBuilder<DataAccess.BusinessObjects.Games.Characters.Character> updateCharacter,
         IEnumerable<IUpdateBuilder<CharacterAttribute>> attributeChanges)
     {
-        var characterId = updateCharacter.AttachTo(dbContext);
+        var characterId = updateCharacter.AttachTo(_dbContext);
         foreach (var attributeChange in attributeChanges)
         {
-            attributeChange.AttachTo(dbContext);
+            attributeChange.AttachTo(_dbContext);
         }
 
-        await dbContext.SaveChangesAsync();
-        return await dbContext.Characters
+        await _dbContext.SaveChangesAsync();
+        return await _dbContext.Characters
             .Where(c => c.CharacterId == characterId)
-            .ProjectTo<Character>(mapper.ConfigurationProvider)
+            .ProjectTo<Character>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }
 
     /// <inheritdoc />
     public async Task<IDictionary<Guid, Guid>> GetAttributeIds(Guid characterId)
     {
-        return await dbContext.CharacterAttributes
+        return await _dbContext.CharacterAttributes
             .Where(c => c.CharacterId == characterId)
             .ToDictionaryAsync(a => a.AttributeId, a => a.CharacterAttributeId);
     }

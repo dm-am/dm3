@@ -36,4 +36,50 @@ internal interface IChatReadingRepository
     /// <param name="id"></param>
     /// <returns></returns>
     Task<ChatMessage> Get(Guid id);
+
+    /// <summary>
+    /// Get chat messages for a specific date
+    /// </summary>
+    /// <param name="date"></param>
+    /// <returns></returns>
+    Task<IEnumerable<ChatMessage>> GetByDate(DateOnly date);
+
+    /// <summary>
+    /// Get messages before (older than) the given message
+    /// </summary>
+    /// <param name="messageId">Reference message ID</param>
+    /// <param name="count">Number of messages to fetch</param>
+    /// <returns>Messages ordered by date ascending</returns>
+    Task<IEnumerable<ChatMessage>> GetBefore(Guid messageId, int count);
+
+    /// <summary>
+    /// Get messages after (newer than) the given message
+    /// </summary>
+    /// <param name="messageId">Reference message ID</param>
+    /// <param name="count">Number of messages to fetch</param>
+    /// <returns>Messages ordered by date ascending</returns>
+    Task<IEnumerable<ChatMessage>> GetAfter(Guid messageId, int count);
+
+    /// <summary>
+    /// Get messages around the given message (half before, half after)
+    /// </summary>
+    /// <param name="messageId">Reference message ID</param>
+    /// <param name="count">Total number of messages to fetch</param>
+    /// <returns>Messages ordered by date ascending</returns>
+    Task<IEnumerable<ChatMessage>> GetAround(Guid messageId, int count);
+
+    /// <summary>
+    /// Check if there are messages before the given message
+    /// </summary>
+    Task<bool> HasMessagesBefore(Guid messageId);
+
+    /// <summary>
+    /// Check if there are messages after the given message
+    /// </summary>
+    Task<bool> HasMessagesAfter(Guid messageId);
+
+    /// <summary>
+    /// Get first message on or after the given date
+    /// </summary>
+    Task<ChatMessage> GetFirstOnOrAfterDate(DateOnly date);
 }

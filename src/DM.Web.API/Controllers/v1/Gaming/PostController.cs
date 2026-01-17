@@ -81,14 +81,14 @@ public class PostController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to change some properties of this post</response>
     /// <response code="410">Post not found</response>
-    [HttpPatch("posts/{id}", Name = nameof(PutPost))]
+    [HttpPatch("posts/{id}", Name = nameof(PatchPost))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Post>), 200)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PutPost(Guid id, [FromBody] Post post) =>
+    public async Task<IActionResult> PatchPost(Guid id, [FromBody] Post post) =>
         Ok(await postApiService.Update(id, post));
 
     /// <summary>

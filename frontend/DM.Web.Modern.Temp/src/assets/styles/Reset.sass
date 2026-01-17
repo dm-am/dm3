@@ -40,11 +40,8 @@ a
   transition: color $animation-time
   +theme(color, $active-text)
   &:hover
+    text-decoration: underline
     +theme(color, $active-text-hover)
-
-  &.router-link-active
-    font-weight: bold
-    +theme(color, $text)
 
 field
   display: flex

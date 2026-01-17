@@ -16,8 +16,8 @@ namespace DM.Services.Gaming.BusinessProcesses.Likes;
 /// </summary>
 internal class LikeService : LikeServiceBase, ILikeService
 {
-    private readonly ICommentaryReadingService commentaryReadingService;
-    private readonly IIntentionManager intentionManager;
+    private readonly ICommentaryReadingService _commentaryReadingService;
+    private readonly IIntentionManager _intentionManager;
 
     /// <inheritdoc />
     public LikeService(
@@ -29,23 +29,23 @@ internal class LikeService : LikeServiceBase, ILikeService
         IInvokedEventProducer invokedEventProducer)
         : base(identityProvider, likeFactory, likeRepository, invokedEventProducer)
     {
-        this.commentaryReadingService = commentaryReadingService;
-        this.intentionManager = intentionManager;
+        _commentaryReadingService = commentaryReadingService;
+        _intentionManager = intentionManager;
     }
 
     /// <inheritdoc />
     public async Task<GeneralUser> LikeComment(Guid commentId)
     {
-        var comment = await commentaryReadingService.Get(commentId);
-        intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
+        var comment = await _commentaryReadingService.Get(commentId);
+        _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
         return await Like(comment, EventType.LikedGameComment);
     }
 
     /// <inheritdoc />
     public async Task DislikeComment(Guid commentId)
     {
-        var comment = await commentaryReadingService.Get(commentId);
-        intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
+        var comment = await _commentaryReadingService.Get(commentId);
+        _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
         await Dislike(comment);
     }
 }

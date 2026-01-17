@@ -88,14 +88,14 @@ public class RoomController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to change some properties of this room</response>
     /// <response code="410">Room not found</response>
-    [HttpPatch("rooms/{id}", Name = nameof(PutRoom))]
+    [HttpPatch("rooms/{id}", Name = nameof(PatchRoom))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Room>), 200)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PutRoom(Guid id, [FromBody] Room room) =>
+    public async Task<IActionResult> PatchRoom(Guid id, [FromBody] Room room) =>
         Ok(await roomApiService.Update(id, room));
 
     /// <summary>
@@ -154,14 +154,14 @@ public class RoomController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to update this claim</response>
     /// <response code="410">Claim not found</response>
-    [HttpPatch("rooms/claims/{id}", Name = nameof(UpdateClaim))]
+    [HttpPatch("rooms/claims/{id}", Name = nameof(PatchClaim))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<RoomClaim>), 200)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> UpdateClaim(Guid id, [FromBody] RoomClaim claim) =>
+    public async Task<IActionResult> PatchClaim(Guid id, [FromBody] RoomClaim claim) =>
         Ok(await claimApiService.Update(id, claim));
 
     /// <summary>

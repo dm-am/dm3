@@ -17,4 +17,12 @@ internal interface IPollVotingRepository
     /// <param name="userId">User identifier</param>
     /// <returns></returns>
     Task<Poll> Vote(Guid pollId, Guid optionId, Guid userId);
+
+    /// <summary>
+    /// Remove vote from the poll
+    /// </summary>
+    /// <param name="pollId">Poll identifier</param>
+    /// <param name="userId">User identifier</param>
+    /// <returns></returns>
+    Task<Poll> Unvote(Guid pollId, Guid userId);
 }

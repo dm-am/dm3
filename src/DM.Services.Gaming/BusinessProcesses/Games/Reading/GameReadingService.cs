@@ -32,7 +32,9 @@ internal class GameReadingService : IGameReadingService
 
     private const string TagListCacheKey = nameof(TagListCacheKey);
     private const string PopularGamesCacheKey = nameof(PopularGamesCacheKey);
+    private const string GamesByStatusCacheKeyPrefix = "GamesByStatus_";
     private const int PopularGamesLimit = 10;
+    private static readonly TimeSpan GamesByStatusCacheDuration = TimeSpan.FromSeconds(30);
 
     /// <inheritdoc />
     public GameReadingService(
@@ -69,6 +71,10 @@ internal class GameReadingService : IGameReadingService
         var currentUserId = identityProvider.Current.User.UserId;
         var games = (await repository.GetOwn(currentUserId)).ToArray();
 
+        if (games.Length == 0)
+            return games;
+
+        // EF Core DbContext не thread-safe, запросы последовательно
         await unreadCountersRepository.FillEntityCounters(
             games, currentUserId, g => g.Id, g => g.UnreadCommentsCount);
         await unreadCountersRepository.FillEntityCounters(
@@ -76,11 +82,12 @@ internal class GameReadingService : IGameReadingService
 
         var gameIds = games.Select(g => g.Id).ToArray();
         var gameRooms = await repository.GetAvailableRoomIds(gameIds, currentUserId);
-        var allRoomIds = gameRooms.SelectMany(r => r.Value).ToArray();
-        var unreadPostCounters = await unreadCountersRepository.SelectByEntities(
-            currentUserId, UnreadEntryType.Message, allRoomIds);
-
         var pendingPosts = (await repository.GetPendingPosts(gameIds, currentUserId)).ToArray();
+
+        var allRoomIds = gameRooms.SelectMany(r => r.Value).ToArray();
+        var unreadPostCounters = allRoomIds.Length > 0
+            ? await unreadCountersRepository.SelectByEntities(currentUserId, UnreadEntryType.Message, allRoomIds)
+            : new Dictionary<Guid, int>();
 
         foreach (var game in games)
         {
@@ -99,22 +106,47 @@ internal class GameReadingService : IGameReadingService
     {
         await validator.ValidateAndThrowAsync(query);
 
-        var currentUserId = identityProvider.Current.User.UserId;
-        var totalCount = await repository.Count(query, currentUserId);
-        var pagingData = new PagingData(query,
-            identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
+        var identity = identityProvider.Current;
+        var currentUserId = identity.User.UserId;
+        var isAnonymous = !identity.User.IsAuthenticated;
+        var pageSize = identity.Settings.Paging.EntitiesPerPage;
 
-        var games = (await repository.GetGames(pagingData, query, currentUserId)).ToArray();
+        // Для анонимов кэшируем результат (без unread counters)
+        if (isAnonymous && !query.TagId.HasValue && query.Number is null or 1)
+        {
+            var cacheKey = $"{GamesByStatusCacheKeyPrefix}{string.Join("_", query.Statuses)}";
+            var cached = await cache.GetOrCreateAsync(cacheKey, async e =>
+            {
+                e.AbsoluteExpirationRelativeToNow = GamesByStatusCacheDuration;
+                var totalCount = await repository.Count(query, Guid.Empty);
+                var pagingData = new PagingData(query, pageSize, totalCount);
+                var gamesList = (await repository.GetGames(pagingData, query, Guid.Empty)).ToArray();
+                return (games: gamesList, paging: pagingData.Result);
+            });
+            return cached;
+        }
+
+        // Для авторизованных — последовательные запросы (DbContext не thread-safe)
+        var totalCountAuth = await repository.Count(query, currentUserId);
+        var pagingDataAuth = new PagingData(query, pageSize, totalCountAuth);
+        var games = (await repository.GetGames(pagingDataAuth, query, currentUserId)).ToArray();
+
+        if (games.Length == 0)
+            return (games, pagingDataAuth.Result);
+
         await unreadCountersRepository.FillEntityCounters(games, currentUserId,
             g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
 
         var gamesWithAvailableComments = games
             .Where(g => intentionManager.IsAllowed(GameIntention.ReadComments, g))
             .ToArray();
-        await unreadCountersRepository.FillEntityCounters(gamesWithAvailableComments, currentUserId,
-            g => g.Id, g => g.UnreadCommentsCount);
+        if (gamesWithAvailableComments.Length > 0)
+        {
+            await unreadCountersRepository.FillEntityCounters(gamesWithAvailableComments, currentUserId,
+                g => g.Id, g => g.UnreadCommentsCount);
+        }
 
-        return (games, pagingData.Result);
+        return (games, pagingDataAuth.Result);
     }
 
     /// <inheritdoc />

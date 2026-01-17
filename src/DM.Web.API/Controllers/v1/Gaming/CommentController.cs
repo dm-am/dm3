@@ -85,14 +85,14 @@ public class CommentController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to change this comment</response>
     /// <response code="410">Comment not found</response>
-    [HttpPatch("comments/{id}", Name = nameof(PutGameComment))]
+    [HttpPatch("comments/{id}", Name = nameof(PatchGameComment))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Comment>), 200)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PutGameComment(Guid id, [FromBody] Comment comment) =>
+    public async Task<IActionResult> PatchGameComment(Guid id, [FromBody] Comment comment) =>
         Ok(await commentApiService.Update(id, comment));
 
     /// <summary>

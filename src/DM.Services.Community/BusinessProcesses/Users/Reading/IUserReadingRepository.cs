@@ -13,16 +13,18 @@ internal interface IUserReadingRepository
     /// Count community users by filter
     /// </summary>
     /// <param name="withInactive">Count inactive users too</param>
+    /// <param name="search">Search by login prefix</param>
     /// <returns>Number of the users</returns>
-    Task<int> CountUsers(bool withInactive);
+    Task<int> CountUsers(bool withInactive, string search = null);
 
     /// <summary>
     /// Get users list on paging data
     /// </summary>
     /// <param name="paging">Paging data</param>
     /// <param name="withInactive">Search among inactive users</param>
+    /// <param name="search">Search by login prefix</param>
     /// <returns>List of users found</returns>
-    Task<IEnumerable<GeneralUser>> GetUsers(PagingData paging, bool withInactive);
+    Task<IEnumerable<GeneralUser>> GetUsers(PagingData paging, bool withInactive, string search = null);
 
     /// <summary>
     /// Get user by login

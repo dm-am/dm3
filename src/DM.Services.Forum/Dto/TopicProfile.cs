@@ -1,6 +1,6 @@
 using System.Linq;
 using AutoMapper;
-using DM.Services.DataAccess.BusinessObjects.Fora;
+using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.Forum.Dto.Output;
 using Comment = DM.Services.DataAccess.BusinessObjects.Common.Comment;
 

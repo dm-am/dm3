@@ -38,4 +38,11 @@ public interface IPollApiService
     /// <param name="optionId">Option identifier</param>
     /// <returns></returns>
     Task<Envelope<Poll>> Vote(Guid pollId, Guid optionId);
+
+    /// <summary>
+    /// Remove vote from the poll
+    /// </summary>
+    /// <param name="pollId">Poll identifier</param>
+    /// <returns></returns>
+    Task<Envelope<Poll>> Unvote(Guid pollId);
 }

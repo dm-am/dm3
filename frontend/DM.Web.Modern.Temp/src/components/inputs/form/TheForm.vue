@@ -8,7 +8,7 @@
       <the-button :disabled="valid === false" :loading="loading">{{
         action
       }}</the-button>
-      <a v-if="cancel" class="controls-cancel">{{ cancel }}</a>
+      <a v-if="cancel" class="controls-cancel" @click="handleCancel">{{ cancel }}</a>
     </div>
   </form>
 </template>
@@ -23,8 +23,9 @@ defineProps<{
   action?: string;
   cancel?: string;
 }>();
-const emit = defineEmits(["submit"]);
+const emit = defineEmits(["submit", "cancel"]);
 const submit = () => emit("submit");
+const handleCancel = () => emit("cancel");
 const slots = defineSlots();
 </script>
 

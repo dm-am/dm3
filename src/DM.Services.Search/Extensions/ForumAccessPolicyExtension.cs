@@ -12,23 +12,23 @@ public static class ForumAccessPolicyExtension
     /// Get list of atomic roles that are authorized to perform forum policy action
     /// </summary>
     /// <param name="forumAccessPolicy">Forum access policy</param>
-    /// <returns>List of user rols</returns>
+    /// <returns>List of user roles</returns>
     public static IEnumerable<UserRole> GetAuthorizedRoles(this ForumAccessPolicy forumAccessPolicy)
     {
         if (forumAccessPolicy.HasFlag(ForumAccessPolicy.Guest))
         {
             yield return UserRole.Guest;
-            yield return UserRole.Player;
+            yield return UserRole.RegularUser;
         }
 
-        if (forumAccessPolicy.HasFlag(ForumAccessPolicy.NannyModerator))
+        if (forumAccessPolicy.HasFlag(ForumAccessPolicy.MentorModerator))
         {
-            yield return UserRole.NannyModerator;
+            yield return UserRole.Mentor;
         }
 
         if (forumAccessPolicy.HasFlag(ForumAccessPolicy.ForumModerator))
         {
-            yield return UserRole.RegularModerator;
+            yield return UserRole.Moderator;
         }
 
         if (forumAccessPolicy.HasFlag(ForumAccessPolicy.SeniorModerator))
@@ -38,7 +38,7 @@ public static class ForumAccessPolicyExtension
 
         if (forumAccessPolicy.HasFlag(ForumAccessPolicy.Administrator))
         {
-            yield return UserRole.Administrator;
+            yield return UserRole.Admin;
         }
     }
 }

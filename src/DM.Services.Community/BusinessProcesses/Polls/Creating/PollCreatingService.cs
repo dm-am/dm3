@@ -10,11 +10,11 @@ namespace DM.Services.Community.BusinessProcesses.Polls.Creating;
 /// <inheritdoc />
 internal class PollCreatingService : IPollCreatingService
 {
-    private readonly IValidator<CreatePoll> validator;
-    private readonly IIntentionManager intentionManager;
-    private readonly IPollFactory factory;
-    private readonly IPollCreatingRepository repository;
-    private readonly IInvokedEventProducer producer;
+    private readonly IValidator<CreatePoll> _validator;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IPollFactory _factory;
+    private readonly IPollCreatingRepository _repository;
+    private readonly IInvokedEventProducer _producer;
 
     /// <inheritdoc />
     public PollCreatingService(
@@ -24,22 +24,22 @@ internal class PollCreatingService : IPollCreatingService
         IPollCreatingRepository repository,
         IInvokedEventProducer producer)
     {
-        this.validator = validator;
-        this.intentionManager = intentionManager;
-        this.factory = factory;
-        this.repository = repository;
-        this.producer = producer;
+        _validator = validator;
+        _intentionManager = intentionManager;
+        _factory = factory;
+        _repository = repository;
+        _producer = producer;
     }
-        
+
     /// <inheritdoc />
     public async Task<Poll> Create(CreatePoll createPoll)
     {
-        await validator.ValidateAndThrowAsync(createPoll);
-        intentionManager.ThrowIfForbidden(PollIntention.Create);
+        await _validator.ValidateAndThrowAsync(createPoll);
+        _intentionManager.ThrowIfForbidden(PollIntention.Create);
 
-        var poll = factory.Create(createPoll);
-        var result = await repository.Create(poll);
-        await producer.Send(EventType.NewPoll, result.Id);
+        var poll = _factory.Create(createPoll);
+        var result = await _repository.Create(poll);
+        await _producer.Send(EventType.NewPoll, result.Id);
 
         return result;
     }

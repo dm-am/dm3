@@ -38,11 +38,12 @@ internal class UserReadingRepository : MongoCollectionRepository<UserSettings>, 
     private static readonly TimeSpan ActivityRange = TimeSpan.FromDays(30);
 
     /// <inheritdoc />
-    public Task<int> CountUsers(bool withInactive) => GetQuery(withInactive).CountAsync();
+    public Task<int> CountUsers(bool withInactive, string search = null) =>
+        GetQuery(withInactive, search).CountAsync();
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetUsers(PagingData paging, bool withInactive) =>
-        await GetQuery(withInactive)
+    public async Task<IEnumerable<GeneralUser>> GetUsers(PagingData paging, bool withInactive, string search = null) =>
+        await GetQuery(withInactive, search)
             .OrderBy(u => u.RatingDisabled)
             .ThenByDescending(u => u.QualityRating)
             .ThenBy(u => u.QuantityRating)
@@ -50,9 +51,16 @@ internal class UserReadingRepository : MongoCollectionRepository<UserSettings>, 
             .ProjectTo<GeneralUser>(mapper.ConfigurationProvider)
             .ToArrayAsync();
 
-    private IQueryable<User> GetQuery(bool withInactive)
+    private IQueryable<User> GetQuery(bool withInactive, string search = null)
     {
         var query = dmDbContext.Users.Where(u => !u.IsRemoved && u.Activated);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchLower = search.ToLower();
+            query = query.Where(u => u.Login.ToLower().StartsWith(searchLower));
+        }
+
         if (withInactive)
         {
             return query;

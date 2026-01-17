@@ -46,7 +46,7 @@ public class UserFactoryShould : UnitTestBase
             Email = "email",
             RegistrationDate = rightNow,
             LastVisitDate = null,
-            Role = UserRole.Player,
+            Role = UserRole.RegularUser,
             AccessPolicy = AccessPolicy.NotSpecified,
             Salt = "salt",
             PasswordHash = "hash",

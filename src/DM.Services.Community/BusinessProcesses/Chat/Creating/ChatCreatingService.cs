@@ -11,12 +11,12 @@ namespace DM.Services.Community.BusinessProcesses.Chat.Creating;
 /// <inheritdoc />
 internal class ChatCreatingService : IChatCreatingService
 {
-    private readonly IValidator<CreateChatMessage> validator;
-    private readonly IIntentionManager intentionManager;
-    private readonly IChatMessageFactory factory;
-    private readonly IChatCreatingRepository repository;
-    private readonly IInvokedEventProducer producer;
-    private readonly IIdentityProvider identityProvider;
+    private readonly IValidator<CreateChatMessage> _validator;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IChatMessageFactory _factory;
+    private readonly IChatCreatingRepository _repository;
+    private readonly IInvokedEventProducer _producer;
+    private readonly IIdentityProvider _identityProvider;
 
     /// <inheritdoc />
     public ChatCreatingService(
@@ -27,23 +27,23 @@ internal class ChatCreatingService : IChatCreatingService
         IInvokedEventProducer producer,
         IIdentityProvider identityProvider)
     {
-        this.validator = validator;
-        this.intentionManager = intentionManager;
-        this.factory = factory;
-        this.repository = repository;
-        this.producer = producer;
-        this.identityProvider = identityProvider;
+        _validator = validator;
+        _intentionManager = intentionManager;
+        _factory = factory;
+        _repository = repository;
+        _producer = producer;
+        _identityProvider = identityProvider;
     }
-        
+
     /// <inheritdoc />
     public async Task<ChatMessage> Create(CreateChatMessage createChatMessage)
     {
-        await validator.ValidateAndThrowAsync(createChatMessage);
-        intentionManager.ThrowIfForbidden(ChatIntention.CreateMessage);
+        await _validator.ValidateAndThrowAsync(createChatMessage);
+        _intentionManager.ThrowIfForbidden(ChatIntention.CreateMessage);
 
-        var chatMessage = factory.Create(createChatMessage, identityProvider.Current.User.UserId);
-        var result = await repository.Create(chatMessage);
-        await producer.Send(EventType.NewChatMessage, chatMessage.ChatMessageId);
+        var chatMessage = _factory.Create(createChatMessage, _identityProvider.Current.User.UserId);
+        var result = await _repository.Create(chatMessage);
+        await _producer.Send(EventType.NewChatMessage, chatMessage.ChatMessageId);
 
         return result;
     }

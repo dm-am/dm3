@@ -8,27 +8,27 @@ namespace DM.Services.Common.BusinessProcesses.Commentaries;
 /// <inheritdoc />
 internal class CommentaryFactory : ICommentaryFactory
 {
-    private readonly IGuidFactory guidFactory;
-    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public CommentaryFactory(
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider)
     {
-        this.guidFactory = guidFactory;
-        this.dateTimeProvider = dateTimeProvider;
+        _guidFactory = guidFactory;
+        _dateTimeProvider = dateTimeProvider;
     }
-        
+
     /// <inheritdoc />
     public Comment Create(CreateComment createComment, Guid userId)
     {
         return new Comment
         {
-            CommentId = guidFactory.Create(),
+            CommentId = _guidFactory.Create(),
             EntityId = createComment.EntityId,
             UserId = userId,
-            CreateDate = dateTimeProvider.Now,
+            CreateDate = _dateTimeProvider.Now,
             Text = createComment.Text.Trim(),
             IsRemoved = false
         };

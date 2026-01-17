@@ -9,7 +9,7 @@ using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Common.Dto;
 using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Fora;
+using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Services.Forum.Authorization;
 using DM.Services.Forum.BusinessProcesses.Commentaries.Creating;
@@ -49,7 +49,7 @@ public class CommentaryCreatingServiceShould : UnitTestBase
             .ReturnsAsync(new ValidationResult());
 
         var topicReadingService = Mock<ITopicReadingService>();
-        topicReadingSetup = topicReadingService.Setup(s => s.GetTopic(It.IsAny<Guid>()));
+        topicReadingSetup = topicReadingService.Setup(s => s.GetTopic(It.IsAny<Guid>(), It.IsAny<CancellationToken>()));
 
         intentionManager = Mock<IIntentionManager>();
         intentionManager

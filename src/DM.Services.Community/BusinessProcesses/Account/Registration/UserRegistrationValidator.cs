@@ -15,7 +15,7 @@ internal class UserRegistrationValidator : AbstractValidator<UserRegistration>
         RuleFor(r => r.Login)
             .NotEmpty().WithMessage(ValidationError.Empty)
             .MinimumLength(2).WithMessage(ValidationError.Short)
-            .MaximumLength(60).WithMessage(ValidationError.Long)
+            .MaximumLength(20).WithMessage(ValidationError.Long)
             .MustAsync(registrationRepository.LoginFree).WithMessage(ValidationError.Taken);
 
         RuleFor(r => r.Email)

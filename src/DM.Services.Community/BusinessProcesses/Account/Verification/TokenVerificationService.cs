@@ -9,19 +9,19 @@ namespace DM.Services.Community.BusinessProcesses.Account.Verification;
 /// <inheritdoc />
 internal class TokenVerificationService : ITokenVerificationService
 {
-    private readonly ITokenVerificationRepository repository;
+    private readonly ITokenVerificationRepository _repository;
 
     /// <inheritdoc />
     public TokenVerificationService(
         ITokenVerificationRepository repository)
     {
-        this.repository = repository;
+        _repository = repository;
     }
 
     /// <inheritdoc />
     public async Task<GeneralUser> Verify(Guid token)
     {
-        var owner = await repository.GetTokenOwner(token);
+        var owner = await _repository.GetTokenOwner(token);
         if (owner == null)
         {
             throw new HttpException(HttpStatusCode.Gone, "Token is invalid");

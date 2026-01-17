@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { useRoute } from "vue-router";
-import { useReviewStore } from "@/stores";
+import { useWebsiteReviewStore } from "@/stores";
 import { extractNumberParam } from "@/router";
 import { useFetchData } from "@/composables/useFetchData";
 
 const route = useRoute();
-const { fetchReviews } = useReviewStore();
+const { fetchWebsiteReviews } = useWebsiteReviewStore();
 
 useFetchData(
-  () => fetchReviews(extractNumberParam(route.params.n)),
+  () => fetchWebsiteReviews(extractNumberParam(route.params.n)),
   [
     {
       param: (p) => p.n,
-      callback: (n) => fetchReviews(extractNumberParam(n)),
+      callback: (n) => fetchWebsiteReviews(extractNumberParam(n)),
     },
   ],
 );

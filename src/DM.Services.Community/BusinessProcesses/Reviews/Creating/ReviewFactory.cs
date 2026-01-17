@@ -20,7 +20,7 @@ internal class ReviewFactory : IReviewFactory
     }
         
     /// <inheritdoc />
-    public Review Create(CreateReview createReview, Guid userId)
+    public Review Create(CreateReview createReview, Guid userId, bool isApproved)
     {
         return new Review
         {
@@ -28,7 +28,7 @@ internal class ReviewFactory : IReviewFactory
             UserId = userId,
             CreateDate = dateTimeProvider.Now,
             Text = createReview.Text.Trim(),
-            IsApproved = false
+            IsApproved = isApproved
         };
     }
 }

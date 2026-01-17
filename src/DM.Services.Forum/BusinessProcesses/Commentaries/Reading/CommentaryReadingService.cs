@@ -7,7 +7,7 @@ using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Core.Dto;
 using DM.Services.Core.Exceptions;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.Forum.BusinessProcesses.Fora;
+using DM.Services.Forum.BusinessProcesses.Boards;
 using DM.Services.Forum.BusinessProcesses.Topics.Reading;
 using Comment = DM.Services.Common.Dto.Comment;
 
@@ -16,11 +16,11 @@ namespace DM.Services.Forum.BusinessProcesses.Commentaries.Reading;
 /// <inheritdoc />
 internal class CommentaryReadingService : ICommentaryReadingService
 {
-    private readonly ITopicReadingService topicReadingService;
-    private readonly IForumReadingService forumReadingService;
-    private readonly IUnreadCountersRepository unreadCountersRepository;
-    private readonly ICommentaryReadingRepository commentaryRepository;
-    private readonly IIdentityProvider identityProvider;
+    private readonly ITopicReadingService _topicReadingService;
+    private readonly IForumReadingService _forumReadingService;
+    private readonly IUnreadCountersRepository _unreadCountersRepository;
+    private readonly ICommentaryReadingRepository _commentaryRepository;
+    private readonly IIdentityProvider _identityProvider;
 
     /// <inheritdoc />
     public CommentaryReadingService(
@@ -30,23 +30,23 @@ internal class CommentaryReadingService : ICommentaryReadingService
         IUnreadCountersRepository unreadCountersRepository,
         ICommentaryReadingRepository commentaryRepository)
     {
-        this.topicReadingService = topicReadingService;
-        this.forumReadingService = forumReadingService;
-        this.unreadCountersRepository = unreadCountersRepository;
-        this.commentaryRepository = commentaryRepository;
-        this.identityProvider = identityProvider;
+        _topicReadingService = topicReadingService;
+        _forumReadingService = forumReadingService;
+        _unreadCountersRepository = unreadCountersRepository;
+        _commentaryRepository = commentaryRepository;
+        _identityProvider = identityProvider;
     }
 
     /// <inheritdoc />
     public async Task<(IEnumerable<Comment> comments, PagingResult paging)> Get(
         Guid topicId, PagingQuery query)
     {
-        await topicReadingService.GetTopic(topicId);
+        await _topicReadingService.GetTopic(topicId);
 
-        var totalCount = await commentaryRepository.Count(topicId);
-        var paging = new PagingData(query, identityProvider.Current.Settings.Paging.CommentsPerPage, totalCount);
+        var totalCount = await _commentaryRepository.Count(topicId);
+        var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.CommentsPerPage, totalCount);
 
-        var comments = await commentaryRepository.Get(topicId, paging);
+        var comments = await _commentaryRepository.Get(topicId, paging);
 
         return (comments, paging.Result);
     }
@@ -54,23 +54,34 @@ internal class CommentaryReadingService : ICommentaryReadingService
     /// <inheritdoc />
     public async Task<Comment> Get(Guid commentId)
     {
-        return await commentaryRepository.Get(commentId) ??
+        return await _commentaryRepository.Get(commentId) ??
                throw new HttpException(HttpStatusCode.Gone, $"Comment {commentId} not found");
     }
 
     /// <inheritdoc />
     public async Task MarkAsRead(Guid topicId)
     {
-        await topicReadingService.GetTopic(topicId);
-        await unreadCountersRepository.Flush(identityProvider.Current.User.UserId,
+        await _topicReadingService.GetTopic(topicId);
+        await _unreadCountersRepository.Flush(_identityProvider.Current.User.UserId,
             UnreadEntryType.Message, topicId);
     }
 
     /// <inheritdoc />
     public async Task MarkAsRead(string forumTitle)
     {
-        var forum = await forumReadingService.GetForum(forumTitle);
-        await unreadCountersRepository.FlushAll(identityProvider.Current.User.UserId,
+        var forum = await _forumReadingService.GetForum(forumTitle);
+        await _unreadCountersRepository.FlushAll(_identityProvider.Current.User.UserId,
             UnreadEntryType.Message, forum.Id);
+    }
+
+    /// <inheritdoc />
+    public async Task MarkAllAsRead()
+    {
+        var forums = await _forumReadingService.GetForaList();
+        var userId = _identityProvider.Current.User.UserId;
+        foreach (var forum in forums)
+        {
+            await _unreadCountersRepository.FlushAll(userId, UnreadEntryType.Message, forum.Id);
+        }
     }
 }

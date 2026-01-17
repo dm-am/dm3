@@ -1,4 +1,4 @@
-using DM.Services.DataAccess.BusinessObjects.Fora;
+using DM.Services.DataAccess.BusinessObjects.Boards;
 
 namespace DM.Services.Community.BusinessProcesses.Polls.Creating;
 

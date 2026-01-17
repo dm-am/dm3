@@ -53,7 +53,7 @@ public class Game
     /// <summary>
     /// Game premoderation moderator
     /// </summary>
-    public GeneralUser Nanny { get; set; }
+    public GeneralUser Mentor { get; set; }
 
     /// <summary>
     /// Pending assistant if any

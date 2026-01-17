@@ -12,27 +12,27 @@ namespace DM.Services.Gaming.BusinessProcesses.Blacklist.Creating;
 /// <inheritdoc />
 internal class BlacklistCreatingRepository : IBlacklistCreatingRepository
 {
-    private readonly DmDbContext dbContext;
-    private readonly IMapper mapper;
+    private readonly DmDbContext _dbContext;
+    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public BlacklistCreatingRepository(
         DmDbContext dbContext,
         IMapper mapper)
     {
-        this.dbContext = dbContext;
-        this.mapper = mapper;
+        _dbContext = dbContext;
+        _mapper = mapper;
     }
-        
+
     /// <inheritdoc />
     public async Task<GeneralUser> Create(BlackListLink link)
     {
-        dbContext.BlackListLinks.Add(link);
-        await dbContext.SaveChangesAsync();
-        return await dbContext.BlackListLinks
+        _dbContext.BlackListLinks.Add(link);
+        await _dbContext.SaveChangesAsync();
+        return await _dbContext.BlackListLinks
             .Where(l => l.BlackListLinkId == link.BlackListLinkId)
             .Select(l => l.User)
-            .ProjectTo<GeneralUser>(mapper.ConfigurationProvider)
+            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }
 }

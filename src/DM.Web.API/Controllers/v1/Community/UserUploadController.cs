@@ -15,13 +15,13 @@ namespace DM.Web.API.Controllers.v1.Community;
 [ApiExplorerSettings(GroupName = "Community")]
 public class UserUploadController : ControllerBase
 {
-    private readonly IUserApiService userApiService;
+    private readonly IUserApiService _userApiService;
 
     /// <inheritdoc />
     public UserUploadController(
         IUserApiService userApiService)
     {
-        this.userApiService = userApiService;
+        _userApiService = userApiService;
     }
 
     /// <summary>
@@ -47,5 +47,5 @@ public class UserUploadController : ControllerBase
             FileMimeTypeNames.Image.Jpeg,
             FileMimeTypeNames.Image.Png, ErrorMessage = "File must be a gif/jpg/png image")]
         IFormFile file) =>
-        Ok(await userApiService.UploadProfilePicture(login, file));
+        Ok(await _userApiService.UploadProfilePicture(login, file));
 }

@@ -14,8 +14,9 @@ public interface IUserReadingService
     /// </summary>
     /// <param name="query">Paging query</param>
     /// <param name="withInactive">Search among inactive users</param>
+    /// <param name="search">Search by login prefix</param>
     /// <returns>Pair of found users and paging data</returns>
-    Task<(IEnumerable<GeneralUser> users, PagingResult paging)> Get(PagingQuery query, bool withInactive);
+    Task<(IEnumerable<GeneralUser> users, PagingResult paging)> Get(PagingQuery query, bool withInactive, string search = null);
 
     /// <summary>
     /// Get community user short info by login

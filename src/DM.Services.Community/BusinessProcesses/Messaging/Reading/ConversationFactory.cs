@@ -10,19 +10,19 @@ namespace DM.Services.Community.BusinessProcesses.Messaging.Reading;
 /// <inheritdoc />
 internal class ConversationFactory : IConversationFactory
 {
-    private readonly IGuidFactory guidFactory;
+    private readonly IGuidFactory _guidFactory;
 
     /// <inheritdoc />
     public ConversationFactory(
         IGuidFactory guidFactory)
     {
-        this.guidFactory = guidFactory;
+        _guidFactory = guidFactory;
     }
-        
+
     /// <inheritdoc />
     public (DbConversation conversation, IEnumerable<DbConversationLink>) CreateVisavi(Guid userId, Guid visaviId)
     {
-        var conversationId = guidFactory.Create();
+        var conversationId = _guidFactory.Create();
         var conversation = new DbConversation
         {
             ConversationId = conversationId,
@@ -33,7 +33,7 @@ internal class ConversationFactory : IConversationFactory
             .Distinct()
             .Select(id => new DbConversationLink
             {
-                UserConversationLinkId = guidFactory.Create(),
+                UserConversationLinkId = _guidFactory.Create(),
                 ConversationId = conversationId,
                 UserId = id,
                 IsRemoved = false

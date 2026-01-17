@@ -12,27 +12,27 @@ namespace DM.Services.Gaming.BusinessProcesses.Characters.Creating;
 /// <inheritdoc />
 internal class CharacterFactory : ICharacterFactory
 {
-    private readonly IGuidFactory guidFactory;
-    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public CharacterFactory(
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider)
     {
-        this.guidFactory = guidFactory;
-        this.dateTimeProvider = dateTimeProvider;
+        _guidFactory = guidFactory;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
     public (Character, IEnumerable<CharacterAttribute>) Create(CreateCharacter createCharacter, Guid userId,
         CharacterStatus initialStatus)
     {
-        var characterId = guidFactory.Create();
+        var characterId = _guidFactory.Create();
         var character = new Character
         {
             CharacterId = characterId,
-            CreateDate = dateTimeProvider.Now,
+            CreateDate = _dateTimeProvider.Now,
             GameId = createCharacter.GameId,
             UserId = userId,
             Status = initialStatus,
@@ -50,7 +50,7 @@ internal class CharacterFactory : ICharacterFactory
         };
         var attributes = createCharacter.Attributes?.Select(a => new CharacterAttribute
         {
-            CharacterAttributeId = guidFactory.Create(),
+            CharacterAttributeId = _guidFactory.Create(),
             CharacterId = characterId,
             AttributeId = a.Id,
             Value = a.Value.Trim()

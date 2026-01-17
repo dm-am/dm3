@@ -14,9 +14,9 @@ public class UserSettings
     public Guid Id { get; set; }
 
     /// <summary>
-    /// If the user is nanny, each newbie linked to it will receive the custom private message upon registration
+    /// If the user is mentor, each newbie linked to them will receive the custom private message upon registration
     /// </summary>
-    public string NannyGreetingsMessage { get; set; }
+    public string MentorGreetingsMessage { get; set; }
 
     /// <summary>
     /// Color scheme for the website view
@@ -41,6 +41,6 @@ public class UserSettings
             MessagesPerPage = 10,
             EntitiesPerPage = 10
         },
-        ColorSchema = ColorSchema.Modern
+        ColorSchema = ColorSchema.Light
     };
 }

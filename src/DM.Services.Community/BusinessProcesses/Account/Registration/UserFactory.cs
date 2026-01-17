@@ -7,29 +7,29 @@ namespace DM.Services.Community.BusinessProcesses.Account.Registration;
 /// <inheritdoc />
 internal class UserFactory : IUserFactory
 {
-    private readonly IGuidFactory guidFactory;
-    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public UserFactory(
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider)
     {
-        this.guidFactory = guidFactory;
-        this.dateTimeProvider = dateTimeProvider;
+        _guidFactory = guidFactory;
+        _dateTimeProvider = dateTimeProvider;
     }
-        
+
     /// <inheritdoc />
     public User Create(UserRegistration registration, string salt, string hash)
     {
         return new User
         {
-            UserId = guidFactory.Create(),
+            UserId = _guidFactory.Create(),
             Login = registration.Login.Trim(),
             Email = registration.Email.Trim(),
-            RegistrationDate = dateTimeProvider.Now,
+            RegistrationDate = _dateTimeProvider.Now,
             LastVisitDate = null,
-            Role = UserRole.Player,
+            Role = UserRole.RegularUser,
             AccessPolicy = AccessPolicy.NotSpecified,
             Salt = salt,
             PasswordHash = hash,

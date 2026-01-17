@@ -18,13 +18,13 @@ namespace DM.Services.Gaming.BusinessProcesses.Characters.Updating;
 /// <inheritdoc />
 internal class CharacterUpdatingService : ICharacterUpdatingService
 {
-    private readonly IValidator<UpdateCharacter> validator;
-    private readonly IIntentionManager intentionManager;
-    private readonly IDateTimeProvider dateTimeProvider;
-    private readonly IUpdateBuilderFactory updateBuilderFactory;
-    private readonly ICharacterUpdatingRepository repository;
-    private readonly ICharacterIntentionConverter intentionConverter;
-    private readonly IInvokedEventProducer producer;
+    private readonly IValidator<UpdateCharacter> _validator;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IUpdateBuilderFactory _updateBuilderFactory;
+    private readonly ICharacterUpdatingRepository _repository;
+    private readonly ICharacterIntentionConverter _intentionConverter;
+    private readonly IInvokedEventProducer _producer;
 
     /// <inheritdoc />
     public CharacterUpdatingService(
@@ -36,24 +36,24 @@ internal class CharacterUpdatingService : ICharacterUpdatingService
         ICharacterIntentionConverter intentionConverter,
         IInvokedEventProducer producer)
     {
-        this.validator = validator;
-        this.intentionManager = intentionManager;
-        this.dateTimeProvider = dateTimeProvider;
-        this.updateBuilderFactory = updateBuilderFactory;
-        this.repository = repository;
-        this.intentionConverter = intentionConverter;
-        this.producer = producer;
+        _validator = validator;
+        _intentionManager = intentionManager;
+        _dateTimeProvider = dateTimeProvider;
+        _updateBuilderFactory = updateBuilderFactory;
+        _repository = repository;
+        _intentionConverter = intentionConverter;
+        _producer = producer;
     }
 
     /// <inheritdoc />
     public async Task<Character> Update(UpdateCharacter updateCharacter)
     {
-        await validator.ValidateAndThrowAsync(updateCharacter);
-        var characterToUpdate = await repository.Get(updateCharacter.CharacterId);
+        await _validator.ValidateAndThrowAsync(updateCharacter);
+        var characterToUpdate = await _repository.Get(updateCharacter.CharacterId);
 
-        intentionManager.ThrowIfForbidden(CharacterIntention.Edit, characterToUpdate);
+        _intentionManager.ThrowIfForbidden(CharacterIntention.Edit, characterToUpdate);
 
-        var changes = updateBuilderFactory.Create<DbCharacter>(updateCharacter.CharacterId)
+        var changes = _updateBuilderFactory.Create<DbCharacter>(updateCharacter.CharacterId)
             .MaybeField(c => c.Name, updateCharacter.Name?.Trim())
             .MaybeField(c => c.Race, updateCharacter.Race?.Trim())
             .MaybeField(c => c.Class, updateCharacter.Class?.Trim())
@@ -66,20 +66,20 @@ internal class CharacterUpdatingService : ICharacterUpdatingService
         var attributeChanges = new IUpdateBuilder<DbAttribute>[0];
         if (updateCharacter.Attributes != null && updateCharacter.Attributes.Any())
         {
-            var attributeIdsIndex = await repository.GetAttributeIds(updateCharacter.CharacterId);
+            var attributeIdsIndex = await _repository.GetAttributeIds(updateCharacter.CharacterId);
             attributeChanges = updateCharacter.Attributes
                 .Where(a => attributeIdsIndex.ContainsKey(a.Id))
-                .Select(a => updateBuilderFactory.Create<DbAttribute>(attributeIdsIndex[a.Id])
+                .Select(a => _updateBuilderFactory.Create<DbAttribute>(attributeIdsIndex[a.Id])
                     .Field(aa => aa.Value, a.Value?.Trim()))
                 .ToArray();
         }
 
-        if (intentionManager.IsAllowed(CharacterIntention.EditPrivacySettings))
+        if (_intentionManager.IsAllowed(CharacterIntention.EditPrivacySettings))
         {
             changes.MaybeField(c => c.AccessPolicy, updateCharacter.AccessPolicy);
         }
 
-        if (intentionManager.IsAllowed(CharacterIntention.EditMasterSettings))
+        if (_intentionManager.IsAllowed(CharacterIntention.EditMasterSettings))
         {
             changes.MaybeField(c => c.IsNpc, updateCharacter.IsNpc);
         }
@@ -87,9 +87,9 @@ internal class CharacterUpdatingService : ICharacterUpdatingService
         var invokedEvents = new List<EventType> {EventType.ChangedCharacter};
         if (updateCharacter.Status.HasValue && updateCharacter.Status != characterToUpdate.Status)
         {
-            var (intention, eventType) = intentionConverter.Convert(
+            var (intention, eventType) = _intentionConverter.Convert(
                 updateCharacter.Status.Value, characterToUpdate.Status);
-            if (intentionManager.IsAllowed(intention, characterToUpdate))
+            if (_intentionManager.IsAllowed(intention, characterToUpdate))
             {
                 changes.Field(c => c.Status, updateCharacter.Status.Value);
                 invokedEvents.Add(eventType);
@@ -98,11 +98,11 @@ internal class CharacterUpdatingService : ICharacterUpdatingService
 
         if (changes.HasChanges() || attributeChanges.Any(c => c.HasChanges()))
         {
-            changes.Field(c => c.LastUpdateDate, dateTimeProvider.Now);
+            changes.Field(c => c.LastUpdateDate, _dateTimeProvider.Now);
         }
 
-        var character = await repository.Update(changes, attributeChanges);
-        await producer.Send(invokedEvents, updateCharacter.CharacterId);
+        var character = await _repository.Update(changes, attributeChanges);
+        await _producer.Send(invokedEvents, updateCharacter.CharacterId);
         return character;
     }
 }

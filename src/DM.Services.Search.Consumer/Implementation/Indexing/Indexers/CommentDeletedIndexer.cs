@@ -7,21 +7,21 @@ namespace DM.Services.Search.Consumer.Implementation.Indexing.Indexers;
 /// <inheritdoc />
 internal class CommentDeletedIndexer : BaseIndexer
 {
-    private readonly IIndexingRepository indexingRepository;
+    private readonly IIndexingRepository _indexingRepository;
 
     /// <inheritdoc />
     public CommentDeletedIndexer(
         IIndexingRepository indexingRepository)
     {
-        this.indexingRepository = indexingRepository;
+        _indexingRepository = indexingRepository;
     }
-    
+
     /// <inheritdoc />
     protected override EventType EventType => EventType.DeletedForumComment;
 
     /// <inheritdoc />
     public override Task Index(InvokedEvent message)
     {
-        return indexingRepository.Delete(message.EntityId);
+        return _indexingRepository.Delete(message.EntityId);
     }
 }

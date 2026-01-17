@@ -11,7 +11,8 @@ namespace DM.Services.Community.BusinessProcesses.Polls;
 /// <inheritdoc />
 internal class PollIntentionResolver :
     IIntentionResolver<PollIntention>,
-    IIntentionResolver<PollIntention, (Poll poll, Guid optionId)>
+    IIntentionResolver<PollIntention, (Poll poll, Guid optionId)>,
+    IIntentionResolver<PollIntention, Poll>
 {
     private readonly IDateTimeProvider dateTimeProvider;
 
@@ -25,7 +26,7 @@ internal class PollIntentionResolver :
     /// <inheritdoc />
     public bool IsAllowed(AuthenticatedUser user, PollIntention intention) => intention switch
     {
-        PollIntention.Create => user.Role.HasFlag(UserRole.Administrator),
+        PollIntention.Create => user.Role >= UserRole.SeniorModerator,
         _ => false
     };
 
@@ -36,6 +37,15 @@ internal class PollIntentionResolver :
             PollIntention.Vote when user.IsAuthenticated =>
                 target.poll.EndDate > dateTimeProvider.Now &&
                 target.poll.Options.Any(o => o.Id == target.optionId),
+            _ => false
+        };
+
+    /// <inheritdoc />
+    public bool IsAllowed(AuthenticatedUser user, PollIntention intention, Poll poll) =>
+        intention switch
+        {
+            PollIntention.Unvote when user.IsAuthenticated =>
+                poll.EndDate > dateTimeProvider.Now,
             _ => false
         };
 }

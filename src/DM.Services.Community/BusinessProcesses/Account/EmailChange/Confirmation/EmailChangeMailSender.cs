@@ -11,9 +11,9 @@ namespace DM.Services.Community.BusinessProcesses.Account.EmailChange.Confirmati
 /// <inheritdoc />
 internal class EmailChangeMailSender : IEmailChangeMailSender
 {
-    private readonly IRenderer renderer;
-    private readonly IMailSender mailSender;
-    private readonly IntegrationSettings integrationSettings;
+    private readonly IRenderer _renderer;
+    private readonly IMailSender _mailSender;
+    private readonly IntegrationSettings _integrationSettings;
 
     /// <inheritdoc />
     public EmailChangeMailSender(
@@ -21,19 +21,19 @@ internal class EmailChangeMailSender : IEmailChangeMailSender
         IMailSender mailSender,
         IOptions<IntegrationSettings> integrationSettings)
     {
-        this.renderer = renderer;
-        this.mailSender = mailSender;
-        this.integrationSettings = integrationSettings.Value;
+        _renderer = renderer;
+        _mailSender = mailSender;
+        _integrationSettings = integrationSettings.Value;
     }
 
     /// <inheritdoc />
     public async Task Send(string email, string login, Guid token)
     {
-        var confirmationLinkUrl = new Uri(new Uri(integrationSettings.WebUrl), $"activate/{token}");
-        var emailBody = await renderer.Render(new RegistrationConfirmationViewModel(
+        var confirmationLinkUrl = new Uri(new Uri(_integrationSettings.WebUrl), $"activate/{token}");
+        var emailBody = await _renderer.Render(new RegistrationConfirmationViewModel(
             login,
             confirmationLinkUrl.ToString()));
-        await mailSender.Send(new MailLetter
+        await _mailSender.Send(new MailLetter
         {
             Address = email,
             Subject = $"Подтверждение смены адреса электронной почты на DM.AM для {login}",

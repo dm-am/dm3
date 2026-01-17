@@ -8,6 +8,8 @@ export type Paging = {
   size: number;
   number: number;
   total: number;
+  hasMoreBefore?: boolean;
+  hasMoreAfter?: boolean;
 };
 
 export type PagingQuery = {

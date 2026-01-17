@@ -12,28 +12,28 @@ namespace DM.Services.Search.Consumer.Implementation;
 /// <inheritdoc />
 public class SearchEngineService : SearchEngine.SearchEngineBase
 {
-    private readonly ISearchService searchService;
-    private readonly IMapper mapper;
+    private readonly ISearchService _searchService;
+    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public SearchEngineService(
         ISearchService searchService,
         IMapper mapper)
     {
-        this.searchService = searchService;
-        this.mapper = mapper;
+        _searchService = searchService;
+        _mapper = mapper;
     }
 
     /// <inheritdoc />
     public override async Task<SearchResponse> Search(SearchRequest request, ServerCallContext context)
     {
         var pagingQuery = new PagingQuery { Skip = request.Skip, Size = request.Size };
-        var entityTypes = request.SearchAcross.Select(t => mapper.Map<SearchEntityType>(t));
-        var (results, paging) = await searchService.Search(request.Query, entityTypes, pagingQuery);
+        var entityTypes = request.SearchAcross.Select(t => _mapper.Map<SearchEntityType>(t));
+        var (results, paging) = await _searchService.Search(request.Query, entityTypes, pagingQuery);
         return new SearchResponse
         {
             Total = paging.TotalEntitiesCount,
-            Entities = { results.Select(mapper.Map<SearchResponse.Types.SearchResultEntity>) }
+            Entities = { results.Select(_mapper.Map<SearchResponse.Types.SearchResultEntity>) }
         };
     }
 }

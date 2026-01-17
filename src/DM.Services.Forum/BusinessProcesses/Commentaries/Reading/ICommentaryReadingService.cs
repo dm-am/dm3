@@ -39,4 +39,10 @@ public interface ICommentaryReadingService
     /// <param name="forumTitle">Forum title</param>
     /// <returns></returns>
     Task MarkAsRead(string forumTitle);
+
+    /// <summary>
+    /// Mark all comments on all forums as read
+    /// </summary>
+    /// <returns></returns>
+    Task MarkAllAsRead();
 }

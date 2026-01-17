@@ -9,21 +9,21 @@ namespace DM.Services.Search.Consumer.Implementation.Indexing.Indexers;
 /// </summary>
 internal class TopicDeletedIndexer : BaseIndexer
 {
-    private readonly IIndexingRepository repository;
+    private readonly IIndexingRepository _repository;
 
     /// <inheritdoc />
     public TopicDeletedIndexer(
         IIndexingRepository repository)
     {
-        this.repository = repository;
+        _repository = repository;
     }
-        
+
     /// <inheritdoc />
     protected override EventType EventType => EventType.DeletedForumTopic;
 
     /// <inheritdoc />
     public override Task Index(InvokedEvent message)
     {
-        return repository.DeleteByParent(message.EntityId);
+        return _repository.DeleteByParent(message.EntityId);
     }
 }

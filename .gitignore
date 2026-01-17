@@ -6,3 +6,4 @@ bundles
 *.user
 launchSettings.json
 appsettings.*.json
+.claude/

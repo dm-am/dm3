@@ -12,13 +12,13 @@ namespace DM.Services.Notifications.Consumer.Implementation.Notifiers.Forum;
 /// <inheritdoc />
 internal class TopicLikedNotificationGenerator : BaseNotificationGenerator
 {
-    private readonly DmDbContext dbContext;
+    private readonly DmDbContext _dbContext;
 
     /// <inheritdoc />
     public TopicLikedNotificationGenerator(
         DmDbContext dbContext)
     {
-        this.dbContext = dbContext;
+        _dbContext = dbContext;
     }
 
     /// <inheritdoc />
@@ -27,7 +27,7 @@ internal class TopicLikedNotificationGenerator : BaseNotificationGenerator
     /// <inheritdoc />
     public override async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
-        var likedTopicData = await dbContext.Likes
+        var likedTopicData = await _dbContext.Likes
             .Where(like => like.LikeId == entityId)
             .Select(like => new
             {

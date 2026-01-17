@@ -7,19 +7,19 @@ namespace DM.Services.Community.BusinessProcesses.Account.PasswordReset;
 /// <inheritdoc />
 internal class PasswordResetRepository : IPasswordResetRepository
 {
-    private readonly DmDbContext dbContext;
+    private readonly DmDbContext _dbContext;
 
     /// <inheritdoc />
     public PasswordResetRepository(
         DmDbContext dbContext)
     {
-        this.dbContext = dbContext;
+        _dbContext = dbContext;
     }
 
     /// <inheritdoc />
     public Task CreateToken(Token token)
     {
-        dbContext.Tokens.Add(token);
-        return dbContext.SaveChangesAsync();
+        _dbContext.Tokens.Add(token);
+        return _dbContext.SaveChangesAsync();
     }
 }

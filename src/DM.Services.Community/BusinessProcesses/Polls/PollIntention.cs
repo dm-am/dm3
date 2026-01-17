@@ -13,5 +13,10 @@ public enum PollIntention
     /// <summary>
     /// Take a vote in an active poll
     /// </summary>
-    Vote = 1
+    Vote = 1,
+
+    /// <summary>
+    /// Remove vote from a poll
+    /// </summary>
+    Unvote = 2
 }

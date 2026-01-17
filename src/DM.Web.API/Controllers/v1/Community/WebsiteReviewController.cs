@@ -14,13 +14,13 @@ namespace DM.Web.API.Controllers.v1.Community;
 [ApiExplorerSettings(GroupName = "Community")]
 public class WebsiteReviewController : ControllerBase
 {
-    private readonly IReviewApiService reviewApiService;
+    private readonly IReviewApiService _reviewApiService;
 
     /// <inheritdoc />
     public WebsiteReviewController(
         IReviewApiService reviewApiService)
     {
-        this.reviewApiService = reviewApiService;
+        _reviewApiService = reviewApiService;
     }
 
     /// <summary>
@@ -30,7 +30,7 @@ public class WebsiteReviewController : ControllerBase
     /// <response code="200"></response>
     [HttpGet(Name = nameof(GetWebsiteReviews))]
     [ProducesResponseType(typeof(ListEnvelope<Review>), 200)]
-    public async Task<IActionResult> GetWebsiteReviews([FromQuery] ReviewsQuery q) => Ok(await reviewApiService.Get(q));
+    public async Task<IActionResult> GetWebsiteReviews([FromQuery] ReviewsQuery q) => Ok(await _reviewApiService.Get(q));
 
     /// <summary>
     /// Create new website review
@@ -43,7 +43,7 @@ public class WebsiteReviewController : ControllerBase
     [AuthenticationRequired]
     public async Task<IActionResult> CreateWebsiteReview([FromBody] Review review)
     {
-        var result = await reviewApiService.Create(review);
+        var result = await _reviewApiService.Create(review);
         return CreatedAtRoute(nameof(GetWebsiteReview), new {id = result.Resource.Id}, result);
     }
 
@@ -56,7 +56,7 @@ public class WebsiteReviewController : ControllerBase
     [HttpGet("{id}", Name = nameof(GetWebsiteReview))]
     [ProducesResponseType(typeof(Envelope<Review>), 200)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> GetWebsiteReview(Guid id) => Ok(await reviewApiService.Get(id));
+    public async Task<IActionResult> GetWebsiteReview(Guid id) => Ok(await _reviewApiService.Get(id));
 
     /// <summary>
     /// Update website review
@@ -66,15 +66,15 @@ public class WebsiteReviewController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to update this review</response>
     /// <response code="410">Review not found</response>
-    [HttpPatch("{id}", Name = nameof(PutWebsiteReview))]
+    [HttpPatch("{id}", Name = nameof(PatchWebsiteReview))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Review>), 200)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PutWebsiteReview(Guid id, [FromBody] Review review) =>
-        Ok(await reviewApiService.Update(id, review));
+    public async Task<IActionResult> PatchWebsiteReview(Guid id, [FromBody] Review review) =>
+        Ok(await _reviewApiService.Update(id, review));
 
     /// <summary>
     /// Delete website review
@@ -89,7 +89,7 @@ public class WebsiteReviewController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), 410)]
     public async Task<IActionResult> DeleteWebsiteReview(Guid id)
     {
-        await reviewApiService.Delete(id);
+        await _reviewApiService.Delete(id);
         return NoContent();
     }
 }

@@ -1,51 +1,73 @@
 <script setup lang="ts">
-import { useUserStore, useUiStore } from "@/stores";
-import { IconType } from "@/components/icons/iconType";
+import { computed } from "vue";
+import { useUserStore, useUiStore, useMessagingStore } from "@/stores";
 import { storeToRefs } from "pinia";
 import GuestActions from "@/views/layout/header/GuestActions.vue";
-import PlayerActions from "@/views/layout/header/PlayerActions.vue";
+import { ColorSchema, UserRole } from "@/api/models/community";
 
-const { toggleTheme } = useUiStore();
 const userStore = useUserStore();
 const { user } = storeToRefs(userStore);
+const { signOut } = userStore;
+
+const uiStore = useUiStore();
+const { theme } = storeToRefs(uiStore);
+const { toggleTheme } = uiStore;
+
+const messagingStore = useMessagingStore();
+const { totalUnreadCount } = storeToRefs(messagingStore);
+
+const isDarkTheme = computed(() => theme.value === ColorSchema.Dark);
+
+const isModerator = computed(() =>
+  user.value?.roles?.some((r) =>
+    [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(r)
+  ) ?? false
+);
+
+const isMentor = computed(() =>
+  user.value?.roles?.some((r) =>
+    [UserRole.Admin, UserRole.SeniorModerator, UserRole.Mentor].includes(r)
+  ) ?? false
+);
+
+const isNewbie = computed(() => user.value?.isNewbie ?? false);
 </script>
 
 <template>
   <div class="header">
     <div class="user-info">
-      <div class="logo-text">
-        <template v-if="user">
-          Добро пожаловать,
-          <router-link :to="{ name: 'profile', params: { login: user.login } }">
-            <the-icon :font="IconType.UserSettings" />
-            {{ user.login }}
-          </router-link>
-        </template>
-        <template v-else>Форумные ролевые игры</template>
-      </div>
       <router-link class="logo" :to="{ name: 'home' }" />
-      <player-actions v-if="user" />
-      <guest-actions v-else />
+      <div class="user-actions">
+        <template v-if="user">
+          Здравствуй,
+          <router-link :to="{ name: 'profile', params: { login: user.login } }" class="username" :title="user.login">
+            {{ user.login }}
+          </router-link>&nbsp;<span class="muted">(</span><router-link :to="{ name: 'messenger' }" title="Непрочитанные сообщения" :class="{ 'has-unread': totalUnreadCount > 0 }">{{ totalUnreadCount }}</router-link><span class="muted">/</span><router-link :to="{ name: 'notifications' }" title="Уведомления">0</router-link><span class="muted">)</span>
+          |
+          <a @click="signOut">Выйти</a>
+        </template>
+        <template v-else>
+          <guest-actions />
+        </template>
+      </div>
     </div>
     <div class="top-menu">
       <router-link class="link" :to="{ name: 'about' }">О проекте</router-link>
-      <router-link class="link" :to="{ name: 'community' }"
-        >Сообщество</router-link
-      >
       <router-link class="link" :to="{ name: 'rules' }">Правила</router-link>
+      <router-link class="link" :to="{ name: 'all-games' }">Игры</router-link>
+      <router-link class="link" :to="{ name: 'blogs' }">Блоги</router-link>
+      <router-link class="link" :to="{ name: 'community' }">Сообщество</router-link>
+      <router-link class="link" :to="{ name: 'forum-index' }">Форум</router-link>
       <router-link class="link" :to="{ name: 'chat' }">Чат</router-link>
-      <router-link
-        v-if="user"
-        class="link create"
-        :to="{ name: 'create-game' }"
-      >
-        <the-icon :font="IconType.Add" />
-        Новая игра
-      </router-link>
+      <router-link v-if="isMentor || isNewbie" class="link" :to="{ name: 'forum', params: { id: 'Для новичков' } }">Для новичков</router-link>
+      <router-link v-if="isModerator" class="link" :to="{ name: 'moderation' }">Модерация</router-link>
     </div>
     <div class="controls">
       <!--      <notifications v-if="user" />-->
-      <span @click="toggleTheme">Switch theme</span>
+      <label class="theme-switch" :title="isDarkTheme ? 'Светлая тема' : 'Тёмная тема'">
+        <input type="checkbox" :checked="isDarkTheme" @change="toggleTheme" />
+        <span class="slider" />
+      </label>
     </div>
   </div>
 </template>
@@ -56,60 +78,121 @@ const { user } = storeToRefs(userStore);
 
 .header
   display: flex
+  align-items: center
   box-sizing: border-box
-
-  padding: $small 0
-  height: 90px /// image size
-
-  background-position: left top
-  background-repeat: repeat-x
+  height: $header-height
 
 .user-info
-  +menu-container()
+  width: $sidebar-width
+  flex-shrink: 0
+  padding-left: $big
+  padding-bottom: $small
+  box-sizing: border-box
   white-space: nowrap
   cursor: default
 
 .logo
   display: block
   margin-bottom: $tiny
-  height: 26px /// image size
-  background: transparent url('@/assets/images/logo.gif') no-repeat
-  +theme(filter, color-pair(none, invert(87%)))
+  height: $header-row-height
+  width: 275px
+  background: transparent url('@/assets/images/logo.svg') no-repeat
+  background-size: contain
 
-.logo-text
-  margin-bottom: $minor
-  +theme(color, $highlight-text)
+.user-actions
+  font-size: $secondary-font-size
+  +theme(color, $text)
 
-.unread
-  font-weight: bold
-  +theme(color, $positive-text)
-  &:hover
-    +theme(color, $active-text-hover)
+  .muted
+    +theme(color, $secondary-text)
+
+  .has-unread
+    font-weight: bold
+    color: $link-online
 
 .top-menu
-  padding: $medium + $small 0
-  +content-container()
+  flex-grow: 1
+  display: flex
+  align-items: flex-end
+  align-self: flex-start
+  padding: 0 $big
+  height: $header-row-height
+  box-sizing: border-box
 
 .link
-  margin-right: $medium + $small
-  font-size: $text-font-size
-  letter-spacing: 1px
+  margin-right: $big
+  font-size: $menu-font-size
+  font-weight: normal
+  transition: color $animation-time ease
   +theme(color, $secondary-text)
 
-  &.router-link-active
-    font-weight: bold
   &:hover
-    +theme(color, $text)
+    text-decoration: none
+    color: $text-contrast
   &.create
-    padding: $minor + $tiny $small
+    padding: $minor $small
     border-radius: $border-radius
+    transition: background $animation-time ease, border-color $animation-time ease, color $animation-time ease
     +theme(background, $panel-background)
-    +theme(border, $panel-background, 1px solid)
+    +theme(border, $border, 1px solid)
     &.router-link-exact-active
-      font-weight: normal
+      font-weight: bold
+      +theme(color, $text)
     &:hover
-      +theme(border-color, $border)
+      +theme(background, $panel-background-highlight)
 
 .controls
-  +sidebar-container()
+  width: $sidebar-width
+  flex-shrink: 0
+  padding-right: $big
+  box-sizing: border-box
+  display: flex
+  align-items: flex-end
+  align-self: flex-start
+  height: $header-row-height
+
+.theme-switch
+  position: relative
+  display: inline-block
+  width: 44px
+  height: 22px
+  cursor: pointer
+
+  input
+    opacity: 0
+    width: 0
+    height: 0
+
+  .slider
+    position: absolute
+    top: 0
+    left: 0
+    right: 0
+    bottom: 0
+    border-radius: 22px
+    +theme(background, $background)
+    +theme(border, $border, 1px solid)
+
+    &:before
+      content: ''
+      position: absolute
+      width: 16px
+      height: 16px
+      left: 2px
+      bottom: 2px
+      border-radius: 50%
+      +theme(background, $secondary-text)
+
+  input:checked + .slider
+    +theme(background, $panel-background-highlight)
+
+  input:checked + .slider:before
+    transform: translateX(22px)
+
+  &:hover .slider
+    +theme(border-color, $secondary-text)
+
+// Animation override (must be after theme rules)
+html .theme-switch .slider:before
+  transition: transform 0.3s ease-in-out, background 0.3s ease !important
 </style>

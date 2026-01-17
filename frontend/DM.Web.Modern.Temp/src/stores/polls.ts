@@ -29,5 +29,10 @@ export const usePollsStore = defineStore("polls", () => {
     if (data) updatePoll(data.resource);
   }
 
-  return { fetchActivePolls, activePolls, fetchPolls, polls, vote };
+  async function unvote(pollId: PollId) {
+    const { data } = await communityApi.deletePollVote(pollId);
+    if (data) updatePoll(data.resource);
+  }
+
+  return { fetchActivePolls, activePolls, fetchPolls, polls, vote, unvote };
 });

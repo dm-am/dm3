@@ -13,29 +13,29 @@ namespace DM.Services.Community.BusinessProcesses.Account.EmailChange;
 /// <inheritdoc />
 internal class EmailChangeRepository : IEmailChangeRepository
 {
-    private readonly DmDbContext dbContext;
-    private readonly IMapper mapper;
+    private readonly DmDbContext _dbContext;
+    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public EmailChangeRepository(
         DmDbContext dbContext,
         IMapper mapper)
     {
-        this.dbContext = dbContext;
-        this.mapper = mapper;
+        _dbContext = dbContext;
+        _mapper = mapper;
     }
 
     /// <inheritdoc />
-    public Task<AuthenticatedUser> FindUser(string login) => dbContext.Users
+    public Task<AuthenticatedUser> FindUser(string login) => _dbContext.Users
         .Where(u => u.Login.ToLower() == login.ToLower())
-        .ProjectTo<AuthenticatedUser>(mapper.ConfigurationProvider)
+        .ProjectTo<AuthenticatedUser>(_mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
     public Task Update(IUpdateBuilder<User> updateUser, Token token)
     {
-        updateUser.AttachTo(dbContext);
-        dbContext.Tokens.Add(token);
-        return dbContext.SaveChangesAsync();
+        updateUser.AttachTo(_dbContext);
+        _dbContext.Tokens.Add(token);
+        return _dbContext.SaveChangesAsync();
     }
 }

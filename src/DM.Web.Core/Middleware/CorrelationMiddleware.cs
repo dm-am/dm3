@@ -1,9 +1,11 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Services.Core.Implementation;
 using DM.Services.Core.Implementation.CorrelationToken;
 using Microsoft.AspNetCore.Http;
+using Serilog.Context;
 
 namespace DM.Web.Core.Middleware;
 
@@ -37,6 +39,18 @@ public class CorrelationMiddleware
             ? token
             : guidFactory.Create();
         setter.Current = correlationToken;
+
+        // Push TraceId to LogContext for correlation with OpenTelemetry traces
+        if (Activity.Current != null)
+        {
+            using (LogContext.PushProperty("TraceId", Activity.Current.TraceId.ToString()))
+            using (LogContext.PushProperty("SpanId", Activity.Current.SpanId.ToString()))
+            {
+                await next(httpContext);
+                return;
+            }
+        }
+
         await next(httpContext);
     }
 }

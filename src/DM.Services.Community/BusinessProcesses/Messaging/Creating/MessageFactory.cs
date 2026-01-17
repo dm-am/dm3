@@ -7,24 +7,24 @@ namespace DM.Services.Community.BusinessProcesses.Messaging.Creating;
 /// <inheritdoc />
 internal class MessageFactory : IMessageFactory
 {
-    private readonly IGuidFactory guidFactory;
-    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public MessageFactory(
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider)
     {
-        this.guidFactory = guidFactory;
-        this.dateTimeProvider = dateTimeProvider;
+        _guidFactory = guidFactory;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
     public Message Create(CreateMessage createMessage, Guid userId) => new()
     {
-        MessageId = guidFactory.Create(),
+        MessageId = _guidFactory.Create(),
         ConversationId = createMessage.ConversationId,
-        CreateDate = dateTimeProvider.Now,
+        CreateDate = _dateTimeProvider.Now,
         UserId = userId,
         Text = createMessage.Text,
         IsRemoved = false

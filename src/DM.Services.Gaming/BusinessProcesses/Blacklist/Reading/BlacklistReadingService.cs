@@ -11,28 +11,28 @@ namespace DM.Services.Gaming.BusinessProcesses.Blacklist.Reading;
 /// <inheritdoc />
 internal class BlacklistReadingService : IBlacklistReadingService
 {
-    private readonly IGameReadingService gameReadingService;
-    private readonly IIntentionManager intentionManager;
-    private readonly IBlacklistReadingRepository repository;
+    private readonly IGameReadingService _gameReadingService;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IBlacklistReadingRepository _repository;
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     public BlacklistReadingService(
         IGameReadingService gameReadingService,
         IIntentionManager intentionManager,
         IBlacklistReadingRepository repository)
     {
-        this.gameReadingService = gameReadingService;
-        this.intentionManager = intentionManager;
-        this.repository = repository;
+        _gameReadingService = gameReadingService;
+        _intentionManager = intentionManager;
+        _repository = repository;
     }
-        
+
     /// <inheritdoc />
     public async Task<IEnumerable<GeneralUser>> Get(Guid gameId)
     {
-        var game = await gameReadingService.GetGame(gameId);
-        intentionManager.ThrowIfForbidden(GameIntention.Edit, game);
-        return await repository.Get(gameId);
+        var game = await _gameReadingService.GetGame(gameId);
+        _intentionManager.ThrowIfForbidden(GameIntention.Edit, game);
+        return await _repository.Get(gameId);
     }
 }

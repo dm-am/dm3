@@ -18,8 +18,7 @@ internal class GameIntentionResolver :
     {
         GameIntention.Create when user.IsAuthenticated => true,
         GameIntention.Subscribe when user.IsAuthenticated => true,
-        GameIntention.SetStatusModeration when user.IsAuthenticated => user.Role.HasFlag(UserRole.Administrator) || user.Role.HasFlag(UserRole.SeniorModerator) ||
-                                                                       user.Role.HasFlag(UserRole.NannyModerator),
+        GameIntention.SetStatusModeration when user.IsAuthenticated => user.Role >= UserRole.Mentor,
         _ => false
     };
 
@@ -38,9 +37,8 @@ internal class GameIntentionResolver :
             return false;
         }
 
-        var userIsHighAuthority = user.Role.HasFlag(UserRole.Administrator) ||
-                                  user.Role.HasFlag(UserRole.SeniorModerator);
-        var userIsNanny = userIsHighAuthority || user.Role.HasFlag(UserRole.NannyModerator);
+        var userIsHighAuthority = user.Role >= UserRole.SeniorModerator;
+        var userIsMentor = user.Role >= UserRole.Mentor;
         var participation = target.Participation(user.UserId);
 
         return intention switch
@@ -57,7 +55,7 @@ internal class GameIntentionResolver :
                                                               user.UserId == target.Master.UserId,
 
             GameIntention.SetStatusModeration when target.Status == GameStatus.RequiresModeration =>
-                userIsHighAuthority || userIsNanny,
+                userIsHighAuthority || userIsMentor,
             GameIntention.SetStatusDraft when target.Status == GameStatus.Moderation =>
                 userIsHighAuthority || participation.HasFlag(GameParticipation.Moderator),
             GameIntention.SetStatusRequirement when target.Status == GameStatus.Moderation =>
@@ -82,7 +80,7 @@ internal class GameIntentionResolver :
                 participation.HasFlag(GameParticipation.Authority),
             GameIntention.SetStatusClosed when target.Status == GameStatus.Active =>
                 participation.HasFlag(GameParticipation.Authority),
-            GameIntention.ReadComments => 
+            GameIntention.ReadComments =>
                 target.CommentariesAccessMode != CommentariesAccessMode.Private ||
                 target.Participation(user.UserId) != GameParticipation.None,
             GameIntention.CreateComment when user.IsAuthenticated =>

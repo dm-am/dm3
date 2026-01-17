@@ -14,15 +14,15 @@ namespace DM.Services.Gaming.BusinessProcesses.Claims.Creating;
 /// <inheritdoc />
 internal class RoomClaimsCreatingService : IRoomClaimsCreatingService
 {
-    private readonly IValidator<CreateRoomClaim> validator;
-    private readonly IRoomUpdatingRepository updatingRepository;
-    private readonly IIntentionManager intentionManager;
-    private readonly IRoomClaimFactory factory;
-    private readonly ICharacterClaimApprove characterClaimApprove;
-    private readonly IReaderClaimApprove readerClaimApprove;
-    private readonly IRoomClaimsCreatingRepository repository;
-    private readonly IInvokedEventProducer producer;
-    private readonly IIdentityProvider identityProvider;
+    private readonly IValidator<CreateRoomClaim> _validator;
+    private readonly IRoomUpdatingRepository _updatingRepository;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IRoomClaimFactory _factory;
+    private readonly ICharacterClaimApprove _characterClaimApprove;
+    private readonly IReaderClaimApprove _readerClaimApprove;
+    private readonly IRoomClaimsCreatingRepository _repository;
+    private readonly IInvokedEventProducer _producer;
+    private readonly IIdentityProvider _identityProvider;
 
     /// <inheritdoc />
     public RoomClaimsCreatingService(
@@ -36,31 +36,31 @@ internal class RoomClaimsCreatingService : IRoomClaimsCreatingService
         IInvokedEventProducer producer,
         IIdentityProvider identityProvider)
     {
-        this.validator = validator;
-        this.updatingRepository = updatingRepository;
-        this.intentionManager = intentionManager;
-        this.factory = factory;
-        this.characterClaimApprove = characterClaimApprove;
-        this.readerClaimApprove = readerClaimApprove;
-        this.repository = repository;
-        this.producer = producer;
-        this.identityProvider = identityProvider;
+        _validator = validator;
+        _updatingRepository = updatingRepository;
+        _intentionManager = intentionManager;
+        _factory = factory;
+        _characterClaimApprove = characterClaimApprove;
+        _readerClaimApprove = readerClaimApprove;
+        _repository = repository;
+        _producer = producer;
+        _identityProvider = identityProvider;
     }
 
     /// <inheritdoc />
     public async Task<RoomClaim> Create(CreateRoomClaim createRoomClaim)
     {
-        await validator.ValidateAndThrowAsync(createRoomClaim);
-        var room = await updatingRepository.GetRoom(createRoomClaim.RoomId, identityProvider.Current.User.UserId);
-        intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
+        await _validator.ValidateAndThrowAsync(createRoomClaim);
+        var room = await _updatingRepository.GetRoom(createRoomClaim.RoomId, _identityProvider.Current.User.UserId);
+        _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
 
         var participantId = createRoomClaim.CharacterId.HasValue
-            ? await characterClaimApprove.GetParticipantId(createRoomClaim.CharacterId.Value, room)
-            : await readerClaimApprove.GetParticipantId(createRoomClaim.ReaderLogin.Trim(), room);
+            ? await _characterClaimApprove.GetParticipantId(createRoomClaim.CharacterId.Value, room)
+            : await _readerClaimApprove.GetParticipantId(createRoomClaim.ReaderLogin.Trim(), room);
         ;
-        var link = factory.Create(createRoomClaim, participantId);
-        var result = await repository.Create(link);
-        await producer.Send(EventType.ChangedRoom, link.RoomId);
+        var link = _factory.Create(createRoomClaim, participantId);
+        var result = await _repository.Create(link);
+        await _producer.Send(EventType.ChangedRoom, link.RoomId);
 
         return result;
     }

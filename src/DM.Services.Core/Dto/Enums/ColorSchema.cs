@@ -8,32 +8,14 @@ namespace DM.Services.Core.Dto.Enums;
 public enum ColorSchema
 {
     /// <summary>
-    /// Base DM3 color schema
+    /// Light color scheme
     /// </summary>
-    [Description("Новая")]
-    Modern = 0,
+    [Description("Светлая")]
+    Light = 0,
 
     /// <summary>
-    /// DM3 color schema with paler colors
+    /// Dark color scheme
     /// </summary>
-    [Description("Новая контрастная")]
-    Pale = 1,
-
-    /// <summary>
-    /// Base DM2 color schema
-    /// </summary>
-    [Description("Классическая")]
-    Classic = 2,
-
-    /// <summary>
-    /// DM2 color schema with paler colors
-    /// </summary>
-    [Description("Классическая контрастная")]
-    ClassicPale = 3,
-
-    /// <summary>
-    /// Nightly mode
-    /// </summary>
-    [Description("Ночная")]
-    Night = 4
+    [Description("Тёмная")]
+    Dark = 1
 }

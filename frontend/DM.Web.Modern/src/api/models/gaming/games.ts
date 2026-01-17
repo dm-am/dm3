@@ -57,7 +57,7 @@ export interface Game {
   master: User;
   assistant: User | null;
   pendingAssistant: User | null;
-  nanny: User | null;
+  mentor: User | null;
   notes: string;
   info: string;
 

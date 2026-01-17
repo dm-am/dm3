@@ -9,13 +9,13 @@ namespace DM.Services.Forum.Authorization;
 /// <inheritdoc />
 internal class ForumIntentionResolver : IIntentionResolver<ForumIntention, Dto.Output.Forum>
 {
-    private readonly IAccessPolicyConverter accessPolicyConverter;
+    private readonly IAccessPolicyConverter _accessPolicyConverter;
 
     /// <inheritdoc />
     public ForumIntentionResolver(
         IAccessPolicyConverter accessPolicyConverter)
     {
-        this.accessPolicyConverter = accessPolicyConverter;
+        _accessPolicyConverter = accessPolicyConverter;
     }
 
     /// <inheritdoc />
@@ -24,10 +24,10 @@ internal class ForumIntentionResolver : IIntentionResolver<ForumIntention, Dto.O
         switch (intention)
         {
             case ForumIntention.CreateTopic when user.IsAuthenticated:
-                var userPolicy = accessPolicyConverter.Convert(user.Role);
+                var userPolicy = _accessPolicyConverter.Convert(user.Role);
                 return (target.CreateTopicPolicy & userPolicy) != ForumAccessPolicy.NoOne;
             case ForumIntention.AdministrateTopics when user.IsAuthenticated:
-                return user.Role.HasFlag(UserRole.Administrator) ||
+                return user.Role >= UserRole.Admin ||
                        target.ModeratorIds.Contains(user.UserId);
             default:
                 return false;

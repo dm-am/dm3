@@ -4,7 +4,7 @@ using DM.Services.Common.Authorization;
 using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Fora;
+using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Services.Forum.Authorization;
 using DM.Services.MessageQueuing.GeneralBus;
@@ -15,11 +15,11 @@ namespace DM.Services.Forum.BusinessProcesses.Commentaries.Deleting;
 /// <inheritdoc />
 internal class CommentaryDeletingService : ICommentaryDeletingService
 {
-    private readonly IIntentionManager intentionManager;
-    private readonly IUpdateBuilderFactory updateBuilderFactory;
-    private readonly ICommentaryDeletingRepository repository;
-    private readonly IUnreadCountersRepository unreadCountersRepository;
-    private readonly IInvokedEventProducer invokedEventProducer;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IUpdateBuilderFactory _updateBuilderFactory;
+    private readonly ICommentaryDeletingRepository _repository;
+    private readonly IUnreadCountersRepository _unreadCountersRepository;
+    private readonly IInvokedEventProducer _invokedEventProducer;
 
     /// <inheritdoc />
     public CommentaryDeletingService(
@@ -29,31 +29,31 @@ internal class CommentaryDeletingService : ICommentaryDeletingService
         IUnreadCountersRepository unreadCountersRepository,
         IInvokedEventProducer invokedEventProducer)
     {
-        this.intentionManager = intentionManager;
-        this.updateBuilderFactory = updateBuilderFactory;
-        this.repository = repository;
-        this.unreadCountersRepository = unreadCountersRepository;
-        this.invokedEventProducer = invokedEventProducer;
+        _intentionManager = intentionManager;
+        _updateBuilderFactory = updateBuilderFactory;
+        _repository = repository;
+        _unreadCountersRepository = unreadCountersRepository;
+        _invokedEventProducer = invokedEventProducer;
     }
         
     /// <inheritdoc />
     public async Task Delete(Guid commentId)
     {
-        var comment = await repository.GetForDelete(commentId);
-        intentionManager.ThrowIfForbidden(CommentIntention.Delete, (Services.Common.Dto.Comment) comment);
+        var comment = await _repository.GetForDelete(commentId);
+        _intentionManager.ThrowIfForbidden(CommentIntention.Delete, (Services.Common.Dto.Comment) comment);
 
-        var updateTopic = updateBuilderFactory.Create<ForumTopic>(comment.EntityId);
+        var updateTopic = _updateBuilderFactory.Create<ForumTopic>(comment.EntityId);
         if (comment.IsLastCommentOfTopic)
         {
-            var previousCommentaryId = await repository.GetSecondLastCommentId(comment.EntityId);
+            var previousCommentaryId = await _repository.GetSecondLastCommentId(comment.EntityId);
             updateTopic = updateTopic.Field(t => t.LastCommentId, previousCommentaryId);
         }
 
-        var updateComment = updateBuilderFactory.Create<Comment>(commentId)
+        var updateComment = _updateBuilderFactory.Create<Comment>(commentId)
             .Field(c => c.IsRemoved, true);
-        await repository.Delete(updateComment, updateTopic);
-        await unreadCountersRepository.Decrement(comment.EntityId, UnreadEntryType.Message, comment.CreateDate);
+        await _repository.Delete(updateComment, updateTopic);
+        await _unreadCountersRepository.Decrement(comment.EntityId, UnreadEntryType.Message, comment.CreateDate);
 
-        await invokedEventProducer.Send(EventType.DeletedForumComment, commentId);
+        await _invokedEventProducer.Send(EventType.DeletedForumComment, commentId);
     }
 }

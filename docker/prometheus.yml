@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'dm-api'
+    static_configs:
+      - targets: ['dm-api:5050']
+    metrics_path: '/metrics'

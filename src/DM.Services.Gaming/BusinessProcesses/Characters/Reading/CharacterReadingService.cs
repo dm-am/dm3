@@ -16,11 +16,11 @@ namespace DM.Services.Gaming.BusinessProcesses.Characters.Reading;
 /// <inheritdoc />
 internal class CharacterReadingService : ICharacterReadingService
 {
-    private readonly IGameReadingService gameReadingService;
-    private readonly ICharacterReadingRepository readingRepository;
-    private readonly ICharacterAttributeValueFiller attributeValueFiller;
-    private readonly IUnreadCountersRepository unreadCountersRepository;
-    private readonly IIdentityProvider identityProvider;
+    private readonly IGameReadingService _gameReadingService;
+    private readonly ICharacterReadingRepository _readingRepository;
+    private readonly ICharacterAttributeValueFiller _attributeValueFiller;
+    private readonly IUnreadCountersRepository _unreadCountersRepository;
+    private readonly IIdentityProvider _identityProvider;
 
     /// <inheritdoc />
     public CharacterReadingService(
@@ -30,41 +30,41 @@ internal class CharacterReadingService : ICharacterReadingService
         IUnreadCountersRepository unreadCountersRepository,
         IIdentityProvider identityProvider)
     {
-        this.gameReadingService = gameReadingService;
-        this.readingRepository = readingRepository;
-        this.attributeValueFiller = attributeValueFiller;
-        this.unreadCountersRepository = unreadCountersRepository;
-        this.identityProvider = identityProvider;
+        _gameReadingService = gameReadingService;
+        _readingRepository = readingRepository;
+        _attributeValueFiller = attributeValueFiller;
+        _unreadCountersRepository = unreadCountersRepository;
+        _identityProvider = identityProvider;
     }
 
     /// <inheritdoc />
     public async Task<IEnumerable<Character>> GetCharacters(Guid gameId)
     {
-        var game = await gameReadingService.GetGame(gameId);
-        var characters = (await readingRepository.GetCharacters(gameId)).ToArray();
-        await attributeValueFiller.Fill(characters, game.AttributeSchemaId);
+        var game = await _gameReadingService.GetGame(gameId);
+        var characters = (await _readingRepository.GetCharacters(gameId)).ToArray();
+        await _attributeValueFiller.Fill(characters, game.AttributeSchemaId);
         return characters;
     }
 
     /// <inheritdoc />
     public async Task<Character> GetCharacter(Guid characterId)
     {
-        var character = await readingRepository.FindCharacter(characterId);
+        var character = await _readingRepository.FindCharacter(characterId);
         if (character == null)
         {
             throw new HttpException(HttpStatusCode.Gone, "Character not found");
         }
 
-        var game = await gameReadingService.GetGame(character.GameId);
-        await attributeValueFiller.Fill(new[] {character}, game.AttributeSchemaId);
+        var game = await _gameReadingService.GetGame(character.GameId);
+        await _attributeValueFiller.Fill(new[] {character}, game.AttributeSchemaId);
         return character;
     }
 
     /// <inheritdoc />
     public async Task MarkAsRead(Guid gameId)
     {
-        await gameReadingService.GetGame(gameId);
-        await unreadCountersRepository.Flush(identityProvider.Current.User.UserId,
+        await _gameReadingService.GetGame(gameId);
+        await _unreadCountersRepository.Flush(_identityProvider.Current.User.UserId,
             UnreadEntryType.Character, gameId);
     }
 }

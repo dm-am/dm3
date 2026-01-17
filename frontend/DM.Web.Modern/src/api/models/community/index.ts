@@ -38,7 +38,7 @@ export enum UserRole {
   Guest = 'Guest',
   Player = 'Player',
   Administrator = 'Administrator',
-  NannyModerator = 'NannyModerator',
+  MentorModerator = 'MentorModerator',
   RegularModerator = 'RegularModerator',
   SeniorModerator = 'SeniorModerator',
 }
@@ -60,7 +60,7 @@ export interface PagingSettings {
 }
 
 export interface UserSettings {
-  nannyGreetingsMessage: string;
+  mentorGreetingsMessage: string;
   colorSchema: ColorSchema;
   paging: PagingSettings;
 }

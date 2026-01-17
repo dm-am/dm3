@@ -7,21 +7,21 @@ namespace DM.Services.Common.BusinessProcesses.Likes;
 /// <inheritdoc />
 internal class LikeFactory : ILikeFactory
 {
-    private readonly IGuidFactory guidFactory;
+    private readonly IGuidFactory _guidFactory;
 
     /// <inheritdoc />
     public LikeFactory(
         IGuidFactory guidFactory)
     {
-        this.guidFactory = guidFactory;
+        _guidFactory = guidFactory;
     }
-        
+
     /// <inheritdoc />
     public Like Create(Guid entityId, Guid userId)
     {
         return new Like
         {
-            LikeId = guidFactory.Create(),
+            LikeId = _guidFactory.Create(),
             UserId = userId,
             EntityId = entityId
         };

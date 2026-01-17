@@ -2,6 +2,7 @@ using DM.Services.Core.Configuration;
 using Jamq.Client.OpenTelemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
@@ -25,11 +26,14 @@ public static class LoggingConfiguration
         var connectionStrings = new ConnectionStrings();
         configuration.GetSection(nameof(ConnectionStrings)).Bind(connectionStrings);
 
+        var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
             .Enrich.FromLogContext()
+            .Enrich.With<ActivityEnricher>()
             .Enrich.WithProperty("Application", applicationName)
-            .Enrich.WithProperty("Environment", "Test")
+            .Enrich.WithProperty("Environment", environmentName)
             .WriteTo.Logger(lc => lc
                 .Filter.ByExcluding(Matching.FromSource("Microsoft"))
                 .WriteTo.OpenSearch(
@@ -51,9 +55,16 @@ public static class LoggingConfiguration
                 .AddHttpClientInstrumentation()
                 .AddEntityFrameworkCoreInstrumentation(opts => opts.SetDbStatementForText = true)
                 .AddSource("MongoDB.Driver.Core.Extensions.DiagnosticSources") // MongoDb is not too fancy
+                .AddSource(DM.Services.Core.Tracing.DmActivitySource.Name)
                 .AddJamqClientInstrumentation()
                 .AddConsoleExporter()
-                .AddOtlpExporter(options => options.Endpoint = new Uri(connectionStrings.TracingEndpoint)));
+                .AddOtlpExporter(options => options.Endpoint = new Uri(connectionStrings.TracingEndpoint)))
+            .WithMetrics(builder => builder
+                .ConfigureResource(r => r.AddService(applicationName))
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddRuntimeInstrumentation()
+                .AddPrometheusExporter());
 
         return services.AddLogging(b => b.AddSerilog());
     }

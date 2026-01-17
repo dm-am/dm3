@@ -60,7 +60,7 @@ export type Game = {
   master: Served<User>;
   assistant: User | null;
   pendingAssistant: Served<User | null>;
-  nanny: Served<User | null>;
+  mentor: Served<User | null>;
   notes: string;
   info: string;
 

@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { useRoute } from "vue-router";
-import { useForumStore } from "@/stores";
+import { useBoardsStore } from "@/stores";
 import { storeToRefs } from "pinia";
 import { extractNumberParam } from "@/router";
-import type { ForumId } from "@/api/models/forum";
+import type { BoardId } from "@/api/models/forum";
 import { useFetchData } from "@/composables/useFetchData";
 
 const route = useRoute();
-const forumStore = useForumStore();
-const { moderators } = storeToRefs(forumStore);
-const { trySelectForum, fetchModerators, fetchTopics } = forumStore;
+const boardsStore = useBoardsStore();
+const { moderators } = storeToRefs(boardsStore);
+const { trySelectBoard, fetchModerators, fetchTopics } = boardsStore;
 
 async function fetchData() {
-  const forumId = route.params.id as ForumId;
-  await trySelectForum(forumId);
+  const boardId = route.params.id as BoardId;
+  await trySelectBoard(boardId);
 
   await Promise.all([
     fetchModerators(),

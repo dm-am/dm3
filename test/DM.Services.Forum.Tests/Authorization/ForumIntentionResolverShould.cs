@@ -26,14 +26,14 @@ public class ForumIntentionResolverShould : UnitTestBase
     public void ForbidCreateTopicWhenCreatePolicyMatchesNotUserRole()
     {
         policyConverter
-            .Setup(c => c.Convert(UserRole.Administrator))
+            .Setup(c => c.Convert(UserRole.Admin))
             .Returns(
                 ForumAccessPolicy.ForumModerator |
                 ForumAccessPolicy.Player |
-                ForumAccessPolicy.NannyModerator);
-            
+                ForumAccessPolicy.MentorModerator);
+
         var actual = resolver.IsAllowed(
-            Create.User().WithRole(UserRole.Administrator).Please(),
+            Create.User().WithRole(UserRole.Admin).Please(),
             ForumIntention.CreateTopic,
             new Dto.Output.Forum
             {
@@ -56,14 +56,14 @@ public class ForumIntentionResolverShould : UnitTestBase
     public void AllowCreateTopicWhenCreatePolicyMatchUserRole()
     {
         policyConverter
-            .Setup(c => c.Convert(UserRole.Administrator | UserRole.Player))
+            .Setup(c => c.Convert(UserRole.Admin))
             .Returns(
                 ForumAccessPolicy.Guest |
                 ForumAccessPolicy.Player |
                 ForumAccessPolicy.Administrator);
-            
+
         var actual = resolver.IsAllowed(
-            Create.User().WithRole(UserRole.Administrator | UserRole.Player).Please(),
+            Create.User().WithRole(UserRole.Admin).Please(),
             ForumIntention.CreateTopic,
             new Dto.Output.Forum
             {
@@ -76,11 +76,11 @@ public class ForumIntentionResolverShould : UnitTestBase
     public void ForbidTopicAdministrationWhenUserNotAdministratorOrLocalModerator()
     {
         var actual = resolver.IsAllowed(
-            Create.User().WithRole(UserRole.Player | UserRole.RegularModerator).Please(),
+            Create.User().WithRole(UserRole.Moderator).Please(),
             ForumIntention.AdministrateTopics,
             new Dto.Output.Forum
             {
-                ModeratorIds = new [] {Guid.NewGuid(), Guid.NewGuid()}
+                ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
             });
         actual.Should().BeFalse();
     }
@@ -89,11 +89,11 @@ public class ForumIntentionResolverShould : UnitTestBase
     public void AllowTopicAdministrationWhenUserAdministrator()
     {
         var actual = resolver.IsAllowed(
-            Create.User().WithRole(UserRole.NannyModerator | UserRole.Administrator).Please(),
+            Create.User().WithRole(UserRole.Admin).Please(),
             ForumIntention.AdministrateTopics,
             new Dto.Output.Forum
             {
-                ModeratorIds = new [] {Guid.NewGuid(), Guid.NewGuid()}
+                ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
             });
         actual.Should().BeTrue();
     }
@@ -103,11 +103,11 @@ public class ForumIntentionResolverShould : UnitTestBase
     {
         var userId = Guid.NewGuid();
         var actual = resolver.IsAllowed(
-            Create.User(userId).WithRole(UserRole.NannyModerator | UserRole.SeniorModerator).Please(),
+            Create.User(userId).WithRole(UserRole.SeniorModerator).Please(),
             ForumIntention.AdministrateTopics,
             new Dto.Output.Forum
             {
-                ModeratorIds = new [] {Guid.NewGuid(), Guid.NewGuid(), userId}
+                ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid(), userId }
             });
         actual.Should().BeTrue();
     }

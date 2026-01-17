@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Services.Authentication.Implementation.UserIdentity;
 using DM.Services.Common.BusinessProcesses.UnreadCounters;
@@ -10,7 +11,7 @@ using DM.Services.Core.Dto;
 using DM.Services.Core.Exceptions;
 using DM.Services.DataAccess.BusinessObjects.Common;
 using DM.Services.Forum.BusinessProcesses.Common;
-using DM.Services.Forum.BusinessProcesses.Fora;
+using DM.Services.Forum.BusinessProcesses.Boards;
 using DM.Services.Forum.Dto.Output;
 
 namespace DM.Services.Forum.BusinessProcesses.Topics.Reading;
@@ -18,11 +19,11 @@ namespace DM.Services.Forum.BusinessProcesses.Topics.Reading;
 /// <inheritdoc />
 internal class TopicReadingService : ITopicReadingService
 {
-    private readonly IForumReadingService forumReadingService;
-    private readonly IAccessPolicyConverter accessPolicyConverter;
-    private readonly ITopicReadingRepository repository;
-    private readonly IUnreadCountersRepository unreadCountersRepository;
-    private readonly IIdentityProvider identityProvider;
+    private readonly IForumReadingService _forumReadingService;
+    private readonly IAccessPolicyConverter _accessPolicyConverter;
+    private readonly ITopicReadingRepository _repository;
+    private readonly IUnreadCountersRepository _unreadCountersRepository;
+    private readonly IIdentityProvider _identityProvider;
 
     /// <inheritdoc />
     public TopicReadingService(
@@ -32,27 +33,27 @@ internal class TopicReadingService : ITopicReadingService
         ITopicReadingRepository repository,
         IUnreadCountersRepository unreadCountersRepository)
     {
-        this.identityProvider = identityProvider;
-        this.forumReadingService = forumReadingService;
-        this.accessPolicyConverter = accessPolicyConverter;
-        this.repository = repository;
-        this.unreadCountersRepository = unreadCountersRepository;
+        _identityProvider = identityProvider;
+        _forumReadingService = forumReadingService;
+        _accessPolicyConverter = accessPolicyConverter;
+        _repository = repository;
+        _unreadCountersRepository = unreadCountersRepository;
     }
 
     /// <inheritdoc />
     public async Task<(IEnumerable<Topic> topics, PagingResult paging)> GetTopicsList(
-        string forumTitle, PagingQuery query)
+        string forumTitle, PagingQuery query, CancellationToken ct = default)
     {
-        var forum = await forumReadingService.GetForum(forumTitle);
+        var forum = await _forumReadingService.GetForum(forumTitle);
 
-        var totalCount = await repository.Count(forum.Id);
-        var identity = identityProvider.Current;
+        var totalCount = await _repository.Count(forum.Id, ct);
+        var identity = _identityProvider.Current;
         var pagingData = new PagingData(query, identity.Settings.Paging.TopicsPerPage, totalCount);
 
-        var topics = (await repository.Get(forum.Id, pagingData, false)).ToArray();
+        var topics = (await _repository.Get(forum.Id, pagingData, false, ct)).ToArray();
         if (identity.User.IsAuthenticated)
         {
-            await unreadCountersRepository.FillEntityCounters(topics, identity.User.UserId,
+            await _unreadCountersRepository.FillEntityCounters(topics, identity.User.UserId,
                 t => t.Id, t => t.UnreadCommentsCount);
         }
 
@@ -60,14 +61,14 @@ internal class TopicReadingService : ITopicReadingService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Topic>> GetAttachedTopics(string forumTitle)
+    public async Task<IEnumerable<Topic>> GetAttachedTopics(string forumTitle, CancellationToken ct = default)
     {
-        var forum = await forumReadingService.GetForum(forumTitle);
-        var topics = (await repository.Get(forum.Id, null, true)).ToArray();
-        var identity = identityProvider.Current;
+        var forum = await _forumReadingService.GetForum(forumTitle);
+        var topics = (await _repository.Get(forum.Id, null, true, ct)).ToArray();
+        var identity = _identityProvider.Current;
         if (identity.User.IsAuthenticated)
         {
-            await unreadCountersRepository.FillEntityCounters(topics, identity.User.UserId,
+            await _unreadCountersRepository.FillEntityCounters(topics, identity.User.UserId,
                 t => t.Id, t => t.UnreadCommentsCount);
         }
 
@@ -75,11 +76,11 @@ internal class TopicReadingService : ITopicReadingService
     }
 
     /// <inheritdoc />
-    public async Task<Topic> GetTopic(Guid topicId)
+    public async Task<Topic> GetTopic(Guid topicId, CancellationToken ct = default)
     {
-        var identity = identityProvider.Current;
-        var accessPolicy = accessPolicyConverter.Convert(identity.User.Role);
-        var topic = await repository.Get(topicId, accessPolicy);
+        var identity = _identityProvider.Current;
+        var accessPolicy = _accessPolicyConverter.Convert(identity.User.Role);
+        var topic = await _repository.Get(topicId, accessPolicy, ct);
         if (topic == null)
         {
             throw new HttpException(HttpStatusCode.Gone, "Topic not found");
@@ -87,7 +88,7 @@ internal class TopicReadingService : ITopicReadingService
 
         if (identity.User.IsAuthenticated)
         {
-            topic.UnreadCommentsCount = (await unreadCountersRepository.SelectByEntities(
+            topic.UnreadCommentsCount = (await _unreadCountersRepository.SelectByEntities(
                 identity.User.UserId, UnreadEntryType.Message, topicId))[topicId];
         }
 

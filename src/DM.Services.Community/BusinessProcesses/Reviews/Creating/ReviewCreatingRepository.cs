@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
@@ -22,7 +23,14 @@ internal class ReviewCreatingRepository : IReviewCreatingRepository
         this.dbContext = dbContext;
         this.mapper = mapper;
     }
-        
+
+    /// <inheritdoc />
+    public async Task<bool> UserHasReview(Guid userId)
+    {
+        return await dbContext.Reviews
+            .AnyAsync(r => r.UserId == userId && !r.IsRemoved);
+    }
+
     /// <inheritdoc />
     public async Task<Review> Create(DataAccess.BusinessObjects.Common.Review review)
     {

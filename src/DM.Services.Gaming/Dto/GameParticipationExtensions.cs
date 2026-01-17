@@ -33,7 +33,7 @@ public static class GameParticipationExtensions
             participation |= GameParticipation.PendingAssistant;
         }
 
-        if (game.Nanny?.UserId == userId)
+        if (game.Mentor?.UserId == userId)
         {
             participation |= GameParticipation.Moderator;
         }

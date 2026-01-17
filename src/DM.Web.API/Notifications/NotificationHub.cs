@@ -9,13 +9,13 @@ namespace DM.Web.API.Notifications;
 /// <inheritdoc />
 public class NotificationHub : Hub<INotificationHub>
 {
-    private readonly IUserConnectionService connectionService;
+    private readonly IUserConnectionService _connectionService;
 
     /// <inheritdoc />
     public NotificationHub(
         IUserConnectionService connectionService)
     {
-        this.connectionService = connectionService;
+        _connectionService = connectionService;
     }
 
     /// <inheritdoc />
@@ -24,7 +24,7 @@ public class NotificationHub : Hub<INotificationHub>
         var (hasToken, token) = TryExtractAuthToken();
         if (hasToken)
         {
-            connectionService.Add(token, Context.ConnectionId);
+            _connectionService.Add(token, Context.ConnectionId);
         }
 
         return base.OnConnectedAsync();
@@ -36,7 +36,7 @@ public class NotificationHub : Hub<INotificationHub>
         var (hasToken, token) = TryExtractAuthToken();
         if (hasToken)
         {
-            connectionService.Remove(token, Context.ConnectionId);
+            _connectionService.Remove(token, Context.ConnectionId);
         }
 
         return base.OnDisconnectedAsync(exception);

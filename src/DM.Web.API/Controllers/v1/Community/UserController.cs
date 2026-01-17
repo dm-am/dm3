@@ -13,13 +13,13 @@ namespace DM.Web.API.Controllers.v1.Community;
 [ApiExplorerSettings(GroupName = "Community")]
 public class UserController : ControllerBase
 {
-    private readonly IUserApiService userApiService;
+    private readonly IUserApiService _userApiService;
 
     /// <inheritdoc />
     public UserController(
         IUserApiService userApiService)
     {
-        this.userApiService = userApiService;
+        _userApiService = userApiService;
     }
 
     /// <summary>
@@ -29,7 +29,7 @@ public class UserController : ControllerBase
     [HttpGet("")]
     [ProducesResponseType(typeof(ListEnvelope<User>), 200)]
     public async Task<IActionResult> GetUsers([FromQuery] UsersQuery query) =>
-        Ok(await userApiService.GetUsers(query));
+        Ok(await _userApiService.GetUsers(query));
 
     /// <summary>
     /// Get user
@@ -40,7 +40,7 @@ public class UserController : ControllerBase
     [HttpGet("{login}", Name = nameof(GetUser))]
     [ProducesResponseType(typeof(Envelope<User>), 200)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> GetUser(string login) => Ok(await userApiService.GetUser(login));
+    public async Task<IActionResult> GetUser(string login) => Ok(await _userApiService.GetUser(login));
 
     /// <summary>
     /// Get user details
@@ -51,7 +51,7 @@ public class UserController : ControllerBase
     [HttpGet("{login}/details", Name = nameof(GetUserDetails))]
     [ProducesResponseType(typeof(Envelope<UserDetails>), 200)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> GetUserDetails(string login) => Ok(await userApiService.GetUserDetails(login));
+    public async Task<IActionResult> GetUserDetails(string login) => Ok(await _userApiService.GetUserDetails(login));
 
     /// <summary>
     /// Update user details
@@ -63,13 +63,13 @@ public class UserController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to modify this user</response>
     /// <response code="410">User not found</response>
-    [HttpPatch("{login}/details", Name = nameof(PutUserDetails))]
+    [HttpPatch("{login}/details", Name = nameof(PatchUserDetails))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<UserDetails>), 200)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PutUserDetails(string login, [FromBody] UserDetails user) =>
-        Ok(await userApiService.UpdateUser(login, user));
+    public async Task<IActionResult> PatchUserDetails(string login, [FromBody] UserDetails user) =>
+        Ok(await _userApiService.UpdateUser(login, user));
 }

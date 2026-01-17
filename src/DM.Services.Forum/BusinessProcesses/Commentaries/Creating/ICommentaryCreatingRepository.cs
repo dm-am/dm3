@@ -1,5 +1,5 @@
 using System.Threading.Tasks;
-using DM.Services.DataAccess.BusinessObjects.Fora;
+using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.DataAccess.RelationalStorage;
 using Comment = DM.Services.DataAccess.BusinessObjects.Common.Comment;
 

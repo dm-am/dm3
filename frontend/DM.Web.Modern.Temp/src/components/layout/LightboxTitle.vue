@@ -8,5 +8,5 @@
 h2
   margin-bottom: $small
   font-size: $title-font-size
-  +theme(color, $highlight-text)
+  +theme(color, $accent-text)
 </style>

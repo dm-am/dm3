@@ -36,10 +36,28 @@ public enum EventType
     NewMessage = 11,
 
     /// <summary>
+    /// Message has been changed
+    /// </summary>
+    [EventRoutingKey("messaging.message.changed")]
+    ChangedMessage = 12,
+
+    /// <summary>
+    /// Message has been liked
+    /// </summary>
+    [EventRoutingKey("messaging.message.liked")]
+    LikedMessage = 13,
+
+    /// <summary>
     /// New chat message has been sent
     /// </summary>
     [EventRoutingKey("chat.message.created")]
     NewChatMessage = 31,
+
+    /// <summary>
+    /// Chat message has been liked
+    /// </summary>
+    [EventRoutingKey("chat.message.liked")]
+    LikedChatMessage = 32,
 
     /// <summary>
     /// New poll has been published

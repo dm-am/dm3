@@ -1,10 +1,10 @@
 <template>
   <div>
-    <block-title class="title" @click="toggle">
-      <slot name="title" />&nbsp;<the-icon
-        :font="show ? IconType.CornerTop : IconType.CornerBottom"
-      />
-    </block-title>
+    <h4 class="sidebar-title">
+      <span class="toggle" @click="toggle" @mouseenter="hovered = true" @mouseleave="hovered = false">
+        <slot name="title" /><span class="icon" :style="{ transform: `rotate(${rotation}deg)`, opacity: hovered ? 1 : 0 }"></span>
+      </span>
+    </h4>
     <div :class="{ list: true, collapsed: !show }" ref="content">
       <slot />
     </div>
@@ -13,17 +13,18 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import BlockTitle from "@/components/layout/BlockTitle.vue";
-import { IconType } from "@/components/icons/iconType";
 
 const props = defineProps<{ token: string }>();
 const storageKey = computed(() => `__HideMenuModule_${props.token}__`);
 
 const show = ref(localStorage.getItem(storageKey.value) !== false.toString());
 const content = ref<HTMLElement | null>(null);
+const rotation = ref(show.value ? 45 : 0);
+const hovered = ref(false);
 
 const toggle = () => {
   localStorage.setItem(storageKey.value, (show.value = !show.value).toString());
+  rotation.value = show.value ? 45 : 0;
   if (show.value) {
     content.value!.style.height = "auto";
     const expectedHeight = content.value!.clientHeight;
@@ -39,9 +40,51 @@ const toggle = () => {
 
 <style scoped lang="sass">
 @import "src/assets/styles/Variables"
+@import "src/assets/styles/Themes"
 
-.title
+.sidebar-title
+  margin: $medium 0 $small
+  font-size: $font-size
+  font-weight: bold
+  text-transform: uppercase
+  letter-spacing: 0.5px
+  +theme(color, $muted-text)
+  transition: color 0.15s ease
+
+.toggle
   cursor: pointer
+  color: inherit
+
+.icon
+  position: relative
+  display: inline-block
+  width: 10px
+  height: 10px
+  margin-left: 6px
+  opacity: 0
+  transition: opacity 0.15s ease, transform 0.3s ease
+  vertical-align: middle
+  margin-top: -2px
+
+  &::before,
+  &::after
+    content: ""
+    position: absolute
+    top: 50%
+    left: 50%
+    +theme(background-color, $muted-text)
+
+  &::before
+    // Horizontal line
+    width: 10px
+    height: 2px
+    transform: translate(-50%, -50%)
+
+  &::after
+    // Vertical line
+    width: 2px
+    height: 10px
+    transform: translate(-50%, -50%)
 
 .list
   overflow: hidden

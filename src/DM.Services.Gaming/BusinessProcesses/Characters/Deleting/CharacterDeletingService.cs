@@ -17,11 +17,11 @@ namespace DM.Services.Gaming.BusinessProcesses.Characters.Deleting;
 /// <inheritdoc />
 internal class CharacterDeletingService : ICharacterDeletingService
 {
-    private readonly IIntentionManager intentionManager;
-    private readonly IUpdateBuilderFactory updateBuilderFactory;
-    private readonly ICharacterUpdatingRepository repository;
-    private readonly IUnreadCountersRepository unreadCountersRepository;
-    private readonly IInvokedEventProducer producer;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IUpdateBuilderFactory _updateBuilderFactory;
+    private readonly ICharacterUpdatingRepository _repository;
+    private readonly IUnreadCountersRepository _unreadCountersRepository;
+    private readonly IInvokedEventProducer _producer;
 
     /// <inheritdoc />
     public CharacterDeletingService(
@@ -31,26 +31,26 @@ internal class CharacterDeletingService : ICharacterDeletingService
         IUnreadCountersRepository unreadCountersRepository,
         IInvokedEventProducer producer)
     {
-        this.intentionManager = intentionManager;
-        this.updateBuilderFactory = updateBuilderFactory;
-        this.repository = repository;
-        this.unreadCountersRepository = unreadCountersRepository;
-        this.producer = producer;
+        _intentionManager = intentionManager;
+        _updateBuilderFactory = updateBuilderFactory;
+        _repository = repository;
+        _unreadCountersRepository = unreadCountersRepository;
+        _producer = producer;
     }
 
     /// <inheritdoc />
     public async Task Delete(Guid characterId)
     {
-        var character = await repository.Get(characterId);
-        intentionManager.ThrowIfForbidden(CharacterIntention.Delete, character);
+        var character = await _repository.Get(characterId);
+        _intentionManager.ThrowIfForbidden(CharacterIntention.Delete, character);
 
-        var updateCharacter = updateBuilderFactory.Create<Character>(characterId);
+        var updateCharacter = _updateBuilderFactory.Create<Character>(characterId);
         updateCharacter.Field(c => c.IsRemoved, true);
-        var updateAttributes = (await repository.GetAttributeIds(characterId)).Keys
-            .Select(id => updateBuilderFactory.Create<CharacterAttribute>(id).Delete());
+        var updateAttributes = (await _repository.GetAttributeIds(characterId)).Keys
+            .Select(id => _updateBuilderFactory.Create<CharacterAttribute>(id).Delete());
 
-        await repository.Update(updateCharacter, updateAttributes);
-        await unreadCountersRepository.Decrement(character.GameId, UnreadEntryType.Character, character.CreateDate);
-        await producer.Send(EventType.DeletedCharacter, characterId);
+        await _repository.Update(updateCharacter, updateAttributes);
+        await _unreadCountersRepository.Decrement(character.GameId, UnreadEntryType.Character, character.CreateDate);
+        await _producer.Send(EventType.DeletedCharacter, characterId);
     }
 }

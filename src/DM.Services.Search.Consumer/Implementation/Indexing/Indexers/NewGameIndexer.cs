@@ -14,9 +14,9 @@ namespace DM.Services.Search.Consumer.Implementation.Indexing.Indexers;
 /// </summary>
 internal class NewGameIndexer : BaseIndexer
 {
-    private readonly DmDbContext dbContext;
-    private readonly IBbParserProvider bbParserProvider;
-    private readonly IIndexingRepository repository;
+    private readonly DmDbContext _dbContext;
+    private readonly IBbParserProvider _bbParserProvider;
+    private readonly IIndexingRepository _repository;
 
     /// <inheritdoc />
     public NewGameIndexer(
@@ -24,9 +24,9 @@ internal class NewGameIndexer : BaseIndexer
         IBbParserProvider bbParserProvider,
         IIndexingRepository repository)
     {
-        this.dbContext = dbContext;
-        this.bbParserProvider = bbParserProvider;
-        this.repository = repository;
+        _dbContext = dbContext;
+        _bbParserProvider = bbParserProvider;
+        _repository = repository;
     }
 
     /// <inheritdoc />
@@ -35,16 +35,16 @@ internal class NewGameIndexer : BaseIndexer
     /// <inheritdoc />
     public override async Task Index(InvokedEvent message)
     {
-        var game = await dbContext.Games
+        var game = await _dbContext.Games
             .Where(g => g.GameId == message.EntityId)
             .Select(g => new {g.GameId, g.Title, g.Info, g.Status, g.MasterId})
             .FirstAsync();
-        await repository.Index(new SearchEntity
+        await _repository.Index(new SearchEntity
         {
             Id = game.GameId,
             EntityType = SearchEntityType.Game,
             Title = game.Title,
-            Text = bbParserProvider.CurrentInfo.Parse(game.Info).ToHtml(),
+            Text = _bbParserProvider.CurrentInfo.Parse(game.Info).ToHtml(),
             AuthorizedUsers = game.Status == GameStatus.Draft || game.Status == GameStatus.RequiresModeration
                 ? new[] {game.MasterId}
                 : null

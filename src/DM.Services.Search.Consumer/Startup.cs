@@ -23,19 +23,19 @@ namespace DM.Services.Search.Consumer;
 /// </summary>
 public class Startup
 {
-    private readonly IConfiguration configuration;
+    private readonly IConfiguration _configuration;
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     /// <param name="configuration"></param>
     public Startup(IConfiguration configuration)
     {
-        this.configuration = configuration;
+        _configuration = configuration;
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     /// <param name="services"></param>
     /// <returns></returns>
@@ -43,17 +43,17 @@ public class Startup
     {
         services
             .AddOptions()
-            .Configure<ConnectionStrings>(configuration.GetSection(nameof(ConnectionStrings)).Bind)
-            .Configure<RabbitMqConfiguration>(configuration.GetSection(nameof(RabbitMqConfiguration)).Bind)
-            .Configure<SearchEngineConfiguration>(configuration.GetSection(nameof(SearchEngineConfiguration)).Bind)
-            .AddDmLogging("DM.Search.Consumer", configuration);
+            .Configure<ConnectionStrings>(_configuration.GetSection(nameof(ConnectionStrings)).Bind)
+            .Configure<RabbitMqConfiguration>(_configuration.GetSection(nameof(RabbitMqConfiguration)).Bind)
+            .Configure<SearchEngineConfiguration>(_configuration.GetSection(nameof(SearchEngineConfiguration)).Bind)
+            .AddDmLogging("DM.Search.Consumer", _configuration);
 
         services.AddJamqClient(config => config.UseRabbit());
 
         services.AddHostedService<SearchEngineConsumer>();
 
         services.AddDbContext<DmDbContext>(options => options
-            .UseNpgsql(configuration.GetConnectionString(nameof(ConnectionStrings.Rdb))));
+            .UseNpgsql(_configuration.GetConnectionString(nameof(ConnectionStrings.Rdb))));
 
         services.AddMvc();
         services.AddGrpc(options => options.Interceptors.Add<IdentityInterceptor>());

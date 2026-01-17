@@ -22,6 +22,11 @@ public class GeneralUser : IUser
     /// <inheritdoc />
     public UserRole Role { get; set; }
 
+    /// <summary>
+    /// Honorary goblin status (special title for active users)
+    /// </summary>
+    public bool IsHonorary { get; set; }
+
     /// <inheritdoc />
     public AccessPolicy AccessPolicy { get; set; }
 
@@ -58,6 +63,16 @@ public class GeneralUser : IUser
     /// </summary>
     public string Location { get; set; }
 
+    /// <summary>
+    /// Gender
+    /// </summary>
+    public Enums.Gender Gender { get; set; }
+
+    /// <summary>
+    /// Birthday date (day and month only)
+    /// </summary>
+    public DateOnly? BirthdayDate { get; set; }
+
     /// <inheritdoc />
     public bool RatingDisabled { get; set; }
 
@@ -71,4 +86,9 @@ public class GeneralUser : IUser
     /// Whether user is authenticated or not
     /// </summary>
     public bool IsAuthenticated => Role != UserRole.Guest;
+
+    /// <summary>
+    /// Whether user is a newbie (less than 100 posts)
+    /// </summary>
+    public bool IsNewbie => QuantityRating < 100;
 }

@@ -59,7 +59,7 @@ const roleNames: Record<string, string> = {
   [UserRole.Administrator]: 'Тролль',
   [UserRole.SeniorModerator]: 'Старший гоблин',
   [UserRole.RegularModerator]: 'Гоблин',
-  [UserRole.NannyModerator]: 'Гоблин-нянька',
+  [UserRole.MentorModerator]: 'Гоблин-нянька',
 };
 
 @Component({

@@ -16,24 +16,24 @@ internal class GameParticipationResolver :
     IValueResolver<ServiceGame, Game, IEnumerable<GameParticipation>>,
     IValueResolver<GameExtended, Game, IEnumerable<GameParticipation>>
 {
-    private readonly IIdentityProvider identityProvider;
+    private readonly IIdentityProvider _identityProvider;
 
     /// <inheritdoc />
     public GameParticipationResolver(
         IIdentityProvider identityProvider)
     {
-        this.identityProvider = identityProvider;
+        _identityProvider = identityProvider;
     }
 
     /// <inheritdoc />
     public IEnumerable<GameParticipation> Resolve(
         ServiceGame source, Game destination, IEnumerable<GameParticipation> destMember, ResolutionContext context) =>
-        Flatten(source.Participation(identityProvider.Current.User.UserId));
+        Flatten(source.Participation(_identityProvider.Current.User.UserId));
 
     /// <inheritdoc />
     public IEnumerable<GameParticipation> Resolve(
         GameExtended source, Game destination, IEnumerable<GameParticipation> destMember, ResolutionContext context) =>
-        Flatten(source.Participation(identityProvider.Current.User.UserId));
+        Flatten(source.Participation(_identityProvider.Current.User.UserId));
 
     private static IEnumerable<GameParticipation> Flatten(GameParticipation participation) =>
         Enum.GetValues(typeof(GameParticipation))

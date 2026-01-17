@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using DM.Services.DataAccess.BusinessObjects.Common;
 using DM.Services.DataAccess.BusinessObjects.DataContracts;
 using DM.Services.DataAccess.BusinessObjects.Users;
 
@@ -34,6 +36,11 @@ public class Message : IRemovable
     public DateTimeOffset CreateDate { get; set; }
 
     /// <summary>
+    /// Last modification moment
+    /// </summary>
+    public DateTimeOffset? LastUpdateDate { get; set; }
+
+    /// <summary>
     /// Text
     /// </summary>
     public string Text { get; set; }
@@ -52,4 +59,10 @@ public class Message : IRemovable
     /// </summary>
     [ForeignKey(nameof(ConversationId))]
     public virtual Conversation Conversation { get; set; }
+
+    /// <summary>
+    /// Likes
+    /// </summary>
+    [InverseProperty(nameof(Like.Message))]
+    public virtual ICollection<Like> Likes { get; set; }
 }

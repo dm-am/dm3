@@ -3,10 +3,10 @@ using System.Threading.Tasks;
 using DM.Services.Core.Dto;
 using DM.Web.API.Authentication;
 using DM.Web.API.Dto.Contracts;
-using DM.Web.API.Dto.Fora;
+using DM.Web.API.Dto.Boards;
 using DM.Web.API.Dto.Shared;
 using DM.Web.API.Dto.Users;
-using DM.Web.API.Services.Fora;
+using DM.Web.API.Services.Boards;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DM.Web.API.Controllers.v1.Forums;
@@ -17,9 +17,9 @@ namespace DM.Web.API.Controllers.v1.Forums;
 [ApiExplorerSettings(GroupName = "Forum")]
 public class TopicController : ControllerBase
 {
-    private readonly ITopicApiService topicApiService;
-    private readonly ILikeApiService likeApiService;
-    private readonly ICommentApiService commentApiService;
+    private readonly ITopicApiService _topicApiService;
+    private readonly ILikeApiService _likeApiService;
+    private readonly ICommentApiService _commentApiService;
 
     /// <inheritdoc />
     public TopicController(
@@ -27,9 +27,9 @@ public class TopicController : ControllerBase
         ILikeApiService likeApiService,
         ICommentApiService commentApiService)
     {
-        this.topicApiService = topicApiService;
-        this.likeApiService = likeApiService;
-        this.commentApiService = commentApiService;
+        _topicApiService = topicApiService;
+        _likeApiService = likeApiService;
+        _commentApiService = commentApiService;
     }
 
     /// <summary>
@@ -45,7 +45,7 @@ public class TopicController : ControllerBase
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 410)]
     public async Task<IActionResult> GetBoardTopics(string id, [FromQuery] TopicsQuery q) =>
-        Ok(await topicApiService.Get(id, q));
+        Ok(await _topicApiService.Get(id, q));
 
     /// <summary>
     /// Create new topic on board
@@ -66,7 +66,7 @@ public class TopicController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), 410)]
     public async Task<IActionResult> PostBoardTopic(string id, [FromBody] Topic topic)
     {
-        var result = await topicApiService.Create(id, topic);
+        var result = await _topicApiService.Create(id, topic);
         return CreatedAtRoute(nameof(TopicController.GetTopic), new { id = result.Resource.Id }, result);
     }
 
@@ -79,7 +79,7 @@ public class TopicController : ControllerBase
     [HttpGet("topics/{id}", Name = nameof(GetTopic))]
     [ProducesResponseType(typeof(Envelope<Topic>), 200)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> GetTopic(Guid id) => Ok(await topicApiService.Get(id));
+    public async Task<IActionResult> GetTopic(Guid id) => Ok(await _topicApiService.Get(id));
 
     /// <summary>
     /// Update topic
@@ -91,15 +91,15 @@ public class TopicController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to change some properties of this topic</response>
     /// <response code="410">Topic not found</response>
-    [HttpPatch("topics/{id}", Name = nameof(PutTopic))]
+    [HttpPatch("topics/{id}", Name = nameof(PatchTopic))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Topic>), 200)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PutTopic(Guid id, [FromBody] Topic topic) =>
-        Ok(await topicApiService.Update(id, topic));
+    public async Task<IActionResult> PatchTopic(Guid id, [FromBody] Topic topic) =>
+        Ok(await _topicApiService.Update(id, topic));
 
     /// <summary>
     /// Delete topic
@@ -117,7 +117,7 @@ public class TopicController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), 410)]
     public async Task<IActionResult> DeleteTopic(Guid id)
     {
-        await topicApiService.Delete(id);
+        await _topicApiService.Delete(id);
         return NoContent();
     }
 
@@ -139,7 +139,7 @@ public class TopicController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), 409)]
     [ProducesResponseType(typeof(GeneralError), 410)]
     public async Task<IActionResult> PostTopicLike(Guid id) =>
-        CreatedAtRoute(nameof(GetTopic), new {id}, await likeApiService.LikeTopic(id));
+        CreatedAtRoute(nameof(GetTopic), new {id}, await _likeApiService.LikeTopic(id));
 
     /// <summary>
     /// Delete like from topic
@@ -159,7 +159,7 @@ public class TopicController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), 410)]
     public async Task<IActionResult> DeleteTopicLike(Guid id)
     {
-        await likeApiService.DislikeTopic(id);
+        await _likeApiService.DislikeTopic(id);
         return NoContent();
     }
 
@@ -177,7 +177,7 @@ public class TopicController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), 410)]
     public async Task<IActionResult> ReadTopicComments(Guid id)
     {
-        await commentApiService.MarkAsRead(id);
+        await _commentApiService.MarkAsRead(id);
         return NoContent();
     }
 }

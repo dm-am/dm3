@@ -15,9 +15,9 @@ namespace DM.Services.Search.Consumer.Implementation.Indexing.Indexers;
 /// </summary>
 internal class NewForumCommentIndexer : BaseIndexer
 {
-    private readonly DmDbContext dbContext;
-    private readonly IBbParserProvider parserProvider;
-    private readonly IIndexingRepository repository;
+    private readonly DmDbContext _dbContext;
+    private readonly IBbParserProvider _parserProvider;
+    private readonly IIndexingRepository _repository;
 
     /// <inheritdoc />
     public NewForumCommentIndexer(
@@ -25,9 +25,9 @@ internal class NewForumCommentIndexer : BaseIndexer
         IBbParserProvider parserProvider,
         IIndexingRepository repository)
     {
-        this.dbContext = dbContext;
-        this.parserProvider = parserProvider;
-        this.repository = repository;
+        _dbContext = dbContext;
+        _parserProvider = parserProvider;
+        _repository = repository;
     }
 
     /// <inheritdoc />
@@ -36,16 +36,16 @@ internal class NewForumCommentIndexer : BaseIndexer
     /// <inheritdoc />
     public override async Task Index(InvokedEvent message)
     {
-        var comment = await dbContext.Comments
+        var comment = await _dbContext.Comments
             .Where(c => c.CommentId == message.EntityId)
             .Select(c => new {c.Topic.Forum.ViewPolicy, c.Topic.ForumTopicId, c.Text})
             .FirstAsync();
-        await repository.Index(new SearchEntity
+        await _repository.Index(new SearchEntity
         {
             Id = message.EntityId,
             ParentEntityId = comment.ForumTopicId,
             EntityType = SearchEntityType.ForumComment,
-            Text = parserProvider.CurrentCommon.Parse(comment.Text).ToHtml(),
+            Text = _parserProvider.CurrentCommon.Parse(comment.Text).ToHtml(),
             AuthorizedRoles = comment.ViewPolicy.GetAuthorizedRoles()
         });
     }

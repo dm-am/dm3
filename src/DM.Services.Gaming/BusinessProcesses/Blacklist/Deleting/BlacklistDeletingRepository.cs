@@ -8,19 +8,19 @@ namespace DM.Services.Gaming.BusinessProcesses.Blacklist.Deleting;
 /// <inheritdoc />
 internal class BlacklistDeletingRepository : IBlacklistDeletingRepository
 {
-    private readonly DmDbContext dbContext;
+    private readonly DmDbContext _dbContext;
 
     /// <inheritdoc />
     public BlacklistDeletingRepository(
         DmDbContext dbContext)
     {
-        this.dbContext = dbContext;
+        _dbContext = dbContext;
     }
-        
+
     /// <inheritdoc />
     public Task Delete(IUpdateBuilder<BlackListLink> updateBuilder)
     {
-        updateBuilder.AttachTo(dbContext);
-        return dbContext.SaveChangesAsync();
+        updateBuilder.AttachTo(_dbContext);
+        return _dbContext.SaveChangesAsync();
     }
 }

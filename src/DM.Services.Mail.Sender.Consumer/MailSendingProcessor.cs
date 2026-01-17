@@ -17,10 +17,10 @@ namespace DM.Services.Mail.Sender.Consumer;
 /// <inheritdoc />
 internal class MailSendingProcessor : IProcessor<string, MailLetter>
 {
-    private readonly ILogger<MailSendingProcessor> logger;
-    private readonly ICorrelationTokenProvider correlationTokenProvider;
-    private readonly EmailConfiguration configuration;
-    private readonly Lazy<IMailTransport> client;
+    private readonly ILogger<MailSendingProcessor> _logger;
+    private readonly ICorrelationTokenProvider _correlationTokenProvider;
+    private readonly EmailConfiguration _configuration;
+    private readonly Lazy<IMailTransport> _client;
 
     /// <inheritdoc />
     public MailSendingProcessor(
@@ -28,15 +28,15 @@ internal class MailSendingProcessor : IProcessor<string, MailLetter>
         ILogger<MailSendingProcessor> logger,
         ICorrelationTokenProvider correlationTokenProvider)
     {
-        this.logger = logger;
-        this.correlationTokenProvider = correlationTokenProvider;
-        this.configuration = configuration.Value;
-        client = new Lazy<IMailTransport>(() =>
+        _logger = logger;
+        _correlationTokenProvider = correlationTokenProvider;
+        _configuration = configuration.Value;
+        _client = new Lazy<IMailTransport>(() =>
         {
             var smtpClient = new SmtpClient();
-            smtpClient.Connect(this.configuration.ServerHost, this.configuration.ServerPort,
+            smtpClient.Connect(_configuration.ServerHost, _configuration.ServerPort,
                 SecureSocketOptions.StartTlsWhenAvailable);
-            smtpClient.Authenticate(this.configuration.Username, this.configuration.Password);
+            smtpClient.Authenticate(_configuration.Username, _configuration.Password);
             smtpClient.NoOp();
             return smtpClient;
         });
@@ -45,15 +45,15 @@ internal class MailSendingProcessor : IProcessor<string, MailLetter>
     /// <inheritdoc />
     public async Task<ProcessResult> Process(string key, MailLetter message, CancellationToken cancellationToken)
     {
-        logger.LogInformation("Sending letter to {Address}", message.Address.Obfuscate());
-        await client.Value.SendAsync(new MimeMessage
+        _logger.LogInformation("Sending letter to {Address}", message.Address.Obfuscate());
+        await _client.Value.SendAsync(new MimeMessage
         {
-            From = {new MailboxAddress(configuration.FromDisplayName, configuration.FromAddress)},
-            ReplyTo = {new MailboxAddress(configuration.FromDisplayName, configuration.ReplyToAddress)},
+            From = {new MailboxAddress(_configuration.FromDisplayName, _configuration.FromAddress)},
+            ReplyTo = {new MailboxAddress(_configuration.FromDisplayName, _configuration.ReplyToAddress)},
             To = {MailboxAddress.Parse(message.Address)},
             Subject = message.Subject,
             Body = new TextPart(TextFormat.Html) {Text = message.Body},
-            MessageId = correlationTokenProvider.Current.ToString()
+            MessageId = _correlationTokenProvider.Current.ToString()
         }, cancellationToken);
         return ProcessResult.Success;
     }

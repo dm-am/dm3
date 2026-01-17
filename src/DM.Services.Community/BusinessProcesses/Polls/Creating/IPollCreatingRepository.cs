@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 using DM.Services.Community.BusinessProcesses.Polls.Reading;
-using DbPoll = DM.Services.DataAccess.BusinessObjects.Fora.Poll;
+using DbPoll = DM.Services.DataAccess.BusinessObjects.Boards.Poll;
 
 namespace DM.Services.Community.BusinessProcesses.Polls.Creating;
 

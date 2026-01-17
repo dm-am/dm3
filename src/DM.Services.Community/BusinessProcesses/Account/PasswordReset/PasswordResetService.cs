@@ -9,11 +9,11 @@ namespace DM.Services.Community.BusinessProcesses.Account.PasswordReset;
 /// <inheritdoc />
 internal class PasswordResetService : IPasswordResetService
 {
-    private readonly IValidator<UserPasswordReset> validator;
-    private readonly IPasswordResetTokenFactory tokenFactory;
-    private readonly IUserReadingRepository userReadingRepository;
-    private readonly IPasswordResetRepository repository;
-    private readonly IPasswordResetEmailSender emailSender;
+    private readonly IValidator<UserPasswordReset> _validator;
+    private readonly IPasswordResetTokenFactory _tokenFactory;
+    private readonly IUserReadingRepository _userReadingRepository;
+    private readonly IPasswordResetRepository _repository;
+    private readonly IPasswordResetEmailSender _emailSender;
 
     /// <inheritdoc />
     public PasswordResetService(
@@ -23,23 +23,23 @@ internal class PasswordResetService : IPasswordResetService
         IPasswordResetRepository repository,
         IPasswordResetEmailSender emailSender)
     {
-        this.validator = validator;
-        this.tokenFactory = tokenFactory;
-        this.userReadingRepository = userReadingRepository;
-        this.repository = repository;
-        this.emailSender = emailSender;
+        _validator = validator;
+        _tokenFactory = tokenFactory;
+        _userReadingRepository = userReadingRepository;
+        _repository = repository;
+        _emailSender = emailSender;
     }
 
     /// <inheritdoc />
     public async Task<GeneralUser> Reset(UserPasswordReset passwordReset)
     {
-        await validator.ValidateAndThrowAsync(passwordReset);
-        var user = await userReadingRepository.GetUserDetails(passwordReset.Login);
+        await _validator.ValidateAndThrowAsync(passwordReset);
+        var user = await _userReadingRepository.GetUserDetails(passwordReset.Login);
 
-        var token = tokenFactory.Create(user.UserId);
-        await repository.CreateToken(token);
+        var token = _tokenFactory.Create(user.UserId);
+        await _repository.CreateToken(token);
 
-        await emailSender.Send(user.Email, user.Login, token.TokenId);
+        await _emailSender.Send(user.Email, user.Login, token.TokenId);
         return user;
     }
 }

@@ -1,5 +1,7 @@
 ﻿using Autofac;
 using DM.Services.Core.Extensions;
+using DM.Services.MessageQueuing.Outbox;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using System;
@@ -24,6 +26,10 @@ public class MessageQueuingModule : Module
                 };
             })
             .As<IAsyncConnectionFactory>()
+            .SingleInstance();
+
+        builder.RegisterType<OutboxProcessor>()
+            .As<IHostedService>()
             .SingleInstance();
 
         builder.RegisterDefaultTypes();

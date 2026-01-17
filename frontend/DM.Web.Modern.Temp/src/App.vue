@@ -24,26 +24,37 @@
 </template>
 
 <script setup lang="ts">
-import { useUiStore, useUserStore } from "@/stores";
+import { useUiStore, useUserStore, useMessagingStore } from "@/stores";
 import { onMounted, watch } from "vue";
 import { ModalsContainer } from "vue-final-modal";
 import TheHeader from "@/views/layout/TheHeader.vue";
 import TheFooter from "@/views/layout/TheFooter.vue";
 
 const uiStore = useUiStore();
-const { fetchUser } = useUserStore();
+const userStore = useUserStore();
+const messagingStore = useMessagingStore();
+
+// Map ColorSchema to CSS theme class
+const themeToClass = (theme: string) => {
+  return theme === "Dark" ? "Night" : "Modern";
+};
 
 watch(
-  () => [uiStore.theme],
+  () => uiStore.theme,
   (value, oldValue) => {
     const html = document.querySelector("html")!;
-    html.classList.remove(`theme_${oldValue}`);
-    html.classList.add(`theme_${value}`);
+    if (oldValue) {
+      html.classList.remove(`theme_${themeToClass(oldValue)}`);
+    }
+    html.classList.add(`theme_${themeToClass(value)}`);
   },
   { immediate: true },
 );
 
-onMounted(fetchUser);
+onMounted(async () => {
+  await userStore.fetchUser();
+  messagingStore.fetchUnreadCount();
+});
 </script>
 
 <style scoped lang="sass">
@@ -58,7 +69,7 @@ onMounted(fetchUser);
 
 .content-container
   position: relative
-  height: 100%
+  min-height: 100%
   min-width: $min-width
   &:before
     content: ''
@@ -66,27 +77,37 @@ onMounted(fetchUser);
     left: 0
     right: 0
     top: 0
-    bottom: 0
+    height: $header-height
     background: url('@/assets/images/header_bg.gif') left top repeat-x
-    +theme(filter, color-pair(none, invert(87%)))
+    background-size: auto $header-height
+    filter: $filter-invert
 
 .content-wrapper
   position: relative
-  margin: auto
   min-height: 100%
   min-width: $min-width
-  max-width: $max-width
+  padding-bottom: $footer-height
 
 .content-body
   display: flex
   padding-bottom: $footer-height + $big
 
 .content-menu
-  +menu-container()
+  width: $sidebar-width
+  flex-shrink: 0
+  padding-left: $big
+  box-sizing: border-box
 
 .content
-  +content-container()
+  flex-grow: 1
+  padding: 0 $big
+  box-sizing: border-box
 
 .content-sidebar
-  +sidebar-container()
+  width: $sidebar-width
+  flex-shrink: 0
+  padding-right: $big
+  box-sizing: border-box
+  @media (max-width: $min-width)
+    display: none
 </style>

@@ -11,4 +11,9 @@ public class UsersQuery : PagingQuery
     /// Filter active/inactive users
     /// </summary>
     public bool Inactive { get; set; }
+
+    /// <summary>
+    /// Search by login prefix
+    /// </summary>
+    public string Search { get; set; }
 }

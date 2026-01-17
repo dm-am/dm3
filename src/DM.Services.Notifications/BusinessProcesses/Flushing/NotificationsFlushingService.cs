@@ -7,23 +7,23 @@ namespace DM.Services.Notifications.BusinessProcesses.Flushing;
 /// <inheritdoc />
 internal class NotificationsFlushingService : INotificationsFlushingService
 {
-    private readonly IIdentityProvider identityProvider;
-    private readonly INotificationsFlushingRepository repository;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly INotificationsFlushingRepository _repository;
 
     /// <inheritdoc />
     public NotificationsFlushingService(
         IIdentityProvider identityProvider,
         INotificationsFlushingRepository repository)
     {
-        this.identityProvider = identityProvider;
-        this.repository = repository;
+        _identityProvider = identityProvider;
+        _repository = repository;
     }
 
     /// <inheritdoc />
     public Task MarkAsRead(Guid notificationId) =>
-        repository.MarkAsRead(notificationId, identityProvider.Current.User.UserId);
+        _repository.MarkAsRead(notificationId, _identityProvider.Current.User.UserId);
 
     /// <inheritdoc />
     public Task MarkAllAsRead() =>
-        repository.MarkAllAsRead(identityProvider.Current.User.UserId);
+        _repository.MarkAllAsRead(_identityProvider.Current.User.UserId);
 }

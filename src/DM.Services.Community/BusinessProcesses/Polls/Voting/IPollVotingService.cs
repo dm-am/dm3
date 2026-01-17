@@ -16,4 +16,11 @@ public interface IPollVotingService
     /// <param name="optionId">Option identifier</param>
     /// <returns></returns>
     Task<Poll> Vote(Guid pollId, Guid optionId);
+
+    /// <summary>
+    /// Remove vote from the poll
+    /// </summary>
+    /// <param name="pollId">Poll identifier</param>
+    /// <returns></returns>
+    Task<Poll> Unvote(Guid pollId);
 }

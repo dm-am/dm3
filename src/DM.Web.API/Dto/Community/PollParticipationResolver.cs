@@ -8,19 +8,19 @@ namespace DM.Web.API.Dto.Community;
 /// <inheritdoc />
 internal class PollParticipationResolver : IValueResolver<DtoPollOption, PollOption, bool?>
 {
-    private readonly IIdentityProvider identityProvider;
+    private readonly IIdentityProvider _identityProvider;
 
     /// <inheritdoc />
     public PollParticipationResolver(
         IIdentityProvider identityProvider)
     {
-        this.identityProvider = identityProvider;
+        _identityProvider = identityProvider;
     }
 
     /// <inheritdoc />
     public bool? Resolve(DtoPollOption source, PollOption destination, bool? destMember, ResolutionContext context)
     {
-        var currentUser = identityProvider.Current.User;
+        var currentUser = _identityProvider.Current.User;
         return currentUser.IsAuthenticated
             ? source.UserIds.Contains(currentUser.UserId)
             : null;

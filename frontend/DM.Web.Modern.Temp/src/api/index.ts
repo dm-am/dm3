@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
 import type {
   AxiosRequestConfig,
@@ -10,6 +10,9 @@ import { HubConnection, HubConnectionBuilder } from "@microsoft/signalr";
 import type { ApiResult } from "@/api/models/common";
 import { BbRenderMode } from "./bbRenderMode";
 
+type QueryParams = Record<string, string | number | boolean | undefined>;
+type RequestBody = object | FormData;
+
 const tokenKey = "x-dm-auth-token";
 const renderKey = "x-dm-bb-render-mode";
 
@@ -19,7 +22,7 @@ const defaultHeaders: { [key: string]: string } = {
   [renderKey]: "html",
 };
 
-const apiHost = "https://api-dm3dev.dev.kub.core.dm.am"; // Config
+const apiHost = import.meta.env.VITE_API_HOST || "http://localhost:5051"; // Config
 
 const configuration: AxiosRequestConfig = {
   baseURL: `${apiHost}/v1`,
@@ -45,7 +48,7 @@ class Api {
 
   public get<T>(
     url: string,
-    params?: any,
+    params?: QueryParams,
     bbRenderMode: BbRenderMode = BbRenderMode.Html,
   ): Promise<ApiResult<T>> {
     return this.send(() =>
@@ -53,8 +56,8 @@ class Api {
     );
   }
 
-  public post<T>(url: string, params?: any): Promise<ApiResult<T>> {
-    return this.send(() => this.axios.post(url, params));
+  public post<T>(url: string, body?: RequestBody): Promise<ApiResult<T>> {
+    return this.send(() => this.axios.post(url, body));
   }
 
   /*
@@ -63,11 +66,14 @@ class Api {
   */
   public postFile<T>(
     url: string,
-    params?: any,
+    formData: FormData,
     progressCallback?: (event: AxiosProgressEvent) => void,
   ): Promise<ApiResult<T>> {
     const result = this.send<T>(() =>
-      this.axios.post(url, params, {
+      this.axios.post(url, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
         onUploadProgress: progressCallback
           ? (event: AxiosProgressEvent) =>
               progressCallback(
@@ -82,12 +88,12 @@ class Api {
     return result;
   }
 
-  public put<T>(url: string, params?: any): Promise<ApiResult<T>> {
-    return this.send(() => this.axios.put(url, params));
+  public put<T>(url: string, body?: RequestBody): Promise<ApiResult<T>> {
+    return this.send(() => this.axios.put(url, body));
   }
 
-  public patch<T>(url: string, params: any): Promise<ApiResult<T>> {
-    return this.send(() => this.axios.patch(url, params));
+  public patch<T>(url: string, body?: RequestBody): Promise<ApiResult<T>> {
+    return this.send(() => this.axios.patch(url, body));
   }
 
   public delete(url: string): Promise<ApiResult<void>> {
@@ -106,10 +112,14 @@ class Api {
         data: data as T,
         error: null,
       };
-    } catch (err: any) {
-      const { response } = err;
-      const { data } = response;
-      return { data: null, error: data };
+    } catch (err: unknown) {
+      if (err instanceof AxiosError && err.response) {
+        return { data: null, error: err.response.data };
+      }
+      return {
+        data: null,
+        error: { type: "Unknown", title: "Unknown error", status: 0, traceId: "" },
+      };
     }
   }
 

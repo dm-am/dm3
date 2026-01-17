@@ -12,13 +12,13 @@ namespace DM.Services.Common.BusinessProcesses.UnreadCounters;
 /// <inheritdoc cref="IUnreadCountersRepository" />
 internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounter>, IUnreadCountersRepository
 {
-    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public UnreadCountersRepository(DmMongoClient client,
         IDateTimeProvider dateTimeProvider) : base(client)
     {
-        this.dateTimeProvider = dateTimeProvider;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -30,7 +30,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
             EntityId = entityId,
             ParentId = id,
             EntryType = entryType,
-            LastRead = dateTimeProvider.Now.UtcDateTime,
+            LastRead = _dateTimeProvider.Now.UtcDateTime,
             Counter = 0
         }));
     }
@@ -44,7 +44,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
             EntityId = entityId,
             ParentId = parentId,
             EntryType = entryType,
-            LastRead = dateTimeProvider.Now.UtcDateTime,
+            LastRead = _dateTimeProvider.Now.UtcDateTime,
             Counter = 0
         });
     }
@@ -58,6 +58,16 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
         return Collection.UpdateManyAsync(
             Filter.Eq(c => c.EntityId, entityId) &
             Filter.Eq(c => c.EntryType, entryType),
+            Update.Inc(c => c.Counter, 1));
+    }
+
+    /// <inheritdoc />
+    public Task IncrementExcluding(Guid entityId, UnreadEntryType entryType, Guid excludeUserId)
+    {
+        return Collection.UpdateManyAsync(
+            Filter.Eq(c => c.EntityId, entityId) &
+            Filter.Eq(c => c.EntryType, entryType) &
+            Filter.Ne(c => c.UserId, excludeUserId),
             Update.Inc(c => c.Counter, 1));
     }
 
@@ -109,6 +119,35 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
+    public async Task<IDictionary<Guid, int>> SelectTotalUnreadByParents(
+        Guid userId, UnreadEntryType entryType, params Guid[] parentIds)
+    {
+        var userIds = new[] {userId, Guid.Empty}.Distinct();
+        var counters = (await Collection.Aggregate()
+                .Match(
+                    Filter.In(c => c.UserId, userIds) &
+                    Filter.In(c => c.ParentId, parentIds) &
+                    Filter.Eq(c => c.EntryType, entryType) &
+                    Filter.Eq(c => c.IsRemoved, false))
+                .Group(c => c.EntityId,
+                    g => new UnreadCounter
+                    {
+                        EntityId = g.First().EntityId,
+                        ParentId = g.First().ParentId,
+                        Counter = g.Min(c => c.Counter)
+                    })
+                .Group(c => c.ParentId,
+                    g => new UnreadCounter
+                    {
+                        EntityId = g.First().ParentId,
+                        Counter = g.Sum(c => c.Counter) // SUM instead of COUNT
+                    })
+                .ToListAsync())
+            .ToDictionary(c => c.EntityId, c => c.Counter);
+        return parentIds.ToDictionary(id => id, id => counters.TryGetValue(id, out var counter) ? counter : 0);
+    }
+
+    /// <inheritdoc />
     public async Task<IDictionary<Guid, int>> SelectByEntities(
         Guid userId, UnreadEntryType entryType, params Guid[] entityIds)
     {
@@ -149,7 +188,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
                     EntityId = entityId,
                     ParentId = counter.ParentId,
                     EntryType = entryType,
-                    LastRead = dateTimeProvider.Now.UtcDateTime,
+                    LastRead = _dateTimeProvider.Now.UtcDateTime,
                     Counter = 0
                 },
                 new ReplaceOptions {IsUpsert = true});
@@ -162,7 +201,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
                 Filter.Eq(c => c.ParentId, parentId) &
                 Filter.Eq(c => c.EntryType, entryType))
             .ToListAsync();
-        var rightNow = dateTimeProvider.Now.UtcDateTime;
+        var rightNow = _dateTimeProvider.Now.UtcDateTime;
 
         await Collection.BulkWriteAsync(entityIds
             .Select(id => new ReplaceOneModel<UnreadCounter>(

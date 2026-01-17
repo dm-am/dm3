@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Fora;
+using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Services.Forum.Dto.Internal;
 

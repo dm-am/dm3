@@ -10,32 +10,32 @@ namespace DM.Services.Community.BusinessProcesses.Users.Reading;
 /// <inheritdoc />
 internal class UserReadingService : IUserReadingService
 {
-    private readonly IIdentityProvider identityProvider;
-    private readonly IUserReadingRepository readingRepository;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IUserReadingRepository _readingRepository;
 
     /// <inheritdoc />
     public UserReadingService(
         IIdentityProvider identityProvider,
         IUserReadingRepository readingRepository)
     {
-        this.identityProvider = identityProvider;
-        this.readingRepository = readingRepository;
+        _identityProvider = identityProvider;
+        _readingRepository = readingRepository;
     }
 
     /// <inheritdoc />
     public async Task<(IEnumerable<GeneralUser> users, PagingResult paging)> Get(
-        PagingQuery query, bool withInactive)
+        PagingQuery query, bool withInactive, string search = null)
     {
-        var totalCount = await readingRepository.CountUsers(withInactive);
-        var paging = new PagingData(query, identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
-        var users = await readingRepository.GetUsers(paging, withInactive);
+        var totalCount = await _readingRepository.CountUsers(withInactive, search);
+        var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
+        var users = await _readingRepository.GetUsers(paging, withInactive, search);
         return (users, paging.Result);
     }
 
     /// <inheritdoc />
     public async Task<GeneralUser> Get(string login)
     {
-        var user = await readingRepository.GetUser(login);
+        var user = await _readingRepository.GetUser(login);
         if (user == null)
         {
             throw new HttpException(HttpStatusCode.Gone, $"User {login} not found");
@@ -47,7 +47,7 @@ internal class UserReadingService : IUserReadingService
     /// <inheritdoc />
     public async Task<UserDetails> GetDetails(string login)
     {
-        var user = await readingRepository.GetUserDetails(login);
+        var user = await _readingRepository.GetUserDetails(login);
         if (user == null)
         {
             throw new HttpException(HttpStatusCode.Gone, $"User {login} not found");

@@ -1,12 +1,9 @@
 export enum ColorSchema {
-  Modern = "Modern",
-  Pale = "Pale",
-  Classic = "Classic",
-  ClassicPale = "ClassicPale",
-  Night = "Night",
+  Light = "Light",
+  Dark = "Dark",
 }
 
-export type PagingSettings = {
+export type PagingLimits = {
   postsPerPage: number;
   commentsPerPage: number;
   topicsPerPage: number;
@@ -15,7 +12,7 @@ export type PagingSettings = {
 };
 
 export type UserSettings = {
-  nannyGreetingsMessage: string;
+  mentorGreetingsMessage: string;
   colorSchema: ColorSchema;
-  paging: PagingSettings;
+  pagingLimits: PagingLimits | null;
 };

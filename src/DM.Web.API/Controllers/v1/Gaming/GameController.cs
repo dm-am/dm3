@@ -42,7 +42,11 @@ public class GameController : ControllerBase
     /// <response code="200"></response>
     [HttpGet(Name = nameof(GetGames))]
     [ProducesResponseType(typeof(ListEnvelope<Game>), 200)]
-    public async Task<IActionResult> GetGames([FromQuery] GamesQuery q) => Ok(await gameApiService.Get(q));
+    public async Task<IActionResult> GetGames([FromQuery] GamesQuery q)
+    {
+        Response.Headers.CacheControl = "public, max-age=30";
+        return Ok(await gameApiService.Get(q));
+    }
 
     /// <summary>
     /// Get list of games owned by current user
@@ -61,7 +65,11 @@ public class GameController : ControllerBase
     /// <response code="200"></response>
     [HttpGet("popular", Name = nameof(GetPopularGames))]
     [ProducesResponseType(typeof(ListEnvelope<Game>), 200)]
-    public async Task<IActionResult> GetPopularGames() => Ok(await gameApiService.GetPopular());
+    public async Task<IActionResult> GetPopularGames()
+    {
+        Response.Headers.CacheControl = "public, max-age=60";
+        return Ok(await gameApiService.GetPopular());
+    }
 
     /// <summary>
     /// Get list of all game tags
@@ -69,7 +77,11 @@ public class GameController : ControllerBase
     /// <response code="200"></response>
     [HttpGet("tags")]
     [ProducesResponseType(typeof(ListEnvelope<Tag>), 200)]
-    public async Task<IActionResult> GetTags() => Ok(await gameApiService.GetTags());
+    public async Task<IActionResult> GetTags()
+    {
+        Response.Headers.CacheControl = "public, max-age=300";
+        return Ok(await gameApiService.GetTags());
+    }
 
     /// <summary>
     /// Get game
@@ -138,14 +150,14 @@ public class GameController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to change some properties of this game</response>
     /// <response code="410">Game not found</response>
-    [HttpPatch("{id}/details", Name = nameof(PutGame))]
+    [HttpPatch("{id}/details", Name = nameof(PatchGame))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Game>), 201)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PutGame(Guid id, [FromBody] Game game) =>
+    public async Task<IActionResult> PatchGame(Guid id, [FromBody] Game game) =>
         Ok(await gameApiService.Update(id, game));
 
     /// <summary>
@@ -158,7 +170,7 @@ public class GameController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to change some properties of this game</response>
     /// <response code="410">Game not found</response>
-    [HttpPatch("{id}/notes", Name = nameof(PutGameNotes))]
+    [HttpPatch("{id}/notes", Name = nameof(PatchGameNotes))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Game>), 201)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
@@ -166,7 +178,7 @@ public class GameController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
     // TODO: Update game notes
-    public Task<IActionResult> PutGameNotes(Guid id, [FromBody] Game game) => throw new NotImplementedException();
+    public Task<IActionResult> PatchGameNotes(Guid id, [FromBody] Game game) => throw new NotImplementedException();
 
     /// <summary>
     /// Delete game

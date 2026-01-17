@@ -10,5 +10,8 @@
 h2
   margin: $medium 0 $small
   font-size: $title-font-size
-  +theme(color, $highlight-text)
+  font-weight: bold
+  text-transform: uppercase
+  letter-spacing: 0.5px
+  +theme(color, $accent-text)
 </style>

@@ -19,15 +19,15 @@ namespace DM.Services.Notifications.Consumer;
 /// </summary>
 public class Startup
 {
-    private readonly IConfiguration configuration;
+    private readonly IConfiguration _configuration;
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     /// <param name="configuration"></param>
     public Startup(IConfiguration configuration)
     {
-        this.configuration = configuration;
+        _configuration = configuration;
     }
 
     /// <summary>
@@ -39,9 +39,9 @@ public class Startup
     {
         services
             .AddOptions()
-            .Configure<ConnectionStrings>(configuration.GetSection(nameof(ConnectionStrings)).Bind)
-            .Configure<RabbitMqConfiguration>(configuration.GetSection(nameof(RabbitMqConfiguration)).Bind)
-            .AddDmLogging("DM.Notifications.Consumer", configuration);
+            .Configure<ConnectionStrings>(_configuration.GetSection(nameof(ConnectionStrings)).Bind)
+            .Configure<RabbitMqConfiguration>(_configuration.GetSection(nameof(RabbitMqConfiguration)).Bind)
+            .AddDmLogging("DM.Notifications.Consumer", _configuration);
 
         services.AddJamqClient(config => config.UseRabbit());
         services.AddHostedService<NotificationConsumer>();
@@ -50,7 +50,7 @@ public class Startup
 
         services
             .AddDbContext<DmDbContext>(options => options
-                .UseNpgsql(configuration.GetConnectionString(nameof(ConnectionStrings.Rdb))))
+                .UseNpgsql(_configuration.GetConnectionString(nameof(ConnectionStrings.Rdb))))
             .AddMvc();
     }
 

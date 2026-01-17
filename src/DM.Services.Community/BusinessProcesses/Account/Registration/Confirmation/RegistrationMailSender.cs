@@ -11,9 +11,9 @@ namespace DM.Services.Community.BusinessProcesses.Account.Registration.Confirmat
 /// <inheritdoc />
 internal class RegistrationMailSender : IRegistrationMailSender
 {
-    private readonly IRenderer renderer;
-    private readonly IMailSender mailSender;
-    private readonly IntegrationSettings integrationSettings;
+    private readonly IRenderer _renderer;
+    private readonly IMailSender _mailSender;
+    private readonly IntegrationSettings _integrationSettings;
 
     /// <inheritdoc />
     public RegistrationMailSender(
@@ -21,19 +21,19 @@ internal class RegistrationMailSender : IRegistrationMailSender
         IMailSender mailSender,
         IOptions<IntegrationSettings> integrationSettings)
     {
-        this.renderer = renderer;
-        this.mailSender = mailSender;
-        this.integrationSettings = integrationSettings.Value;
+        _renderer = renderer;
+        _mailSender = mailSender;
+        _integrationSettings = integrationSettings.Value;
     }
 
     /// <inheritdoc />
     public async Task Send(string email, string login, Guid token)
     {
-        var confirmationLinkUrl = new Uri(new Uri(integrationSettings.WebUrl), $"activate/{token}");
-        var emailBody = await renderer.Render(new RegistrationConfirmationViewModel(
+        var confirmationLinkUrl = new Uri(new Uri(_integrationSettings.WebUrl), $"activate/{token}");
+        var emailBody = await _renderer.Render(new RegistrationConfirmationViewModel(
             Login: login,
             ConfirmationLinkUrl: confirmationLinkUrl.ToString()));
-        await mailSender.Send(new MailLetter
+        await _mailSender.Send(new MailLetter
         {
             Address = email,
             Subject = $"Добро пожаловать на DM.AM, {login}!",

@@ -11,16 +11,16 @@ namespace DM.Services.Gaming.BusinessProcesses.Characters.Shared;
 /// <inheritdoc />
 internal class CharacterAttributeValueFiller : ICharacterAttributeValueFiller
 {
-    private readonly ISchemaReadingService schemaReadingService;
-    private readonly IAttributeValueValidator attributeValueValidator;
+    private readonly ISchemaReadingService _schemaReadingService;
+    private readonly IAttributeValueValidator _attributeValueValidator;
 
     /// <inheritdoc />
     public CharacterAttributeValueFiller(
         ISchemaReadingService schemaReadingService,
         IAttributeValueValidator attributeValueValidator)
     {
-        this.schemaReadingService = schemaReadingService;
-        this.attributeValueValidator = attributeValueValidator;
+        _schemaReadingService = schemaReadingService;
+        _attributeValueValidator = attributeValueValidator;
     }
 
     /// <inheritdoc />
@@ -36,7 +36,7 @@ internal class CharacterAttributeValueFiller : ICharacterAttributeValueFiller
             return;
         }
 
-        var schema = await schemaReadingService.Get(schemaId.Value);
+        var schema = await _schemaReadingService.Get(schemaId.Value);
         foreach (var character in characters)
         {
             var attributeIndex = character.Attributes.ToDictionary(a => a.Id);
@@ -56,7 +56,7 @@ internal class CharacterAttributeValueFiller : ICharacterAttributeValueFiller
                 }
                 else
                 {
-                    var (valid, _) = attributeValueValidator.Validate(attribute.Value, specification);
+                    var (valid, _) = _attributeValueValidator.Validate(attribute.Value, specification);
                     var filledAttribute = new CharacterAttribute
                     {
                         Id = specification.Id,

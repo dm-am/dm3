@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
@@ -22,12 +23,12 @@ internal class TopicReadingRepository(
     private static readonly Guid ErrorsForumId = Guid.Parse("00000000-0000-0000-0000-000000000006");
 
     /// <inheritdoc />
-    public Task<int> Count(Guid forumId) => dbContext.ForumTopics
+    public Task<int> Count(Guid forumId, CancellationToken ct = default) => dbContext.ForumTopics
         .TagWith("DM.Forum.TopicsCount")
-        .CountAsync(t => !t.IsRemoved && t.ForumId == forumId && !t.IsAttached);
+        .CountAsync(t => !t.IsRemoved && t.ForumId == forumId && !t.IsAttached, ct);
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Topic>> Get(Guid forumId, PagingData pagingData, bool attached)
+    public async Task<IEnumerable<Topic>> Get(Guid forumId, PagingData pagingData, bool attached, CancellationToken ct = default)
     {
         var query = dbContext.ForumTopics
             .TagWith("DM.Forum.TopicsList")
@@ -48,17 +49,17 @@ internal class TopicReadingRepository(
             orderedQuery = query.OrderByDescending(q => q.LastActivityDate);
         }
 
-        return await orderedQuery.Page(pagingData).ToArrayAsync();
+        return await orderedQuery.Page(pagingData).ToArrayAsync(ct);
     }
 
     /// <inheritdoc />
-    public async Task<Topic> Get(Guid topicId, ForumAccessPolicy accessPolicy)
+    public async Task<Topic> Get(Guid topicId, ForumAccessPolicy accessPolicy, CancellationToken ct = default)
     {
         return await dbContext.ForumTopics
             .TagWith("DM.Forum.Topic")
             .Where(t => !t.IsRemoved && t.ForumTopicId == topicId &&
                         (t.Forum.ViewPolicy & accessPolicy) != ForumAccessPolicy.NoOne)
             .ProjectTo<Topic>(mapper.ConfigurationProvider)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(ct);
     }
 }

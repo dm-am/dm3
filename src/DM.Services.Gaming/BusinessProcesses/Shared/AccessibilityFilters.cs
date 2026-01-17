@@ -26,7 +26,7 @@ public static class AccessibilityFilters
         (
             game.MasterId == userId ||
             game.AssistantId == userId ||
-            game.NannyId == userId ||
+            game.MentorId == userId ||
             game.Status != GameStatus.Draft ||
             game.Status != GameStatus.RequiresModeration ||
             game.Status != GameStatus.Moderation
@@ -47,7 +47,7 @@ public static class AccessibilityFilters
         (
             room.Game.MasterId == userId ||
             room.Game.AssistantId == userId ||
-            room.Game.NannyId == userId ||
+            room.Game.MentorId == userId ||
             room.Game.Status != GameStatus.Draft ||
             room.Game.Status != GameStatus.RequiresModeration ||
             room.Game.Status != GameStatus.Moderation

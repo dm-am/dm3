@@ -5,7 +5,7 @@ using DM.Web.API.Authentication;
 using DM.Web.API.Dto.Contracts;
 using DM.Web.API.Dto.Shared;
 using DM.Web.API.Dto.Users;
-using DM.Web.API.Services.Fora;
+using DM.Web.API.Services.Boards;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DM.Web.API.Controllers.v1.Forums;
@@ -86,14 +86,14 @@ public class CommentController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to change this comment</response>
     /// <response code="410">Comment not found</response>
-    [HttpPatch("forum/comments/{id}", Name = nameof(PutForumComment))]
+    [HttpPatch("forum/comments/{id}", Name = nameof(PatchForumComment))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Comment>), 200)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PutForumComment(Guid id, [FromBody] Comment comment) =>
+    public async Task<IActionResult> PatchForumComment(Guid id, [FromBody] Comment comment) =>
         Ok(await commentApiService.Update(id, comment));
 
     /// <summary>

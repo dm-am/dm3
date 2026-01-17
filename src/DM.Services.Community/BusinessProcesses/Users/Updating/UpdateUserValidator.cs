@@ -31,8 +31,8 @@ internal class UpdateUserValidator : AbstractValidator<UpdateUser>
 
         Unless(u => u.Settings == null, () =>
         {
-            Unless(u => u.Settings.NannyGreetingsMessage == null, () =>
-                RuleFor(u => u.Settings.NannyGreetingsMessage)
+            Unless(u => u.Settings.MentorGreetingsMessage == null, () =>
+                RuleFor(u => u.Settings.MentorGreetingsMessage)
                     .NotEmpty().WithMessage(ValidationError.Empty));
 
             Unless(u => u.Settings.Paging == null, () =>

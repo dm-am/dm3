@@ -12,27 +12,27 @@ namespace DM.Services.Forum.BusinessProcesses.Commentaries.Updating;
 /// <inheritdoc />
 internal class CommentaryUpdatingRepository : ICommentaryUpdatingRepository
 {
-    private readonly DmDbContext dbContext;
-    private readonly IMapper mapper;
+    private readonly DmDbContext _dbContext;
+    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public CommentaryUpdatingRepository(
         DmDbContext dbContext,
         IMapper mapper)
     {
-        this.dbContext = dbContext;
-        this.mapper = mapper;
+        _dbContext = dbContext;
+        _mapper = mapper;
     }
         
     /// <inheritdoc />
     public async Task<Services.Common.Dto.Comment> Update(IUpdateBuilder<Comment> update)
     {
-        var commentId = update.AttachTo(dbContext);
-        await dbContext.SaveChangesAsync();
-        return await dbContext.Comments
+        var commentId = update.AttachTo(_dbContext);
+        await _dbContext.SaveChangesAsync();
+        return await _dbContext.Comments
             .TagWith("DM.Forum.UpdatedComment")
             .Where(c => c.CommentId == commentId)
-            .ProjectTo<Services.Common.Dto.Comment>(mapper.ConfigurationProvider)
+            .ProjectTo<Services.Common.Dto.Comment>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }
 }

@@ -10,9 +10,9 @@ namespace DM.Services.Notifications.BusinessProcesses.Creating;
 /// <inheritdoc />
 internal class NotificationCreatingService : INotificationCreatingService
 {
-    private readonly IDateTimeProvider dateTimeProvider;
-    private readonly INotificationFactory factory;
-    private readonly INotificationCreatingRepository repository;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly INotificationFactory _factory;
+    private readonly INotificationCreatingRepository _repository;
 
     /// <inheritdoc />
     public NotificationCreatingService(
@@ -20,20 +20,20 @@ internal class NotificationCreatingService : INotificationCreatingService
         INotificationFactory factory,
         INotificationCreatingRepository repository)
     {
-        this.dateTimeProvider = dateTimeProvider;
-        this.factory = factory;
-        this.repository = repository;
+        _dateTimeProvider = dateTimeProvider;
+        _factory = factory;
+        _repository = repository;
     }
 
     /// <inheritdoc />
     public async Task<IEnumerable<Notification>> Create(IEnumerable<CreateNotification> createNotifications)
     {
-        var createDate = dateTimeProvider.Now;
+        var createDate = _dateTimeProvider.Now;
         var notifications = createNotifications
-            .Select(n => factory.Create(n, createDate))
+            .Select(n => _factory.Create(n, createDate))
             .ToArray();
 
-        await repository.Create(notifications);
+        await _repository.Create(notifications);
 
         return notifications;
     }

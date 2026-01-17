@@ -1,10 +1,10 @@
-import type { ListEnvelope, Envelope, PagingQuery } from "@/api/models/common";
+import type { ListEnvelope, Envelope, PagingQuery, ApiResult } from "@/api/models/common";
 import type {
   Poll,
   PollId,
   PollOptionId,
-  Review,
-  ReviewId,
+  WebsiteReview,
+  WebsiteReviewId,
   User,
   UserLogin,
 } from "@/api/models/community";
@@ -21,14 +21,20 @@ export default new (class CommunityApi {
     });
   }
   public postPollVote(pollId: PollId, optionId: PollOptionId) {
-    return Api.put<Envelope<Poll>>(`polls/${pollId}?optionId=${optionId}`);
+    return Api.post<Envelope<Poll>>(`polls/${pollId}/vote?optionId=${optionId}`);
+  }
+  public deletePollVote(pollId: PollId) {
+    return Api.delete(`polls/${pollId}/vote`) as Promise<ApiResult<Envelope<Poll>>>;
   }
   public postPoll(poll: Post<Poll>) {
-    return Api.post<Envelope<Poll>>("polls", poll);
+    return Api.post<Envelope<Poll>>("polls/global", poll);
   }
 
   public getUsers(q: PagingQuery) {
     return Api.get<ListEnvelope<User>>("users", q);
+  }
+  public searchUsers(search: string, size: number = 10) {
+    return Api.get<ListEnvelope<User>>("users", { search, size });
   }
 
   public getUser(login: UserLogin) {
@@ -56,16 +62,19 @@ export default new (class CommunityApi {
     );
   }
 
-  public getReviews(q: PagingQuery, onlyApproved: boolean) {
-    return Api.get<ListEnvelope<Review>>("reviews", {
+  public getWebsiteReviews(q: PagingQuery, onlyApproved: boolean) {
+    return Api.get<ListEnvelope<WebsiteReview>>("websitereviews", {
       ...q,
       onlyApproved,
     });
   }
-  public updateReview(id: ReviewId, review: Patch<Review>) {
-    return Api.patch<Envelope<Review>>(`reviews/${id}`, review);
+  public postWebsiteReview(review: { text: string; authorLogin: string }) {
+    return Api.post<Envelope<WebsiteReview>>("websitereviews", review);
   }
-  public removeReview(id: ReviewId) {
-    return Api.delete(`reviews/${id}`);
+  public updateWebsiteReview(id: WebsiteReviewId, review: Patch<WebsiteReview>) {
+    return Api.patch<Envelope<WebsiteReview>>(`websitereviews/${id}`, review);
+  }
+  public removeWebsiteReview(id: WebsiteReviewId) {
+    return Api.delete(`websitereviews/${id}`);
   }
 })();

@@ -3,10 +3,10 @@ using DM.Services.Common.Authorization;
 using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Fora;
+using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Services.Forum.Authorization;
-using DM.Services.Forum.BusinessProcesses.Fora;
+using DM.Services.Forum.BusinessProcesses.Boards;
 using DM.Services.Forum.BusinessProcesses.Topics.Reading;
 using DM.Services.Forum.Dto.Input;
 using DM.Services.Forum.Dto.Output;
@@ -18,14 +18,14 @@ namespace DM.Services.Forum.BusinessProcesses.Topics.Updating;
 /// <inheritdoc />
 internal class TopicUpdatingService : ITopicUpdatingService
 {
-    private readonly IValidator<UpdateTopic> validator;
-    private readonly ITopicReadingService topicReadingService;
-    private readonly IForumReadingService forumReadingService;
-    private readonly IIntentionManager intentionManager;
-    private readonly IUpdateBuilderFactory updateBuilderFactory;
-    private readonly ITopicUpdatingRepository repository;
-    private readonly IUnreadCountersRepository unreadCountersRepository;
-    private readonly IInvokedEventProducer invokedEventProducer;
+    private readonly IValidator<UpdateTopic> _validator;
+    private readonly ITopicReadingService _topicReadingService;
+    private readonly IForumReadingService _forumReadingService;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IUpdateBuilderFactory _updateBuilderFactory;
+    private readonly ITopicUpdatingRepository _repository;
+    private readonly IUnreadCountersRepository _unreadCountersRepository;
+    private readonly IInvokedEventProducer _invokedEventProducer;
 
     /// <inheritdoc />
     public TopicUpdatingService(
@@ -38,29 +38,29 @@ internal class TopicUpdatingService : ITopicUpdatingService
         IUnreadCountersRepository unreadCountersRepository,
         IInvokedEventProducer invokedEventProducer)
     {
-        this.validator = validator;
-        this.topicReadingService = topicReadingService;
-        this.forumReadingService = forumReadingService;
-        this.intentionManager = intentionManager;
-        this.updateBuilderFactory = updateBuilderFactory;
-        this.repository = repository;
-        this.unreadCountersRepository = unreadCountersRepository;
-        this.invokedEventProducer = invokedEventProducer;
+        _validator = validator;
+        _topicReadingService = topicReadingService;
+        _forumReadingService = forumReadingService;
+        _intentionManager = intentionManager;
+        _updateBuilderFactory = updateBuilderFactory;
+        _repository = repository;
+        _unreadCountersRepository = unreadCountersRepository;
+        _invokedEventProducer = invokedEventProducer;
     }
 
     /// <inheritdoc />
     public async Task<Topic> UpdateTopic(UpdateTopic updateTopic)
     {
-        await validator.ValidateAndThrowAsync(updateTopic);
-        var oldTopic = await topicReadingService.GetTopic(updateTopic.TopicId);
+        await _validator.ValidateAndThrowAsync(updateTopic);
+        var oldTopic = await _topicReadingService.GetTopic(updateTopic.TopicId);
 
-        intentionManager.ThrowIfForbidden(TopicIntention.Edit, oldTopic);
+        _intentionManager.ThrowIfForbidden(TopicIntention.Edit, oldTopic);
 
-        var changes = updateBuilderFactory.Create<ForumTopic>(updateTopic.TopicId)
+        var changes = _updateBuilderFactory.Create<ForumTopic>(updateTopic.TopicId)
             .MaybeField(t => t.Title, updateTopic.Title?.Trim())
             .MaybeField(t => t.Text, updateTopic.Text?.Trim());
 
-        if (intentionManager.IsAllowed(ForumIntention.AdministrateTopics, oldTopic.Forum))
+        if (_intentionManager.IsAllowed(ForumIntention.AdministrateTopics, oldTopic.Forum))
         {
             changes
                 .MaybeField(t => t.IsClosed, updateTopic.IsClosed)
@@ -69,15 +69,15 @@ internal class TopicUpdatingService : ITopicUpdatingService
             if (updateTopic.ForumTitle != default &&
                 oldTopic.Forum.Title != updateTopic.ForumTitle)
             {
-                var forum = await forumReadingService.GetForum(updateTopic.ForumTitle, false);
-                intentionManager.ThrowIfForbidden(ForumIntention.CreateTopic, forum);
+                var forum = await _forumReadingService.GetForum(updateTopic.ForumTitle, false);
+                _intentionManager.ThrowIfForbidden(ForumIntention.CreateTopic, forum);
                 changes.Field(t => t.ForumId, forum.Id);
-                await unreadCountersRepository.ChangeParent(oldTopic.Forum.Id, UnreadEntryType.Message, forum.Id);
+                await _unreadCountersRepository.ChangeParent(oldTopic.Forum.Id, UnreadEntryType.Message, forum.Id);
             }
         }
 
-        var topic = await repository.Update(changes);
-        await invokedEventProducer.Send(EventType.ChangedForumTopic, topic.Id);
+        var topic = await _repository.Update(changes);
+        await _invokedEventProducer.Send(EventType.ChangedForumTopic, topic.Id);
 
         return topic;
     }

@@ -1,11 +1,13 @@
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Services.Authentication.Implementation.UserIdentity;
 using DM.Services.Common.Authorization;
 using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Core.Dto.Enums;
+using DM.Services.Core.Tracing;
 using DM.Services.DataAccess.BusinessObjects.Common;
 using DM.Services.Forum.Authorization;
-using DM.Services.Forum.BusinessProcesses.Fora;
+using DM.Services.Forum.BusinessProcesses.Boards;
 using DM.Services.Forum.Dto.Input;
 using DM.Services.Forum.Dto.Output;
 using DM.Services.MessageQueuing.GeneralBus;
@@ -16,14 +18,14 @@ namespace DM.Services.Forum.BusinessProcesses.Topics.Creating;
 /// <inheritdoc />
 internal class TopicCreatingService : ITopicCreatingService
 {
-    private readonly IValidator<CreateTopic> validator;
-    private readonly IForumReadingService forumReadingService;
-    private readonly IIntentionManager intentionManager;
-    private readonly ITopicFactory topicFactory;
-    private readonly ITopicCreatingRepository repository;
-    private readonly IUnreadCountersRepository unreadCountersRepository;
-    private readonly IInvokedEventProducer invokedEventProducer;
-    private readonly IIdentityProvider identityProvider;
+    private readonly IValidator<CreateTopic> _validator;
+    private readonly IForumReadingService _forumReadingService;
+    private readonly IIntentionManager _intentionManager;
+    private readonly ITopicFactory _topicFactory;
+    private readonly ITopicCreatingRepository _repository;
+    private readonly IUnreadCountersRepository _unreadCountersRepository;
+    private readonly IInvokedEventProducer _invokedEventProducer;
+    private readonly IIdentityProvider _identityProvider;
 
     /// <inheritdoc />
     public TopicCreatingService(
@@ -36,30 +38,33 @@ internal class TopicCreatingService : ITopicCreatingService
         IUnreadCountersRepository unreadCountersRepository,
         IInvokedEventProducer invokedEventProducer)
     {
-        this.validator = validator;
-        this.forumReadingService = forumReadingService;
-        this.intentionManager = intentionManager;
-        this.topicFactory = topicFactory;
-        this.repository = repository;
-        this.unreadCountersRepository = unreadCountersRepository;
-        this.invokedEventProducer = invokedEventProducer;
-        this.identityProvider = identityProvider;
+        _validator = validator;
+        _forumReadingService = forumReadingService;
+        _intentionManager = intentionManager;
+        _topicFactory = topicFactory;
+        _repository = repository;
+        _unreadCountersRepository = unreadCountersRepository;
+        _invokedEventProducer = invokedEventProducer;
+        _identityProvider = identityProvider;
     }
 
     /// <inheritdoc />
-    public async Task<Topic> CreateTopic(CreateTopic createTopic)
+    public async Task<Topic> CreateTopic(CreateTopic createTopic, CancellationToken ct = default)
     {
-        await validator.ValidateAndThrowAsync(createTopic);
+        using var activity = DmActivitySource.Source.StartActivity("CreateTopic");
+        activity?.SetTag("forum.title", createTopic.ForumTitle);
 
-        var forum = await forumReadingService.GetForum(createTopic.ForumTitle);
-        intentionManager.ThrowIfForbidden(ForumIntention.CreateTopic, forum);
+        await _validator.ValidateAndThrowAsync(createTopic, ct);
 
-        var topicToCreate = topicFactory.Create(forum.Id, identityProvider.Current.User.UserId, createTopic);
-        var topic = await repository.Create(topicToCreate);
+        var forum = await _forumReadingService.GetForum(createTopic.ForumTitle);
+        _intentionManager.ThrowIfForbidden(ForumIntention.CreateTopic, forum);
+
+        var topicToCreate = _topicFactory.Create(forum.Id, _identityProvider.Current.User.UserId, createTopic);
+        var topic = await _repository.Create(topicToCreate, ct);
 
         await Task.WhenAll(
-            invokedEventProducer.Send(EventType.NewForumTopic, topic.Id),
-            unreadCountersRepository.Create(topic.Id, forum.Id, UnreadEntryType.Message));
+            _invokedEventProducer.Send(EventType.NewForumTopic, topic.Id),
+            _unreadCountersRepository.Create(topic.Id, forum.Id, UnreadEntryType.Message));
 
         return topic;
     }

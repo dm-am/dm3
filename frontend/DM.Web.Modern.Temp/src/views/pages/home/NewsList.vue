@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { IconType } from "@/components/icons/iconType";
-import { useForumStore } from "@/stores";
+import { useBoardsStore } from "@/stores";
 import { onMounted } from "vue";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
 import { storeToRefs } from "pinia";
 
-const store = useForumStore();
+const store = useBoardsStore();
 const { news } = storeToRefs(store);
 
 onMounted(() => store.fetchNews());
@@ -25,8 +25,8 @@ onMounted(() => store.fetchNews());
     </router-link>
     <div class="article-description" v-html="article.description"></div>
     <div>
-      <user-link :user="article.author!" />
-      <human-timespan :date="article.created!" />&nbsp;<the-icon
+      <user-link :user="article.author!" />,
+      <human-timespan :date="article.createdUtc!" />&nbsp;<the-icon
         :font="IconType.CommentsNoUnread"
       />
     </div>

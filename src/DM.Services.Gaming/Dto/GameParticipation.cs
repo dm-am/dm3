@@ -24,7 +24,7 @@ public enum GameParticipation
     Player = 1 << 1,
 
     /// <summary>
-    /// User is game nanny
+    /// User is game mentor
     /// </summary>
     Moderator = 1 << 2,
 

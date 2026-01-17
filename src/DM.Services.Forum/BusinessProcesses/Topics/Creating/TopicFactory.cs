@@ -1,6 +1,6 @@
 using System;
 using DM.Services.Core.Implementation;
-using DM.Services.DataAccess.BusinessObjects.Fora;
+using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.Forum.Dto.Input;
 
 namespace DM.Services.Forum.BusinessProcesses.Topics.Creating;
@@ -8,16 +8,16 @@ namespace DM.Services.Forum.BusinessProcesses.Topics.Creating;
 /// <inheritdoc />
 internal class TopicFactory : ITopicFactory
 {
-    private readonly IGuidFactory guidFactory;
-    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public TopicFactory(
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider)
     {
-        this.guidFactory = guidFactory;
-        this.dateTimeProvider = dateTimeProvider;
+        _guidFactory = guidFactory;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -26,8 +26,8 @@ internal class TopicFactory : ITopicFactory
         return new ForumTopic
         {
             ForumId = forumId,
-            ForumTopicId = guidFactory.Create(),
-            CreateDate = dateTimeProvider.Now,
+            ForumTopicId = _guidFactory.Create(),
+            CreateDate = _dateTimeProvider.Now,
             UserId = userId,
             Title = createTopic.Title.Trim(),
             Text = createTopic.Text?.Trim()

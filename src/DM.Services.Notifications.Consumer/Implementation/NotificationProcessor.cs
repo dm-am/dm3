@@ -16,10 +16,10 @@ namespace DM.Services.Notifications.Consumer.Implementation;
 /// <inheritdoc />
 internal class NotificationProcessor : IProcessor<string, InvokedEvent>
 {
-    private readonly IEnumerable<INotificationGenerator> generators;
-    private readonly INotificationCreatingService service;
-    private readonly IMapper mapper;
-    private readonly IProducer<string, RealtimeNotification> producer;
+    private readonly IEnumerable<INotificationGenerator> _generators;
+    private readonly INotificationCreatingService _service;
+    private readonly IMapper _mapper;
+    private readonly IProducer<string, RealtimeNotification> _producer;
 
     /// <inheritdoc />
     public NotificationProcessor(
@@ -28,10 +28,10 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
         IMapper mapper,
         IProducerBuilder producerBuilder)
     {
-        this.generators = generators;
-        this.service = service;
-        this.mapper = mapper;
-        producer = producerBuilder.BuildRabbit<RealtimeNotification>(
+        _generators = generators;
+        _service = service;
+        _mapper = mapper;
+        _producer = producerBuilder.BuildRabbit<RealtimeNotification>(
             new RabbitProducerParameters("dm.notifications.sent"));
     }
 
@@ -39,7 +39,7 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
     public async Task<ProcessResult> Process(string key, InvokedEvent message, CancellationToken cancellationToken)
     {
         var notificationsToCreate = new List<CreateNotification>();
-        foreach (var generator in generators.Where(g => g.CanResolve(message.Type)))
+        foreach (var generator in _generators.Where(g => g.CanResolve(message.Type)))
         {
             await foreach (var createNotification in generator.Generate(message.EntityId)
                                .WithCancellation(cancellationToken))
@@ -53,10 +53,10 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
             return ProcessResult.Success;
         }
 
-        var notifications = await service.Create(notificationsToCreate);
-        foreach (var notification in notifications.Select(mapper.Map<RealtimeNotification>))
+        var notifications = await _service.Create(notificationsToCreate);
+        foreach (var notification in notifications.Select(_mapper.Map<RealtimeNotification>))
         {
-            await producer.Send(string.Empty, notification, cancellationToken);
+            await _producer.Send(string.Empty, notification, cancellationToken);
         }
 
         return ProcessResult.Success;

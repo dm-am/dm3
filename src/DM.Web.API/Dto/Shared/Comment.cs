@@ -23,12 +23,12 @@ public class Comment
     /// <summary>
     /// Creation moment
     /// </summary>
-    public DateTimeOffset Created { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Last update moment
     /// </summary>
-    public DateTimeOffset? Updated { get; set; }
+    public DateTimeOffset? UpdatedUtc { get; set; }
 
     /// <summary>
     /// Text

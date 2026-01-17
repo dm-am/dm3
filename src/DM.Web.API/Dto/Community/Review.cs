@@ -1,5 +1,4 @@
 using System;
-using DM.Web.API.BbRendering;
 using DM.Web.API.Dto.Users;
 
 namespace DM.Web.API.Dto.Community;
@@ -20,17 +19,22 @@ public class Review
     public User Author { get; set; }
 
     /// <summary>
+    /// Author login (for creating reviews on behalf of users)
+    /// </summary>
+    public string AuthorLogin { get; set; }
+
+    /// <summary>
     /// Creating moment
     /// </summary>
-    public DateTimeOffset Created { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Publish flag
     /// </summary>
-    public bool? Approved { get; set; }
+    public bool? IsApproved { get; set; }
 
     /// <summary>
     /// Review text
     /// </summary>
-    public CommonBbText Text { get; set; }
+    public string Text { get; set; }
 }

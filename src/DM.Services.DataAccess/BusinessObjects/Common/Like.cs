@@ -1,7 +1,8 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using DM.Services.DataAccess.BusinessObjects.Fora;
+using DM.Services.DataAccess.BusinessObjects.Boards;
+using DM.Services.DataAccess.BusinessObjects.Messaging;
 using DM.Services.DataAccess.BusinessObjects.Users;
 
 namespace DM.Services.DataAccess.BusinessObjects.Common;
@@ -51,4 +52,16 @@ public class Like
     /// </summary>
     [ForeignKey(nameof(EntityId))]
     public virtual Review Review { get; set; }
+
+    /// <summary>
+    /// Parent message
+    /// </summary>
+    [ForeignKey(nameof(EntityId))]
+    public virtual Message Message { get; set; }
+
+    /// <summary>
+    /// Parent chat message
+    /// </summary>
+    [ForeignKey(nameof(EntityId))]
+    public virtual ChatMessage ChatMessage { get; set; }
 }

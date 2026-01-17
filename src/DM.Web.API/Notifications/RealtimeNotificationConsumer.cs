@@ -13,24 +13,24 @@ namespace DM.Web.API.Notifications;
 
 internal class RealtimeNotificationConsumer : BackgroundService
 {
-    private readonly ILogger<RealtimeNotificationConsumer> logger;
-    private readonly IConsumerBuilder consumerBuilder;
-    private readonly RetryPolicy consumeRetryPolicy;
+    private readonly ILogger<RealtimeNotificationConsumer> _logger;
+    private readonly IConsumerBuilder _consumerBuilder;
+    private readonly RetryPolicy _consumeRetryPolicy;
 
     public RealtimeNotificationConsumer(
         ILogger<RealtimeNotificationConsumer> logger,
         IConsumerBuilder consumerBuilder)
     {
-        this.logger = logger;
-        this.consumerBuilder = consumerBuilder;
-        consumeRetryPolicy = Policy.Handle<Exception>().WaitAndRetry(5,
+        _logger = logger;
+        _consumerBuilder = consumerBuilder;
+        _consumeRetryPolicy = Policy.Handle<Exception>().WaitAndRetry(5,
             attempt => TimeSpan.FromSeconds(1 << attempt),
-            (exception, _) => logger.LogWarning(exception, "Could not subscribe to the queue"));
+            (exception, _) => _logger.LogWarning(exception, "Could not subscribe to the queue"));
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogDebug("[🚴] Starting realtime notifications consumer");
+        _logger.LogDebug("[🚴] Starting realtime notifications consumer");
 
         var parameters = new RabbitConsumerParameters("dm.api", "dm.notifications.api", ProcessingOrder.Sequential)
         {
@@ -38,10 +38,10 @@ internal class RealtimeNotificationConsumer : BackgroundService
             RoutingKeys = new[] { "#" },
             Exclusive = true
         };
-        var consumer = consumerBuilder.BuildRabbit<RealtimeNotification, RealtimeNotificationProcessor>(parameters);
-        consumeRetryPolicy.Execute(consumer.Subscribe);
+        var consumer = _consumerBuilder.BuildRabbit<RealtimeNotification, RealtimeNotificationProcessor>(parameters);
+        _consumeRetryPolicy.Execute(consumer.Subscribe);
 
-        logger.LogDebug("[👂] Realtime notifications consumer is listening to {QueueName} queue",
+        _logger.LogDebug("[👂] Realtime notifications consumer is listening to {QueueName} queue",
             parameters.QueueName);
         return Task.CompletedTask;
     }

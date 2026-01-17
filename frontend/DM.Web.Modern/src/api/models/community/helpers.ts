@@ -17,7 +17,7 @@ export function userIsAuthority(user: User | null): boolean {
     r === UserRole.RegularModerator);
 }
 
-export function userIsNanny(user: User | null): boolean {
+export function userIsMentor(user: User | null): boolean {
   return user !== null && user.roles.some(r =>
-    r === UserRole.NannyModerator);
+    r === UserRole.MentorModerator);
 }

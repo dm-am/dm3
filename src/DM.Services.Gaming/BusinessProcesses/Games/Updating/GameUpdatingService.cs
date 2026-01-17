@@ -103,13 +103,13 @@ internal class GameUpdatingService : IGameUpdatingService
                 changes.Field(g => g.Status, updateGame.Status.Value);
                 invokedEvents.Add(eventType);
                     
-                if (updateGame.Status == GameStatus.Moderation) // when we go to moderation the actor becomes nanny
+                if (updateGame.Status == GameStatus.Moderation) // when we go to moderation the actor becomes mentor
                 {
-                    changes = changes.Field(g => g.NannyId, identityProvider.Current.User.UserId);
+                    changes = changes.Field(g => g.MentorId, identityProvider.Current.User.UserId);
                 }
-                else if (game.Status == GameStatus.Moderation) // when we go from moderation the nanny is no more
+                else if (game.Status == GameStatus.Moderation) // when we go from moderation the mentor is no more
                 {
-                    changes = changes.Field(g => g.NannyId, null);
+                    changes = changes.Field(g => g.MentorId, null);
                 }
 
                 if (!game.ReleaseDate.HasValue && updateGame.Status == GameStatus.Requirement)

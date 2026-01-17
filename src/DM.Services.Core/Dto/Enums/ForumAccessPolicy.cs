@@ -29,9 +29,9 @@ public enum ForumAccessPolicy
     RegularModerator = 1 << 2,
 
     /// <summary>
-    /// Nanny moderators allowed
+    /// Mentor moderators allowed
     /// </summary>
-    NannyModerator = 1 << 3,
+    MentorModerator = 1 << 3,
 
     /// <summary>
     /// Forum moderators allowed

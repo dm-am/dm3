@@ -15,9 +15,9 @@ namespace DM.Services.Search.Consumer.Implementation.Indexing.Indexers;
 /// </summary>
 internal class TopicChangedIndexer : BaseIndexer
 {
-    private readonly DmDbContext dbContext;
-    private readonly IBbParserProvider parserProvider;
-    private readonly IIndexingRepository repository;
+    private readonly DmDbContext _dbContext;
+    private readonly IBbParserProvider _parserProvider;
+    private readonly IIndexingRepository _repository;
 
     /// <inheritdoc />
     public TopicChangedIndexer(
@@ -25,31 +25,31 @@ internal class TopicChangedIndexer : BaseIndexer
         IBbParserProvider parserProvider,
         IIndexingRepository repository)
     {
-        this.dbContext = dbContext;
-        this.parserProvider = parserProvider;
-        this.repository = repository;
+        _dbContext = dbContext;
+        _parserProvider = parserProvider;
+        _repository = repository;
     }
-        
+
     /// <inheritdoc />
     protected override EventType EventType => EventType.ChangedForumTopic;
 
     /// <inheritdoc />
     public override async Task Index(InvokedEvent message)
     {
-        var topic = await dbContext.ForumTopics
+        var topic = await _dbContext.ForumTopics
             .Where(t => t.ForumTopicId == message.EntityId)
             .Select(t => new {t.Forum.ViewPolicy, t.Title, t.Text})
             .FirstAsync();
         var authorizedRoles = topic.ViewPolicy.GetAuthorizedRoles().ToArray();
 
-        await repository.UpdateByParent(message.EntityId, authorizedRoles);
-        await repository.Index(new SearchEntity
+        await _repository.UpdateByParent(message.EntityId, authorizedRoles);
+        await _repository.Index(new SearchEntity
         {
             Id = message.EntityId,
             ParentEntityId = message.EntityId,
             EntityType = SearchEntityType.Topic,
             Title = topic.Title,
-            Text = parserProvider.CurrentCommon.Parse(topic.Text).ToHtml(),
+            Text = _parserProvider.CurrentCommon.Parse(topic.Text).ToHtml(),
             AuthorizedRoles = authorizedRoles
         });
     }

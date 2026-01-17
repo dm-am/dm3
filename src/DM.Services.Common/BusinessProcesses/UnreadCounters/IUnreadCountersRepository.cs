@@ -45,6 +45,15 @@ public interface IUnreadCountersRepository
     Task Increment(Guid entityId, UnreadEntryType entryType);
 
     /// <summary>
+    /// Increment counter of the entity for every user except the specified one
+    /// </summary>
+    /// <param name="entityId">Entity Id</param>
+    /// <param name="entryType">Entry type</param>
+    /// <param name="excludeUserId">User Id to exclude from increment</param>
+    /// <returns></returns>
+    Task IncrementExcluding(Guid entityId, UnreadEntryType entryType, Guid excludeUserId);
+
+    /// <summary>
     /// Decrement counter for users who hasn't read the entry since given time
     /// </summary>
     /// <param name="entityId">Entity Id</param>
@@ -69,6 +78,16 @@ public interface IUnreadCountersRepository
     /// <param name="parentIds">Parent entity Ids</param>
     /// <returns>List of pairs of parent entity Id and number of according entities that have unread entries</returns>
     Task<IDictionary<Guid, int>> SelectByParents(
+        Guid userId, UnreadEntryType entryType, params Guid[] parentIds);
+
+    /// <summary>
+    /// Get total count of unread entries by parent entity ids (sum of all counters)
+    /// </summary>
+    /// <param name="userId">User Id</param>
+    /// <param name="entryType">Entry type</param>
+    /// <param name="parentIds">Parent entity Ids</param>
+    /// <returns>List of pairs of parent entity Id and total number of unread entries</returns>
+    Task<IDictionary<Guid, int>> SelectTotalUnreadByParents(
         Guid userId, UnreadEntryType entryType, params Guid[] parentIds);
 
     /// <summary>

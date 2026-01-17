@@ -11,7 +11,23 @@ import Api from "@/api";
 
 export default new (class {
   public getOwnGames() {
-    return Api.get<ListEnvelope<Game>>("games/own");
+    return Api.get<ListEnvelope<Game>>("games/owned");
+  }
+
+  public getModerationGames() {
+    return Api.get<ListEnvelope<Game>>("games", { statuses: "Moderation" });
+  }
+
+  public getActiveGames() {
+    return Api.get<ListEnvelope<Game>>("games", { statuses: "Active" });
+  }
+
+  public getRequirementGames() {
+    return Api.get<ListEnvelope<Game>>("games", { statuses: "Requirement" });
+  }
+
+  public getFinishedGames() {
+    return Api.get<ListEnvelope<Game>>("games", { statuses: "Finished" });
   }
 
   public async getPopularGames() {
@@ -35,7 +51,7 @@ export default new (class {
   }
 
   public getSchemas() {
-    return Api.get<ListEnvelope<AttributeSchema>>("schemata");
+    return Api.get<ListEnvelope<AttributeSchema>>("schemas");
   }
 
   public getTags() {
@@ -43,7 +59,7 @@ export default new (class {
   }
 
   public createSchema(schema: AttributeSchema) {
-    return Api.post<Envelope<AttributeSchema>>("schemata", schema);
+    return Api.post<Envelope<AttributeSchema>>("schemas", schema);
   }
 
   public createGame(game: Game) {

@@ -13,10 +13,10 @@ namespace DM.Services.Community.BusinessProcesses.Account.Activation;
 /// <inheritdoc />
 internal class ActivationService : IActivationService
 {
-    private readonly IDateTimeProvider dateTimeProvider;
-    private readonly IUpdateBuilderFactory updateBuilderFactory;
-    private readonly IActivationRepository repository;
-    private readonly IInvokedEventProducer producer;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IUpdateBuilderFactory _updateBuilderFactory;
+    private readonly IActivationRepository _repository;
+    private readonly IInvokedEventProducer _producer;
 
     /// <inheritdoc />
     public ActivationService(
@@ -25,27 +25,27 @@ internal class ActivationService : IActivationService
         IActivationRepository repository,
         IInvokedEventProducer producer)
     {
-        this.dateTimeProvider = dateTimeProvider;
-        this.updateBuilderFactory = updateBuilderFactory;
-        this.repository = repository;
-        this.producer = producer;
+        _dateTimeProvider = dateTimeProvider;
+        _updateBuilderFactory = updateBuilderFactory;
+        _repository = repository;
+        _producer = producer;
     }
         
     /// <inheritdoc />
     public async Task<Guid> Activate(Guid tokenId)
     {
-        var userId = await repository.FindUserToActivate(tokenId, dateTimeProvider.Now - TimeSpan.FromDays(2));
+        var userId = await _repository.FindUserToActivate(tokenId, _dateTimeProvider.Now - TimeSpan.FromDays(2));
         if (!userId.HasValue)
         {
             throw new HttpException(HttpStatusCode.Gone,
                 "Activation token is invalid! Address the technical support for further assistance");
         }
 
-        var updateUser = updateBuilderFactory.Create<User>(userId.Value).Field(u => u.Activated, true);
-        var updateToken = updateBuilderFactory.Create<Token>(tokenId).Field(t => t.IsRemoved, true);
-        await repository.ActivateUser(updateUser, updateToken);
+        var updateUser = _updateBuilderFactory.Create<User>(userId.Value).Field(u => u.Activated, true);
+        var updateToken = _updateBuilderFactory.Create<Token>(tokenId).Field(t => t.IsRemoved, true);
+        await _repository.ActivateUser(updateUser, updateToken);
 
-        await producer.Send(EventType.ActivatedUser, userId.Value);
+        await _producer.Send(EventType.ActivatedUser, userId.Value);
         return userId.Value;
     }
 }

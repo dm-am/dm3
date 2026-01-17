@@ -3,8 +3,8 @@ import type { User } from "@/api/models/community";
 import type {
   Comment,
   CommentId,
-  Forum,
-  ForumId,
+  Board,
+  BoardId,
   Topic,
   TopicId,
 } from "@/api/models/forum";
@@ -13,41 +13,45 @@ import { BbRenderMode } from "@/api/bbRenderMode";
 import type { Patch, Post } from "@/api/models";
 
 export default new (class ForumApi {
-  public getFora() {
-    return Api.get<ListEnvelope<Forum>>("fora");
+  public getBoards() {
+    return Api.get<ListEnvelope<Board>>("boards");
   }
 
-  public getForum(id: ForumId) {
-    return Api.get<Envelope<Forum>>(`fora/${id}`);
+  public getBoard(id: BoardId) {
+    return Api.get<Envelope<Board>>(`boards/${id}`);
   }
 
   public getNews() {
-    return Api.get<ListEnvelope<Topic>>("fora/Новости проекта/topics", {
+    return Api.get<ListEnvelope<Topic>>("boards/Новости проекта/topics", {
       size: 3,
     });
   }
 
-  public getModerators(id: ForumId) {
-    return Api.get<ListEnvelope<User>>(`fora/${id}/moderators`);
+  public getModerators(id: BoardId) {
+    return Api.get<ListEnvelope<User>>(`boards/${id}/moderators`);
   }
 
-  public getTopics(id: ForumId, q: PagingQuery, attached: boolean) {
-    return Api.get<ListEnvelope<Topic>>(`fora/${id}/topics`, {
+  public getTopics(id: BoardId, q: PagingQuery, isAttached: boolean) {
+    return Api.get<ListEnvelope<Topic>>(`boards/${id}/topics`, {
       ...q,
-      attached,
+      isAttached,
     });
   }
 
-  public createTopic(id: ForumId, topic: Post<Topic>) {
-    return Api.post<Envelope<Topic>>(`fora/${id}/topics`, topic);
+  public createTopic(id: BoardId, topic: Post<Topic>) {
+    return Api.post<Envelope<Topic>>(`boards/${id}/topics`, topic);
   }
 
   public getTopic(id: TopicId) {
     return Api.get<Envelope<Topic>>(`topics/${id}`);
   }
 
-  public markAllTopicsAsRead(id: ForumId) {
-    return Api.delete(`fora/${id}/comments/unread`);
+  public markBoardAsRead(id: BoardId) {
+    return Api.delete(`boards/${id}/comments/unread`);
+  }
+
+  public markAllForumAsRead() {
+    return Api.delete("forum/comments/unread");
   }
 
   public markTopicAsRead(id: TopicId) {

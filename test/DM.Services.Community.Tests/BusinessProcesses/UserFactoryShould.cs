@@ -48,7 +48,7 @@ public class UserFactoryShould : UnitTestBase
             PasswordHash = "hash",
             Activated = false,
             LastVisitDate = null,
-            Role = UserRole.Player,
+            Role = UserRole.RegularUser,
             QualityRating = 0,
             QuantityRating = 0,
             RatingDisabled = false,

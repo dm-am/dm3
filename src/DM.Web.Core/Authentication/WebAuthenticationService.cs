@@ -66,7 +66,7 @@ internal class WebAuthenticationService : IWebAuthenticationService
     {
         if (identity.Error == AuthenticationError.ForgedToken)
         {
-            logger.LogError($"Seems like someone is trying to forge the token for {identity.User.Login}");
+            logger.LogError("Seems like someone is trying to forge the token for {Login}", identity.User.Login);
         }
 
         return identity.Error == AuthenticationError.NoError && identity.User.IsAuthenticated

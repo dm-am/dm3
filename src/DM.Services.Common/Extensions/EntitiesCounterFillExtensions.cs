@@ -15,7 +15,7 @@ namespace DM.Services.Common.Extensions;
 public static class EntitiesCounterFillExtensions
 {
     /// <summary>
-    /// Fill counters fields for passed parent entities
+    /// Fill counters fields for passed parent entities (count of entities with unread)
     /// </summary>
     /// <param name="repository">Counters repository</param>
     /// <param name="entities">Entities to fill</param>
@@ -28,6 +28,21 @@ public static class EntitiesCounterFillExtensions
         ICollection<TEntity> entities, Guid userId,
         Func<TEntity, Guid> getId, Expression<Func<TEntity, int>> counterField) =>
         FillCounters(entities, userId, getId, repository.SelectByParents, counterField);
+
+    /// <summary>
+    /// Fill total unread counters fields for passed parent entities (sum of all unread)
+    /// </summary>
+    /// <param name="repository">Counters repository</param>
+    /// <param name="entities">Entities to fill</param>
+    /// <param name="userId">Reading user identifier</param>
+    /// <param name="getId">Entity identifier mapper</param>
+    /// <param name="counterField">Expression of the field to fill counter in</param>
+    /// <typeparam name="TEntity"></typeparam>
+    /// <returns></returns>
+    public static Task FillTotalUnreadCounters<TEntity>(this IUnreadCountersRepository repository,
+        ICollection<TEntity> entities, Guid userId,
+        Func<TEntity, Guid> getId, Expression<Func<TEntity, int>> counterField) =>
+        FillCounters(entities, userId, getId, repository.SelectTotalUnreadByParents, counterField);
 
     /// <summary>
     /// Fill counters fields for passed entities

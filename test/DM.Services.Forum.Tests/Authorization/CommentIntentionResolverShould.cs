@@ -18,7 +18,7 @@ public class CommentIntentionResolverShould
     public void AllowEditingAndDeletingForAuthors(CommentIntention intention)
     {
         var userId = Guid.NewGuid();
-        var author = Create.User(userId).WithRole(UserRole.Player).Please();
+        var author = Create.User(userId).WithRole(UserRole.RegularUser).Please();
         var actual = resolver.IsAllowed(author, intention, new Comment {Author = author});
         actual.Should().BeTrue();
     }
@@ -40,7 +40,7 @@ public class CommentIntentionResolverShould
     public void NotAllowEditingAndDeletingForAuthors(CommentIntention intention)
     {
         var userId = Guid.NewGuid();
-        var author = Create.User(userId).WithRole(UserRole.NannyModerator).Please();
+        var author = Create.User(userId).WithRole(UserRole.Mentor).Please();
         var actual = resolver.IsAllowed(author, intention, new Comment {Author = Create.User().Please()});
         actual.Should().BeFalse();
     }
@@ -57,7 +57,7 @@ public class CommentIntentionResolverShould
     public void NotAllowLikeOwnComments()
     {
         var userId = Guid.NewGuid();
-        var user = Create.User(userId).WithRole(UserRole.Player).Please();
+        var user = Create.User(userId).WithRole(UserRole.RegularUser).Please();
         var actual = resolver.IsAllowed(user, CommentIntention.Like, new Comment {Author = user});
         actual.Should().BeFalse();
     }
@@ -65,7 +65,7 @@ public class CommentIntentionResolverShould
     [Fact]
     public void AllowToLikeOthersComments()
     {
-        var user = Create.User().WithRole(UserRole.Player).Please();
+        var user = Create.User().WithRole(UserRole.RegularUser).Please();
         var actual = resolver.IsAllowed(user, CommentIntention.Like, new Comment {Author = Create.User().Please()});
         actual.Should().BeTrue();
     }

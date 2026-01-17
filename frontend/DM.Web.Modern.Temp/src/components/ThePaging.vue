@@ -93,10 +93,6 @@ const links = computed(() => {
     +theme(border-bottom-color, $active-text)
     text-align: center
 
-    &.active
-      border-bottom-width: $minor
-      padding-bottom: 1px
-      font-weight: bold
     &:hover
       +theme(border-bottom-color, $active-text-hover)
 </style>

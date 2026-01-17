@@ -26,7 +26,7 @@ const router = createRouter({
         {
           name: "about",
           path: ":n?",
-          component: () => import("@/views/pages/about/ReviewList.vue"),
+          component: () => import("@/views/pages/about/WebsiteReviewList.vue"),
         },
       ],
     },
@@ -42,11 +42,40 @@ const router = createRouter({
     {
       name: "chat",
       path: "/chat",
-      component: () => import("@/components/TheLoader.vue"),
+      components: {
+        menu: GeneralMenu,
+        sidebar: GeneralSidebar,
+        page: () => import("@/views/pages/chat/ChatPage.vue"),
+      },
     },
     {
-      name: "messenger",
       path: "/messenger",
+      components: {
+        menu: GeneralMenu,
+        sidebar: GeneralSidebar,
+        page: () => import("@/views/pages/messenger/MessengerPage.vue"),
+      },
+      children: [
+        {
+          name: "messenger",
+          path: ":n?",
+          component: () => import("@/views/pages/messenger/ConversationsList.vue"),
+        },
+        {
+          name: "conversation",
+          path: "c/:id",
+          component: () => import("@/views/pages/messenger/ConversationView.vue"),
+        },
+        {
+          name: "direct-message",
+          path: "user/:login",
+          component: () => import("@/views/pages/messenger/DirectConversation.vue"),
+        },
+      ],
+    },
+    {
+      name: "notifications",
+      path: "/notifications",
       component: () => import("@/components/TheLoader.vue"),
     },
     {
@@ -69,6 +98,15 @@ const router = createRouter({
           component: () => import("@/views/pages/community/UsersList.vue"),
         },
       ],
+    },
+    {
+      path: "/Azur",
+      name: "azur-profile",
+      beforeEnter() {
+        window.location.href = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+        return false;
+      },
+      component: () => import("@/components/TheLoader.vue"),
     },
     {
       path: "/profile",
@@ -102,7 +140,7 @@ const router = createRouter({
     },
 
     {
-      path: "/fora/:id",
+      path: "/forum/:id",
       components: {
         menu: GeneralMenu,
         sidebar: GeneralSidebar,
@@ -117,7 +155,7 @@ const router = createRouter({
       ],
     },
     {
-      path: "/topics/:id",
+      path: "/topic/:id",
       components: {
         menu: GeneralMenu,
         sidebar: GeneralSidebar,
@@ -133,6 +171,42 @@ const router = createRouter({
     },
 
     {
+      name: "all-games",
+      path: "/games",
+      components: {
+        menu: GeneralMenu,
+        sidebar: GeneralSidebar,
+        page: () => import("@/views/pages/games/GamesPage.vue"),
+      },
+    },
+    {
+      name: "blogs",
+      path: "/blogs",
+      components: {
+        menu: GeneralMenu,
+        sidebar: GeneralSidebar,
+        page: () => import("@/views/pages/blogs/BlogsPage.vue"),
+      },
+    },
+    {
+      name: "forum-index",
+      path: "/forum",
+      components: {
+        menu: GeneralMenu,
+        sidebar: GeneralSidebar,
+        page: () => import("@/views/pages/forum/ForumIndexPage.vue"),
+      },
+    },
+    {
+      name: "moderation",
+      path: "/moderation",
+      components: {
+        menu: GeneralMenu,
+        sidebar: GeneralSidebar,
+        page: () => import("@/views/pages/moderation/ModerationPage.vue"),
+      },
+    },
+    {
       name: "create-game",
       path: "/create-game",
       component: () => import("@/components/TheLoader.vue"),
@@ -144,7 +218,22 @@ const router = createRouter({
     },
     {
       name: "game",
-      path: "/games/:id",
+      path: "/game/:id",
+      component: () => import("@/components/TheLoader.vue"),
+    },
+    {
+      name: "game-first-unread-post",
+      path: "/game/:id/posts/unread",
+      component: () => import("@/components/TheLoader.vue"),
+    },
+    {
+      name: "game-comments",
+      path: "/game/:id/comments",
+      component: () => import("@/components/TheLoader.vue"),
+    },
+    {
+      name: "game-characters",
+      path: "/game/:id/characters",
       component: () => import("@/components/TheLoader.vue"),
     },
   ],

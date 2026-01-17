@@ -2,14 +2,14 @@ import { UserRole } from "@/api/models/community";
 import type { User } from "@/api/models/community";
 
 export function userIsAdmin(user: User | null): boolean {
-  return user !== null && user.roles.some((r) => r === UserRole.Administrator);
+  return user !== null && user.roles.some((r) => r === UserRole.Admin);
 }
 
 export function userIsHighAuthority(user: User | null): boolean {
   return (
     user !== null &&
     user.roles.some(
-      (r) => r === UserRole.Administrator || r === UserRole.SeniorModerator,
+      (r) => r === UserRole.Admin || r === UserRole.SeniorModerator,
     )
   );
 }
@@ -19,13 +19,9 @@ export function userIsAuthority(user: User | null): boolean {
     user !== null &&
     user.roles.some(
       (r) =>
-        r === UserRole.Administrator ||
+        r === UserRole.Admin ||
         r === UserRole.SeniorModerator ||
-        r === UserRole.RegularModerator,
+        r === UserRole.Moderator,
     )
   );
-}
-
-export function userIsNanny(user: User | null): boolean {
-  return user !== null && user.roles.some((r) => r === UserRole.NannyModerator);
 }

@@ -18,13 +18,13 @@ namespace DM.Services.Gaming.BusinessProcesses.Blacklist.Deleting;
 /// <inheritdoc />
 internal class BlacklistDeletingService : IBlacklistDeletingService
 {
-    private readonly IValidator<OperateBlacklistLink> validator;
-    private readonly IUserRepository userRepository;
-    private readonly IGameReadingService gameReadingService;
-    private readonly IIntentionManager intentionManager;
-    private readonly IUpdateBuilderFactory updateBuilderFactory;
-    private readonly IBlacklistDeletingRepository repository;
-    private readonly IInvokedEventProducer invokedEventProducer;
+    private readonly IValidator<OperateBlacklistLink> _validator;
+    private readonly IUserRepository _userRepository;
+    private readonly IGameReadingService _gameReadingService;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IUpdateBuilderFactory _updateBuilderFactory;
+    private readonly IBlacklistDeletingRepository _repository;
+    private readonly IInvokedEventProducer _invokedEventProducer;
 
     /// <inheritdoc />
     public BlacklistDeletingService(
@@ -36,31 +36,31 @@ internal class BlacklistDeletingService : IBlacklistDeletingService
         IBlacklistDeletingRepository repository,
         IInvokedEventProducer invokedEventProducer)
     {
-        this.validator = validator;
-        this.userRepository = userRepository;
-        this.gameReadingService = gameReadingService;
-        this.intentionManager = intentionManager;
-        this.updateBuilderFactory = updateBuilderFactory;
-        this.repository = repository;
-        this.invokedEventProducer = invokedEventProducer;
+        _validator = validator;
+        _userRepository = userRepository;
+        _gameReadingService = gameReadingService;
+        _intentionManager = intentionManager;
+        _updateBuilderFactory = updateBuilderFactory;
+        _repository = repository;
+        _invokedEventProducer = invokedEventProducer;
     }
-        
+
     /// <inheritdoc />
     public async Task Delete(OperateBlacklistLink operateBlacklistLink)
     {
-        await validator.ValidateAndThrowAsync(operateBlacklistLink);
-        var game = await gameReadingService.GetGame(operateBlacklistLink.GameId);
-        intentionManager.ThrowIfForbidden(GameIntention.Edit, game);
+        await _validator.ValidateAndThrowAsync(operateBlacklistLink);
+        var game = await _gameReadingService.GetGame(operateBlacklistLink.GameId);
+        _intentionManager.ThrowIfForbidden(GameIntention.Edit, game);
 
-        var (_, userId) = await userRepository.FindUserId(operateBlacklistLink.Login);
+        var (_, userId) = await _userRepository.FindUserId(operateBlacklistLink.Login);
         var blacklistedLink = game.BlacklistedUsers.FirstOrDefault(u => u.UserId == userId);
         if (blacklistedLink == default)
         {
             throw new HttpException(HttpStatusCode.Conflict, "User is not blacklisted");
         }
 
-        var updateBuilder = updateBuilderFactory.Create<BlackListLink>(blacklistedLink.LinkId).Delete();
-        await repository.Delete(updateBuilder);
-        await invokedEventProducer.Send(EventType.ChangedGame, game.Id);
+        var updateBuilder = _updateBuilderFactory.Create<BlackListLink>(blacklistedLink.LinkId).Delete();
+        await _repository.Delete(updateBuilder);
+        await _invokedEventProducer.Send(EventType.ChangedGame, game.Id);
     }
 }

@@ -6,7 +6,7 @@ using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Common.Dto;
 using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Fora;
+using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Services.Forum.Authorization;
 using DM.Services.Forum.BusinessProcesses.Topics.Reading;
@@ -19,15 +19,15 @@ namespace DM.Services.Forum.BusinessProcesses.Commentaries.Creating;
 /// <inheritdoc />
 internal class CommentaryCreatingService : ICommentaryCreatingService
 {
-    private readonly IValidator<CreateComment> validator;
-    private readonly ITopicReadingService topicReadingService;
-    private readonly IIntentionManager intentionManager;
-    private readonly IIdentityProvider identityProvider;
-    private readonly ICommentaryFactory commentaryFactory;
-    private readonly IUpdateBuilderFactory updateBuilderFactory;
-    private readonly ICommentaryCreatingRepository repository;
-    private readonly IUnreadCountersRepository countersRepository;
-    private readonly IInvokedEventProducer invokedEventProducer;
+    private readonly IValidator<CreateComment> _validator;
+    private readonly ITopicReadingService _topicReadingService;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly ICommentaryFactory _commentaryFactory;
+    private readonly IUpdateBuilderFactory _updateBuilderFactory;
+    private readonly ICommentaryCreatingRepository _repository;
+    private readonly IUnreadCountersRepository _countersRepository;
+    private readonly IInvokedEventProducer _invokedEventProducer;
 
     /// <inheritdoc />
     public CommentaryCreatingService(
@@ -41,31 +41,31 @@ internal class CommentaryCreatingService : ICommentaryCreatingService
         IUnreadCountersRepository countersRepository,
         IInvokedEventProducer invokedEventProducer)
     {
-        this.validator = validator;
-        this.topicReadingService = topicReadingService;
-        this.intentionManager = intentionManager;
-        this.commentaryFactory = commentaryFactory;
-        this.updateBuilderFactory = updateBuilderFactory;
-        this.repository = repository;
-        this.countersRepository = countersRepository;
-        this.invokedEventProducer = invokedEventProducer;
-        this.identityProvider = identityProvider;
+        _validator = validator;
+        _topicReadingService = topicReadingService;
+        _intentionManager = intentionManager;
+        _commentaryFactory = commentaryFactory;
+        _updateBuilderFactory = updateBuilderFactory;
+        _repository = repository;
+        _countersRepository = countersRepository;
+        _invokedEventProducer = invokedEventProducer;
+        _identityProvider = identityProvider;
     }
 
     /// <inheritdoc />
     public async Task<Comment> Create(CreateComment createComment)
     {
-        await validator.ValidateAndThrowAsync(createComment);
+        await _validator.ValidateAndThrowAsync(createComment);
 
-        var topic = await topicReadingService.GetTopic(createComment.EntityId);
-        intentionManager.ThrowIfForbidden(TopicIntention.CreateComment, topic);
+        var topic = await _topicReadingService.GetTopic(createComment.EntityId);
+        _intentionManager.ThrowIfForbidden(TopicIntention.CreateComment, topic);
 
-        var comment = commentaryFactory.Create(createComment, identityProvider.Current.User.UserId);
-        var topicUpdate = updateBuilderFactory.Create<ForumTopic>(topic.Id)
+        var comment = _commentaryFactory.Create(createComment, _identityProvider.Current.User.UserId);
+        var topicUpdate = _updateBuilderFactory.Create<ForumTopic>(topic.Id)
             .Field(t => t.LastCommentId, comment.CommentId);
-        var createdComment = await repository.Create(comment, topicUpdate);
-        await countersRepository.Increment(topic.Id, UnreadEntryType.Message);
-        await invokedEventProducer.Send(EventType.NewForumComment, comment.CommentId);
+        var createdComment = await _repository.Create(comment, topicUpdate);
+        await _countersRepository.Increment(topic.Id, UnreadEntryType.Message);
+        await _invokedEventProducer.Send(EventType.NewForumComment, comment.CommentId);
 
         return createdComment;
     }

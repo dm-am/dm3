@@ -15,13 +15,13 @@ namespace DM.Services.Gaming.BusinessProcesses.Claims.Deleting;
 /// <inheritdoc />
 internal class RoomClaimsDeletingService : IRoomClaimsDeletingService
 {
-    private readonly IRoomClaimsDeletingRepository repository;
-    private readonly IRoomClaimsReadingRepository readingRepository;
-    private readonly IRoomUpdatingRepository roomUpdatingRepository;
-    private readonly IIntentionManager intentionManager;
-    private readonly IUpdateBuilderFactory updateBuilderFactory;
-    private readonly IInvokedEventProducer producer;
-    private readonly IIdentityProvider identityProvider;
+    private readonly IRoomClaimsDeletingRepository _repository;
+    private readonly IRoomClaimsReadingRepository _readingRepository;
+    private readonly IRoomUpdatingRepository _roomUpdatingRepository;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IUpdateBuilderFactory _updateBuilderFactory;
+    private readonly IInvokedEventProducer _producer;
+    private readonly IIdentityProvider _identityProvider;
 
     /// <inheritdoc />
     public RoomClaimsDeletingService(
@@ -33,25 +33,25 @@ internal class RoomClaimsDeletingService : IRoomClaimsDeletingService
         IInvokedEventProducer producer,
         IIdentityProvider identityProvider)
     {
-        this.repository = repository;
-        this.readingRepository = readingRepository;
-        this.roomUpdatingRepository = roomUpdatingRepository;
-        this.intentionManager = intentionManager;
-        this.updateBuilderFactory = updateBuilderFactory;
-        this.producer = producer;
-        this.identityProvider = identityProvider;
+        _repository = repository;
+        _readingRepository = readingRepository;
+        _roomUpdatingRepository = roomUpdatingRepository;
+        _intentionManager = intentionManager;
+        _updateBuilderFactory = updateBuilderFactory;
+        _producer = producer;
+        _identityProvider = identityProvider;
     }
 
     /// <inheritdoc />
     public async Task Delete(Guid claimId)
     {
-        var currentUserId = identityProvider.Current.User.UserId;
-        var oldClaim = await readingRepository.GetClaim(claimId, currentUserId);
-        var room = await roomUpdatingRepository.GetRoom(oldClaim.RoomId, currentUserId);
-        intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
+        var currentUserId = _identityProvider.Current.User.UserId;
+        var oldClaim = await _readingRepository.GetClaim(claimId, currentUserId);
+        var room = await _roomUpdatingRepository.GetRoom(oldClaim.RoomId, currentUserId);
+        _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
 
-        var updateBuilder = updateBuilderFactory.Create<RoomClaim>(claimId).Delete();
-        await repository.Delete(updateBuilder);
-        await producer.Send(EventType.ChangedRoom, room.Id);
+        var updateBuilder = _updateBuilderFactory.Create<RoomClaim>(claimId).Delete();
+        await _repository.Delete(updateBuilder);
+        await _producer.Send(EventType.ChangedRoom, room.Id);
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Services.Authentication.Dto;
 using DM.Services.Authentication.Implementation.UserIdentity;
@@ -9,7 +10,7 @@ using DM.Services.Core.Dto.Enums;
 using DM.Services.Core.Exceptions;
 using DM.Services.DataAccess.BusinessObjects.Common;
 using DM.Services.Forum.BusinessProcesses.Common;
-using DM.Services.Forum.BusinessProcesses.Fora;
+using DM.Services.Forum.BusinessProcesses.Boards;
 using DM.Services.Forum.BusinessProcesses.Topics.Reading;
 using DM.Services.Forum.Dto.Output;
 using DM.Services.Forum.Tests.Dsl;
@@ -53,14 +54,14 @@ public class TopicReadingServiceShould : UnitTestBase
             .Returns(ForumAccessPolicy.SeniorModerator);
 
         topicRepository
-            .Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<ForumAccessPolicy>()))
+            .Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<ForumAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Topic) null);
 
         var err = await service.Awaiting(s => s.GetTopic(topicId))
             .Should().ThrowAsync<HttpException>();
         err.And.StatusCode.Should().Be(HttpStatusCode.Gone);
 
-        topicRepository.Verify(r => r.Get(topicId, ForumAccessPolicy.SeniorModerator), Times.Once);
+        topicRepository.Verify(r => r.Get(topicId, ForumAccessPolicy.SeniorModerator, It.IsAny<CancellationToken>()), Times.Once);
         topicRepository.VerifyNoOtherCalls();
     }
 
@@ -70,7 +71,7 @@ public class TopicReadingServiceShould : UnitTestBase
         var topicId = Guid.NewGuid();
         var expected = new Topic();
         topicRepository
-            .Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<ForumAccessPolicy>()))
+            .Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<ForumAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(expected);
         accessPolicyConverter
             .Setup(c => c.Convert(It.IsAny<UserRole>()))
@@ -80,7 +81,7 @@ public class TopicReadingServiceShould : UnitTestBase
         var actual = await service.GetTopic(topicId);
 
         actual.Should().Be(expected);
-        topicRepository.Verify(r => r.Get(topicId, ForumAccessPolicy.Player), Times.Once);
+        topicRepository.Verify(r => r.Get(topicId, ForumAccessPolicy.Player, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -90,12 +91,12 @@ public class TopicReadingServiceShould : UnitTestBase
         var userId = Guid.NewGuid();
         var expected = new Topic();
         topicRepository
-            .Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<ForumAccessPolicy>()))
+            .Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<ForumAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(expected);
         accessPolicyConverter
             .Setup(c => c.Convert(It.IsAny<UserRole>()))
             .Returns(ForumAccessPolicy.Player);
-        currentUserSetup.Returns(Create.User(userId).WithRole(UserRole.Player).Please);
+        currentUserSetup.Returns(Create.User(userId).WithRole(UserRole.RegularUser).Please);
         unreadCountersRepository
             .Setup(r => r.SelectByEntities(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<Guid[]>()))
             .ReturnsAsync(new Dictionary<Guid, int>{[topicId] = 22});

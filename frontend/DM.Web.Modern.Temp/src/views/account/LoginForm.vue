@@ -9,6 +9,7 @@ import LightboxTitle from "@/components/layout/LightboxTitle.vue";
 
 const emit = defineEmits<{
   (e: "success"): void;
+  (e: "cancel"): void;
 }>();
 
 const { defineInputBinds, handleSubmit, meta, errorBag } =
@@ -18,16 +19,12 @@ const { defineInputBinds, handleSubmit, meta, errorBag } =
       password: string().required(ValidationErrorCode.Empty),
     }),
   });
-const login = defineInputBinds("login", (state) => ({
-  validateOnInput: state.errors.length > 0,
-  validateOnBlur: true,
-  validateOnChange: true,
-}));
-const password = defineInputBinds("password", (state) => ({
-  validateOnInput: state.errors.length > 0,
-  validateOnBlur: true,
-  validateOnChange: true,
-}));
+const login = defineInputBinds("login", {
+  validateOnInput: true,
+});
+const password = defineInputBinds("password", {
+  validateOnInput: true,
+});
 const rememberMe = ref(true);
 
 const loading = ref(false);
@@ -56,6 +53,7 @@ const submit = handleSubmit(async (values, { setErrors }) => {
 
     <the-form
       @submit="submit"
+      @cancel="emit('cancel')"
       :valid="meta.valid"
       :loading="loading"
       action="Войти"

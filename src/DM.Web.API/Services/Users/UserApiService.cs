@@ -31,7 +31,7 @@ internal class UserApiService : IUserApiService
     /// <inheritdoc />
     public async Task<ListEnvelope<User>> GetUsers(UsersQuery query)
     {
-        var (users, paging) = await readingService.Get(query, query.Inactive);
+        var (users, paging) = await readingService.Get(query, query.Inactive, query.Search);
         return new ListEnvelope<User>(users.Select(mapper.Map<User>), new Paging(paging));
     }
 

@@ -14,27 +14,27 @@ namespace DM.Services.Gaming.BusinessProcesses.Characters.Creating;
 /// <inheritdoc />
 internal class CharacterCreatingRepository : ICharacterCreatingRepository
 {
-    private readonly DmDbContext dbContext;
-    private readonly IMapper mapper;
+    private readonly DmDbContext _dbContext;
+    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public CharacterCreatingRepository(
         DmDbContext dbContext,
         IMapper mapper)
     {
-        this.dbContext = dbContext;
-        this.mapper = mapper;
+        _dbContext = dbContext;
+        _mapper = mapper;
     }
-        
+
     /// <inheritdoc />
     public async Task<Character> Create(DbCharacter character, IEnumerable<CharacterAttribute> attributes)
     {
-        dbContext.Characters.Add(character);
-        dbContext.CharacterAttributes.AddRange(attributes);
-        await dbContext.SaveChangesAsync();
-        return await dbContext.Characters
+        _dbContext.Characters.Add(character);
+        _dbContext.CharacterAttributes.AddRange(attributes);
+        await _dbContext.SaveChangesAsync();
+        return await _dbContext.Characters
             .Where(c => c.CharacterId == character.CharacterId)
-            .ProjectTo<Character>(mapper.ConfigurationProvider)
+            .ProjectTo<Character>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }
 }

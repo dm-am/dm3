@@ -16,16 +16,16 @@ namespace DM.Services.Search.Repositories;
 /// <inheritdoc />
 internal class SearchEngineRepository : ISearchEngineRepository
 {
-    private readonly IOpenSearchClient client;
-    private readonly ILogger<SearchEngineRepository> logger;
+    private readonly IOpenSearchClient _client;
+    private readonly ILogger<SearchEngineRepository> _logger;
 
     /// <inheritdoc />
     public SearchEngineRepository(
         IOpenSearchClient client,
         ILogger<SearchEngineRepository> logger)
     {
-        this.client = client;
-        this.logger = logger;
+        _client = client;
+        _logger = logger;
     }
 
     private static readonly Fuzziness SearchFuzziness = Fuzziness.EditDistance(1);
@@ -34,7 +34,7 @@ internal class SearchEngineRepository : ISearchEngineRepository
     public async Task<(IEnumerable<FoundEntity> entities, int totalCount)> Search(string query,
         IEnumerable<SearchEntityType> types, PagingData pagingData, IEnumerable<UserRole> roles, Guid userId)
     {
-        var searchResponse = await client.SearchAsync<SearchEntity>(s => s
+        var searchResponse = await _client.SearchAsync<SearchEntity>(s => s
             .Source(sf => sf.Excludes(e => e.Fields(
                 f => f.AuthorizedRoles, f => f.AuthorizedUsers, f => f.UnauthorizedUsers)))
             .Query(q =>
@@ -81,7 +81,7 @@ internal class SearchEngineRepository : ISearchEngineRepository
 
         if (searchResponse is not { IsValid: true })
         {
-            logger.LogError(searchResponse.OriginalException,
+            _logger.LogError(searchResponse.OriginalException,
                 "The search for query {SearchQuery} has resulted in error", query);
             throw new HttpException(HttpStatusCode.InternalServerError, "Search engine error!");
         }

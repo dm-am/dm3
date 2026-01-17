@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Services.Authentication.Dto;
 using DM.Services.Authentication.Implementation.UserIdentity;
@@ -10,7 +11,7 @@ using DM.Services.Core.Dto.Enums;
 using DM.Services.Core.Exceptions;
 using DM.Services.DataAccess.BusinessObjects.Common;
 using DM.Services.Forum.BusinessProcesses.Commentaries.Reading;
-using DM.Services.Forum.BusinessProcesses.Fora;
+using DM.Services.Forum.BusinessProcesses.Boards;
 using DM.Services.Forum.BusinessProcesses.Topics.Reading;
 using DM.Services.Forum.Dto.Output;
 using DM.Services.Forum.Tests.Dsl;
@@ -37,7 +38,7 @@ public class CommentaryReadingServiceShould : UnitTestBase
     public CommentaryReadingServiceShould()
     {
         var topicReadingService = Mock<ITopicReadingService>();
-        readingTopicSetup = topicReadingService.Setup(r => r.GetTopic(It.IsAny<Guid>()));
+        readingTopicSetup = topicReadingService.Setup(r => r.GetTopic(It.IsAny<Guid>(), It.IsAny<CancellationToken>()));
 
         var identity = Mock<IIdentity>();
         identity.Setup(i => i.Settings).Returns(new UserSettings

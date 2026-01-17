@@ -16,24 +16,24 @@ namespace DM.Services.Notifications.Consumer;
 
 internal class NotificationConsumer : BackgroundService
 {
-    private readonly ILogger<NotificationConsumer> logger;
-    private readonly IConsumerBuilder consumerBuilder;
-    private readonly RetryPolicy consumeRetryPolicy;
+    private readonly ILogger<NotificationConsumer> _logger;
+    private readonly IConsumerBuilder _consumerBuilder;
+    private readonly RetryPolicy _consumeRetryPolicy;
 
     public NotificationConsumer(
         ILogger<NotificationConsumer> logger,
         IConsumerBuilder consumerBuilder)
     {
-        this.logger = logger;
-        this.consumerBuilder = consumerBuilder;
-        consumeRetryPolicy = Policy.Handle<Exception>().WaitAndRetry(5,
+        _logger = logger;
+        _consumerBuilder = consumerBuilder;
+        _consumeRetryPolicy = Policy.Handle<Exception>().WaitAndRetry(5,
             attempt => TimeSpan.FromSeconds(1 << attempt),
-            (exception, _) => logger.LogWarning(exception, "Could not subscribe to the queue"));
+            (exception, _) => _logger.LogWarning(exception, "Could not subscribe to the queue"));
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogDebug("[🚴] Starting notifications consumer");
+        _logger.LogDebug("[🚴] Starting notifications consumer");
 
         var parameters = new RabbitConsumerParameters("dm.notifications", "dm.notifications", ProcessingOrder.Unmanaged)
         {
@@ -52,10 +52,10 @@ internal class NotificationConsumer : BackgroundService
                 EventType.LikedTopic
             }.ToRoutingKeys(),
         };
-        var consumer = consumerBuilder.BuildRabbit<InvokedEvent, NotificationProcessor>(parameters);
-        consumeRetryPolicy.Execute(consumer.Subscribe);
+        var consumer = _consumerBuilder.BuildRabbit<InvokedEvent, NotificationProcessor>(parameters);
+        _consumeRetryPolicy.Execute(consumer.Subscribe);
 
-        logger.LogDebug("[👂] Notifications consumer is listening to {QueueName} queue", parameters.QueueName);
+        _logger.LogDebug("[👂] Notifications consumer is listening to {QueueName} queue", parameters.QueueName);
         return Task.CompletedTask;
     }
 }

@@ -27,7 +27,7 @@ public class UserSettings
     /// <summary>
     /// Message that user's newbies will receive once they are connected
     /// </summary>
-    public string NannyGreetingsMessage { get; set; }
+    public string MentorGreetingsMessage { get; set; }
 
     /// <summary>
     /// Website color scheme

@@ -55,7 +55,7 @@ internal class UserUpdatingService : IUserUpdatingService
 
         var settingsUpdate = updateBuilderFactory.Create<UserSettings>(user.UserId)
             .MaybeField(u => u.ColorSchema, updateUser.Settings?.ColorSchema)
-            .MaybeField(u => u.NannyGreetingsMessage, updateUser.Settings?.NannyGreetingsMessage)
+            .MaybeField(u => u.MentorGreetingsMessage, updateUser.Settings?.MentorGreetingsMessage)
             .MaybeField(u => u.Paging.CommentsPerPage, updateUser.Settings?.Paging?.CommentsPerPage)
             .MaybeField(u => u.Paging.TopicsPerPage, updateUser.Settings?.Paging?.TopicsPerPage)
             .MaybeField(u => u.Paging.MessagesPerPage, updateUser.Settings?.Paging?.MessagesPerPage)

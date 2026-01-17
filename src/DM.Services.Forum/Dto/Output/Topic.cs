@@ -34,6 +34,11 @@ public class Topic : ILikable
     public DateTimeOffset CreateDate { get; set; }
 
     /// <summary>
+    /// Last update moment
+    /// </summary>
+    public DateTimeOffset? LastUpdateDate { get; set; }
+
+    /// <summary>
     /// Author
     /// </summary>
     public GeneralUser Author { get; set; }

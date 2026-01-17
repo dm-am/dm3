@@ -12,7 +12,6 @@ import type {
 
 export const useUserStore = defineStore("root", () => {
   const user = ref<User | null>(null);
-  const unreadConversations = ref(0);
   const userKey = "user";
 
   function updateUser(newUser: User | null) {
@@ -21,7 +20,7 @@ export const useUserStore = defineStore("root", () => {
     user.value = newUser;
     if (newUser === null) localStorage.removeItem(userKey);
     else localStorage.setItem(userKey, JSON.stringify(newUser));
-    updateTheme(newUser?.settings?.colorSchema ?? ColorSchema.Modern);
+    updateTheme(newUser?.settings?.colorSchema ?? ColorSchema.Light);
   }
 
   async function register(credentials: RegisterCredentials) {
@@ -51,7 +50,6 @@ export const useUserStore = defineStore("root", () => {
 
     const serializedUser = localStorage.getItem(userKey);
     if (serializedUser) {
-      console.debug("User is extracted from cache, verifying...");
       const storedUser = JSON.parse(serializedUser) as User;
       updateUser(storedUser);
     }
@@ -60,5 +58,5 @@ export const useUserStore = defineStore("root", () => {
     updateUser(data?.resource ?? null);
   }
 
-  return { user, unreadConversations, register, signIn, signOut, fetchUser };
+  return { user, register, signIn, signOut, fetchUser };
 });

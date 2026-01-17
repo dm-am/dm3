@@ -56,6 +56,14 @@ public interface IMessagingApiService
     Task<Envelope<Message>> GetMessage(Guid messageId);
 
     /// <summary>
+    /// Update existing message
+    /// </summary>
+    /// <param name="messageId">Message identifier</param>
+    /// <param name="message">Message data</param>
+    /// <returns></returns>
+    Task<Envelope<Message>> UpdateMessage(Guid messageId, Message message);
+
+    /// <summary>
     /// Delete single message
     /// </summary>
     /// <param name="messageId">Message identifier</param>
@@ -68,4 +76,18 @@ public interface IMessagingApiService
     /// <param name="conversationId">Conversation identifier</param>
     /// <returns></returns>
     Task MarkAsRead(Guid conversationId);
+
+    /// <summary>
+    /// Like a message
+    /// </summary>
+    /// <param name="messageId">Message identifier</param>
+    /// <returns></returns>
+    Task<Envelope<Message>> LikeMessage(Guid messageId);
+
+    /// <summary>
+    /// Unlike a message
+    /// </summary>
+    /// <param name="messageId">Message identifier</param>
+    /// <returns></returns>
+    Task UnlikeMessage(Guid messageId);
 }

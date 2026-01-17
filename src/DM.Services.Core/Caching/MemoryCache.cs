@@ -7,23 +7,23 @@ namespace DM.Services.Core.Caching;
 /// <inheritdoc />
 internal class MemoryCache : ICache
 {
-    private readonly IMemoryCache memoryCache;
+    private readonly IMemoryCache _memoryCache;
 
     /// <inheritdoc />
     public MemoryCache(
         IMemoryCache memoryCache)
     {
-        this.memoryCache = memoryCache;
+        _memoryCache = memoryCache;
     }
 
     /// <inheritdoc />
     public Task<TEntry> GetOrCreate<TEntry>(object key, Func<Task<TEntry>> create) =>
-        memoryCache.GetOrCreateAsync(key, _ => create());
+        _memoryCache.GetOrCreateAsync(key, _ => create());
 
     /// <inheritdoc />
     public Task Invalidate(object key)
     {
-        memoryCache.Remove(key);
+        _memoryCache.Remove(key);
         return Task.CompletedTask;
     }
 }

@@ -11,16 +11,16 @@ namespace DM.Web.API.BbRendering;
 /// <inheritdoc />
 internal class BbConverterFactory : JsonConverterFactory
 {
-    private readonly IHttpContextAccessor httpContextAccessor;
-    private readonly IBbParserProvider bbParserProvider;
+    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IBbParserProvider _bbParserProvider;
 
     /// <inheritdoc />
     public BbConverterFactory(
         IHttpContextAccessor httpContextAccessor,
         IBbParserProvider bbParserProvider)
     {
-        this.httpContextAccessor = httpContextAccessor;
-        this.bbParserProvider = bbParserProvider;
+        _httpContextAccessor = httpContextAccessor;
+        _bbParserProvider = bbParserProvider;
     }
 
     /// <inheritdoc />
@@ -32,7 +32,7 @@ internal class BbConverterFactory : JsonConverterFactory
         var converter = (JsonConverter) Activator.CreateInstance(
             typeof(BbConverter<>).MakeGenericType(typeToConvert),
             BindingFlags.Instance | BindingFlags.Public,
-            null, new object[] {httpContextAccessor, bbParserProvider}, null);
+            null, new object[] {_httpContextAccessor, _bbParserProvider}, null);
         return converter;
     }
 

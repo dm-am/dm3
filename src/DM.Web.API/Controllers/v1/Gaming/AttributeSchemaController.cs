@@ -84,14 +84,14 @@ public class AttributeSchemaController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to update this attribute schema</response>
     /// <response code="410">Schema not found</response>
-    [HttpPatch("{id}", Name = nameof(PutSchema))]
+    [HttpPatch("{id}", Name = nameof(PatchSchema))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<AttributeSchema>), 200)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PutSchema(Guid id, [FromBody] AttributeSchema schema) =>
+    public async Task<IActionResult> PatchSchema(Guid id, [FromBody] AttributeSchema schema) =>
         Ok(await schemaApiService.Update(id, schema));
 
     /// <summary>

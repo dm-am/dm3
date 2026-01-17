@@ -15,10 +15,10 @@ namespace DM.Services.Common.BusinessProcesses.Likes;
 /// </summary>
 public abstract class LikeServiceBase
 {
-    private readonly IIdentityProvider identityProvider;
-    private readonly ILikeFactory likeFactory;
-    private readonly ILikeRepository likeRepository;
-    private readonly IInvokedEventProducer producer;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly ILikeFactory _likeFactory;
+    private readonly ILikeRepository _likeRepository;
+    private readonly IInvokedEventProducer _producer;
 
     /// <inheritdoc />
     protected LikeServiceBase(
@@ -27,10 +27,10 @@ public abstract class LikeServiceBase
         ILikeRepository likeRepository,
         IInvokedEventProducer producer)
     {
-        this.identityProvider = identityProvider;
-        this.likeFactory = likeFactory;
-        this.likeRepository = likeRepository;
-        this.producer = producer;
+        _identityProvider = identityProvider;
+        _likeFactory = likeFactory;
+        _likeRepository = likeRepository;
+        _producer = producer;
     }
         
     /// <summary>
@@ -41,16 +41,16 @@ public abstract class LikeServiceBase
     /// <returns>Person who liked</returns>
     protected async Task<GeneralUser> Like(ILikable entity, EventType eventType)
     {
-        var currentUser = identityProvider.Current.User;
+        var currentUser = _identityProvider.Current.User;
         if (entity.Likes.Any(l => l.UserId == currentUser.UserId))
         {
             throw new HttpException(HttpStatusCode.Conflict,
                 $"User already liked this {entity.GetType().Name.ToLower()}");
         }
 
-        var like = likeFactory.Create(entity.Id, currentUser.UserId);
-        await likeRepository.Add(like);
-        await producer.Send(eventType, like.LikeId);
+        var like = _likeFactory.Create(entity.Id, currentUser.UserId);
+        await _likeRepository.Add(like);
+        await _producer.Send(eventType, like.LikeId);
         return currentUser;
     }
 
@@ -61,13 +61,13 @@ public abstract class LikeServiceBase
     /// <returns></returns>
     protected async Task Dislike(ILikable entity)
     {
-        var currentUser = identityProvider.Current.User;
+        var currentUser = _identityProvider.Current.User;
         if (entity.Likes.All(l => l.UserId != currentUser.UserId))
         {
             throw new HttpException(HttpStatusCode.Conflict,
                 $"User never liked this {entity.GetType().Name.ToLower()} in the first place");
         }
 
-        await likeRepository.Delete(entity.Id, currentUser.UserId);
+        await _likeRepository.Delete(entity.Id, currentUser.UserId);
     }
 }

@@ -18,6 +18,7 @@ internal class MessagingProfile : Profile
                 .Select(l => l.User)));
 
         CreateMap<DbMessage, Message>()
-            .ForMember(d => d.Id, s => s.MapFrom(m => m.MessageId));
+            .ForMember(d => d.Id, s => s.MapFrom(m => m.MessageId))
+            .ForMember(d => d.Likes, s => s.MapFrom(m => m.Likes.Select(l => l.User)));
     }
 }

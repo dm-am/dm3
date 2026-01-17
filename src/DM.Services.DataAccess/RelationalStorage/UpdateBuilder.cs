@@ -15,47 +15,47 @@ namespace DM.Services.DataAccess.RelationalStorage;
 internal class UpdateBuilder<TEntity> : IUpdateBuilder<TEntity>
     where TEntity : class, new()
 {
-    private readonly Guid id;
-    private readonly IList<Action<TEntity, DbContext>> efUpdateActions;
-    private readonly IList<Func<UpdateDefinition<TEntity>>> mongoUpdateActions;
-    private bool toDelete;
+    private readonly Guid _id;
+    private readonly IList<Action<TEntity, DbContext>> _efUpdateActions;
+    private readonly IList<Func<UpdateDefinition<TEntity>>> _mongoUpdateActions;
+    private bool _toDelete;
 
     /// <inheritdoc />
     public UpdateBuilder(Guid id)
     {
-        this.id = id;
-        efUpdateActions = new List<Action<TEntity, DbContext>>();
-        mongoUpdateActions = new List<Func<UpdateDefinition<TEntity>>>();
+        _id = id;
+        _efUpdateActions = new List<Action<TEntity, DbContext>>();
+        _mongoUpdateActions = new List<Func<UpdateDefinition<TEntity>>>();
     }
 
     /// <inheritdoc />
     public IUpdateBuilder<TEntity> Field<TValue>(Expression<Func<TEntity, TValue>> field, TValue value)
     {
-        if (toDelete)
+        if (_toDelete)
         {
             throw new UpdateBuilderException("Builder is configured to delete entity, you cannot modify it");
         }
 
-        efUpdateActions.Add((entity, dbContext) =>
+        _efUpdateActions.Add((entity, dbContext) =>
         {
             SetPropertyValue(entity, field, value);
             dbContext.Entry(entity).Property(field).IsModified = true;
         });
-        mongoUpdateActions.Add(() => new UpdateDefinitionBuilder<TEntity>().Set(field, value));
+        _mongoUpdateActions.Add(() => new UpdateDefinitionBuilder<TEntity>().Set(field, value));
         return this;
     }
 
     /// <inheritdoc />
-    public bool HasChanges() => toDelete || efUpdateActions.Any();
+    public bool HasChanges() => _toDelete || _efUpdateActions.Any();
 
     public IUpdateBuilder<TEntity> Delete()
     {
-        if (efUpdateActions.Any())
+        if (_efUpdateActions.Any())
         {
             throw new UpdateBuilderException("Builder is configured to update entity, you cannot delete it");
         }
 
-        toDelete = true;
+        _toDelete = true;
         return this;
     }
 
@@ -69,33 +69,33 @@ internal class UpdateBuilder<TEntity> : IUpdateBuilder<TEntity>
         {
             throw new UpdateBuilderException($"No key property was found for entity {type.Name}");
         }
-        var attachedEntry = dbContext.Set<TEntity>().Local.FirstOrDefault(entry => id.Equals(primaryKeyProperty.GetValue(entry)));
+        var attachedEntry = dbContext.Set<TEntity>().Local.FirstOrDefault(entry => _id.Equals(primaryKeyProperty.GetValue(entry)));
         if (attachedEntry != null)
         {
             dbContext.Entry(attachedEntry).State = EntityState.Detached;
         }
 
-        primaryKeyProperty.SetValue(entity, id);
+        primaryKeyProperty.SetValue(entity, _id);
 
-        if (toDelete)
+        if (_toDelete)
         {
             dbContext.Set<TEntity>().Attach(entity);
             dbContext.Entry(entity).State = EntityState.Deleted;
-            return id;
+            return _id;
         }
 
-        if (!efUpdateActions.Any())
+        if (!_efUpdateActions.Any())
         {
-            return id;
+            return _id;
         }
 
         dbContext.Set<TEntity>().Attach(entity);
-        foreach (var updateAction in efUpdateActions)
+        foreach (var updateAction in _efUpdateActions)
         {
             updateAction.Invoke(entity, dbContext);
         }
 
-        return id;
+        return _id;
     }
 
     public async Task<Guid> UpdateFor(DmMongoClient mongoClient, bool upsert)
@@ -108,19 +108,19 @@ internal class UpdateBuilder<TEntity> : IUpdateBuilder<TEntity>
 
         var primaryKeyProperty = GetPrimaryKeyProperty();
 
-        if (!mongoUpdateActions.Any())
+        if (!_mongoUpdateActions.Any())
         {
-            return id;
+            return _id;
         }
 
         var updateDefinition = new UpdateDefinitionBuilder<TEntity>()
-            .Combine(mongoUpdateActions.Select(a => a.Invoke()));
+            .Combine(_mongoUpdateActions.Select(a => a.Invoke()));
         var filterDefinition = new FilterDefinitionBuilder<TEntity>()
-            .Eq(primaryKeyProperty.Name, id);
+            .Eq(primaryKeyProperty.Name, _id);
         await mongoClient.GetCollection<TEntity>()
             .UpdateOneAsync(filterDefinition, updateDefinition, new UpdateOptions {IsUpsert = upsert});
 
-        return id;
+        return _id;
     }
 
     private static PropertyInfo GetPrimaryKeyProperty()

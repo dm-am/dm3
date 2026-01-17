@@ -10,6 +10,11 @@ namespace DM.Web.API.Dto.Users;
 public class User
 {
     /// <summary>
+    /// User identifier
+    /// </summary>
+    public Guid Id { get; set; }
+
+    /// <summary>
     /// Login
     /// </summary>
     public string Login { get; set; }
@@ -18,6 +23,26 @@ public class User
     /// Roles
     /// </summary>
     public IEnumerable<UserRole> Roles { get; set; }
+
+    /// <summary>
+    /// Honorary goblin status
+    /// </summary>
+    public bool IsHonorary { get; set; }
+
+    /// <summary>
+    /// Newbie status (less than 100 posts)
+    /// </summary>
+    public bool IsNewbie { get; set; }
+
+    /// <summary>
+    /// User gender
+    /// </summary>
+    public Gender Gender { get; set; }
+
+    /// <summary>
+    /// Birthday date (day and month only)
+    /// </summary>
+    public DateOnly? BirthdayDate { get; set; }
 
     /// <summary>
     /// Profile picture URL M-size
@@ -30,34 +55,24 @@ public class User
     public string SmallPictureUrl { get; set; }
 
     /// <summary>
-    /// User defined status
-    /// </summary>
-    public string Status { get; set; }
-
-    /// <summary>
     /// Rating
     /// </summary>
     public Rating Rating { get; set; }
 
     /// <summary>
-    /// Last seen online moment
+    /// Last seen online moment (UTC)
     /// </summary>
-    public DateTimeOffset? Online { get; set; }
+    public DateTimeOffset? OnlineUtc { get; set; }
 
     /// <summary>
-    /// User real name
+    /// User registration moment (UTC)
     /// </summary>
-    public string Name { get; set; }
+    public DateTimeOffset? RegistrationDateUtc { get; set; }
 
     /// <summary>
-    /// User real location
+    /// User access policy (ban status)
     /// </summary>
-    public string Location { get; set; }
-
-    /// <summary>
-    /// User registration moment
-    /// </summary>
-    public DateTimeOffset? Registration { get; set; }
+    public AccessPolicy AccessPolicy { get; set; }
 }
 
 /// <summary>
@@ -68,15 +83,15 @@ public class Rating
     /// <summary>
     /// Rating participation flag
     /// </summary>
-    public bool Enabled { get; set; }
+    public bool IsEnabled { get; set; }
 
     /// <summary>
-    /// Quality rating
+    /// Total quality rating
     /// </summary>
-    public int Quality { get; set; }
+    public int TotalRating { get; set; }
 
     /// <summary>
-    /// Quantity rating
+    /// Total posts count
     /// </summary>
-    public int Quantity { get; set; }
+    public int TotalPosts { get; set; }
 }

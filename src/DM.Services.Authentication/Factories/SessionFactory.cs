@@ -6,25 +6,25 @@ namespace DM.Services.Authentication.Factories;
 /// <inheritdoc />
 internal class SessionFactory : ISessionFactory
 {
-    private readonly IGuidFactory guidFactory;
-    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public SessionFactory(
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider)
     {
-        this.guidFactory = guidFactory;
-        this.dateTimeProvider = dateTimeProvider;
+        _guidFactory = guidFactory;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
     public Session Create(bool persistent, bool invisible)
     {
-        var rightNow = dateTimeProvider.Now.UtcDateTime;
+        var rightNow = _dateTimeProvider.Now.UtcDateTime;
         return new Session
         {
-            Id = guidFactory.Create(),
+            Id = _guidFactory.Create(),
             Persistent = persistent,
             Invisible = invisible,
             ExpirationDate = persistent

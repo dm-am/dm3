@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using DM.Services.DataAccess.BusinessObjects.Administration;
+using DM.Services.DataAccess.BusinessObjects.DataContracts;
 using DM.Services.DataAccess.BusinessObjects.Users;
 
 namespace DM.Services.DataAccess.BusinessObjects.Common;
@@ -10,7 +11,7 @@ namespace DM.Services.DataAccess.BusinessObjects.Common;
 /// <summary>
 /// DAL model for general chat message
 /// </summary>
-public class ChatMessage
+public class ChatMessage : IRemovable
 {
     /// <summary>
     /// Identifier
@@ -24,14 +25,22 @@ public class ChatMessage
     public Guid UserId { get; set; }
 
     /// <summary>
-    /// Creation moment in ticks
+    /// Creation moment
     /// </summary>
     public DateTimeOffset CreateDate { get; set; }
+
+    /// <summary>
+    /// Last modification moment
+    /// </summary>
+    public DateTimeOffset? LastUpdateDate { get; set; }
 
     /// <summary>
     /// Text
     /// </summary>
     public string Text { get; set; }
+
+    /// <inheritdoc />
+    public bool IsRemoved { get; set; }
 
     /// <summary>
     /// Message author
@@ -44,4 +53,10 @@ public class ChatMessage
     /// </summary>
     [InverseProperty(nameof(Warning.ChatMessage))]
     public virtual ICollection<Warning> Warnings { get; set; }
+
+    /// <summary>
+    /// Likes
+    /// </summary>
+    [InverseProperty(nameof(Like.ChatMessage))]
+    public virtual ICollection<Like> ChatMessageLikes { get; set; }
 }

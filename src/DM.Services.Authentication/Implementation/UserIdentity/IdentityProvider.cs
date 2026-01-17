@@ -8,16 +8,16 @@ namespace DM.Services.Authentication.Implementation.UserIdentity;
 /// </summary>
 internal class IdentityProvider : IIdentitySetter, IIdentityProvider
 {
-    private IIdentity identity;
+    private IIdentity _identity;
 
     /// <inheritdoc cref="IdentityProvider" />
     public IIdentity Current
     {
-        get => identity;
+        get => _identity;
         set
         {
-            identity = value;
-            LogContext.PushProperty("User", identity.User.Login);
+            _identity = value;
+            LogContext.PushProperty("User", _identity.User.Login);
         }
     }
 

@@ -12,8 +12,8 @@ internal class CommentProfile : Profile
     public CommentProfile()
     {
         CreateMap<DM.Services.Common.Dto.Comment, Comment>()
-            .ForMember(d => d.Created, s => s.MapFrom(c => c.CreateDate))
-            .ForMember(d => d.Updated, s => s.MapFrom(c => c.LastUpdateDate));
+            .ForMember(d => d.CreatedUtc, s => s.MapFrom(c => c.CreateDate))
+            .ForMember(d => d.UpdatedUtc, s => s.MapFrom(c => c.LastUpdateDate));
 
         CreateMap<Comment, CreateComment>();
         CreateMap<Comment, UpdateComment>();

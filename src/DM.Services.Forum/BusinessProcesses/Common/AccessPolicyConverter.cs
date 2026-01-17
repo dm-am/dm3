@@ -14,24 +14,25 @@ internal class AccessPolicyConverter : IAccessPolicyConverter
         }
 
         var result = ForumAccessPolicy.Guest | ForumAccessPolicy.Player;
-        if (role.HasFlag(UserRole.Administrator))
+
+        if (role >= UserRole.Admin)
         {
-            result = result | ForumAccessPolicy.Administrator;
+            result |= ForumAccessPolicy.Administrator;
         }
 
-        if (role.HasFlag(UserRole.SeniorModerator))
+        if (role >= UserRole.SeniorModerator)
         {
-            result = result | ForumAccessPolicy.SeniorModerator;
+            result |= ForumAccessPolicy.SeniorModerator;
         }
 
-        if (role.HasFlag(UserRole.RegularModerator))
+        if (role >= UserRole.Moderator)
         {
-            result = result | ForumAccessPolicy.RegularModerator;
+            result |= ForumAccessPolicy.RegularModerator;
         }
 
-        if (role.HasFlag(UserRole.NannyModerator))
+        if (role >= UserRole.Mentor)
         {
-            result = result | ForumAccessPolicy.NannyModerator;
+            result |= ForumAccessPolicy.MentorModerator;
         }
 
         return result;

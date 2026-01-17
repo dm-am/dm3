@@ -61,7 +61,7 @@ internal class GameReadingRepository : IGameReadingRepository
             .Where(g => g.Characters.Any(c =>
                             !c.IsRemoved && c.Status == CharacterStatus.Active && c.UserId == userId) ||
                         g.Readers.Any(r => r.UserId == userId) ||
-                        g.MasterId == userId || g.AssistantId == userId || g.NannyId == userId)
+                        g.MasterId == userId || g.AssistantId == userId || g.MentorId == userId)
             .ProjectTo<Game>(mapper.ConfigurationProvider)
             .ToArrayAsync();
     }

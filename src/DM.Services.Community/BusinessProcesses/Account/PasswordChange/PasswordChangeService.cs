@@ -12,12 +12,12 @@ namespace DM.Services.Community.BusinessProcesses.Account.PasswordChange;
 /// <inheritdoc />
 internal class PasswordChangeService : IPasswordChangeService
 {
-    private readonly IValidator<UserPasswordChange> validator;
-    private readonly IPasswordChangeRepository repository;
-    private readonly IAuthenticationService authenticationService;
-    private readonly IIdentityProvider identityProvider;
-    private readonly ISecurityManager securityManager;
-    private readonly IUpdateBuilderFactory updateBuilderFactory;
+    private readonly IValidator<UserPasswordChange> _validator;
+    private readonly IPasswordChangeRepository _repository;
+    private readonly IAuthenticationService _authenticationService;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly ISecurityManager _securityManager;
+    private readonly IUpdateBuilderFactory _updateBuilderFactory;
 
     /// <inheritdoc />
     public PasswordChangeService(
@@ -28,33 +28,33 @@ internal class PasswordChangeService : IPasswordChangeService
         IAuthenticationService authenticationService,
         IIdentityProvider identityProvider)
     {
-        this.validator = validator;
-        this.repository = repository;
-        this.authenticationService = authenticationService;
-        this.identityProvider = identityProvider;
-        this.securityManager = securityManager;
-        this.updateBuilderFactory = updateBuilderFactory;
+        _validator = validator;
+        _repository = repository;
+        _authenticationService = authenticationService;
+        _identityProvider = identityProvider;
+        _securityManager = securityManager;
+        _updateBuilderFactory = updateBuilderFactory;
     }
 
     /// <inheritdoc />
     public async Task<GeneralUser> Change(UserPasswordChange passwordChange)
     {
-        await validator.ValidateAndThrowAsync(passwordChange);
+        await _validator.ValidateAndThrowAsync(passwordChange);
         var user = passwordChange.Token.HasValue
-            ? await repository.FindUser(passwordChange.Token.Value)
-            : identityProvider.Current.User;
+            ? await _repository.FindUser(passwordChange.Token.Value)
+            : _identityProvider.Current.User;
 
-        var (hash, salt) = securityManager.GeneratePassword(passwordChange.NewPassword);
-        var userUpdate = updateBuilderFactory.Create<User>(user.UserId)
+        var (hash, salt) = _securityManager.GeneratePassword(passwordChange.NewPassword);
+        var userUpdate = _updateBuilderFactory.Create<User>(user.UserId)
             .Field(u => u.PasswordHash, hash)
             .Field(u => u.Salt, salt);
         var tokenUpdate = passwordChange.Token.HasValue
-            ? updateBuilderFactory.Create<Token>(passwordChange.Token.Value)
+            ? _updateBuilderFactory.Create<Token>(passwordChange.Token.Value)
                 .Field(t => t.IsRemoved, true)
             : null;
 
-        await repository.UpdatePassword(userUpdate, tokenUpdate);
-        await authenticationService.LogoutElsewhere();
+        await _repository.UpdatePassword(userUpdate, tokenUpdate);
+        await _authenticationService.LogoutElsewhere();
 
         return user;
     }

@@ -38,5 +38,5 @@ public class Vote
     /// <summary>
     /// Creation moment
     /// </summary>
-    public DateTimeOffset Created { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 }

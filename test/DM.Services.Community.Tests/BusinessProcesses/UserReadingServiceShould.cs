@@ -92,16 +92,16 @@ public class UserReadingServiceShould : UnitTestBase
     {
         var expected = new GeneralUser[0];
         readingRepository
-            .Setup(r => r.CountUsers(It.IsAny<bool>()))
+            .Setup(r => r.CountUsers(It.IsAny<bool>(), It.IsAny<string>()))
             .ReturnsAsync(10);
         readingRepository
-            .Setup(r => r.GetUsers(It.IsAny<PagingData>(), It.IsAny<bool>()))
+            .Setup(r => r.GetUsers(It.IsAny<PagingData>(), It.IsAny<bool>(), It.IsAny<string>()))
             .ReturnsAsync(expected);
         currentUserSettingsSetup.Returns(new UserSettings{Paging = new PagingSettings{EntitiesPerPage = 10}});
 
         var (actual, _) = await service.Get(new PagingQuery(), true);
         actual.Should().BeSameAs(expected);
-        readingRepository.Verify(r => r.CountUsers(true), Times.Once);
-        readingRepository.Verify(r => r.GetUsers(It.IsAny<PagingData>(), true));
+        readingRepository.Verify(r => r.CountUsers(true, null), Times.Once);
+        readingRepository.Verify(r => r.GetUsers(It.IsAny<PagingData>(), true, null));
     }
 }

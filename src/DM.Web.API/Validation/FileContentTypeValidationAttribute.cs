@@ -8,12 +8,12 @@ namespace DM.Web.API.Validation;
 /// <inheritdoc />
 internal class FileContentTypeValidationAttribute : ValidationAttribute
 {
-    private readonly HashSet<string> contentTypes;
+    private readonly HashSet<string> _contentTypes;
 
     /// <inheritdoc />
     public FileContentTypeValidationAttribute(params string[] contentTypes)
     {
-        this.contentTypes = contentTypes.ToHashSet();
+        _contentTypes = contentTypes.ToHashSet();
     }
 
     /// <inheritdoc />
@@ -28,5 +28,5 @@ internal class FileContentTypeValidationAttribute : ValidationAttribute
         _ => new ValidationResult("Value must be a file")
     };
 
-    private bool IsValid(IFormFile file) => contentTypes.Contains(file.ContentType);
+    private bool IsValid(IFormFile file) => _contentTypes.Contains(file.ContentType);
 }

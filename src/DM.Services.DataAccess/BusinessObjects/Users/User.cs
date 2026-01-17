@@ -7,7 +7,7 @@ using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.Administration;
 using DM.Services.DataAccess.BusinessObjects.Common;
 using DM.Services.DataAccess.BusinessObjects.DataContracts;
-using DM.Services.DataAccess.BusinessObjects.Fora;
+using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.DataAccess.BusinessObjects.Games;
 using DM.Services.DataAccess.BusinessObjects.Games.Characters;
 using DM.Services.DataAccess.BusinessObjects.Games.Links;
@@ -28,7 +28,7 @@ public class User : IUser, IRemovable
     public Guid UserId { get; set; }
 
     /// <inheritdoc />
-    [MaxLength(100)]
+    [MaxLength(20)]
     public string Login { get; set; }
 
     /// <summary>
@@ -53,6 +53,11 @@ public class User : IUser, IRemovable
 
     /// <inheritdoc />
     public UserRole Role { get; set; }
+
+    /// <summary>
+    /// Honorary goblin status (special title for active users)
+    /// </summary>
+    public bool IsHonorary { get; set; }
 
     /// <inheritdoc />
     public AccessPolicy AccessPolicy { get; set; }
@@ -113,6 +118,16 @@ public class User : IUser, IRemovable
     /// </summary>
     [MaxLength(100)]
     public string Location { get; set; }
+
+    /// <summary>
+    /// User gender
+    /// </summary>
+    public Gender Gender { get; set; }
+
+    /// <summary>
+    /// User birthday date (day and month only, year is ignored)
+    /// </summary>
+    public DateOnly? BirthdayDate { get; set; }
 
     /// <summary>
     /// ICQ number
@@ -226,8 +241,8 @@ public class User : IUser, IRemovable
     /// <summary>
     /// Games user moderates
     /// </summary>
-    [InverseProperty(nameof(Game.Nanny))]
-    public virtual ICollection<Game> GamesAsNanny { get; set; }
+    [InverseProperty(nameof(Game.Mentor))]
+    public virtual ICollection<Game> GamesAsMentor { get; set; }
 
     /// <summary>
     /// Games user is blacklisted in

@@ -13,26 +13,26 @@ namespace DM.Services.Gaming.BusinessProcesses.Claims.Updating;
 /// <inheritdoc />
 internal class RoomClaimsUpdatingRepository : IRoomClaimsUpdatingRepository
 {
-    private readonly DmDbContext dbContext;
-    private readonly IMapper mapper;
+    private readonly DmDbContext _dbContext;
+    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public RoomClaimsUpdatingRepository(
         DmDbContext dbContext,
         IMapper mapper)
     {
-        this.dbContext = dbContext;
-        this.mapper = mapper;
+        _dbContext = dbContext;
+        _mapper = mapper;
     }
 
     /// <inheritdoc />
     public async Task<RoomClaim> Update(IUpdateBuilder<DbRoomClaim> updateClaim)
     {
-        var linkId = updateClaim.AttachTo(dbContext);
-        await dbContext.SaveChangesAsync();
-        return await dbContext.RoomClaims
+        var linkId = updateClaim.AttachTo(_dbContext);
+        await _dbContext.SaveChangesAsync();
+        return await _dbContext.RoomClaims
             .Where(l => l.RoomClaimId == linkId)
-            .ProjectTo<RoomClaim>(mapper.ConfigurationProvider)
+            .ProjectTo<RoomClaim>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }
 }

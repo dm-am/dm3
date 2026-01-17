@@ -9,19 +9,19 @@ namespace DM.Services.Notifications.BusinessProcesses.Creating;
 /// <inheritdoc />
 internal class NotificationFactory : INotificationFactory
 {
-    private readonly IGuidFactory guidFactory;
+    private readonly IGuidFactory _guidFactory;
 
     /// <inheritdoc />
     public NotificationFactory(
         IGuidFactory guidFactory)
     {
-        this.guidFactory = guidFactory;
+        _guidFactory = guidFactory;
     }
 
     /// <inheritdoc />
     public Notification Create(CreateNotification createNotification, DateTimeOffset createDate) => new()
     {
-        NotificationId = guidFactory.Create(),
+        NotificationId = _guidFactory.Create(),
         CreateDate = createDate.UtcDateTime,
         EventType = createNotification.EventType,
         UsersNotified = new List<Guid>(),

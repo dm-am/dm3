@@ -146,6 +146,7 @@ internal class Startup(IConfiguration configuration)
             {
                 c.MapControllers();
                 c.MapHub<NotificationHub>("/whatsup");
+                c.MapPrometheusScrapingEndpoint("/metrics");
             });
     }
 }

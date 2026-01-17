@@ -315,11 +315,26 @@ namespace DM.Services.DataAccess.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int>("CommentsCount")
+                        .HasColumnType("integer");
+
                     b.Property<int>("CreateTopicPolicy")
                         .HasColumnType("integer");
 
                     b.Property<string>("Description")
                         .HasColumnType("text");
+
+                    b.Property<Guid?>("LastCommentAuthorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("LastCommentDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("LastCommentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("LastCommentTopicId")
+                        .HasColumnType("uuid");
 
                     b.Property<int>("Order")
                         .HasColumnType("integer");
@@ -327,10 +342,17 @@ namespace DM.Services.DataAccess.Migrations
                     b.Property<string>("Title")
                         .HasColumnType("text");
 
+                    b.Property<int>("TopicsCount")
+                        .HasColumnType("integer");
+
                     b.Property<int>("ViewPolicy")
                         .HasColumnType("integer");
 
                     b.HasKey("ForumId");
+
+                    b.HasIndex("LastCommentAuthorId");
+
+                    b.HasIndex("LastCommentId");
 
                     b.ToTable("Fora");
                 });
@@ -362,10 +384,10 @@ namespace DM.Services.DataAccess.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<bool>("Attached")
+                    b.Property<bool>("IsAttached")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("Closed")
+                    b.Property<bool>("IsClosed")
                         .HasColumnType("boolean");
 
                     b.Property<DateTimeOffset>("CreateDate")
@@ -379,6 +401,9 @@ namespace DM.Services.DataAccess.Migrations
 
                     b.Property<Guid?>("LastCommentId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("LastUpdateDate")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Text")
                         .HasColumnType("text");
@@ -533,7 +558,7 @@ namespace DM.Services.DataAccess.Migrations
                     b.Property<Guid>("MasterId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("NannyId")
+                    b.Property<Guid?>("MentorId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Notepad")
@@ -563,7 +588,7 @@ namespace DM.Services.DataAccess.Migrations
 
                     b.HasIndex("MasterId");
 
-                    b.HasIndex("NannyId");
+                    b.HasIndex("MentorId");
 
                     b.ToTable("Games");
                 });
@@ -848,6 +873,9 @@ namespace DM.Services.DataAccess.Migrations
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTimeOffset?>("LastUpdateDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Text")
                         .HasColumnType("text");
 
@@ -929,6 +957,9 @@ namespace DM.Services.DataAccess.Migrations
                     b.Property<bool>("Activated")
                         .HasColumnType("boolean");
 
+                    b.Property<DateOnly?>("BirthdayDate")
+                        .HasColumnType("date");
+
                     b.Property<bool>("CanMerge")
                         .HasColumnType("boolean");
 
@@ -936,12 +967,18 @@ namespace DM.Services.DataAccess.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int>("Gender")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Icq")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
                     b.Property<string>("Info")
                         .HasColumnType("text");
+
+                    b.Property<bool>("IsHonorary")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
@@ -954,8 +991,8 @@ namespace DM.Services.DataAccess.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<string>("Login")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("MediumProfilePictureUrl")
                         .HasMaxLength(200)
@@ -1224,6 +1261,23 @@ namespace DM.Services.DataAccess.Migrations
                     b.Navigation("UserProfile");
                 });
 
+            modelBuilder.Entity("DM.Services.DataAccess.BusinessObjects.Fora.Forum", b =>
+                {
+                    b.HasOne("DM.Services.DataAccess.BusinessObjects.Common.Comment", "LastComment")
+                        .WithMany()
+                        .HasForeignKey("LastCommentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("DM.Services.DataAccess.BusinessObjects.Users.User", "LastCommentAuthor")
+                        .WithMany()
+                        .HasForeignKey("LastCommentAuthorId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("LastComment");
+
+                    b.Navigation("LastCommentAuthor");
+                });
+
             modelBuilder.Entity("DM.Services.DataAccess.BusinessObjects.Fora.ForumModerator", b =>
                 {
                     b.HasOne("DM.Services.DataAccess.BusinessObjects.Fora.Forum", "Forum")
@@ -1310,15 +1364,15 @@ namespace DM.Services.DataAccess.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("DM.Services.DataAccess.BusinessObjects.Users.User", "Nanny")
-                        .WithMany("GamesAsNanny")
-                        .HasForeignKey("NannyId");
+                    b.HasOne("DM.Services.DataAccess.BusinessObjects.Users.User", "Mentor")
+                        .WithMany("GamesAsMentor")
+                        .HasForeignKey("MentorId");
 
                     b.Navigation("Assistant");
 
                     b.Navigation("Master");
 
-                    b.Navigation("Nanny");
+                    b.Navigation("Mentor");
                 });
 
             modelBuilder.Entity("DM.Services.DataAccess.BusinessObjects.Games.Links.BlackListLink", b =>
@@ -1704,7 +1758,7 @@ namespace DM.Services.DataAccess.Migrations
 
                     b.Navigation("GamesAsMaster");
 
-                    b.Navigation("GamesAsNanny");
+                    b.Navigation("GamesAsMentor");
 
                     b.Navigation("GamesBlacklisted");
 

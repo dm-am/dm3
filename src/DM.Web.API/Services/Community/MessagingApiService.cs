@@ -4,7 +4,9 @@ using System.Threading.Tasks;
 using AutoMapper;
 using DM.Services.Community.BusinessProcesses.Messaging.Creating;
 using DM.Services.Community.BusinessProcesses.Messaging.Deleting;
+using DM.Services.Community.BusinessProcesses.Messaging.Likes;
 using DM.Services.Community.BusinessProcesses.Messaging.Reading;
+using DM.Services.Community.BusinessProcesses.Messaging.Updating;
 using DM.Services.Core.Dto;
 using DM.Web.API.Dto.Contracts;
 using Conversation = DM.Web.API.Dto.Messaging.Conversation;
@@ -18,7 +20,9 @@ internal class MessagingApiService : IMessagingApiService
     private readonly IConversationReadingService conversationReadingService;
     private readonly IMessageReadingService messageReadingService;
     private readonly IMessageCreatingService messageCreatingService;
+    private readonly IMessageUpdatingService messageUpdatingService;
     private readonly IMessageDeletingService messageDeletingService;
+    private readonly IMessageLikeService messageLikeService;
     private readonly IMapper mapper;
 
     /// <inheritdoc />
@@ -26,13 +30,17 @@ internal class MessagingApiService : IMessagingApiService
         IConversationReadingService conversationReadingService,
         IMessageReadingService messageReadingService,
         IMessageCreatingService messageCreatingService,
+        IMessageUpdatingService messageUpdatingService,
         IMessageDeletingService messageDeletingService,
+        IMessageLikeService messageLikeService,
         IMapper mapper)
     {
         this.conversationReadingService = conversationReadingService;
         this.messageReadingService = messageReadingService;
         this.messageCreatingService = messageCreatingService;
+        this.messageUpdatingService = messageUpdatingService;
         this.messageDeletingService = messageDeletingService;
+        this.messageLikeService = messageLikeService;
         this.mapper = mapper;
     }
 
@@ -81,8 +89,27 @@ internal class MessagingApiService : IMessagingApiService
     }
 
     /// <inheritdoc />
+    public async Task<Envelope<Message>> UpdateMessage(Guid messageId, Message message)
+    {
+        var updateMessage = mapper.Map<UpdateMessage>(message);
+        updateMessage.MessageId = messageId;
+        var updatedMessage = await messageUpdatingService.Update(updateMessage);
+        return new Envelope<Message>(mapper.Map<Message>(updatedMessage));
+    }
+
+    /// <inheritdoc />
     public Task DeleteMessage(Guid messageId) => messageDeletingService.Delete(messageId);
 
     /// <inheritdoc />
     public Task MarkAsRead(Guid conversationId) => conversationReadingService.MarkAsRead(conversationId);
+
+    /// <inheritdoc />
+    public async Task<Envelope<Message>> LikeMessage(Guid messageId)
+    {
+        await messageLikeService.LikeMessage(messageId);
+        return await GetMessage(messageId);
+    }
+
+    /// <inheritdoc />
+    public Task UnlikeMessage(Guid messageId) => messageLikeService.DislikeMessage(messageId);
 }
