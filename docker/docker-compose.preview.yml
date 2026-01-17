@@ -1,0 +1,32 @@
+# Preview deployment with nginx basic auth
+# Usage:
+#   1. Generate password: docker run --rm httpd htpasswd -nb preview yourpassword > docker/nginx/.htpasswd
+#   2. Run: docker-compose -f docker/docker-compose.yml -f docker/docker-compose.preview.yml up -d
+
+networks:
+  default:
+    name: 'dm-full-app'
+
+services:
+  nginx:
+    container_name: 'dm-nginx'
+    image: 'nginx:alpine'
+    ports:
+      - '80:80'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
+    depends_on:
+      - dmapi
+      - dmfront
+
+  dmfront:
+    container_name: 'dm-front'
+    image: 'dm-front:local'
+    build:
+      context: ../frontend/DM.Web.Modern.Temp
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+    depends_on:
+      - dmapi
