@@ -13,6 +13,8 @@ internal class DmDbContextFactory : IDesignTimeDbContextFactory<DmDbContext>
         var connectionString = Environment.GetEnvironmentVariable("DM_ConnectionStrings__Rdb") ??
                                throw new ArgumentNullException();
         return new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
-            .UseNpgsql(connectionString).Options);
+            .UseNpgsql(connectionString)
+            .UseOpenIddict()
+            .Options);
     }
 }

@@ -51,7 +51,7 @@ internal class CommentaryDeletingRepository : ICommentaryDeletingRepository
         var result = await _dbContext.Comments
             .TagWith("DM.Forum.SecondLastCommentAfterDelete")
             .Where(c => !c.IsRemoved && c.EntityId == topicId)
-            .OrderByDescending(c => c.CreateDate)
+            .OrderByDescending(c => c.CreatedUtc)
             .Skip(1)
             .Select(c => c.CommentId)
             .FirstOrDefaultAsync();

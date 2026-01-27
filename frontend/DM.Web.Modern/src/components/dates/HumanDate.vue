@@ -1,21 +1,12 @@
 <template>
-  <span>{{humanDate}}</span>
+  {{ humanDate }}
 </template>
 
-<script lang="ts">
-import { Component, Prop, Vue } from 'vue-property-decorator';
-import moment from 'moment';
+<script setup lang="ts">
+import { computed } from "vue";
+import dayjs from "dayjs";
 
-@Component({})
-export default class HumanDate extends Vue {
-  @Prop()
-  private date!: string;
+const props = defineProps<{ date: string; format: string }>();
 
-  @Prop()
-  private format!: string;
-
-  private get humanDate(): string {
-    return moment(this.date).format(this.format);
-  }
-}
+const humanDate = computed(() => dayjs(props.date).format(props.format));
 </script>

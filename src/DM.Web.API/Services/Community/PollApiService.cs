@@ -3,7 +3,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Services.Community.BusinessProcesses.Polls.Creating;
+using DM.Services.Community.BusinessProcesses.Polls.Deleting;
 using DM.Services.Community.BusinessProcesses.Polls.Reading;
+using DM.Services.Community.BusinessProcesses.Polls.Updating;
 using DM.Services.Community.BusinessProcesses.Polls.Voting;
 using DM.Web.API.Dto.Community;
 using DM.Web.API.Dto.Contracts;
@@ -16,6 +18,8 @@ internal class PollApiService : IPollApiService
 {
     private readonly IPollReadingService readingService;
     private readonly IPollCreatingService creatingService;
+    private readonly IPollUpdatingService updatingService;
+    private readonly IPollDeletingService deletingService;
     private readonly IPollVotingService votingService;
     private readonly IMapper mapper;
 
@@ -23,11 +27,15 @@ internal class PollApiService : IPollApiService
     public PollApiService(
         IPollReadingService readingService,
         IPollCreatingService creatingService,
+        IPollUpdatingService updatingService,
+        IPollDeletingService deletingService,
         IPollVotingService votingService,
         IMapper mapper)
     {
         this.readingService = readingService;
         this.creatingService = creatingService;
+        this.updatingService = updatingService;
+        this.deletingService = deletingService;
         this.votingService = votingService;
         this.mapper = mapper;
     }
@@ -67,4 +75,20 @@ internal class PollApiService : IPollApiService
         var poll = await votingService.Unvote(pollId);
         return new Envelope<Poll>(mapper.Map<Poll>(poll));
     }
+
+    /// <inheritdoc />
+    public async Task<Envelope<Poll>> Update(Guid id, Poll poll)
+    {
+        var updatePoll = new UpdatePoll
+        {
+            Id = id,
+            Title = poll.Title,
+            EndDate = poll.EndsUtc
+        };
+        var updatedPoll = await updatingService.Update(updatePoll);
+        return new Envelope<Poll>(mapper.Map<Poll>(updatedPoll));
+    }
+
+    /// <inheritdoc />
+    public Task Delete(Guid id) => deletingService.Delete(id);
 }

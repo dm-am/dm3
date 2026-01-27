@@ -14,7 +14,7 @@ namespace DM.Services.DataAccess.BusinessObjects.Games.Posts;
 /// DAL model for game post
 /// </summary>
 [Table("Posts")]
-public class Post : IRemovable
+public class Post : ISoftDeletable, IEditable, IHasEditHistory<PostEdit>
 {
     /// <summary>
     /// Post identifier
@@ -38,19 +38,19 @@ public class Post : IRemovable
     public Guid UserId { get; set; }
 
     /// <summary>
-    /// Creation moment
+    /// Creation moment (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Last update author identifier
     /// </summary>
-    public Guid? LastUpdateUserId { get; set; }
+    public Guid? ModifiedByUserId { get; set; }
 
     /// <summary>
-    /// Last update moment
+    /// Last modification moment (UTC)
     /// </summary>
-    public DateTimeOffset? LastUpdateDate { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
     /// Post text
@@ -69,6 +69,12 @@ public class Post : IRemovable
 
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
+
+    /// <inheritdoc />
+    public Guid? DeletedByUserId { get; set; }
+
+    /// <inheritdoc />
+    public DateTimeOffset? DeletedAtUtc { get; set; }
 
     /// <summary>
     /// Room
@@ -91,8 +97,20 @@ public class Post : IRemovable
     /// <summary>
     /// Last update author
     /// </summary>
-    [ForeignKey(nameof(LastUpdateUserId))]
-    public virtual User LastUpdateAuthor { get; set; }
+    [ForeignKey(nameof(ModifiedByUserId))]
+    public virtual User ModifiedBy { get; set; }
+
+    /// <summary>
+    /// User who deleted the post
+    /// </summary>
+    [ForeignKey(nameof(DeletedByUserId))]
+    public virtual User DeletedBy { get; set; }
+
+    /// <summary>
+    /// Edit history
+    /// </summary>
+    [InverseProperty(nameof(PostEdit.Post))]
+    public virtual ICollection<PostEdit> Edits { get; set; }
 
     /// <summary>
     /// Votes for the post

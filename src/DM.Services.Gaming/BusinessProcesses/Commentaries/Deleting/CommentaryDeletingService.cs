@@ -49,7 +49,7 @@ internal class CommentaryDeletingService : ICommentaryDeletingService
         var updateComment = updateBuilderFactory.Create<Comment>(commentId)
             .Field(c => c.IsRemoved, true);
         await updatingRepository.Update(updateComment);
-        await unreadCountersRepository.Decrement(comment.EntityId, UnreadEntryType.Message, comment.CreateDate);
+        await unreadCountersRepository.Decrement(comment.EntityId, UnreadEntryType.Message, comment.CreatedUtc);
 
         await invokedEventProducer.Send(EventType.DeletedGameComment, commentId);
     }

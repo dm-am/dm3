@@ -16,14 +16,14 @@ public class Message : ILikable
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Creating moment
+    /// Creating moment (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Last modification moment
+    /// Last modification moment (UTC)
     /// </summary>
-    public DateTimeOffset? LastUpdateDate { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
     /// Message author

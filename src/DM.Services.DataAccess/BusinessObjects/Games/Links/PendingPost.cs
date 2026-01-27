@@ -35,7 +35,7 @@ public class PendingPost
     /// <summary>
     /// Creation moment
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Waiting user

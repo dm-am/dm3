@@ -1,72 +1,106 @@
 <template>
-  <div :class="{'collapsed': !show}">
-    <div class="title" @click="toggle">
-      <slot name="title" />
-    </div>
-    <div class="list" ref="content">
+  <div>
+    <h4 class="sidebar-title">
+      <span
+        class="toggle"
+        @click="toggle"
+        @mouseenter="hovered = true"
+        @mouseleave="hovered = false"
+      >
+        <slot name="title" /><span
+          class="icon"
+          :style="{
+            transform: `rotate(${rotation}deg)`,
+            opacity: hovered ? 1 : 0,
+          }"
+        ></span>
+      </span>
+    </h4>
+    <div :class="{ list: true, collapsed: !show }" ref="content">
       <slot />
     </div>
   </div>
 </template>
 
-<script lang="ts">
-import { Component, Prop, Vue } from 'vue-property-decorator';
+<script setup lang="ts">
+import { computed, ref } from "vue";
 
-@Component({})
-export default class MenuBlock extends Vue {
-  public $refs!: {
-    content: HTMLElement;
-  };
+const props = defineProps<{ token: string }>();
+const storageKey = computed(() => `__HideMenuModule_${props.token}__`);
 
-  @Prop()
-  private token!: string;
+const show = ref(localStorage.getItem(storageKey.value) !== false.toString());
+const content = ref<HTMLElement | null>(null);
+const rotation = ref(show.value ? 45 : 0);
+const hovered = ref(false);
 
-  private get storageKey() {
-    return `__HideLeftMenuModules__${ this.token }__`;
+const toggle = () => {
+  localStorage.setItem(storageKey.value, (show.value = !show.value).toString());
+  rotation.value = show.value ? 45 : 0;
+  if (show.value) {
+    content.value!.style.height = "auto";
+    const expectedHeight = content.value!.clientHeight;
+    content.value!.style.height = "0";
+    setTimeout(() => (content.value!.style.height = `${expectedHeight}px`), 0);
+    setTimeout(() => (content.value!.style.height = "auto"), 200);
+  } else {
+    content.value!.style.height = `${content.value!.clientHeight}px`;
+    setTimeout(() => (content.value!.style.height = "0"), 0);
   }
-
-  private show = true;
-
-  private toggle() {
-    localStorage.setItem(this.storageKey, (this.show = !this.show).toString());
-    const content = this.$refs.content;
-    if (this.show) {
-      content.style.height = 'auto';
-      const neededHeight = content.clientHeight;
-      content.style.height = '0';
-      setTimeout(() => content.style.height = `${ neededHeight }px`, 0);
-      setTimeout(() => content.style.height = 'auto', 200);
-    } else {
-      content.style.height = `${ content.clientHeight }px`;
-      setTimeout(() => content.style.height = '0', 0);
-    }
-  }
-
-  private mounted() {
-    const storedValue = localStorage.getItem(this.storageKey);
-    if (storedValue === false.toString()) {
-      this.show = false;
-    }
-  }
-}
+};
 </script>
 
-<style scoped lang="stylus">
-.title
-  header()
-  cursor pointer
+<style scoped lang="sass">
+@import "src/assets/styles/Variables"
+@import "src/assets/styles/Themes"
 
-  &:after
-    icon()
-    content ' '
+.sidebar-title
+  margin: $medium 0 $small
+  font-size: $font-size
+  font-weight: bold
+  text-transform: uppercase
+  letter-spacing: 0.5px
+  color: $heading-alt
+  transition: color 0.15s ease
 
-  .collapsed &:after
-    content ' '
+.toggle
+  cursor: pointer
+  color: inherit
+
+.icon
+  position: relative
+  display: inline-block
+  width: 10px
+  height: 10px
+  margin-left: 6px
+  opacity: 0
+  transition: opacity 0.15s ease, transform 0.3s ease
+  vertical-align: middle
+  margin-top: -2px
+
+  &::before,
+  &::after
+    content: ""
+    position: absolute
+    top: 50%
+    left: 50%
+    background-color: $heading-alt
+
+  &::before
+    // Horizontal line
+    width: 10px
+    height: 2px
+    transform: translate(-50%, -50%)
+
+  &::after
+    // Vertical line
+    width: 2px
+    height: 10px
+    transform: translate(-50%, -50%)
 
 .list
-  overflow hidden
-  transition height .2s
-  .collapsed &
-    height 0
+  overflow: hidden
+  transition: height $animation-time
 
+  &.collapsed
+    height: 0
 </style>

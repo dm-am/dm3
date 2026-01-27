@@ -12,16 +12,16 @@ public class AccessPolicyConverterShould
     [Fact]
     public void ReturnGuestPolicyForGuestUser()
     {
-        converter.Convert(UserRole.Guest).Should().Be(ForumAccessPolicy.Guest);
+        converter.Convert(UserRole.Guest).Should().Be(BoardAccessPolicy.Guest);
     }
 
     [Theory]
-    [InlineData(UserRole.RegularUser, ForumAccessPolicy.Player)]
-    [InlineData(UserRole.Admin, ForumAccessPolicy.Administrator)]
-    [InlineData(UserRole.SeniorModerator, ForumAccessPolicy.SeniorModerator)]
-    [InlineData(UserRole.Moderator, ForumAccessPolicy.RegularModerator)]
-    [InlineData(UserRole.Mentor, ForumAccessPolicy.MentorModerator)]
-    public void MapRolesAndPoliciesAccordingly(UserRole role, ForumAccessPolicy policy)
+    [InlineData(UserRole.RegularUser, BoardAccessPolicy.Player)]
+    [InlineData(UserRole.Admin, BoardAccessPolicy.Administrator)]
+    [InlineData(UserRole.SeniorModerator, BoardAccessPolicy.SeniorModerator)]
+    [InlineData(UserRole.Moderator, BoardAccessPolicy.RegularModerator)]
+    [InlineData(UserRole.Mentor, BoardAccessPolicy.MentorModerator)]
+    public void MapRolesAndPoliciesAccordingly(UserRole role, BoardAccessPolicy policy)
     {
         converter.Convert(role).Should().HaveFlag(policy);
     }
@@ -34,28 +34,28 @@ public class AccessPolicyConverterShould
     [InlineData(UserRole.Admin)]
     public void ContainGuestAccessForNonGuestUsers(UserRole role)
     {
-        converter.Convert(role).Should().HaveFlag(ForumAccessPolicy.Guest);
+        converter.Convert(role).Should().HaveFlag(BoardAccessPolicy.Guest);
     }
 
     [Fact]
     public void AdminShouldHaveAllPolicies()
     {
         var result = converter.Convert(UserRole.Admin);
-        result.Should().HaveFlag(ForumAccessPolicy.Guest);
-        result.Should().HaveFlag(ForumAccessPolicy.Player);
-        result.Should().HaveFlag(ForumAccessPolicy.MentorModerator);
-        result.Should().HaveFlag(ForumAccessPolicy.RegularModerator);
-        result.Should().HaveFlag(ForumAccessPolicy.SeniorModerator);
-        result.Should().HaveFlag(ForumAccessPolicy.Administrator);
+        result.Should().HaveFlag(BoardAccessPolicy.Guest);
+        result.Should().HaveFlag(BoardAccessPolicy.Player);
+        result.Should().HaveFlag(BoardAccessPolicy.MentorModerator);
+        result.Should().HaveFlag(BoardAccessPolicy.RegularModerator);
+        result.Should().HaveFlag(BoardAccessPolicy.SeniorModerator);
+        result.Should().HaveFlag(BoardAccessPolicy.Administrator);
     }
 
     [Fact]
     public void MentorShouldNotHaveModeratorPolicies()
     {
         var result = converter.Convert(UserRole.Mentor);
-        result.Should().HaveFlag(ForumAccessPolicy.MentorModerator);
-        result.Should().NotHaveFlag(ForumAccessPolicy.RegularModerator);
-        result.Should().NotHaveFlag(ForumAccessPolicy.SeniorModerator);
-        result.Should().NotHaveFlag(ForumAccessPolicy.Administrator);
+        result.Should().HaveFlag(BoardAccessPolicy.MentorModerator);
+        result.Should().NotHaveFlag(BoardAccessPolicy.RegularModerator);
+        result.Should().NotHaveFlag(BoardAccessPolicy.SeniorModerator);
+        result.Should().NotHaveFlag(BoardAccessPolicy.Administrator);
     }
 }

@@ -8,45 +8,45 @@ using DM.Web.API.Dto.Boards;
 namespace DM.Web.API.Services.Boards;
 
 /// <inheritdoc />
-internal class ForumApiService : IForumApiService
+internal class BoardApiService : IBoardApiService
 {
-    private readonly IForumReadingService forumService;
+    private readonly IBoardReadingService boardService;
     private readonly IMapper mapper;
 
     /// <inheritdoc />
-    public ForumApiService(
-        IForumReadingService forumService,
+    public BoardApiService(
+        IBoardReadingService boardService,
         IMapper mapper)
     {
-        this.forumService = forumService;
+        this.boardService = boardService;
         this.mapper = mapper;
     }
 
     /// <inheritdoc />
     public async Task<ListEnvelope<Forum>> Get()
     {
-        var fora = await forumService.GetForaList();
-        return new ListEnvelope<Forum>(fora.Select(mapper.Map<Forum>));
+        var boards = await boardService.GetBoardsList();
+        return new ListEnvelope<Forum>(boards.Select(mapper.Map<Forum>));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Forum>> Get(string id)
     {
-        var forum = await forumService.GetSingleForum(id);
-        return new Envelope<Forum>(mapper.Map<Forum>(forum));
+        var board = await boardService.GetSingleBoard(id);
+        return new Envelope<Forum>(mapper.Map<Forum>(board));
     }
 
     /// <inheritdoc />
     public async Task<ListEnvelope<Board>> GetBoards()
     {
-        var fora = await forumService.GetForaList();
-        return new ListEnvelope<Board>(fora.Select(mapper.Map<Board>));
+        var boards = await boardService.GetBoardsList();
+        return new ListEnvelope<Board>(boards.Select(mapper.Map<Board>));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Board>> GetBoard(string id)
     {
-        var forum = await forumService.GetSingleForum(id);
-        return new Envelope<Board>(mapper.Map<Board>(forum));
+        var board = await boardService.GetSingleBoard(id);
+        return new Envelope<Board>(mapper.Map<Board>(board));
     }
 }

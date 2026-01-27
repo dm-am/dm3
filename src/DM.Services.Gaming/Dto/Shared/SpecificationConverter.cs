@@ -19,7 +19,9 @@ internal class SpecificationConverter : ITypeConverter<
             Id = source.Id,
             Title = source.Title,
             Type = ResolveType(source),
-            Required = source.Constraints.Required
+            Required = source.Constraints.Required,
+            IsDescriptor = source.IsDescriptor,
+            IsHidden = source.IsHidden
         };
 
         switch (source.Constraints)
@@ -40,6 +42,9 @@ internal class SpecificationConverter : ITypeConverter<
                     Modifier = v.Modifier
                 });
                 return result;
+            case BbCodeAttributeConstraints _:
+                result.Values = null;
+                return result;
             default:
                 return result;
         }
@@ -52,6 +57,7 @@ internal class SpecificationConverter : ITypeConverter<
             NumberAttributeConstraints _ => AttributeSpecificationType.Number,
             StringAttributeConstraints _ => AttributeSpecificationType.String,
             ListAttributeConstraints _ => AttributeSpecificationType.List,
+            BbCodeAttributeConstraints _ => AttributeSpecificationType.BbCode,
             _ => AttributeSpecificationType.Number
         };
 }

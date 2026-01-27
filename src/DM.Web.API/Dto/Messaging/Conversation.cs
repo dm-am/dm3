@@ -15,9 +15,14 @@ public class Conversation
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Conversation name
+    /// Sign of a basic conversation between two users
     /// </summary>
-    public string Name { get; set; }
+    public bool Visavi { get; set; }
+
+    /// <summary>
+    /// Conversation title (for group conversations, null for visavi)
+    /// </summary>
+    public string Title { get; set; }
 
     /// <summary>
     /// Conversation participants

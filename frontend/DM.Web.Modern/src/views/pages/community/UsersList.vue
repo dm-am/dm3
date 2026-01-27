@@ -1,11 +1,24 @@
+<script setup lang="ts">
+import ThePaging from "@/components/ThePaging.vue";
+import { storeToRefs } from "pinia";
+import UserRating from "@/components/community/UserRating.vue";
+import UserOnline from "@/components/community/UserOnline.vue";
+import { useCommunityStore } from "@/stores/community";
+import { useRoute } from "vue-router";
+
+const { users } = storeToRefs(useCommunityStore());
+const route = useRoute();
+</script>
+
 <template>
-  <div>
+  <the-paging
+    v-if="users"
+    :paging="users.paging!"
+    :to="{ name: 'community', params: route.params }"
+  />
 
-    <paging v-if="users"
-      :paging="users.paging"
-      :to="{ name: 'community', params: $route.params }" />
-
-    <div class="list">
+  <div class="users-list-table">
+    <div class="users-list-header">
       <div>#</div>
       <div>Логин</div>
       <div>Рейтинг</div>
@@ -14,40 +27,49 @@
       <div>Местоположение</div>
     </div>
 
-    <loader v-if="!users" :big="true" />
-    <template v-else-if="users.resources.length">
-      <community-user v-for="(user, number) in users.resources" :key="user.login"
-        :user="user"
-        :number="number + (users.paging.size * (users.paging.current - 1)) + 1" />
-    </template>
-
+    <the-loader v-if="!users" :big="true" />
+    <secondary-text v-else-if="!users.resources.length" class="users-list-none"
+      >Пользователей нет...</secondary-text
+    >
+    <div
+      class="users-list-row"
+      v-else
+      v-for="(user, number) in users.resources"
+      :key="user.login"
+    >
+      <span class="number">{{
+        number + users.paging!.size * (users.paging!.current - 1) + 1
+      }}</span>
+      <user-link :user="user" />
+      <user-rating :user="user" />
+      <user-online :user="user" :detailed="true" />
+      <span>{{ user.name }}</span>
+      <span>{{ user.location }}</span>
+    </div>
   </div>
 </template>
 
-<script lang="ts">
-import { Component, Vue } from 'vue-property-decorator';
-import { Getter } from 'vuex-class';
+<style scoped lang="sass">
+@import "@/assets/styles/Tables"
 
-import { User } from '@/api/models/community';
-import { ListEnvelope } from '@/api/models/common';
+$grid-template: [number] 6% [login] auto [rating] 12% [online] 8% [name] 25% [location] 25%
 
-import CommunityUser from './CommunityUser.vue';
+.users-list-table
+  +table
 
-@Component({
-  components: {
-    CommunityUser,
-  },
-})
-export default class UsersList extends Vue {
-  @Getter('community/users')
-  private users!: ListEnvelope<User> | null;
-}
-</script>
+.users-list-header
+  display: grid
+  grid-template-columns: $grid-template
+  +table-columns
+  +table-header
 
-<style scoped lang="stylus">
-@import '~@/views/pages/community/Grid'
+.users-list-row
+  display: grid
+  grid-template-columns: $grid-template
+  +table-columns
+  +table-row
 
-.list
-  gridHead($communityGridTemplate)
-  margin-top $medium
+.users-list-none
+  margin: $medium 0
+  text-align: center
 </style>

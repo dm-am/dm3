@@ -91,4 +91,8 @@ internal class ChatReadingService : IChatReadingService
     /// <inheritdoc />
     public Task<ChatMessage> GetFirstMessageOnOrAfterDate(DateOnly date) =>
         _repository.GetFirstOnOrAfterDate(date);
+
+    /// <inheritdoc />
+    public Task<ChatMessage> GetLastMessageOnOrBeforeDate(DateOnly date) =>
+        _repository.GetLastOnOrBeforeDate(date);
 }

@@ -7,3 +7,4 @@ bundles
 launchSettings.json
 appsettings.*.json
 .claude/
+.gitignore

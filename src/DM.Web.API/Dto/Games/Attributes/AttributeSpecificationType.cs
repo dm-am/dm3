@@ -18,5 +18,10 @@ public enum AttributeSpecificationType
     /// <summary>
     /// List of values with modifiers
     /// </summary>
-    List = 3
+    List = 2,
+
+    /// <summary>
+    /// BBCode formatted text (for appearance, personality, history, etc.)
+    /// </summary>
+    BbCode = 3
 }

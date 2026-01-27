@@ -63,7 +63,7 @@ podTemplate(containers: [
         }
       }
     }, typescript: {
-      dir("frontend/DM.Web.Modern.Temp") {
+      dir("frontend/DM.Web.Modern") {
         container('bun') {
           stage('VueJs Update Packages') {
             sh 'bun update -f --no-save'
@@ -83,7 +83,7 @@ podTemplate(containers: [
       }
       stage('VueJS Publish') {
         fileOperations([
-          folderCopyOperation(sourceFolderPath:'frontend/DM.Web.Modern.Temp/dist', destinationFolderPath: 'publish/DM.Web.Modern.Temp')
+          folderCopyOperation(sourceFolderPath:'frontend/DM.Web.Modern/dist', destinationFolderPath: 'publish/DM.Web.Modern')
         ])
       }
     }, failFast: true)

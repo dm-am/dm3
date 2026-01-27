@@ -49,12 +49,12 @@ internal class PublicImageUploadRepository : IPublicImageUploadRepository
         var uploadsInfo = await dbContext.Uploads
             .Where(u => !u.IsRemoved)
             .Where(u => u.EntityId == entityId)
-            .OrderByDescending(u => u.CreateDate)
-            .Select(u => new {u.CreateDate, u.UploadId})
+            .OrderByDescending(u => u.CreatedUtc)
+            .Select(u => new {u.CreatedUtc, u.UploadId})
             .ToArrayAsync();
 
         var obsoleteUploadUpdates = uploadsInfo
-            .GroupBy(u => u.CreateDate)
+            .GroupBy(u => u.CreatedUtc)
             .OrderByDescending(g => g.Key)
             .Skip(1)
             .SelectMany(g => g.Select(u => u.UploadId))

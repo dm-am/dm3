@@ -26,7 +26,10 @@ internal class RoomFactory : IRoomFactory
             GameId = gameId,
             AccessType = RoomAccessType.Open,
             Type = RoomType.Default,
-            Title = Dto.Output.Room.DefaultRoomName
+            Title = Dto.Output.Room.DefaultRoomName,
+            ViewPrivateText = false,
+            ViewDiceResults = true,
+            DiceEnabled = true
         };
     }
 }

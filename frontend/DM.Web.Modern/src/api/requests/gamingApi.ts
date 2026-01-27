@@ -1,65 +1,136 @@
-import { ApiResult, Envelope, ListEnvelope } from '@/api/models/common';
-import { Game, AttributeSchema, Tag, Character, Room } from '@/api/models/gaming';
-import { User } from '@/api/models/community';
-import Api from '@/api';
+import type { Envelope, ListEnvelope, PagingQuery } from "@/api/models/common";
+import type {
+  Game,
+  AttributeSchema,
+  Tag,
+  Character,
+  Room,
+  Post,
+  Invitation,
+} from "@/api/models/gaming";
+import type { Comment } from "@/api/models/forum";
+import type { User } from "@/api/models/community";
+import Api from "@/api";
 
-export default new class {
-  public async getOwnGames(): Promise<ListEnvelope<Game>> {
-    const { data } = await Api.get<ListEnvelope<Game>>('games/own');
-    return data!;
+export default new (class {
+  public getOwnGames() {
+    return Api.get<ListEnvelope<Game>>("games/owned");
   }
 
-  public async getPopularGames(): Promise<ListEnvelope<Game>> {
-    const { data } = await Api.get<ListEnvelope<Game>>('games/popular');
-    return data!;
+  public getModerationGames() {
+    return Api.get<ListEnvelope<Game>>("games", { statuses: "Moderation" });
   }
 
-  public async getGame(id: string): Promise<ApiResult<Envelope<Game>>> {
-    return await Api.get<Envelope<Game>>(`games/${id}/details`);
+  public getActiveGames() {
+    return Api.get<ListEnvelope<Game>>("games", { statuses: "Active" });
   }
 
-  public async getCharacters(gameId: string): Promise<ListEnvelope<Character>> {
-    const { data } = await Api.get<ListEnvelope<Character>>(`games/${gameId}/characters`);
-    return data!;
+  public getRecruitingGames() {
+    return Api.get<ListEnvelope<Game>>("games", { statuses: "Requirement" });
   }
 
-  public async getRooms(gameId: string): Promise<ListEnvelope<Room>> {
-    const { data } = await Api.get<ListEnvelope<Room>>(`games/${gameId}/rooms`);
-    return data!
+  public getFinishedGames() {
+    return Api.get<ListEnvelope<Game>>("games", { statuses: "Finished" });
   }
 
-  public async getReaders(gameId: string): Promise<ListEnvelope<User>> {
-    const { data } = await Api.get<ListEnvelope<User>>(`games/${gameId}/readers`);
-    return data!;
+  public async getPopularGames() {
+    return Api.get<ListEnvelope<Game>>("games/popular");
   }
 
-  public async getSchemas(): Promise<ListEnvelope<AttributeSchema>> {
-    const { data } = await Api.get<ListEnvelope<AttributeSchema>>('schemata');
-    return data!;
+  public getGame(id: string) {
+    return Api.get<Envelope<Game>>(`games/${id}/details`);
   }
 
-  public async getTags(): Promise<ListEnvelope<Tag>> {
-    const { data } = await Api.get<ListEnvelope<Tag>>('games/tags');
-    return data!;
+  public getCharacters(gameId: string) {
+    return Api.get<ListEnvelope<Character>>(`games/${gameId}/characters`);
   }
 
-  public async createSchema(schema: AttributeSchema): Promise<ApiResult<Envelope<AttributeSchema>>> {
-    return await Api.post<Envelope<AttributeSchema>>('schemata', schema);
+  public getRooms(gameId: string) {
+    return Api.get<ListEnvelope<Room>>(`games/${gameId}/rooms`);
   }
 
-  public async createGame(game: Game): Promise<ApiResult<Envelope<Game>>> {
-    return await Api.post<Envelope<Game>>('games', game);
+  public getPosts(roomId: string, paging?: PagingQuery) {
+    return Api.get<ListEnvelope<Post>>(`rooms/${roomId}/posts`, paging);
   }
 
-  public async createCharacter(id: string, character: Character): Promise<ApiResult<Envelope<Character>>> {
-    return await Api.post<Envelope<Character>>(`games/${id}/characters`, character);
+  public getPost(postId: string) {
+    return Api.get<Envelope<Post>>(`posts/${postId}`);
   }
 
-  public async subscribe(id: string): Promise<ApiResult<Envelope<User>>> {
-    return await Api.post<Envelope<User>>(`games/${id}/readers`);
+  public createPost(roomId: string, post: Partial<Post>) {
+    return Api.post<Envelope<Post>>(`rooms/${roomId}/posts`, post);
   }
 
-  public async unsubscribe(id: string): Promise<ApiResult<void>> {
-    return await Api.delete(`games/${id}/readers`);
+  public updatePost(postId: string, post: Partial<Post>) {
+    return Api.patch<Envelope<Post>>(`posts/${postId}`, post);
   }
-}();
+
+  public deletePost(postId: string) {
+    return Api.delete(`posts/${postId}`);
+  }
+
+  // Game comments
+  public getGameComments(gameId: string, paging?: PagingQuery) {
+    return Api.get<ListEnvelope<Comment>>(`games/${gameId}/comments`, paging);
+  }
+
+  public createGameComment(gameId: string, comment: { text: string }) {
+    return Api.post<Envelope<Comment>>(`games/${gameId}/comments`, comment);
+  }
+
+  public updateGameComment(commentId: string, comment: { text: string }) {
+    return Api.patch<Envelope<Comment>>(`games/comments/${commentId}`, comment);
+  }
+
+  public deleteGameComment(commentId: string) {
+    return Api.delete(`games/comments/${commentId}`);
+  }
+
+  public getReaders(gameId: string) {
+    return Api.get<ListEnvelope<User>>(`games/${gameId}/readers`);
+  }
+
+  public getSchemas() {
+    return Api.get<ListEnvelope<AttributeSchema>>("schemas");
+  }
+
+  public getTags() {
+    return Api.get<ListEnvelope<Tag>>("games/tags");
+  }
+
+  public createSchema(schema: AttributeSchema) {
+    return Api.post<Envelope<AttributeSchema>>("schemas", schema);
+  }
+
+  public createGame(game: Game) {
+    return Api.post<Envelope<Game>>("games", game);
+  }
+
+  public createCharacter(id: string, character: Character) {
+    return Api.post<Envelope<Character>>(`games/${id}/characters`, character);
+  }
+
+  public subscribe(id: string) {
+    return Api.post<Envelope<User>>(`games/${id}/readers`);
+  }
+  public unsubscribe(id: string) {
+    return Api.delete(`games/${id}/readers`);
+  }
+
+  // Invitations
+  public getGameInvitations(gameId: string) {
+    return Api.get<ListEnvelope<Invitation>>(`games/${gameId}/invitations`);
+  }
+
+  public invitePlayer(gameId: string, login: string) {
+    return Api.post<Envelope<Invitation>>(`games/${gameId}/invitations/players`, { login });
+  }
+
+  public inviteReader(gameId: string, login: string) {
+    return Api.post<Envelope<Invitation>>(`games/${gameId}/invitations/readers`, { login });
+  }
+
+  public cancelInvitation(gameId: string, tokenId: string) {
+    return Api.delete(`games/${gameId}/invitations/${tokenId}`);
+  }
+})();

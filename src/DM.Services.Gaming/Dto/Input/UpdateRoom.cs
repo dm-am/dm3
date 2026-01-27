@@ -33,4 +33,19 @@ public class UpdateRoom
     /// Previous room identifier
     /// </summary>
     public Optional<Guid> PreviousRoomId { get; set; }
+
+    /// <summary>
+    /// Any user can read private messages within posts
+    /// </summary>
+    public bool? ViewPrivateText { get; set; }
+
+    /// <summary>
+    /// Any user can see dice roll results
+    /// </summary>
+    public bool? ViewDiceResults { get; set; }
+
+    /// <summary>
+    /// Dice rolling is enabled in this room
+    /// </summary>
+    public bool? DiceEnabled { get; set; }
 }

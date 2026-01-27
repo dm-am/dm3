@@ -31,6 +31,21 @@ public class ChatMessage
     public User Author { get; set; }
 
     /// <summary>
+    /// User who deleted the message (for moderation)
+    /// </summary>
+    public User DeletedBy { get; set; }
+
+    /// <summary>
+    /// When the message was deleted
+    /// </summary>
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+
+    /// <summary>
+    /// Edit history
+    /// </summary>
+    public IEnumerable<ChatMessageEdit> Edits { get; set; }
+
+    /// <summary>
     /// Content
     /// </summary>
     public ChatBbText Text { get; set; }

@@ -58,7 +58,7 @@ public class TopicIntentionResolverShould
             {
                 Author = Create.User().Please(),
                 IsClosed = false,
-                Forum = new Dto.Output.Forum
+                Board = new Dto.Output.Board
                 {
                     ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
                 }
@@ -77,7 +77,7 @@ public class TopicIntentionResolverShould
             {
                 Author = Create.User(userId).Please(),
                 IsClosed = false,
-                Forum = new Dto.Output.Forum
+                Board = new Dto.Output.Board
                 {
                     ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
                 }
@@ -96,7 +96,7 @@ public class TopicIntentionResolverShould
             {
                 Author = Create.User().Please(),
                 IsClosed = false,
-                Forum = new Dto.Output.Forum
+                Board = new Dto.Output.Board
                 {
                     ModeratorIds = new[] {userId, Guid.NewGuid()}
                 }
@@ -114,7 +114,7 @@ public class TopicIntentionResolverShould
             {
                 Author = Create.User().Please(),
                 IsClosed = false,
-                Forum = new Dto.Output.Forum
+                Board = new Dto.Output.Board
                 {
                     ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
                 }
@@ -133,7 +133,7 @@ public class TopicIntentionResolverShould
             {
                 Author = Create.User(userId).Please(),
                 IsClosed = false,
-                Forum = new Dto.Output.Forum
+                Board = new Dto.Output.Board
                 {
                     ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
                 }
@@ -151,7 +151,7 @@ public class TopicIntentionResolverShould
             {
                 Author = Create.User().Please(),
                 IsClosed = false,
-                Forum = new Dto.Output.Forum
+                Board = new Dto.Output.Board
                 {
                     ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
                 }

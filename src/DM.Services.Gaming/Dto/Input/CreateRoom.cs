@@ -27,4 +27,19 @@ public class CreateRoom
     /// Room access type
     /// </summary>
     public RoomAccessType AccessType { get; set; }
+
+    /// <summary>
+    /// Any user can read private messages within posts
+    /// </summary>
+    public bool ViewPrivateText { get; set; }
+
+    /// <summary>
+    /// Any user can see dice roll results
+    /// </summary>
+    public bool ViewDiceResults { get; set; } = true;
+
+    /// <summary>
+    /// Dice rolling is enabled in this room
+    /// </summary>
+    public bool DiceEnabled { get; set; } = true;
 }

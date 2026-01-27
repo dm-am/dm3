@@ -34,14 +34,14 @@ public interface ICommentaryReadingService
     Task MarkAsRead(Guid topicId);
 
     /// <summary>
-    /// Mark all forum comments as read
+    /// Mark all board comments as read
     /// </summary>
-    /// <param name="forumTitle">Forum title</param>
+    /// <param name="boardTitle">Board title</param>
     /// <returns></returns>
-    Task MarkAsRead(string forumTitle);
+    Task MarkAsRead(string boardTitle);
 
     /// <summary>
-    /// Mark all comments on all forums as read
+    /// Mark all comments on all boards as read
     /// </summary>
     /// <returns></returns>
     Task MarkAllAsRead();

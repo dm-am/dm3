@@ -1,38 +1,43 @@
-import { PagingQuery } from '@/api/models/common';
-import { User } from '@/api/models/community';
-import { AttributeSchema } from '@/api/models/gaming/attributes';
+import type { PagingQuery } from "@/api/models/common";
+import type { User } from "@/api/models/community";
+import type { AttributeSchema } from "@/api/models/gaming/attributes";
+import type { Id, Served } from "@/api/models";
 
 export enum GameStatus {
-  Closed = 'Closed',
-  Finished = 'Finished',
-  Frozen = 'Frozen',
-  Requirement = 'Requirement',
-  Draft = 'Draft',
-  Active = 'Active',
-  RequiresModeration = 'RequiresModeration',
-  Moderation = 'Moderation',
+  Closed = "Closed",
+  Finished = "Finished",
+  Frozen = "Frozen",
+  /** Games looking for players (набор игроков) */
+  Recruiting = "Requirement",
+  /** @deprecated Use Recruiting instead */
+  Requirement = "Requirement",
+  Draft = "Draft",
+  Active = "Active",
+  RequiresModeration = "RequiresModeration",
+  Moderation = "Moderation",
 }
 
 export enum GameParticipation {
-  None = 'None',
-  Reader = 'Reader',
-  Player = 'Player',
-  Moderator = 'Moderator',
-  PendingAssistant = 'PendingAssistant',
-  Authority = 'Authority',
-  Owner = 'Owner',
+  None = "None",
+  Reader = "Reader",
+  Player = "Player",
+  Moderator = "Moderator",
+  PendingAssistant = "PendingAssistant",
+  Authority = "Authority",
+  Owner = "Owner",
 }
 
-export interface Tag {
-  id: string;
-  title: string;
-  category: string;
-}
+export type TagId = Id<string>;
+export type Tag = {
+  id: Served<TagId>;
+  title: Served<string>;
+  category: Served<string>;
+};
 
 export enum CommentariesAccessMode {
-  Public = 'Public',
-  Readonly = 'Readonly',
-  Private = 'Private',
+  Public = "Public",
+  Readonly = "Readonly",
+  Private = "Private",
 }
 
 export interface GamePrivacySettings {
@@ -45,19 +50,20 @@ export interface GamePrivacySettings {
   commentariesAccess: CommentariesAccessMode;
 }
 
-export interface Game {
-  id: string;
+export type GameId = Id<string>;
+export type Game = {
+  id: Served<GameId>;
   title: string;
   system: string;
   setting: string;
   status: GameStatus;
-  participation: GameParticipation[];
-  released: string;
+  participation: Served<GameParticipation[]>;
+  released: Served<string>;
 
-  master: User;
+  master: Served<User>;
   assistant: User | null;
-  pendingAssistant: User | null;
-  mentor: User | null;
+  pendingAssistant: Served<User | null>;
+  mentor: Served<User | null>;
   notes: string;
   info: string;
 
@@ -65,11 +71,26 @@ export interface Game {
   privacySettings: GamePrivacySettings;
   schema: AttributeSchema | null;
 
-  unreadPostsCount: number;
-  unreadCommentsCount: number;
-  unreadCharactersCount: number;
-}
+  // Sidebar data
+  activeCharacterUserIds: Served<string[]>;
+
+  unreadPostsCount: Served<number>;
+  unreadCommentsCount: Served<number>;
+  unreadCharactersCount: Served<number>;
+};
 
 export interface GamesQuery extends PagingQuery {
   statuses: GameStatus[];
+}
+
+export type InvitationType = "assistant" | "player" | "reader";
+
+export interface Invitation {
+  id: string;
+  gameId: string;
+  gameTitle: string;
+  invitedUser: User;
+  inviterLogin: string;
+  type: InvitationType;
+  createdUtc: string;
 }

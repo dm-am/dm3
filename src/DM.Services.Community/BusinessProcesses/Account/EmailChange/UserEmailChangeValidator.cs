@@ -34,7 +34,7 @@ internal class UserEmailChangeValidator : AbstractValidator<UserEmailChange>
             .Must((model, password, context) =>
                 context.RootContextData.TryGetValue(FoundUserKey, out var userWrapper) &&
                 userWrapper is AuthenticatedUser user &&
-                securityManager.ComparePasswords(password, user.Salt, user.PasswordHash))
+                securityManager.ComparePasswords(password, user.Salt, user.PasswordHash, user.PasswordHashVersion))
             .WithMessage(ValidationError.Invalid);
 
         RuleFor(u => u.Email)

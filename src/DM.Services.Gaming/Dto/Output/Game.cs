@@ -16,14 +16,39 @@ public class Game
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Created date
+    /// Created date (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Game status
     /// </summary>
     public GameStatus Status { get; set; }
+
+    /// <summary>
+    /// Premoderation status for newbie GMs
+    /// </summary>
+    public PremoderationStatus PremoderationStatus { get; set; }
+
+    /// <summary>
+    /// Game was completed successfully (only when Status = Closed)
+    /// </summary>
+    public bool IsFinished { get; set; }
+
+    /// <summary>
+    /// Game was frozen due to inactivity (only when Status = Closed)
+    /// </summary>
+    public bool IsFrozen { get; set; }
+
+    /// <summary>
+    /// Recruitment information
+    /// </summary>
+    public GameRecruitment Recruitment { get; set; }
+
+    /// <summary>
+    /// When the game was closed
+    /// </summary>
+    public DateTimeOffset? ClosedUtc { get; set; }
 
     /// <summary>
     /// Game tags
@@ -92,9 +117,9 @@ public class Game
     public string SystemName { get; set; }
 
     /// <summary>
-    /// Game RPG setting
+    /// Narrative setting (e.g. Mass Effect, WarHammer, Our world)
     /// </summary>
-    public string SettingName { get; set; }
+    public string NarrativeSetting { get; set; }
 
     /// <summary>
     /// Commentaries access mode

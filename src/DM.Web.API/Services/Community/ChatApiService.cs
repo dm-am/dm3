@@ -134,4 +134,16 @@ internal class ChatApiService : IChatApiService
         }
         return new Envelope<ChatMessage>(_mapper.Map<ChatMessage>(message));
     }
+
+    /// <inheritdoc />
+    public async Task<Envelope<ChatMessage>> GetLastMessageOnOrBeforeDate(DateOnly date)
+    {
+        var message = await _readingService.GetLastMessageOnOrBeforeDate(date);
+        if (message == null)
+        {
+            throw new DM.Services.Core.Exceptions.HttpException(
+                System.Net.HttpStatusCode.NotFound, "No messages found on or before this date");
+        }
+        return new Envelope<ChatMessage>(_mapper.Map<ChatMessage>(message));
+    }
 }

@@ -69,7 +69,7 @@ internal class GameUpdatingService : IGameUpdatingService
 
         var changes = updateBuilderFactory.Create<Game>(game.Id)
             .MaybeField(c => c.Title, updateGame.Title?.Trim())
-            .MaybeField(c => c.SettingName, updateGame.SettingName?.Trim())
+            .MaybeField(c => c.NarrativeSetting, updateGame.NarrativeSetting?.Trim())
             .MaybeField(c => c.SystemName, updateGame.SystemName?.Trim())
             .MaybeField(c => c.Info, updateGame.Info)
             .MaybeField(c => c.HideTemper, updateGame.HideTemper)
@@ -102,21 +102,76 @@ internal class GameUpdatingService : IGameUpdatingService
             {
                 changes.Field(g => g.Status, updateGame.Status.Value);
                 invokedEvents.Add(eventType);
-                    
-                if (updateGame.Status == GameStatus.Moderation) // when we go to moderation the actor becomes mentor
-                {
-                    changes = changes.Field(g => g.MentorId, identityProvider.Current.User.UserId);
-                }
-                else if (game.Status == GameStatus.Moderation) // when we go from moderation the mentor is no more
-                {
-                    changes = changes.Field(g => g.MentorId, null);
-                }
 
-                if (!game.ReleaseDate.HasValue && updateGame.Status == GameStatus.Requirement)
+                // Set ReleaseDate on first activation
+                if (!game.ReleaseDate.HasValue && updateGame.Status == GameStatus.Active)
                 {
                     changes = changes.Field(g => g.ReleaseDate, dateTimeProvider.Now);
                 }
+
+                // Set ClosedUtc when closing
+                if (updateGame.Status == GameStatus.Closed)
+                {
+                    changes = changes.Field(g => g.ClosedUtc, dateTimeProvider.Now);
+                    changes = changes.Field(g => g.IsRecruitmentOpen, false);
+                }
+
+                // Clear ClosedUtc when reopening
+                if (game.Status == GameStatus.Closed && updateGame.Status != GameStatus.Closed)
+                {
+                    changes = changes.Field(g => g.ClosedUtc, (DateTimeOffset?)null);
+                    changes = changes.Field(g => g.IsFinished, false);
+                    changes = changes.Field(g => g.IsFrozen, false);
+                }
             }
+        }
+
+        // Handle premoderation status changes
+        if (updateGame.PremoderationStatus.HasValue && updateGame.PremoderationStatus != game.PremoderationStatus)
+        {
+            if (intentionManager.IsAllowed(GameIntention.SetStatusModeration, game))
+            {
+                changes.Field(g => g.PremoderationStatus, updateGame.PremoderationStatus.Value);
+
+                // Mentor takes game for review
+                if (updateGame.PremoderationStatus == PremoderationStatus.Approved ||
+                    updateGame.PremoderationStatus == PremoderationStatus.AwaitingEdits)
+                {
+                    changes = changes.Field(g => g.MentorId, identityProvider.Current.User.UserId);
+                }
+
+                // When approved, clear mentor
+                if (updateGame.PremoderationStatus == PremoderationStatus.Approved &&
+                    game.PremoderationStatus != PremoderationStatus.Approved)
+                {
+                    changes = changes.Field(g => g.MentorId, (Guid?)null);
+                }
+            }
+        }
+
+        // Handle close reason flags
+        if (updateGame.IsFinished.HasValue)
+        {
+            changes = changes.MaybeField(g => g.IsFinished, updateGame.IsFinished);
+        }
+        if (updateGame.IsFrozen.HasValue)
+        {
+            changes = changes.MaybeField(g => g.IsFrozen, updateGame.IsFrozen);
+        }
+        if (updateGame.IsRecruitmentOpen.HasValue)
+        {
+            changes = changes.MaybeField(g => g.IsRecruitmentOpen, updateGame.IsRecruitmentOpen);
+
+            // Set RecruitmentStartedUtc when opening recruitment for the first time
+            if (updateGame.IsRecruitmentOpen.Value && !game.Recruitment?.IsOpen == true)
+            {
+                changes = changes.Field(g => g.RecruitmentStartedUtc, dateTimeProvider.Now);
+            }
+        }
+
+        if (updateGame.RecruitmentPlayerLimit.HasValue)
+        {
+            changes = changes.Field(g => g.RecruitmentPlayerLimit, updateGame.RecruitmentPlayerLimit);
         }
 
         var result = await updatingRepository.Update(changes);

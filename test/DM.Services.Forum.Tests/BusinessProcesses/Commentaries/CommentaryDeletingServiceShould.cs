@@ -117,7 +117,7 @@ public class CommentaryDeletingServiceShould : UnitTestBase
         var comment = new CommentToDelete
         {
             EntityId = topicId,
-            CreateDate = new DateTimeOffset(2019, 01, 14, 10, 13, 11, TimeSpan.Zero)
+            CreatedUtc = new DateTimeOffset(2019, 01, 14, 10, 13, 11, TimeSpan.Zero)
         };
         getCommentSetup.ReturnsAsync(comment);
 

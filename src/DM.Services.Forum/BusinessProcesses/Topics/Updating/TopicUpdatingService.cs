@@ -20,7 +20,7 @@ internal class TopicUpdatingService : ITopicUpdatingService
 {
     private readonly IValidator<UpdateTopic> _validator;
     private readonly ITopicReadingService _topicReadingService;
-    private readonly IForumReadingService _forumReadingService;
+    private readonly IBoardReadingService _boardReadingService;
     private readonly IIntentionManager _intentionManager;
     private readonly IUpdateBuilderFactory _updateBuilderFactory;
     private readonly ITopicUpdatingRepository _repository;
@@ -31,7 +31,7 @@ internal class TopicUpdatingService : ITopicUpdatingService
     public TopicUpdatingService(
         IValidator<UpdateTopic> validator,
         ITopicReadingService topicReadingService,
-        IForumReadingService forumReadingService,
+        IBoardReadingService boardReadingService,
         IIntentionManager intentionManager,
         IUpdateBuilderFactory updateBuilderFactory,
         ITopicUpdatingRepository repository,
@@ -40,7 +40,7 @@ internal class TopicUpdatingService : ITopicUpdatingService
     {
         _validator = validator;
         _topicReadingService = topicReadingService;
-        _forumReadingService = forumReadingService;
+        _boardReadingService = boardReadingService;
         _intentionManager = intentionManager;
         _updateBuilderFactory = updateBuilderFactory;
         _repository = repository;
@@ -60,19 +60,19 @@ internal class TopicUpdatingService : ITopicUpdatingService
             .MaybeField(t => t.Title, updateTopic.Title?.Trim())
             .MaybeField(t => t.Text, updateTopic.Text?.Trim());
 
-        if (_intentionManager.IsAllowed(ForumIntention.AdministrateTopics, oldTopic.Forum))
+        if (_intentionManager.IsAllowed(ForumIntention.AdministrateTopics, oldTopic.Board))
         {
             changes
                 .MaybeField(t => t.IsClosed, updateTopic.IsClosed)
                 .MaybeField(t => t.IsAttached, updateTopic.IsAttached);
 
-            if (updateTopic.ForumTitle != default &&
-                oldTopic.Forum.Title != updateTopic.ForumTitle)
+            if (updateTopic.BoardTitle != default &&
+                oldTopic.Board.Title != updateTopic.BoardTitle)
             {
-                var forum = await _forumReadingService.GetForum(updateTopic.ForumTitle, false);
-                _intentionManager.ThrowIfForbidden(ForumIntention.CreateTopic, forum);
-                changes.Field(t => t.ForumId, forum.Id);
-                await _unreadCountersRepository.ChangeParent(oldTopic.Forum.Id, UnreadEntryType.Message, forum.Id);
+                var board = await _boardReadingService.GetBoard(updateTopic.BoardTitle, false);
+                _intentionManager.ThrowIfForbidden(ForumIntention.CreateTopic, board);
+                changes.Field(t => t.BoardId, board.Id);
+                await _unreadCountersRepository.ChangeParent(oldTopic.Board.Id, UnreadEntryType.Message, board.Id);
             }
         }
 

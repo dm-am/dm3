@@ -12,7 +12,7 @@ namespace DM.Services.DataAccess.BusinessObjects.Boards;
 /// DAL model for forum topic
 /// </summary>
 [Table("ForumTopics")]
-public class ForumTopic : IRemovable
+public class ForumTopic : ISoftDeletable, IEditable, IHasEditHistory<TopicEdit>
 {
     /// <summary>
     /// Topic identifier
@@ -21,9 +21,9 @@ public class ForumTopic : IRemovable
     public Guid ForumTopicId { get; set; }
 
     /// <summary>
-    /// Forum identifier
+    /// Board identifier
     /// </summary>
-    public Guid ForumId { get; set; }
+    public Guid BoardId { get; set; }
 
     /// <summary>
     /// Author identifier
@@ -31,14 +31,19 @@ public class ForumTopic : IRemovable
     public Guid UserId { get; set; }
 
     /// <summary>
-    /// Creation moment
+    /// Creation moment (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Last update moment
+    /// Last modification moment (UTC)
     /// </summary>
-    public DateTimeOffset? LastUpdateDate { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
+
+    /// <summary>
+    /// Last editor user identifier
+    /// </summary>
+    public Guid? ModifiedByUserId { get; set; }
 
     /// <summary>
     /// Title
@@ -69,11 +74,17 @@ public class ForumTopic : IRemovable
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
 
+    /// <inheritdoc />
+    public Guid? DeletedByUserId { get; set; }
+
+    /// <inheritdoc />
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+
     /// <summary>
-    /// Forum
+    /// Board
     /// </summary>
-    [ForeignKey(nameof(ForumId))]
-    public virtual Forum Forum { get; set; }
+    [ForeignKey(nameof(BoardId))]
+    public virtual Board Board { get; set; }
 
     /// <summary>
     /// Author
@@ -82,10 +93,28 @@ public class ForumTopic : IRemovable
     public virtual User Author { get; set; }
 
     /// <summary>
+    /// Last editor
+    /// </summary>
+    [ForeignKey(nameof(ModifiedByUserId))]
+    public virtual User ModifiedBy { get; set; }
+
+    /// <summary>
+    /// User who deleted the topic
+    /// </summary>
+    [ForeignKey(nameof(DeletedByUserId))]
+    public virtual User DeletedBy { get; set; }
+
+    /// <summary>
     /// Last commentary
     /// </summary>
     [ForeignKey(nameof(LastCommentId))]
     public virtual Comment LastComment { get; set; }
+
+    /// <summary>
+    /// Edit history
+    /// </summary>
+    [InverseProperty(nameof(TopicEdit.Topic))]
+    public virtual ICollection<TopicEdit> Edits { get; set; }
 
     /// <summary>
     /// Commenaries

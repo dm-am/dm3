@@ -22,18 +22,27 @@ internal class PollReadingRepository : MongoCollectionRepository<DbPoll>, IPollR
     }
 
     /// <inheritdoc />
-    public Task<long> Count(DateTimeOffset? activeUntil) =>
-        Collection.CountDocumentsAsync(activeUntil.HasValue
-            ? Filter.Gte(p => p.EndDate, activeUntil.Value.UtcDateTime)
-            : Filter.Empty);
+    public Task<long> Count(DateTimeOffset? activeUntil)
+    {
+        var filter = Filter.Eq(p => p.IsRemoved, false);
+        if (activeUntil.HasValue)
+        {
+            filter &= Filter.Gte(p => p.EndDate, activeUntil.Value.UtcDateTime);
+        }
+        return Collection.CountDocumentsAsync(filter);
+    }
 
     /// <inheritdoc />
     public async Task<IEnumerable<Poll>> Get(DateTimeOffset? activeUntil, PagingData pagingData)
     {
+        var filter = Filter.Eq(p => p.IsRemoved, false);
+        if (activeUntil.HasValue)
+        {
+            filter &= Filter.Gte(p => p.EndDate, activeUntil.Value.UtcDateTime);
+        }
+
         var dbPolls = await Collection
-            .Find(activeUntil.HasValue
-                ? Filter.Gte(p => p.EndDate, activeUntil.Value.UtcDateTime)
-                : Filter.Empty)
+            .Find(filter)
             .Sort(Sort.Descending(p => p.StartDate))
             .Skip(pagingData.Skip)
             .Limit(pagingData.Take)
@@ -45,7 +54,7 @@ internal class PollReadingRepository : MongoCollectionRepository<DbPoll>, IPollR
     public async Task<Poll> Get(Guid id)
     {
         var dbPoll = await Collection
-            .Find(Filter.Eq(p => p.Id, id))
+            .Find(Filter.Eq(p => p.Id, id) & Filter.Eq(p => p.IsRemoved, false))
             .FirstOrDefaultAsync();
         return mapper.Map<Poll>(dbPoll);
     }

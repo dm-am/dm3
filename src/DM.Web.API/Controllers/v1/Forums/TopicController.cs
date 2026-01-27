@@ -109,7 +109,7 @@ public class TopicController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to remove the topic</response>
     /// <response code="410">Topic not found</response>
-    [HttpDelete("{id}", Name = nameof(DeleteTopic))]
+    [HttpDelete("topics/{id}", Name = nameof(DeleteTopic))]
     [AuthenticationRequired]
     [ProducesResponseType(204)]
     [ProducesResponseType(typeof(GeneralError), 401)]

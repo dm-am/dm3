@@ -25,11 +25,18 @@ public interface IConversationReadingService
     Task<Conversation> Get(Guid conversationId);
 
     /// <summary>
-    /// Find user visavi conversation
+    /// Find user visavi conversation by login
     /// </summary>
     /// <param name="login">User login</param>
     /// <returns></returns>
     Task<Conversation> GetOrCreate(string login);
+
+    /// <summary>
+    /// Find user visavi conversation by ID
+    /// </summary>
+    /// <param name="visaviUserId">Visavi user ID</param>
+    /// <returns></returns>
+    Task<Conversation> GetOrCreate(Guid visaviUserId);
 
     /// <summary>
     /// Count all unread conversations

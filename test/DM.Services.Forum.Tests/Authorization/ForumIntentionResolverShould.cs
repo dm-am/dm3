@@ -14,12 +14,12 @@ namespace DM.Services.Forum.Tests.Authorization;
 public class ForumIntentionResolverShould : UnitTestBase
 {
     private readonly Mock<IAccessPolicyConverter> policyConverter;
-    private readonly ForumIntentionResolver resolver;
+    private readonly BoardIntentionResolver resolver;
 
     public ForumIntentionResolverShould()
     {
         policyConverter = Mock<IAccessPolicyConverter>();
-        resolver = new ForumIntentionResolver(policyConverter.Object);
+        resolver = new BoardIntentionResolver(policyConverter.Object);
     }
 
     [Fact]
@@ -28,16 +28,16 @@ public class ForumIntentionResolverShould : UnitTestBase
         policyConverter
             .Setup(c => c.Convert(UserRole.Admin))
             .Returns(
-                ForumAccessPolicy.ForumModerator |
-                ForumAccessPolicy.Player |
-                ForumAccessPolicy.MentorModerator);
+                BoardAccessPolicy.BoardModerator |
+                BoardAccessPolicy.Player |
+                BoardAccessPolicy.MentorModerator);
 
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.Admin).Please(),
             ForumIntention.CreateTopic,
-            new Dto.Output.Forum
+            new Dto.Output.Board
             {
-                CreateTopicPolicy = ForumAccessPolicy.Guest | ForumAccessPolicy.SeniorModerator
+                CreateTopicPolicy = BoardAccessPolicy.Guest | BoardAccessPolicy.SeniorModerator
             });
         actual.Should().BeFalse();
     }
@@ -48,7 +48,7 @@ public class ForumIntentionResolverShould : UnitTestBase
         resolver.IsAllowed(
                 Create.User().Please(),
                 ForumIntention.CreateTopic,
-                new Dto.Output.Forum())
+                new Dto.Output.Board())
             .Should().BeFalse();
     }
 
@@ -58,16 +58,16 @@ public class ForumIntentionResolverShould : UnitTestBase
         policyConverter
             .Setup(c => c.Convert(UserRole.Admin))
             .Returns(
-                ForumAccessPolicy.Guest |
-                ForumAccessPolicy.Player |
-                ForumAccessPolicy.Administrator);
+                BoardAccessPolicy.Guest |
+                BoardAccessPolicy.Player |
+                BoardAccessPolicy.Administrator);
 
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.Admin).Please(),
             ForumIntention.CreateTopic,
-            new Dto.Output.Forum
+            new Dto.Output.Board
             {
-                CreateTopicPolicy = ForumAccessPolicy.Administrator | ForumAccessPolicy.SeniorModerator
+                CreateTopicPolicy = BoardAccessPolicy.Administrator | BoardAccessPolicy.SeniorModerator
             });
         actual.Should().BeTrue();
     }
@@ -78,7 +78,7 @@ public class ForumIntentionResolverShould : UnitTestBase
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.Moderator).Please(),
             ForumIntention.AdministrateTopics,
-            new Dto.Output.Forum
+            new Dto.Output.Board
             {
                 ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
             });
@@ -91,7 +91,7 @@ public class ForumIntentionResolverShould : UnitTestBase
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.Admin).Please(),
             ForumIntention.AdministrateTopics,
-            new Dto.Output.Forum
+            new Dto.Output.Board
             {
                 ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
             });
@@ -105,7 +105,7 @@ public class ForumIntentionResolverShould : UnitTestBase
         var actual = resolver.IsAllowed(
             Create.User(userId).WithRole(UserRole.SeniorModerator).Please(),
             ForumIntention.AdministrateTopics,
-            new Dto.Output.Forum
+            new Dto.Output.Board
             {
                 ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid(), userId }
             });
@@ -117,6 +117,6 @@ public class ForumIntentionResolverShould : UnitTestBase
     [InlineData(ForumIntention.AdministrateTopics)]
     public void AllowNothingWhenUserGuest(ForumIntention intention)
     {
-        resolver.IsAllowed(AuthenticatedUser.Guest, intention, new Dto.Output.Forum()).Should().BeFalse();
+        resolver.IsAllowed(AuthenticatedUser.Guest, intention, new Dto.Output.Board()).Should().BeFalse();
     }
 }

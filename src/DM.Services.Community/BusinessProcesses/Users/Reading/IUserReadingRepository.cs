@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Services.Core.Dto;
+using DM.Services.Core.Dto.Enums;
 
 namespace DM.Services.Community.BusinessProcesses.Users.Reading;
 
@@ -34,9 +36,30 @@ internal interface IUserReadingRepository
     Task<GeneralUser> GetUser(string login);
 
     /// <summary>
+    /// Get user by ID
+    /// </summary>
+    /// <param name="userId">User ID</param>
+    /// <returns>User found. Null if none found</returns>
+    Task<GeneralUser> GetUser(Guid userId);
+
+    /// <summary>
     /// Get user details by login
     /// </summary>
     /// <param name="login">User login</param>
     /// <returns>User found. Null if none found</returns>
     Task<UserDetails> GetUserDetails(string login);
+
+    /// <summary>
+    /// Get user details by ID
+    /// </summary>
+    /// <param name="userId">User ID</param>
+    /// <returns>User found. Null if none found</returns>
+    Task<UserDetails> GetUserDetails(Guid userId);
+
+    /// <summary>
+    /// Get users by role
+    /// </summary>
+    /// <param name="role">User role</param>
+    /// <returns>List of users with the specified role</returns>
+    Task<IEnumerable<GeneralUser>> GetUsersByRole(UserRole role);
 }

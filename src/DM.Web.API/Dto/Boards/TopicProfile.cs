@@ -13,14 +13,14 @@ internal class TopicProfile : Profile
     public TopicProfile()
     {
         CreateMap<DM.Services.Forum.Dto.Output.Topic, Topic>()
-            .ForMember(d => d.CreatedUtc, s => s.MapFrom(t => t.CreateDate))
-            .ForMember(d => d.EditedUtc, s => s.MapFrom(t => t.LastUpdateDate))
+            .ForMember(d => d.CreatedUtc, s => s.MapFrom(t => t.CreatedUtc))
+            .ForMember(d => d.EditedUtc, s => s.MapFrom(t => t.ModifiedUtc))
             .ForMember(d => d.CommentsCount, s => s.MapFrom(t => t.TotalCommentsCount))
             .ForMember(d => d.Description, s => s.MapFrom(t => t.Text))
-            .ForMember(d => d.Board, s => s.MapFrom(t => t.Forum));
+            .ForMember(d => d.Board, s => s.MapFrom(t => t.Board));
 
         CreateMap<LastComment, LastTopicComment>()
-            .ForMember(d => d.CreatedUtc, s => s.MapFrom(c => c.CreateDate));
+            .ForMember(d => d.CreatedUtc, s => s.MapFrom(c => c.CreatedUtc));
 
         CreateMap<Topic, CreateTopic>()
             .ForMember(d => d.Text, s => s.MapFrom(t => t.Description));
@@ -28,6 +28,6 @@ internal class TopicProfile : Profile
         CreateMap<Topic, UpdateTopic>()
             .ForMember(d => d.Text, s => s.MapFrom(t => t.Description))
             .ForMember(d => d.TopicId, s => s.MapFrom(t => t.Id))
-            .ForMember(d => d.ForumTitle, s => s.MapFrom(t => t.Board.Id));
+            .ForMember(d => d.BoardTitle, s => s.MapFrom(t => t.Board.Id));
     }
 }

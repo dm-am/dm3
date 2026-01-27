@@ -48,7 +48,7 @@ public class MessageController : ControllerBase
     /// <response code="410">Dialogue not found</response>
     [HttpPost("conversations/{id}/messages", Name = nameof(PostMessage))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(ListEnvelope<Message>), 201)]
+    [ProducesResponseType(typeof(Envelope<Message>), 201)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]

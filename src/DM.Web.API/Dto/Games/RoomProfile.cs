@@ -12,6 +12,7 @@ internal class RoomProfile : Profile
     public RoomProfile()
     {
         CreateMap<DM.Services.Gaming.Dto.Output.Room, Room>();
+        CreateMap<DM.Services.Gaming.Dto.Output.RoomSettings, RoomSettings>();
 
         CreateMap<Room, CreateRoom>();
         CreateMap<Room, UpdateRoom>();

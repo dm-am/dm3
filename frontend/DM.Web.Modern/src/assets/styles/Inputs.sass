@@ -1,0 +1,68 @@
+@import "Themes"
+
+$input-padding: ($minor + 1px) $small
+
+/// Base input styles without font settings (for custom inputs)
+@mixin input-base()
+  padding: $input-padding
+  color: $text
+  background-color: $input-bg-overlay
+  border: 1px dashed $border
+
+@mixin input()
+  margin: 0
+  +input-base()
+
+  outline: none
+
+  font-family: "PT Sans", sans-serif
+  font-size: $font-size
+
+  &:focus
+    outline: none
+    border-style: solid
+    border-color: $button-border-hover
+
+  &:disabled
+    background-color: $input-bg-disabled
+
+/// Standard button styling - dashed border, bold text
+@mixin button()
+  padding: $minor $small
+  border: 1px dashed
+  font-family: "PT Sans", sans-serif
+  font-size: $font-size
+  font-weight: bold
+  cursor: pointer
+  transition: all 0.15s
+  background-color: $button-bg
+  color: $button-text
+  border-color: $button-border
+
+  &:hover
+    background-color: $button-bg-hover
+    color: $button-text-hover
+    border-color: $button-border-hover
+
+  &:focus
+    outline: none
+    border-color: $button-border-hover
+
+  &:disabled
+    background-color: $button-bg-disabled
+    color: $button-text-disabled
+    border-color: $button-border-disabled
+    cursor: not-allowed
+
+/// Badge/tag styling - small label with background
+@mixin badge()
+  display: inline-block
+  padding: $tiny $small
+  font-size: $secondary-font-size
+  font-weight: bold
+  background-color: $button-bg
+  color: $button-text
+
+input,
+textarea
+  +input()

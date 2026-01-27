@@ -14,7 +14,7 @@ namespace DM.Services.DataAccess.BusinessObjects.Common;
 /// DAL model for commentary
 /// </summary>
 [Table("Comments")]
-public class Comment : IRemovable
+public class Comment : ISoftDeletable, IEditable, IHasEditHistory<CommentEdit>
 {
     /// <summary>
     /// Commentary identifier
@@ -33,14 +33,19 @@ public class Comment : IRemovable
     public Guid UserId { get; set; }
 
     /// <summary>
-    /// Creation moment
+    /// Creation moment (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Last update moment
+    /// Last modification moment (UTC)
     /// </summary>
-    public DateTimeOffset? LastUpdateDate { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
+
+    /// <summary>
+    /// Last editor user identifier
+    /// </summary>
+    public Guid? ModifiedByUserId { get; set; }
 
     /// <summary>
     /// Commentary content
@@ -50,12 +55,18 @@ public class Comment : IRemovable
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
 
+    /// <inheritdoc />
+    public Guid? DeletedByUserId { get; set; }
+
+    /// <inheritdoc />
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+
     /// <summary>
     /// Parent topic
     /// </summary>
     [ForeignKey(nameof(EntityId))]
     public virtual ForumTopic Topic { get; set; }
-        
+
     /// <summary>
     /// Parent game
     /// </summary>
@@ -67,6 +78,24 @@ public class Comment : IRemovable
     /// </summary>
     [ForeignKey(nameof(UserId))]
     public virtual User Author { get; set; }
+
+    /// <summary>
+    /// Last editor
+    /// </summary>
+    [ForeignKey(nameof(ModifiedByUserId))]
+    public virtual User ModifiedBy { get; set; }
+
+    /// <summary>
+    /// User who deleted the comment
+    /// </summary>
+    [ForeignKey(nameof(DeletedByUserId))]
+    public virtual User DeletedBy { get; set; }
+
+    /// <summary>
+    /// Edit history
+    /// </summary>
+    [InverseProperty(nameof(CommentEdit.Comment))]
+    public virtual ICollection<CommentEdit> Edits { get; set; }
 
     /// <summary>
     /// Likes

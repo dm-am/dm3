@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DM.Services.DataAccess.BusinessObjects.DataContracts;
 using DM.Services.DataAccess.MongoIntegration;
 using MongoDB.Bson.Serialization.Attributes;
 
@@ -9,7 +10,7 @@ namespace DM.Services.DataAccess.BusinessObjects.Boards;
 /// DAL model for poll
 /// </summary>
 [MongoCollectionName("Polls")]
-public class Poll
+public class Poll : IRemovable
 {
     /// <summary>
     /// Identifier
@@ -43,6 +44,11 @@ public class Poll
     /// Options
     /// </summary>
     public List<PollOption> Options { get; set; }
+
+    /// <summary>
+    /// Removed flag
+    /// </summary>
+    public bool IsRemoved { get; set; }
 }
 
 /// <summary>

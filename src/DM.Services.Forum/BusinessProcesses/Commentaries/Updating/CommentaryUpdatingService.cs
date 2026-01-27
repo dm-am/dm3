@@ -54,7 +54,7 @@ internal class CommentaryUpdatingService : ICommentaryUpdatingService
 
         if (updateBuilder.HasChanges())
         {
-            updateBuilder.Field(f => f.LastUpdateDate, _dateTimeProvider.Now);
+            updateBuilder.Field(f => f.ModifiedUtc, _dateTimeProvider.Now);
         }
 
         var updatedComment = await _repository.Update(updateBuilder);

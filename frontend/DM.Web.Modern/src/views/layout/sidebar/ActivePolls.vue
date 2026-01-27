@@ -1,62 +1,41 @@
-<template>
-  <div>
-    <menu-block token="OpenPolls">
-      <template v-slot:title>Опросы</template>
+<script setup lang="ts">
+import MenuBlock from "@/views/layout/MenuBlock.vue";
+import { usePollsStore } from "@/stores/polls";
+import { onMounted } from "vue";
+import ThePoll from "@/views/layout/sidebar/ThePoll.vue";
+import { storeToRefs } from "pinia";
+import SecondaryText from "@/components/layout/SecondaryText.vue";
 
-      <loader v-if="polls === null" />
-      <div v-else-if="polls.length">
-        <poll-component v-for="poll in polls" :key="poll.id" :poll="poll" />
-      </div>
-      <div v-else class="nothing">Нет активных опросов</div>
+const store = usePollsStore();
+const { activePolls } = storeToRefs(store);
 
-      <router-link :to="{ name: 'polls' }" class="rest-link">
-        К прошедшим опросам
-        <icon :font="IconType.Forward" />
-      </router-link>
-    </menu-block>
-  </div>
-</template>
-
-<script lang="ts">
-import { Component, Watch, Vue } from 'vue-property-decorator';
-import { Getter, Action } from 'vuex-class';
-
-import { Poll } from '@/api/models/community';
-import MenuBlock from '@/views/layout/MenuBlock.vue';
-import PollComponent from '@/components/community/Poll.vue';
-import IconType from '@/components/iconType';
-
-@Component({
-  components: {
-    MenuBlock,
-    PollComponent,
-  },
-})
-export default class ActivePolls extends Vue {
-  private IconType: typeof IconType = IconType;
-
-  @Getter('community/activePolls')
-  private polls!: Poll[];
-
-  @Action('community/fetchActivePolls')
-  private fetchPolls: any;
-
-  @Watch('user')
-  private onUserChange() {
-    this.fetchPolls();
-  }
-
-  private mounted(): void {
-    this.fetchPolls();
-  }
-}
+onMounted(() => store.fetchActivePolls());
 </script>
 
-<style scoped lang="stylus">
-.nothing
-  margin-bottom $minor
-  secondary()
+<template>
+  <menu-block token="OpenPolls">
+    <template #title>Опросы</template>
+    <the-loader v-if="!activePolls" />
+    <secondary-text v-else-if="!activePolls.length"
+      >Нет активных опросов</secondary-text
+    >
+    <the-poll v-else v-for="poll in activePolls" :key="poll.id" :poll="poll" />
+    <div class="all-polls-link">
+      <span class="muted">- </span><router-link class="forward" :to="{ name: 'polls' }">Все опросы</router-link>
+    </div>
+  </menu-block>
+</template>
 
-.rest-link
-  font-weight bold
+<style scoped lang="sass">
+@import "src/assets/styles/Variables"
+@import "src/assets/styles/Themes"
+
+.all-polls-link
+  margin-top: $small
+
+.forward
+  font-weight: bold
+
+.muted
+  color: $text-muted
 </style>

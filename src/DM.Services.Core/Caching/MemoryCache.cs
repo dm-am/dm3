@@ -18,7 +18,15 @@ internal class MemoryCache : ICache
 
     /// <inheritdoc />
     public Task<TEntry> GetOrCreate<TEntry>(object key, Func<Task<TEntry>> create) =>
-        _memoryCache.GetOrCreateAsync(key, _ => create());
+        GetOrCreate(key, create, CachePolicy.LongLived);
+
+    /// <inheritdoc />
+    public async Task<TEntry> GetOrCreate<TEntry>(object key, Func<Task<TEntry>> create, TimeSpan absoluteExpiration) =>
+        (await _memoryCache.GetOrCreateAsync(key, async e =>
+        {
+            e.AbsoluteExpirationRelativeToNow = absoluteExpiration;
+            return await create();
+        }))!;
 
     /// <inheritdoc />
     public Task Invalidate(object key)

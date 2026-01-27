@@ -26,7 +26,7 @@ public enum GameIntention
     Delete = 3,
 
     /// <summary>
-    /// Move game on moderation
+    /// Handle premoderation (mentor approval/rejection)
     /// </summary>
     SetStatusModeration = 4,
 
@@ -36,24 +36,9 @@ public enum GameIntention
     SetStatusDraft = 5,
 
     /// <summary>
-    /// Move game to requirement
-    /// </summary>
-    SetStatusRequirement = 6,
-
-    /// <summary>
     /// Move game to active
     /// </summary>
     SetStatusActive = 7,
-
-    /// <summary>
-    /// Froze the game
-    /// </summary>
-    SetStatusFrozen = 8,
-
-    /// <summary>
-    /// Finish the game
-    /// </summary>
-    SetStatusFinished = 9,
 
     /// <summary>
     /// Close the game
@@ -83,5 +68,20 @@ public enum GameIntention
     /// <summary>
     /// Create game character
     /// </summary>
-    CreateCharacter = 15
+    CreateCharacter = 15,
+
+    /// <summary>
+    /// Invite player to the game
+    /// </summary>
+    InvitePlayer = 16,
+
+    /// <summary>
+    /// Invite reader to the game
+    /// </summary>
+    InviteReader = 17,
+
+    /// <summary>
+    /// Cancel an invitation
+    /// </summary>
+    CancelInvitation = 18
 }

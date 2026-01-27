@@ -19,9 +19,9 @@ public class Review
     public GeneralUser Author { get; set; }
 
     /// <summary>
-    /// Creating moment
+    /// Creating moment (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Review is published

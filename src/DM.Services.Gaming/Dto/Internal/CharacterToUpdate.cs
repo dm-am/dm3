@@ -14,14 +14,24 @@ internal class CharacterToUpdate
     public Guid UserId { get; set; }
 
     /// <summary>
-    /// Character create date
+    /// Character create date (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Character status
     /// </summary>
     public CharacterStatus Status { get; set; }
+
+    /// <summary>
+    /// Character died in game (only when Status = Retired)
+    /// </summary>
+    public bool IsDead { get; set; }
+
+    /// <summary>
+    /// Player left the game voluntarily (only when Status = Retired)
+    /// </summary>
+    public bool IsPlayerLeft { get; set; }
 
     /// <summary>
     /// Character is NPC

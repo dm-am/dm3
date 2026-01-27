@@ -14,8 +14,8 @@ public class CreateCommentValidatorShould
     [Theory]
     [InlineData("")]
     [InlineData("    ")]
-    [InlineData(null)]
-    public async Task ThrowValidationExceptionWhenTextIsEmpty(string text)
+    [InlineData(null!)]
+    public async Task ThrowValidationExceptionWhenTextIsEmpty(string? text)
     {
         var err = await validator.Awaiting(v => v.ValidateAndThrowAsync(new CreateComment { Text = text }))
             .Should().ThrowAsync<ValidationException>();

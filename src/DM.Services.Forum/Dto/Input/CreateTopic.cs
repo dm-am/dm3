@@ -6,9 +6,9 @@ namespace DM.Services.Forum.Dto.Input;
 public class CreateTopic
 {
     /// <summary>
-    /// Parent forum title
+    /// Parent board title
     /// </summary>
-    public string ForumTitle { get; set; }
+    public string BoardTitle { get; set; }
 
     /// <summary>
     /// New topic title

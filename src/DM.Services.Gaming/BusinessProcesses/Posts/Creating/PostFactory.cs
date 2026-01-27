@@ -26,7 +26,7 @@ internal class PostFactory : IPostFactory
         return new Post
         {
             PostId = guidFactory.Create(),
-            CreateDate = dateTimeProvider.Now,
+            CreatedUtc = dateTimeProvider.Now,
             UserId = userId,
             RoomId = createPost.RoomId,
             CharacterId = createPost.CharacterId,
@@ -34,7 +34,7 @@ internal class PostFactory : IPostFactory
             Commentary = createPost.Commentary,
             MasterMessage = createPost.MasterMessage,
             IsRemoved = false,
-            LastUpdateDate = null
+            ModifiedUtc = null
         };
     }
 }

@@ -216,6 +216,42 @@ public enum EventType
     AssignmentRequestRejected = 353,
 
     /// <summary>
+    /// Player invitation has been created
+    /// </summary>
+    [EventRoutingKey("game.invitation.player.created")]
+    PlayerInvitationCreated = 354,
+
+    /// <summary>
+    /// Player invitation has been accepted
+    /// </summary>
+    [EventRoutingKey("game.invitation.player.accepted")]
+    PlayerInvitationAccepted = 355,
+
+    /// <summary>
+    /// Player invitation has been rejected
+    /// </summary>
+    [EventRoutingKey("game.invitation.player.rejected")]
+    PlayerInvitationRejected = 356,
+
+    /// <summary>
+    /// Reader invitation has been created
+    /// </summary>
+    [EventRoutingKey("game.invitation.reader.created")]
+    ReaderInvitationCreated = 357,
+
+    /// <summary>
+    /// Reader invitation has been accepted
+    /// </summary>
+    [EventRoutingKey("game.invitation.reader.accepted")]
+    ReaderInvitationAccepted = 358,
+
+    /// <summary>
+    /// Reader invitation has been rejected
+    /// </summary>
+    [EventRoutingKey("game.invitation.reader.rejected")]
+    ReaderInvitationRejected = 359,
+
+    /// <summary>
     /// New character has been created
     /// </summary>
     [EventRoutingKey("game.character.created")]
@@ -316,4 +352,10 @@ public enum EventType
     /// </summary>
     [EventRoutingKey("game.post.deleted")]
     DeletedPost = 403,
+
+    /// <summary>
+    /// Post has been voted (rated)
+    /// </summary>
+    [EventRoutingKey("game.post.voted")]
+    PostVoted = 411,
 }

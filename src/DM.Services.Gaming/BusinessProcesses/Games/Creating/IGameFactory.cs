@@ -16,6 +16,9 @@ internal interface IGameFactory
     /// <param name="createGame">DTO model</param>
     /// <param name="masterId">User identifier</param>
     /// <param name="initialStatus">Initial game status</param>
+    /// <param name="premoderationStatus">Premoderation status</param>
+    /// <param name="isRecruitmentOpen">Whether recruitment is open</param>
     /// <returns>Game DAL</returns>
-    DbGame Create(CreateGame createGame, Guid masterId, GameStatus initialStatus);
+    DbGame Create(CreateGame createGame, Guid masterId, GameStatus initialStatus,
+        PremoderationStatus premoderationStatus, bool isRecruitmentOpen);
 }

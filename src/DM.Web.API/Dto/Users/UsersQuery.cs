@@ -13,7 +13,7 @@ public class UsersQuery : PagingQuery
     public bool Inactive { get; set; }
 
     /// <summary>
-    /// Search by login prefix
+    /// Search by login prefix (optional)
     /// </summary>
-    public string Search { get; set; }
+    public string? Search { get; set; }
 }

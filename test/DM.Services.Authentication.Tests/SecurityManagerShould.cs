@@ -13,7 +13,8 @@ public class SecurityManagerShould : UnitTestBase
 {
     private readonly Mock<ISaltFactory> saltFactory;
     private readonly Mock<IHashProvider> hashProvider;
-    private readonly ISetup<IHashProvider, byte[]> computeHashSetup;
+    private readonly ISetup<IHashProvider, byte[]> computeSha256Setup;
+    private readonly ISetup<IHashProvider, byte[]> computePbkdf2Setup;
     private readonly SecurityManager securityManager;
 
     public SecurityManagerShould()
@@ -21,7 +22,9 @@ public class SecurityManagerShould : UnitTestBase
         saltFactory = Mock<ISaltFactory>();
 
         hashProvider = Mock<IHashProvider>();
-        computeHashSetup = hashProvider.Setup(p => p.ComputeSha256(It.IsAny<string>(), It.IsAny<string>()));
+        computeSha256Setup = hashProvider.Setup(p => p.ComputeSha256(It.IsAny<string>(), It.IsAny<string>()));
+        computePbkdf2Setup = hashProvider.Setup(p => p.ComputePbkdf2(It.IsAny<string>(), It.IsAny<string>()));
+        hashProvider.Setup(p => p.CurrentVersion).Returns(2);
 
         securityManager = new SecurityManager(saltFactory.Object, hashProvider.Object);
     }
@@ -32,34 +35,32 @@ public class SecurityManagerShould : UnitTestBase
         saltFactory.Setup(f => f.Create(It.IsAny<int>())).Returns("salt");
         var expectedHash = Convert.ToBase64String(Encoding.UTF8.GetBytes("hash"));
         var expectedHashBytes = Convert.FromBase64String(expectedHash);
-        computeHashSetup.Returns(expectedHashBytes);
+        computePbkdf2Setup.Returns(expectedHashBytes);
 
-        var (actualHash, actualSalt) = securityManager.GeneratePassword("qwerty");
+        var (actualHash, actualSalt, actualVersion) = securityManager.GeneratePassword("qwerty");
         actualHash.Should().Be(expectedHash);
         actualSalt.Should().Be("salt");
-        hashProvider.Verify(p => p.ComputeSha256("qwerty", "salt"), Times.Once);
-        hashProvider.VerifyNoOtherCalls();
+        actualVersion.Should().Be(2); // Current PBKDF2 version
+        hashProvider.Verify(p => p.ComputePbkdf2("qwerty", "salt"), Times.Once);
     }
 
     [Fact]
     public void ConfirmPasswordEquivalency()
     {
         var base64Hash = Convert.ToBase64String(Encoding.UTF8.GetBytes("hash"));
-        computeHashSetup.Returns(Encoding.UTF8.GetBytes("hash"));
+        computeSha256Setup.Returns(Encoding.UTF8.GetBytes("hash"));
 
-        securityManager.ComparePasswords("qwerty", "salt", base64Hash).Should().BeTrue();
+        securityManager.ComparePasswords("qwerty", "salt", base64Hash, 1).Should().BeTrue();
         hashProvider.Verify(p => p.ComputeSha256("qwerty", "salt"), Times.Once);
-        hashProvider.VerifyNoOtherCalls();
     }
 
     [Fact]
     public void ConfirmPasswordInequality()
     {
         var base64Hash = Convert.ToBase64String(Encoding.UTF8.GetBytes("hash"));
-        computeHashSetup.Returns(Encoding.UTF8.GetBytes("notHash"));
+        computeSha256Setup.Returns(Encoding.UTF8.GetBytes("notHash"));
 
-        securityManager.ComparePasswords("qwerty", "salt", base64Hash).Should().BeFalse();
+        securityManager.ComparePasswords("qwerty", "salt", base64Hash, 1).Should().BeFalse();
         hashProvider.Verify(p => p.ComputeSha256("qwerty", "salt"), Times.Once);
-        hashProvider.VerifyNoOtherCalls();
     }
 }

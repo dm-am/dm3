@@ -1,89 +1,113 @@
+<script setup lang="ts">
+import { ref, computed, onUnmounted } from "vue";
+import type { AxiosProgressEvent } from "axios";
+import type { UserLogin } from "@/api/models/community";
+import { useCommunityStore } from "@/stores/community";
+import TheUpload from "@/components/inputs/TheUpload.vue";
+
+const props = defineProps<{
+  login: UserLogin;
+}>();
+
+const communityStore = useCommunityStore();
+let resetTimeout: ReturnType<typeof setTimeout> | null = null;
+
+onUnmounted(() => {
+  if (resetTimeout) clearTimeout(resetTimeout);
+});
+
+type UploadState = "idle" | "uploading" | "success" | "error";
+const uploadState = ref<UploadState>("idle");
+const progress = ref(0);
+const errorMessage = ref("");
+
+const stateLabel = computed(() => {
+  switch (uploadState.value) {
+    case "idle":
+      return "Загрузить фото";
+    case "uploading":
+      return `${progress.value}%`;
+    case "success":
+      return "Готово!";
+    case "error":
+      return errorMessage.value || "Ошибка";
+    default:
+      return "Загрузить фото";
+  }
+});
+
+const onProgress = (e: AxiosProgressEvent) => {
+  if (e.total) {
+    progress.value = Math.round((e.loaded / e.total) * 100);
+  }
+};
+
+const onUploading = async (formData: FormData) => {
+  uploadState.value = "uploading";
+  progress.value = 0;
+
+  const { error } = await communityStore.uploadPicture(
+    props.login,
+    formData,
+    onProgress,
+  );
+
+  if (error) {
+    uploadState.value = "error";
+    errorMessage.value = "Ошибка загрузки";
+    resetTimeout = setTimeout(() => {
+      uploadState.value = "idle";
+    }, 2000);
+  } else {
+    uploadState.value = "success";
+    resetTimeout = setTimeout(() => {
+      uploadState.value = "idle";
+    }, 1500);
+  }
+};
+</script>
+
 <template>
-  <div class="container">
-    <span class="disclaimer" v-if="!uploaded && !uploading">
-      <icon :font="IconType.Upload" /> Загрузить изображение
-    </span>
-    <span class="status" v-else>
-      <template v-if="uploaded">
-        <icon :font="IconType.Tick" /> Изображение загружено
-      </template>
-      <progress-bar class="progress" v-else :current="loaded" :goal="total">{{ progress }}%</progress-bar>
-    </span>
-    <upload @uploading="upload" />
+  <div class="profile-picture-upload">
+    <div class="upload-overlay">
+      <span class="upload-label">{{ stateLabel }}</span>
+      <the-upload v-if="uploadState === 'idle'" @uploading="onUploading" />
+    </div>
   </div>
 </template>
 
-<script lang="ts">
-import { Component, Vue } from 'vue-property-decorator';
-import IconType from '@/components/iconType';
-import ProgressBar from '@/components/ProgressBar.vue';
-import { Action } from 'vuex-class';
+<style scoped lang="sass">
+@import "src/assets/styles/Variables"
+@import "src/assets/styles/Themes"
 
-@Component({
-  components: {ProgressBar}
-})
-export default class ProfilePicture extends Vue {
-  private IconType: typeof IconType = IconType;
-  private uploading = false;
-  private uploaded = false;
+.profile-picture-upload
+  position: absolute
+  top: 0
+  left: 0
+  right: 0
+  bottom: 0
+  opacity: 0
+  transition: opacity 0.2s ease
 
-  private loaded = 0;
-  private total = 1;
+  &:hover
+    opacity: 1
 
-  @Action('community/uploadProfilePicture')
-  private uploadProfilePicture: any;
+.upload-overlay
+  position: absolute
+  top: 0
+  left: 0
+  right: 0
+  bottom: 0
+  background-color: $shade-bg
+  display: flex
+  align-items: center
+  justify-content: center
+  border-radius: $border-radius
+  cursor: pointer
 
-  private get progress() {
-    return Math.floor(this.loaded / this.total * 100);
-  }
-
-  private async upload(formData: FormData): Promise<void> {
-    this.uploadProfilePicture({ file: formData, progressCallback: this.onUploadProgress });
-  }
-
-  private onUploadProgress(progressEvent: ProgressEvent): void {
-    this.loaded = progressEvent.loaded;
-    this.total = progressEvent.total;
-
-    this.uploading = progressEvent.loaded !== progressEvent.total;
-    this.uploaded = !this.uploading;
-
-    if (this.uploaded) {
-      setTimeout(() => this.uploaded = false, 2000);
-    }
-  }
-}
-</script>
-
-<style lang="stylus" scoped>
-.picture-container
-  position absolute
-  top 0
-  bottom 0
-  left 0
-  right 0
-
-pictureUploadLabel()
-  position absolute
-  bottom 0
-  left 0
-  right 0
-  padding $small
-  theme(background-color, $shadeBackground);
-  theme(color, $shadeText);
-  text-align center
-
-.disclaimer
-  pictureUploadLabel()
-  opacity 0
-  transition opacity $animationTime
-
-  .picture-container:hover &
-    opacity 1
-
-.status
-  pictureUploadLabel()
-
-.progress
-  margin 0
+.upload-label
+  color: $shade-text
+  font-weight: bold
+  text-transform: uppercase
+  pointer-events: none
 </style>

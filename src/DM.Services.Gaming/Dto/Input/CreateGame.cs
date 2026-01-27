@@ -20,9 +20,9 @@ public class CreateGame
     public string SystemName { get; set; }
 
     /// <summary>
-    /// Game RPG setting
+    /// Narrative setting (e.g. Mass Effect, WarHammer, Our world)
     /// </summary>
-    public string SettingName { get; set; }
+    public string NarrativeSetting { get; set; }
 
     /// <summary>
     /// Game public information

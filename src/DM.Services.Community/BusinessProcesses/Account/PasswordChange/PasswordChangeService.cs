@@ -44,10 +44,11 @@ internal class PasswordChangeService : IPasswordChangeService
             ? await _repository.FindUser(passwordChange.Token.Value)
             : _identityProvider.Current.User;
 
-        var (hash, salt) = _securityManager.GeneratePassword(passwordChange.NewPassword);
+        var (hash, salt, version) = _securityManager.GeneratePassword(passwordChange.NewPassword);
         var userUpdate = _updateBuilderFactory.Create<User>(user.UserId)
             .Field(u => u.PasswordHash, hash)
-            .Field(u => u.Salt, salt);
+            .Field(u => u.Salt, salt)
+            .Field(u => u.PasswordHashVersion, version);
         var tokenUpdate = passwordChange.Token.HasValue
             ? _updateBuilderFactory.Create<Token>(passwordChange.Token.Value)
                 .Field(t => t.IsRemoved, true)

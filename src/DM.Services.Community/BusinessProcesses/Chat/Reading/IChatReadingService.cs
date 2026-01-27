@@ -67,4 +67,11 @@ public interface IChatReadingService
     /// <param name="date">Date to search from</param>
     /// <returns>First message or null</returns>
     Task<ChatMessage> GetFirstMessageOnOrAfterDate(DateOnly date);
+
+    /// <summary>
+    /// Get last message on or before the given date
+    /// </summary>
+    /// <param name="date">Date to search until</param>
+    /// <returns>Last message or null</returns>
+    Task<ChatMessage> GetLastMessageOnOrBeforeDate(DateOnly date);
 }

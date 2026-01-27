@@ -8,6 +8,7 @@ using DM.Services.MessageQueuing;
 using DM.Services.Search.Configuration;
 using DM.Services.Search.Consumer.Implementation;
 using DM.Services.Search.Consumer.Interceptors;
+using Jamq.Client.Abstractions.Consuming;
 using Jamq.Client.DependencyInjection;
 using Jamq.Client.Rabbit.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
@@ -48,7 +49,9 @@ public class Startup
             .Configure<SearchEngineConfiguration>(_configuration.GetSection(nameof(SearchEngineConfiguration)).Bind)
             .AddDmLogging("DM.Search.Consumer", _configuration);
 
-        services.AddJamqClient(config => config.UseRabbit());
+        services.AddJamqClient(
+            config => config.UseRabbit(),
+            consumerBuilderDefaults: builder => builder.WithMiddleware<SearchConsumerRetryMiddleware>());
 
         services.AddHostedService<SearchEngineConsumer>();
 

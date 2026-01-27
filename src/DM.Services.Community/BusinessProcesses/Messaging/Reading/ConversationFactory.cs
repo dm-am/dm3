@@ -41,4 +41,28 @@ internal class ConversationFactory : IConversationFactory
 
         return (conversation, links);
     }
+
+    /// <inheritdoc />
+    public (DbConversation conversation, IEnumerable<DbConversationLink>) CreateGroup(string title, IEnumerable<Guid> participantIds)
+    {
+        var conversationId = _guidFactory.Create();
+        var conversation = new DbConversation
+        {
+            ConversationId = conversationId,
+            LastMessageId = null,
+            Visavi = false,
+            Title = title
+        };
+        var links = participantIds
+            .Distinct()
+            .Select(id => new DbConversationLink
+            {
+                UserConversationLinkId = _guidFactory.Create(),
+                ConversationId = conversationId,
+                UserId = id,
+                IsRemoved = false
+            });
+
+        return (conversation, links);
+    }
 }

@@ -1,8 +1,10 @@
+using System;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Services.Authentication.Dto;
 using DM.Services.Authentication.Implementation.UserIdentity;
 using DM.Services.Community.BusinessProcesses.Users.Reading;
+using DM.Services.Core.Caching;
 using DM.Services.Core.Dto;
 using DM.Services.Core.Exceptions;
 using DM.Tests.Core;
@@ -29,8 +31,13 @@ public class UserReadingServiceShould : UnitTestBase
         currentUserSettingsSetup = identity.Setup(i => i.Settings);
 
         readingRepository = Mock<IUserReadingRepository>();
+        var cache = Mock<ICache>();
+        // Configure cache to invoke the factory function (pass-through)
+        cache
+            .Setup(c => c.GetOrCreate(It.IsAny<object>(), It.IsAny<Func<Task<UserDetails>>>(), It.IsAny<TimeSpan>()))
+            .Returns((object key, Func<Task<UserDetails>> factory, TimeSpan ttl) => factory());
 
-        service = new UserReadingService(identityProvider.Object, readingRepository.Object);
+        service = new UserReadingService(identityProvider.Object, readingRepository.Object, cache.Object);
     }
 
     [Fact]

@@ -26,14 +26,14 @@ public class Ban : IAdministrated
     public Guid ModeratorId { get; set; }
 
     /// <summary>
-    /// Moment from
+    /// Moment from (UTC)
     /// </summary>
-    public DateTimeOffset StartDate { get; set; }
+    public DateTimeOffset StartedUtc { get; set; }
 
     /// <summary>
-    /// Moment to
+    /// Moment to (UTC)
     /// </summary>
-    public DateTimeOffset EndDate { get; set; }
+    public DateTimeOffset EndedUtc { get; set; }
 
     /// <summary>
     /// Moderator commentary for the ban

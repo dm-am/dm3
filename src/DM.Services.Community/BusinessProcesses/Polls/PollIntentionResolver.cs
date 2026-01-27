@@ -46,6 +46,8 @@ internal class PollIntentionResolver :
         {
             PollIntention.Unvote when user.IsAuthenticated =>
                 poll.EndDate > dateTimeProvider.Now,
+            PollIntention.Edit => user.Role >= UserRole.SeniorModerator,
+            PollIntention.Delete => user.Role >= UserRole.SeniorModerator,
             _ => false
         };
 }

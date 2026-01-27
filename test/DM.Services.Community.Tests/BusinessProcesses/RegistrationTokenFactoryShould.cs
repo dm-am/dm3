@@ -42,7 +42,7 @@ public class RegistrationTokenFactoryShould : UnitTestBase
             TokenId = tokenId,
             UserId = userId,
             Type = TokenType.Activation,
-            CreateDate = dateTimeOffset,
+            CreatedUtc = dateTimeOffset,
             IsRemoved = false
         });
     }

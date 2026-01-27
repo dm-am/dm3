@@ -44,7 +44,7 @@ internal class TopicDeletingService : ITopicDeletingService
     public async Task DeleteTopic(Guid topicId)
     {
         var topic = await _topicReadingService.GetTopic(topicId);
-        _intentionManager.ThrowIfForbidden(ForumIntention.AdministrateTopics, topic.Forum);
+        _intentionManager.ThrowIfForbidden(ForumIntention.AdministrateTopics, topic.Board);
 
         await _repository.Update(_updateBuilderFactory.Create<ForumTopic>(topicId).Field(t => t.IsRemoved, true));
         await _unreadCountersRepository.Delete(topicId, UnreadEntryType.Message);

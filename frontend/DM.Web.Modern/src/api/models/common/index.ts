@@ -1,36 +1,49 @@
-export interface Envelope<T> {
+export type Envelope<T> = {
   resource: T;
-}
+};
 
-export interface Paging {
+export type Paging = {
   pages: number;
   current: number;
   size: number;
   number: number;
   total: number;
-}
+  hasMoreBefore?: boolean;
+  hasMoreAfter?: boolean;
+};
 
-export interface PagingQuery {
-  skip: number | null;
-  size: number | null;
-  number: number | null;
-}
+export type PagingQuery = {
+  skip?: number;
+  size?: number;
+  number?: number;
+};
 
-export interface ListEnvelope<T> {
+export type ListEnvelope<T> = {
   resources: T[];
   paging: Paging | null;
+};
+
+export type GeneralError = {
+  type: string;
+  title: string;
+  status: number;
+  traceId: string;
+};
+
+export enum ValidationErrorCode {
+  Empty = "Empty",
+  Short = "Short",
+  Long = "Long",
+  Taken = "Taken",
+  NotFound = "NotFound",
+  Invalid = "Invalid",
 }
 
-export interface GeneralError {
-  message: string;
-  code: number;
-}
+export type BadRequestError = GeneralError & {
+  errors: { [field: string]: ValidationErrorCode[] };
+};
 
-export interface BadRequestError extends GeneralError {
-  invalidProperties: { [field: string]: string };
-}
-
-export interface ApiResult<T> {
+export type ApiResult<T> = {
   data: T | null;
   error: GeneralError | null;
-}
+};

@@ -101,7 +101,7 @@ public class GameController : ControllerBase
     /// <response code="200"></response>
     /// <response code="410">Game not found</response>
     [HttpGet("{id}/details", Name = nameof(GetGameDetails))]
-    [ProducesResponseType(typeof(Envelope<Game>), 200)]
+    [ProducesResponseType(typeof(Envelope<GameDetails>), 200)]
     [ProducesResponseType(typeof(GeneralError), 410)]
     public async Task<IActionResult> GetGameDetails(Guid id) => Ok(await gameApiService.GetDetails(id));
 
@@ -111,17 +111,21 @@ public class GameController : ControllerBase
     /// </summary>
     /// <param name="id"></param>
     /// <response code="200"></response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User is not authorized to read notes of this game</response>
     /// <response code="410">Game not found</response>
     [HttpGet("{id}/notes", Name = nameof(GetGameNotes))]
-    [ProducesResponseType(typeof(Envelope<Game>), 200)]
+    [AuthenticationRequired]
+    [ProducesResponseType(typeof(Envelope<GameNotes>), 200)]
+    [ProducesResponseType(typeof(GeneralError), 401)]
+    [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    // TODO: Get game notes
-    public Task<IActionResult> GetGameNotes(Guid id) => throw new NotImplementedException();
+    public async Task<IActionResult> GetGameNotes(Guid id) => Ok(await gameApiService.GetNotes(id));
 
     /// <summary>
     /// Create new game
     /// </summary>
-    /// <param name="game">Game</param>
+    /// <param name="game">Game details</param>
     /// <response code="201"></response>
     /// <response code="400">Some of game properties were invalid</response>
     /// <response code="401">User must be authenticated</response>
@@ -129,12 +133,12 @@ public class GameController : ControllerBase
     /// <response code="410">Game not found</response>
     [HttpPost(Name = nameof(PostGame))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Game>), 201)]
+    [ProducesResponseType(typeof(Envelope<GameDetails>), 201)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PostGame([FromBody] Game game)
+    public async Task<IActionResult> PostGame([FromBody] GameDetails game)
     {
         var result = await gameApiService.Create(game);
         return CreatedAtRoute(nameof(GetGameDetails), new {id = result.Resource.Id}, result);
@@ -144,41 +148,41 @@ public class GameController : ControllerBase
     /// Update game details
     /// </summary>
     /// <param name="id">Game identifier</param>
-    /// <param name="game">Game</param>
-    /// <response code="201"></response>
+    /// <param name="game">Game details</param>
+    /// <response code="200"></response>
     /// <response code="400">Some of game properties were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to change some properties of this game</response>
     /// <response code="410">Game not found</response>
     [HttpPatch("{id}/details", Name = nameof(PatchGame))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Game>), 201)]
+    [ProducesResponseType(typeof(Envelope<GameDetails>), 200)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PatchGame(Guid id, [FromBody] Game game) =>
+    public async Task<IActionResult> PatchGame(Guid id, [FromBody] GameDetails game) =>
         Ok(await gameApiService.Update(id, game));
 
     /// <summary>
     /// Update game notes
     /// </summary>
     /// <param name="id">Game identifier</param>
-    /// <param name="game">Game</param>
-    /// <response code="201"></response>
+    /// <param name="notes">Game notes</param>
+    /// <response code="200"></response>
     /// <response code="400">Some of game properties were invalid</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User is not authorized to change some properties of this game</response>
+    /// <response code="403">User is not authorized to change notes of this game</response>
     /// <response code="410">Game not found</response>
     [HttpPatch("{id}/notes", Name = nameof(PatchGameNotes))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Game>), 201)]
+    [ProducesResponseType(typeof(Envelope<GameNotes>), 200)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    // TODO: Update game notes
-    public Task<IActionResult> PatchGameNotes(Guid id, [FromBody] Game game) => throw new NotImplementedException();
+    public async Task<IActionResult> PatchGameNotes(Guid id, [FromBody] GameNotes notes) =>
+        Ok(await gameApiService.UpdateNotes(id, notes));
 
     /// <summary>
     /// Delete game
@@ -250,56 +254,6 @@ public class GameController : ControllerBase
         await readerApiService.Unsubscribe(id);
         return NoContent();
     }
-
-    /// <summary>
-    /// Get list of invited users in game
-    /// </summary>
-    /// <param name="id"></param>
-    /// <response code="200"></response>
-    /// <response code="410">Game not found</response>
-    [HttpGet("{id}/invites", Name = nameof(GetInvites))]
-    [ProducesResponseType(typeof(ListEnvelope<User>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
-    // TODO: Get list of invited users in game
-    public Task<IActionResult> GetInvites(Guid id) => throw new NotImplementedException();
-
-    /// <summary>
-    /// Add new invited user in game
-    /// </summary>
-    /// <param name="id"></param>
-    /// <response code="201"></response>
-    /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User is not authorized to invite to this game</response>
-    /// <response code="409">User is already invited to this game</response>
-    /// <response code="410">Game not found</response>
-    [HttpPost("{id}/invites", Name = nameof(PostInvite))]
-    [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<User>), 201)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 409)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
-    // TODO: Add new invited user in game
-    public Task<IActionResult> PostInvite(Guid id) => throw new NotImplementedException();
-
-    /// <summary>
-    /// Delete invited user in game
-    /// </summary>
-    /// <param name="id"></param>
-    /// <response code="201"></response>
-    /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User is not authorized to un-invite from this game</response>
-    /// <response code="409">User is not invited to this game</response>
-    /// <response code="410">Game not found</response>
-    [HttpDelete("{id}/invites", Name = nameof(DeleteInvite))]
-    [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 409)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
-    // TODO: Delete invited user in game
-    public Task<IActionResult> DeleteInvite(Guid id) => throw new NotImplementedException();
 
     /// <summary>
     /// Get list of blacklisted users in game

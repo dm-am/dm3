@@ -32,7 +32,7 @@ internal class CharacterFactory : ICharacterFactory
         var character = new Character
         {
             CharacterId = characterId,
-            CreateDate = _dateTimeProvider.Now,
+            CreatedUtc = _dateTimeProvider.Now,
             GameId = createCharacter.GameId,
             UserId = userId,
             Status = initialStatus,

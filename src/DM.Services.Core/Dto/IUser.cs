@@ -29,9 +29,9 @@ public interface IUser
     AccessPolicy AccessPolicy { get; }
 
     /// <summary>
-    /// Last time user performed any action on any site
+    /// Last time user performed any action on any site (UTC)
     /// </summary>
-    DateTimeOffset? LastVisitDate { get; }
+    DateTimeOffset? LastActivityUtc { get; }
 
     /// <summary>
     /// Rating participation flag

@@ -33,7 +33,13 @@ internal class RoomProfile : Profile
                         p.Room.RoomClaims.Any(c => c.Character.UserId == p.PendingUserId)
                     ))))
             .ForMember(d => d.TotalPostsCount, s => s.MapFrom(r => r.Posts
-                .Count(p => !p.IsRemoved)));
+                .Count(p => !p.IsRemoved)))
+            .ForMember(d => d.Settings, s => s.MapFrom(r => new RoomSettings
+            {
+                ViewPrivateText = r.ViewPrivateText,
+                ViewDiceResults = r.ViewDiceResults,
+                DiceEnabled = r.DiceEnabled
+            }));
 
         CreateMap<DbRoom, RoomOrderInfo>()
             .ForMember(d => d.Id, s => s.MapFrom(r => r.RoomId));
@@ -45,6 +51,6 @@ internal class RoomProfile : Profile
             .ForMember(d => d.AwaitingUser, s => s.MapFrom(p => p.AwaitingUser))
             .ForMember(d => d.PendingUser, s => s.MapFrom(p => p.PendingUser))
             .ForMember(d => d.RoomId, s => s.MapFrom(p => p.RoomId))
-            .ForMember(d => d.WaitsSince, s => s.MapFrom(p => p.CreateDate));
+            .ForMember(d => d.WaitsSince, s => s.MapFrom(p => p.CreatedUtc));
     }
 }

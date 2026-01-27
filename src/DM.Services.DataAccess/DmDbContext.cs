@@ -28,11 +28,58 @@ public class DmDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // One active review per user
-        modelBuilder.Entity<Review>()
-            .HasIndex(r => r.UserId)
-            .HasFilter("\"IsRemoved\" = false")
-            .IsUnique();
+        var isPostgres = Database.IsNpgsql();
+
+        // Configure OpenIddict only for PostgreSQL (not SQLite in tests)
+        if (isPostgres)
+        {
+            modelBuilder.UseOpenIddict();
+        }
+
+        // One active review per user (filtered unique index - PostgreSQL only)
+        var reviewBuilder = modelBuilder.Entity<Review>()
+            .HasIndex(r => r.UserId);
+
+        // SQLite doesn't support partial indexes with filters
+        if (isPostgres)
+        {
+            reviewBuilder.HasFilter("\"IsRemoved\" = false");
+        }
+
+        reviewBuilder.IsUnique();
+
+        // Configure relationships for soft-deletable and editable entities
+        // These have DeletedBy and ModifiedBy navigation properties without inverse collections
+        ConfigureSoftDeletableRelationships<Comment>(modelBuilder);
+        ConfigureSoftDeletableRelationships<ForumTopic>(modelBuilder);
+        ConfigureSoftDeletableRelationships<Message>(modelBuilder);
+        ConfigureSoftDeletableRelationships<Post>(modelBuilder);
+        ConfigureSoftDeletableRelationships<Character>(modelBuilder);
+    }
+
+    /// <summary>
+    /// Configure relationships for entities with DeletedBy and ModifiedBy without inverse properties
+    /// </summary>
+    private static void ConfigureSoftDeletableRelationships<TEntity>(ModelBuilder modelBuilder)
+        where TEntity : class
+    {
+        var entityBuilder = modelBuilder.Entity<TEntity>();
+
+        // Configure DeletedBy relationship without inverse collection
+        entityBuilder
+            .HasOne<User>("DeletedBy")
+            .WithMany()
+            .HasForeignKey("DeletedByUserId")
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Configure ModifiedBy relationship without inverse collection
+        entityBuilder
+            .HasOne<User>("ModifiedBy")
+            .WithMany()
+            .HasForeignKey("ModifiedByUserId")
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 
     #region Users
@@ -55,6 +102,11 @@ public class DmDbContext : DbContext
     /// Commentaries
     /// </summary>
     public DbSet<Comment> Comments { get; set; }
+
+    /// <summary>
+    /// Comment edit history
+    /// </summary>
+    public DbSet<CommentEdit> CommentEdits { get; set; }
 
     /// <summary>
     /// Likes
@@ -93,7 +145,7 @@ public class DmDbContext : DbContext
     /// <summary>
     /// Boards
     /// </summary>
-    public DbSet<Forum> Boards { get; set; }
+    public DbSet<Board> Boards { get; set; }
 
     /// <summary>
     /// Topics
@@ -101,9 +153,14 @@ public class DmDbContext : DbContext
     public DbSet<ForumTopic> ForumTopics { get; set; }
 
     /// <summary>
-    /// Moderators
+    /// Topic edit history
     /// </summary>
-    public DbSet<ForumModerator> ForumModerators { get; set; }
+    public DbSet<TopicEdit> TopicEdits { get; set; }
+
+    /// <summary>
+    /// Board Moderators
+    /// </summary>
+    public DbSet<BoardModerator> BoardModerators { get; set; }
 
     #endregion
 
@@ -140,6 +197,11 @@ public class DmDbContext : DbContext
     public DbSet<Character> Characters { get; set; }
 
     /// <summary>
+    /// Character edit history
+    /// </summary>
+    public DbSet<CharacterEdit> CharacterEdits { get; set; }
+
+    /// <summary>
     /// Character attribute values
     /// </summary>
     public DbSet<CharacterAttribute> CharacterAttributes { get; set; }
@@ -153,6 +215,11 @@ public class DmDbContext : DbContext
     /// Game posts
     /// </summary>
     public DbSet<Post> Posts { get; set; }
+
+    /// <summary>
+    /// Post edit history
+    /// </summary>
+    public DbSet<PostEdit> PostEdits { get; set; }
 
     /// <summary>
     /// Game post anticipations
@@ -179,14 +246,14 @@ public class DmDbContext : DbContext
     public DbSet<UserConversationLink> UserConversationLinks { get; set; }
 
     /// <summary>
-    /// Conversation messages
+    /// Messages (both chat and private conversations)
     /// </summary>
     public DbSet<Message> Messages { get; set; }
 
     /// <summary>
-    /// 
+    /// Message edit history
     /// </summary>
-    public DbSet<ChatMessage> ChatMessages { get; set; }
+    public DbSet<MessageEdit> MessageEdits { get; set; }
 
     #endregion
 

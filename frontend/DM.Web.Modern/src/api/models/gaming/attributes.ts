@@ -1,14 +1,14 @@
-import { User } from '@/api/models/community';
+import type { User } from "@/api/models/community";
 
 export enum AttributeSchemaType {
-  Public = 'Public',
-  Private = 'Private',
+  Public = "Public",
+  Private = "Private",
 }
 
 export enum AttributeSpecificationType {
-  Number = 'Number',
-  String = 'String',
-  List = 'List',
+  Number = "Number",
+  String = "String",
+  List = "List",
 }
 
 export interface AttributeValueSpecification {

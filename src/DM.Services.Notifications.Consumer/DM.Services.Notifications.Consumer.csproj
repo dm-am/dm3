@@ -9,6 +9,7 @@
         <PackageReference Include="Autofac" />
         <PackageReference Include="Autofac.Extensions.DependencyInjection" />
         <PackageReference Include="Jamq.Client.Rabbit.DependencyInjection" />
+        <PackageReference Include="Polly" />
         <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
     </ItemGroup>
 

@@ -21,14 +21,14 @@ public class Character
     public Guid GameId { get; set; }
 
     /// <summary>
-    /// Created date
+    /// Created date (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Last updated date
+    /// Last modification date (UTC)
     /// </summary>
-    public DateTimeOffset? LastUpdateDate { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
     /// Character status

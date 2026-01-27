@@ -37,8 +37,24 @@ public class ConversationController : ControllerBase
         Ok(await _apiService.GetConversations(q));
 
     /// <summary>
-    /// Get 1-on-1 conversation of current user with another user
+    /// Get 1-on-1 conversation of current user with another user by ID
     /// </summary>
+    /// <param name="userId">User ID</param>
+    /// <response code="200"></response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="410">User not found</response>
+    [HttpGet("conversations/direct/{userId:guid}", Name = nameof(GetDirectConversationById))]
+    [AuthenticationRequired]
+    [ProducesResponseType(typeof(Envelope<Conversation>), 200)]
+    [ProducesResponseType(typeof(GeneralError), 401)]
+    [ProducesResponseType(typeof(GeneralError), 410)]
+    public async Task<IActionResult> GetDirectConversationById(Guid userId) =>
+        Ok(await _apiService.GetDirectConversation(userId));
+
+    /// <summary>
+    /// Get 1-on-1 conversation of current user with another user by login
+    /// </summary>
+    /// <param name="login">User login</param>
     /// <response code="200"></response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="410">User not found</response>
@@ -80,4 +96,42 @@ public class ConversationController : ControllerBase
         await _apiService.MarkAsRead(id);
         return NoContent();
     }
+
+    /// <summary>
+    /// Create a new group conversation
+    /// </summary>
+    /// <param name="createConversation">Conversation data</param>
+    /// <response code="201">Conversation created</response>
+    /// <response code="400">Validation error</response>
+    /// <response code="401">User must be authenticated</response>
+    [HttpPost("conversations", Name = nameof(CreateConversation))]
+    [AuthenticationRequired]
+    [ProducesResponseType(typeof(Envelope<Conversation>), 201)]
+    [ProducesResponseType(typeof(BadRequestError), 400)]
+    [ProducesResponseType(typeof(GeneralError), 401)]
+    public async Task<IActionResult> CreateConversation([FromBody] CreateConversation createConversation)
+    {
+        var result = await _apiService.CreateConversation(createConversation);
+        return CreatedAtRoute(nameof(GetConversation), new { id = result.Resource.Id }, result);
+    }
+
+    /// <summary>
+    /// Update an existing conversation (title and/or participants)
+    /// </summary>
+    /// <param name="id">Conversation identifier</param>
+    /// <param name="updateConversation">Update data</param>
+    /// <response code="200">Conversation updated</response>
+    /// <response code="400">Validation error</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User is not a participant</response>
+    /// <response code="410">Conversation not found</response>
+    [HttpPatch("conversations/{id}", Name = nameof(UpdateConversation))]
+    [AuthenticationRequired]
+    [ProducesResponseType(typeof(Envelope<Conversation>), 200)]
+    [ProducesResponseType(typeof(BadRequestError), 400)]
+    [ProducesResponseType(typeof(GeneralError), 401)]
+    [ProducesResponseType(typeof(GeneralError), 403)]
+    [ProducesResponseType(typeof(GeneralError), 410)]
+    public async Task<IActionResult> UpdateConversation(Guid id, [FromBody] UpdateConversation updateConversation) =>
+        Ok(await _apiService.UpdateConversation(id, updateConversation));
 }

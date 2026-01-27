@@ -1,30 +1,54 @@
 <template>
   <menu-block token="ModerationGames">
-    <template v-slot:title>Требуют премодерации</template>
+    <template #title>Требуют премодерации</template>
+    <the-loader v-if="!store.moderationGames" />
+    <template v-else-if="store.moderationGames.length === 0">
+      <secondary-text>Пока тут ничего нет...</secondary-text>
+    </template>
+    <game-menu-link
+      v-else
+      v-for="game in store.moderationGames"
+      :key="game.id"
+      :game="game"
+      :counters="true"
+      :always-show-counters="true"
+    />
+    <div class="separator">
+      - - - - - - - - - - - - - - - - - - - - - - - - - -
+    </div>
+    <div>
+      <span class="muted">- </span
+      ><router-link
+        class="forward"
+        :to="{ name: 'games-moderation' }"
+        >Все премодерируемые игры</router-link
+      >
+    </div>
   </menu-block>
 </template>
 
-<script lang="ts">
-import { Component, Vue } from 'vue-property-decorator';
+<script setup lang="ts">
+import MenuBlock from "@/views/layout/MenuBlock.vue";
+import TheLoader from "@/components/TheLoader.vue";
+import SecondaryText from "@/components/layout/SecondaryText.vue";
+import GameMenuLink from "@/views/layout/menu/GameMenuLink.vue";
+import { useGamesStore } from "@/stores/games";
+import { onMounted } from "vue";
 
-import IconType from '@/components/iconType';
-import MenuBlock from '../MenuBlock.vue';
+const store = useGamesStore();
 
-@Component({
-  components: {
-    MenuBlock,
-  },
-})
-export default class ModerationGames extends Vue {
-  private IconType: typeof IconType = IconType;
-}
+onMounted(() => store.fetchModerationGames());
 </script>
 
-<style scoped lang="stylus">
-.menu-game-item
-  display flex
-  justify-content space-between
+<style scoped lang="sass">
+@import "src/assets/styles/Themes"
 
-.menu-rest-link
-  font-weight bold
+.forward
+  font-weight: bold
+
+.muted
+  color: $text-muted
+
+.separator
+  color: $text-muted
 </style>

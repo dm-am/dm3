@@ -17,4 +17,12 @@ internal interface IConversationFactory
     /// <param name="visaviId">Visavi user identifier</param>
     /// <returns></returns>
     (DbConversation conversation, IEnumerable<DbConversationLink>) CreateVisavi(Guid userId, Guid visaviId);
+
+    /// <summary>
+    /// Create DAL entities for group conversation
+    /// </summary>
+    /// <param name="title">Conversation title</param>
+    /// <param name="participantIds">Participant user identifiers (including creator)</param>
+    /// <returns></returns>
+    (DbConversation conversation, IEnumerable<DbConversationLink>) CreateGroup(string title, IEnumerable<Guid> participantIds);
 }

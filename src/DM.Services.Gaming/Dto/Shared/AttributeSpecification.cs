@@ -47,4 +47,14 @@ public class AttributeSpecification
     /// Possible values
     /// </summary>
     public IEnumerable<ListValue> Values { get; set; }
+
+    /// <summary>
+    /// Show on game main page as descriptor
+    /// </summary>
+    public bool IsDescriptor { get; set; }
+
+    /// <summary>
+    /// Hide from other players (only GM and owner can see)
+    /// </summary>
+    public bool IsHidden { get; set; }
 }

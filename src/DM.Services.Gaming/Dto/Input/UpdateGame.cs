@@ -20,6 +20,31 @@ public class UpdateGame
     public GameStatus? Status { get; set; }
 
     /// <summary>
+    /// Premoderation status
+    /// </summary>
+    public PremoderationStatus? PremoderationStatus { get; set; }
+
+    /// <summary>
+    /// Game was completed successfully (only when closing)
+    /// </summary>
+    public bool? IsFinished { get; set; }
+
+    /// <summary>
+    /// Game was frozen due to inactivity (only when closing)
+    /// </summary>
+    public bool? IsFrozen { get; set; }
+
+    /// <summary>
+    /// Recruitment is open for new players
+    /// </summary>
+    public bool? IsRecruitmentOpen { get; set; }
+
+    /// <summary>
+    /// Maximum number of players allowed (null = unlimited)
+    /// </summary>
+    public int? RecruitmentPlayerLimit { get; set; }
+
+    /// <summary>
     /// Game title
     /// </summary>
     public string Title { get; set; }
@@ -30,9 +55,9 @@ public class UpdateGame
     public string SystemName { get; set; }
 
     /// <summary>
-    /// Game RPG setting
+    /// Narrative setting (e.g. Mass Effect, WarHammer, Our world)
     /// </summary>
-    public string SettingName { get; set; }
+    public string NarrativeSetting { get; set; }
 
     /// <summary>
     /// Game public information

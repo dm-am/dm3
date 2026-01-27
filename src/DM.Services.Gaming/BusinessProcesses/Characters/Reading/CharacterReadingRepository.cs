@@ -30,7 +30,7 @@ internal class CharacterReadingRepository : ICharacterReadingRepository
     {
         return await _dbContext.Characters
             .Where(c => !c.IsRemoved && c.GameId == gameId)
-            .OrderByDescending(c => c.CreateDate)
+            .OrderByDescending(c => c.CreatedUtc)
             .ProjectTo<Character>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
     }

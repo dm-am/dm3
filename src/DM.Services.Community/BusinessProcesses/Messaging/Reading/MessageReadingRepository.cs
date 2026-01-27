@@ -35,7 +35,7 @@ internal class MessageReadingRepository : IMessageReadingRepository
     /// <inheritdoc />
     public async Task<IEnumerable<Message>> Get(Guid conversationId, PagingData paging, CancellationToken ct = default) => await dbContext.Messages
         .Where(m => !m.IsRemoved && m.ConversationId == conversationId)
-        .OrderBy(m => m.CreateDate)
+        .OrderBy(m => m.CreatedUtc)
         .Page(paging)
         .ProjectTo<Message>(mapper.ConfigurationProvider)
         .ToArrayAsync(ct);

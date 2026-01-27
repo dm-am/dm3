@@ -22,18 +22,22 @@ internal class GameFactory : IGameFactory
     }
 
     /// <inheritdoc />
-    public Game Create(CreateGame createGame, Guid masterId, GameStatus initialStatus)
+    public Game Create(CreateGame createGame, Guid masterId, GameStatus initialStatus,
+        PremoderationStatus premoderationStatus, bool isRecruitmentOpen)
     {
         return new Game
         {
             GameId = guidFactory.Create(),
-            CreateDate = dateTimeProvider.Now,
+            CreatedUtc = dateTimeProvider.Now,
             Status = initialStatus,
+            PremoderationStatus = premoderationStatus,
+            IsRecruitmentOpen = isRecruitmentOpen,
+            RecruitmentStartedUtc = isRecruitmentOpen ? dateTimeProvider.Now : null,
             MasterId = masterId,
             AssistantId = null,
             Title = createGame.Title,
             SystemName = createGame.SystemName,
-            SettingName = createGame.SettingName,
+            NarrativeSetting = createGame.NarrativeSetting,
             AttributeSchemaId = createGame.AttributeSchemaId,
             Info = createGame.Info,
             DisableAlignment = createGame.DisableAlignment,

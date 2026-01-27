@@ -16,12 +16,15 @@ namespace DM.Web.API.Controllers.v1.Gaming;
 public class PostController : ControllerBase
 {
     private readonly IPostApiService postApiService;
+    private readonly IVoteApiService voteApiService;
 
     /// <inheritdoc />
     public PostController(
-        IPostApiService postApiService)
+        IPostApiService postApiService,
+        IVoteApiService voteApiService)
     {
         this.postApiService = postApiService;
+        this.voteApiService = voteApiService;
     }
 
     /// <summary>
@@ -112,26 +115,29 @@ public class PostController : ControllerBase
     }
 
     /// <summary>
-    /// Get list of reviews of post
+    /// Get list of votes for a post
     /// </summary>
+    /// <param name="id">Post identifier</param>
     /// <response code="200"></response>
     /// <response code="410">Post not found</response>
-    [HttpGet("posts/{id}/reviews", Name = nameof(GetPostReviews))]
+    [HttpGet("posts/{id}/votes", Name = nameof(GetPostVotes))]
     [ProducesResponseType(typeof(ListEnvelope<Vote>), 200)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    // TODO: Get list of reviews of post
-    public Task<IActionResult> GetPostReviews(Guid id) => throw new NotImplementedException();
+    public async Task<IActionResult> GetPostVotes(Guid id) =>
+        Ok(await voteApiService.GetByPost(id));
 
     /// <summary>
-    /// Create new review of post
+    /// Create new vote on a post
     /// </summary>
+    /// <param name="id">Post identifier</param>
+    /// <param name="vote">Vote data</param>
     /// <response code="201"></response>
     /// <response code="400">Some of vote parameters were invalid</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User is not allowed to review for the post</response>
-    /// <response code="409">User already reviewed for this post</response>
+    /// <response code="403">User is not allowed to vote for this post</response>
+    /// <response code="409">User already voted for this post</response>
     /// <response code="410">Post not found</response>
-    [HttpPost("posts/{id}/reviews", Name = nameof(PostReviews))]
+    [HttpPost("posts/{id}/votes", Name = nameof(PostVote))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Vote>), 201)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
@@ -139,39 +145,42 @@ public class PostController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 409)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    // TODO: Create new review of post
-    public Task<IActionResult> PostReviews(Guid id, [FromBody] Vote vote) => throw new NotImplementedException();
+    public async Task<IActionResult> PostVote(Guid id, [FromBody] Vote vote)
+    {
+        var result = await voteApiService.Create(id, vote);
+        return CreatedAtRoute(nameof(GetVote),
+            new {id = result.Resource.Id}, result);
+    }
 
     /// <summary>
-    /// Get post review
+    /// Get single vote
     /// </summary>
+    /// <param name="id">Vote identifier</param>
     /// <response code="200"></response>
-    /// <response code="410">Review not found</response>
-    [HttpGet("postreview/{id}", Name = nameof(GetPostReview))]
+    /// <response code="410">Vote not found</response>
+    [HttpGet("votes/{id}", Name = nameof(GetVote))]
     [ProducesResponseType(typeof(Envelope<Vote>), 200)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    // TODO: Get post review
-    public Task<IActionResult> GetPostReview(Guid id) => throw new NotImplementedException();
+    public async Task<IActionResult> GetVote(Guid id) =>
+        Ok(await voteApiService.Get(id));
 
     /// <summary>
-    /// Update post review
+    /// Delete vote
     /// </summary>
-    /// <response code="200"></response>
-    /// <response code="410">Review not found</response>
-    [HttpPatch("postreview/{id}", Name = nameof(PatchPostReview))]
-    [ProducesResponseType(typeof(Envelope<Vote>), 200)]
+    /// <param name="id">Vote identifier</param>
+    /// <response code="204"></response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User is not allowed to remove the vote</response>
+    /// <response code="410">Vote not found</response>
+    [HttpDelete("votes/{id}", Name = nameof(DeleteVote))]
+    [AuthenticationRequired]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(typeof(GeneralError), 401)]
+    [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    // TODO: Update post review
-    public Task<IActionResult> PatchPostReview(Guid id) => throw new NotImplementedException();
-
-    /// <summary>
-    /// Delete post review
-    /// </summary>
-    /// <response code="200"></response>
-    /// <response code="410">Review not found</response>
-    [HttpDelete("postreview/{id}", Name = nameof(DeletePostReview))]
-    [ProducesResponseType(typeof(Envelope<Vote>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
-    // TODO: Delete post review
-    public Task<IActionResult> DeletePostReview(Guid id) => throw new NotImplementedException();
+    public async Task<IActionResult> DeleteVote(Guid id)
+    {
+        await voteApiService.Delete(id);
+        return NoContent();
+    }
 }

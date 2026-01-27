@@ -47,7 +47,7 @@ internal class ConversationReadingRepository : IConversationReadingRepository
         await _dbContext.Conversations
             .Where(UserParticipates(userId))
             .Where(c => c.LastMessageId.HasValue)
-            .OrderByDescending(c => c.LastMessage.CreateDate)
+            .OrderByDescending(c => c.LastMessage.CreatedUtc)
             .Page(paging)
             .ProjectTo<Conversation>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
@@ -63,6 +63,10 @@ internal class ConversationReadingRepository : IConversationReadingRepository
         .Where(u => u.Login.ToLower() == login.ToLower() && !u.IsRemoved && u.Activated)
         .Select(u => new {u.UserId})
         .FirstOrDefaultAsync())?.UserId;
+
+    /// <inheritdoc />
+    public Task<bool> UserExists(Guid userId) => _dbContext.Users
+        .AnyAsync(u => u.UserId == userId && !u.IsRemoved && u.Activated);
 
     /// <inheritdoc />
     public Task<Conversation> FindVisaviConversation(Guid userId, Guid visaviId) => _dbContext.Conversations

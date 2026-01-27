@@ -21,6 +21,21 @@ public class UpdateCharacter
     public CharacterStatus? Status { get; set; }
 
     /// <summary>
+    /// Character died in game (only when Status = Retired)
+    /// </summary>
+    public bool? IsDead { get; set; }
+
+    /// <summary>
+    /// Player left the game voluntarily (only when Status = Retired)
+    /// </summary>
+    public bool? IsPlayerLeft { get; set; }
+
+    /// <summary>
+    /// Player was exiled from the game by GM (only when Status = Retired)
+    /// </summary>
+    public bool? IsPlayerExiled { get; set; }
+
+    /// <summary>
     /// Character name
     /// </summary>
     public string Name { get; set; }

@@ -32,7 +32,7 @@ public class LastPost
     public Guid RoomId { get; set; }
 
     /// <summary>
-    /// Creating moment
+    /// Creating moment (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 }

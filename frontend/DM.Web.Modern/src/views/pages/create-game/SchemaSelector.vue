@@ -1,70 +1,95 @@
-<template>
-  <span>
-    <dropdown v-if="schemas && schemas.length" id="attribute-schema"
-      :value="value" @input="changeSchema" :options="schemasList" />
-    <loader v-else />
+<script setup lang="ts">
+import { ref, onMounted } from "vue";
+import type { AttributeSchema } from "@/api/models/gaming";
+import gamingApi from "@/api/requests/gamingApi";
+import SecondaryText from "@/components/layout/SecondaryText.vue";
+import TheLoader from "@/components/TheLoader.vue";
 
-    <create-schema @created="changeSchema" />
-  </span>
-</template>
+const model = defineModel<string | null>();
 
-<script lang="ts">
-import { Component, Prop, Vue } from 'vue-property-decorator';
-import { Action, Getter } from 'vuex-class';
-import { AttributeSchema, AttributeSchemaType } from '@/api/models/gaming';
+const schemas = ref<AttributeSchema[]>([]);
+const loading = ref(false);
+const error = ref<string | null>(null);
 
-import CreateSchema from '@/views/pages/create-game/CreateSchema.vue';
+async function loadSchemas() {
+  loading.value = true;
+  error.value = null;
 
-const createSchemaOption = {} as AttributeSchema;
+  const { data, error: apiError } = await gamingApi.getSchemas();
 
-@Component({
-  components: {
-    CreateSchema,
-  },
-})
-export default class SchemaSelector extends Vue {
-  @Prop()
-  private value!: AttributeSchema;
-
-  @Getter('gaming/schemas')
-  private schemas!: AttributeSchema[] | null;
-
-  @Action('gaming/fetchSchemas')
-  private fetchSchemas!: any;
-
-  private changeSchema(schema: AttributeSchema): void {
-    if (schema === createSchemaOption) {
-      this.$modal.show('create-schema');
-    } else {
-      this.$emit('input', schema);
-    }
+  if (apiError) {
+    error.value = apiError.title || "Failed to load schemas";
+  } else if (data) {
+    schemas.value = data.resources;
   }
 
-  private get schemasList() {
-    if (this.schemas === null) return [];
-
-    return [{
-      value: null as AttributeSchema | null,
-      label: 'не нужны',
-    }].concat(this.schemas!.map((s: AttributeSchema) => ({
-      value: s,
-      label: s.title,
-      description: s!.type === AttributeSchemaType.Public ? 'публичная схема' : `автор: ${s.author!.login}`,
-    }))).concat([{
-      value: createSchemaOption,
-      label: 'Создать новую схему...',
-    }]);
-  }
-
-  private mounted(): void {
-    this.fetchData();
-  }
-
-  private fetchData(): void {
-    this.fetchSchemas();
-  }
+  loading.value = false;
 }
+
+onMounted(loadSchemas);
 </script>
 
-<style lang="stylus" scoped>
+<template>
+  <div class="schema-selector">
+    <the-loader v-if="loading" />
+
+    <div v-else-if="error" class="selector-error">
+      {{ error }}
+    </div>
+
+    <div v-else-if="schemas.length === 0" class="selector-empty">
+      <secondary-text>Нет доступных схем атрибутов</secondary-text>
+    </div>
+
+    <div v-else class="schema-options">
+      <label class="schema-option">
+        <input
+          type="radio"
+          :value="null"
+          v-model="model"
+        />
+        <span class="option-label">Без системы атрибутов</span>
+      </label>
+      <label
+        v-for="schema in schemas"
+        :key="schema.id"
+        class="schema-option"
+      >
+        <input
+          type="radio"
+          :value="schema.id"
+          v-model="model"
+        />
+        <span class="option-label">{{ schema.title }}</span>
+      </label>
+    </div>
+  </div>
+</template>
+
+<style scoped lang="sass">
+@import "src/assets/styles/Variables"
+@import "src/assets/styles/Themes"
+
+.schema-selector
+  min-height: $grid-step * 10
+
+.selector-error
+  color: $accent-red
+
+.schema-options
+  display: flex
+  flex-direction: column
+  gap: $small
+
+.schema-option
+  display: flex
+  align-items: center
+  gap: $small
+  cursor: pointer
+
+  input[type="radio"]
+    width: auto
+
+.option-label
+  flex: 1
 </style>

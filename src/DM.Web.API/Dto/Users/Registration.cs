@@ -19,4 +19,9 @@ public class Registration
     /// Password
     /// </summary>
     public string Password { get; set; }
+
+    /// <summary>
+    /// Honeypot field for bot protection (should be empty)
+    /// </summary>
+    public string? Website { get; set; }
 }

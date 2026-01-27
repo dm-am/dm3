@@ -5,21 +5,21 @@ using DM.Web.API.Dto.Boards;
 namespace DM.Web.API.Services.Boards;
 
 /// <summary>
-/// API service for forum/board resources
+/// API service for board resources
 /// </summary>
-public interface IForumApiService
+public interface IBoardApiService
 {
     /// <summary>
-    /// Get list of available fora (legacy)
+    /// Get list of available boards (legacy Forum response)
     /// </summary>
-    /// <returns>Envelope with fora list</returns>
+    /// <returns>Envelope with boards list</returns>
     Task<ListEnvelope<Forum>> Get();
 
     /// <summary>
-    /// Get forum by id (legacy)
+    /// Get board by id (legacy Forum response)
     /// </summary>
-    /// <param name="id">Forum id</param>
-    /// <returns>Envelope with forum</returns>
+    /// <param name="id">Board id</param>
+    /// <returns>Envelope with board</returns>
     Task<Envelope<Forum>> Get(string id);
 
     /// <summary>

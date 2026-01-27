@@ -117,7 +117,7 @@ public class GlobalChatController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), 409)]
     [ProducesResponseType(typeof(GeneralError), 410)]
     public async Task<IActionResult> LikeChatMessage(Guid id) =>
-        Created(string.Empty, await _chatApiService.LikeMessage(id));
+        CreatedAtRoute(nameof(GetChatMessage), new { id }, await _chatApiService.LikeMessage(id));
 
     /// <summary>
     /// Unlike chat message
@@ -160,6 +160,22 @@ public class GlobalChatController : ControllerBase
     public async Task<IActionResult> GetFirstChatMessageOnOrAfterDate(DateOnly date)
     {
         var result = await _chatApiService.GetFirstMessageOnOrAfterDate(date);
+        if (result == null) return NotFound();
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get last chat message on or before a specific date
+    /// </summary>
+    /// <param name="date">Date in YYYY-MM-DD format</param>
+    /// <response code="200">Message found</response>
+    /// <response code="404">No messages on or before this date</response>
+    [HttpGet("logs/{date}/last", Name = nameof(GetLastChatMessageOnOrBeforeDate))]
+    [ProducesResponseType(typeof(Envelope<ChatMessage>), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetLastChatMessageOnOrBeforeDate(DateOnly date)
+    {
+        var result = await _chatApiService.GetLastMessageOnOrBeforeDate(date);
         if (result == null) return NotFound();
         return Ok(result);
     }

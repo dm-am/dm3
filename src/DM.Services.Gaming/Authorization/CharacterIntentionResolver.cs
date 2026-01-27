@@ -19,7 +19,7 @@ internal class CharacterIntentionResolver :
     {
         var characterOwned = target.UserId == user.UserId;
         var gameOwned = target.GameMasterId == user.UserId || target.GameAssistantId == user.UserId;
-        var gameActive = target.GameStatus == GameStatus.Active || target.GameStatus == GameStatus.Requirement;
+        var gameActive = target.GameStatus == GameStatus.Active;
 
         return intention switch
         {
@@ -29,13 +29,13 @@ internal class CharacterIntentionResolver :
             CharacterIntention.EditPrivacySettings when characterOwned => gameActive,
             CharacterIntention.EditMasterSettings when gameOwned => true,
             CharacterIntention.Delete when characterOwned => gameActive,
-            CharacterIntention.Accept when gameOwned => target.Status == CharacterStatus.Registration ||
+            CharacterIntention.Accept when gameOwned => target.Status == CharacterStatus.UnderReview ||
                                                         target.Status == CharacterStatus.Declined,
-            CharacterIntention.Decline when gameOwned => target.Status == CharacterStatus.Registration,
+            CharacterIntention.Decline when gameOwned => target.Status == CharacterStatus.UnderReview,
             CharacterIntention.Kill when gameOwned => target.Status == CharacterStatus.Active,
-            CharacterIntention.Resurrect when gameOwned => target.Status == CharacterStatus.Dead,
+            CharacterIntention.Resurrect when gameOwned => target.Status == CharacterStatus.Retired && target.IsDead,
             CharacterIntention.Leave when characterOwned => target.Status == CharacterStatus.Active,
-            CharacterIntention.Return when characterOwned => target.Status == CharacterStatus.Left,
+            CharacterIntention.Return when characterOwned => target.Status == CharacterStatus.Retired && target.IsPlayerLeft,
             _ => false
         };
     }

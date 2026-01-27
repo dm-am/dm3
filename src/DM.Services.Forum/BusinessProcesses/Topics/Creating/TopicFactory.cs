@@ -21,13 +21,13 @@ internal class TopicFactory : ITopicFactory
     }
 
     /// <inheritdoc />
-    public ForumTopic Create(Guid forumId, Guid userId, CreateTopic createTopic)
+    public ForumTopic Create(Guid boardId, Guid userId, CreateTopic createTopic)
     {
         return new ForumTopic
         {
-            ForumId = forumId,
+            BoardId = boardId,
             ForumTopicId = _guidFactory.Create(),
-            CreateDate = _dateTimeProvider.Now,
+            CreatedUtc = _dateTimeProvider.Now,
             UserId = userId,
             Title = createTopic.Title.Trim(),
             Text = createTopic.Text?.Trim()

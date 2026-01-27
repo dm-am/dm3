@@ -72,8 +72,25 @@ internal class ConversationReadingService : IConversationReadingService
             throw new HttpException(HttpStatusCode.Gone, "User not found");
         }
 
+        return await GetOrCreateInternal(visaviId.Value);
+    }
+
+    /// <inheritdoc />
+    public async Task<Conversation> GetOrCreate(Guid visaviUserId)
+    {
+        var exists = await _repository.UserExists(visaviUserId);
+        if (!exists)
+        {
+            throw new HttpException(HttpStatusCode.Gone, "User not found");
+        }
+
+        return await GetOrCreateInternal(visaviUserId);
+    }
+
+    private async Task<Conversation> GetOrCreateInternal(Guid visaviId)
+    {
         var currentUserId = _identityProvider.Current.User.UserId;
-        var existingConversation = await _repository.FindVisaviConversation(currentUserId, visaviId.Value);
+        var existingConversation = await _repository.FindVisaviConversation(currentUserId, visaviId);
         if (existingConversation != null)
         {
             await _unreadCountersRepository.FillEntityCounters(new[] {existingConversation}, currentUserId,
@@ -81,11 +98,11 @@ internal class ConversationReadingService : IConversationReadingService
             return existingConversation;
         }
 
-        var (conversation, conversationLinks) = _factory.CreateVisavi(currentUserId, visaviId.Value);
+        var (conversation, conversationLinks) = _factory.CreateVisavi(currentUserId, visaviId);
         var result = await _repository.Create(conversation, conversationLinks);
 
         await _unreadCountersRepository.Create(result.Id, UnreadEntryType.Message,
-            new[] {currentUserId, visaviId.Value}.Distinct());
+            new[] {currentUserId, visaviId}.Distinct());
 
         return result;
     }

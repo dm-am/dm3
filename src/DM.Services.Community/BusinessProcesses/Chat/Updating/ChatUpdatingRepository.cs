@@ -3,9 +3,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
-using DM.Services.Community.BusinessProcesses.Chat.Reading;
 using DM.Services.DataAccess;
+using DM.Services.DataAccess.BusinessObjects.Messaging;
 using Microsoft.EntityFrameworkCore;
+using ChatMessageDto = DM.Services.Community.BusinessProcesses.Chat.Reading.ChatMessage;
 
 namespace DM.Services.Community.BusinessProcesses.Chat.Updating;
 
@@ -25,21 +26,32 @@ internal class ChatUpdatingRepository : IChatUpdatingRepository
     }
 
     /// <inheritdoc />
-    public async Task<ChatMessage> Update(Guid id, string text)
+    public async Task<ChatMessageDto> Update(Guid id, string text, Guid editorUserId)
     {
-        var message = await _dbContext.ChatMessages
-            .FirstOrDefaultAsync(m => m.ChatMessageId == id);
+        var message = await _dbContext.Messages
+            .FirstOrDefaultAsync(m => m.MessageId == id && m.ConversationId == Message.GlobalChatId);
 
         if (message == null) return null;
 
         message.Text = text;
-        message.LastUpdateDate = DateTimeOffset.UtcNow;
+        message.ModifiedUtc = DateTimeOffset.UtcNow;
+        message.ModifiedByUserId = editorUserId;
+
+        // Create edit history record
+        var editRecord = new MessageEdit
+        {
+            MessageEditId = Guid.NewGuid(),
+            MessageId = id,
+            EditorUserId = editorUserId,
+            EditedAtUtc = DateTimeOffset.UtcNow
+        };
+        _dbContext.MessageEdits.Add(editRecord);
 
         await _dbContext.SaveChangesAsync();
 
-        return await _dbContext.ChatMessages
-            .Where(m => m.ChatMessageId == id)
-            .ProjectTo<ChatMessage>(_mapper.ConfigurationProvider)
+        return await _dbContext.Messages
+            .Where(m => m.MessageId == id)
+            .ProjectTo<ChatMessageDto>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
     }
 }

@@ -28,9 +28,9 @@ public class Token : IRemovable
     public Guid? EntityId { get; set; }
 
     /// <summary>
-    /// Creation moment
+    /// Creation moment (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Authorised action type

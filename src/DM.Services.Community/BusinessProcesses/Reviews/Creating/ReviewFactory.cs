@@ -26,7 +26,7 @@ internal class ReviewFactory : IReviewFactory
         {
             ReviewId = guidFactory.Create(),
             UserId = userId,
-            CreateDate = dateTimeProvider.Now,
+            CreatedUtc = dateTimeProvider.Now,
             Text = createReview.Text.Trim(),
             IsApproved = isApproved
         };

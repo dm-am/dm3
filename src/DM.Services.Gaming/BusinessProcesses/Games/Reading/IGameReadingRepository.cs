@@ -77,4 +77,20 @@ internal interface IGameReadingRepository
     /// </summary>
     /// <returns></returns>
     Task<IEnumerable<Game>> GetPopularGames(int gamesCount);
+
+    /// <summary>
+    /// Get rooms and pending posts in one query (optimization)
+    /// </summary>
+    Task<(IDictionary<Guid, IEnumerable<Guid>> rooms, IEnumerable<PendingPost> pendingPosts)> GetRoomsAndPendingPosts(
+        IEnumerable<Guid> gameIds, Guid userId);
+
+    /// <summary>
+    /// Get total post counts per game (for anonymous users)
+    /// </summary>
+    Task<IDictionary<Guid, int>> GetTotalPostCounts(IEnumerable<Guid> gameIds);
+
+    /// <summary>
+    /// Get total comment counts per game (for anonymous users)
+    /// </summary>
+    Task<IDictionary<Guid, int>> GetTotalCommentCounts(IEnumerable<Guid> gameIds);
 }

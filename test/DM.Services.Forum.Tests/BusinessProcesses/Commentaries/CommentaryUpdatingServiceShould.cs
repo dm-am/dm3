@@ -56,7 +56,7 @@ public class CommentaryUpdatingServiceShould : UnitTestBase
             .Setup(b => b.Field(t => t.Text, It.IsAny<string>()))
             .Returns(commentUpdateBuilder.Object);
         commentUpdateBuilder
-            .Setup(b => b.Field(t => t.LastUpdateDate, It.IsAny<DateTimeOffset?>()))
+            .Setup(b => b.Field(t => t.ModifiedUtc, It.IsAny<DateTimeOffset?>()))
             .Returns(commentUpdateBuilder.Object);
         updateBuilderFactory
             .Setup(f => f.Create<Comment>(It.IsAny<Guid>()))
@@ -111,7 +111,7 @@ public class CommentaryUpdatingServiceShould : UnitTestBase
         actual.Should().Be(expected);
         commentRepository.Verify(r => r.Update(commentUpdateBuilder.Object), Times.Once);
         commentUpdateBuilder.Verify(b => b.Field(c => c.Text, "some text boi"));
-        commentUpdateBuilder.Verify(b => b.Field(c => c.LastUpdateDate, rightNow));
+        commentUpdateBuilder.Verify(b => b.Field(c => c.ModifiedUtc, rightNow));
     }
 
     [Fact]

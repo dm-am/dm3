@@ -43,7 +43,7 @@ internal class ChatCreatingService : IChatCreatingService
 
         var chatMessage = _factory.Create(createChatMessage, _identityProvider.Current.User.UserId);
         var result = await _repository.Create(chatMessage);
-        await _producer.Send(EventType.NewChatMessage, chatMessage.ChatMessageId);
+        await _producer.Send(EventType.NewChatMessage, chatMessage.MessageId);
 
         return result;
     }

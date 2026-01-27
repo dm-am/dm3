@@ -7,25 +7,25 @@ using DM.Services.Forum.BusinessProcesses.Common;
 namespace DM.Services.Forum.Authorization;
 
 /// <inheritdoc />
-internal class ForumIntentionResolver : IIntentionResolver<ForumIntention, Dto.Output.Forum>
+internal class BoardIntentionResolver : IIntentionResolver<ForumIntention, Dto.Output.Board>
 {
     private readonly IAccessPolicyConverter _accessPolicyConverter;
 
     /// <inheritdoc />
-    public ForumIntentionResolver(
+    public BoardIntentionResolver(
         IAccessPolicyConverter accessPolicyConverter)
     {
         _accessPolicyConverter = accessPolicyConverter;
     }
 
     /// <inheritdoc />
-    public bool IsAllowed(AuthenticatedUser user, ForumIntention intention, Dto.Output.Forum target)
+    public bool IsAllowed(AuthenticatedUser user, ForumIntention intention, Dto.Output.Board target)
     {
         switch (intention)
         {
             case ForumIntention.CreateTopic when user.IsAuthenticated:
                 var userPolicy = _accessPolicyConverter.Convert(user.Role);
-                return (target.CreateTopicPolicy & userPolicy) != ForumAccessPolicy.NoOne;
+                return (target.CreateTopicPolicy & userPolicy) != BoardAccessPolicy.NoOne;
             case ForumIntention.AdministrateTopics when user.IsAuthenticated:
                 return user.Role >= UserRole.Admin ||
                        target.ModeratorIds.Contains(user.UserId);

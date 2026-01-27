@@ -32,7 +32,7 @@ public class CommentaryReadingServiceShould : UnitTestBase
     private readonly ISetup<ICommentaryReadingRepository, Task<int>> countCommentsSetup;
     private readonly ISetup<IIdentity, AuthenticatedUser> currentUserSetup;
     private readonly Mock<IUnreadCountersRepository> unreadCountersRepository;
-    private readonly ISetup<IForumReadingService, Task<Dto.Output.Forum>> getForumSetup;
+    private readonly ISetup<IBoardReadingService, Task<Dto.Output.Board>> getBoardSetup;
     private readonly CommentaryReadingService readingService;
 
     public CommentaryReadingServiceShould()
@@ -52,8 +52,8 @@ public class CommentaryReadingServiceShould : UnitTestBase
         getCommentSetup = commentaryRepository.Setup(r => r.Get(It.IsAny<Guid>()));
         countCommentsSetup = commentaryRepository.Setup(r => r.Count(It.IsAny<Guid>()));
 
-        var forumReadingService = Mock<IForumReadingService>();
-        getForumSetup = forumReadingService.Setup(s => s.GetForum(It.IsAny<string>(), It.IsAny<bool>()));
+        var boardReadingService = Mock<IBoardReadingService>();
+        getBoardSetup = boardReadingService.Setup(s => s.GetBoard(It.IsAny<string>(), It.IsAny<bool>()));
 
         unreadCountersRepository = Mock<IUnreadCountersRepository>();
         unreadCountersRepository
@@ -64,7 +64,7 @@ public class CommentaryReadingServiceShould : UnitTestBase
             .Returns(Task.CompletedTask);
 
         readingService = new CommentaryReadingService(topicReadingService.Object,
-            forumReadingService.Object, identityProvider.Object,
+            boardReadingService.Object, identityProvider.Object,
             unreadCountersRepository.Object, commentaryRepository.Object);
     }
 
@@ -125,7 +125,7 @@ public class CommentaryReadingServiceShould : UnitTestBase
         var forumInternalId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         currentUserSetup.Returns(Create.User(userId).Please);
-        getForumSetup.ReturnsAsync(new Dto.Output.Forum {Id = forumInternalId});
+        getBoardSetup.ReturnsAsync(new Dto.Output.Board {Id = forumInternalId});
 
         await readingService.MarkAsRead(forumId);
 

@@ -21,6 +21,11 @@ public class Conversation
     public bool Visavi { get; set; }
 
     /// <summary>
+    /// Conversation title (for group conversations)
+    /// </summary>
+    public string Title { get; set; }
+
+    /// <summary>
     /// Last message identifier
     /// </summary>
     public Guid? LastMessageId { get; set; }

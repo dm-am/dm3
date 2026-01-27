@@ -4,28 +4,28 @@ using System.Threading.Tasks;
 namespace DM.Services.Forum.BusinessProcesses.Boards;
 
 /// <summary>
-/// Service for reading fora
+/// Service for reading boards
 /// </summary>
-public interface IForumReadingService
+public interface IBoardReadingService
 {
     /// <summary>
-    /// Get list of available fora
+    /// Get list of available boards
     /// </summary>
     /// <returns></returns>
-    Task<IEnumerable<Dto.Output.Forum>> GetForaList();
+    Task<IEnumerable<Dto.Output.Board>> GetBoardsList();
 
     /// <summary>
-    /// Get available forum by title with counters
+    /// Get available board by title with counters
     /// </summary>
-    /// <param name="forumTitle">Forum title</param>
+    /// <param name="boardTitle">Board title</param>
     /// <returns></returns>
-    Task<Dto.Output.Forum> GetSingleForum(string forumTitle);
+    Task<Dto.Output.Board> GetSingleBoard(string boardTitle);
 
     /// <summary>
-    /// Get available forum by title with no counters
+    /// Get available board by title with no counters
     /// </summary>
-    /// <param name="forumTitle">Forum title</param>
-    /// <param name="onlyAvailable">Only search in forums that are available for display for current user</param>
+    /// <param name="boardTitle">Board title</param>
+    /// <param name="onlyAvailable">Only search in boards that are available for display for current user</param>
     /// <returns></returns>
-    Task<Dto.Output.Forum> GetForum(string forumTitle, bool onlyAvailable = true);
+    Task<Dto.Output.Board> GetBoard(string boardTitle, bool onlyAvailable = true);
 }

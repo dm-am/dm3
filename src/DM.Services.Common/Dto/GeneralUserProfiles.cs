@@ -20,7 +20,7 @@ internal class GeneralUserProfiles : Profile
             .ForMember(d => d.OriginalPictureUrl, s => s.MapFrom(u => u.ProfilePictureUrl))
             .ForMember(d => d.MediumPictureUrl, s => s.MapFrom(u => u.MediumProfilePictureUrl))
             .ForMember(d => d.SmallPictureUrl, s => s.MapFrom(u => u.SmallProfilePictureUrl))
-            .ForMember(d => d.LastVisitDate, s => s.MapFrom(u => u.LastVisitDate));
+            .ForMember(d => d.LastActivityUtc, s => s.MapFrom(u => u.LastActivityUtc));
         CreateMap<User, AuthenticatedUser>()
             .ForMember(d => d.AccessRestrictionPolicies, s => s.MapFrom(
                 u => u.BansReceived

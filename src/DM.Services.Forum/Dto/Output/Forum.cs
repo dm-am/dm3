@@ -6,17 +6,17 @@ using DM.Services.Core.Dto.Enums;
 namespace DM.Services.Forum.Dto.Output;
 
 /// <summary>
-/// Forum (Board) DTO model
+/// Board DTO model
 /// </summary>
-public class Forum
+public class Board
 {
     /// <summary>
-    /// Forum identifier
+    /// Board identifier
     /// </summary>
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Forum title
+    /// Board title
     /// </summary>
     public string Title { get; set; }
 
@@ -28,12 +28,12 @@ public class Forum
     /// <summary>
     /// Create topic policy
     /// </summary>
-    public ForumAccessPolicy CreateTopicPolicy { get; set; }
+    public BoardAccessPolicy CreateTopicPolicy { get; set; }
 
     /// <summary>
     /// View topic policy
     /// </summary>
-    public ForumAccessPolicy ViewPolicy { get; set; }
+    public BoardAccessPolicy ViewPolicy { get; set; }
 
     /// <summary>
     /// Moderator identifiers
@@ -51,7 +51,7 @@ public class Forum
     public int CommentsCount { get; set; }
 
     /// <summary>
-    /// Total number of forum topics that has unread commentaries
+    /// Total number of board topics that has unread commentaries
     /// </summary>
     public int UnreadTopicsCount { get; set; }
 
@@ -61,15 +61,15 @@ public class Forum
     public int UnreadCommentsCount { get; set; }
 
     /// <summary>
-    /// Last comment in the forum
+    /// Last comment in the board
     /// </summary>
-    public ForumLastComment LastComment { get; set; }
+    public BoardLastComment LastComment { get; set; }
 }
 
 /// <summary>
-/// Last comment in forum DTO model
+/// Last comment in board DTO model
 /// </summary>
-public class ForumLastComment
+public class BoardLastComment
 {
     /// <summary>
     /// Comment identifier
@@ -87,7 +87,7 @@ public class ForumLastComment
     public GeneralUser Author { get; set; }
 
     /// <summary>
-    /// Creation moment
+    /// Creation moment (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 }

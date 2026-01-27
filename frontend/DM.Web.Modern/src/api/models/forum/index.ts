@@ -1,35 +1,54 @@
-import { User } from '@/api/models/community';
+import type { User } from "@/api/models/community";
+import type { Id, Served } from "@/api/models";
 
-export interface Forum {
-  id: string;
-  unreadTopicsCount: number;
-}
+export type BoardId = Id<string>;
+export type TopicId = Id<string>;
+export type CommentId = Id<string>;
 
-export interface LastComment {
-  created: string;
+export type BoardLastComment = {
+  id: CommentId;
+  topicId: TopicId;
+  createdUtc: string;
   author: User;
-}
+};
 
-export interface Topic {
-  id?: string;
-  author?: User;
-  created?: string;
+export type Board = {
+  id: Served<BoardId>;
+  description: Served<string>;
+  topicsCount: Served<number>;
+  commentsCount: Served<number>;
+  unreadTopicsCount: Served<number>;
+  unreadCommentsCount: Served<number>;
+  lastComment: Served<BoardLastComment | null>;
+};
+
+export type LastComment = {
+  createdUtc: string;
+  author: User;
+};
+
+export type Topic = {
+  id: Served<TopicId>;
+  author: Served<User>;
+  createdUtc: Served<string>;
+  editedUtc: Served<string | null>;
   title: string;
-  description?: string;
-  attached?: boolean;
-  closed?: boolean;
-  lastComment?: LastComment | null;
-  commentsCount?: number;
-  unreadCommentsCount?: number;
-  forum: Forum;
-  likes?: User[];
-}
+  description: string;
+  isAttached: boolean;
+  isClosed: boolean;
+  lastComment: Served<LastComment | null>;
+  commentsCount: Served<number>;
+  unreadCommentsCount: Served<number>;
+  board: Board;
+  likes: Served<User[]>;
+};
 
-export interface Comment {
-  id: string;
-  author: User;
-  created: string;
-  updated: string | null;
+export type Comment = {
+  id: Served<CommentId>;
+  author: Served<User>;
+  createdUtc: Served<string>;
+  updatedUtc: Served<string | null>;
   text: string;
-  likes: User[];
-}
+  isRemoved: Served<boolean>;
+  likes: Served<User[]>;
+};

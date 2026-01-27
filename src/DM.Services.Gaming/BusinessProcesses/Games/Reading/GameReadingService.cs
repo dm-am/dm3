@@ -7,6 +7,7 @@ using DM.Services.Authentication.Implementation.UserIdentity;
 using DM.Services.Common.Authorization;
 using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Common.Extensions;
+using DM.Services.Core.Caching;
 using DM.Services.Core.Dto;
 using DM.Services.Core.Exceptions;
 using DM.Services.DataAccess.BusinessObjects.Common;
@@ -33,8 +34,8 @@ internal class GameReadingService : IGameReadingService
     private const string TagListCacheKey = nameof(TagListCacheKey);
     private const string PopularGamesCacheKey = nameof(PopularGamesCacheKey);
     private const string GamesByStatusCacheKeyPrefix = "GamesByStatus_";
+    private const string OwnGamesCacheKeyPrefix = "OwnGames_";
     private const int PopularGamesLimit = 10;
-    private static readonly TimeSpan GamesByStatusCacheDuration = TimeSpan.FromSeconds(30);
 
     /// <inheritdoc />
     public GameReadingService(
@@ -60,7 +61,7 @@ internal class GameReadingService : IGameReadingService
     {
         return cache.GetOrCreateAsync(TagListCacheKey, async e =>
         {
-            e.SlidingExpiration = TimeSpan.FromDays(1);
+            e.AbsoluteExpirationRelativeToNow = CachePolicy.Permanent;
             return await repository.GetTags();
         });
     }
@@ -69,20 +70,35 @@ internal class GameReadingService : IGameReadingService
     public async Task<IEnumerable<Game>> GetOwnGames()
     {
         var currentUserId = identityProvider.Current.User.UserId;
+        var cacheKey = $"{OwnGamesCacheKeyPrefix}{currentUserId}";
+
+        // Простой кэш без race condition проблем GetOrCreateAsync
+        if (cache.TryGetValue(cacheKey, out Game[] cachedGames) && cachedGames != null)
+        {
+            return cachedGames;
+        }
+
         var games = (await repository.GetOwn(currentUserId)).ToArray();
 
         if (games.Length == 0)
+        {
+            cache.Set(cacheKey, games, CachePolicy.Short);
             return games;
-
-        // EF Core DbContext не thread-safe, запросы последовательно
-        await unreadCountersRepository.FillEntityCounters(
-            games, currentUserId, g => g.Id, g => g.UnreadCommentsCount);
-        await unreadCountersRepository.FillEntityCounters(
-            games, currentUserId, g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
+        }
 
         var gameIds = games.Select(g => g.Id).ToArray();
-        var gameRooms = await repository.GetAvailableRoomIds(gameIds, currentUserId);
-        var pendingPosts = (await repository.GetPendingPosts(gameIds, currentUserId)).ToArray();
+
+        // Все запросы параллельно: MongoDB counters + PostgreSQL rooms
+        var fillCommentsTask = unreadCountersRepository.FillEntityCounters(
+            games, currentUserId, g => g.Id, g => g.UnreadCommentsCount);
+        var fillCharactersTask = unreadCountersRepository.FillEntityCounters(
+            games, currentUserId, g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
+        var roomsTask = repository.GetRoomsAndPendingPosts(gameIds, currentUserId);
+
+        await Task.WhenAll(fillCommentsTask, fillCharactersTask, roomsTask);
+
+        var (gameRooms, pendingPosts) = await roomsTask;
+        var pendingPostsArray = pendingPosts.ToArray();
 
         var allRoomIds = gameRooms.SelectMany(r => r.Value).ToArray();
         var unreadPostCounters = allRoomIds.Length > 0
@@ -95,9 +111,10 @@ internal class GameReadingService : IGameReadingService
             var gameRoomIds = roomIds.ToArray();
             game.UnreadPostsCount = gameRoomIds.Sum(id =>
                 unreadPostCounters.TryGetValue(id, out var count) ? count : 0);
-            game.Pendings = pendingPosts.Where(p => gameRoomIds.Contains(p.RoomId));
+            game.Pendings = pendingPostsArray.Where(p => gameRoomIds.Contains(p.RoomId));
         }
 
+        cache.Set(cacheKey, games, CachePolicy.Short);
         return games;
     }
 
@@ -111,16 +128,33 @@ internal class GameReadingService : IGameReadingService
         var isAnonymous = !identity.User.IsAuthenticated;
         var pageSize = identity.Settings.Paging.EntitiesPerPage;
 
-        // Для анонимов кэшируем результат (без unread counters)
+        // Для анонимов кэшируем результат с total counters
         if (isAnonymous && !query.TagId.HasValue && query.Number is null or 1)
         {
             var cacheKey = $"{GamesByStatusCacheKeyPrefix}{string.Join("_", query.Statuses)}";
             var cached = await cache.GetOrCreateAsync(cacheKey, async e =>
             {
-                e.AbsoluteExpirationRelativeToNow = GamesByStatusCacheDuration;
+                e.AbsoluteExpirationRelativeToNow = CachePolicy.Medium;
                 var totalCount = await repository.Count(query, Guid.Empty);
                 var pagingData = new PagingData(query, pageSize, totalCount);
                 var gamesList = (await repository.GetGames(pagingData, query, Guid.Empty)).ToArray();
+
+                if (gamesList.Length > 0)
+                {
+                    var gameIds = gamesList.Select(g => g.Id).ToArray();
+
+                    // Для анонимов — показываем TOTAL counts вместо unread
+                    // DbContext не потокобезопасен — выполняем последовательно
+                    var postCounts = await repository.GetTotalPostCounts(gameIds);
+                    var commentCounts = await repository.GetTotalCommentCounts(gameIds);
+
+                    foreach (var game in gamesList)
+                    {
+                        game.UnreadPostsCount = postCounts.TryGetValue(game.Id, out var pc) ? pc : 0;
+                        game.UnreadCommentsCount = commentCounts.TryGetValue(game.Id, out var cc) ? cc : 0;
+                    }
+                }
+
                 return (games: gamesList, paging: pagingData.Result);
             });
             return cached;
@@ -134,16 +168,41 @@ internal class GameReadingService : IGameReadingService
         if (games.Length == 0)
             return (games, pagingDataAuth.Result);
 
-        await unreadCountersRepository.FillEntityCounters(games, currentUserId,
+        var gameIds = games.Select(g => g.Id).ToArray();
+
+        // MongoDB thread-safe, можно параллелить
+        var fillCharactersTask = unreadCountersRepository.FillEntityCounters(games, currentUserId,
             g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
 
         var gamesWithAvailableComments = games
             .Where(g => intentionManager.IsAllowed(GameIntention.ReadComments, g))
             .ToArray();
-        if (gamesWithAvailableComments.Length > 0)
+
+        var fillCommentsTask = gamesWithAvailableComments.Length > 0
+            ? unreadCountersRepository.FillEntityCounters(gamesWithAvailableComments, currentUserId,
+                g => g.Id, g => g.UnreadCommentsCount)
+            : Task.CompletedTask;
+
+        // PostgreSQL: get room IDs for unread posts aggregation
+        var roomsTask = repository.GetRoomsAndPendingPosts(gameIds, currentUserId);
+
+        await Task.WhenAll(fillCharactersTask, fillCommentsTask, roomsTask);
+
+        // Aggregate unread posts from rooms
+        var (gameRooms, _) = await roomsTask;
+        var allRoomIds = gameRooms.SelectMany(r => r.Value).ToArray();
+        if (allRoomIds.Length > 0)
         {
-            await unreadCountersRepository.FillEntityCounters(gamesWithAvailableComments, currentUserId,
-                g => g.Id, g => g.UnreadCommentsCount);
+            var unreadPostCounters = await unreadCountersRepository.SelectByEntities(
+                currentUserId, UnreadEntryType.Message, allRoomIds);
+
+            foreach (var game in games)
+            {
+                if (!gameRooms.TryGetValue(game.Id, out var roomIds)) continue;
+                var gameRoomIds = roomIds.ToArray();
+                game.UnreadPostsCount = gameRoomIds.Sum(id =>
+                    unreadPostCounters.TryGetValue(id, out var count) ? count : 0);
+            }
         }
 
         return (games, pagingDataAuth.Result);
@@ -159,10 +218,12 @@ internal class GameReadingService : IGameReadingService
             throw new HttpException(HttpStatusCode.Gone, "Game not found");
         }
 
-        await unreadCountersRepository.FillEntityCounters(new[] {game}, currentUserId,
+        // MongoDB thread-safe, можно параллелить
+        var fillCommentsTask = unreadCountersRepository.FillEntityCounters(new[] {game}, currentUserId,
             g => g.Id, g => g.UnreadCommentsCount);
-        await unreadCountersRepository.FillEntityCounters(new[] {game}, currentUserId,
+        var fillCharactersTask = unreadCountersRepository.FillEntityCounters(new[] {game}, currentUserId,
             g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
+        await Task.WhenAll(fillCommentsTask, fillCharactersTask);
 
         return game;
     }
@@ -182,10 +243,12 @@ internal class GameReadingService : IGameReadingService
             game.AttributeSchema = await schemaReadingService.Get(game.AttributeSchemaId.Value);
         }
 
-        await unreadCountersRepository.FillEntityCounters(new[] {game}, currentUserId,
+        // MongoDB thread-safe, можно параллелить
+        var fillCommentsTask = unreadCountersRepository.FillEntityCounters(new[] {game}, currentUserId,
             g => g.Id, g => g.UnreadCommentsCount);
-        await unreadCountersRepository.FillEntityCounters(new[] {game}, currentUserId,
+        var fillCharactersTask = unreadCountersRepository.FillEntityCounters(new[] {game}, currentUserId,
             g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
+        await Task.WhenAll(fillCommentsTask, fillCharactersTask);
 
         return game;
     }
@@ -195,7 +258,8 @@ internal class GameReadingService : IGameReadingService
     {
         return cache.GetOrCreateAsync(PopularGamesCacheKey, async e =>
         {
-            e.SlidingExpiration = TimeSpan.FromDays(1);
+            // AbsoluteExpiration ensures cache refreshes even with constant access
+            e.AbsoluteExpirationRelativeToNow = CachePolicy.LongLived;
             return await repository.GetPopularGames(PopularGamesLimit);
         });
     }

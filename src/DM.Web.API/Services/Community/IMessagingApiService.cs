@@ -26,11 +26,18 @@ public interface IMessagingApiService
     Task<Envelope<Conversation>> GetConversation(Guid id);
 
     /// <summary>
-    /// Get visavi conversation with user
+    /// Get visavi conversation with user by login
     /// </summary>
     /// <param name="login"></param>
     /// <returns></returns>
     Task<Envelope<Conversation>> GetConversation(string login);
+
+    /// <summary>
+    /// Get visavi conversation with user by ID
+    /// </summary>
+    /// <param name="visaviUserId">Visavi user ID</param>
+    /// <returns></returns>
+    Task<Envelope<Conversation>> GetDirectConversation(Guid visaviUserId);
 
     /// <summary>
     /// Get list of conversation messages
@@ -90,4 +97,19 @@ public interface IMessagingApiService
     /// <param name="messageId">Message identifier</param>
     /// <returns></returns>
     Task UnlikeMessage(Guid messageId);
+
+    /// <summary>
+    /// Create a new group conversation
+    /// </summary>
+    /// <param name="createConversation">Conversation data</param>
+    /// <returns></returns>
+    Task<Envelope<Conversation>> CreateConversation(CreateConversation createConversation);
+
+    /// <summary>
+    /// Update an existing conversation
+    /// </summary>
+    /// <param name="conversationId">Conversation identifier</param>
+    /// <param name="updateConversation">Update data</param>
+    /// <returns></returns>
+    Task<Envelope<Conversation>> UpdateConversation(Guid conversationId, UpdateConversation updateConversation);
 }

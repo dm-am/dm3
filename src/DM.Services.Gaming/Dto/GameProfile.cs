@@ -31,7 +31,18 @@ internal class GameProfile : Profile
                 .Select(c => c.UserId)))
             .ForMember(d => d.ReaderUserIds, s => s.MapFrom(g => g.Readers
                 .Select(r => r.UserId)))
-            .ForMember(d => d.BlacklistedUsers, s => s.MapFrom(g => g.BlackList));
+            .ForMember(d => d.BlacklistedUsers, s => s.MapFrom(g => g.BlackList))
+            .ForMember(d => d.Recruitment, s => s.MapFrom(g => new GameRecruitment
+            {
+                IsOpen = g.IsRecruitmentOpen,
+                PlayerLimit = g.RecruitmentPlayerLimit,
+                PlayerCount = g.Characters
+                    .Where(c => !c.IsRemoved && c.Status == CharacterStatus.Active)
+                    .Select(c => c.UserId)
+                    .Distinct()
+                    .Count(),
+                StartedUtc = g.RecruitmentStartedUtc
+            }));
 
         CreateMap<BlackListLink, BlacklistedUser>()
             .ForMember(u => u.LinkId, s => s.MapFrom(l => l.BlackListLinkId));

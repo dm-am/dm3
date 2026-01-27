@@ -18,11 +18,11 @@ public interface ICharacterApiService
     Task<ListEnvelope<Character>> GetAll(Guid gameId);
 
     /// <summary>
-    /// Get single character
+    /// Get single character details
     /// </summary>
     /// <param name="characterId">Character identifier</param>
     /// <returns></returns>
-    Task<Envelope<Character>> Get(Guid characterId);
+    Task<Envelope<CharacterDetails>> Get(Guid characterId);
 
     /// <summary>
     /// Create new character
@@ -30,7 +30,7 @@ public interface ICharacterApiService
     /// <param name="gameId">Game identifier</param>
     /// <param name="character">Character API model</param>
     /// <returns></returns>
-    Task<Envelope<Character>> Create(Guid gameId, Character character);
+    Task<Envelope<CharacterDetails>> Create(Guid gameId, CharacterDetails character);
 
     /// <summary>
     /// Update existing character
@@ -38,7 +38,7 @@ public interface ICharacterApiService
     /// <param name="characterId">Character identifier</param>
     /// <param name="character">Character API model</param>
     /// <returns></returns>
-    Task<Envelope<Character>> Update(Guid characterId, Character character);
+    Task<Envelope<CharacterDetails>> Update(Guid characterId, CharacterDetails character);
 
     /// <summary>
     /// Delete existing character

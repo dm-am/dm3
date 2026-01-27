@@ -38,7 +38,7 @@ internal class CommentaryReadingRepository : ICommentaryReadingRepository
         return await _dbContext.Comments
             .TagWith("DM.Forum.CommentsList")
             .Where(c => !c.IsRemoved && c.EntityId == topicId)
-            .OrderBy(c => c.CreateDate)
+            .OrderBy(c => c.CreatedUtc)
             .Page(paging)
             .ProjectTo<Comment>(_mapper.ConfigurationProvider)
             .ToArrayAsync();

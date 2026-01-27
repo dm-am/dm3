@@ -20,26 +20,40 @@ internal class UserFactory : IUserFactory
     }
 
     /// <inheritdoc />
-    public User Create(UserRegistration registration, string salt, string hash)
+    public User Create(UserRegistration registration, string salt, string hash, int hashVersion)
     {
         return new User
         {
             UserId = _guidFactory.Create(),
             Login = registration.Login.Trim(),
             Email = registration.Email.Trim(),
-            RegistrationDate = _dateTimeProvider.Now,
-            LastVisitDate = null,
+            CreatedUtc = _dateTimeProvider.Now,
+            LastActivityUtc = null,
             Role = UserRole.RegularUser,
             AccessPolicy = AccessPolicy.NotSpecified,
             Salt = salt,
             PasswordHash = hash,
+            PasswordHashVersion = hashVersion,
             RatingDisabled = false,
             QualityRating = 0,
             QuantityRating = 0,
             Activated = false,
             CanMerge = false,
             MergeRequested = null,
-            IsRemoved = false
+            IsRemoved = false,
+            // Initialize NOT NULL string fields with defaults
+            Status = string.Empty,
+            Name = string.Empty,
+            Location = string.Empty,
+            Icq = string.Empty,
+            Skype = string.Empty,
+            Info = string.Empty,
+            ProfilePictureUrl = string.Empty,
+            SmallProfilePictureUrl = string.Empty,
+            MediumProfilePictureUrl = string.Empty,
+#pragma warning disable CS0618 // TimezoneId is obsolete
+            TimezoneId = "UTC"
+#pragma warning restore CS0618
         };
     }
 }

@@ -13,15 +13,15 @@ namespace DM.Web.API.Controllers.v1.Forums;
 [ApiExplorerSettings(GroupName = "Forum")]
 public class ForumController : ControllerBase
 {
-    private readonly IForumApiService _forumApiService;
+    private readonly IBoardApiService _boardApiService;
     private readonly ICommentApiService _commentApiService;
 
     /// <inheritdoc />
     public ForumController(
-        IForumApiService forumApiService,
+        IBoardApiService boardApiService,
         ICommentApiService commentApiService)
     {
-        _forumApiService = forumApiService;
+        _boardApiService = boardApiService;
         _commentApiService = commentApiService;
     }
 
@@ -34,7 +34,7 @@ public class ForumController : ControllerBase
     public async Task<IActionResult> GetForum()
     {
         Response.Headers.CacheControl = "public, max-age=60";
-        return Ok(await _forumApiService.GetBoards());
+        return Ok(await _boardApiService.GetBoards());
     }
 
     /// <summary>

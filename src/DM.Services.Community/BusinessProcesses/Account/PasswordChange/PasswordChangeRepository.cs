@@ -42,7 +42,7 @@ internal class PasswordChangeRepository : IPasswordChangeRepository
     /// <inheritdoc />
     public Task<bool> TokenValid(Guid tokenId, DateTimeOffset createdSince) => _dbContext.Tokens
         .AnyAsync(t => t.TokenId == tokenId &&
-                       t.Type == TokenType.PasswordChange && t.CreateDate > createdSince);
+                       t.Type == TokenType.PasswordChange && t.CreatedUtc > createdSince);
 
     /// <inheritdoc />
     public Task UpdatePassword(IUpdateBuilder<User> userUpdate, IUpdateBuilder<Token> tokenUpdate)

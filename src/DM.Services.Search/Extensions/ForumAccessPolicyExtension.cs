@@ -4,39 +4,39 @@ using DM.Services.Core.Dto.Enums;
 namespace DM.Services.Search.Extensions;
 
 /// <summary>
-/// Extensions for forum entities indexing
+/// Extensions for board entities indexing
 /// </summary>
-public static class ForumAccessPolicyExtension
+public static class BoardAccessPolicyExtension
 {
     /// <summary>
-    /// Get list of atomic roles that are authorized to perform forum policy action
+    /// Get list of atomic roles that are authorized to perform board policy action
     /// </summary>
-    /// <param name="forumAccessPolicy">Forum access policy</param>
+    /// <param name="boardAccessPolicy">Board access policy</param>
     /// <returns>List of user roles</returns>
-    public static IEnumerable<UserRole> GetAuthorizedRoles(this ForumAccessPolicy forumAccessPolicy)
+    public static IEnumerable<UserRole> GetAuthorizedRoles(this BoardAccessPolicy boardAccessPolicy)
     {
-        if (forumAccessPolicy.HasFlag(ForumAccessPolicy.Guest))
+        if (boardAccessPolicy.HasFlag(BoardAccessPolicy.Guest))
         {
             yield return UserRole.Guest;
             yield return UserRole.RegularUser;
         }
 
-        if (forumAccessPolicy.HasFlag(ForumAccessPolicy.MentorModerator))
+        if (boardAccessPolicy.HasFlag(BoardAccessPolicy.MentorModerator))
         {
             yield return UserRole.Mentor;
         }
 
-        if (forumAccessPolicy.HasFlag(ForumAccessPolicy.ForumModerator))
+        if (boardAccessPolicy.HasFlag(BoardAccessPolicy.BoardModerator))
         {
             yield return UserRole.Moderator;
         }
 
-        if (forumAccessPolicy.HasFlag(ForumAccessPolicy.SeniorModerator))
+        if (boardAccessPolicy.HasFlag(BoardAccessPolicy.SeniorModerator))
         {
             yield return UserRole.SeniorModerator;
         }
 
-        if (forumAccessPolicy.HasFlag(ForumAccessPolicy.Administrator))
+        if (boardAccessPolicy.HasFlag(BoardAccessPolicy.Administrator))
         {
             yield return UserRole.Admin;
         }

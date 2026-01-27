@@ -27,7 +27,10 @@ internal class RoomFactory : IRoomFactory
             Title = createRoom.Title.Trim(),
             Type = createRoom.Type,
             AccessType = createRoom.AccessType,
-            OrderNumber = 0
+            OrderNumber = 0,
+            ViewPrivateText = createRoom.ViewPrivateText,
+            ViewDiceResults = createRoom.ViewDiceResults,
+            DiceEnabled = createRoom.DiceEnabled
         };
     }
 

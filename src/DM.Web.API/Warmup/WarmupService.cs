@@ -1,0 +1,118 @@
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using DM.Services.Core.Dto.Enums;
+using DM.Services.DataAccess;
+using DM.Services.DataAccess.BusinessObjects.Common;
+using DM.Services.DataAccess.MongoIntegration;
+using DM.Services.Gaming.BusinessProcesses.Shared;
+using DM.Services.Gaming.Dto.Output;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using MongoDB.Driver;
+
+namespace DM.Web.API.Warmup;
+
+/// <summary>
+/// Warmup service that preloads DB connections and JIT compiles critical paths on startup
+/// </summary>
+internal class WarmupService : IHostedService
+{
+    private readonly IServiceProvider _serviceProvider;
+    private readonly ILogger<WarmupService> _logger;
+
+    public WarmupService(
+        IServiceProvider serviceProvider,
+        ILogger<WarmupService> logger)
+    {
+        _serviceProvider = serviceProvider;
+        _logger = logger;
+    }
+
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        _ = Task.Run(async () =>
+        {
+            _logger.LogInformation("[Warmup] Starting application warmup...");
+            var startTime = DateTime.UtcNow;
+
+            try
+            {
+                // Phase 1: DB, MongoDB and AutoMapper warmup (all in parallel)
+                var tasks = new[]
+                {
+                    WarmupDb(cancellationToken),
+                    WarmupMongo(cancellationToken),
+                    Task.Run(() => WarmupAutoMapper(), cancellationToken)
+                };
+
+                await Task.WhenAll(tasks);
+
+                var duration = DateTime.UtcNow - startTime;
+                _logger.LogInformation("[Warmup] Completed in {Duration}ms", duration.TotalMilliseconds);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[Warmup] Failed (non-critical): {Message}", ex.Message);
+            }
+        }, cancellationToken);
+        return Task.CompletedTask;
+    }
+
+    private void WarmupAutoMapper()
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var mapper = scope.ServiceProvider.GetRequiredService<IMapper>();
+        mapper.ConfigurationProvider.CompileMappings();
+    }
+
+    private async Task WarmupDb(CancellationToken ct)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+        var mapper = scope.ServiceProvider.GetRequiredService<IMapper>();
+
+        // Warmup simple games query
+        await db.Games.Where(g => !g.IsRemoved && g.Status == GameStatus.Active)
+            .Take(10).Select(g => g.GameId).ToListAsync(ct);
+
+        // Warmup tags
+        await db.Tags.CountAsync(ct);
+
+        // Warmup the complex GetOwn query with ProjectTo<Game>
+        // This pre-compiles the EF Core query and AutoMapper projection
+        var dummyUserId = Guid.Empty;
+        await db.Games
+            .Where(AccessibilityFilters.GameAvailable(dummyUserId))
+            .Where(g => g.Characters.Any(c =>
+                            !c.IsRemoved && c.Status == CharacterStatus.Active && c.UserId == dummyUserId) ||
+                        g.Readers.Any(r => r.UserId == dummyUserId) ||
+                        g.MasterId == dummyUserId || g.AssistantId == dummyUserId || g.MentorId == dummyUserId)
+            .ProjectTo<Game>(mapper.ConfigurationProvider)
+            .Take(1)
+            .ToListAsync(ct);
+
+        _logger.LogDebug("[Warmup] EF Core queries compiled");
+    }
+
+    private async Task WarmupMongo(CancellationToken ct)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var mongoClient = scope.ServiceProvider.GetRequiredService<DmMongoClient>();
+
+        // Warmup MongoDB connection and UnreadCounters collection
+        var collection = mongoClient.GetCollection<UnreadCounter>();
+        await collection.Find(c => c.UserId == Guid.Empty)
+            .Limit(1)
+            .FirstOrDefaultAsync(ct);
+
+        _logger.LogDebug("[Warmup] MongoDB connection established");
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+}

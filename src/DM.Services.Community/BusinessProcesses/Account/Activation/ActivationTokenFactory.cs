@@ -27,7 +27,7 @@ internal class ActivationTokenFactory : IActivationTokenFactory
             TokenId = _guidFactory.Create(),
             UserId = userId,
             Type = TokenType.Activation,
-            CreateDate = _dateTimeProvider.Now,
+            CreatedUtc = _dateTimeProvider.Now,
             IsRemoved = false
         };
     }

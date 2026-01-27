@@ -9,34 +9,34 @@ using DM.Services.Forum.Dto.Output;
 namespace DM.Services.Forum.BusinessProcesses.Topics.Reading;
 
 /// <summary>
-/// Forum topics storage
+/// Board topics storage
 /// </summary>
 internal interface ITopicReadingRepository
 {
     /// <summary>
-    /// Get number of forum topics
+    /// Get number of board topics
     /// </summary>
-    /// <param name="forumId">Forum identifier</param>
+    /// <param name="boardId">Board identifier</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns></returns>
-    Task<int> Count(Guid forumId, CancellationToken ct = default);
+    Task<int> Count(Guid boardId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get list of forum topics
+    /// Get list of board topics
     /// </summary>
-    /// <param name="forumId">Forum identifier</param>
+    /// <param name="boardId">Board identifier</param>
     /// <param name="pagingData">Paging data</param>
     /// <param name="attached">Select attached/not attached topics exclusively</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns></returns>
-    Task<IEnumerable<Topic>> Get(Guid forumId, PagingData pagingData, bool attached, CancellationToken ct = default);
+    Task<IEnumerable<Topic>> Get(Guid boardId, PagingData pagingData, bool attached, CancellationToken ct = default);
 
     /// <summary>
     /// Get topic
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
-    /// <param name="accessPolicy">Forum access policy</param>
+    /// <param name="accessPolicy">Board access policy</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns></returns>
-    Task<Topic> Get(Guid topicId, ForumAccessPolicy accessPolicy, CancellationToken ct = default);
+    Task<Topic> Get(Guid topicId, BoardAccessPolicy accessPolicy, CancellationToken ct = default);
 }

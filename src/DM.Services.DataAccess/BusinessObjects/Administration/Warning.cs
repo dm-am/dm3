@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using DM.Services.DataAccess.BusinessObjects.Common;
 using DM.Services.DataAccess.BusinessObjects.DataContracts;
+using DM.Services.DataAccess.BusinessObjects.Messaging;
 using DM.Services.DataAccess.BusinessObjects.Users;
 
 namespace DM.Services.DataAccess.BusinessObjects.Administration;
@@ -31,9 +32,9 @@ public class Warning : IAdministrated
     public Guid EntityId { get; set; }
 
     /// <summary>
-    /// Creation moment
+    /// Creation moment (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Moderation message
@@ -63,8 +64,8 @@ public class Warning : IAdministrated
     public virtual Comment Comment { get; set; }
 
     /// <summary>
-    /// Warning causation chat message
+    /// Warning causation message (chat or private)
     /// </summary>
     [ForeignKey(nameof(EntityId))]
-    public virtual ChatMessage ChatMessage { get; set; }
+    public virtual Message Message { get; set; }
 }

@@ -37,7 +37,7 @@ public class UserFactoryShould : UnitTestBase
             Email = "email  ",
             Login = "   login",
             Password = "whatever"
-        }, "salt", "hash");
+        }, "salt", "hash", 2);
 
         actual.Should().BeEquivalentTo(new User
         {
@@ -47,15 +47,30 @@ public class UserFactoryShould : UnitTestBase
             Salt = "salt",
             PasswordHash = "hash",
             Activated = false,
-            LastVisitDate = null,
+            LastActivityUtc = null,
             Role = UserRole.RegularUser,
+            AccessPolicy = AccessPolicy.NotSpecified,
             QualityRating = 0,
             QuantityRating = 0,
             RatingDisabled = false,
             CanMerge = false,
             MergeRequested = null,
             IsRemoved = false,
-            RegistrationDate = rightNow
+            CreatedUtc = rightNow,
+            PasswordHashVersion = 2,
+            // String fields initialized by factory
+            Status = string.Empty,
+            Name = string.Empty,
+            Location = string.Empty,
+            Icq = string.Empty,
+            Skype = string.Empty,
+            Info = string.Empty,
+            ProfilePictureUrl = string.Empty,
+            SmallProfilePictureUrl = string.Empty,
+            MediumProfilePictureUrl = string.Empty,
+#pragma warning disable CS0618
+            TimezoneId = "UTC"
+#pragma warning restore CS0618
         });
     }
 }

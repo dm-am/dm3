@@ -36,7 +36,7 @@ internal class CommentaryReadingRepository : ICommentaryReadingRepository
     {
         return await dbContext.Comments
             .Where(c => !c.IsRemoved && c.EntityId == gameId)
-            .OrderBy(c => c.CreateDate)
+            .OrderBy(c => c.CreatedUtc)
             .Page(paging)
             .ProjectTo<Comment>(mapper.ConfigurationProvider)
             .ToArrayAsync();

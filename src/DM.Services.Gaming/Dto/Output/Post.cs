@@ -26,7 +26,7 @@ public class Post
     /// <summary>
     /// Post last update author
     /// </summary>
-    public GeneralUser LastUpdateAuthor { get; set; }
+    public GeneralUser ModifiedBy { get; set; }
 
     /// <summary>
     /// Short character information
@@ -34,14 +34,14 @@ public class Post
     public CharacterShort Character { get; set; }
 
     /// <summary>
-    /// Creating moment
+    /// Creating moment (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Last update moment
+    /// Last modification moment (UTC)
     /// </summary>
-    public DateTimeOffset? LastUpdateDate { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
     /// Text

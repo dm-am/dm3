@@ -46,6 +46,7 @@ public static class AttributeExtensions
         foreach (var field in type.GetFields(BindingFlags.Static | BindingFlags.GetField | BindingFlags.Public))
         {
             var fieldValue = field.GetValue(null);
+            if (fieldValue is null) continue;
             if (fieldValue.Equals(structValue))
                 return (TAttr[])field.GetCustomAttributes(typeof(TAttr), false);
             if (isFlag && type.IsEnum)

@@ -13,100 +13,101 @@ using DM.Services.Forum.BusinessProcesses.Common;
 namespace DM.Services.Forum.BusinessProcesses.Boards;
 
 /// <inheritdoc />
-internal class ForumReadingService : IForumReadingService
+internal class BoardReadingService : IBoardReadingService
 {
     private readonly IIdentityProvider _identityProvider;
     private readonly IAccessPolicyConverter _accessPolicyConverter;
-    private readonly IForumRepository _forumRepository;
+    private readonly IBoardRepository _boardRepository;
     private readonly IUnreadCountersRepository _unreadCountersRepository;
 
     /// <inheritdoc />
-    public ForumReadingService(
+    public BoardReadingService(
         IIdentityProvider identityProvider,
         IAccessPolicyConverter accessPolicyConverter,
-        IForumRepository forumRepository,
+        IBoardRepository boardRepository,
         IUnreadCountersRepository unreadCountersRepository)
     {
         _identityProvider = identityProvider;
         _accessPolicyConverter = accessPolicyConverter;
-        _forumRepository = forumRepository;
+        _boardRepository = boardRepository;
         _unreadCountersRepository = unreadCountersRepository;
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Dto.Output.Forum>> GetForaList()
+    public async Task<IEnumerable<Dto.Output.Board>> GetBoardsList()
     {
-        var fora = await GetFora();
+        var boards = await GetBoards();
         var identity = _identityProvider.Current;
 
         // Для анонимных пользователей возвращаем объекты из кэша напрямую
         if (!identity.User.IsAuthenticated)
         {
-            return fora;
+            return boards;
         }
 
         // Для авторизованных — копируем, чтобы не загрязнять кэш персональными данными
-        var foraCopy = fora.Select(f => new Dto.Output.Forum
+        var boardsCopy = boards.Select(b => new Dto.Output.Board
         {
-            Id = f.Id,
-            Title = f.Title,
-            Description = f.Description,
-            CreateTopicPolicy = f.CreateTopicPolicy,
-            ViewPolicy = f.ViewPolicy,
-            ModeratorIds = f.ModeratorIds,
-            TopicsCount = f.TopicsCount,
-            CommentsCount = f.CommentsCount,
+            Id = b.Id,
+            Title = b.Title,
+            Description = b.Description,
+            CreateTopicPolicy = b.CreateTopicPolicy,
+            ViewPolicy = b.ViewPolicy,
+            ModeratorIds = b.ModeratorIds,
+            TopicsCount = b.TopicsCount,
+            CommentsCount = b.CommentsCount,
             UnreadTopicsCount = 0,
             UnreadCommentsCount = 0,
-            LastComment = f.LastComment
+            LastComment = b.LastComment
         }).ToArray();
 
-        var fillTopicsTask = _unreadCountersRepository.FillParentCounters(foraCopy, identity.User.UserId,
-            f => f.Id, f => f.UnreadTopicsCount);
-        var fillCommentsTask = _unreadCountersRepository.FillTotalUnreadCounters(foraCopy, identity.User.UserId,
-            f => f.Id, f => f.UnreadCommentsCount);
+        var fillTopicsTask = _unreadCountersRepository.FillParentCounters(boardsCopy, identity.User.UserId,
+            b => b.Id, b => b.UnreadTopicsCount);
+        var fillCommentsTask = _unreadCountersRepository.FillTotalUnreadCounters(boardsCopy, identity.User.UserId,
+            b => b.Id, b => b.UnreadCommentsCount);
         await Task.WhenAll(fillTopicsTask, fillCommentsTask);
 
-        return foraCopy;
+        return boardsCopy;
     }
 
     /// <inheritdoc />
-    public async Task<Dto.Output.Forum> GetSingleForum(string forumTitle)
+    public async Task<Dto.Output.Board> GetSingleBoard(string boardTitle)
     {
-        var forum = await GetForum(forumTitle);
+        var board = await GetBoard(boardTitle);
         var identity = _identityProvider.Current;
         if (identity.User.IsAuthenticated)
         {
             var topicsTask = _unreadCountersRepository.SelectByParents(
-                identity.User.UserId, UnreadEntryType.Message, forum.Id);
+                identity.User.UserId, UnreadEntryType.Message, board.Id);
             var commentsTask = _unreadCountersRepository.SelectTotalUnreadByParents(
-                identity.User.UserId, UnreadEntryType.Message, forum.Id);
-            await Task.WhenAll(topicsTask, commentsTask);
+                identity.User.UserId, UnreadEntryType.Message, board.Id);
+            var topics = await topicsTask;
+            var comments = await commentsTask;
 
-            forum.UnreadTopicsCount = topicsTask.Result[forum.Id];
-            forum.UnreadCommentsCount = commentsTask.Result[forum.Id];
+            board.UnreadTopicsCount = topics[board.Id];
+            board.UnreadCommentsCount = comments[board.Id];
         }
 
-        return forum;
+        return board;
     }
 
     /// <inheritdoc />
-    public async Task<Dto.Output.Forum> GetForum(string forumTitle, bool onlyAvailable = true)
+    public async Task<Dto.Output.Board> GetBoard(string boardTitle, bool onlyAvailable = true)
     {
-        var forum = (await GetFora(onlyAvailable)).FirstOrDefault(f => f.Title == forumTitle);
-        if (forum == null)
+        var board = (await GetBoards(onlyAvailable)).FirstOrDefault(b => b.Title == boardTitle);
+        if (board == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, $"Forum {forumTitle} not found");
+            throw new HttpException(HttpStatusCode.Gone, $"Board {boardTitle} not found");
         }
 
-        return forum;
+        return board;
     }
 
-    private async Task<Dto.Output.Forum[]> GetFora(bool onlyAvailable = true)
+    private async Task<Dto.Output.Board[]> GetBoards(bool onlyAvailable = true)
     {
         var accessPolicy = onlyAvailable
             ? _accessPolicyConverter.Convert(_identityProvider.Current.User.Role)
-            : (ForumAccessPolicy?) null;
-        return (await _forumRepository.SelectFora(accessPolicy)).ToArray();
+            : (BoardAccessPolicy?) null;
+        return (await _boardRepository.SelectBoards(accessPolicy)).ToArray();
     }
 }

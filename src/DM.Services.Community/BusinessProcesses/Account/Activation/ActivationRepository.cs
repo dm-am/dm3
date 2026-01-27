@@ -24,7 +24,7 @@ internal class ActivationRepository : IActivationRepository
     public async Task<Guid?> FindUserToActivate(Guid tokenId, DateTimeOffset createdSince)
     {
         return (await _dbContext.Tokens
-            .Where(t => t.TokenId == tokenId && t.CreateDate > createdSince)
+            .Where(t => t.TokenId == tokenId && t.CreatedUtc > createdSince)
             .Select(t => new {t.UserId})
             .FirstOrDefaultAsync())?.UserId;
     }

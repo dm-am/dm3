@@ -34,7 +34,7 @@ internal class ReviewReadingRepository : IReviewReadingRepository
     /// <inheritdoc />
     public async Task<IEnumerable<Review>> Get(PagingData paging, bool approvedOnly) => await dbContext.Reviews
         .Where(r => (!approvedOnly || r.IsApproved) && !r.IsRemoved)
-        .OrderByDescending(r => r.CreateDate)
+        .OrderByDescending(r => r.CreatedUtc)
         .Page(paging)
         .ProjectTo<Review>(mapper.ConfigurationProvider)
         .ToArrayAsync();

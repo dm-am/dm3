@@ -18,5 +18,15 @@ public enum TokenType
     /// <summary>
     /// Game assistant assignment
     /// </summary>
-    AssistantAssignment = 2
+    AssistantAssignment = 2,
+
+    /// <summary>
+    /// Game player invitation
+    /// </summary>
+    PlayerInvitation = 3,
+
+    /// <summary>
+    /// Game reader invitation
+    /// </summary>
+    ReaderInvitation = 4
 }

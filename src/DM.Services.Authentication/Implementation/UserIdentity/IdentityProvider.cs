@@ -17,10 +17,19 @@ internal class IdentityProvider : IIdentitySetter, IIdentityProvider
         set
         {
             _identity = value;
-            LogContext.PushProperty("User", _identity.User.Login);
+            if (_identity?.User != null)
+            {
+                LogContext.PushProperty("User", _identity.User.Login);
+            }
         }
     }
 
     /// <inheritdoc />
-    public void Refresh() => Current = Current;
+    public void Refresh()
+    {
+        if (_identity != null)
+        {
+            Current = Current;
+        }
+    }
 }

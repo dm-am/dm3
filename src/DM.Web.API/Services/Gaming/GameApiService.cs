@@ -69,27 +69,27 @@ internal class GameApiService : IGameApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Game>> GetDetails(Guid gameId)
+    public async Task<Envelope<GameDetails>> GetDetails(Guid gameId)
     {
         var game = await readingService.GetGameDetails(gameId);
-        return new Envelope<Game>(mapper.Map<Game>(game));
+        return new Envelope<GameDetails>(mapper.Map<GameDetails>(game));
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Game>> Create(Game game)
+    public async Task<Envelope<GameDetails>> Create(GameDetails game)
     {
         var createGame = mapper.Map<CreateGame>(game);
         var createdGame = await creatingService.Create(createGame);
-        return new Envelope<Game>(mapper.Map<Game>(createdGame));
+        return new Envelope<GameDetails>(mapper.Map<GameDetails>(createdGame));
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Game>> Update(Guid gameId, Game game)
+    public async Task<Envelope<GameDetails>> Update(Guid gameId, GameDetails game)
     {
         var updateGame = mapper.Map<UpdateGame>(game);
         updateGame.GameId = gameId;
         var updatedGame = await updatingService.Update(updateGame);
-        return new Envelope<Game>(mapper.Map<Game>(updatedGame));
+        return new Envelope<GameDetails>(mapper.Map<GameDetails>(updatedGame));
     }
 
     /// <inheritdoc />
@@ -100,5 +100,24 @@ internal class GameApiService : IGameApiService
     {
         var tags = await readingService.GetTags();
         return new ListEnvelope<Tag>(tags.Select(mapper.Map<Tag>));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<GameNotes>> GetNotes(Guid gameId)
+    {
+        var game = await readingService.GetGameDetails(gameId);
+        return new Envelope<GameNotes>(new GameNotes { Notes = game.Notepad });
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<GameNotes>> UpdateNotes(Guid gameId, GameNotes notes)
+    {
+        var updateGame = new UpdateGame
+        {
+            GameId = gameId,
+            Notepad = notes.Notes
+        };
+        var updatedGame = await updatingService.Update(updateGame);
+        return new Envelope<GameNotes>(new GameNotes { Notes = updatedGame.Notepad });
     }
 }

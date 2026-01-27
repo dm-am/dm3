@@ -8,5 +8,10 @@ public enum ConversationIntention
     /// <summary>
     /// Create new message
     /// </summary>
-    CreateMessage = 0
+    CreateMessage = 0,
+
+    /// <summary>
+    /// Update conversation (title, participants)
+    /// </summary>
+    UpdateConversation = 1
 }

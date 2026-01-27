@@ -22,7 +22,7 @@ internal class UploadFactory : IUploadFactory
         DateTimeOffset createdAt) => new()
     {
         UploadId = guidFactory.Create(),
-        CreateDate = createdAt,
+        CreatedUtc = createdAt,
         UserId = userId,
         EntityId = createUpload.EntityId,
         FileName = createUpload.FileName,

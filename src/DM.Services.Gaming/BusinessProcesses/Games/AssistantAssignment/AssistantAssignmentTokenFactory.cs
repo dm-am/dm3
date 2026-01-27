@@ -28,7 +28,7 @@ internal class AssistantAssignmentTokenFactory : IAssistantAssignmentTokenFactor
             UserId = userId,
             EntityId = gameId,
             Type = TokenType.AssistantAssignment,
-            CreateDate = dateTimeProvider.Now,
+            CreatedUtc = dateTimeProvider.Now,
             IsRemoved = false
         };
     }

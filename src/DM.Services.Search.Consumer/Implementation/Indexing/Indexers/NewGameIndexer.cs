@@ -45,7 +45,7 @@ internal class NewGameIndexer : BaseIndexer
             EntityType = SearchEntityType.Game,
             Title = game.Title,
             Text = _bbParserProvider.CurrentInfo.Parse(game.Info).ToHtml(),
-            AuthorizedUsers = game.Status == GameStatus.Draft || game.Status == GameStatus.RequiresModeration
+            AuthorizedUsers = game.Status == GameStatus.Draft
                 ? new[] {game.MasterId}
                 : null
         });

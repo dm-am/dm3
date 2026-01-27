@@ -1,6 +1,5 @@
 using System;
 using DM.Services.Core.Dto.Enums;
-using DM.Web.API.BbRendering;
 using DM.Web.API.Dto.Users;
 
 namespace DM.Web.API.Dto.Games;
@@ -11,9 +10,14 @@ namespace DM.Web.API.Dto.Games;
 public class Vote
 {
     /// <summary>
-    /// Target post
+    /// Vote identifier
     /// </summary>
-    public Post Post { get; set; }
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// Post identifier
+    /// </summary>
+    public Guid PostId { get; set; }
 
     /// <summary>
     /// Vote author
@@ -29,11 +33,6 @@ public class Vote
     /// Vote reason type
     /// </summary>
     public VoteType Type { get; set; }
-
-    /// <summary>
-    /// Vote text
-    /// </summary>
-    public CommonBbText Text { get; set; }
 
     /// <summary>
     /// Creation moment

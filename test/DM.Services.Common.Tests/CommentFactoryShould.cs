@@ -48,9 +48,9 @@ public class CommentFactoryShould : UnitTestBase
         {
             CommentId = commentId,
             EntityId = topicId,
-            CreateDate = rightNow,
+            CreatedUtc = rightNow,
             UserId = userId,
-            LastUpdateDate = null,
+            ModifiedUtc = null,
             IsRemoved = false,
             Text = "text of commentary"
         });

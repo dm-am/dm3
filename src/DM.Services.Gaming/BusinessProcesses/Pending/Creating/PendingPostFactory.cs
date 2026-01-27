@@ -29,7 +29,7 @@ internal class PendingPostFactory : IPendingPostFactory
             RoomId = createPendingPost.RoomId,
             AwaitingUserId = awaitingUserId,
             PendingUserId = pendingUserId,
-            CreateDate = dateTimeProvider.Now
+            CreatedUtc = dateTimeProvider.Now
         };
     }
 }

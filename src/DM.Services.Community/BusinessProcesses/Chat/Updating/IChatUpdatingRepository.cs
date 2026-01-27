@@ -14,6 +14,7 @@ internal interface IChatUpdatingRepository
     /// </summary>
     /// <param name="id">Message identifier</param>
     /// <param name="text">New message text</param>
+    /// <param name="editorUserId">User who edited the message</param>
     /// <returns>Updated message</returns>
-    Task<ChatMessage> Update(Guid id, string text);
+    Task<ChatMessage> Update(Guid id, string text, Guid editorUserId);
 }

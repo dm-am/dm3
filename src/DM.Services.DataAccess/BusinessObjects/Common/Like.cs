@@ -54,14 +54,8 @@ public class Like
     public virtual Review Review { get; set; }
 
     /// <summary>
-    /// Parent message
+    /// Parent message (both chat and private messages)
     /// </summary>
     [ForeignKey(nameof(EntityId))]
     public virtual Message Message { get; set; }
-
-    /// <summary>
-    /// Parent chat message
-    /// </summary>
-    [ForeignKey(nameof(EntityId))]
-    public virtual ChatMessage ChatMessage { get; set; }
 }

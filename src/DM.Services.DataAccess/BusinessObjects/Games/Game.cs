@@ -26,9 +26,9 @@ public class Game : IRemovable
     public Guid GameId { get; set; }
 
     /// <summary>
-    /// Creation moment
+    /// Creation moment (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Release moment (first time the game started requirement)
@@ -39,6 +39,41 @@ public class Game : IRemovable
     /// Status
     /// </summary>
     public GameStatus Status { get; set; }
+
+    /// <summary>
+    /// Premoderation status for newbie GMs
+    /// </summary>
+    public PremoderationStatus PremoderationStatus { get; set; }
+
+    /// <summary>
+    /// Game was completed successfully (only when Status = Closed)
+    /// </summary>
+    public bool IsFinished { get; set; }
+
+    /// <summary>
+    /// Game was frozen due to inactivity (only when Status = Closed)
+    /// </summary>
+    public bool IsFrozen { get; set; }
+
+    /// <summary>
+    /// Recruitment is open for new players
+    /// </summary>
+    public bool IsRecruitmentOpen { get; set; }
+
+    /// <summary>
+    /// Maximum number of players allowed (null = unlimited)
+    /// </summary>
+    public int? RecruitmentPlayerLimit { get; set; }
+
+    /// <summary>
+    /// When the recruitment was opened
+    /// </summary>
+    public DateTimeOffset? RecruitmentStartedUtc { get; set; }
+
+    /// <summary>
+    /// When the game was closed
+    /// </summary>
+    public DateTimeOffset? ClosedUtc { get; set; }
 
     /// <summary>
     /// GM identifier
@@ -71,9 +106,9 @@ public class Game : IRemovable
     public string SystemName { get; set; }
 
     /// <summary>
-    /// Setting name (e.g. Mass Effect, WarHammer, Our world)
+    /// Narrative setting (e.g. Mass Effect, WarHammer, Our world)
     /// </summary>
-    public string SettingName { get; set; }
+    public string NarrativeSetting { get; set; }
 
     /// <summary>
     /// Full game information

@@ -1,14 +1,24 @@
 using System.Threading.Tasks;
+using DM.Services.Authentication.Configuration;
 using DM.Services.Authentication.Implementation.Security;
 using DM.Tests.Core;
 using FluentAssertions;
+using Microsoft.Extensions.Options;
+using Moq;
 using Xunit;
 
 namespace DM.Services.Authentication.Tests;
 
 public class SymmetricCryptoServiceShould : UnitTestBase
 {
-    private readonly TripleDesSymmetricCryptoService service = new();
+    private readonly TripleDesSymmetricCryptoService service;
+
+    public SymmetricCryptoServiceShould()
+    {
+        var cryptoOptions = Mock<IOptions<CryptoConfiguration>>();
+        cryptoOptions.Setup(o => o.Value).Returns(new CryptoConfiguration());
+        service = new TripleDesSymmetricCryptoService(cryptoOptions.Object);
+    }
 
     [Fact]
     public async Task CryptSymmetrically()

@@ -14,9 +14,9 @@ public class Topic : ILikable
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Forum
+    /// Board
     /// </summary>
-    public Forum Forum { get; set; }
+    public Board Board { get; set; }
 
     /// <summary>
     /// Title
@@ -29,14 +29,14 @@ public class Topic : ILikable
     public string Text { get; set; }
 
     /// <summary>
-    /// Creation moment
+    /// Creation moment (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Last update moment
+    /// Last modification moment (UTC)
     /// </summary>
-    public DateTimeOffset? LastUpdateDate { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
     /// Author
@@ -69,9 +69,9 @@ public class Topic : ILikable
     public bool IsClosed { get; set; }
 
     /// <summary>
-    /// Last commentary creation moment or (if none) topic creation moment
+    /// Last commentary creation moment or (if none) topic creation moment (UTC)
     /// </summary>
-    public DateTimeOffset LastActivityDate { get; set; }
+    public DateTimeOffset LastActivityUtc { get; set; }
 
     /// <inheritdoc />
     public IEnumerable<GeneralUser> Likes { get; set; }
@@ -88,7 +88,7 @@ public class LastComment
     public GeneralUser Author { get; set; }
 
     /// <summary>
-    /// Creation moment
+    /// Creation moment (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 }

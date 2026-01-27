@@ -1,5 +1,5 @@
 using System;
-using DM.Services.DataAccess.BusinessObjects.Common;
+using DM.Services.DataAccess.BusinessObjects.Messaging;
 
 namespace DM.Services.Community.BusinessProcesses.Chat.Creating;
 
@@ -9,10 +9,10 @@ namespace DM.Services.Community.BusinessProcesses.Chat.Creating;
 internal interface IChatMessageFactory
 {
     /// <summary>
-    /// Create new DAL model
+    /// Create new DAL model for global chat
     /// </summary>
     /// <param name="createChatMessage">Creating DTO model</param>
     /// <param name="userId">User identifier</param>
     /// <returns></returns>
-    ChatMessage Create(CreateChatMessage createChatMessage, Guid userId);
+    Message Create(CreateChatMessage createChatMessage, Guid userId);
 }

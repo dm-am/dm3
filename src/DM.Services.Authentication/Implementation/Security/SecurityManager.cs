@@ -1,5 +1,5 @@
 using System;
-using System.Text;
+using System.Security.Cryptography;
 
 namespace DM.Services.Authentication.Implementation.Security;
 
@@ -19,20 +19,29 @@ internal class SecurityManager : ISecurityManager
     }
 
     /// <inheritdoc />
-    public (string Hash, string Salt) GeneratePassword(string password)
+    public (string Hash, string Salt, int Version) GeneratePassword(string password)
     {
         var salt = _saltFactory.Create(100);
-        var hash = _hashProvider.ComputeSha256(password, salt);
-        return (Convert.ToBase64String(hash), salt);
+        var hash = _hashProvider.ComputePbkdf2(password, salt);
+        return (Convert.ToBase64String(hash), salt, _hashProvider.CurrentVersion);
     }
 
     /// <inheritdoc />
-    public bool ComparePasswords(string password, string salt, string hash)
+    public bool ComparePasswords(string password, string salt, string hash, int version)
     {
-        var saltedHash = _hashProvider.ComputeSha256(password, salt);
-        var passwordHashByteArray = Convert.FromBase64String(hash);
-        return string.Equals(
-            Encoding.UTF8.GetString(saltedHash),
-            Encoding.UTF8.GetString(passwordHashByteArray));
+        var computedHash = version switch
+        {
+            1 => _hashProvider.ComputeSha256(password, salt),
+            2 => _hashProvider.ComputePbkdf2(password, salt),
+            _ => throw new ArgumentException($"Unknown password hash version: {version}", nameof(version))
+        };
+
+        var storedHash = Convert.FromBase64String(hash);
+
+        // Use constant-time comparison to prevent timing attacks
+        return CryptographicOperations.FixedTimeEquals(computedHash, storedHash);
     }
+
+    /// <inheritdoc />
+    public bool NeedsRehash(int version) => version < _hashProvider.CurrentVersion;
 }

@@ -19,7 +19,7 @@ namespace DM.Services.Forum.BusinessProcesses.Topics.Reading;
 /// <inheritdoc />
 internal class TopicReadingService : ITopicReadingService
 {
-    private readonly IForumReadingService _forumReadingService;
+    private readonly IBoardReadingService _boardReadingService;
     private readonly IAccessPolicyConverter _accessPolicyConverter;
     private readonly ITopicReadingRepository _repository;
     private readonly IUnreadCountersRepository _unreadCountersRepository;
@@ -28,13 +28,13 @@ internal class TopicReadingService : ITopicReadingService
     /// <inheritdoc />
     public TopicReadingService(
         IIdentityProvider identityProvider,
-        IForumReadingService forumReadingService,
+        IBoardReadingService boardReadingService,
         IAccessPolicyConverter accessPolicyConverter,
         ITopicReadingRepository repository,
         IUnreadCountersRepository unreadCountersRepository)
     {
         _identityProvider = identityProvider;
-        _forumReadingService = forumReadingService;
+        _boardReadingService = boardReadingService;
         _accessPolicyConverter = accessPolicyConverter;
         _repository = repository;
         _unreadCountersRepository = unreadCountersRepository;
@@ -42,15 +42,15 @@ internal class TopicReadingService : ITopicReadingService
 
     /// <inheritdoc />
     public async Task<(IEnumerable<Topic> topics, PagingResult paging)> GetTopicsList(
-        string forumTitle, PagingQuery query, CancellationToken ct = default)
+        string boardTitle, PagingQuery query, CancellationToken ct = default)
     {
-        var forum = await _forumReadingService.GetForum(forumTitle);
+        var board = await _boardReadingService.GetBoard(boardTitle);
 
-        var totalCount = await _repository.Count(forum.Id, ct);
+        var totalCount = await _repository.Count(board.Id, ct);
         var identity = _identityProvider.Current;
         var pagingData = new PagingData(query, identity.Settings.Paging.TopicsPerPage, totalCount);
 
-        var topics = (await _repository.Get(forum.Id, pagingData, false, ct)).ToArray();
+        var topics = (await _repository.Get(board.Id, pagingData, false, ct)).ToArray();
         if (identity.User.IsAuthenticated)
         {
             await _unreadCountersRepository.FillEntityCounters(topics, identity.User.UserId,
@@ -61,10 +61,10 @@ internal class TopicReadingService : ITopicReadingService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Topic>> GetAttachedTopics(string forumTitle, CancellationToken ct = default)
+    public async Task<IEnumerable<Topic>> GetAttachedTopics(string boardTitle, CancellationToken ct = default)
     {
-        var forum = await _forumReadingService.GetForum(forumTitle);
-        var topics = (await _repository.Get(forum.Id, null, true, ct)).ToArray();
+        var board = await _boardReadingService.GetBoard(boardTitle);
+        var topics = (await _repository.Get(board.Id, null, true, ct)).ToArray();
         var identity = _identityProvider.Current;
         if (identity.User.IsAuthenticated)
         {

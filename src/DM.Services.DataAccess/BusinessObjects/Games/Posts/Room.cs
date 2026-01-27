@@ -46,6 +46,21 @@ public class Room : IRemovable
     public double OrderNumber { get; set; }
 
     /// <summary>
+    /// Any user can read private messages within posts
+    /// </summary>
+    public bool ViewPrivateText { get; set; }
+
+    /// <summary>
+    /// Any user can see dice roll results
+    /// </summary>
+    public bool ViewDiceResults { get; set; }
+
+    /// <summary>
+    /// Dice rolling is enabled in this room
+    /// </summary>
+    public bool DiceEnabled { get; set; }
+
+    /// <summary>
     /// Previous room identifier (for 2-linked-list)
     /// </summary>
     public Guid? PreviousRoomId { get; set; }

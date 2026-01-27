@@ -10,7 +10,11 @@ using DM.Services.Community.BusinessProcesses.Messaging.Updating;
 using DM.Services.Core.Dto;
 using DM.Web.API.Dto.Contracts;
 using Conversation = DM.Web.API.Dto.Messaging.Conversation;
+using CreateConversation = DM.Web.API.Dto.Messaging.CreateConversation;
+using UpdateConversation = DM.Web.API.Dto.Messaging.UpdateConversation;
 using Message = DM.Web.API.Dto.Messaging.Message;
+using ServiceCreateConversation = DM.Services.Community.BusinessProcesses.Messaging.Creating.CreateConversation;
+using ServiceUpdateConversation = DM.Services.Community.BusinessProcesses.Messaging.Updating.UpdateConversation;
 
 namespace DM.Web.API.Services.Community;
 
@@ -18,6 +22,8 @@ namespace DM.Web.API.Services.Community;
 internal class MessagingApiService : IMessagingApiService
 {
     private readonly IConversationReadingService conversationReadingService;
+    private readonly IConversationCreatingService conversationCreatingService;
+    private readonly IConversationUpdatingService conversationUpdatingService;
     private readonly IMessageReadingService messageReadingService;
     private readonly IMessageCreatingService messageCreatingService;
     private readonly IMessageUpdatingService messageUpdatingService;
@@ -28,6 +34,8 @@ internal class MessagingApiService : IMessagingApiService
     /// <inheritdoc />
     public MessagingApiService(
         IConversationReadingService conversationReadingService,
+        IConversationCreatingService conversationCreatingService,
+        IConversationUpdatingService conversationUpdatingService,
         IMessageReadingService messageReadingService,
         IMessageCreatingService messageCreatingService,
         IMessageUpdatingService messageUpdatingService,
@@ -36,6 +44,8 @@ internal class MessagingApiService : IMessagingApiService
         IMapper mapper)
     {
         this.conversationReadingService = conversationReadingService;
+        this.conversationCreatingService = conversationCreatingService;
+        this.conversationUpdatingService = conversationUpdatingService;
         this.messageReadingService = messageReadingService;
         this.messageCreatingService = messageCreatingService;
         this.messageUpdatingService = messageUpdatingService;
@@ -62,6 +72,13 @@ internal class MessagingApiService : IMessagingApiService
     public async Task<Envelope<Conversation>> GetConversation(string login)
     {
         var conversation = await conversationReadingService.GetOrCreate(login);
+        return new Envelope<Conversation>(mapper.Map<Conversation>(conversation));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<Conversation>> GetDirectConversation(Guid visaviUserId)
+    {
+        var conversation = await conversationReadingService.GetOrCreate(visaviUserId);
         return new Envelope<Conversation>(mapper.Map<Conversation>(conversation));
     }
 
@@ -112,4 +129,21 @@ internal class MessagingApiService : IMessagingApiService
 
     /// <inheritdoc />
     public Task UnlikeMessage(Guid messageId) => messageLikeService.DislikeMessage(messageId);
+
+    /// <inheritdoc />
+    public async Task<Envelope<Conversation>> CreateConversation(CreateConversation createConversation)
+    {
+        var serviceCreateConversation = mapper.Map<ServiceCreateConversation>(createConversation);
+        var conversation = await conversationCreatingService.CreateGroup(serviceCreateConversation);
+        return new Envelope<Conversation>(mapper.Map<Conversation>(conversation));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<Conversation>> UpdateConversation(Guid conversationId, UpdateConversation updateConversation)
+    {
+        var serviceUpdateConversation = mapper.Map<ServiceUpdateConversation>(updateConversation);
+        serviceUpdateConversation.ConversationId = conversationId;
+        var conversation = await conversationUpdatingService.Update(serviceUpdateConversation);
+        return new Envelope<Conversation>(mapper.Map<Conversation>(conversation));
+    }
 }

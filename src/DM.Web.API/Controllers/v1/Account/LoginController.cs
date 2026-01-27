@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Web.API.Authentication;
 using DM.Web.API.Dto.Contracts;
@@ -5,6 +6,7 @@ using DM.Web.API.Dto.Users;
 using DM.Web.API.Services.Users;
 using DM.Web.Core.Authentication.Credentials;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace DM.Web.API.Controllers.v1.Account;
 
@@ -12,6 +14,7 @@ namespace DM.Web.API.Controllers.v1.Account;
 [ApiController]
 [Route("v1/account/login")]
 [ApiExplorerSettings(GroupName = "Account")]
+[EnableRateLimiting("auth")]
 public class LoginController : ControllerBase
 {
     private readonly ILoginApiService loginApiService;
@@ -34,8 +37,21 @@ public class LoginController : ControllerBase
     [ProducesResponseType(typeof(Envelope<User>), 200)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 403)]
-    public async Task<IActionResult> Login([FromBody] LoginCredentials credentials) =>
-        Ok(await loginApiService.Login(credentials, HttpContext));
+    public async Task<IActionResult> Login([FromBody] LoginCredentials credentials)
+    {
+        // Honeypot validation - reject if the Website field is filled
+        if (!string.IsNullOrWhiteSpace(credentials.Website))
+        {
+            return BadRequest(new BadRequestError(
+                "Invalid request",
+                new Dictionary<string, IEnumerable<string>>
+                {
+                    ["login"] = new[] { "Invalid login attempt" }
+                }));
+        }
+
+        return Ok(await loginApiService.Login(credentials, HttpContext));
+    }
 
     /// <summary>
     /// Logout as current user

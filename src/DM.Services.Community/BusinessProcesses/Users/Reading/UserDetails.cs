@@ -12,7 +12,7 @@ public class UserDetails : GeneralUser
     /// <summary>
     /// Date of user registration
     /// </summary>
-    public DateTimeOffset RegistrationDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// User ICQ number

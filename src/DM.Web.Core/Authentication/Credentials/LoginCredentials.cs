@@ -19,4 +19,9 @@ public class LoginCredentials : AuthCredentials
     /// Flag to create persistent session
     /// </summary>
     public bool RememberMe { get; set; }
+
+    /// <summary>
+    /// Honeypot field for bot protection (should be empty)
+    /// </summary>
+    public string Website { get; set; }
 }

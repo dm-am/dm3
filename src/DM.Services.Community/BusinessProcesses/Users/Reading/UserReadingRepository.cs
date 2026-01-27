@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Services.Core.Dto;
+using DM.Services.Core.Dto.Enums;
 using DM.Services.Core.Extensions;
 using DM.Services.Core.Implementation;
 using DM.Services.DataAccess;
@@ -68,13 +69,19 @@ internal class UserReadingRepository : MongoCollectionRepository<UserSettings>, 
 
         var activeRange = dateTimeProvider.Now - ActivityRange;
         return query.Where(u =>
-            u.LastVisitDate.HasValue &&
-            u.LastVisitDate > activeRange);
+            u.LastActivityUtc.HasValue &&
+            u.LastActivityUtc > activeRange);
     }
 
     /// <inheritdoc />
     public Task<GeneralUser> GetUser(string login) => dmDbContext.Users
         .Where(u => !u.IsRemoved && u.Activated && u.Login.ToLower() == login.ToLower())
+        .ProjectTo<GeneralUser>(mapper.ConfigurationProvider)
+        .FirstOrDefaultAsync();
+
+    /// <inheritdoc />
+    public Task<GeneralUser> GetUser(Guid userId) => dmDbContext.Users
+        .Where(u => !u.IsRemoved && u.Activated && u.UserId == userId)
         .ProjectTo<GeneralUser>(mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();
 
@@ -99,4 +106,34 @@ internal class UserReadingRepository : MongoCollectionRepository<UserSettings>, 
             : mapper.Map<Authentication.Dto.UserSettings>(userSettings);
         return userDetails;
     }
+
+    /// <inheritdoc />
+    public async Task<UserDetails> GetUserDetails(Guid userId)
+    {
+        var userDetails = await dmDbContext.Users
+            .Where(u => !u.IsRemoved && u.Activated && u.UserId == userId)
+            .ProjectTo<UserDetails>(mapper.ConfigurationProvider)
+            .FirstOrDefaultAsync();
+
+        if (userDetails == null)
+        {
+            return null;
+        }
+
+        var userSettings = await Collection
+            .Find(Filter.Eq(u => u.UserId, userDetails.UserId))
+            .FirstOrDefaultAsync();
+        userDetails.Settings = userSettings == null
+            ? Authentication.Dto.UserSettings.Default
+            : mapper.Map<Authentication.Dto.UserSettings>(userSettings);
+        return userDetails;
+    }
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<GeneralUser>> GetUsersByRole(UserRole role) =>
+        await dmDbContext.Users
+            .Where(u => !u.IsRemoved && u.Activated && u.Role == role)
+            .OrderBy(u => u.Login)
+            .ProjectTo<GeneralUser>(mapper.ConfigurationProvider)
+            .ToArrayAsync();
 }

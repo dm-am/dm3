@@ -16,7 +16,7 @@ namespace DM.Services.DataAccess.BusinessObjects.Games.Characters;
 /// DAL model for character
 /// </summary>
 [Table("Characters")]
-public class Character : IRemovable
+public class Character : ISoftDeletable, IEditable, IHasEditHistory<CharacterEdit>
 {
     /// <summary>
     /// Character identifier
@@ -40,14 +40,34 @@ public class Character : IRemovable
     public CharacterStatus Status { get; set; }
 
     /// <summary>
-    /// Creation moment
+    /// Character died in game (only when Status = Retired)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public bool IsDead { get; set; }
 
     /// <summary>
-    /// Last update moment
+    /// Player left the game voluntarily (only when Status = Retired)
     /// </summary>
-    public DateTimeOffset? LastUpdateDate { get; set; }
+    public bool IsPlayerLeft { get; set; }
+
+    /// <summary>
+    /// Player was exiled from the game by GM (only when Status = Retired)
+    /// </summary>
+    public bool IsPlayerExiled { get; set; }
+
+    /// <summary>
+    /// Creation moment (UTC)
+    /// </summary>
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    /// <summary>
+    /// Last modification moment (UTC)
+    /// </summary>
+    public DateTimeOffset? ModifiedUtc { get; set; }
+
+    /// <summary>
+    /// Last editor user identifier
+    /// </summary>
+    public Guid? ModifiedByUserId { get; set; }
 
     /// <summary>
     /// Name
@@ -107,6 +127,12 @@ public class Character : IRemovable
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
 
+    /// <inheritdoc />
+    public Guid? DeletedByUserId { get; set; }
+
+    /// <inheritdoc />
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+
     /// <summary>
     /// Game
     /// </summary>
@@ -118,6 +144,24 @@ public class Character : IRemovable
     /// </summary>
     [ForeignKey(nameof(UserId))]
     public virtual User Author { get; set; }
+
+    /// <summary>
+    /// Last editor
+    /// </summary>
+    [ForeignKey(nameof(ModifiedByUserId))]
+    public virtual User ModifiedBy { get; set; }
+
+    /// <summary>
+    /// User who deleted the character
+    /// </summary>
+    [ForeignKey(nameof(DeletedByUserId))]
+    public virtual User DeletedBy { get; set; }
+
+    /// <summary>
+    /// Edit history
+    /// </summary>
+    [InverseProperty(nameof(CharacterEdit.Character))]
+    public virtual ICollection<CharacterEdit> Edits { get; set; }
 
     /// <summary>
     /// Portrait

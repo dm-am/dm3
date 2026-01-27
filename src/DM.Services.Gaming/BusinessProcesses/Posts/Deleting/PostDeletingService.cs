@@ -49,7 +49,7 @@ internal class PostDeletingService : IPostDeletingService
             .Field(p => p.IsRemoved, true);
 
         await repository.Update(updateBuilder);
-        await unreadCountersRepository.Decrement(post.RoomId, UnreadEntryType.Message, post.CreateDate);
+        await unreadCountersRepository.Decrement(post.RoomId, UnreadEntryType.Message, post.CreatedUtc);
         await producer.Send(EventType.DeletedPost, postId);
     }
 }

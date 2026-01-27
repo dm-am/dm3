@@ -67,29 +67,39 @@ public class PollController : ControllerBase
     /// Update poll
     /// </summary>
     /// <param name="id"></param>
+    /// <param name="poll"></param>
     /// <response code="200"></response>
     /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User is not authorized to update polls</response>
     /// <response code="410">Poll not found</response>
     [HttpPatch("{id}", Name = nameof(PatchPoll))]
+    [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Poll>), 200)]
     [ProducesResponseType(typeof(GeneralError), 401)]
+    [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    // TODO: Update poll
-    public Task<IActionResult> PatchPoll(Guid id) => throw new NotImplementedException();
+    public async Task<IActionResult> PatchPoll(Guid id, [FromBody] Poll poll) =>
+        Ok(await _apiService.Update(id, poll));
 
     /// <summary>
-    /// Delete poll
+    /// Delete poll (soft delete)
     /// </summary>
     /// <param name="id"></param>
-    /// <response code="200"></response>
+    /// <response code="204">Poll deleted</response>
     /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User is not authorized to delete polls</response>
     /// <response code="410">Poll not found</response>
     [HttpDelete("{id}", Name = nameof(DeletePoll))]
+    [AuthenticationRequired]
     [ProducesResponseType(204)]
     [ProducesResponseType(typeof(GeneralError), 401)]
+    [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    // TODO: Delete poll
-    public Task<IActionResult> DeletePoll(Guid id) => throw new NotImplementedException();
+    public async Task<IActionResult> DeletePoll(Guid id)
+    {
+        await _apiService.Delete(id);
+        return NoContent();
+    }
 
     /// <summary>
     /// Vote for the poll option

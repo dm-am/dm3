@@ -11,12 +11,12 @@ namespace DM.Web.API.Dto.Games;
 public class GamesQuery : PagingQuery
 {
     /// <summary>
-    /// Game statuses to filter by
+    /// Game statuses to filter by (optional)
     /// </summary>
-    public IEnumerable<GameStatus> Statuses { get; set; }
+    public IEnumerable<GameStatus>? Statuses { get; set; }
 
     /// <summary>
-    /// Game tags to filter by
+    /// Game tags to filter by (optional)
     /// </summary>
-    public IEnumerable<Guid> Tag { get; set; }
+    public IEnumerable<Guid>? Tag { get; set; }
 }

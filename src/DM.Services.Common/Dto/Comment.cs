@@ -18,14 +18,14 @@ public class Comment : ILikable
     public Guid EntityId { get; set; }
 
     /// <summary>
-    /// Date of creation
+    /// Date of creation (UTC)
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Date of last update
+    /// Date of last modification (UTC)
     /// </summary>
-    public DateTimeOffset? LastUpdateDate { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
     /// Text

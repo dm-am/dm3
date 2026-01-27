@@ -47,7 +47,7 @@ internal class PostReadingRepository : IPostReadingRepository
             .Where(r => r.RoomId == roomId)
             .SelectMany(r => r.Posts)
             .Where(p => !p.IsRemoved)
-            .OrderBy(p => p.CreateDate)
+            .OrderBy(p => p.CreatedUtc)
             .Page(paging)
             .ProjectTo<Post>(mapper.ConfigurationProvider)
             .ToArrayAsync();

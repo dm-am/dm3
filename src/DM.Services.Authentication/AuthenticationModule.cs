@@ -23,6 +23,11 @@ public class AuthenticationModule : Module
             .AsImplementedInterfaces()
             .InstancePerLifetimeScope();
 
+        // Login attempt tracker should be singleton
+        builder.RegisterType<Implementation.LoginAttemptTracker>()
+            .AsImplementedInterfaces()
+            .SingleInstance();
+
         builder.RegisterModuleOnce<CoreModule>();
         builder.RegisterModuleOnce<DataAccessModule>();
         builder.RegisterModuleOnce<MessageQueuingModule>();

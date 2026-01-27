@@ -2,19 +2,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Services.Authentication.Implementation.UserIdentity;
-using DM.Services.Common.Authorization;
-using DM.Services.Common.BusinessProcesses.UnreadCounters;
-using DM.Services.Core.Dto.Enums;
-using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.Gaming.Authorization;
 using DM.Services.Gaming.BusinessProcesses.Games.AssistantAssignment;
-using DM.Services.Gaming.BusinessProcesses.Games.Reading;
-using DM.Services.Gaming.BusinessProcesses.Games.Shared;
-using DM.Services.Gaming.BusinessProcesses.Schemas.Reading;
+using DM.Services.Gaming.BusinessProcesses.Games.Creating.Facades;
 using DM.Services.Gaming.Dto.Input;
 using DM.Services.Gaming.Dto.Output;
-using DM.Services.MessageQueuing.GeneralBus;
-using FluentValidation;
+using Microsoft.Extensions.Logging;
 using DbTag = DM.Services.DataAccess.BusinessObjects.Games.Links.GameTag;
 
 namespace DM.Services.Gaming.BusinessProcesses.Games.Creating;
@@ -22,108 +14,95 @@ namespace DM.Services.Gaming.BusinessProcesses.Games.Creating;
 /// <inheritdoc />
 internal class GameCreatingService : IGameCreatingService
 {
-    private readonly IValidator<CreateGame> validator;
-    private readonly IIntentionManager intentionManager;
-    private readonly IGameReadingService readingService;
-    private readonly IAssignmentService assignmentService;
-    private readonly IIdentityProvider identityProvider;
-    private readonly IGameFactory gameFactory;
-    private readonly IRoomFactory roomFactory;
-    private readonly IGameTagFactory gameTagFactory;
-    private readonly IGameCreatingRepository repository;
-    private readonly IUserRepository userRepository;
-    private readonly ISchemaReadingRepository schemaRepository;
-    private readonly IUnreadCountersRepository countersRepository;
-    private readonly IInvokedEventProducer producer;
+    private readonly IGameCreationValidator _validator;
+    private readonly IGameEntityFactory _entityFactory;
+    private readonly IGameCreationDataResolver _dataResolver;
+    private readonly IGameInitializationService _initialization;
+    private readonly IGameCreatingRepository _repository;
+    private readonly IAssignmentService _assignmentService;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly ILogger<GameCreatingService> _logger;
 
     /// <inheritdoc />
     public GameCreatingService(
-        IValidator<CreateGame> validator,
-        IIntentionManager intentionManager,
-        IGameReadingService readingService,
+        IGameCreationValidator validator,
+        IGameEntityFactory entityFactory,
+        IGameCreationDataResolver dataResolver,
+        IGameInitializationService initialization,
+        IGameCreatingRepository repository,
         IAssignmentService assignmentService,
         IIdentityProvider identityProvider,
-        IGameFactory gameFactory,
-        IRoomFactory roomFactory,
-        IGameTagFactory gameTagFactory,
-        IGameCreatingRepository repository,
-        IUserRepository userRepository,
-        ISchemaReadingRepository schemaRepository,
-        IUnreadCountersRepository countersRepository,
-        IInvokedEventProducer producer)
+        ILogger<GameCreatingService> logger)
     {
-        this.validator = validator;
-        this.intentionManager = intentionManager;
-        this.readingService = readingService;
-        this.assignmentService = assignmentService;
-        this.identityProvider = identityProvider;
-        this.gameFactory = gameFactory;
-        this.roomFactory = roomFactory;
-        this.gameTagFactory = gameTagFactory;
-        this.repository = repository;
-        this.userRepository = userRepository;
-        this.schemaRepository = schemaRepository;
-        this.countersRepository = countersRepository;
-        this.producer = producer;
+        _validator = validator;
+        _entityFactory = entityFactory;
+        _dataResolver = dataResolver;
+        _initialization = initialization;
+        _repository = repository;
+        _assignmentService = assignmentService;
+        _identityProvider = identityProvider;
+        _logger = logger;
     }
 
     /// <inheritdoc />
     public async Task<GameExtended> Create(CreateGame createGame)
     {
-        await validator.ValidateAndThrowAsync(createGame);
-        intentionManager.ThrowIfForbidden(GameIntention.Create);
+        _logger.LogDebug("Creating game. Title={Title}", createGame.Title);
 
-        // resolve game initial status
-        var identity = identityProvider.Current;
-        var initialStatus = identity.User.QuantityRating < 100
-            ? GameStatus.RequiresModeration
-            : createGame.Draft
-                ? GameStatus.Draft
-                : GameStatus.Requirement;
+        // Validate and authorize
+        await _validator.ValidateAndAuthorize(createGame);
 
-        // create base DAL entities
-        var game = gameFactory.Create(createGame, identity.User.UserId, initialStatus);
-        var room = roomFactory.Create(game.GameId);
+        // Resolve game initial status and premoderation
+        var (initialStatus, premoderationStatus, isRecruitmentOpen) = _validator.GetInitialGameState(createGame);
 
+        // Create base DAL entities
+        var userId = _identityProvider.Current.User.UserId;
+        var game = _entityFactory.CreateGame(createGame, userId, initialStatus, premoderationStatus, isRecruitmentOpen);
+        var room = _entityFactory.CreateDefaultRoom(game.GameId);
+
+        // Create tags
         IEnumerable<DbTag> tags;
         if (createGame.Tags != null && createGame.Tags.Any())
         {
-            var availableTags = (await readingService.GetTags()).Select(t => t.Id).ToHashSet();
-            tags = createGame.Tags
-                .Where(availableTags.Contains)
-                .Select(tagId => gameTagFactory.Create(game.GameId, tagId));
+            var availableTags = (await _dataResolver.GetAvailableTagIds()).ToHashSet();
+            var validTagIds = createGame.Tags.Where(availableTags.Contains);
+            tags = _entityFactory.CreateTags(game.GameId, validTagIds);
         }
         else
         {
             tags = Enumerable.Empty<DbTag>();
         }
 
-        // initiate assistant assignment
+        // Initiate assistant assignment
         if (!string.IsNullOrEmpty(createGame.AssistantLogin))
         {
-            var (assistantExists, foundAssistantId) = await userRepository.FindUserId(createGame.AssistantLogin);
+            var (assistantExists, assistantId) = await _dataResolver.FindAssistantId(createGame.AssistantLogin);
             if (assistantExists)
             {
-                await assignmentService.CreateAssignment(game.GameId, foundAssistantId);
+                await _assignmentService.CreateAssignment(game.GameId, assistantId);
             }
         }
 
+        // Apply attribute schema if allowed
         if (createGame.AttributeSchemaId.HasValue)
         {
-            var schema = await schemaRepository.GetSchema(createGame.AttributeSchemaId.Value);
-            if (intentionManager.IsAllowed(AttributeSchemaIntention.Use, schema))
+            var allowedSchemaId = await _dataResolver.GetAllowedSchemaId(createGame.AttributeSchemaId.Value);
+            if (allowedSchemaId.HasValue)
             {
-                game.AttributeSchemaId = createGame.AttributeSchemaId.Value;
+                game.AttributeSchemaId = allowedSchemaId.Value;
             }
         }
 
-        var createdGame = await repository.Create(game, room, tags);
+        // Persist the game
+        var createdGame = await _repository.Create(game, room, tags);
 
-        await countersRepository.Create(room.RoomId, UnreadEntryType.Message);
-        await countersRepository.Create(game.GameId, UnreadEntryType.Message);
-        await countersRepository.Create(game.GameId, UnreadEntryType.Character);
+        // Initialize counters and publish event
+        await _initialization.InitializeCounters(game.GameId, room.RoomId);
+        await _initialization.PublishGameCreated(game.GameId);
 
-        await producer.Send(EventType.NewGame, game.GameId);
+        _logger.LogInformation("Game created successfully. GameId={GameId}, Title={Title}, MasterId={MasterId}",
+            game.GameId, createGame.Title, userId);
+
         return createdGame;
     }
 }

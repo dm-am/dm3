@@ -28,7 +28,7 @@ internal class CommentaryFactory : ICommentaryFactory
             CommentId = _guidFactory.Create(),
             EntityId = createComment.EntityId,
             UserId = userId,
-            CreateDate = _dateTimeProvider.Now,
+            CreatedUtc = _dateTimeProvider.Now,
             Text = createComment.Text.Trim(),
             IsRemoved = false
         };

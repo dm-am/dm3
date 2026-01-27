@@ -1,62 +1,65 @@
-import Vue from 'vue';
-import VModal from 'vue-js-modal';
-import Vuelidate from 'vuelidate';
-import PortalVue from 'portal-vue';
-import App from './App.vue';
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import "dayjs/locale/ru";
 
-import Icon from '@/components/Icon.vue';
+import { createApp } from "vue";
+import { createPinia } from "pinia";
+import { createVfm } from "vue-final-modal";
 
-import Lightbox from '@/components/Lightbox.vue';
+import App from "./App.vue";
+import router from "./router";
 
-import HumanTimespan from '@/components/dates/HumanTimespan.vue';
-import HumanDate from '@/components/dates/HumanDate.vue';
+import "vue-final-modal/style.css";
+import "@/assets/styles/ThemeVariables.css";
+import "@/assets/styles/Reset.sass";
+import "@/assets/styles/Fonts.sass";
+import "@/assets/styles/Inputs.sass";
 
-import Loader from '@/components/Loader.vue';
-import Paging from '@/components/Paging.vue';
+import { IconType } from "@/components/icons/iconType";
 
-import TextArea from '@/components/inputs/TextArea.vue';
-import ActionButton from '@/components/inputs/ActionButton.vue';
-import Dropdown from '@/components/inputs/Dropdown.vue';
-import SuggestInput from '@/components/inputs/SuggestInput.vue';
-import Upload from '@/components/inputs/Upload.vue';
+import PageTitle from "@/components/layout/PageTitle.vue";
+import BlockTitle from "@/components/layout/BlockTitle.vue";
+import SidebarTitle from "@/components/layout/SidebarTitle.vue";
+import SecondaryText from "@/components/layout/SecondaryText.vue";
+import TheLoader from "@/components/TheLoader.vue";
+import HumanDate from "@/components/dates/HumanDate.vue";
+import HumanTimespan from "@/components/dates/HumanTimespan.vue";
+import TheIcon from "@/components/icons/TheIcon.vue";
+import TheLightbox from "@/components/layout/TheLightbox.vue";
+import TheButton from "@/components/inputs/TheButton.vue";
+import TheForm from "@/components/inputs/form/TheForm.vue";
+import FormField from "@/components/inputs/form/FormField.vue";
+import { createI18n } from "vue-i18n";
+import UserLink from "@/components/community/UserLink.vue";
 
-import Rating from '@/components/community/Rating.vue';
-import Online from '@/components/community/Online.vue';
-import UserLink from '@/components/community/UserLink.vue';
+dayjs.extend(relativeTime).locale("ru");
 
-import moment from 'moment';
+const i18n = createI18n({
+  locale: "ru",
+});
 
-import router from './router';
-import store from './store';
+const application = createApp(App);
 
-Vue.use(VModal);
-Vue.use(Vuelidate);
-Vue.use(PortalVue);
+application.config.globalProperties.IconType = IconType;
 
-Vue.config.productionTip = false;
-Vue.component('icon', Icon);
-Vue.component('lightbox', Lightbox);
+application
+  .component("TheLoader", TheLoader)
+  .component("TheIcon", TheIcon)
+  .component("PageTitle", PageTitle)
+  .component("BlockTitle", BlockTitle)
+  .component("SidebarTitle", SidebarTitle)
+  .component("SecondaryText", SecondaryText)
+  .component("TheForm", TheForm)
+  .component("FormField", FormField)
+  .component("TheButton", TheButton)
+  .component("TheLightbox", TheLightbox)
+  .component("HumanDate", HumanDate)
+  .component("HumanTimespan", HumanTimespan)
+  .component("UserLink", UserLink);
 
-Vue.component('humanTimespan', HumanTimespan);
-Vue.component('humanDate', HumanDate);
-
-Vue.component('loader', Loader);
-Vue.component('paging', Paging);
-
-Vue.component('textArea', TextArea);
-Vue.component('actionButton', ActionButton);
-Vue.component('dropdown', Dropdown);
-Vue.component('suggestInput', SuggestInput);
-Vue.component('upload', Upload);
-
-Vue.component('rating', Rating);
-Vue.component('online', Online);
-Vue.component('userLink', UserLink);
-
-moment.locale('ru');
-
-new Vue({
-  router,
-  store,
-  render: (h) => h(App),
-}).$mount('#app');
+application
+  .use(createPinia())
+  .use(router)
+  .use(createVfm())
+  .use(i18n)
+  .mount("#application");

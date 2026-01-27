@@ -1,15 +1,18 @@
-﻿using Autofac.Extensions.DependencyInjection;
+﻿using System.Runtime.CompilerServices;
+using Autofac.Extensions.DependencyInjection;
 using DM.Services.Core.Configuration;
 using DM.Services.Core.Extensions;
 using Microsoft.Extensions.Hosting;
 using Serilog;
+
+[assembly: InternalsVisibleTo("DM.Web.API.IntegrationTests")]
 
 namespace DM.Web.API;
 
 /// <summary>
 /// Hosting
 /// </summary>
-internal class Program
+public class Program
 {
     /// <summary>
     /// Main

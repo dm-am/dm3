@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Web.API.Authentication;
 using DM.Web.API.Controllers.v1.Community;
@@ -6,6 +7,7 @@ using DM.Web.API.Dto.Contracts;
 using DM.Web.API.Dto.Users;
 using DM.Web.API.Services.Users;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace DM.Web.API.Controllers.v1.Account;
 
@@ -43,10 +45,22 @@ public class AccountController : ControllerBase
     /// <response code="201">User has been registered and expects confirmation by e-mail</response>
     /// <response code="400">Some of registration properties were invalid</response>
     [HttpPost(Name = nameof(Register))]
+    [EnableRateLimiting("auth")]
     [ProducesResponseType(201)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     public async Task<IActionResult> Register([FromBody] Registration registration)
     {
+        // Honeypot validation - reject if the Website field is filled
+        if (!string.IsNullOrWhiteSpace(registration.Website))
+        {
+            return BadRequest(new BadRequestError(
+                "Invalid request",
+                new Dictionary<string, IEnumerable<string>>
+                {
+                    ["login"] = new[] { "Invalid registration attempt" }
+                }));
+        }
+
         await registrationApiService.Register(registration);
         return CreatedAtRoute(nameof(UserController.GetUser), new {login = registration.Login}, null);
     }
@@ -80,6 +94,7 @@ public class AccountController : ControllerBase
     /// <response code="200">Password has been reset</response>
     /// <response code="400">Some account details were incorrect</response>
     [HttpPost("password", Name = nameof(ResetPassword))]
+    [EnableRateLimiting("auth")]
     [ProducesResponseType(typeof(Envelope<User>), 201)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPassword resetPassword) =>

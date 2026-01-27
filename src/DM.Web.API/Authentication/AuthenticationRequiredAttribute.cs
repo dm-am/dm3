@@ -1,12 +1,14 @@
-using System.Net;
 using DM.Services.Authentication.Implementation.UserIdentity;
-using DM.Services.Core.Exceptions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace DM.Web.API.Authentication;
 
-/// <inheritdoc />
+/// <summary>
+/// Attribute that requires user authentication.
+/// Uses IAuthorizationFilter to run BEFORE model binding/validation.
+/// </summary>
 internal class AuthenticationRequiredAttribute : TypeFilterAttribute
 {
     /// <inheritdoc />
@@ -14,18 +16,29 @@ internal class AuthenticationRequiredAttribute : TypeFilterAttribute
     {
     }
 
-    private class AuthenticationRequiredFilter(IIdentityProvider identityProvider) : IActionFilter
+    /// <summary>
+    /// Authorization filter that checks if user is authenticated.
+    /// Runs before model binding, so validation errors won't mask auth failures.
+    /// </summary>
+    private class AuthenticationRequiredFilter(IIdentityProvider identityProvider) : IAuthorizationFilter
     {
-        public void OnActionExecuting(ActionExecutingContext context)
+        public void OnAuthorization(AuthorizationFilterContext context)
         {
-            if (!identityProvider.Current.User.IsAuthenticated)
+            // Check if identity is set and user is authenticated
+            var identity = identityProvider.Current;
+            if (identity?.User == null || !identity.User.IsAuthenticated)
             {
-                throw new HttpException(HttpStatusCode.Unauthorized, "User must be authenticated");
+                context.Result = new ObjectResult(new
+                {
+                    type = "https://tools.ietf.org/html/rfc9110#section-15.5.2",
+                    title = "User must be authenticated",
+                    status = StatusCodes.Status401Unauthorized
+                })
+                {
+                    StatusCode = StatusCodes.Status401Unauthorized,
+                    ContentTypes = { "application/problem+json" }
+                };
             }
-        }
-
-        public void OnActionExecuted(ActionExecutedContext context)
-        {
         }
     }
 }

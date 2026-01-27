@@ -18,16 +18,23 @@ public class DataAccessModule : Module
     /// <inheritdoc />
     protected override void Load(ContainerBuilder builder)
     {
-        // Configure GUID serialization - use Unspecified to handle both Legacy and Standard formats
-        BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Unspecified));
+        // Configure GUID serialization for backward compatibility with existing data
+        // Try to register only if not already registered (for test scenarios)
+        try
+        {
+            BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.CSharpLegacy));
+        }
+        catch (BsonSerializationException)
+        {
+            // Serializer already registered, ignore
+        }
 
         builder.Register(ctx =>
             {
                 var connectionString = MongoUrl.Create(ctx.Resolve<IOptions<ConnectionStrings>>().Value.Mongo);
                 var settings = MongoClientSettings.FromUrl(connectionString);
-                // TODO: revert it back when the library providing it gets updated
-                /*settings.ClusterConfigurator = cb => cb.Subscribe(
-                    new DiagnosticsActivityEventSubscriber(new InstrumentationOptions { CaptureCommandText = true }));*/
+                settings.ClusterConfigurator = cb => cb.Subscribe(
+                    new DiagnosticsActivityEventSubscriber(new InstrumentationOptions { CaptureCommandText = true }));
                 return new DmMongoClient(settings, connectionString);
             })
             .AsSelf()

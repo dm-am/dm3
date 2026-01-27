@@ -47,7 +47,7 @@ internal class SchemaReadingRepository :
 
         var authorIds = schemata
             .Where(s => s.UserId.HasValue)
-            .Select(s => s.UserId.Value)
+            .Select(s => s.UserId!.Value)
             .ToHashSet();
         var authors = (await GetSchemataAuthors(authorIds)).ToDictionary(u => u.UserId);
 

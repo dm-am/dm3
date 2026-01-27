@@ -42,12 +42,12 @@ internal class CharacterProfile : Profile
 
         CreateMap<DbPost, LastPost>()
             .ForMember(d => d.Id, s => s.MapFrom(p => p.PostId))
-            .ForMember(d => d.CreateDate, s => s.MapFrom(p => p.CreateDate))
+            .ForMember(d => d.CreatedUtc, s => s.MapFrom(p => p.CreatedUtc))
             .ForMember(d => d.RoomId, s => s.MapFrom(p => p.RoomId));
         CreateMap<DbCharacter, CharacterShortInfo>()
             .ForMember(d => d.LastPost, s => s.MapFrom(c => c.Posts
                 .Where(p => !p.IsRemoved)
-                .OrderByDescending(p => p.CreateDate)
+                .OrderByDescending(p => p.CreatedUtc)
                 .FirstOrDefault()))
             .ForMember(d => d.PostsCount, s => s.MapFrom(c => c.Posts.Count(p => !p.IsRemoved)));
     }

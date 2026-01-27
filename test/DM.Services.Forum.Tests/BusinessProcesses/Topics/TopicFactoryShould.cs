@@ -43,9 +43,9 @@ public class TopicFactoryShould : UnitTestBase
         actual.Should().BeEquivalentTo(new ForumTopic
         {
             ForumTopicId = topicId,
-            ForumId = forumId,
+            BoardId = forumId,
             UserId = userId,
-            CreateDate = rightNow,
+            CreatedUtc = rightNow,
             Title = "title",
             Text = "text"
         });

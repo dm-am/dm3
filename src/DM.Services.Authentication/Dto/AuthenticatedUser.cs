@@ -26,6 +26,11 @@ public class AuthenticatedUser : GeneralUser
     public string PasswordHash { get; set; }
 
     /// <summary>
+    /// Password hash algorithm version (1 = SHA256, 2 = PBKDF2)
+    /// </summary>
+    public int PasswordHashVersion { get; set; } = 1;
+
+    /// <summary>
     /// Removed flag
     /// </summary>
     public bool IsRemoved { get; set; }

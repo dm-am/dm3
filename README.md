@@ -1,15 +1,86 @@
-# Установка и запуск для разработчиков
+# DM3
 
-1. Нужно установить на компьютер Docker for Desktop последней версии. Для пользователей Windows настоятельно рекомендуется переключиться с Hyper-V на WSL2 в качестве движка виртуализации. В разработке мы пользуемся только вторым, поэтому не гарантируем корректную работу на Hyper-V.
-2. Для локальной разработки бэка (без докера) нужно установить на компьютер dotnet 8
-3. Для локальной разработки фронта нужно установить на компьютер Node.js последней мажорной версии
-4. Запустить в директории репозитория `./docker` команду `docker compose up -d --build`, которая скачает, соберет и запустит все необходимые для окружения DM приложения, а также проинициализирует базу данных в готовом для работы состоянии.
-5. Открыть в браузере `http://localhost:9001`, войти под `minio:miniokey`
-6. Перейти на вкладку "Buckets", создать новый бакет под именем `dm-uploads`, в настройках бакета после создания изменить уровень доступа с `Private` на `Public`
-7. Swagger API доступен по `http://localhost:5051`
-8. Фронтенд доступен по `http://localhost:5050`
-9. Grpc сервиса поиска доступен по `grpc://localhost:5052`, для него включен server reflection
+Платформа для текстовых ролевых игр.
 
-## Работа с почтовой рассылкой
+---
 
-Email-ы отправляются в mailhog, который доступен по адресу `http://localhost:5025`.
+## Документация
+
+| Документ | Описание |
+|----------|----------|
+| [docs/README.md](./docs/README.md) | **Индекс документации** |
+| [docs/SETUP.md](./docs/SETUP.md) | Установка и запуск |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Архитектура проекта |
+| [docs/PROJECT_STANDARDS.md](./docs/PROJECT_STANDARDS.md) | Стандарты разработки |
+
+---
+
+## Быстрый старт
+
+### 1. Требования
+
+- Docker Desktop (WSL2 на Windows)
+- Node.js 20+
+- Yarn
+
+### 2. Запуск
+
+```bash
+# Инфраструктура
+cd docker && docker-compose up -d
+
+# Frontend
+cd frontend/DM.Web.Modern
+yarn install && yarn dev
+```
+
+### 3. Доступ
+
+| Сервис | URL |
+|--------|-----|
+| Frontend | http://localhost:5173 |
+| API | http://localhost:5051 |
+| Swagger | http://localhost:5051/swagger |
+| MinIO | http://localhost:9001 (minio/miniokey) |
+| RabbitMQ | http://localhost:15672 (guest/guest) |
+| MailHog | http://localhost:5025 |
+
+### 4. Настройка MinIO
+
+1. Откройте http://localhost:9001, войдите `minio` / `miniokey`
+2. Создайте bucket `dm-uploads`
+3. Установите Access Policy: `Public`
+
+---
+
+## Тестовые аккаунты
+
+Перейдите на `/dev/accounts` и нажмите "Создать тестовые аккаунты".
+
+| Логин | Пароль | Роль |
+|-------|--------|------|
+| Alice | `Test123!` | RegularUser |
+| Rayzen | `Test123!` | SeniorModerator |
+
+---
+
+## Структура проекта
+
+```
+dm3/
+├── src/                    # Backend (.NET 8)
+│   ├── DM.Services.*/      # Доменные сервисы
+│   ├── DM.Web.API/         # REST API
+│   └── DM.Web.Core/        # Web инфраструктура
+├── test/                   # Backend тесты
+├── frontend/
+│   └── DM.Web.Modern/      # Frontend (Vue 3 + TypeScript)
+├── docker/                 # Docker конфигурация
+└── docs/                   # Документация
+```
+
+---
+
+## Работа с почтой
+
+Email-ы отправляются в MailHog: http://localhost:5025

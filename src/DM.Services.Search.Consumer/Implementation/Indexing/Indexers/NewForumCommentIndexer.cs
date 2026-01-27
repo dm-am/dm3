@@ -38,7 +38,7 @@ internal class NewForumCommentIndexer : BaseIndexer
     {
         var comment = await _dbContext.Comments
             .Where(c => c.CommentId == message.EntityId)
-            .Select(c => new {c.Topic.Forum.ViewPolicy, c.Topic.ForumTopicId, c.Text})
+            .Select(c => new {c.Topic.Board.ViewPolicy, c.Topic.ForumTopicId, c.Text})
             .FirstAsync();
         await _repository.Index(new SearchEntity
         {

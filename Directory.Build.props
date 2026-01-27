@@ -2,9 +2,12 @@
     <PropertyGroup>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <!-- Exclude nullable warnings from being treated as errors (gradual adoption) -->
+        <WarningsNotAsErrors>CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CS8619;CS8620;CS8625;CS8765</WarningsNotAsErrors>
         <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
         <LangVersion>preview</LangVersion>
         <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+        <Nullable>enable</Nullable>
     </PropertyGroup>
     
     <ItemGroup>

@@ -65,7 +65,33 @@ public class Room
     public Guid? PreviousRoomId { get; set; }
 
     /// <summary>
+    /// Room settings
+    /// </summary>
+    public RoomSettings Settings { get; set; }
+
+    /// <summary>
     /// Default room name
     /// </summary>
     public const string DefaultRoomName = "Основная комната";
+}
+
+/// <summary>
+/// DTO model for room settings
+/// </summary>
+public class RoomSettings
+{
+    /// <summary>
+    /// Any user can read private messages within posts
+    /// </summary>
+    public bool ViewPrivateText { get; set; }
+
+    /// <summary>
+    /// Any user can see dice roll results
+    /// </summary>
+    public bool ViewDiceResults { get; set; }
+
+    /// <summary>
+    /// Dice rolling is enabled in this room
+    /// </summary>
+    public bool DiceEnabled { get; set; }
 }

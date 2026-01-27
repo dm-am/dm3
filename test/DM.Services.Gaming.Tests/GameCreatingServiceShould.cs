@@ -1,25 +1,16 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using DM.Services.Authentication.Dto;
 using DM.Services.Authentication.Implementation.UserIdentity;
-using DM.Services.Common.Authorization;
-using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Core.Dto.Enums;
-using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.Gaming.Authorization;
 using DM.Services.Gaming.BusinessProcesses.Games.AssistantAssignment;
 using DM.Services.Gaming.BusinessProcesses.Games.Creating;
-using DM.Services.Gaming.BusinessProcesses.Games.Reading;
-using DM.Services.Gaming.BusinessProcesses.Games.Shared;
-using DM.Services.Gaming.BusinessProcesses.Schemas.Reading;
+using DM.Services.Gaming.BusinessProcesses.Games.Creating.Facades;
 using DM.Services.Gaming.Dto.Input;
 using DM.Services.Gaming.Dto.Output;
-using DM.Services.MessageQueuing.GeneralBus;
 using DM.Tests.Core;
-using FluentValidation;
-using FluentValidation.Results;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Language.Flow;
 using Xunit;
@@ -32,137 +23,108 @@ namespace DM.Services.Gaming.Tests;
 public class GameCreatingServiceShould : UnitTestBase
 {
     private readonly ISetup<IIdentity, AuthenticatedUser> currentUserSetup;
-    private readonly ISetup<IGameFactory, Game> createGameSetup;
-    private readonly ISetup<IRoomFactory, Room> createRoomSetup;
+    private readonly ISetup<IGameEntityFactory, Game> createGameSetup;
+    private readonly ISetup<IGameEntityFactory, Room> createRoomSetup;
     private readonly ISetup<IGameCreatingRepository, Task<GameExtended>> saveGameSetup;
     private readonly Mock<IGameCreatingRepository> gameRepository;
-    private readonly Mock<IGameFactory> gameFactory;
-    private readonly Mock<IIntentionManager> intentionManager;
-    private readonly Mock<IInvokedEventProducer> publisher;
+    private readonly Mock<IGameEntityFactory> entityFactory;
+    private readonly Mock<IGameCreationValidator> validator;
+    private readonly Mock<IGameInitializationService> initialization;
     private readonly GameCreatingService service;
-    private readonly Mock<IUnreadCountersRepository> countersRepository;
-    private readonly Mock<IUserRepository> userRepository;
     private readonly Mock<IAssignmentService> assignmentService;
+    private readonly Mock<IGameCreationDataResolver> dataResolver;
 
     public GameCreatingServiceShould()
     {
-        var validator = Mock<IValidator<CreateGame>>();
+        validator = Mock<IGameCreationValidator>();
         validator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreateGame>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
-
-        var readingService = Mock<IGameReadingService>();
-        readingService.Setup(s => s.GetTags());
-
-        assignmentService = Mock<IAssignmentService>();
-        assignmentService
-            .Setup(s => s.CreateAssignment(It.IsAny<Guid>(), It.IsAny<Guid>()))
+            .Setup(v => v.ValidateAndAuthorize(It.IsAny<CreateGame>()))
             .Returns(Task.CompletedTask);
+        validator
+            .Setup(v => v.GetInitialGameState(It.IsAny<CreateGame>()))
+            .Returns((GameStatus.Active, PremoderationStatus.Approved, true));
 
-        intentionManager = Mock<IIntentionManager>();
-        intentionManager
-            .Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>()));
+        entityFactory = Mock<IGameEntityFactory>();
+        createGameSetup = entityFactory
+            .Setup(f => f.CreateGame(It.IsAny<CreateGame>(), It.IsAny<Guid>(), It.IsAny<GameStatus>(),
+                It.IsAny<PremoderationStatus>(), It.IsAny<bool>()));
+        createRoomSetup = entityFactory.Setup(f => f.CreateDefaultRoom(It.IsAny<Guid>()));
+        entityFactory
+            .Setup(f => f.CreateTags(It.IsAny<Guid>(), It.IsAny<IEnumerable<Guid>>()))
+            .Returns(Array.Empty<GameTag>());
 
-        var identityProvider = Mock<IIdentityProvider>();
-        var identity = Mock<IIdentity>();
-        identityProvider.Setup(p => p.Current).Returns(identity.Object);
-        currentUserSetup = identity.Setup(i => i.User);
+        dataResolver = Mock<IGameCreationDataResolver>();
+        dataResolver
+            .Setup(r => r.FindAssistantId(It.IsAny<string>()))
+            .ReturnsAsync((false, Guid.Empty));
 
-        gameFactory = Mock<IGameFactory>();
-        createGameSetup = gameFactory
-            .Setup(f => f.Create(It.IsAny<CreateGame>(), It.IsAny<Guid>(), It.IsAny<GameStatus>()));
-
-        var roomFactory = Mock<IRoomFactory>();
-        createRoomSetup = roomFactory.Setup(r => r.Create(It.IsAny<Guid>()));
-
-        var gameTagFactory = Mock<IGameTagFactory>();
-
-        userRepository = Mock<IUserRepository>();
+        initialization = Mock<IGameInitializationService>();
+        initialization
+            .Setup(i => i.InitializeCounters(It.IsAny<Guid>(), It.IsAny<Guid>()))
+            .Returns(Task.CompletedTask);
+        initialization
+            .Setup(i => i.PublishGameCreated(It.IsAny<Guid>()))
+            .Returns(Task.CompletedTask);
 
         gameRepository = Mock<IGameCreatingRepository>();
         saveGameSetup = gameRepository
             .Setup(r => r.Create(It.IsAny<Game>(), It.IsAny<Room>(),
                 It.IsAny<IEnumerable<GameTag>>()));
 
-        countersRepository = Mock<IUnreadCountersRepository>();
-        countersRepository
-            .Setup(r => r.Create(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()))
+        assignmentService = Mock<IAssignmentService>();
+        assignmentService
+            .Setup(s => s.CreateAssignment(It.IsAny<Guid>(), It.IsAny<Guid>()))
             .Returns(Task.CompletedTask);
 
-        var schemaRepository = Mock<ISchemaReadingRepository>();
+        var identityProvider = Mock<IIdentityProvider>();
+        var identity = Mock<IIdentity>();
+        identityProvider.Setup(p => p.Current).Returns(identity.Object);
+        currentUserSetup = identity.Setup(i => i.User);
+        var logger = Mock<ILogger<GameCreatingService>>();
 
-        publisher = Mock<IInvokedEventProducer>();
-        publisher
-            .Setup(p => p.Send(It.IsAny<EventType>(), It.IsAny<Guid>()))
-            .Returns(Task.CompletedTask);
-
-        service = new GameCreatingService(validator.Object,
-            intentionManager.Object,
-            readingService.Object,
+        service = new GameCreatingService(
+            validator.Object,
+            entityFactory.Object,
+            dataResolver.Object,
+            initialization.Object,
+            gameRepository.Object,
             assignmentService.Object,
             identityProvider.Object,
-            gameFactory.Object,
-            roomFactory.Object,
-            gameTagFactory.Object,
-            gameRepository.Object,
-            userRepository.Object,
-            schemaRepository.Object,
-            countersRepository.Object,
-            publisher.Object);
+            logger.Object);
     }
 
     [Fact]
-    public async Task CheckAuthorization()
+    public async Task CheckValidationAndAuthorization()
     {
         currentUserSetup.Returns(new AuthenticatedUser());
         createGameSetup.Returns(new Game());
         createRoomSetup.Returns(new Room());
         saveGameSetup.ReturnsAsync(new GameExtended());
 
-        await service.Create(new CreateGame());
+        var createGame = new CreateGame();
+        await service.Create(createGame);
 
-        intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Create), Times.Once);
+        validator.Verify(v => v.ValidateAndAuthorize(createGame), Times.Once);
     }
 
     [Fact]
-    public async Task CreateModerationRequiredGameWhenUserHasLowRating()
+    public async Task CreateGameWithCorrectStatus()
     {
         var userId = Guid.NewGuid();
-        currentUserSetup.Returns(new AuthenticatedUser
-        {
-            UserId = userId,
-            QuantityRating = 99
-        });
+        currentUserSetup.Returns(new AuthenticatedUser { UserId = userId });
         createGameSetup.Returns(new Game());
         createRoomSetup.Returns(new Room());
         saveGameSetup.ReturnsAsync(new GameExtended());
+
+        validator
+            .Setup(v => v.GetInitialGameState(It.IsAny<CreateGame>()))
+            .Returns((GameStatus.Active, PremoderationStatus.AwaitingApproval, false));
 
         var createGame = new CreateGame();
         await service.Create(createGame);
-        gameFactory.Verify(f => f.Create(createGame, userId, GameStatus.RequiresModeration));
-    }
 
-    [Theory]
-    [InlineData(true, GameStatus.Draft)]
-    [InlineData(false, GameStatus.Requirement)]
-    public async Task CreateInDesiredStatusWhenUserHasHighRating(bool draft, GameStatus status)
-    {
-        var userId = Guid.NewGuid();
-        currentUserSetup.Returns(new AuthenticatedUser
-        {
-            UserId = userId,
-            QuantityRating = 100
-        });
-        createGameSetup.Returns(new Game());
-        createRoomSetup.Returns(new Room());
-        saveGameSetup.ReturnsAsync(new GameExtended());
-
-        var createGame = new CreateGame
-        {
-            Draft = draft
-        };
-        await service.Create(createGame);
-        gameFactory.Verify(f => f.Create(createGame, userId, status));
+        entityFactory.Verify(f => f.CreateGame(createGame, userId, GameStatus.Active,
+            PremoderationStatus.AwaitingApproval, false));
     }
 
     [Fact]
@@ -174,14 +136,11 @@ public class GameCreatingServiceShould : UnitTestBase
         createGameSetup.Returns(game);
         createRoomSetup.Returns(room);
         saveGameSetup.ReturnsAsync(new GameExtended());
-        userRepository
-            .Setup(r => r.FindUserId(It.IsAny<string>()))
-            .ReturnsAsync((false, Guid.Empty));
 
-        var createGame = new CreateGame {AssistantLogin = "assistant boi"};
+        var createGame = new CreateGame { AssistantLogin = "assistant boi" };
         await service.Create(createGame);
 
-        userRepository.Verify(r => r.FindUserId("assistant boi"));
+        dataResolver.Verify(r => r.FindAssistantId("assistant boi"));
     }
 
     [Fact]
@@ -189,17 +148,17 @@ public class GameCreatingServiceShould : UnitTestBase
     {
         currentUserSetup.Returns(new AuthenticatedUser());
         var gameId = Guid.NewGuid();
-        var game = new Game {GameId = gameId};
+        var game = new Game { GameId = gameId };
         var room = new Room();
         createGameSetup.Returns(game);
         createRoomSetup.Returns(room);
         saveGameSetup.ReturnsAsync(new GameExtended());
         var assistantId = Guid.NewGuid();
-        userRepository
-            .Setup(r => r.FindUserId(It.IsAny<string>()))
+        dataResolver
+            .Setup(r => r.FindAssistantId(It.IsAny<string>()))
             .ReturnsAsync((true, assistantId));
 
-        await service.Create(new CreateGame {AssistantLogin = "assistant boi"});
+        await service.Create(new CreateGame { AssistantLogin = "assistant boi" });
 
         assignmentService.Verify(s => s.CreateAssignment(gameId, assistantId), Times.Once);
     }
@@ -217,51 +176,21 @@ public class GameCreatingServiceShould : UnitTestBase
         await service.Create(new CreateGame());
 
         gameRepository.Verify(r => r.Create(game, room, It.IsAny<IEnumerable<GameTag>>()), Times.Once);
-        gameRepository.VerifyNoOtherCalls();
-    }
-
-    [Theory]
-    [InlineData(UnreadEntryType.Message)]
-    [InlineData(UnreadEntryType.Character)]
-    public async Task CreateCountersForGameEntries(UnreadEntryType entryType)
-    {
-        currentUserSetup.Returns(new AuthenticatedUser());
-        var gameId = Guid.NewGuid();
-        createGameSetup.Returns(new Game {GameId = gameId});
-        createRoomSetup.Returns(new Room());
-        saveGameSetup.ReturnsAsync(new GameExtended());
-
-        await service.Create(new CreateGame());
-
-        countersRepository.Verify(r => r.Create(gameId, entryType), Times.Once);
     }
 
     [Fact]
-    public async Task CreateCountersForRoomEntries()
+    public async Task InitializeCountersAndPublishEvent()
     {
         currentUserSetup.Returns(new AuthenticatedUser());
+        var gameId = Guid.NewGuid();
         var roomId = Guid.NewGuid();
-        createGameSetup.Returns(new Game {GameId = Guid.NewGuid()});
-        createRoomSetup.Returns(new Room {RoomId = roomId});
+        createGameSetup.Returns(new Game { GameId = gameId });
+        createRoomSetup.Returns(new Room { RoomId = roomId });
         saveGameSetup.ReturnsAsync(new GameExtended());
 
         await service.Create(new CreateGame());
 
-        countersRepository.Verify(r => r.Create(roomId, UnreadEntryType.Message), Times.Once);
-    }
-
-    [Fact]
-    public async Task PublishMessage()
-    {
-        currentUserSetup.Returns(new AuthenticatedUser());
-        var gameId = Guid.NewGuid();
-        createGameSetup.Returns(new Game {GameId = gameId});
-        createRoomSetup.Returns(new Room());
-        saveGameSetup.ReturnsAsync(new GameExtended());
-
-        await service.Create(new CreateGame());
-
-        publisher.Verify(p => p.Send(EventType.NewGame, gameId), Times.Once);
-        publisher.VerifyNoOtherCalls();
+        initialization.Verify(i => i.InitializeCounters(gameId, roomId), Times.Once);
+        initialization.Verify(i => i.PublishGameCreated(gameId), Times.Once);
     }
 }

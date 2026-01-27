@@ -6,33 +6,33 @@ namespace DM.Services.Forum.BusinessProcesses.Common;
 internal class AccessPolicyConverter : IAccessPolicyConverter
 {
     /// <inheritdoc />
-    public ForumAccessPolicy Convert(UserRole role)
+    public BoardAccessPolicy Convert(UserRole role)
     {
         if (role == UserRole.Guest)
         {
-            return ForumAccessPolicy.Guest;
+            return BoardAccessPolicy.Guest;
         }
 
-        var result = ForumAccessPolicy.Guest | ForumAccessPolicy.Player;
+        var result = BoardAccessPolicy.Guest | BoardAccessPolicy.Player;
 
         if (role >= UserRole.Admin)
         {
-            result |= ForumAccessPolicy.Administrator;
+            result |= BoardAccessPolicy.Administrator;
         }
 
         if (role >= UserRole.SeniorModerator)
         {
-            result |= ForumAccessPolicy.SeniorModerator;
+            result |= BoardAccessPolicy.SeniorModerator;
         }
 
         if (role >= UserRole.Moderator)
         {
-            result |= ForumAccessPolicy.RegularModerator;
+            result |= BoardAccessPolicy.RegularModerator;
         }
 
         if (role >= UserRole.Mentor)
         {
-            result |= ForumAccessPolicy.MentorModerator;
+            result |= BoardAccessPolicy.MentorModerator;
         }
 
         return result;

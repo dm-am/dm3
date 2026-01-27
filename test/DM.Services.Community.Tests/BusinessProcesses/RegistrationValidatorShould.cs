@@ -33,11 +33,11 @@ public class RegistrationValidatorShould : UnitTestBase
 
     [Theory]
     [InlineData("")]
-    [InlineData((string) null)]
+    [InlineData(null!)]
     [InlineData("  ")]
     [InlineData("the very long string that could not be user's login in any way")]
     [InlineData("LoginTaken")]
-    public async Task ValidateUserLogin(string login)
+    public async Task ValidateUserLogin(string? login)
     {
         var userRegistration = new UserRegistration
         {
@@ -50,10 +50,10 @@ public class RegistrationValidatorShould : UnitTestBase
 
     [Theory]
     [InlineData("")]
-    [InlineData((string) null)]
+    [InlineData(null!)]
     [InlineData("  ")]
     [InlineData("short")]
-    public async Task ValidateUserPassword(string password)
+    public async Task ValidateUserPassword(string? password)
     {
         var userRegistration = new UserRegistration
         {
@@ -72,12 +72,12 @@ public class RegistrationValidatorShould : UnitTestBase
 
     [Theory]
     [InlineData("")]
-    [InlineData((string) null)]
+    [InlineData(null!)]
     [InlineData("  ")]
     [InlineData("kajlsdhfaksjdhlfaksljdhfklasdhfaksdhadfasdfaslkdhfaskdjhfasldfaslkdjhaskdhfaskldfhaskjldfhaskdhfsakdhfaskldhf@gmail.com")]
     [InlineData("someInvalidEmail")]
     [InlineData("EmailTaken")]
-    public async Task ValidateUserEmail(string email)
+    public async Task ValidateUserEmail(string? email)
     {
         var userRegistration = new UserRegistration
         {

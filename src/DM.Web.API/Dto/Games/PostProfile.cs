@@ -12,8 +12,8 @@ internal class PostProfile : Profile
     public PostProfile()
     {
         CreateMap<DM.Services.Gaming.Dto.Output.Post, Post>()
-            .ForMember(d => d.CreatedUtc, s => s.MapFrom(p => p.CreateDate))
-            .ForMember(d => d.UpdatedUtc, s => s.MapFrom(p => p.LastUpdateDate))
+            .ForMember(d => d.CreatedUtc, s => s.MapFrom(p => p.CreatedUtc))
+            .ForMember(d => d.UpdatedUtc, s => s.MapFrom(p => p.ModifiedUtc))
             .ForMember(d => d.Commentary, s => s.MapFrom(p => p.Comment));
 
         CreateMap<Post, CreatePost>();

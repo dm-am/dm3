@@ -26,7 +26,7 @@ namespace DM.Services.Forum.Tests.BusinessProcesses.Topics;
 
 public class TopicCreatingServiceShould : UnitTestBase
 {
-    private readonly ISetup<IForumReadingService, Task<Dto.Output.Forum>> getForumSetup;
+    private readonly ISetup<IBoardReadingService, Task<Dto.Output.Board>> getBoardSetup;
     private readonly Mock<IIntentionManager> intentionManager;
     private readonly ISetup<ITopicFactory, ForumTopic> createTopicSetup;
     private readonly Mock<ITopicCreatingRepository> creatingRepository;
@@ -43,12 +43,12 @@ public class TopicCreatingServiceShould : UnitTestBase
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ValidationResult());
 
-        var forumReadingService = Mock<IForumReadingService>();
-        getForumSetup = forumReadingService.Setup(s => s.GetForum(It.IsAny<string>(), true));
+        var boardReadingService = Mock<IBoardReadingService>();
+        getBoardSetup = boardReadingService.Setup(s => s.GetBoard(It.IsAny<string>(), true));
 
         intentionManager = Mock<IIntentionManager>();
         intentionManager
-            .Setup(m => m.ThrowIfForbidden(It.IsAny<ForumIntention>(), It.IsAny<Dto.Output.Forum>()));
+            .Setup(m => m.ThrowIfForbidden(It.IsAny<ForumIntention>(), It.IsAny<Dto.Output.Board>()));
 
         var identityProvider = Mock<IIdentityProvider>();
         identityProvider
@@ -73,7 +73,7 @@ public class TopicCreatingServiceShould : UnitTestBase
             .Returns(Task.CompletedTask);
 
         service = new TopicCreatingService(validator.Object,
-            forumReadingService.Object,
+            boardReadingService.Object,
             intentionManager.Object,
             identityProvider.Object,
             topicFactory.Object,
@@ -85,9 +85,9 @@ public class TopicCreatingServiceShould : UnitTestBase
     [Fact]
     public async Task AuthorizeCreateTopicAction()
     {
-        var createTopic = new CreateTopic {ForumTitle = "Forum X"};
-        var forum = new Dto.Output.Forum {Id = Guid.NewGuid()};
-        getForumSetup.ReturnsAsync(forum);
+        var createTopic = new CreateTopic {BoardTitle = "Forum X"};
+        var forum = new Dto.Output.Board {Id = Guid.NewGuid()};
+        getBoardSetup.ReturnsAsync(forum);
         var forumTopic = new ForumTopic();
         createTopicSetup.Returns(forumTopic);
         saveTopicSetup.ReturnsAsync(new Topic());
@@ -100,9 +100,9 @@ public class TopicCreatingServiceShould : UnitTestBase
     [Fact]
     public async Task SaveTopic()
     {
-        var createTopic = new CreateTopic {ForumTitle = "Forum Y"};
-        var forum = new Dto.Output.Forum {Id = Guid.NewGuid()};
-        getForumSetup.ReturnsAsync(forum);
+        var createTopic = new CreateTopic {BoardTitle = "Forum Y"};
+        var forum = new Dto.Output.Board {Id = Guid.NewGuid()};
+        getBoardSetup.ReturnsAsync(forum);
         var forumTopic = new ForumTopic();
         createTopicSetup.Returns(forumTopic);
         var expected = new Topic();
@@ -118,10 +118,10 @@ public class TopicCreatingServiceShould : UnitTestBase
     [Fact]
     public async Task CreateUnreadCommentsCounterForTopic()
     {
-        var createTopic = new CreateTopic {ForumTitle = "Forum Y"};
+        var createTopic = new CreateTopic {BoardTitle = "Forum Y"};
         var forumId = Guid.NewGuid();
-        var forum = new Dto.Output.Forum {Id = forumId};
-        getForumSetup.ReturnsAsync(forum);
+        var forum = new Dto.Output.Board {Id = forumId};
+        getBoardSetup.ReturnsAsync(forum);
         var forumTopicId = Guid.NewGuid();
         var forumTopic = new ForumTopic {ForumTopicId = forumTopicId};
         createTopicSetup.Returns(forumTopic);
@@ -136,9 +136,9 @@ public class TopicCreatingServiceShould : UnitTestBase
     [Fact]
     public async Task PublishMessage()
     {
-        var createTopic = new CreateTopic {ForumTitle = "Forum Y"};
-        var forum = new Dto.Output.Forum {Id = Guid.NewGuid()};
-        getForumSetup.ReturnsAsync(forum);
+        var createTopic = new CreateTopic {BoardTitle = "Forum Y"};
+        var forum = new Dto.Output.Board {Id = Guid.NewGuid()};
+        getBoardSetup.ReturnsAsync(forum);
         var forumTopicId = Guid.NewGuid();
         var forumTopic = new ForumTopic {ForumTopicId = forumTopicId};
         createTopicSetup.Returns(forumTopic);

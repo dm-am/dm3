@@ -1,23 +1,27 @@
-import { User, UserRole } from '@/api/models/community';
+import { UserRole } from "@/api/models/community";
+import type { User } from "@/api/models/community";
 
 export function userIsAdmin(user: User | null): boolean {
-  return user !== null && user.roles.some(r => r === UserRole.Administrator);
+  return user !== null && user.roles.some((r) => r === UserRole.Admin);
 }
 
 export function userIsHighAuthority(user: User | null): boolean {
-  return user !== null && user.roles.some(r =>
-    r === UserRole.Administrator ||
-    r === UserRole.SeniorModerator);
+  return (
+    user !== null &&
+    user.roles.some(
+      (r) => r === UserRole.Admin || r === UserRole.SeniorModerator,
+    )
+  );
 }
 
 export function userIsAuthority(user: User | null): boolean {
-  return user !== null && user.roles.some(r =>
-    r === UserRole.Administrator ||
-    r === UserRole.SeniorModerator ||
-    r === UserRole.RegularModerator);
-}
-
-export function userIsMentor(user: User | null): boolean {
-  return user !== null && user.roles.some(r =>
-    r === UserRole.MentorModerator);
+  return (
+    user !== null &&
+    user.roles.some(
+      (r) =>
+        r === UserRole.Admin ||
+        r === UserRole.SeniorModerator ||
+        r === UserRole.Moderator,
+    )
+  );
 }

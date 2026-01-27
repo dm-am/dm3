@@ -40,7 +40,10 @@ internal class NotificationConsumer : BackgroundService
             ExchangeName = InvokedEventsTransport.ExchangeName,
             RoutingKeys = new[]
             {
+                // Community
                 EventType.ActivatedUser,
+
+                // Forum
                 EventType.NewForumComment,
                 EventType.ChangedForumComment,
                 EventType.DeletedForumComment,
@@ -48,8 +51,30 @@ internal class NotificationConsumer : BackgroundService
                 EventType.NewForumTopic,
                 EventType.ChangedForumTopic,
                 EventType.DeletedForumTopic,
+                EventType.LikedTopic,
+
+                // Game status changes
+                EventType.StatusGameActive,
+                EventType.StatusGameClosed,
+                EventType.StatusGameFrozen,
+                EventType.StatusGameFinished,
+
+                // Invitations
+                EventType.AssignmentRequestCreated,
+                EventType.PlayerInvitationCreated,
+                EventType.ReaderInvitationCreated,
+
+                // Characters
                 EventType.NewCharacter,
-                EventType.LikedTopic
+                EventType.StatusCharacterDeclined,
+                EventType.StatusCharacterAccepted,
+                EventType.StatusCharacterDied,
+                EventType.StatusCharacterResurrected,
+                EventType.StatusCharacterLeft,
+                EventType.StatusCharacterReturned,
+
+                // Posts
+                EventType.PostVoted
             }.ToRoutingKeys(),
         };
         var consumer = _consumerBuilder.BuildRabbit<InvokedEvent, NotificationProcessor>(parameters);

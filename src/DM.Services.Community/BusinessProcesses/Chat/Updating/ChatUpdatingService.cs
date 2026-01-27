@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DM.Services.Authentication.Implementation.UserIdentity;
 using DM.Services.Common.Authorization;
 using DM.Services.Community.BusinessProcesses.Chat.Reading;
 using DM.Services.Core.Exceptions;
@@ -12,16 +13,19 @@ internal class ChatUpdatingService : IChatUpdatingService
     private readonly IChatReadingRepository _readingRepository;
     private readonly IChatUpdatingRepository _updatingRepository;
     private readonly IIntentionManager _intentionManager;
+    private readonly IIdentityProvider _identityProvider;
 
     /// <inheritdoc />
     public ChatUpdatingService(
         IChatReadingRepository readingRepository,
         IChatUpdatingRepository updatingRepository,
-        IIntentionManager intentionManager)
+        IIntentionManager intentionManager,
+        IIdentityProvider identityProvider)
     {
         _readingRepository = readingRepository;
         _updatingRepository = updatingRepository;
         _intentionManager = intentionManager;
+        _identityProvider = identityProvider;
     }
 
     /// <inheritdoc />
@@ -35,6 +39,7 @@ internal class ChatUpdatingService : IChatUpdatingService
 
         _intentionManager.ThrowIfForbidden(ChatIntention.EditMessage, message);
 
-        return await _updatingRepository.Update(id, text);
+        var editorUserId = _identityProvider.Current.User.UserId;
+        return await _updatingRepository.Update(id, text, editorUserId);
     }
 }

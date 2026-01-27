@@ -14,7 +14,7 @@ public static class DescriptionExtensions
     /// </summary>
     /// <param name="value"></param>
     /// <returns></returns>
-    public static string GetDescription(this Enum value) =>
+    public static string? GetDescription(this Enum value) =>
         value.GetType().GetField(value.ToString())
             ?.GetCustomAttribute<DescriptionAttribute>()
             ?.Description;

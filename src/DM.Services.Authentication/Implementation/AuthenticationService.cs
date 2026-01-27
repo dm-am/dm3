@@ -11,6 +11,7 @@ using DM.Services.Core.Dto.Enums;
 using DM.Services.Core.Implementation;
 using DM.Services.DataAccess.BusinessObjects.Users;
 using DM.Services.DataAccess.RelationalStorage;
+using Microsoft.Extensions.Logging;
 using DbSession = DM.Services.DataAccess.BusinessObjects.Users.Session;
 
 namespace DM.Services.Authentication.Implementation;
@@ -25,6 +26,8 @@ internal class AuthenticationService : IAuthenticationService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IIdentityProvider _identityProvider;
     private readonly IUpdateBuilderFactory _updateBuilderFactory;
+    private readonly ILoginAttemptTracker _loginAttemptTracker;
+    private readonly ILogger<AuthenticationService> _logger;
 
     private const string UserIdKey = "userId";
     private const string SessionIdKey = "sessionId";
@@ -37,7 +40,9 @@ internal class AuthenticationService : IAuthenticationService
         ISessionFactory sessionFactory,
         IDateTimeProvider dateTimeProvider,
         IIdentityProvider identityProvider,
-        IUpdateBuilderFactory updateBuilderFactory)
+        IUpdateBuilderFactory updateBuilderFactory,
+        ILoginAttemptTracker loginAttemptTracker,
+        ILogger<AuthenticationService> logger)
     {
         _securityManager = securityManager;
         _cryptoService = cryptoService;
@@ -46,29 +51,56 @@ internal class AuthenticationService : IAuthenticationService
         _dateTimeProvider = dateTimeProvider;
         _identityProvider = identityProvider;
         _updateBuilderFactory = updateBuilderFactory;
+        _loginAttemptTracker = loginAttemptTracker;
+        _logger = logger;
     }
 
     /// <inheritdoc />
     public async Task<IIdentity> Authenticate(string login, string password, bool persistent)
     {
+        // Progressive delay for bot protection
+        var delaySeconds = await _loginAttemptTracker.GetDelayForUser(login);
+        if (delaySeconds > 0)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+        }
+
         var (userFound, user) = await _repository.TryFindUser(login);
         switch (userFound)
         {
             case false:
+                await _loginAttemptTracker.RecordFailedAttempt(login);
+                _logger.LogWarning("Login failed: user not found. Login={Login}", login);
                 return Identity.Fail(AuthenticationError.WrongLogin);
             case true when !user.Activated:
+                _logger.LogWarning("Login failed: account not activated. UserId={UserId}, Login={Login}", user.UserId, login);
                 return Identity.Fail(AuthenticationError.Inactive);
             case true when user.IsRemoved:
+                _logger.LogWarning("Login failed: account removed. UserId={UserId}, Login={Login}", user.UserId, login);
                 return Identity.Fail(AuthenticationError.Removed);
             case true when user.AccessPolicy.HasFlag(AccessPolicy.FullBan):
+                _logger.LogWarning("Login failed: account banned. UserId={UserId}, Login={Login}", user.UserId, login);
                 return Identity.Fail(AuthenticationError.Banned);
-            case true when !_securityManager.ComparePasswords(password, user.Salt, user.PasswordHash):
-                // todo: brute force protection
+            case true when !_securityManager.ComparePasswords(password, user.Salt, user.PasswordHash, user.PasswordHashVersion):
+                await _loginAttemptTracker.RecordFailedAttempt(login);
+                _logger.LogWarning("Login failed: wrong password. UserId={UserId}, Login={Login}", user.UserId, login);
                 return Identity.Fail(AuthenticationError.WrongPassword);
 
             default:
+                // Successful login - reset attempt counter
+                await _loginAttemptTracker.ResetAttempts(login);
+
+                // Opportunistic rehashing: upgrade password hash on successful login
+                if (_securityManager.NeedsRehash(user.PasswordHashVersion))
+                {
+                    await RehashPassword(user.UserId, password);
+                    _logger.LogInformation("Password hash upgraded for user. UserId={UserId}", user.UserId);
+                }
+
                 var session = _sessionFactory.Create(persistent, false);
                 var settings = await _repository.FindUserSettings(user.UserId);
+                _logger.LogInformation("User authenticated successfully. UserId={UserId}, Login={Login}, Persistent={Persistent}",
+                    user.UserId, login, persistent);
                 return await CreateAuthenticationResult(user, session, settings);
         }
     }
@@ -88,6 +120,7 @@ internal class AuthenticationService : IAuthenticationService
         }
         catch
         {
+            _logger.LogWarning("Token authentication failed: forged or corrupted token");
             return Identity.Fail(AuthenticationError.ForgedToken);
         }
 
@@ -103,6 +136,7 @@ internal class AuthenticationService : IAuthenticationService
 
         if (session == null)
         {
+            _logger.LogDebug("Token authentication failed: session not found. UserId={UserId}, SessionId={SessionId}", userId, sessionId);
             return Identity.Fail(AuthenticationError.SessionExpired);
         }
 
@@ -110,6 +144,7 @@ internal class AuthenticationService : IAuthenticationService
             session.ExpirationDate < _dateTimeProvider.Now)
         {
             await _repository.RemoveSession(userId, sessionId);
+            _logger.LogDebug("Token authentication failed: session expired. UserId={UserId}, SessionId={SessionId}", userId, sessionId);
             return Identity.Fail(AuthenticationError.SessionExpired);
         }
 
@@ -121,11 +156,11 @@ internal class AuthenticationService : IAuthenticationService
         }
 
         if (!session.Invisible && (
-                !user.LastVisitDate.HasValue ||
-                _dateTimeProvider.Now - user.LastVisitDate.Value > TimeSpan.FromMinutes(1)))
+                !user.LastActivityUtc.HasValue ||
+                _dateTimeProvider.Now - user.LastActivityUtc.Value > TimeSpan.FromMinutes(1)))
         {
             var userUpdate = _updateBuilderFactory.Create<User>(user.UserId)
-                .Field(u => u.LastVisitDate, _dateTimeProvider.Now);
+                .Field(u => u.LastActivityUtc, _dateTimeProvider.Now);
             await _repository.UpdateActivity(userUpdate);
         }
 
@@ -146,6 +181,7 @@ internal class AuthenticationService : IAuthenticationService
     {
         var identity = _identityProvider.Current;
         await _repository.RemoveSession(identity.User.UserId, identity.Session.Id);
+        _logger.LogInformation("User logged out. UserId={UserId}", identity.User.UserId);
         return Identity.Guest();
     }
 
@@ -155,6 +191,16 @@ internal class AuthenticationService : IAuthenticationService
         var identity = _identityProvider.Current;
         await _repository.RemoveSessionsExcept(identity.User.UserId, identity.Session.Id);
         return identity;
+    }
+
+    private async Task RehashPassword(Guid userId, string password)
+    {
+        var (hash, salt, version) = _securityManager.GeneratePassword(password);
+        var userUpdate = _updateBuilderFactory.Create<User>(userId)
+            .Field(u => u.PasswordHash, hash)
+            .Field(u => u.Salt, salt)
+            .Field(u => u.PasswordHashVersion, version);
+        await _repository.UpdateActivity(userUpdate);
     }
 
     private async Task<IIdentity> CreateAuthenticationResult(

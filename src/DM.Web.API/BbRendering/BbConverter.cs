@@ -56,7 +56,11 @@ internal class BbConverterFactory : JsonConverterFactory
                 
             if (renderMode == BbRenderMode.SafeHtml)
             {
-                writer.WriteStringValue(bbParserProvider.CurrentSafePost.Parse(value).ToHtml());
+                var safeParsedTree = bbParserProvider.CurrentSafePost.Parse(value);
+                var safeHtml = safeParsedTree is BbParserWrapper.WrappedNodeTree safeWrappedTree
+                    ? safeWrappedTree.ToHtml()
+                    : safeParsedTree.ToHtml();
+                writer.WriteStringValue(safeHtml);
                 return;
             }
                 
@@ -69,13 +73,22 @@ internal class BbConverterFactory : JsonConverterFactory
                 _ => throw new ArgumentOutOfRangeException(nameof(bbText.ParseMode))
             };
                 
-            var text = renderMode switch
-            {
-                BbRenderMode.Html => parsedTree.ToHtml(),
-                BbRenderMode.Bb => parsedTree.ToBb(),
-                BbRenderMode.Text => parsedTree.ToText(),
-                _ => throw new ArgumentOutOfRangeException()
-            };
+            // Handle WrappedNodeTree (from BbParserWrapper) which has custom ToHtml/ToBb/ToText methods
+            var text = parsedTree is BbParserWrapper.WrappedNodeTree wrappedTree
+                ? renderMode switch
+                {
+                    BbRenderMode.Html => wrappedTree.ToHtml(),
+                    BbRenderMode.Bb => wrappedTree.ToBb(),
+                    BbRenderMode.Text => wrappedTree.ToText(),
+                    _ => throw new ArgumentOutOfRangeException()
+                }
+                : renderMode switch
+                {
+                    BbRenderMode.Html => parsedTree.ToHtml(),
+                    BbRenderMode.Bb => parsedTree.ToBb(),
+                    BbRenderMode.Text => parsedTree.ToText(),
+                    _ => throw new ArgumentOutOfRangeException()
+                };
                 
             writer.WriteStringValue(text);
         }

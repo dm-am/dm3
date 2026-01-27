@@ -46,12 +46,12 @@ public class CharacterController : ControllerBase
     /// <response code="410">Game not found</response>
     [HttpPost("games/{id}/characters", Name = nameof(PostCharacter))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Character>), 201)]
+    [ProducesResponseType(typeof(Envelope<CharacterDetails>), 201)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PostCharacter(Guid id, [FromBody] Character character)
+    public async Task<IActionResult> PostCharacter(Guid id, [FromBody] CharacterDetails character)
     {
         var result = await characterApiService.Create(id, character);
         return CreatedAtRoute(nameof(GetCharacter),
@@ -59,27 +59,18 @@ public class CharacterController : ControllerBase
     }
 
     /// <summary>
-    /// Get character
-    /// </summary>
-    /// <param name="id"></param>
-    /// <response code="200"></response>
-    /// <response code="410">Character not found</response>
-    [HttpGet("characters/{id}", Name = nameof(GetCharacter))]
-    [ProducesResponseType(typeof(Envelope<Character>), 200)]
-    public async Task<IActionResult> GetCharacter(Guid id) => Ok(await characterApiService.Get(id));
-
-    /// <summary>
     /// Get character details
     /// </summary>
     /// <param name="id"></param>
     /// <response code="200"></response>
     /// <response code="410">Character not found</response>
-    [HttpGet("characters/{id}/details", Name = nameof(GetCharacterDetails))]
-    [ProducesResponseType(typeof(Envelope<Character>), 200)]
-    public async Task<IActionResult> GetCharacterDetails(Guid id) => Ok(await characterApiService.Get(id));
+    [HttpGet("characters/{id}", Name = nameof(GetCharacter))]
+    [ProducesResponseType(typeof(Envelope<CharacterDetails>), 200)]
+    [ProducesResponseType(typeof(GeneralError), 410)]
+    public async Task<IActionResult> GetCharacter(Guid id) => Ok(await characterApiService.Get(id));
 
     /// <summary>
-    /// Update character changes
+    /// Update character
     /// </summary>
     /// <param name="id"></param>
     /// <param name="character"></param>
@@ -88,14 +79,14 @@ public class CharacterController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to change some properties of this character</response>
     /// <response code="410">Character not found</response>
-    [HttpPatch("characters/{id}/details", Name = nameof(PutCharacter))]
+    [HttpPatch("characters/{id}", Name = nameof(PutCharacter))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Character>), 200)]
+    [ProducesResponseType(typeof(Envelope<CharacterDetails>), 200)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PutCharacter(Guid id, [FromBody] Character character) =>
+    public async Task<IActionResult> PutCharacter(Guid id, [FromBody] CharacterDetails character) =>
         Ok(await characterApiService.Update(id, character));
 
     /// <summary>

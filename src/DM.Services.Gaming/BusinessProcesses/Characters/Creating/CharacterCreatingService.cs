@@ -60,7 +60,7 @@ internal class CharacterCreatingService : ICharacterCreatingService
         // Master and assistant characters should be created in Active status
         var initialStatus = gameParticipation.HasFlag(GameParticipation.Authority)
             ? CharacterStatus.Active
-            : CharacterStatus.Registration;
+            : CharacterStatus.UnderReview;
 
         // Only master and assistant are allowed to create NPCs
         createCharacter.IsNpc = createCharacter.IsNpc && gameParticipation.HasFlag(GameParticipation.Authority);

@@ -21,7 +21,7 @@ internal class CreateGameValidator : AbstractValidator<CreateGame>
             .NotEmpty().WithMessage(ValidationError.Empty)
             .MaximumLength(50).WithMessage(ValidationError.Long);
 
-        RuleFor(g => g.SettingName)
+        RuleFor(g => g.NarrativeSetting)
             .NotEmpty().WithMessage(ValidationError.Empty)
             .MaximumLength(50).WithMessage(ValidationError.Long);
 

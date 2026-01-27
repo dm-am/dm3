@@ -57,7 +57,10 @@ internal class RoomUpdatingService : IRoomUpdatingService
         var roomUpdate = updateBuilderFactory.Create<DbRoom>(updateRoom.RoomId)
             .MaybeField(r => r.Title, updateRoom.Title)
             .MaybeField(r => r.Type, updateRoom.Type)
-            .MaybeField(r => r.AccessType, updateRoom.AccessType);
+            .MaybeField(r => r.AccessType, updateRoom.AccessType)
+            .MaybeField(r => r.ViewPrivateText, updateRoom.ViewPrivateText)
+            .MaybeField(r => r.ViewDiceResults, updateRoom.ViewDiceResults)
+            .MaybeField(r => r.DiceEnabled, updateRoom.DiceEnabled);
 
         if (updateRoom.PreviousRoomId == null || updateRoom.PreviousRoomId.Value == room.PreviousRoomId)
         {

@@ -36,11 +36,18 @@ internal interface IConversationReadingRepository
     Task<Conversation> Get(Guid conversationId, Guid userId);
 
     /// <summary>
-    /// Find user for conversation
+    /// Find user for conversation by login
     /// </summary>
     /// <param name="login">User login</param>
     /// <returns></returns>
     Task<Guid?> FindUser(string login);
+
+    /// <summary>
+    /// Check if user exists by ID
+    /// </summary>
+    /// <param name="userId">User ID</param>
+    /// <returns>True if user exists</returns>
+    Task<bool> UserExists(Guid userId);
 
     /// <summary>
     /// Find existing visavi conversation

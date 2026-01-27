@@ -20,11 +20,15 @@ services:
       - dmapi
       - dmfront
 
+  dmapi:
+    environment:
+      DM_CdnConfiguration__PublicUrl: ""
+
   dmfront:
     container_name: 'dm-front'
     image: 'dm-front:local'
     build:
-      context: ../frontend/DM.Web.Modern.Temp
+      context: ../frontend/DM.Web.Modern
       dockerfile: Dockerfile
       args:
         VITE_API_URL: ""

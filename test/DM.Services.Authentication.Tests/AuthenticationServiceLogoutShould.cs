@@ -6,8 +6,10 @@ using DM.Services.Authentication.Implementation;
 using DM.Services.Authentication.Implementation.Security;
 using DM.Services.Authentication.Implementation.UserIdentity;
 using DM.Services.Authentication.Repositories;
+using DM.Services.Core.Implementation;
 using DM.Tests.Core;
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Language.Flow;
 using Xunit;
@@ -37,8 +39,10 @@ public class AuthenticationServiceLogoutShould : UnitTestBase
             .Returns(identity.Object);
         userSetup = identity.Setup(i => i.User);
         sessionSetup = identity.Setup(i => i.Session);
-        service = new AuthenticationService(null, cryptoService.Object,
-            authenticationRepository.Object, sessionFactory.Object, null, identityProvider.Object, null);
+        var loginAttemptTracker = Mock<ILoginAttemptTracker>();
+        var logger = Mock<ILogger<AuthenticationService>>();
+        service = new AuthenticationService(null!, cryptoService.Object,
+            authenticationRepository.Object, sessionFactory.Object, null!, identityProvider.Object, null!, loginAttemptTracker.Object, logger.Object);
     }
 
     [Fact]

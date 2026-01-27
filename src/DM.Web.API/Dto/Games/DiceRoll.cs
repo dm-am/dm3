@@ -23,9 +23,9 @@ public class DiceRoll
     public int Bonus { get; set; }
 
     /// <summary>
-    /// Blasts count
+    /// Explosion count (max re-rolls when die shows maximum value)
     /// </summary>
-    public int? Blast { get; set; }
+    public int? Explosion { get; set; }
 
     /// <summary>
     /// Commentary
@@ -54,7 +54,7 @@ public class DiceResult
     public bool Critical { get; set; }
 
     /// <summary>
-    /// Result has blasted
+    /// Result has exploded (triggered re-roll)
     /// </summary>
-    public bool Blasted { get; set; }
+    public bool Exploded { get; set; }
 }

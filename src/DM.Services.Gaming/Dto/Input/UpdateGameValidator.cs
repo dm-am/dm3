@@ -21,8 +21,8 @@ internal class UpdateGameValidator : AbstractValidator<UpdateGame>
                 .NotEmpty().WithMessage(ValidationError.Empty)
                 .MaximumLength(50).WithMessage(ValidationError.Long));
 
-        When(g => g.SettingName != default, () =>
-            RuleFor(g => g.SettingName)
+        When(g => g.NarrativeSetting != default, () =>
+            RuleFor(g => g.NarrativeSetting)
                 .NotEmpty().WithMessage(ValidationError.Empty)
                 .MaximumLength(50).WithMessage(ValidationError.Long));
 

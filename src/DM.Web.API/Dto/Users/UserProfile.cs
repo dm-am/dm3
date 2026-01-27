@@ -27,7 +27,7 @@ internal class UserProfile : Profile
         CreateMap<GeneralUser, User>()
             .ForMember(d => d.Id, s => s.MapFrom(u => u.UserId))
             .ForMember(d => d.Roles, s => s.MapFrom(u => u.Role))
-            .ForMember(d => d.OnlineUtc, s => s.MapFrom(u => u.LastVisitDate))
+            .ForMember(d => d.OnlineUtc, s => s.MapFrom(u => u.LastActivityUtc))
             .ForMember(d => d.Rating, s => s.MapFrom(u => new Rating
             {
                 IsEnabled = !u.RatingDisabled,
@@ -37,7 +37,7 @@ internal class UserProfile : Profile
 
         CreateMap<DtoUserDetails, UserDetails>()
             .IncludeBase<GeneralUser, User>()
-            .ForMember(d => d.RegistrationDateUtc, s => s.MapFrom(u => u.RegistrationDate))
+            .ForMember(d => d.RegistrationDateUtc, s => s.MapFrom(u => u.CreatedUtc))
             .ForMember(d => d.Contacts, s => s.MapFrom(u => CreateContacts(u.Icq, u.Skype)));
         CreateMap<DM.Services.Authentication.Dto.UserSettings, UserSettings>()
             .ForMember(d => d.PagingLimits, s => s.MapFrom(u => u.Paging))

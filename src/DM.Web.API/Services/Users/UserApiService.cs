@@ -1,8 +1,10 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Services.Community.BusinessProcesses.Users.Reading;
 using DM.Services.Community.BusinessProcesses.Users.Updating;
+using DM.Services.Core.Dto.Enums;
 using DM.Web.API.Dto.Contracts;
 using DM.Web.API.Dto.Users;
 using Microsoft.AspNetCore.Http;
@@ -43,9 +45,30 @@ internal class UserApiService : IUserApiService
     }
 
     /// <inheritdoc />
+    public async Task<Envelope<User>> GetUser(Guid userId)
+    {
+        var user = await readingService.Get(userId);
+        return new Envelope<User>(mapper.Map<User>(user));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<User>> GetCurrentUser()
+    {
+        var user = await readingService.GetCurrent();
+        return new Envelope<User>(mapper.Map<User>(user));
+    }
+
+    /// <inheritdoc />
     public async Task<Envelope<UserDetails>> GetUserDetails(string login)
     {
         var user = await readingService.GetDetails(login);
+        return new Envelope<UserDetails>(mapper.Map<UserDetails>(user));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<UserDetails>> GetUserDetails(Guid userId)
+    {
+        var user = await readingService.GetDetails(userId);
         return new Envelope<UserDetails>(mapper.Map<UserDetails>(user));
     }
 
@@ -64,5 +87,31 @@ internal class UserApiService : IUserApiService
         await using var uploadStream = file.OpenReadStream();
         var updatedUser = await updatingService.UploadPicture(login, uploadStream, file.Name, file.ContentType);
         return new Envelope<UserDetails>(mapper.Map<UserDetails>(updatedUser));
+    }
+
+    /// <inheritdoc />
+    public async Task<ListEnvelope<User>> GetUsersByRole(UserRole role)
+    {
+        var users = await readingService.GetByRole(role);
+        return new ListEnvelope<User>(users.Select(mapper.Map<User>));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<UserSettings>> GetUserSettings(string login)
+    {
+        var user = await readingService.GetDetails(login);
+        return new Envelope<UserSettings>(mapper.Map<UserSettings>(user.Settings));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<UserSettings>> UpdateUserSettings(string login, UserSettings settings)
+    {
+        var updateUser = new UpdateUser
+        {
+            Login = login,
+            Settings = mapper.Map<DM.Services.Authentication.Dto.UserSettings>(settings)
+        };
+        var updatedUser = await updatingService.Update(updateUser);
+        return new Envelope<UserSettings>(mapper.Map<UserSettings>(updatedUser.Settings));
     }
 }

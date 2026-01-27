@@ -18,5 +18,15 @@ public enum PollIntention
     /// <summary>
     /// Remove vote from a poll
     /// </summary>
-    Unvote = 2
+    Unvote = 2,
+
+    /// <summary>
+    /// Edit existing poll
+    /// </summary>
+    Edit = 3,
+
+    /// <summary>
+    /// Delete existing poll
+    /// </summary>
+    Delete = 4
 }

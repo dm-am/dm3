@@ -19,7 +19,7 @@ namespace DM.Services.Community.Tests.BusinessProcesses;
 
 public class RegistrationServiceShould : UnitTestBase
 {
-    private readonly ISetup<ISecurityManager, (string Hash, string Salt)> passwordGenerationSetup;
+    private readonly ISetup<ISecurityManager, (string Hash, string Salt, int Version)> passwordGenerationSetup;
     private readonly ISetup<IUserFactory, User> createUserSetup;
     private readonly ISetup<IActivationTokenFactory, Token> createTokenSetup;
     private readonly Mock<IUserFactory> userFactory;
@@ -43,7 +43,7 @@ public class RegistrationServiceShould : UnitTestBase
 
         userFactory = Mock<IUserFactory>();
         createUserSetup = userFactory.Setup(f =>
-            f.Create(It.IsAny<UserRegistration>(), It.IsAny<string>(), It.IsAny<string>()));
+            f.Create(It.IsAny<UserRegistration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>()));
 
         tokenFactory = Mock<IActivationTokenFactory>();
         createTokenSetup = tokenFactory.Setup(f => f.Create(It.IsAny<Guid>()));
@@ -75,7 +75,7 @@ public class RegistrationServiceShould : UnitTestBase
     [Fact]
     public async Task CreateUserWithGeneratedSaltAndHash()
     {
-        passwordGenerationSetup.Returns(("hash", "salt"));
+        passwordGenerationSetup.Returns(("hash", "salt", 2));
         createTokenSetup.Returns(new Token());
         createUserSetup.Returns(new User());
 
@@ -83,13 +83,13 @@ public class RegistrationServiceShould : UnitTestBase
         await service.Register(userRegistration);
 
         securityManager.Verify(m => m.GeneratePassword("my password"));
-        userFactory.Verify(f => f.Create(userRegistration, "salt", "hash"));
+        userFactory.Verify(f => f.Create(userRegistration, "salt", "hash", 2));
     }
 
     [Fact]
     public async Task CreateTokenWithGeneratedUserId()
     {
-        passwordGenerationSetup.Returns(("hash", "salt"));
+        passwordGenerationSetup.Returns(("hash", "salt", 2));
         createTokenSetup.Returns(new Token());
         var userId = Guid.NewGuid();
         createUserSetup.Returns(new User {UserId = userId});
@@ -102,7 +102,7 @@ public class RegistrationServiceShould : UnitTestBase
     [Fact]
     public async Task SaveCreatedUserAndToken()
     {
-        passwordGenerationSetup.Returns(("hash", "salt"));
+        passwordGenerationSetup.Returns(("hash", "salt", 2));
         var token = new Token();
         createTokenSetup.Returns(token);
         var user = new User();
@@ -117,7 +117,7 @@ public class RegistrationServiceShould : UnitTestBase
     [Fact]
     public async Task SendConfirmationLetter()
     {
-        passwordGenerationSetup.Returns(("hash", "salt"));
+        passwordGenerationSetup.Returns(("hash", "salt", 2));
         var tokenId = Guid.NewGuid();
         createTokenSetup.Returns(new Token {TokenId = tokenId});
         createUserSetup.Returns(new User {Email = "email", Login = "login"});
@@ -131,7 +131,7 @@ public class RegistrationServiceShould : UnitTestBase
     [Fact]
     public async Task PublishEvent()
     {
-        passwordGenerationSetup.Returns(("hash", "salt"));
+        passwordGenerationSetup.Returns(("hash", "salt", 2));
         createTokenSetup.Returns(new Token());
         var userId = Guid.NewGuid();
         createUserSetup.Returns(new User {UserId = userId});

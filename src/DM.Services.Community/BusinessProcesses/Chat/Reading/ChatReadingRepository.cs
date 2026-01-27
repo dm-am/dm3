@@ -7,6 +7,7 @@ using AutoMapper.QueryableExtensions;
 using DM.Services.Core.Dto;
 using DM.Services.Core.Extensions;
 using DM.Services.DataAccess;
+using DM.Services.DataAccess.BusinessObjects.Messaging;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Services.Community.BusinessProcesses.Chat.Reading;
@@ -26,29 +27,32 @@ internal class ChatReadingRepository : IChatReadingRepository
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
-    public Task<int> Count() => _dbContext.ChatMessages.CountAsync();
+    private IQueryable<Message> GlobalChatQuery =>
+        _dbContext.Messages.Where(m => m.ConversationId == Message.GlobalChatId);
 
     /// <inheritdoc />
-    public async Task<IEnumerable<ChatMessage>> Get(PagingData pagingData) => await _dbContext.ChatMessages
-        .OrderByDescending(m => m.CreateDate)
+    public Task<int> Count() => GlobalChatQuery.CountAsync();
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<ChatMessage>> Get(PagingData pagingData) => await GlobalChatQuery
+        .OrderByDescending(m => m.CreatedUtc)
         .Page(pagingData)
         .ProjectTo<ChatMessage>(_mapper.ConfigurationProvider)
-        .OrderBy(m => m.CreateDate)
+        .OrderBy(m => m.CreatedUtc)
         .ToArrayAsync();
 
     /// <inheritdoc />
     public async Task<IEnumerable<ChatMessage>> Get(DateTimeOffset since) =>
-        await _dbContext.ChatMessages
-            .OrderByDescending(m => m.CreateDate)
-            .Where(m => m.CreateDate >= since)
+        await GlobalChatQuery
+            .OrderByDescending(m => m.CreatedUtc)
+            .Where(m => m.CreatedUtc >= since)
             .ProjectTo<ChatMessage>(_mapper.ConfigurationProvider)
-            .OrderBy(m => m.CreateDate)
+            .OrderBy(m => m.CreatedUtc)
             .ToArrayAsync();
 
     /// <inheritdoc />
-    public async Task<ChatMessage> Get(Guid id) => await _dbContext.ChatMessages
-        .Where(m => m.ChatMessageId == id)
+    public async Task<ChatMessage> Get(Guid id) => await GlobalChatQuery
+        .Where(m => m.MessageId == id)
         .ProjectTo<ChatMessage>(_mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();
 
@@ -58,9 +62,9 @@ internal class ChatReadingRepository : IChatReadingRepository
         var startOfDay = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var endOfDay = date.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
-        return await _dbContext.ChatMessages
-            .Where(m => m.CreateDate >= startOfDay && m.CreateDate <= endOfDay)
-            .OrderBy(m => m.CreateDate)
+        return await GlobalChatQuery
+            .Where(m => m.CreatedUtc >= startOfDay && m.CreatedUtc <= endOfDay)
+            .OrderBy(m => m.CreatedUtc)
             .ProjectTo<ChatMessage>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
     }
@@ -68,35 +72,35 @@ internal class ChatReadingRepository : IChatReadingRepository
     /// <inheritdoc />
     public async Task<IEnumerable<ChatMessage>> GetBefore(Guid messageId, int count)
     {
-        var referenceMessage = await _dbContext.ChatMessages
-            .Where(m => m.ChatMessageId == messageId)
-            .Select(m => m.CreateDate)
+        var referenceMessage = await GlobalChatQuery
+            .Where(m => m.MessageId == messageId)
+            .Select(m => m.CreatedUtc)
             .FirstOrDefaultAsync();
 
         if (referenceMessage == default) return Array.Empty<ChatMessage>();
 
-        return await _dbContext.ChatMessages
-            .Where(m => m.CreateDate < referenceMessage)
-            .OrderByDescending(m => m.CreateDate)
+        return await GlobalChatQuery
+            .Where(m => m.CreatedUtc < referenceMessage)
+            .OrderByDescending(m => m.CreatedUtc)
             .Take(count)
             .ProjectTo<ChatMessage>(_mapper.ConfigurationProvider)
-            .OrderBy(m => m.CreateDate)
+            .OrderBy(m => m.CreatedUtc)
             .ToArrayAsync();
     }
 
     /// <inheritdoc />
     public async Task<IEnumerable<ChatMessage>> GetAfter(Guid messageId, int count)
     {
-        var referenceMessage = await _dbContext.ChatMessages
-            .Where(m => m.ChatMessageId == messageId)
-            .Select(m => m.CreateDate)
+        var referenceMessage = await GlobalChatQuery
+            .Where(m => m.MessageId == messageId)
+            .Select(m => m.CreatedUtc)
             .FirstOrDefaultAsync();
 
         if (referenceMessage == default) return Array.Empty<ChatMessage>();
 
-        return await _dbContext.ChatMessages
-            .Where(m => m.CreateDate > referenceMessage)
-            .OrderBy(m => m.CreateDate)
+        return await GlobalChatQuery
+            .Where(m => m.CreatedUtc > referenceMessage)
+            .OrderBy(m => m.CreatedUtc)
             .Take(count)
             .ProjectTo<ChatMessage>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
@@ -105,36 +109,36 @@ internal class ChatReadingRepository : IChatReadingRepository
     /// <inheritdoc />
     public async Task<IEnumerable<ChatMessage>> GetAround(Guid messageId, int count)
     {
-        var referenceMessage = await _dbContext.ChatMessages
-            .Where(m => m.ChatMessageId == messageId)
-            .Select(m => m.CreateDate)
+        var referenceMessage = await GlobalChatQuery
+            .Where(m => m.MessageId == messageId)
+            .Select(m => m.CreatedUtc)
             .FirstOrDefaultAsync();
 
         if (referenceMessage == default) return Array.Empty<ChatMessage>();
 
         var halfCount = count / 2;
 
-        var before = await _dbContext.ChatMessages
-            .Where(m => m.CreateDate < referenceMessage)
-            .OrderByDescending(m => m.CreateDate)
+        var before = await GlobalChatQuery
+            .Where(m => m.CreatedUtc < referenceMessage)
+            .OrderByDescending(m => m.CreatedUtc)
             .Take(halfCount)
             .ProjectTo<ChatMessage>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
 
-        var target = await _dbContext.ChatMessages
-            .Where(m => m.ChatMessageId == messageId)
+        var target = await GlobalChatQuery
+            .Where(m => m.MessageId == messageId)
             .ProjectTo<ChatMessage>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
 
-        var after = await _dbContext.ChatMessages
-            .Where(m => m.CreateDate > referenceMessage)
-            .OrderBy(m => m.CreateDate)
+        var after = await GlobalChatQuery
+            .Where(m => m.CreatedUtc > referenceMessage)
+            .OrderBy(m => m.CreatedUtc)
             .Take(halfCount)
             .ProjectTo<ChatMessage>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
 
         var result = new List<ChatMessage>();
-        result.AddRange(before.OrderBy(m => m.CreateDate));
+        result.AddRange(before.OrderBy(m => m.CreatedUtc));
         if (target != null) result.Add(target);
         result.AddRange(after);
 
@@ -144,29 +148,29 @@ internal class ChatReadingRepository : IChatReadingRepository
     /// <inheritdoc />
     public async Task<bool> HasMessagesBefore(Guid messageId)
     {
-        var referenceMessage = await _dbContext.ChatMessages
-            .Where(m => m.ChatMessageId == messageId)
-            .Select(m => m.CreateDate)
+        var referenceMessage = await GlobalChatQuery
+            .Where(m => m.MessageId == messageId)
+            .Select(m => m.CreatedUtc)
             .FirstOrDefaultAsync();
 
         if (referenceMessage == default) return false;
 
-        return await _dbContext.ChatMessages
-            .AnyAsync(m => m.CreateDate < referenceMessage);
+        return await GlobalChatQuery
+            .AnyAsync(m => m.CreatedUtc < referenceMessage);
     }
 
     /// <inheritdoc />
     public async Task<bool> HasMessagesAfter(Guid messageId)
     {
-        var referenceMessage = await _dbContext.ChatMessages
-            .Where(m => m.ChatMessageId == messageId)
-            .Select(m => m.CreateDate)
+        var referenceMessage = await GlobalChatQuery
+            .Where(m => m.MessageId == messageId)
+            .Select(m => m.CreatedUtc)
             .FirstOrDefaultAsync();
 
         if (referenceMessage == default) return false;
 
-        return await _dbContext.ChatMessages
-            .AnyAsync(m => m.CreateDate > referenceMessage);
+        return await GlobalChatQuery
+            .AnyAsync(m => m.CreatedUtc > referenceMessage);
     }
 
     /// <inheritdoc />
@@ -174,9 +178,21 @@ internal class ChatReadingRepository : IChatReadingRepository
     {
         var startOfDay = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
 
-        return await _dbContext.ChatMessages
-            .Where(m => m.CreateDate >= startOfDay)
-            .OrderBy(m => m.CreateDate)
+        return await GlobalChatQuery
+            .Where(m => m.CreatedUtc >= startOfDay)
+            .OrderBy(m => m.CreatedUtc)
+            .ProjectTo<ChatMessage>(_mapper.ConfigurationProvider)
+            .FirstOrDefaultAsync();
+    }
+
+    /// <inheritdoc />
+    public async Task<ChatMessage> GetLastOnOrBeforeDate(DateOnly date)
+    {
+        var endOfDay = date.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+
+        return await GlobalChatQuery
+            .Where(m => m.CreatedUtc <= endOfDay)
+            .OrderByDescending(m => m.CreatedUtc)
             .ProjectTo<ChatMessage>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
     }

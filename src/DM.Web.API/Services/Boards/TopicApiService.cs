@@ -39,11 +39,11 @@ internal class TopicApiService : ITopicApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Topic>> Get(string forumId, TopicsQuery query)
+    public async Task<ListEnvelope<Topic>> Get(string boardId, TopicsQuery query)
     {
         var (topics, paging) = query.IsAttached
-            ? (await topicReadingService.GetAttachedTopics(forumId), null)
-            : await topicReadingService.GetTopicsList(forumId, mapper.Map<PagingQuery>(query));
+            ? (await topicReadingService.GetAttachedTopics(boardId), null)
+            : await topicReadingService.GetTopicsList(boardId, mapper.Map<PagingQuery>(query));
         return new ListEnvelope<Topic>(topics.Select(mapper.Map<Topic>),
             paging == null ? null : new Paging(paging));
     }
@@ -56,10 +56,10 @@ internal class TopicApiService : ITopicApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Topic>> Create(string forumId, Topic topic)
+    public async Task<Envelope<Topic>> Create(string boardId, Topic topic)
     {
         var createTopic = mapper.Map<CreateTopic>(topic);
-        createTopic.ForumTitle = forumId;
+        createTopic.BoardTitle = boardId;
         var createdTopic = await topicCreatingService.CreateTopic(createTopic);
         return new Envelope<Topic>(mapper.Map<Topic>(createdTopic));
     }

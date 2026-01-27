@@ -82,4 +82,9 @@ internal interface IChatReadingRepository
     /// Get first message on or after the given date
     /// </summary>
     Task<ChatMessage> GetFirstOnOrAfterDate(DateOnly date);
+
+    /// <summary>
+    /// Get last message on or before the given date
+    /// </summary>
+    Task<ChatMessage> GetLastOnOrBeforeDate(DateOnly date);
 }

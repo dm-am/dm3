@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using DM.Services.DataAccess;
+using DM.Services.DataAccess.BusinessObjects.Messaging;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Services.Community.BusinessProcesses.Chat.Deleting;
@@ -19,8 +20,8 @@ internal class ChatDeletingRepository : IChatDeletingRepository
     /// <inheritdoc />
     public async Task Delete(Guid id)
     {
-        var message = await _dbContext.ChatMessages
-            .FirstOrDefaultAsync(m => m.ChatMessageId == id);
+        var message = await _dbContext.Messages
+            .FirstOrDefaultAsync(m => m.MessageId == id && m.ConversationId == Message.GlobalChatId);
 
         if (message != null)
         {

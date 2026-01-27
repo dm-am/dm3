@@ -2,14 +2,12 @@ using System;
 using System.Collections.Generic;
 using DM.Services.Core.Dto.Enums;
 using DM.Services.Gaming.Dto;
-using DM.Web.API.BbRendering;
-using DM.Web.API.Dto.Games.Attributes;
 using DM.Web.API.Dto.Users;
 
 namespace DM.Web.API.Dto.Games;
 
 /// <summary>
-/// API DTO model for game
+/// API DTO model for game (lightweight, for lists)
 /// </summary>
 public class Game
 {
@@ -34,9 +32,9 @@ public class Game
     public string Setting { get; set; }
 
     /// <summary>
-    /// Attribute schema identifier
+    /// Attribute schema identifier (for referencing, full schema in GameDetails)
     /// </summary>
-    public AttributeSchema Schema { get; set; }
+    public Guid? SchemaId { get; set; }
 
     /// <summary>
     /// Game status
@@ -79,21 +77,6 @@ public class Game
     public IEnumerable<Tag> Tags { get; set; }
 
     /// <summary>
-    /// Game information
-    /// </summary>
-    public InfoBbText Info { get; set; }
-
-    /// <summary>
-    /// Game private notes for master
-    /// </summary>
-    public string Notes { get; set; }
-
-    /// <summary>
-    /// Game privacy settings
-    /// </summary>
-    public GamePrivacySettings PrivacySettings { get; set; }
-
-    /// <summary>
     /// Number of unread posts
     /// </summary>
     public int UnreadPostsCount { get; set; }
@@ -107,6 +90,42 @@ public class Game
     /// Number of unread characters
     /// </summary>
     public int UnreadCharactersCount { get; set; }
+
+    /// <summary>
+    /// User IDs of active character owners (for player count in sidebar)
+    /// </summary>
+    public IEnumerable<Guid> ActiveCharacterUserIds { get; set; }
+
+    /// <summary>
+    /// Recruitment information
+    /// </summary>
+    public GameRecruitment Recruitment { get; set; }
+}
+
+/// <summary>
+/// DTO for game recruitment information
+/// </summary>
+public class GameRecruitment
+{
+    /// <summary>
+    /// Recruitment is open for new players
+    /// </summary>
+    public bool IsOpen { get; set; }
+
+    /// <summary>
+    /// Maximum number of players allowed (null = unlimited)
+    /// </summary>
+    public int? PlayerLimit { get; set; }
+
+    /// <summary>
+    /// Current number of active players
+    /// </summary>
+    public int PlayerCount { get; set; }
+
+    /// <summary>
+    /// When the recruitment was started
+    /// </summary>
+    public DateTimeOffset? StartedUtc { get; set; }
 }
 
 /// <summary>

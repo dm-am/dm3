@@ -11,7 +11,7 @@ internal class ReviewProfile : Profile
     public ReviewProfile()
     {
         CreateMap<DM.Services.Community.BusinessProcesses.Reviews.Reading.Review, Review>()
-            .ForMember(d => d.CreatedUtc, s => s.MapFrom(r => r.CreateDate))
+            .ForMember(d => d.CreatedUtc, s => s.MapFrom(r => r.CreatedUtc))
             .ForMember(d => d.IsApproved, s => s.MapFrom(r => r.Approved));
         CreateMap<Review, CreateReview>();
         CreateMap<Review, UpdateReview>()

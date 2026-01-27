@@ -87,18 +87,41 @@ internal class CharacterUpdatingService : ICharacterUpdatingService
         var invokedEvents = new List<EventType> {EventType.ChangedCharacter};
         if (updateCharacter.Status.HasValue && updateCharacter.Status != characterToUpdate.Status)
         {
+            var isDead = updateCharacter.IsDead ?? characterToUpdate.IsDead;
+            var isPlayerLeft = updateCharacter.IsPlayerLeft ?? characterToUpdate.IsPlayerLeft;
+
             var (intention, eventType) = _intentionConverter.Convert(
-                updateCharacter.Status.Value, characterToUpdate.Status);
+                characterToUpdate.Status, updateCharacter.Status.Value, isDead, isPlayerLeft);
             if (_intentionManager.IsAllowed(intention, characterToUpdate))
             {
                 changes.Field(c => c.Status, updateCharacter.Status.Value);
                 invokedEvents.Add(eventType);
+
+                // Set flags when retiring
+                if (updateCharacter.Status == CharacterStatus.Retired)
+                {
+                    if (updateCharacter.IsDead.HasValue)
+                        changes.Field(c => c.IsDead, updateCharacter.IsDead.Value);
+                    if (updateCharacter.IsPlayerLeft.HasValue)
+                        changes.Field(c => c.IsPlayerLeft, updateCharacter.IsPlayerLeft.Value);
+                    if (updateCharacter.IsPlayerExiled.HasValue)
+                        changes.Field(c => c.IsPlayerExiled, updateCharacter.IsPlayerExiled.Value);
+                }
+
+                // Clear flags when returning to active
+                if (updateCharacter.Status == CharacterStatus.Active &&
+                    characterToUpdate.Status == CharacterStatus.Retired)
+                {
+                    changes.Field(c => c.IsDead, false);
+                    changes.Field(c => c.IsPlayerLeft, false);
+                    changes.Field(c => c.IsPlayerExiled, false);
+                }
             }
         }
 
         if (changes.HasChanges() || attributeChanges.Any(c => c.HasChanges()))
         {
-            changes.Field(c => c.LastUpdateDate, _dateTimeProvider.Now);
+            changes.Field(c => c.ModifiedUtc, _dateTimeProvider.Now);
         }
 
         var character = await _repository.Update(changes, attributeChanges);

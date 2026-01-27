@@ -3,7 +3,7 @@ namespace DM.Services.DataAccess.BusinessObjects.DataContracts;
 /// <summary>
 /// Removable entity contract
 /// </summary>
-internal interface IRemovable
+public interface IRemovable
 {
     /// <summary>
     /// Removed flag

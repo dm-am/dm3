@@ -27,7 +27,7 @@ internal class PasswordResetTokenFactory : IPasswordResetTokenFactory
             TokenId = _guidFactory.Create(),
             UserId = userId,
             Type = TokenType.PasswordChange,
-            CreateDate = _dateTimeProvider.Now,
+            CreatedUtc = _dateTimeProvider.Now,
             IsRemoved = false
         };
     }

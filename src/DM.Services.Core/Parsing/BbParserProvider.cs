@@ -23,6 +23,18 @@ public class BbParserProvider : IBbParserProvider
     private static readonly Tag Italic = new("i", "<em>", "</em>");
     private static readonly Tag Underlined = new("u", "<u>", "</u>");
     private static readonly Tag Strike = new("s", "<s>", "</s>");
+    private static readonly Tag StrikeAlias = new("strike", "<s>", "</s>");
+
+    // NSFW - same structure as spoiler, but with nsfw-head toggle and nsfw-spoiler content
+    private static readonly Tag Nsfw = new("nsfw",
+        "<a href=\"javascript:void(0)\" class=\"nsfw-head\" data-swaptext=\"Скрыть шокирующий контент\">Показать шокирующий контент</a><div class=\"nsfw-spoiler\">",
+        "</div>");
+
+    // Warning block - red highlighted block for important warnings
+    private static readonly Tag Warning = new("warning", "<div class=\"warning-block\">", "</div>");
+
+    // Mod block - green highlighted block for moderator messages (Common and Message contexts only)
+    private static readonly Tag Mod = new("mod", "<div class=\"mod-block\">", "</div>");
     private static readonly Tag Preformatted = new("pre", $"<pre class=\"{CodeClassName}\">", "</pre>");
     private static readonly ListTag OrderedList = new("ol", "<ol>", "</ol>");
     private static readonly ListTag UnorderedList = new("ul", "<ul>", "</ul>");
@@ -50,6 +62,9 @@ public class BbParserProvider : IBbParserProvider
     private static readonly Tag Tab = new("tab", "&nbsp;&nbsp;&nbsp;");
 
     private static readonly CodeTag Code = new("code", $"<pre class=\"{CodeClassName}\">", "</pre>");
+
+    // Noparse - outputs content as-is without parsing inner BBCode tags
+    private static readonly CodeTag Noparse = new("noparse", "", "");
 
     private static readonly Tag Private = new("private", $"<div class=\"{PrivateClassName}\">",
         $"</div><div class=\"{PrivateHeaderClassName}\">Получатели: {{value}}</div>", true, false);
@@ -83,43 +98,49 @@ public class BbParserProvider : IBbParserProvider
         {"\n", "<br />"}
     };
 
+    // Base tags available in all contexts
     private static TagSetBuilder DefaultTags => new(new[]
     {
-        Strong, Italic, Underlined, Strike,
+        Strong, Italic, Underlined, Strike, StrikeAlias,
         Preformatted, Spoiler, Quote, Image,
         UnorderedList, OrderedList, ListItem,
-        Link, Tab, Code
+        Link, Tab, Code, Noparse, Nsfw, Warning
     });
 
     private static TagSetBuilder DefaultSafeTags => DefaultTags.Without(Preformatted, Image).With(SafeImage);
 
+    // Common context: base tags + mod
     private static readonly Lazy<IBbParser> CommonParser = new(() =>
-        new BbParser(DefaultTags.Build(),
-            BbParser.SecuritySubstitutions, CommonSubstitutions));
+        new BbParserWrapper(new BbParser(DefaultTags.With(Mod).Build(),
+            BbParser.SecuritySubstitutions, CommonSubstitutions)));
 
-    private static readonly Lazy<IBbParser> PostParser = new(
-        new BbParser(DefaultTags.With(Private).Build(),
-            BbParser.SecuritySubstitutions, CommonSubstitutions));
+    // Post context: base tags + private (no mod)
+    private static readonly Lazy<IBbParser> PostParser = new(() =>
+        new BbParserWrapper(new BbParser(DefaultTags.With(Private).Build(),
+            BbParser.SecuritySubstitutions, CommonSubstitutions)));
 
-    private static readonly Lazy<IBbParser> InfoParser = new(
-        new BbParser(DefaultTags.With(Head).Build(),
-            BbParser.SecuritySubstitutions, InfoSubstitutions));
+    // Info context: base tags + head (no mod, no private)
+    private static readonly Lazy<IBbParser> InfoParser = new(() =>
+        new BbParserWrapper(new BbParser(DefaultTags.With(Head).Build(),
+            BbParser.SecuritySubstitutions, InfoSubstitutions)));
 
-    private static readonly Lazy<IBbParser> ConversationMessageParser = new(
-        new BbParser(DefaultTags.Build(),
-            BbParser.SecuritySubstitutions, ConversationMessageSubstitutions));
+    // Conversation/Message context: base tags + mod
+    private static readonly Lazy<IBbParser> ConversationMessageParser = new(() =>
+        new BbParserWrapper(new BbParser(DefaultTags.With(Mod).Build(),
+            BbParser.SecuritySubstitutions, ConversationMessageSubstitutions)));
 
-    private static readonly Lazy<IBbParser> GeneralChatMessageParser = new(
-        new BbParser(DefaultSafeTags.With(Preformatted).Build(),
-            BbParser.SecuritySubstitutions, CommonSubstitutions));
+    // General chat context: safe tags + preformatted + mod
+    private static readonly Lazy<IBbParser> GeneralChatMessageParser = new(() =>
+        new BbParserWrapper(new BbParser(DefaultSafeTags.With(Preformatted, Mod).Build(),
+            BbParser.SecuritySubstitutions, CommonSubstitutions)));
 
-    private static readonly Lazy<IBbParser> SafePostParser = new(
-        new BbParser(DefaultSafeTags.With(Private).Build(),
-            BbParser.SecuritySubstitutions, SafeSubstitutions));
+    private static readonly Lazy<IBbParser> SafePostParser = new(() =>
+        new BbParserWrapper(new BbParser(DefaultSafeTags.With(Private).Build(),
+            BbParser.SecuritySubstitutions, SafeSubstitutions)));
 
-    private static readonly Lazy<IBbParser> SafeRatingParser = new(
-        new BbParser(DefaultSafeTags.Build(),
-            BbParser.SecuritySubstitutions, SafeSubstitutions));
+    private static readonly Lazy<IBbParser> SafeRatingParser = new(() =>
+        new BbParserWrapper(new BbParser(DefaultSafeTags.Build(),
+            BbParser.SecuritySubstitutions, SafeSubstitutions)));
 
     /// <inheritdoc />
     public IBbParser CurrentCommon => CommonParser.Value;

@@ -1,14 +1,14 @@
 namespace DM.Services.Core.Dto.Enums;
 
 /// <summary>
-/// Character status
+/// Character status (simplified to 4 values)
 /// </summary>
 public enum CharacterStatus
 {
     /// <summary>
-    /// The character requires GM review
+    /// The character requires GM review (was Registration)
     /// </summary>
-    Registration = 0,
+    UnderReview = 0,
 
     /// <summary>
     /// GM declined the character
@@ -21,12 +21,8 @@ public enum CharacterStatus
     Active = 2,
 
     /// <summary>
-    /// GM killed the character or forced the player to leave
+    /// Character is no longer active in the game (dead, left, or exiled)
+    /// Check IsDead, IsPlayerLeft, IsPlayerExiled flags for details
     /// </summary>
-    Dead = 3,
-
-    /// <summary>
-    /// Player left the game voluntarily
-    /// </summary>
-    Left = 4
+    Retired = 3
 }

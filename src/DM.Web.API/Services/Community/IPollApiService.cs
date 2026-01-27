@@ -45,4 +45,18 @@ public interface IPollApiService
     /// <param name="pollId">Poll identifier</param>
     /// <returns></returns>
     Task<Envelope<Poll>> Unvote(Guid pollId);
+
+    /// <summary>
+    /// Update existing poll
+    /// </summary>
+    /// <param name="id">Poll identifier</param>
+    /// <param name="poll">Poll update data</param>
+    /// <returns></returns>
+    Task<Envelope<Poll>> Update(Guid id, Poll poll);
+
+    /// <summary>
+    /// Delete poll (soft delete)
+    /// </summary>
+    /// <param name="id">Poll identifier</param>
+    Task Delete(Guid id);
 }

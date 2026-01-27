@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using DM.Services.Core.Dto.Enums;
 
 namespace DM.Web.API.Dto.Community;
@@ -22,6 +23,7 @@ public class Poll
     /// <summary>
     /// End date (UTC)
     /// </summary>
+    [JsonPropertyName("ends")]
     public DateTimeOffset EndsUtc { get; set; }
 
     /// <summary>

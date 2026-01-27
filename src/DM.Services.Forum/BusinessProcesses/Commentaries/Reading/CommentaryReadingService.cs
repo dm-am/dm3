@@ -17,7 +17,7 @@ namespace DM.Services.Forum.BusinessProcesses.Commentaries.Reading;
 internal class CommentaryReadingService : ICommentaryReadingService
 {
     private readonly ITopicReadingService _topicReadingService;
-    private readonly IForumReadingService _forumReadingService;
+    private readonly IBoardReadingService _boardReadingService;
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly ICommentaryReadingRepository _commentaryRepository;
     private readonly IIdentityProvider _identityProvider;
@@ -25,13 +25,13 @@ internal class CommentaryReadingService : ICommentaryReadingService
     /// <inheritdoc />
     public CommentaryReadingService(
         ITopicReadingService topicReadingService,
-        IForumReadingService forumReadingService,
+        IBoardReadingService boardReadingService,
         IIdentityProvider identityProvider,
         IUnreadCountersRepository unreadCountersRepository,
         ICommentaryReadingRepository commentaryRepository)
     {
         _topicReadingService = topicReadingService;
-        _forumReadingService = forumReadingService;
+        _boardReadingService = boardReadingService;
         _unreadCountersRepository = unreadCountersRepository;
         _commentaryRepository = commentaryRepository;
         _identityProvider = identityProvider;
@@ -67,21 +67,21 @@ internal class CommentaryReadingService : ICommentaryReadingService
     }
 
     /// <inheritdoc />
-    public async Task MarkAsRead(string forumTitle)
+    public async Task MarkAsRead(string boardTitle)
     {
-        var forum = await _forumReadingService.GetForum(forumTitle);
+        var board = await _boardReadingService.GetBoard(boardTitle);
         await _unreadCountersRepository.FlushAll(_identityProvider.Current.User.UserId,
-            UnreadEntryType.Message, forum.Id);
+            UnreadEntryType.Message, board.Id);
     }
 
     /// <inheritdoc />
     public async Task MarkAllAsRead()
     {
-        var forums = await _forumReadingService.GetForaList();
+        var boards = await _boardReadingService.GetBoardsList();
         var userId = _identityProvider.Current.User.UserId;
-        foreach (var forum in forums)
+        foreach (var board in boards)
         {
-            await _unreadCountersRepository.FlushAll(userId, UnreadEntryType.Message, forum.Id);
+            await _unreadCountersRepository.FlushAll(userId, UnreadEntryType.Message, board.Id);
         }
     }
 }

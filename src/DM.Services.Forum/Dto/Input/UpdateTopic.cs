@@ -23,9 +23,9 @@ public class UpdateTopic
     public string Text { get; set; }
 
     /// <summary>
-    /// New parent forum title
+    /// New parent board title
     /// </summary>
-    public string ForumTitle { get; set; }
+    public string BoardTitle { get; set; }
 
     /// <summary>
     /// Is attached

@@ -38,12 +38,12 @@ public class User : IUser, IRemovable
     public string Email { get; set; }
 
     /// <summary>
-    /// Registration moment
+    /// Registration moment (UTC)
     /// </summary>
-    public DateTimeOffset RegistrationDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <inheritdoc />
-    public DateTimeOffset? LastVisitDate { get; set; }
+    public DateTimeOffset? LastActivityUtc { get; set; }
 
     /// <summary>
     /// Timezone identifier (OS-specific)
@@ -73,6 +73,11 @@ public class User : IUser, IRemovable
     /// </summary>
     [MaxLength(300)]
     public string PasswordHash { get; set; }
+
+    /// <summary>
+    /// Password hash algorithm version (1 = SHA256, 2 = PBKDF2)
+    /// </summary>
+    public int PasswordHashVersion { get; set; } = 1;
 
     /// <inheritdoc />
     public bool RatingDisabled { get; set; }
@@ -164,6 +169,12 @@ public class User : IUser, IRemovable
     [MaxLength(200)]
     public string MediumProfilePictureUrl { get; set; }
 
+    /// <summary>
+    /// Discord account ID for OAuth integration
+    /// </summary>
+    [MaxLength(50)]
+    public string? DiscordId { get; set; }
+
     #region Profile navigations
 
     /// <summary>
@@ -219,8 +230,8 @@ public class User : IUser, IRemovable
     /// <summary>
     /// User moderation links
     /// </summary>
-    [InverseProperty(nameof(ForumModerator.User))]
-    public virtual ICollection<ForumModerator> ForumModerators { get; set; }
+    [InverseProperty(nameof(BoardModerator.User))]
+    public virtual ICollection<BoardModerator> BoardModerators { get; set; }
 
     #endregion
 

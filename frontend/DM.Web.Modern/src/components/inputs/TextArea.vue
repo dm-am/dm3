@@ -1,35 +1,76 @@
 <template>
   <div>
-    <div class="controls">TODO: элементы управления</div>
-    <textarea :value="value" :disabled="disabled" @input="$emit('input', $event.target.value)" />
+    <textarea
+      ref="textareaRef"
+      :value="modelValue"
+      :disabled="disabled"
+      :placeholder="placeholder"
+      @input="onInput"
+    />
   </div>
 </template>
 
-<script lang="ts">
-import { Component, Prop, Vue } from 'vue-property-decorator';
+<script setup lang="ts">
+import { ref, watch, nextTick, onMounted } from "vue";
 
-@Component({})
-export default class TextArea extends Vue {
-  @Prop()
-  private value!: string;
+const props = defineProps<{
+  modelValue: string;
+  disabled?: boolean;
+  placeholder?: string;
+}>();
+const emit = defineEmits<{
+  (e: "update:modelValue", value: string): void;
+}>();
 
-  @Prop()
-  private disabled!: boolean;
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
 
-  private textUpdate(evt: any): void {
-    this.$emit('input', evt.target.value);
+function adjustHeight() {
+  const textarea = textareaRef.value;
+  if (textarea) {
+    textarea.style.height = "auto";
+    textarea.style.height = textarea.scrollHeight + "px";
   }
 }
+
+const onInput = (event: Event) => {
+  const target = event.target as HTMLTextAreaElement;
+  emit("update:modelValue", target.value);
+  adjustHeight();
+};
+
+watch(
+  () => props.modelValue,
+  () => {
+    nextTick(adjustHeight);
+  },
+);
+
+onMounted(adjustHeight);
 </script>
 
-<style lang="stylus" scoped>
-.controls
-  secondary()
+<style scoped lang="sass">
+@import "src/assets/styles/Themes"
 
 textarea
-  display block
-  height $large
-  width 100%
-  min-width $gridStep * 100
-  box-sizing border-box
+  display: block
+  width: 100%
+  min-height: $big * 3
+  box-sizing: border-box
+  padding: $small
+  resize: none
+  overflow: hidden
+  font-family: inherit
+  font-size: inherit
+  background-color: $input-bg-overlay
+  color: $text
+  border: 1px dashed $border
+
+  &:focus
+    outline: none
+    border-style: solid
+    border-color: $button-border-hover
+
+  &::placeholder
+    color: $text-muted
+    opacity: 0.6
 </style>

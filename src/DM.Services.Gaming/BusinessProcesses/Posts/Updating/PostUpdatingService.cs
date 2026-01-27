@@ -84,8 +84,8 @@ internal class PostUpdatingService : IPostUpdatingService
         if (updateBuilder.HasChanges())
         {
             updateBuilder
-                .Field(p => p.LastUpdateDate, dateTimeProvider.Now)
-                .Field(p => p.LastUpdateUserId, currentUserId);
+                .Field(p => p.ModifiedUtc, dateTimeProvider.Now)
+                .Field(p => p.ModifiedByUserId, currentUserId);
         }
 
         var updatedPost = await repository.Update(updateBuilder);

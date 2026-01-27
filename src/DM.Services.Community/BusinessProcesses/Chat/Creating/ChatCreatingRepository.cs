@@ -4,6 +4,7 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Services.Community.BusinessProcesses.Chat.Reading;
 using DM.Services.DataAccess;
+using DM.Services.DataAccess.BusinessObjects.Messaging;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Services.Community.BusinessProcesses.Chat.Creating;
@@ -24,13 +25,13 @@ internal class ChatCreatingRepository : IChatCreatingRepository
     }
 
     /// <inheritdoc />
-    public async Task<ChatMessage> Create(DataAccess.BusinessObjects.Common.ChatMessage chatMessage)
+    public async Task<ChatMessage> Create(Message message)
     {
-        _dbContext.ChatMessages.Add(chatMessage);
+        _dbContext.Messages.Add(message);
         await _dbContext.SaveChangesAsync();
 
-        return await _dbContext.ChatMessages
-            .Where(m => m.ChatMessageId == chatMessage.ChatMessageId)
+        return await _dbContext.Messages
+            .Where(m => m.MessageId == message.MessageId)
             .ProjectTo<ChatMessage>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }

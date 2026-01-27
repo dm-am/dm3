@@ -1,9 +1,9 @@
 <template>
-  <div id="app" :class="`theme_${theme}`">
+  <div id="app">
     <div class="main" ref="scroll">
       <div class="content-container">
         <div class="content-wrapper">
-          <dm-header />
+          <the-header />
           <div class="content-body">
             <div class="content-menu">
               <router-view name="menu" />
@@ -16,150 +16,137 @@
             </div>
           </div>
         </div>
-        <dm-footer />
+        <the-footer />
       </div>
-      <portal-target name="lightbox" multiple />
-      <portal-target name="popup" class="popup-container" multiple />
-      <portal-target name="notifications" class="notifications-container" />
     </div>
+    <modals-container />
   </div>
 </template>
 
-<script lang="ts">
-import { Component, Vue } from 'vue-property-decorator';
-import { Action, Getter } from 'vuex-class';
-import DmFooter from '@/views/layout/Footer.vue';
-import DmHeader from '@/views/layout/Header.vue';
+<script setup lang="ts">
+import { useUiStore, useUserStore, useMessagingStore } from "@/stores";
+import { onMounted, watch } from "vue";
+import { ModalsContainer } from "vue-final-modal";
+import TheHeader from "@/views/layout/TheHeader.vue";
+import TheFooter from "@/views/layout/TheFooter.vue";
+import { useGlobalSignalR } from "@/composables/useSignalR";
+import { EventType } from "@/api/models/notifications/signalr";
+import type { SignalRNotification } from "@/api/models/notifications/signalr";
 
-@Component({
-  components: {
-    DmHeader,
-    DmFooter,
+const uiStore = useUiStore();
+const userStore = useUserStore();
+const messagingStore = useMessagingStore();
+const { connect: connectSignalR, disconnect: disconnectSignalR, onNotification } = useGlobalSignalR();
+
+// Map ColorSchema to CSS theme class (now 1:1 mapping)
+const themeToClass = (theme: string) => theme;
+
+watch(
+  () => uiStore.theme,
+  (value, oldValue) => {
+    const html = document.querySelector("html")!;
+    if (oldValue) {
+      html.classList.remove(`theme_${themeToClass(oldValue)}`);
+    }
+    html.classList.add(`theme_${themeToClass(value)}`);
   },
-})
-export default class DmApp extends Vue {
-  public $refs!: {
-    scroll: HTMLElement;
-  }
+  { immediate: true },
+);
 
-  @Getter('ui/theme')
-  private theme!: string;
-
-  @Action('fetchUser')
-  private fetchUser: any;
-
-  private mounted(): void {
-    this.fetchUser();
+// Handle SignalR notifications
+function handleNotification(notification: SignalRNotification) {
+  switch (notification.eventType) {
+    case EventType.NewMessage:
+    case EventType.NewChatMessage:
+      // Refresh unread count when new message arrives
+      messagingStore.fetchUnreadCount();
+      break;
+    // Add more event handlers as needed
   }
 }
+
+// Connect/disconnect SignalR based on authentication state
+watch(
+  () => userStore.isAuthenticated,
+  async (isAuthenticated) => {
+    if (isAuthenticated) {
+      const connected = await connectSignalR();
+      if (connected) {
+        onNotification(handleNotification);
+      }
+    } else {
+      await disconnectSignalR();
+    }
+  },
+);
+
+onMounted(async () => {
+  // User уже инициализирован из localStorage в store
+  // Параллельно обновляем данные с сервера
+  userStore.fetchUser();
+  messagingStore.fetchUnreadCount();
+
+  // Connect to SignalR if already authenticated
+  if (userStore.isAuthenticated) {
+    const connected = await connectSignalR();
+    if (connected) {
+      onNotification(handleNotification);
+    }
+  }
+});
 </script>
 
-<style lang="stylus">
-html, body, #app
-  height 100%
-  margin 0
-  overflow hidden
-
-body
-  font-family PT Sans
-  font-size $fontSize
-  line-height 1.3
-  word-wrap break-word
-
-.v--modal
-  theme(background-color, $background)
-.v--modal-overlay
-  theme(background-color, $overlayBackground)
-  overflow auto
-.v--modal-box
-  margin-top $big
-  margin-bottom $big
+<style scoped lang="sass">
+@import "src/assets/styles/Layout"
+@import "src/assets/styles/Themes"
 
 .main
-  height 100%
-  min-height 100%
-  overflow-y scroll
-  theme(background-color, $background)
-  theme(color, $text)
-  transition color $animationTime, background-color $animationTime
+  height: 100%
+  min-height: 100%
+  overflow-y: scroll
+  background-color: $bg-page
 
 .content-container
-  position relative
-  height 100%
-  min-width $minWidth
+  position: relative
+  min-height: 100%
+  min-width: $min-width
   &:before
-    content ''
-    position absolute
-    left 0
-    right 0
-    top 0
-    bottom 0
-    background url('~@/assets/header_bg.gif') left top repeat-x
-    theme(filter, colorPair(none, invert(87%)))
-    transition filter $animationTime
+    content: ''
+    position: absolute
+    left: 0
+    right: 0
+    top: 0
+    height: $header-height
+    background: url('@/assets/images/header_bg.gif') left top repeat-x
+    background-size: auto $header-height
+    filter: $filter-invert
 
 .content-wrapper
-  position relative
-  margin auto
-  min-height 100%
-  min-width $minWidth
-  max-width $maxWidth
+  position: relative
+  min-height: 100%
+  min-width: $min-width
+  padding-bottom: $footer-height
 
 .content-body
-  display flex
-  padding-bottom $footerHeight + $big
+  display: flex
+  padding-bottom: $footer-height + $big
 
 .content-menu
-  menuContainer()
-
-.content-sidebar
-  sidebarContainer()
+  width: $sidebar-width
+  flex-shrink: 0
+  padding-left: $big
+  box-sizing: border-box
 
 .content
-  flex-grow 1
-  min-width 0 // fix inner overflow elements https://www.w3.org/TR/css-flexbox-1/#flex-common
-  margin-left 0
-  margin-right $big
+  flex-grow: 1
+  padding: 0 $big
+  box-sizing: border-box
 
-a
-  theme(color, $activeText)
-  text-decoration none
-  transition color $animationTime
-  cursor pointer
-  &:hover
-    theme(color, $activeHoverText)
-
-.page-title
-  pageTitle()
-
-.content-title
-  header()
-
-.content-minor-title
-  minorTitle()
-
-.popup-container
-  position absolute
-  top 0
-  left 0
-  z-index 1000
-  theme(color, $text)
-
-.notifications-container
-  position absolute
-  bottom 0
-  right $medium
-  z-index 1000
-
-.quote
-  padding $small
-  theme(background-color, $quoteBackground)
-  themeExtend(border-left, $minor solid, $quoteOutline)
-
-.info-head
-  display inline-block
-  margin $medium 0 $small
-  font-size $titleFontSize
-  font-weight normal
-  theme(color, $highlightText)
+.content-sidebar
+  width: $sidebar-width
+  flex-shrink: 0
+  padding-right: $big
+  box-sizing: border-box
+  @media (max-width: $min-width)
+    display: none
 </style>

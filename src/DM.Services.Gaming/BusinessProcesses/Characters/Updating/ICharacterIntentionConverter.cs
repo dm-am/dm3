@@ -13,7 +13,10 @@ internal interface ICharacterIntentionConverter
     /// </summary>
     /// <param name="statusFrom">Current status</param>
     /// <param name="statusTo">Desired status</param>
+    /// <param name="isDead">Character is dead (when Retired)</param>
+    /// <param name="isPlayerLeft">Player left voluntarily (when Retired)</param>
     /// <returns>Authorized intention and invoked event type</returns>
     (CharacterIntention intention, EventType eventType) Convert(
-        CharacterStatus statusFrom, CharacterStatus statusTo);
+        CharacterStatus statusFrom, CharacterStatus statusTo,
+        bool isDead = false, bool isPlayerLeft = false);
 }

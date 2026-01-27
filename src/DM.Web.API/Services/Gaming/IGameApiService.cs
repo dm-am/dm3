@@ -42,14 +42,14 @@ public interface IGameApiService
     /// </summary>
     /// <param name="gameId">Game identifier</param>
     /// <returns></returns>
-    Task<Envelope<Game>> GetDetails(Guid gameId);
+    Task<Envelope<GameDetails>> GetDetails(Guid gameId);
 
     /// <summary>
     /// Create new game
     /// </summary>
     /// <param name="game">Game API model</param>
     /// <returns>Envelope for created game</returns>
-    Task<Envelope<Game>> Create(Game game);
+    Task<Envelope<GameDetails>> Create(GameDetails game);
 
     /// <summary>
     /// Update existing game
@@ -57,7 +57,7 @@ public interface IGameApiService
     /// <param name="gameId">Game identifier</param>
     /// <param name="game">Game API model</param>
     /// <returns>Envelope for updated game</returns>
-    Task<Envelope<Game>> Update(Guid gameId, Game game);
+    Task<Envelope<GameDetails>> Update(Guid gameId, GameDetails game);
 
     /// <summary>
     /// Delete existing game
@@ -71,4 +71,19 @@ public interface IGameApiService
     /// </summary>
     /// <returns></returns>
     Task<ListEnvelope<Tag>> GetTags();
+
+    /// <summary>
+    /// Get game notes (private notepad for GM)
+    /// </summary>
+    /// <param name="gameId">Game identifier</param>
+    /// <returns>Envelope with game notes</returns>
+    Task<Envelope<GameNotes>> GetNotes(Guid gameId);
+
+    /// <summary>
+    /// Update game notes
+    /// </summary>
+    /// <param name="gameId">Game identifier</param>
+    /// <param name="notes">Notes to update</param>
+    /// <returns>Envelope with updated game notes</returns>
+    Task<Envelope<GameNotes>> UpdateNotes(Guid gameId, GameNotes notes);
 }

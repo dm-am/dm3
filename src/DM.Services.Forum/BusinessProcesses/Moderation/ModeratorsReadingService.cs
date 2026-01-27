@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using DM.Services.Core.Caching;
 using DM.Services.Core.Dto;
 using DM.Services.Forum.BusinessProcesses.Boards;
 
@@ -8,22 +9,28 @@ namespace DM.Services.Forum.BusinessProcesses.Moderation;
 /// <inheritdoc />
 internal class ModeratorsReadingService : IModeratorsReadingService
 {
-    private readonly IForumReadingService _forumReadingService;
+    private readonly IBoardReadingService _boardReadingService;
     private readonly IModeratorRepository _moderatorRepository;
+    private readonly ICache _cache;
 
     /// <inheritdoc />
     public ModeratorsReadingService(
-        IForumReadingService forumReadingService,
-        IModeratorRepository moderatorRepository)
+        IBoardReadingService boardReadingService,
+        IModeratorRepository moderatorRepository,
+        ICache cache)
     {
-        _forumReadingService = forumReadingService;
+        _boardReadingService = boardReadingService;
         _moderatorRepository = moderatorRepository;
+        _cache = cache;
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetModerators(string forumTitle)
+    public async Task<IEnumerable<GeneralUser>> GetModerators(string boardTitle)
     {
-        var forum = await _forumReadingService.GetForum(forumTitle);
-        return await _moderatorRepository.Get(forum.Id);
+        var board = await _boardReadingService.GetBoard(boardTitle);
+        return await _cache.GetOrCreate(
+            $"board_moderators_{board.Id}",
+            () => _moderatorRepository.Get(board.Id),
+            CachePolicy.LongLived);
     }
 }

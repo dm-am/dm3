@@ -1,6 +1,6 @@
 using System;
 using DM.Services.Core.Implementation;
-using DM.Services.DataAccess.BusinessObjects.Common;
+using DM.Services.DataAccess.BusinessObjects.Messaging;
 
 namespace DM.Services.Community.BusinessProcesses.Chat.Creating;
 
@@ -20,12 +20,13 @@ internal class ChatMessageFactory : IChatMessageFactory
     }
 
     /// <inheritdoc />
-    public ChatMessage Create(CreateChatMessage createChatMessage, Guid userId)
+    public Message Create(CreateChatMessage createChatMessage, Guid userId)
     {
-        return new ChatMessage
+        return new Message
         {
-            ChatMessageId = _guidFactory.Create(),
-            CreateDate = _dateTimeProvider.Now,
+            MessageId = _guidFactory.Create(),
+            ConversationId = Message.GlobalChatId,
+            CreatedUtc = _dateTimeProvider.Now,
             UserId = userId,
             Text = createChatMessage.Text.Trim()
         };

@@ -11,6 +11,7 @@ using DM.Services.DataAccess.BusinessObjects.Users;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Tests.Core;
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Language.Flow;
 using Xunit;
@@ -47,9 +48,11 @@ public class AuthenticationServiceTokenShould : UnitTestBase
             .Setup(f => f.Create<User>(It.IsAny<Guid>()))
             .Returns(updateBuilder.Object);
 
+        var loginAttemptTracker = Mock<ILoginAttemptTracker>();
+        var logger = Mock<ILogger<AuthenticationService>>();
         service = new AuthenticationService(securityManager.Object, cryptoService.Object,
             authenticationRepository.Object, sessionFactory.Object, dateTimeProvider.Object,
-            identityProvider.Object, updateBuilderFactory.Object);
+            identityProvider.Object, updateBuilderFactory.Object, loginAttemptTracker.Object, logger.Object);
     }
 
     [Fact]
@@ -172,7 +175,7 @@ public class AuthenticationServiceTokenShould : UnitTestBase
             .Setup(p => p.Now)
             .Returns(new DateTime(2018, 06, 11, 9, 50, 0));
         updateBuilder
-            .Setup(b => b.Field(u => u.LastVisitDate, It.IsAny<DateTimeOffset>()))
+            .Setup(b => b.Field(u => u.LastActivityUtc, It.IsAny<DateTimeOffset>()))
             .Returns(updateBuilder.Object);
 
         var actual = await service.Authenticate("token");
@@ -223,7 +226,7 @@ public class AuthenticationServiceTokenShould : UnitTestBase
             .Setup(p => p.Now)
             .Returns(new DateTime(2018, 06, 11, 10, 10, 0));
         updateBuilder
-            .Setup(b => b.Field(u => u.LastVisitDate, It.IsAny<DateTimeOffset>()))
+            .Setup(b => b.Field(u => u.LastActivityUtc, It.IsAny<DateTimeOffset>()))
             .Returns(updateBuilder.Object);
 
         var actual = await service.Authenticate("token");
@@ -267,7 +270,7 @@ public class AuthenticationServiceTokenShould : UnitTestBase
             .Setup(r => r.FindUserSession(It.IsAny<Guid>()))
             .ReturnsAsync(session);
         updateBuilder
-            .Setup(b => b.Field(u => u.LastVisitDate, It.IsAny<DateTimeOffset>()))
+            .Setup(b => b.Field(u => u.LastActivityUtc, It.IsAny<DateTimeOffset>()))
             .Returns(updateBuilder.Object);
 
         var actual = await service.Authenticate("token");

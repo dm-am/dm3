@@ -84,7 +84,7 @@ public class WebsiteReviewController : ControllerBase
     /// <response code="410">Review not found</response>
     [HttpDelete("{id}", Name = nameof(DeleteWebsiteReview))]
     [AuthenticationRequired]
-    [ProducesResponseType(240)]
+    [ProducesResponseType(204)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 410)]
     public async Task<IActionResult> DeleteWebsiteReview(Guid id)

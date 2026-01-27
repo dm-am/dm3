@@ -41,7 +41,7 @@ internal class ChatIntentionResolver :
         // Author can edit/delete within 15 minutes
         if (message.Author?.UserId != user.UserId) return false;
 
-        var timeSinceCreation = DateTimeOffset.UtcNow - message.CreateDate;
+        var timeSinceCreation = DateTimeOffset.UtcNow - message.CreatedUtc;
         return timeSinceCreation <= EditTimeLimit;
     }
 }

@@ -23,8 +23,9 @@ public class DiceRoll
     /// <summary>
     /// Creation moment
     /// </summary>
+    [BsonElement("CreateDate")]
     [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
-    public DateTime CreateDate { get; set; }
+    public DateTime CreatedUtc { get; set; }
 
     /// <summary>
     /// Is appended flag
@@ -52,9 +53,10 @@ public class DiceRoll
     public int EdgesCount { get; set; }
 
     /// <summary>
-    /// Maximum number of dice blast (no blast if 0, any number of blast if null)
+    /// Maximum number of dice explosions (no explosion if 0, unlimited explosions if null)
     /// </summary>
-    public int? BlastCount { get; set; }
+    [BsonElement("BlastCount")]
+    public int? ExplosionCount { get; set; }
 
     /// <summary>
     /// Constant bonus
@@ -88,7 +90,8 @@ public class RollResult
     public bool IsCritical { get; set; }
 
     /// <summary>
-    /// Blasted flag
+    /// Exploded flag (die rolled maximum value and triggered re-roll)
     /// </summary>
-    public bool IsBlasted { get; set; }
+    [BsonElement("IsBlasted")]
+    public bool IsExploded { get; set; }
 }

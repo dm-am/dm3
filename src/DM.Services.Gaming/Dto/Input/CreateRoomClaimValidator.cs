@@ -16,7 +16,7 @@ internal class CreateRoomClaimValidator : AbstractValidator<CreateRoomClaim>
             .Must(p => p != RoomAccessPolicy.NoAccess).WithMessage(ValidationError.Invalid);
 
         When(c => c.CharacterId.HasValue, () =>
-            RuleFor(c => c.CharacterId.Value)
+            RuleFor(c => c.CharacterId!.Value)
                 .NotEmpty().WithMessage(ValidationError.Empty));
 
         When(c => !string.IsNullOrEmpty(c.ReaderLogin), () =>

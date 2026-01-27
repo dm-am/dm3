@@ -14,19 +14,19 @@ namespace DM.Web.API.Controllers.v1.Forums;
 [ApiExplorerSettings(GroupName = "Forum")]
 public class BoardController : ControllerBase
 {
-    private readonly IForumApiService _forumApiService;
+    private readonly IBoardApiService _boardApiService;
     private readonly ITopicApiService _topicApiService;
     private readonly ICommentApiService _commentApiService;
     private readonly IModeratorsApiService _moderatorsApiService;
 
     /// <inheritdoc />
     public BoardController(
-        IForumApiService forumApiService,
+        IBoardApiService boardApiService,
         ITopicApiService topicApiService,
         ICommentApiService commentApiService,
         IModeratorsApiService moderatorsApiService)
     {
-        _forumApiService = forumApiService;
+        _boardApiService = boardApiService;
         _topicApiService = topicApiService;
         _commentApiService = commentApiService;
         _moderatorsApiService = moderatorsApiService;
@@ -41,7 +41,7 @@ public class BoardController : ControllerBase
     public async Task<IActionResult> GetBoards()
     {
         Response.Headers.CacheControl = "public, max-age=60";
-        return Ok(await _forumApiService.GetBoards());
+        return Ok(await _boardApiService.GetBoards());
     }
 
     /// <summary>
@@ -53,7 +53,7 @@ public class BoardController : ControllerBase
     [HttpGet("{id}", Name = nameof(GetBoard))]
     [ProducesResponseType(typeof(Envelope<Board>), 200)]
     [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> GetBoard(string id) => Ok(await _forumApiService.GetBoard(id));
+    public async Task<IActionResult> GetBoard(string id) => Ok(await _boardApiService.GetBoard(id));
 
     /// <summary>
     /// Mark all comments on board as read

@@ -6,32 +6,32 @@ using DM.Services.Forum.Dto.Output;
 namespace DM.Services.Forum.Dto;
 
 /// <summary>
-/// Profile for forum DTO and DAL mapping
+/// Profile for board DTO and DAL mapping
 /// </summary>
-internal class ForumProfile : Profile
+internal class BoardProfile : Profile
 {
     /// <inheritdoc />
-    public ForumProfile()
+    public BoardProfile()
     {
-        CreateMap<Output.Forum, Output.Forum>();
+        CreateMap<Output.Board, Output.Board>();
 
-        CreateMap<DataAccess.BusinessObjects.Boards.Forum, Output.Forum>()
-            .ForMember(d => d.Id, s => s.MapFrom(f => f.ForumId))
+        CreateMap<DataAccess.BusinessObjects.Boards.Board, Output.Board>()
+            .ForMember(d => d.Id, s => s.MapFrom(b => b.BoardId))
             .ForMember(d => d.ModeratorIds,
-                s => s.MapFrom(f => f.Moderators.Select(m => m.UserId)))
-            .ForMember(d => d.LastComment, s => s.MapFrom(f => f.LastCommentId.HasValue
-                ? new ForumLastComment
+                s => s.MapFrom(b => b.Moderators.Select(m => m.UserId)))
+            .ForMember(d => d.LastComment, s => s.MapFrom(b => b.LastCommentId.HasValue
+                ? new BoardLastComment
                 {
-                    Id = f.LastCommentId.Value,
-                    TopicId = f.LastCommentTopicId!.Value,
-                    CreateDate = f.LastCommentDate!.Value,
-                    Author = f.LastCommentAuthor != null
+                    Id = b.LastCommentId.Value,
+                    TopicId = b.LastCommentTopicId!.Value,
+                    CreatedUtc = b.LastCommentUtc!.Value,
+                    Author = b.LastCommentAuthor != null
                         ? new GeneralUser
                         {
-                            UserId = f.LastCommentAuthor.UserId,
-                            Login = f.LastCommentAuthor.Login,
-                            Role = f.LastCommentAuthor.Role,
-                            Status = f.LastCommentAuthor.Status
+                            UserId = b.LastCommentAuthor.UserId,
+                            Login = b.LastCommentAuthor.Login,
+                            Role = b.LastCommentAuthor.Role,
+                            Status = b.LastCommentAuthor.Status
                         }
                         : null
                 }

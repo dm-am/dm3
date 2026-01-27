@@ -24,7 +24,7 @@ internal class MessageFactory : IMessageFactory
     {
         MessageId = _guidFactory.Create(),
         ConversationId = createMessage.ConversationId,
-        CreateDate = _dateTimeProvider.Now,
+        CreatedUtc = _dateTimeProvider.Now,
         UserId = userId,
         Text = createMessage.Text,
         IsRemoved = false

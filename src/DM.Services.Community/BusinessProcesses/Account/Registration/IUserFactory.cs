@@ -13,6 +13,7 @@ internal interface IUserFactory
     /// <param name="registration">Registration DTO model</param>
     /// <param name="salt">Password salt</param>
     /// <param name="hash">Password hash</param>
+    /// <param name="hashVersion">Password hash algorithm version</param>
     /// <returns>DAL model for user</returns>
-    User Create(UserRegistration registration, string salt, string hash);
+    User Create(UserRegistration registration, string salt, string hash, int hashVersion);
 }

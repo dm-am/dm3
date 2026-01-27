@@ -9,6 +9,7 @@ using DM.Services.Authentication.Repositories;
 using DM.Services.Core.Dto.Enums;
 using DM.Tests.Core;
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Language.Flow;
 using Xunit;
@@ -37,8 +38,11 @@ public class AuthenticationServiceLoginShould : UnitTestBase
         sessionFactory = Mock<ISessionFactory>();
         var identityProvider = Mock<IIdentityProvider>();
         identityProvider.Setup(p => p.Current).Returns(Identity.Guest);
+        var loginAttemptTracker = Mock<ILoginAttemptTracker>();
+        loginAttemptTracker.Setup(t => t.GetDelayForUser(It.IsAny<string>())).ReturnsAsync(0);
+        var logger = Mock<ILogger<AuthenticationService>>();
         service = new AuthenticationService(securityManager.Object, cryptoService.Object,
-            authenticationRepository.Object, sessionFactory.Object, null, identityProvider.Object, null);
+            authenticationRepository.Object, sessionFactory.Object, null!, identityProvider.Object, null!, loginAttemptTracker.Object, logger.Object);
     }
 
     [Fact]
@@ -110,7 +114,7 @@ public class AuthenticationServiceLoginShould : UnitTestBase
         };
         userSearchSetup.ReturnsAsync((true, user));
         securityManager
-            .Setup(m => m.ComparePasswords(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(m => m.ComparePasswords(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>()))
             .Returns(false);
 
         var actual = await service.Authenticate(Username, "qwerty", false);
@@ -120,7 +124,7 @@ public class AuthenticationServiceLoginShould : UnitTestBase
         actual.Session.Should().BeNull();
         actual.Settings.Should().Be(UserSettings.Default);
         actual.AuthenticationToken.Should().BeNull();
-        securityManager.Verify(m => m.ComparePasswords("qwerty", "salt", "hash"));
+        securityManager.Verify(m => m.ComparePasswords("qwerty", "salt", "hash", It.IsAny<int>()));
     }
 
     [Fact]
@@ -142,7 +146,7 @@ public class AuthenticationServiceLoginShould : UnitTestBase
         var externalSession = new DM.Services.Authentication.Dto.Session();
         userSearchSetup.ReturnsAsync((true, user));
         securityManager
-            .Setup(m => m.ComparePasswords(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(m => m.ComparePasswords(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>()))
             .Returns(true);
         sessionFactory
             .Setup(f => f.Create(It.IsAny<bool>(), It.IsAny<bool>()))
@@ -164,7 +168,7 @@ public class AuthenticationServiceLoginShould : UnitTestBase
         actual.Session.Should().BeEquivalentTo(externalSession);
         actual.Settings.Should().Be(userSettings);
         actual.AuthenticationToken.Should().Be("token");
-        securityManager.Verify(m => m.ComparePasswords("qwerty", "salt", "hash"));
+        securityManager.Verify(m => m.ComparePasswords("qwerty", "salt", "hash", It.IsAny<int>()));
         sessionFactory.Verify(f => f.Create(true, false));
         authenticationRepository.Verify(r => r.FindUserSettings(userId), Times.Once);
         authenticationRepository.Verify(r => r.AddSession(userId, session), Times.Once);

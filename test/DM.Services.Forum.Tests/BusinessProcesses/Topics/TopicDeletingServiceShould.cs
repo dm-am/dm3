@@ -72,14 +72,14 @@ public class TopicDeletingServiceShould : UnitTestBase
     public async Task AuthorizeDeletingAction()
     {
         var topicId = Guid.NewGuid();
-        var forum = new Dto.Output.Forum();
-        var topic = new Topic {Forum = forum};
+        var board = new Dto.Output.Board();
+        var topic = new Topic {Board = board};
         getTopicSetup.ReturnsAsync(topic);
         updateSetup.ReturnsAsync(new Topic());
 
         await service.DeleteTopic(topicId);
 
-        intentionManager.Verify(m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, forum), Times.Once);
+        intentionManager.Verify(m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board), Times.Once);
     }
 
     [Fact]

@@ -50,7 +50,7 @@ internal class CharacterDeletingService : ICharacterDeletingService
             .Select(id => _updateBuilderFactory.Create<CharacterAttribute>(id).Delete());
 
         await _repository.Update(updateCharacter, updateAttributes);
-        await _unreadCountersRepository.Decrement(character.GameId, UnreadEntryType.Character, character.CreateDate);
+        await _unreadCountersRepository.Decrement(character.GameId, UnreadEntryType.Character, character.CreatedUtc);
         await _producer.Send(EventType.DeletedCharacter, characterId);
     }
 }

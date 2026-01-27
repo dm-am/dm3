@@ -98,4 +98,11 @@ public interface IChatApiService
     /// <param name="date">Date to search from</param>
     /// <returns></returns>
     Task<Envelope<ChatMessage>> GetFirstMessageOnOrAfterDate(DateOnly date);
+
+    /// <summary>
+    /// Get last message on or before the given date
+    /// </summary>
+    /// <param name="date">Date to search until</param>
+    /// <returns></returns>
+    Task<Envelope<ChatMessage>> GetLastMessageOnOrBeforeDate(DateOnly date);
 }

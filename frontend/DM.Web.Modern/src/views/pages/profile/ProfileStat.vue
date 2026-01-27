@@ -1,26 +1,51 @@
-<template>
-  <div class="container">
-    <span class="title">{{title}}</span>
-    <span class="value"><slot /></span>
-  </div>
-</template>
+<script setup lang="ts">
+import SecondaryText from "@/components/layout/SecondaryText.vue";
 
-<script lang="ts">
-import { Component, Prop, Vue } from 'vue-property-decorator';
-
-@Component({})
-export default class ProfileStat extends Vue {
-  @Prop()
-  private title!: string;
-}
+defineProps<{
+  title: string;
+  empty?: string;
+  editable?: boolean;
+}>();
+const value = defineModel<string>();
 </script>
 
-<style scoped lang="stylus">
-.container
-  display flex
-  margin $medium 0
+<template>
+  <dl>
+    <secondary-text tag="dt">{{ title }}</secondary-text>
+    <dd v-if="editable">
+      <input
+        type="text"
+        :value="value"
+        @input="value = ($event.target as HTMLInputElement).value"
+        class="stat-input"
+      />
+    </dd>
+    <dd v-else>{{ value || empty }}</dd>
+  </dl>
+</template>
 
-.title
-  width $gridStep * 20
-  theme(color, $secondaryText)
+<style scoped lang="sass">
+@import "src/assets/styles/Variables"
+@import "src/assets/styles/Themes"
+
+dl
+  margin: $small 0
+
+dd
+  padding: 0
+
+.stat-input
+  width: 100%
+  padding: $tiny $small
+  font-size: inherit
+  font-family: inherit
+  box-sizing: border-box
+  border: 1px dashed $border
+  background-color: $input-bg
+  color: $text
+
+  &:focus
+    outline: none
+    border-style: solid
+    border-color: $button-border-hover
 </style>

@@ -8,6 +8,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="DM.Services.MessageQueuing.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
       <PackageReference Include="Autofac" />
       <PackageReference Include="Jamq.Client.Abstractions" />
       <PackageReference Include="Jamq.Client.Rabbit" />

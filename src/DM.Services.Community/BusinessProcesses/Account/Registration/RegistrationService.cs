@@ -43,8 +43,8 @@ internal class RegistrationService : IRegistrationService
     {
         await _validator.ValidateAndThrowAsync(registration);
 
-        var (hash, salt) = _securityManager.GeneratePassword(registration.Password);
-        var user = _userFactory.Create(registration, salt, hash);
+        var (hash, salt, version) = _securityManager.GeneratePassword(registration.Password);
+        var user = _userFactory.Create(registration, salt, hash, version);
         var token = _activationTokenFactory.Create(user.UserId);
 
         await _repository.AddUser(user, token);

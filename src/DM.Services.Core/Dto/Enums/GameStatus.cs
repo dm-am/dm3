@@ -3,55 +3,50 @@ using System.ComponentModel;
 namespace DM.Services.Core.Dto.Enums;
 
 /// <summary>
-/// Game status
+/// Game status (simplified to 3 states)
 /// </summary>
 public enum GameStatus
 {
     /// <summary>
-    /// Game is closed inconclusively
+    /// Game is being created/drafted
     /// </summary>
-    [Description("Закрыта")]
-    Closed = 0,
+    [Description("Оформляется")]
+    Draft = 0,
 
     /// <summary>
-    /// Game is finished successfully
-    /// </summary>
-    [Description("Завершена")]
-    Finished = 1,
-
-    /// <summary>
-    /// Game is frozen due to inactivity
-    /// </summary>
-    [Description("Заморожена")]
-    Frozen = 2,
-
-    /// <summary>
-    /// Game requires players and characters
-    /// </summary>
-    [Description("Набор игроков")]
-    Requirement = 3,
-
-    /// <summary>
-    /// Game is not yet published
-    /// </summary>
-    [Description("Черновик")]
-    Draft = 4,
-
-    /// <summary>
-    /// Game has started
+    /// Game is running (recruiting or playing)
     /// </summary>
     [Description("Идет игра")]
-    Active = 5,
+    Active = 1,
 
     /// <summary>
-    /// GM is newbie so the game requires moderation, no moderator is assigned yet
+    /// Game is closed (finished, frozen, or abandoned)
+    /// Check IsFinished and IsFrozen flags for details
     /// </summary>
-    [Description("Ожидает модерации")]
-    RequiresModeration = 6,
+    [Description("Закрыта")]
+    Closed = 2
+}
+
+/// <summary>
+/// Premoderation status for new GM games
+/// </summary>
+public enum PremoderationStatus
+{
+    /// <summary>
+    /// Game does not require premoderation
+    /// </summary>
+    [Description("Одобрено")]
+    Approved = 0,
 
     /// <summary>
-    /// Game is on moderation and awaits moderator
+    /// Game is awaiting mentor approval
     /// </summary>
-    [Description("На модерации")]
-    Moderation = 7
+    [Description("Ожидает проверки")]
+    AwaitingApproval = 1,
+
+    /// <summary>
+    /// Game requires edits after mentor review
+    /// </summary>
+    [Description("Требует правок")]
+    AwaitingEdits = 2
 }

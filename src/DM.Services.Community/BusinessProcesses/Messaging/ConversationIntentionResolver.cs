@@ -13,6 +13,7 @@ internal class ConversationIntentionResolver : IIntentionResolver<ConversationIn
         intention switch
         {
             ConversationIntention.CreateMessage => target.Participants.Any(p => p.UserId == user.UserId),
+            ConversationIntention.UpdateConversation => !target.Visavi && target.Participants.Any(p => p.UserId == user.UserId),
             _ => false
         };
 }

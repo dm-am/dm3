@@ -35,7 +35,7 @@ internal class CharacterApiService : ICharacterApiService
         this.deletingService = deletingService;
         this.mapper = mapper;
     }
-        
+
     /// <inheritdoc />
     public async Task<ListEnvelope<Character>> GetAll(Guid gameId)
     {
@@ -44,28 +44,28 @@ internal class CharacterApiService : ICharacterApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Character>> Get(Guid characterId)
+    public async Task<Envelope<CharacterDetails>> Get(Guid characterId)
     {
         var character = await readingService.GetCharacter(characterId);
-        return new Envelope<Character>(mapper.Map<Character>(character));
+        return new Envelope<CharacterDetails>(mapper.Map<CharacterDetails>(character));
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Character>> Create(Guid gameId, Character character)
+    public async Task<Envelope<CharacterDetails>> Create(Guid gameId, CharacterDetails character)
     {
         var createCharacter = mapper.Map<CreateCharacter>(character);
         createCharacter.GameId = gameId;
         var createdCharacter = await creatingService.Create(createCharacter);
-        return new Envelope<Character>(mapper.Map<Character>(createdCharacter));
+        return new Envelope<CharacterDetails>(mapper.Map<CharacterDetails>(createdCharacter));
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Character>> Update(Guid characterId, Character character)
+    public async Task<Envelope<CharacterDetails>> Update(Guid characterId, CharacterDetails character)
     {
         var updateCharacter = mapper.Map<UpdateCharacter>(character);
         updateCharacter.CharacterId = characterId;
         var updatedCharacter = await updatingService.Update(updateCharacter);
-        return new Envelope<Character>(mapper.Map<Character>(updatedCharacter));
+        return new Envelope<CharacterDetails>(mapper.Map<CharacterDetails>(updatedCharacter));
     }
 
     /// <inheritdoc />

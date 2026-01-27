@@ -19,46 +19,46 @@ internal class TopicReadingRepository(
     DmDbContext dbContext,
     IMapper mapper) : ITopicReadingRepository
 {
-    private static readonly Guid NewsForumId = Guid.Parse("00000000-0000-0000-0000-000000000008");
-    private static readonly Guid ErrorsForumId = Guid.Parse("00000000-0000-0000-0000-000000000006");
+    private static readonly Guid NewsBoardId = Guid.Parse("00000000-0000-0000-0000-000000000008");
+    private static readonly Guid ErrorsBoardId = Guid.Parse("00000000-0000-0000-0000-000000000006");
 
     /// <inheritdoc />
-    public Task<int> Count(Guid forumId, CancellationToken ct = default) => dbContext.ForumTopics
+    public Task<int> Count(Guid boardId, CancellationToken ct = default) => dbContext.ForumTopics
         .TagWith("DM.Forum.TopicsCount")
-        .CountAsync(t => !t.IsRemoved && t.ForumId == forumId && !t.IsAttached, ct);
+        .CountAsync(t => !t.IsRemoved && t.BoardId == boardId && !t.IsAttached, ct);
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Topic>> Get(Guid forumId, PagingData pagingData, bool attached, CancellationToken ct = default)
+    public async Task<IEnumerable<Topic>> Get(Guid boardId, PagingData pagingData, bool attached, CancellationToken ct = default)
     {
         var query = dbContext.ForumTopics
             .TagWith("DM.Forum.TopicsList")
-            .Where(t => !t.IsRemoved && t.ForumId == forumId && t.IsAttached == attached)
+            .Where(t => !t.IsRemoved && t.BoardId == boardId && t.IsAttached == attached)
             .ProjectTo<Topic>(mapper.ConfigurationProvider);
 
         IOrderedQueryable<Topic> orderedQuery;
-        if (forumId == NewsForumId || attached)
+        if (boardId == NewsBoardId || attached)
         {
-            orderedQuery = query.OrderByDescending(q => q.CreateDate);
+            orderedQuery = query.OrderByDescending(q => q.CreatedUtc);
         }
-        else if (forumId == ErrorsForumId)
+        else if (boardId == ErrorsBoardId)
         {
-            orderedQuery = query.OrderBy(q => q.IsClosed).ThenByDescending(q => q.LastActivityDate);
+            orderedQuery = query.OrderBy(q => q.IsClosed).ThenByDescending(q => q.LastActivityUtc);
         }
         else
         {
-            orderedQuery = query.OrderByDescending(q => q.LastActivityDate);
+            orderedQuery = query.OrderByDescending(q => q.LastActivityUtc);
         }
 
         return await orderedQuery.Page(pagingData).ToArrayAsync(ct);
     }
 
     /// <inheritdoc />
-    public async Task<Topic> Get(Guid topicId, ForumAccessPolicy accessPolicy, CancellationToken ct = default)
+    public async Task<Topic> Get(Guid topicId, BoardAccessPolicy accessPolicy, CancellationToken ct = default)
     {
         return await dbContext.ForumTopics
             .TagWith("DM.Forum.Topic")
             .Where(t => !t.IsRemoved && t.ForumTopicId == topicId &&
-                        (t.Forum.ViewPolicy & accessPolicy) != ForumAccessPolicy.NoOne)
+                        (t.Board.ViewPolicy & accessPolicy) != BoardAccessPolicy.NoOne)
             .ProjectTo<Topic>(mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
     }

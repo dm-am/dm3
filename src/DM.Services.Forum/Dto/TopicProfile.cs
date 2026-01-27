@@ -18,9 +18,9 @@ internal class TopicProfile : Profile
 
         CreateMap<ForumTopic, Topic>()
             .ForMember(d => d.Id, s => s.MapFrom(t => t.ForumTopicId))
-            .ForMember(d => d.LastActivityDate, s => s.MapFrom(t => t.LastComment == null
-                ? t.CreateDate
-                : t.LastComment.CreateDate))
+            .ForMember(d => d.LastActivityUtc, s => s.MapFrom(t => t.LastComment == null
+                ? t.CreatedUtc
+                : t.LastComment.CreatedUtc))
             .ForMember(d => d.TotalCommentsCount, s => s.MapFrom(t => t.Comments.Count(c => !c.IsRemoved)))
             .ForMember(d => d.Likes, s => s.MapFrom(t => t.Likes.Select(l => l.User)));
     }

@@ -19,7 +19,7 @@ namespace DM.Services.Forum.BusinessProcesses.Topics.Creating;
 internal class TopicCreatingService : ITopicCreatingService
 {
     private readonly IValidator<CreateTopic> _validator;
-    private readonly IForumReadingService _forumReadingService;
+    private readonly IBoardReadingService _boardReadingService;
     private readonly IIntentionManager _intentionManager;
     private readonly ITopicFactory _topicFactory;
     private readonly ITopicCreatingRepository _repository;
@@ -30,7 +30,7 @@ internal class TopicCreatingService : ITopicCreatingService
     /// <inheritdoc />
     public TopicCreatingService(
         IValidator<CreateTopic> validator,
-        IForumReadingService forumReadingService,
+        IBoardReadingService boardReadingService,
         IIntentionManager intentionManager,
         IIdentityProvider identityProvider,
         ITopicFactory topicFactory,
@@ -39,7 +39,7 @@ internal class TopicCreatingService : ITopicCreatingService
         IInvokedEventProducer invokedEventProducer)
     {
         _validator = validator;
-        _forumReadingService = forumReadingService;
+        _boardReadingService = boardReadingService;
         _intentionManager = intentionManager;
         _topicFactory = topicFactory;
         _repository = repository;
@@ -52,19 +52,19 @@ internal class TopicCreatingService : ITopicCreatingService
     public async Task<Topic> CreateTopic(CreateTopic createTopic, CancellationToken ct = default)
     {
         using var activity = DmActivitySource.Source.StartActivity("CreateTopic");
-        activity?.SetTag("forum.title", createTopic.ForumTitle);
+        activity?.SetTag("board.title", createTopic.BoardTitle);
 
         await _validator.ValidateAndThrowAsync(createTopic, ct);
 
-        var forum = await _forumReadingService.GetForum(createTopic.ForumTitle);
-        _intentionManager.ThrowIfForbidden(ForumIntention.CreateTopic, forum);
+        var board = await _boardReadingService.GetBoard(createTopic.BoardTitle);
+        _intentionManager.ThrowIfForbidden(ForumIntention.CreateTopic, board);
 
-        var topicToCreate = _topicFactory.Create(forum.Id, _identityProvider.Current.User.UserId, createTopic);
+        var topicToCreate = _topicFactory.Create(board.Id, _identityProvider.Current.User.UserId, createTopic);
         var topic = await _repository.Create(topicToCreate, ct);
 
         await Task.WhenAll(
             _invokedEventProducer.Send(EventType.NewForumTopic, topic.Id),
-            _unreadCountersRepository.Create(topic.Id, forum.Id, UnreadEntryType.Message));
+            _unreadCountersRepository.Create(topic.Id, board.Id, UnreadEntryType.Message));
 
         return topic;
     }

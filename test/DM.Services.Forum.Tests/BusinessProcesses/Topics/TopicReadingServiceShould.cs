@@ -40,7 +40,7 @@ public class TopicReadingServiceShould : UnitTestBase
         accessPolicyConverter = Mock<IAccessPolicyConverter>();
         unreadCountersRepository = Mock<IUnreadCountersRepository>();
         service = new TopicReadingService(identityProvider.Object,
-            Mock<IForumReadingService>().Object, accessPolicyConverter.Object,
+            Mock<IBoardReadingService>().Object, accessPolicyConverter.Object,
             topicRepository.Object, unreadCountersRepository.Object);
     }
 
@@ -51,17 +51,17 @@ public class TopicReadingServiceShould : UnitTestBase
         currentUserSetup.Returns(Create.User().Please);
         accessPolicyConverter
             .Setup(c => c.Convert(It.IsAny<UserRole>()))
-            .Returns(ForumAccessPolicy.SeniorModerator);
+            .Returns(BoardAccessPolicy.SeniorModerator);
 
         topicRepository
-            .Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<ForumAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Topic) null);
 
         var err = await service.Awaiting(s => s.GetTopic(topicId))
             .Should().ThrowAsync<HttpException>();
         err.And.StatusCode.Should().Be(HttpStatusCode.Gone);
 
-        topicRepository.Verify(r => r.Get(topicId, ForumAccessPolicy.SeniorModerator, It.IsAny<CancellationToken>()), Times.Once);
+        topicRepository.Verify(r => r.Get(topicId, BoardAccessPolicy.SeniorModerator, It.IsAny<CancellationToken>()), Times.Once);
         topicRepository.VerifyNoOtherCalls();
     }
 
@@ -71,17 +71,17 @@ public class TopicReadingServiceShould : UnitTestBase
         var topicId = Guid.NewGuid();
         var expected = new Topic();
         topicRepository
-            .Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<ForumAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(expected);
         accessPolicyConverter
             .Setup(c => c.Convert(It.IsAny<UserRole>()))
-            .Returns(ForumAccessPolicy.Player);
+            .Returns(BoardAccessPolicy.Player);
         currentUserSetup.Returns(Create.User().Please);
 
         var actual = await service.GetTopic(topicId);
 
         actual.Should().Be(expected);
-        topicRepository.Verify(r => r.Get(topicId, ForumAccessPolicy.Player, It.IsAny<CancellationToken>()), Times.Once);
+        topicRepository.Verify(r => r.Get(topicId, BoardAccessPolicy.Player, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -91,11 +91,11 @@ public class TopicReadingServiceShould : UnitTestBase
         var userId = Guid.NewGuid();
         var expected = new Topic();
         topicRepository
-            .Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<ForumAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(expected);
         accessPolicyConverter
             .Setup(c => c.Convert(It.IsAny<UserRole>()))
-            .Returns(ForumAccessPolicy.Player);
+            .Returns(BoardAccessPolicy.Player);
         currentUserSetup.Returns(Create.User(userId).WithRole(UserRole.RegularUser).Please);
         unreadCountersRepository
             .Setup(r => r.SelectByEntities(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<Guid[]>()))

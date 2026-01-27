@@ -8,7 +8,8 @@ namespace DM.Services.DataAccess.BusinessObjects.Games.Characters.Attributes;
 [BsonKnownTypes(
     typeof(NumberAttributeConstraints),
     typeof(StringAttributeConstraints),
-    typeof(ListAttributeConstraints))]
+    typeof(ListAttributeConstraints),
+    typeof(BbCodeAttributeConstraints))]
 public abstract class AttributeConstraints
 {
     /// <summary>
