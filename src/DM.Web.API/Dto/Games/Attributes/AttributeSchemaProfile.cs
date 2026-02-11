@@ -8,13 +8,13 @@ internal class AttributeSchemaProfile : Profile
     /// <inheritdoc />
     public AttributeSchemaProfile()
     {
-        CreateMap<DM.Services.Gaming.Dto.Shared.AttributeSchema, AttributeSchema>()
+        CreateMap<DM.Services.Game.Dto.Shared.AttributeSchema, AttributeSchema>()
             .ReverseMap();
 
-        CreateMap<DM.Services.Gaming.Dto.Shared.AttributeSpecification, AttributeSpecification>()
+        CreateMap<DM.Services.Game.Dto.Shared.AttributeSpecification, AttributeSpecification>()
             .ReverseMap();
 
-        CreateMap<DM.Services.Gaming.Dto.Shared.ListValue, AttributeValueSpecification>()
+        CreateMap<DM.Services.Game.Dto.Shared.ListValue, AttributeValueSpecification>()
             .ReverseMap();
     }
 }

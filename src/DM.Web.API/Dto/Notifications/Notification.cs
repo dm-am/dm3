@@ -21,5 +21,16 @@ public class Notification
     /// <summary>
     /// Notification payload
     /// </summary>
-    public object Payload { get; set; }
+    public object Payload { get; set; } = new { };
+}
+
+/// <summary>
+/// DTO model for notification count
+/// </summary>
+public class NotificationCount
+{
+    /// <summary>
+    /// Number of unread notifications
+    /// </summary>
+    public long Count { get; set; }
 }

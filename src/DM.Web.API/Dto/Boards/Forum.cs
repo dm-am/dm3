@@ -8,7 +8,7 @@ public class Forum
     /// <summary>
     /// Forum identifier
     /// </summary>
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     /// Total count of topics with unread commentaries within

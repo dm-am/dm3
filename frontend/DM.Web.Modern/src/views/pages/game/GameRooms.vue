@@ -2,11 +2,10 @@
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/stores";
-import TheLoader from "@/components/TheLoader.vue";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
 import TheIcon from "@/components/icons/TheIcon.vue";
 import { IconType } from "@/components/icons/iconType";
-import { RoomType, RoomAccessType } from "@/api/models/gaming";
+import { RoomType, RoomAccessType } from "@/api/models/game";
 
 const gameStore = useGameDetailsStore();
 const { game, rooms, roomsLoading, roomsError } = storeToRefs(gameStore);
@@ -18,7 +17,7 @@ const roomTypeLabels: Record<RoomType, string> = {
 };
 
 const roomTypeIcons: Record<RoomType, IconType> = {
-  [RoomType.Clean]: IconType.Book,
+  [RoomType.Clean]: IconType.List,
   [RoomType.Hybrid]: IconType.Edit,
   [RoomType.Chat]: IconType.Comment,
 };
@@ -32,9 +31,7 @@ const accessTypeLabels: Record<RoomAccessType, string> = {
 
 <template>
   <div class="game-rooms">
-    <the-loader v-if="roomsLoading" />
-
-    <div v-else-if="roomsError" class="rooms-error">
+    <div v-if="roomsError" class="rooms-error">
       {{ roomsError }}
     </div>
 

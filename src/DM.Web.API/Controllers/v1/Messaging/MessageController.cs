@@ -5,14 +5,16 @@ using DM.Web.API.Authentication;
 using DM.Web.API.Dto.Contracts;
 using DM.Web.API.Dto.Messaging;
 using DM.Web.API.Services.Community;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DM.Web.API.Controllers.v1.Messaging;
 
 /// <inheritdoc />
 [ApiController]
-[Route("v1")]
+[Route("v1/messages")]
 [ApiExplorerSettings(GroupName = "Messaging")]
+[Tags("Messages")]
 public class MessageController : ControllerBase
 {
     private readonly IMessagingApiService _apiService;
@@ -25,36 +27,58 @@ public class MessageController : ControllerBase
     }
 
     /// <summary>
-    /// Get list of messages in conversation
+    /// Get list of messages in conversation with cursor-based pagination
     /// </summary>
-    /// <response code="200"></response>
+    /// <remarks>
+    /// This endpoint supports multiple pagination modes:
+    /// - **Default**: Without parameters, returns the most recent messages
+    /// - **Cursor**: Use `cursor` parameter from previous response's `paging.nextCursor` or `paging.prevCursor`
+    /// - **Around message**: Use `aroundMessageId` to get messages centered around a specific message
+    /// - **Near timestamp**: Use `nearTimestampUtc` to get messages near a specific time
+    ///
+    /// The `limit` parameter controls how many messages to return (max 100, default 50).
+    /// </remarks>
+    /// <param name="id">Conversation identifier</param>
+    /// <param name="cursor">Opaque cursor for pagination (from previous response)</param>
+    /// <param name="aroundMessageId">Get messages around this message</param>
+    /// <param name="nearTimestampUtc">Get messages near this UTC timestamp (ISO 8601 format)</param>
+    /// <param name="limit">Maximum number of messages to return (1-100, default 50)</param>
+    /// <response code="200">Messages with cursor pagination info</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="410">Dialogue not found</response>
-    [HttpGet("conversations/{id}/messages", Name = nameof(GetMessages))]
+    /// <response code="404">Conversation not found</response>
+    [HttpGet("~/v1/conversations/{id:guid}/messages", Name = nameof(GetMessages))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(ListEnvelope<Message>), 200)]
+    [ProducesResponseType(typeof(CursorEnvelope<Message>), 200)]
     [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> GetMessages(Guid id, [FromQuery] PagingQuery q) =>
-        Ok(await _apiService.GetMessages(id, q));
+    [ProducesResponseType(typeof(GeneralError), 404)]
+    public async Task<IActionResult> GetMessages(
+        Guid id,
+        [FromQuery] string? cursor = null,
+        [FromQuery] Guid? aroundMessageId = null,
+        [FromQuery] DateTimeOffset? nearTimestampUtc = null,
+        [FromQuery] int limit = 50) =>
+        Ok(await _apiService.GetMessagesWithCursor(id, cursor, aroundMessageId, nearTimestampUtc, limit));
 
     /// <summary>
     /// Create message in conversation
     /// </summary>
-    /// <response code="201"></response>
+    /// <param name="id">Conversation identifier</param>
+    /// <param name="input">Message content</param>
+    /// <response code="201">Message created successfully</response>
     /// <response code="400">Some message parameters were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to create message in this conversation</response>
-    /// <response code="410">Dialogue not found</response>
-    [HttpPost("conversations/{id}/messages", Name = nameof(PostMessage))]
+    /// <response code="404">Dialogue not found</response>
+    [HttpPost("~/v1/conversations/{id:guid}/messages", Name = nameof(PostMessage))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Message>), 201)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PostMessage(Guid id, [FromBody] Message message)
+    [ProducesResponseType(typeof(GeneralError), 404)]
+    public async Task<IActionResult> PostMessage(Guid id, [FromBody] CreateMessageInput input)
     {
+        var message = new Message { Text = new BbRendering.CommonBbText { Value = input.Text } };
         var result = await _apiService.CreateMessage(id, message);
         return CreatedAtRoute(nameof(GetMessage), new { id = result.Resource.Id }, result);
     }
@@ -62,45 +86,53 @@ public class MessageController : ControllerBase
     /// <summary>
     /// Get message
     /// </summary>
-    /// <response code="200"></response>
+    /// <param name="id">Message identifier</param>
+    /// <response code="200">Message retrieved successfully</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="410">Message not found</response>
-    [HttpGet("messages/{id}", Name = nameof(GetMessage))]
+    /// <response code="404">Message not found</response>
+    [HttpGet("{id:guid}", Name = nameof(GetMessage))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Message>), 200)]
     [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
+    [ProducesResponseType(typeof(GeneralError), 404)]
     public async Task<IActionResult> GetMessage(Guid id) => Ok(await _apiService.GetMessage(id));
 
     /// <summary>
     /// Update message
     /// </summary>
-    /// <response code="200"></response>
+    /// <param name="id">Message identifier</param>
+    /// <param name="input">Updated message content</param>
+    /// <response code="200">Message updated successfully</response>
     /// <response code="400">Some message parameters were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to edit this message</response>
-    /// <response code="410">Message not found</response>
-    [HttpPatch("messages/{id}", Name = nameof(PatchMessage))]
+    /// <response code="404">Message not found</response>
+    [HttpPatch("{id:guid}", Name = nameof(PatchMessage))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Message>), 200)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PatchMessage(Guid id, [FromBody] Message message) =>
-        Ok(await _apiService.UpdateMessage(id, message));
+    [ProducesResponseType(typeof(GeneralError), 404)]
+    public async Task<IActionResult> PatchMessage(Guid id, [FromBody] UpdateMessageInput input)
+    {
+        var message = new Message { Text = new BbRendering.CommonBbText { Value = input.Text } };
+        return Ok(await _apiService.UpdateMessage(id, message));
+    }
 
     /// <summary>
     /// Delete message
     /// </summary>
-    /// <response code="200"></response>
+    /// <response code="204">Message deleted successfully</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="410">Message not found</response>
-    [HttpDelete("messages/{id}", Name = nameof(DeleteMessage))]
+    /// <response code="403">User is not allowed to delete this message</response>
+    /// <response code="404">Message not found</response>
+    [HttpDelete("{id:guid}", Name = nameof(DeleteMessage))]
     [AuthenticationRequired]
     [ProducesResponseType(204)]
     [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
+    [ProducesResponseType(typeof(GeneralError), 403)]
+    [ProducesResponseType(typeof(GeneralError), 404)]
     public async Task<IActionResult> DeleteMessage(Guid id)
     {
         await _apiService.DeleteMessage(id);
@@ -110,32 +142,34 @@ public class MessageController : ControllerBase
     /// <summary>
     /// Add new like for message
     /// </summary>
-    /// <response code="200"></response>
+    /// <param name="id">Message identifier</param>
+    /// <response code="200">Like added successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="409">User already liked this message</response>
-    /// <response code="410">Message not found</response>
-    [HttpPost("messages/{id}/likes", Name = nameof(PostMessageLike))]
+    /// <response code="404">Message not found</response>
+    [HttpPost("{id:guid}/likes", Name = nameof(PostMessageLike))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Message>), 200)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 409)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
+    [ProducesResponseType(typeof(GeneralError), 404)]
     public async Task<IActionResult> PostMessageLike(Guid id) =>
         Ok(await _apiService.LikeMessage(id));
 
     /// <summary>
     /// Delete like from message
     /// </summary>
-    /// <response code="204"></response>
+    /// <param name="id">Message identifier</param>
+    /// <response code="204">Like removed successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="409">User never liked this message</response>
-    /// <response code="410">Message not found</response>
-    [HttpDelete("messages/{id}/likes", Name = nameof(DeleteMessageLike))]
+    /// <response code="404">Message not found</response>
+    [HttpDelete("{id:guid}/likes", Name = nameof(DeleteMessageLike))]
     [AuthenticationRequired]
     [ProducesResponseType(204)]
     [ProducesResponseType(typeof(GeneralError), 401)]
     [ProducesResponseType(typeof(GeneralError), 409)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
+    [ProducesResponseType(typeof(GeneralError), 404)]
     public async Task<IActionResult> DeleteMessageLike(Guid id)
     {
         await _apiService.UnlikeMessage(id);

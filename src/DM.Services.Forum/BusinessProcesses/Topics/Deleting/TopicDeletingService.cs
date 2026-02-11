@@ -4,7 +4,7 @@ using DM.Services.Common.Authorization;
 using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Boards;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Services.Forum.Authorization;
 using DM.Services.Forum.BusinessProcesses.Topics.Reading;
@@ -46,7 +46,7 @@ internal class TopicDeletingService : ITopicDeletingService
         var topic = await _topicReadingService.GetTopic(topicId);
         _intentionManager.ThrowIfForbidden(ForumIntention.AdministrateTopics, topic.Board);
 
-        await _repository.Update(_updateBuilderFactory.Create<ForumTopic>(topicId).Field(t => t.IsRemoved, true));
+        await _repository.Update(_updateBuilderFactory.Create<TopicDal>(topicId).Field(t => t.IsRemoved, true));
         await _unreadCountersRepository.Delete(topicId, UnreadEntryType.Message);
         await _invokedEventProducer.Send(EventType.DeletedForumTopic, topicId);
     }

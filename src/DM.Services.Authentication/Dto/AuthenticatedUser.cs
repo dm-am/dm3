@@ -11,19 +11,14 @@ namespace DM.Services.Authentication.Dto;
 public class AuthenticatedUser : GeneralUser
 {
     /// <summary>
-    /// User account is activated by email
-    /// </summary>
-    public bool Activated { get; set; }
-
-    /// <summary>
     /// Password salt
     /// </summary>
-    public string Salt { get; set; }
+    public string Salt { get; set; } = null!;
 
     /// <summary>
     /// Password hash
     /// </summary>
-    public string PasswordHash { get; set; }
+    public string PasswordHash { get; set; } = null!;
 
     /// <summary>
     /// Password hash algorithm version (1 = SHA256, 2 = PBKDF2)
@@ -38,7 +33,7 @@ public class AuthenticatedUser : GeneralUser
     /// <summary>
     /// Ban access restriction policies
     /// </summary>
-    public IEnumerable<AccessPolicy> AccessRestrictionPolicies { get; set; }
+    public IEnumerable<AccessPolicy> AccessRestrictionPolicies { get; set; } = [];
 
     /// <summary>
     /// Calculated restriction policy based on ban and personal restrictions

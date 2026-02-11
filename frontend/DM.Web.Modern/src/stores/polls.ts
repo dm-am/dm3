@@ -9,12 +9,12 @@ export const usePollsStore = defineStore("polls", () => {
   const activePolls = ref<Poll[] | null>(null);
   async function fetchActivePolls() {
     const { data } = await communityApi.getPolls({ size: 3, skip: 0 }, true);
-    activePolls.value = data!.resources;
+    activePolls.value = data?.resources ?? null;
   }
   const polls = ref<ListEnvelope<Poll> | null>(null);
   async function fetchPolls(number: number, onlyActive: boolean) {
     const { data } = await communityApi.getPolls({ number }, onlyActive);
-    polls.value = data!;
+    polls.value = data ?? null;
   }
 
   function updatePoll(poll: Poll) {

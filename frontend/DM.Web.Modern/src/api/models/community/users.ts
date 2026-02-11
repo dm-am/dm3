@@ -30,7 +30,7 @@ export type User = {
   mediumPictureUrl: Served<string>;
   smallPictureUrl: Served<string>;
   rating: Served<Rating>;
-  onlineUtc: Served<string | null>;
+  lastActivityUtc: Served<string | null>;
   status: string;
   name: string;
   location: string;
@@ -41,6 +41,9 @@ export type User = {
   registrationDateUtc: Served<string | null>;
   settings: UserSettings;
   accessPolicy: Served<AccessPolicy>;
+
+  /** Email address (only available for current user's own profile) */
+  email?: Served<string>;
 };
 
 export enum UserRole {
@@ -52,10 +55,60 @@ export enum UserRole {
   Admin = "Admin",
 }
 
+export type LoginHistoryEntry = {
+  id: string;
+  oldLogin: string;
+  newLogin: string;
+  changedUtc: string;
+  approvedByLogin?: string;
+};
+
+export type BestPost = {
+  id: string;
+  text: string;
+  gameTitle: string;
+  gameId: string;
+  roomTitle: string;
+  roomId: string;
+  authorLogin: string;
+  rating: number;
+  createdUtc: string;
+};
+
 export enum AccessPolicy {
   NotSpecified = "NotSpecified",
   DemocraticBan = "DemocraticBan",
   FullBan = "FullBan",
-  ChatBan = "ChatBan",
+  GlobalChatBan = "GlobalChatBan",
   RestrictContentEditing = "RestrictContentEditing",
+}
+
+export enum UserActivityFilter {
+  Active = "Active",
+  All = "All",
+  Pending = "Pending",
+}
+
+export type ProfileNote = {
+  text: string;
+  updatedUtc?: string;
+};
+
+export type PublicWarning = {
+  id: string;
+  moderatorLogin: string;
+  text: string;
+  points: number;
+  createdUtc: string;
+  expiresUtc?: string;
+};
+
+export type PublicBan = {
+  id: string;
+  moderatorLogin: string;
+  reason: string;
+  startUtc: string;
+  endUtc?: string;
+  isPermanent: boolean;
+  isActive: boolean;
 }

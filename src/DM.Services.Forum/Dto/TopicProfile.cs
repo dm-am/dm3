@@ -1,6 +1,7 @@
 using System.Linq;
 using AutoMapper;
-using DM.Services.DataAccess.BusinessObjects.Boards;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
+using TopicDto = DM.Services.Forum.Dto.Output.Topic;
 using DM.Services.Forum.Dto.Output;
 using Comment = DM.Services.DataAccess.BusinessObjects.Common.Comment;
 
@@ -16,12 +17,12 @@ internal class TopicProfile : Profile
     {
         CreateMap<Comment, LastComment>();
 
-        CreateMap<ForumTopic, Topic>()
-            .ForMember(d => d.Id, s => s.MapFrom(t => t.ForumTopicId))
+        CreateMap<TopicDal, TopicDto>()
+            .ForMember(d => d.Id, s => s.MapFrom(t => t.TopicId))
             .ForMember(d => d.LastActivityUtc, s => s.MapFrom(t => t.LastComment == null
                 ? t.CreatedUtc
                 : t.LastComment.CreatedUtc))
-            .ForMember(d => d.TotalCommentsCount, s => s.MapFrom(t => t.Comments.Count(c => !c.IsRemoved)))
-            .ForMember(d => d.Likes, s => s.MapFrom(t => t.Likes.Select(l => l.User)));
+            .ForMember(d => d.TotalCommentsCount, s => s.MapFrom(t => t.Comments.Count()))
+            .ForMember(d => d.Likes, s => s.Ignore()); // Likes fetched via EntityType+EntityId pattern
     }
 }

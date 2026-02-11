@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
+using DM.Services.Core.Dto.Enums;
 using DM.Web.API.Dto.Users;
 
 namespace DM.Web.API.Dto.Messaging;
@@ -15,24 +17,25 @@ public class Conversation
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Sign of a basic conversation between two users
+    /// Conversation type (direct, group, or global)
     /// </summary>
-    public bool Visavi { get; set; }
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public ConversationType Type { get; set; }
 
     /// <summary>
-    /// Conversation title (for group conversations, null for visavi)
+    /// Conversation title (for group conversations, null for direct)
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Conversation participants
     /// </summary>
-    public IEnumerable<User> Participants { get; set; }
+    public IEnumerable<User> Participants { get; set; } = [];
 
     /// <summary>
     /// Last conversation message
     /// </summary>
-    public Message LastMessage { get; set; }
+    public Message LastMessage { get; set; } = null!;
 
     /// <summary>
     /// Number of unread conversation messages

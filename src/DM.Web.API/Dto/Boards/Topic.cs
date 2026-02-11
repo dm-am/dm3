@@ -18,7 +18,7 @@ public class Topic
     /// <summary>
     /// Author
     /// </summary>
-    public User Author { get; set; }
+    public User Author { get; set; } = null!;
 
     /// <summary>
     /// Creation moment
@@ -33,12 +33,12 @@ public class Topic
     /// <summary>
     /// Title
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Description
     /// </summary>
-    public CommonBbText Description { get; set; }
+    public CommonBbText Description { get; set; } = null!;
 
     /// <summary>
     /// Attached (pinned to top)
@@ -53,7 +53,7 @@ public class Topic
     /// <summary>
     /// Last commentary
     /// </summary>
-    public LastTopicComment LastComment { get; set; }
+    public LastTopicComment LastComment { get; set; } = null!;
 
     /// <summary>
     /// Total commentaries count
@@ -68,12 +68,12 @@ public class Topic
     /// <summary>
     /// Board (forum section)
     /// </summary>
-    public Board Board { get; set; }
+    public Board Board { get; set; } = null!;
 
     /// <summary>
     /// Users who like this
     /// </summary>
-    public IEnumerable<User> Likes { get; set; }
+    public IEnumerable<User> Likes { get; set; } = [];
 }
 
 /// <summary>
@@ -89,5 +89,5 @@ public class LastTopicComment
     /// <summary>
     /// Author
     /// </summary>
-    public User Author { get; set; }
+    public User Author { get; set; } = null!;
 }

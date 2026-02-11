@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Boards;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Services.Forum.Dto.Internal;
 
@@ -17,7 +17,7 @@ internal interface ICommentaryDeletingRepository
     /// </summary>
     /// <param name="commentId"></param>
     /// <returns></returns>
-    Task<CommentToDelete> GetForDelete(Guid commentId);
+    Task<CommentToDelete?> GetForDelete(Guid commentId);
 
     /// <summary>
     /// Gets second last commentary identifier of the topic
@@ -32,5 +32,5 @@ internal interface ICommentaryDeletingRepository
     /// <param name="update">Updated fields</param>
     /// <param name="topicUpdate">Updating for parent topic (denormalize)</param>
     /// <returns></returns>
-    Task Delete(IUpdateBuilder<Comment> update, IUpdateBuilder<ForumTopic> topicUpdate);
+    Task Delete(IUpdateBuilder<Comment> update, IUpdateBuilder<TopicDal> topicUpdate);
 }

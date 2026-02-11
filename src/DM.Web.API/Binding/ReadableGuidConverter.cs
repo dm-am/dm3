@@ -14,6 +14,7 @@ internal class ReadableGuidConverter : JsonConverter<Guid>
     public override Guid Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         var readerValue = reader.GetString();
+        if (readerValue == null) return default;
         return Guid.TryParse(readerValue, out var simpleGuid)
             ? simpleGuid
             : readerValue.TryDecodeFromReadableGuid(out var decodedGuid)
@@ -35,6 +36,7 @@ internal class ReadableNullableGuidConverter : JsonConverter<Guid?>
     public override Guid? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         var readerValue = reader.GetString();
+        if (readerValue == null) return null;
         return Guid.TryParse(readerValue, out var simpleGuid)
             ? simpleGuid
             : readerValue.TryDecodeFromReadableGuid(out var decodedGuid)

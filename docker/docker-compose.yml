@@ -11,73 +11,119 @@ volumes:
   osdata:
   miniodata:
 
+# Переменные с дефолтами для локальной разработки
+# Для зеркала: переопределить в .env.mirror
 x-workload-env: &workload-env
-  DM_ConnectionStrings__Rdb: Host=dm-pg;Port=5432;User ID=postgres;Password=admin;Database=dm3.5;Pooling=true;MinPoolSize=0;MaxPoolSize=100;Connection Idle Lifetime=60;
-  DM_ConnectionStrings__Mongo: mongodb://dm-mongo:27017/dm3-5?maxPoolSize=1000
-  DM_ConnectionStrings__Logs: http://dm-es:9200
-  DM_ConnectionStrings__TracingEndpoint: http://dm-jaeger:14268/api/traces
+  # === ASP.NET Core ===
+  ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
 
-  DM_RabbitMqConfiguration__Endpoint: amqp://dm-rmq:5672
+  # === Базы данных ===
+  DM_ConnectionStrings__Rdb: Host=${DB_HOST:-dm-pg};Port=5432;User ID=postgres;Password=${POSTGRES_PASSWORD};Database=dm3;Pooling=true;MinPoolSize=0;MaxPoolSize=100;Connection Idle Lifetime=60;${DB_SSL_MODE:-}
+  DM_ConnectionStrings__Mongo: mongodb://${MONGO_HOST:-dm-mongo}:27017/dm3?maxPoolSize=1000${MONGO_TLS:-}
+  DM_ConnectionStrings__Logs: http://${LOGS_HOST:-dm-es}:9200
+  DM_ConnectionStrings__TracingEndpoint: http://${TRACING_HOST:-dm-jaeger}:4317
+
+  # === RabbitMQ ===
+  DM_RabbitMqConfiguration__Endpoint: amqp://${RABBITMQ_HOST:-dm-rmq}:5672
   DM_RabbitMqConfiguration__VirtualHost: /
   DM_RabbitMqConfiguration__Username: guest
-  DM_RabbitMqConfiguration__Password: guest
+  DM_RabbitMqConfiguration__Password: ${RABBITMQ_DEFAULT_PASS}
 
-  DM_SearchEngineConfiguration__Endpoint: http://dm-es:9200
+  # === Search ===
+  DM_SearchEngineConfiguration__Endpoint: http://${SEARCH_HOST:-dm-es}:9200
   DM_SearchEngineConfiguration__UserName: admin
   DM_SearchEngineConfiguration__Password: admin
+  DM_SearchServiceConfiguration__GrpcEndpoint: http://${SEARCH_GRPC_HOST:-dm-search-engine-consumer}:5000
 
-  DM_CdnConfiguration__Url: http://dm-minio:9000
-  DM_CdnConfiguration__PublicUrl: http://localhost:9000
+  # === CDN (MinIO) ===
+  DM_CdnConfiguration__Url: http://${MINIO_HOST:-dm-minio}:9000
+  DM_CdnConfiguration__PublicUrl: ${CDN_PUBLIC_URL:-http://localhost:9000}
   DM_CdnConfiguration__Region: us-east-1
   DM_CdnConfiguration__BucketName: dm-uploads
   DM_CdnConfiguration__AccessKey: minio
-  DM_CdnConfiguration__SecretKey: miniokey
+  DM_CdnConfiguration__SecretKey: ${MINIO_ROOT_PASSWORD}
   DM_CdnConfiguration__Folder:
   DM_CdnConfiguration__Provider: Minio
 
-  DM_EmailConfiguration__ServerHost: dm-mailhog
-  DM_EmailConfiguration__ServerPort: 1025
+  # === Email ===
+  DM_EmailConfiguration__ServerHost: ${MAIL_HOST:-dm-mailhog}
+  DM_EmailConfiguration__ServerPort: ${MAIL_PORT:-1025}
   DM_EmailConfiguration__Username:
   DM_EmailConfiguration__Password:
   DM_EmailConfiguration__FromAddress: info@dm.am
   DM_EmailConfiguration__FromDisplayName: DM.am
   DM_EmailConfiguration__ReplyToAddress: test@dm.am
 
-  DM_SearchServiceConfiguration__GrpcEndpoint: http://dm-search-engine-consumer:5050
-
-  DM_IntegrationSettings__WebUrl: http://localhost:5050
-  DM_IntegrationSettings__ApiUrl: http://localhost:5051
+  # === Интеграция ===
+  DM_IntegrationSettings__WebUrl: ${WEB_URL:-http://localhost:5173}
+  DM_IntegrationSettings__ApiUrl: ${API_URL:-http://localhost:5000}
   DM_IntegrationSettings__AdminUrl:
   DM_IntegrationSettings__MobileUrl:
-  DM_IntegrationSettings__CorsUrls__0: http://localhost:5050
-  DM_IntegrationSettings__CorsUrls__1: http://localhost:8080
-  DM_IntegrationSettings__CorsUrls__2: http://localhost:5173
-  PORT: 5050
+  DM_IntegrationSettings__CorsUrls__0: ${CORS_URL_0:-http://localhost:5173}
+  DM_IntegrationSettings__CorsUrls__1: ${CORS_URL_1:-http://localhost:8080}
+  DM_IntegrationSettings__StaticAssetsUrl: ${STATIC_ASSETS_URL:-http://localhost:9000/dm-uploads}
+
+  # === Зеркало ===
+  DM_MirrorConfiguration__CurrentMirrorId: ${MIRROR_ID:-main}
+
+  # === Криптография (только для production/mirror — в .env) ===
+  # Для локальной разработки используется дефолт из appsettings.json
+  # КРИТИЧНО: на всех зеркалах должен быть ОДИНАКОВЫЙ ключ!
 
 x-docker-context: &docker-context
   context: ./..
   dockerfile: ./docker/app.Dockerfile
 
 services:
+  # --- Infrastructure: Databases ---
+
   postgres:
     container_name: 'dm-pg'
     image: 'postgres:16'
     ports:
       - '5432:5432'
     environment:
-      POSTGRES_PASSWORD: 'admin'
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - backups:/var/backups
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dm3"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
 
   mongo:
     container_name: 'dm-mongo'
-    image: 'mongo:latest'
+    image: 'mongo:7'
     ports:
       - '27017:27017'
     volumes:
       - mongodata:/data/db
       - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
 
   opensearch:
     container_name: 'dm-es'
@@ -91,6 +137,20 @@ services:
       OPENSEARCH_INITIAL_ADMIN_PASSWORD: 'sUp3r!P@ssw0rd'
     volumes:
       - osdata:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
 
   opensearch-dashboards:
     image: opensearchproject/opensearch-dashboards:2
@@ -100,6 +160,26 @@ services:
     environment:
       OPENSEARCH_HOSTS: '["http://dm-es:9200"]'
       DISABLE_SECURITY_DASHBOARDS_PLUGIN: 'true'
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    profiles:
+      - dashboards
+      - full
+
+  # --- Infrastructure: Message Broker ---
 
   rabbitmq:
     container_name: 'dm-rmq'
@@ -108,61 +188,180 @@ services:
     ports:
       - '15672:15672'
       - '5672:5672'
+    environment:
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+
+  # --- Infrastructure: Dev Tools ---
 
   mailhog:
     container_name: 'dm-mailhog'
     image: 'mailhog/mailhog'
     ports:
       - '1025:1025'
-      - '5025:8025'
+      - '8025:8025'
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8025/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+
+  # --- Infrastructure: Object Storage ---
 
   minio:
     container_name: 'dm-minio'
-    image: 'quay.io/minio/minio'
+    image: 'quay.io/minio/minio:RELEASE.2024-06-13T22-53-53Z'
     command: server --console-address ':9001' /data/
     ports:
       - '9000:9000'
       - '9001:9001'
     environment:
       MINIO_ROOT_USER: 'minio'
-      MINIO_ROOT_PASSWORD: 'miniokey'
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       MINIO_REGION: 'us-east-1'
     volumes:
       - miniodata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+
+  # --- Infrastructure: Tracing ---
 
   jaeger:
     container_name: 'dm-jaeger'
-    image: jaegertracing/all-in-one:1.6
+    image: jaegertracing/all-in-one:1.56
     ports:
-      - '5775:5775/udp'
-      - '6831:6831/udp'
-      - '6832:6832/udp'
-      - '5778:5778'
       - '16686:16686'
-      - '14268:14268'
-      - '9411:9411'
+      - '4318:4318'
     environment:
-      COLLECTOR_ZIPKIN_HTTP_PORT: 9411
+      COLLECTOR_OTLP_ENABLED: 'true'
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:14269/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+
+  # --- Infrastructure: Monitoring ---
 
   prometheus:
     container_name: 'dm-prometheus'
-    image: 'prom/prometheus:latest'
+    image: 'prom/prometheus:v2.51.0'
     ports:
       - '9090:9090'
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    networks:
-      - default
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:9090/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
 
   grafana:
     container_name: 'dm-grafana'
-    image: 'grafana/grafana:latest'
+    image: 'grafana/grafana:10.4.0'
     ports:
       - '3000:3000'
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    networks:
-      - default
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+
+  # --- Infrastructure: Exporters ---
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: 'dm-pg-exporter'
+    environment:
+      DATA_SOURCE_NAME: "postgresql://postgres:${POSTGRES_PASSWORD}@dm-pg:5432/dm3?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+    profiles:
+      - monitoring
+      - full
+
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: 'dm-node-exporter'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+    profiles:
+      - monitoring
+      - full
+
+  # --- Application: Migration ---
 
   migration:
     container_name: 'dm-migration'
@@ -175,8 +374,15 @@ services:
       <<: *workload-env
       DM_MigrateOnStart: true
     depends_on:
-      - mongo
-      - postgres
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: "no"
+
+  # --- Application: Consumers ---
 
   dmemailsenderconsumer:
     container_name: 'dm-email-sender-consumer'
@@ -186,11 +392,25 @@ services:
       args:
         PROJECT_NAME: DM.Services.Mail.Sender.Consumer
     ports:
-      - '5054:5050'
+      - '5003:5000'
     environment: *workload-env
     depends_on:
-      - rabbitmq
-      - mailhog
+      rabbitmq:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "test -d /proc/1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
 
   dmsearchengineconsumer:
     container_name: 'dm-search-engine-consumer'
@@ -200,11 +420,25 @@ services:
       args:
         PROJECT_NAME: DM.Services.Search.Consumer
     ports:
-      - '5052:5050'
+      - '5001:5000'
     environment: *workload-env
     depends_on:
-      - rabbitmq
-      - opensearch
+      rabbitmq:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -d /proc/1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
 
   dmnotificationsconsumer:
     container_name: 'dm-notifications-consumer'
@@ -214,33 +448,74 @@ services:
       args:
         PROJECT_NAME: DM.Services.Notifications.Consumer
     ports:
-      - '5053:5050'
+      - '5002:5000'
     environment: *workload-env
     depends_on:
-      - rabbitmq
-      - mongo
+      rabbitmq:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -d /proc/1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+
+  # --- Application: API ---
 
   dmapi:
     container_name: 'dm-api'
-    image: 'dm-api:local'
+    image: ${API_IMAGE:-ghcr.io/dm-am/dm-api:latest}
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     build:
       <<: *docker-context
       args:
         PROJECT_NAME: DM.Web.API
     ports:
-      - '5051:5050'
+      - '5000:5000'
     environment: *workload-env
     depends_on:
-      - rabbitmq
-      - migration
+      migration:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/_health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
 
-#  dmfront:
-#    container_name: 'dm-front'
-#    image: 'quilin/dm-front:0.3-local'
-#    # todo: build
-#    ports:
-#      - '5050:80'
-#    environment:
-#      API_URL: http://localhost:5051
-#    depends_on:
-#      - dmapi
+  # --- Infrastructure: Auto-update ---
+
+  watchtower:
+    container_name: 'dm-watchtower'
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_CLEANUP: 'true'
+      WATCHTOWER_POLL_INTERVAL: 300  # проверка каждые 5 минут
+      WATCHTOWER_LABEL_ENABLE: 'true'  # обновлять только с label
+    restart: unless-stopped
+    profiles:
+      - production
+      - mirror

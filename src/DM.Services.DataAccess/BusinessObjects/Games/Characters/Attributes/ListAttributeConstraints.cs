@@ -11,7 +11,7 @@ public class ListAttributeConstraints : AttributeConstraints
     /// <summary>
     /// Possible values
     /// </summary>
-    public IEnumerable<ListAttributeValue> Values { get; set; }
+    public IEnumerable<ListAttributeValue> Values { get; set; } = [];
 
     /// <inheritdoc />
     public override string GetDefaultValue() => Values?.FirstOrDefault()?.Value ?? string.Empty;
@@ -25,7 +25,7 @@ public class ListAttributeValue
     /// <summary>
     /// Value
     /// </summary>
-    public string Value { get; set; }
+    public string Value { get; set; } = null!;
 
     /// <summary>
     /// Modifier for the value

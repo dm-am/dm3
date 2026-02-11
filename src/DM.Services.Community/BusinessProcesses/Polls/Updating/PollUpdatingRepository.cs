@@ -20,7 +20,7 @@ internal class PollUpdatingRepository : MongoCollectionRepository<Poll>, IPollUp
     }
 
     /// <inheritdoc />
-    public async Task<Reading.Poll> UpdatePoll(Guid pollId, string title, DateTimeOffset? endDate)
+    public async Task<Reading.Poll> UpdatePoll(Guid pollId, string? title, DateTimeOffset? endDate)
     {
         var updates = new List<UpdateDefinition<Poll>>();
 

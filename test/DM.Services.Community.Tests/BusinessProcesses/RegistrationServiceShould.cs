@@ -2,12 +2,10 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Services.Authentication.Implementation.Security;
-using DM.Services.Community.BusinessProcesses.Account.Activation;
 using DM.Services.Community.BusinessProcesses.Account.Registration;
 using DM.Services.Community.BusinessProcesses.Account.Registration.Confirmation;
-using DM.Services.Core.Dto.Enums;
+using DM.Services.Core.Implementation;
 using DM.Services.DataAccess.BusinessObjects.Users;
-using DM.Services.MessageQueuing.GeneralBus;
 using DM.Tests.Core;
 using FluentValidation;
 using FluentValidation.Results;
@@ -20,15 +18,11 @@ namespace DM.Services.Community.Tests.BusinessProcesses;
 public class RegistrationServiceShould : UnitTestBase
 {
     private readonly ISetup<ISecurityManager, (string Hash, string Salt, int Version)> passwordGenerationSetup;
-    private readonly ISetup<IUserFactory, User> createUserSetup;
-    private readonly ISetup<IActivationTokenFactory, Token> createTokenSetup;
-    private readonly Mock<IUserFactory> userFactory;
-    private readonly Mock<IActivationTokenFactory> tokenFactory;
     private readonly Mock<IRegistrationRepository> registrationRepository;
     private readonly Mock<IRegistrationMailSender> mailSender;
-    private readonly Mock<IInvokedEventProducer> eventPublisher;
     private readonly RegistrationService service;
     private readonly Mock<ISecurityManager> securityManager;
+    private readonly Mock<IGuidFactory> guidFactory;
 
     public RegistrationServiceShould()
     {
@@ -41,77 +35,68 @@ public class RegistrationServiceShould : UnitTestBase
         securityManager = Mock<ISecurityManager>();
         passwordGenerationSetup = securityManager.Setup(m => m.GeneratePassword(It.IsAny<string>()));
 
-        userFactory = Mock<IUserFactory>();
-        createUserSetup = userFactory.Setup(f =>
-            f.Create(It.IsAny<UserRegistration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>()));
+        guidFactory = Mock<IGuidFactory>();
+        guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
 
-        tokenFactory = Mock<IActivationTokenFactory>();
-        createTokenSetup = tokenFactory.Setup(f => f.Create(It.IsAny<Guid>()));
+        var dateTimeProvider = Mock<IDateTimeProvider>();
+        dateTimeProvider.Setup(p => p.Now).Returns(new DateTimeOffset(2019, 01, 02, 0, 0, 0, TimeSpan.Zero));
 
         registrationRepository = Mock<IRegistrationRepository>();
         registrationRepository
-            .Setup(r => r.AddUser(It.IsAny<User>(), It.IsAny<Token>()))
+            .Setup(r => r.PendingExists(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        registrationRepository
+            .Setup(r => r.AddPending(It.IsAny<PendingRegistration>()))
             .Returns(Task.CompletedTask);
 
         mailSender = Mock<IRegistrationMailSender>();
         mailSender
-            .Setup(s => s.Send(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid>()))
+            .Setup(s => s.Send(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(Task.CompletedTask);
 
-        eventPublisher = Mock<IInvokedEventProducer>();
-        eventPublisher
-            .Setup(p => p.Send(It.IsAny<EventType>(), It.IsAny<Guid>()))
-            .Returns(Task.CompletedTask);
-
+        // Constructor order: validator, securityManager, repository, mailSender, guidFactory, dateTimeProvider
         service = new RegistrationService(validator.Object,
             securityManager.Object,
-            userFactory.Object,
-            tokenFactory.Object,
             registrationRepository.Object,
             mailSender.Object,
-            eventPublisher.Object);
+            guidFactory.Object,
+            dateTimeProvider.Object);
     }
 
     [Fact]
-    public async Task CreateUserWithGeneratedSaltAndHash()
+    public async Task CreatePendingRegistrationWithGeneratedSaltAndHash()
     {
         passwordGenerationSetup.Returns(("hash", "salt", 2));
-        createTokenSetup.Returns(new Token());
-        createUserSetup.Returns(new User());
 
-        var userRegistration = new UserRegistration {Password = "my password"};
+        var userRegistration = new UserRegistration { Email = "test@email.com", Password = "my password" };
         await service.Register(userRegistration);
 
         securityManager.Verify(m => m.GeneratePassword("my password"));
-        userFactory.Verify(f => f.Create(userRegistration, "salt", "hash", 2));
+        registrationRepository.Verify(r => r.AddPending(
+            It.Is<PendingRegistration>(p =>
+                p.PasswordHash == "hash" &&
+                p.Salt == "salt" &&
+                p.PasswordHashVersion == 2 &&
+                p.Email == "test@email.com")), Times.Once);
     }
 
     [Fact]
-    public async Task CreateTokenWithGeneratedUserId()
+    public async Task ReplacePendingRegistrationWhenEmailAlreadyExists()
     {
         passwordGenerationSetup.Returns(("hash", "salt", 2));
-        createTokenSetup.Returns(new Token());
-        var userId = Guid.NewGuid();
-        createUserSetup.Returns(new User {UserId = userId});
+        registrationRepository
+            .Setup(r => r.PendingExists("existing@email.com", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        registrationRepository
+            .Setup(r => r.ReplacePending(It.IsAny<PendingRegistration>()))
+            .Returns(Task.CompletedTask);
 
-        await service.Register(new UserRegistration());
+        await service.Register(new UserRegistration { Email = "existing@email.com", Password = "password" });
 
-        tokenFactory.Verify(f => f.Create(userId));
-    }
-
-    [Fact]
-    public async Task SaveCreatedUserAndToken()
-    {
-        passwordGenerationSetup.Returns(("hash", "salt", 2));
-        var token = new Token();
-        createTokenSetup.Returns(token);
-        var user = new User();
-        createUserSetup.Returns(user);
-
-        await service.Register(new UserRegistration());
-
-        registrationRepository.Verify(r => r.AddUser(user, token), Times.Once);
-        registrationRepository.VerifyNoOtherCalls();
+        registrationRepository.Verify(r => r.ReplacePending(
+            It.Is<PendingRegistration>(p => p.Email == "existing@email.com")), Times.Once);
+        registrationRepository.Verify(r => r.AddPending(
+            It.IsAny<PendingRegistration>()), Times.Never);
     }
 
     [Fact]
@@ -119,25 +104,24 @@ public class RegistrationServiceShould : UnitTestBase
     {
         passwordGenerationSetup.Returns(("hash", "salt", 2));
         var tokenId = Guid.NewGuid();
-        createTokenSetup.Returns(new Token {TokenId = tokenId});
-        createUserSetup.Returns(new User {Email = "email", Login = "login"});
+        guidFactory.SetupSequence(f => f.Create())
+            .Returns(Guid.NewGuid()) // PendingRegistrationId
+            .Returns(tokenId);        // TokenId
 
-        await service.Register(new UserRegistration());
+        await service.Register(new UserRegistration { Email = "email@test.com", Password = "password" });
 
-        mailSender.Verify(s => s.Send("email", "login", tokenId), Times.Once);
+        mailSender.Verify(s => s.Send("email@test.com", tokenId), Times.Once);
         mailSender.VerifyNoOtherCalls();
     }
 
     [Fact]
-    public async Task PublishEvent()
+    public async Task NormalizeEmailToLowercase()
     {
         passwordGenerationSetup.Returns(("hash", "salt", 2));
-        createTokenSetup.Returns(new Token());
-        var userId = Guid.NewGuid();
-        createUserSetup.Returns(new User {UserId = userId});
 
-        await service.Register(new UserRegistration {Email = "email", Login = "login"});
+        await service.Register(new UserRegistration { Email = "Test@EMAIL.Com", Password = "password" });
 
-        eventPublisher.Verify(p => p.Send(EventType.NewUser, userId));
+        registrationRepository.Verify(r => r.AddPending(
+            It.Is<PendingRegistration>(p => p.Email == "test@email.com")), Times.Once);
     }
 }

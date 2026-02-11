@@ -1,12 +1,30 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { VueFinalModal } from "vue-final-modal";
+
+const props = defineProps<{
+  narrow?: boolean;
+  withForm?: boolean;
+}>();
+
+const emit = defineEmits<{
+  (e: "beforeClose"): void;
+}>();
+
+const contentClass = computed(() =>
+  props.narrow ? "lightbox lightbox--narrow" : "lightbox"
+);
 </script>
 
 <template>
   <vue-final-modal
-    content-class="lightbox"
+    :content-class="contentClass"
+    overlay-class="lightbox-overlay"
     overlay-transition="vfm-fade"
     content-transition="vfm-fade"
+    :click-to-close="true"
+    :esc-to-close="true"
+    @before-close="emit('beforeClose')"
   >
     <slot />
   </vue-final-modal>
@@ -20,29 +38,26 @@ import { VueFinalModal } from "vue-final-modal";
   justify-content: center
   align-items: center
 
+.lightbox-overlay
+  /* styled via ThemeVariables.css for proper cascade */
+
 .lightbox
   position: relative
   padding: $medium
-  width: $grid-step * 100
-  border-radius: $border-radius
+  width: 580px
   background-color: $bg-page
+  border-radius: $border-radius
 
   & h2
     margin-top: 0
 
-.lightbox-close
-  position: absolute
-  top: 0
-  right: 0
-  margin: $small
+.lightbox--narrow
+  width: 380px
 
-  font-size: $grid-step * 4
-  cursor: pointer
-  color: $text
+  .form-field-row input,
+  .form-field-row textarea,
+  .form-field-row select
+    width: 100%
+    box-sizing: border-box
 
-  &:hover
-    color: $link
-
-h2
-  margin-top: 0
 </style>

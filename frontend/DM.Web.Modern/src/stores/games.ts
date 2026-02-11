@@ -1,31 +1,31 @@
 import { defineStore } from "pinia";
 import { computed } from "vue";
-import type { Game } from "@/api/models/gaming";
+import type { Game } from "@/api/models/game";
 import type { ListEnvelope } from "@/api/models/common";
-import gamingApi from "@/api/requests/gamingApi";
+import gameApi from "@/api/requests/gameApi";
 import { useApiList, useApiResource } from "@/composables/useApiResource";
 
 export const useGamesStore = defineStore("games", () => {
   // Menu/sidebar lists - just need the resources array
-  const own = useApiList<Game>(() => gamingApi.getOwnGames());
-  const moderation = useApiList<Game>(() => gamingApi.getModerationGames());
-  const popular = useApiList<Game>(() => gamingApi.getPopularGames());
+  const own = useApiList<Game>(() => gameApi.getOwnGames());
+  const moderation = useApiList<Game>(() => gameApi.getModerationGames());
+  const popular = useApiList<Game>(() => gameApi.getPopularGames());
 
   // Page lists - need full envelope with paging
   const activePage = useApiResource<ListEnvelope<Game>>(
-    () => gamingApi.getActiveGames(),
+    () => gameApi.getActiveGames(),
     { cacheMs: 30_000 },
   );
   const recruitingPage = useApiResource<ListEnvelope<Game>>(
-    () => gamingApi.getRecruitingGames(),
+    () => gameApi.getRecruitingGames(),
     { cacheMs: 30_000 },
   );
   const finishedPage = useApiResource<ListEnvelope<Game>>(
-    () => gamingApi.getFinishedGames(),
+    () => gameApi.getFinishedGames(),
     { cacheMs: 30_000 },
   );
   const moderationPage = useApiResource<ListEnvelope<Game>>(
-    () => gamingApi.getModerationGames(),
+    () => gameApi.getModerationGames(),
     { cacheMs: 30_000 },
   );
 

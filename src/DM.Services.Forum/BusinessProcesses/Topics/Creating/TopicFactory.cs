@@ -1,6 +1,6 @@
 using System;
 using DM.Services.Core.Implementation;
-using DM.Services.DataAccess.BusinessObjects.Boards;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
 using DM.Services.Forum.Dto.Input;
 
 namespace DM.Services.Forum.BusinessProcesses.Topics.Creating;
@@ -21,16 +21,16 @@ internal class TopicFactory : ITopicFactory
     }
 
     /// <inheritdoc />
-    public ForumTopic Create(Guid boardId, Guid userId, CreateTopic createTopic)
+    public TopicDal Create(Guid boardId, Guid userId, CreateTopic createTopic)
     {
-        return new ForumTopic
+        return new TopicDal
         {
             BoardId = boardId,
-            ForumTopicId = _guidFactory.Create(),
+            TopicId = _guidFactory.Create(),
             CreatedUtc = _dateTimeProvider.Now,
             UserId = userId,
             Title = createTopic.Title.Trim(),
-            Text = createTopic.Text?.Trim()
+            Text = createTopic.Text.Trim()
         };
     }
 }

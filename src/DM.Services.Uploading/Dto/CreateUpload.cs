@@ -11,7 +11,7 @@ public class CreateUpload
     /// <summary>
     /// File stream getting strategy
     /// </summary>
-    public Func<Stream> StreamAccessor { get; set; }
+    public Func<Stream> StreamAccessor { get; set; } = null!;
 
     /// <summary>
     /// Parent entity identifier
@@ -21,10 +21,10 @@ public class CreateUpload
     /// <summary>
     /// Original file name
     /// </summary>
-    public string FileName { get; set; }
+    public string FileName { get; set; } = null!;
 
     /// <summary>
     /// File content type
     /// </summary>
-    public string ContentType { get; set; }
+    public string ContentType { get; set; } = null!;
 }

@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Services.DataAccess;
-using DM.Services.DataAccess.BusinessObjects.Boards;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
 using DM.Services.DataAccess.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using Comment = DM.Services.DataAccess.BusinessObjects.Common.Comment;
@@ -26,7 +26,7 @@ internal class CommentaryCreatingRepository : ICommentaryCreatingRepository
     }
 
     /// <inheritdoc />
-    public async Task<Services.Common.Dto.Comment> Create(Comment comment, IUpdateBuilder<ForumTopic> topicUpdate)
+    public async Task<Services.Common.Dto.Comment> Create(Comment comment, IUpdateBuilder<TopicDal> topicUpdate)
     {
         _dbContext.Comments.Add(comment);
         topicUpdate.AttachTo(_dbContext);

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace DM.Services.Mail.Sender;
 
 /// <summary>
@@ -8,15 +10,20 @@ public class MailLetter
     /// <summary>
     /// Email address to send letter to
     /// </summary>
-    public string Address { get; set; }
+    public required string Address { get; set; }
 
     /// <summary>
     /// Letter subject
     /// </summary>
-    public string Subject { get; set; }
+    public required string Subject { get; set; }
 
     /// <summary>
     /// Letter body
     /// </summary>
-    public string Body { get; set; }
+    public required string Body { get; set; }
+
+    /// <summary>
+    /// Embedded resources (CID attachments) for inline images
+    /// </summary>
+    public IReadOnlyList<LinkedResource> LinkedResources { get; set; } = [];
 }

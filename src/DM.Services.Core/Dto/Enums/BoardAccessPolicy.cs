@@ -11,7 +11,7 @@ public enum BoardAccessPolicy
     /// <summary>
     /// No one is allowed
     /// </summary>
-    NoOne = 0,
+    None = 0,
 
     /// <summary>
     /// Administrators allowed
@@ -24,24 +24,19 @@ public enum BoardAccessPolicy
     SeniorModerator = 1 << 1,
 
     /// <summary>
-    /// Regular moderators allowed
+    /// Moderators allowed
     /// </summary>
-    RegularModerator = 1 << 2,
+    Moderator = 1 << 2,
 
     /// <summary>
-    /// Mentor moderators allowed
+    /// Mentors allowed
     /// </summary>
-    MentorModerator = 1 << 3,
-
-    /// <summary>
-    /// Board moderators allowed
-    /// </summary>
-    BoardModerator = 1 << 4,
+    Mentor = 1 << 3,
 
     /// <summary>
     /// Any authenticated user allowed
     /// </summary>
-    Player = 1 << 5,
+    RegularUser = 1 << 5,
 
     /// <summary>
     /// Anyone allowed

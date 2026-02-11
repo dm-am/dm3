@@ -12,7 +12,7 @@ public record CreateNotification
     /// <summary>
     /// Interested user identifiers
     /// </summary>
-    public IEnumerable<Guid> UsersInterested { get; set; }
+    public IEnumerable<Guid> UsersInterested { get; set; } = [];
 
     /// <summary>
     /// Event type
@@ -22,5 +22,5 @@ public record CreateNotification
     /// <summary>
     /// Event metadata
     /// </summary>
-    public object Metadata { get; set; }
+    public object Metadata { get; set; } = null!;
 }

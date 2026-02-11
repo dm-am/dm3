@@ -36,21 +36,21 @@ function handleWarn(_id: string) {
     :paging="comments.paging!"
     :to="{ name: 'topic', params: route.params }"
   />
-  <the-loader v-if="!comments" :big="true" />
-  <secondary-text v-else-if="!comments.resources.length" class="comments-none">
+  <secondary-text v-if="comments && !comments.resources.length" class="comments-none">
     Комментариев пока нет...
   </secondary-text>
-  <the-comment
-    v-else
-    v-for="comment in comments.resources"
-    :key="comment.id"
-    :comment="comment"
-    @edit="handleEdit"
-    @delete="handleDelete"
-    @like="handleLike"
-    @unlike="handleUnlike"
-    @warn="handleWarn"
-  />
+  <template v-else-if="comments">
+    <the-comment
+      v-for="comment in comments.resources"
+      :key="comment.id"
+      :comment="comment"
+      @edit="handleEdit"
+      @delete="handleDelete"
+      @like="handleLike"
+      @unlike="handleUnlike"
+      @warn="handleWarn"
+    />
+  </template>
 </template>
 
 <style scoped lang="sass">

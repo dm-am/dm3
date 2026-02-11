@@ -44,75 +44,29 @@ public class ConversationControllerTests : IntegrationTestBase
 
     #endregion
 
-    #region GetDirectConversationById Tests
+    #region GetOrCreateDirectConversation Tests
 
     /// <summary>
-    /// Get direct conversation by user ID without authentication should return Unauthorized
+    /// Get or create direct conversation by login without authentication should return Unauthorized
     /// </summary>
     [Fact]
-    public async Task GetDirectConversationById_WhenNotAuthenticated_ReturnsUnauthorized()
+    public async Task GetOrCreateDirectConversation_WhenNotAuthenticated_ReturnsUnauthorized()
     {
-        // Act
-        var response = await Client.GetAsync($"/v1/conversations/direct/{TestConstants.SecondUserId}");
+        // Act - POST is used to get or create conversation
+        var response = await Client.PostAsync($"/v1/conversations/direct/{TestConstants.SecondUserLogin}", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     /// <summary>
-    /// Get direct conversation with non-existent user should return Unauthorized (auth check first)
+    /// Get or create direct conversation with non-existent login should return Unauthorized (auth check first)
     /// </summary>
     [Fact]
-    public async Task GetDirectConversationById_WithNonExistentUserId_ReturnsUnauthorized()
+    public async Task GetOrCreateDirectConversation_WithNonExistentLogin_ReturnsUnauthorized()
     {
-        // Arrange
-        var nonExistentId = Guid.NewGuid();
-
-        // Act
-        var response = await Client.GetAsync($"/v1/conversations/direct/{nonExistentId}");
-
-        // Assert - auth check happens first
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    /// <summary>
-    /// Get direct conversation with invalid GUID should return Unauthorized (auth check first)
-    /// </summary>
-    [Fact]
-    public async Task GetDirectConversationById_WithInvalidGuid_ReturnsUnauthorized()
-    {
-        // Act
-        var response = await Client.GetAsync("/v1/conversations/direct/not-a-guid");
-
-        // Assert - auth check happens first
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    #endregion
-
-    #region GetDirectConversation Tests
-
-    /// <summary>
-    /// Get direct conversation by login without authentication should return Unauthorized
-    /// </summary>
-    [Fact]
-    public async Task GetDirectConversation_WhenNotAuthenticated_ReturnsUnauthorized()
-    {
-        // Act
-        var response = await Client.GetAsync($"/v1/conversations/direct/{TestConstants.SecondUserLogin}");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    /// <summary>
-    /// Get direct conversation with non-existent login should return Unauthorized (auth check first)
-    /// </summary>
-    [Fact]
-    public async Task GetDirectConversation_WithNonExistentLogin_ReturnsUnauthorized()
-    {
-        // Act
-        var response = await Client.GetAsync("/v1/conversations/direct/nonexistentuser");
+        // Act - POST is used to get or create conversation
+        var response = await Client.PostAsync("/v1/conversations/direct/nonexistentuser", null);
 
         // Assert - auth check happens first
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -152,16 +106,16 @@ public class ConversationControllerTests : IntegrationTestBase
     }
 
     /// <summary>
-    /// Get conversation with invalid GUID should return Unauthorized (auth check first)
+    /// Get conversation with invalid GUID should return NotFound (route doesn't match)
     /// </summary>
     [Fact]
-    public async Task GetConversation_WithInvalidGuid_ReturnsUnauthorized()
+    public async Task GetConversation_WithInvalidGuid_ReturnsNotFound()
     {
         // Act
         var response = await Client.GetAsync("/v1/conversations/not-a-guid");
 
-        // Assert - auth check happens first
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        // Assert - invalid GUID format results in route not found
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     #endregion
@@ -174,7 +128,7 @@ public class ConversationControllerTests : IntegrationTestBase
     [Fact]
     public async Task MarkAsRead_WhenNotAuthenticated_ReturnsUnauthorized()
     {
-        // Act
+        // Act - DELETE is used to mark messages as read (unread pattern)
         var response = await Client.DeleteAsync($"/v1/conversations/{TestConstants.TestConversationId}/messages/unread");
 
         // Assert
@@ -190,7 +144,7 @@ public class ConversationControllerTests : IntegrationTestBase
         // Arrange
         var nonExistentId = Guid.NewGuid();
 
-        // Act
+        // Act - DELETE is used to mark messages as read (unread pattern)
         var response = await Client.DeleteAsync($"/v1/conversations/{nonExistentId}/messages/unread");
 
         // Assert - auth check happens first
@@ -315,10 +269,10 @@ public class ConversationControllerTests : IntegrationTestBase
     }
 
     /// <summary>
-    /// Update conversation with invalid GUID should return Unauthorized (auth check first)
+    /// Update conversation with invalid GUID should return NotFound (route doesn't match)
     /// </summary>
     [Fact]
-    public async Task UpdateConversation_WithInvalidGuid_ReturnsUnauthorized()
+    public async Task UpdateConversation_WithInvalidGuid_ReturnsNotFound()
     {
         // Arrange
         var update = new
@@ -334,8 +288,8 @@ public class ConversationControllerTests : IntegrationTestBase
         // Act
         var response = await Client.SendAsync(request);
 
-        // Assert - auth check happens first
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        // Assert - invalid GUID format results in route not found
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     #endregion

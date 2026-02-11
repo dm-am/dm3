@@ -21,13 +21,20 @@ internal class UpdateUserValidator : AbstractValidator<UpdateUser>
             RuleFor(u => u.Location)
                 .MaximumLength(100).WithMessage(ValidationError.Long));
 
-        Unless(u => u.Icq == null, () =>
-            RuleFor(u => u.Icq)
-                .MaximumLength(20).WithMessage(ValidationError.Long));
-
-        Unless(u => u.Skype == null, () =>
-            RuleFor(u => u.Skype)
-                .MaximumLength(50).WithMessage(ValidationError.Long));
+        Unless(u => u.Contacts == null, () =>
+        {
+            RuleFor(u => u.Contacts)
+                .Must(c => c.Count <= 10).WithMessage(ValidationError.TooMany);
+            RuleForEach(u => u.Contacts).ChildRules(contact =>
+            {
+                contact.RuleFor(c => c.ContactType)
+                    .NotEmpty().WithMessage(ValidationError.Empty)
+                    .MaximumLength(50).WithMessage(ValidationError.Long);
+                contact.RuleFor(c => c.ContactValue)
+                    .NotEmpty().WithMessage(ValidationError.Empty)
+                    .MaximumLength(200).WithMessage(ValidationError.Long);
+            });
+        });
 
         Unless(u => u.Settings == null, () =>
         {

@@ -95,7 +95,7 @@ public class LikeServiceForTopicsShould : UnitTestBase
         var likeId = Guid.NewGuid();
         var like = new Like {LikeId = likeId};
         factory
-            .Setup(f => f.Create(It.IsAny<Guid>(), It.IsAny<Guid>()))
+            .Setup(f => f.Create(It.IsAny<Guid>(), It.IsAny<LikeEntityType>(), It.IsAny<Guid>()))
             .Returns(like);
         likeRepository
             .Setup(r => r.Add(It.IsAny<Like>()))

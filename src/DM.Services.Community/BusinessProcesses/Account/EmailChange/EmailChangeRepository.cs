@@ -1,4 +1,6 @@
+using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
@@ -26,10 +28,14 @@ internal class EmailChangeRepository : IEmailChangeRepository
     }
 
     /// <inheritdoc />
-    public Task<AuthenticatedUser> FindUser(string login) => _dbContext.Users
-        .Where(u => u.Login.ToLower() == login.ToLower())
+    public Task<AuthenticatedUser?> FindUser(string login) => _dbContext.Users
+        .Where(u => EF.Functions.ILike(u.Login, login))
         .ProjectTo<AuthenticatedUser>(_mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();
+
+    /// <inheritdoc />
+    public async Task<bool> IsEmailFree(string email, CancellationToken ct) =>
+        !await _dbContext.Users.AnyAsync(u => EF.Functions.ILike(u.Email, email) && !u.IsRemoved, ct);
 
     /// <inheritdoc />
     public Task Update(IUpdateBuilder<User> updateUser, Token token)
@@ -37,5 +43,23 @@ internal class EmailChangeRepository : IEmailChangeRepository
         updateUser.AttachTo(_dbContext);
         _dbContext.Tokens.Add(token);
         return _dbContext.SaveChangesAsync();
+    }
+
+    /// <inheritdoc />
+    public async Task InvalidateOldEmailChangeTokens(Guid userId)
+    {
+        var oldTokens = await _dbContext.Tokens
+            .Where(t => t.UserId == userId && t.Type == TokenType.EmailChange && !t.IsRemoved)
+            .ToListAsync();
+
+        foreach (var token in oldTokens)
+        {
+            token.IsRemoved = true;
+        }
+
+        if (oldTokens.Count > 0)
+        {
+            await _dbContext.SaveChangesAsync();
+        }
     }
 }

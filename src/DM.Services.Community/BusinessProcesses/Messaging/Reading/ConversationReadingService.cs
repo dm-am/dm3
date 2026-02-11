@@ -64,33 +64,21 @@ internal class ConversationReadingService : IConversationReadingService
     }
 
     /// <inheritdoc />
-    public async Task<Conversation> GetOrCreate(string login)
+    public async Task<Conversation> GetOrCreateDirect(string login)
     {
-        var visaviId = await _repository.FindUser(login);
-        if (!visaviId.HasValue)
+        var otherUserId = await _repository.FindUser(login);
+        if (!otherUserId.HasValue)
         {
             throw new HttpException(HttpStatusCode.Gone, "User not found");
         }
 
-        return await GetOrCreateInternal(visaviId.Value);
+        return await GetOrCreateDirectInternal(otherUserId.Value);
     }
 
-    /// <inheritdoc />
-    public async Task<Conversation> GetOrCreate(Guid visaviUserId)
-    {
-        var exists = await _repository.UserExists(visaviUserId);
-        if (!exists)
-        {
-            throw new HttpException(HttpStatusCode.Gone, "User not found");
-        }
-
-        return await GetOrCreateInternal(visaviUserId);
-    }
-
-    private async Task<Conversation> GetOrCreateInternal(Guid visaviId)
+    private async Task<Conversation> GetOrCreateDirectInternal(Guid otherUserId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
-        var existingConversation = await _repository.FindVisaviConversation(currentUserId, visaviId);
+        var existingConversation = await _repository.FindDirectConversation(currentUserId, otherUserId);
         if (existingConversation != null)
         {
             await _unreadCountersRepository.FillEntityCounters(new[] {existingConversation}, currentUserId,
@@ -98,11 +86,11 @@ internal class ConversationReadingService : IConversationReadingService
             return existingConversation;
         }
 
-        var (conversation, conversationLinks) = _factory.CreateVisavi(currentUserId, visaviId);
+        var (conversation, conversationLinks) = _factory.CreateDirect(currentUserId, otherUserId);
         var result = await _repository.Create(conversation, conversationLinks);
 
         await _unreadCountersRepository.Create(result.Id, UnreadEntryType.Message,
-            new[] {currentUserId, visaviId}.Distinct());
+            new[] {currentUserId, otherUserId}.Distinct());
 
         return result;
     }

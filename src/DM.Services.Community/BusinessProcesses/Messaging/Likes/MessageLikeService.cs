@@ -15,8 +15,8 @@ namespace DM.Services.Community.BusinessProcesses.Messaging.Likes;
 /// </summary>
 internal class MessageLikeService : LikeServiceBase, IMessageLikeService
 {
-    private readonly IMessageReadingService messageReadingService;
-    private readonly IIntentionManager intentionManager;
+    private readonly IMessageReadingService _messageReadingService;
+    private readonly IIntentionManager _intentionManager;
 
     /// <inheritdoc />
     public MessageLikeService(
@@ -28,23 +28,23 @@ internal class MessageLikeService : LikeServiceBase, IMessageLikeService
         IInvokedEventProducer invokedEventProducer)
         : base(identityProvider, likeFactory, likeRepository, invokedEventProducer)
     {
-        this.messageReadingService = messageReadingService;
-        this.intentionManager = intentionManager;
+        _messageReadingService = messageReadingService;
+        _intentionManager = intentionManager;
     }
 
     /// <inheritdoc />
     public async Task<GeneralUser> LikeMessage(Guid messageId)
     {
-        var message = await messageReadingService.Get(messageId);
-        intentionManager.ThrowIfForbidden(MessageIntention.Like, message);
+        var message = await _messageReadingService.Get(messageId);
+        _intentionManager.ThrowIfForbidden(MessageIntention.Like, message);
         return await Like(message, EventType.LikedMessage);
     }
 
     /// <inheritdoc />
     public async Task DislikeMessage(Guid messageId)
     {
-        var message = await messageReadingService.Get(messageId);
-        intentionManager.ThrowIfForbidden(MessageIntention.Like, message);
+        var message = await _messageReadingService.Get(messageId);
+        _intentionManager.ThrowIfForbidden(MessageIntention.Like, message);
         await Dislike(message);
     }
 }

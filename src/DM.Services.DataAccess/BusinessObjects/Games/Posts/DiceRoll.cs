@@ -23,7 +23,6 @@ public class DiceRoll
     /// <summary>
     /// Creation moment
     /// </summary>
-    [BsonElement("CreateDate")]
     [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
     public DateTime CreatedUtc { get; set; }
 
@@ -55,7 +54,6 @@ public class DiceRoll
     /// <summary>
     /// Maximum number of dice explosions (no explosion if 0, unlimited explosions if null)
     /// </summary>
-    [BsonElement("BlastCount")]
     public int? ExplosionCount { get; set; }
 
     /// <summary>
@@ -66,12 +64,12 @@ public class DiceRoll
     /// <summary>
     /// Roll commentary
     /// </summary>
-    public string Commentary { get; set; }
+    public string Commentary { get; set; } = null!;
 
     /// <summary>
     /// Result
     /// </summary>
-    public RollResult[] Result { get; set; }
+    public RollResult[] Result { get; set; } = null!;
 }
 
 /// <summary>
@@ -92,6 +90,5 @@ public class RollResult
     /// <summary>
     /// Exploded flag (die rolled maximum value and triggered re-roll)
     /// </summary>
-    [BsonElement("IsBlasted")]
     public bool IsExploded { get; set; }
 }

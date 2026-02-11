@@ -30,11 +30,10 @@ const { topics } = storeToRefs(useBoardsStore());
       <div class="col-last">Последнее сообщение</div>
     </div>
 
-    <the-loader v-if="!topics" :big="true" />
-    <secondary-text v-else-if="!topics.resources.length" class="topics-empty">
+    <secondary-text v-if="topics && !topics.resources.length" class="topics-empty">
       Еще не создано ни одной темы
     </secondary-text>
-    <template v-else>
+    <template v-else-if="topics">
       <div
         v-for="topic in topics.resources"
         :key="topic.id"

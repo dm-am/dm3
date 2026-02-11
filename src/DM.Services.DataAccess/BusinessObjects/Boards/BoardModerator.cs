@@ -31,11 +31,11 @@ public class BoardModerator
     /// Board
     /// </summary>
     [ForeignKey(nameof(BoardId))]
-    public virtual Board Board { get; set; }
+    public virtual Board Board { get; set; } = null!;
 
     /// <summary>
     /// User
     /// </summary>
     [ForeignKey(nameof(UserId))]
-    public virtual User User { get; set; }
+    public virtual User User { get; set; } = null!;
 }

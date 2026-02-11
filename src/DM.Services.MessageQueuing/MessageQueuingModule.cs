@@ -11,6 +11,24 @@ namespace DM.Services.MessageQueuing;
 /// <inheritdoc />
 public class MessageQueuingModule : Module
 {
+    private readonly bool _enableOutboxProcessor;
+
+    /// <summary>
+    /// Creates a new MessageQueuingModule with default settings (OutboxProcessor disabled)
+    /// </summary>
+    public MessageQueuingModule() : this(enableOutboxProcessor: false)
+    {
+    }
+
+    /// <summary>
+    /// Creates a new MessageQueuingModule
+    /// </summary>
+    /// <param name="enableOutboxProcessor">Whether to enable the outbox processor (requires DmDbContext)</param>
+    public MessageQueuingModule(bool enableOutboxProcessor)
+    {
+        _enableOutboxProcessor = enableOutboxProcessor;
+    }
+
     /// <inheritdoc />
     protected override void Load(ContainerBuilder builder)
     {
@@ -28,9 +46,12 @@ public class MessageQueuingModule : Module
             .As<IAsyncConnectionFactory>()
             .SingleInstance();
 
-        builder.RegisterType<OutboxProcessor>()
-            .As<IHostedService>()
-            .SingleInstance();
+        if (_enableOutboxProcessor)
+        {
+            builder.RegisterType<OutboxProcessor>()
+                .As<IHostedService>()
+                .SingleInstance();
+        }
 
         builder.RegisterDefaultTypes();
         base.Load(builder);

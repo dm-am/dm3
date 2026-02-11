@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Services.Core.Configuration;
@@ -46,15 +47,47 @@ internal class MailSendingProcessor : IProcessor<string, MailLetter>
     public async Task<ProcessResult> Process(string key, MailLetter message, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Sending letter to {Address}", message.Address.Obfuscate());
-        await _client.Value.SendAsync(new MimeMessage
+
+        var mimeMessage = new MimeMessage
         {
-            From = {new MailboxAddress(_configuration.FromDisplayName, _configuration.FromAddress)},
-            ReplyTo = {new MailboxAddress(_configuration.FromDisplayName, _configuration.ReplyToAddress)},
-            To = {MailboxAddress.Parse(message.Address)},
+            From = { new MailboxAddress(_configuration.FromDisplayName, _configuration.FromAddress) },
+            ReplyTo = { new MailboxAddress(_configuration.FromDisplayName, _configuration.ReplyToAddress) },
+            To = { MailboxAddress.Parse(message.Address) },
             Subject = message.Subject,
-            Body = new TextPart(TextFormat.Html) {Text = message.Body},
             MessageId = _correlationTokenProvider.Current.ToString()
-        }, cancellationToken);
+        };
+
+        mimeMessage.Body = BuildMessageBody(message);
+
+        await _client.Value.SendAsync(mimeMessage, cancellationToken);
         return ProcessResult.Success;
+    }
+
+    private static MimeEntity BuildMessageBody(MailLetter message)
+    {
+        var htmlPart = new TextPart(TextFormat.Html) { Text = message.Body };
+
+        // If no linked resources, return simple HTML body
+        if (message.LinkedResources.Count == 0)
+        {
+            return htmlPart;
+        }
+
+        // Build multipart/related for inline images (CID attachments)
+        var multipart = new MultipartRelated { htmlPart };
+
+        foreach (var resource in message.LinkedResources)
+        {
+            var attachment = new MimePart(resource.MimeType)
+            {
+                Content = new MimeContent(new MemoryStream(resource.Content)),
+                ContentId = resource.ContentId,
+                ContentDisposition = new ContentDisposition(ContentDisposition.Inline),
+                ContentTransferEncoding = ContentEncoding.Base64
+            };
+            multipart.Add(attachment);
+        }
+
+        return multipart;
     }
 }

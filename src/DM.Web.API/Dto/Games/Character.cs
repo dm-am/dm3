@@ -17,7 +17,7 @@ public class Character
     /// <summary>
     /// Character author
     /// </summary>
-    public User Author { get; set; }
+    public User Author { get; set; } = null!;
 
     /// <summary>
     /// Character status
@@ -32,22 +32,22 @@ public class Character
     /// <summary>
     /// Character name
     /// </summary>
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 
     /// <summary>
     /// Character race
     /// </summary>
-    public string Race { get; set; }
+    public string Race { get; set; } = null!;
 
     /// <summary>
     /// Character class
     /// </summary>
-    public string Class { get; set; }
+    public string Class { get; set; } = null!;
 
     /// <summary>
     /// Character picture URL
     /// </summary>
-    public string PictureUrl { get; set; }
+    public string PictureUrl { get; set; } = null!;
 }
 
 /// <summary>
@@ -84,12 +84,12 @@ public class CharacterAttribute
     /// <summary>
     /// Specification title
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Attribute value
     /// </summary>
-    public string Value { get; set; }
+    public string Value { get; set; } = null!;
 
     /// <summary>
     /// Attribute modifier

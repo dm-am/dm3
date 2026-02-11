@@ -28,9 +28,9 @@ public class ForumIntentionResolverShould : UnitTestBase
         policyConverter
             .Setup(c => c.Convert(UserRole.Admin))
             .Returns(
-                BoardAccessPolicy.BoardModerator |
-                BoardAccessPolicy.Player |
-                BoardAccessPolicy.MentorModerator);
+                BoardAccessPolicy.Moderator |
+                BoardAccessPolicy.RegularUser |
+                BoardAccessPolicy.Mentor);
 
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.Admin).Please(),
@@ -59,7 +59,7 @@ public class ForumIntentionResolverShould : UnitTestBase
             .Setup(c => c.Convert(UserRole.Admin))
             .Returns(
                 BoardAccessPolicy.Guest |
-                BoardAccessPolicy.Player |
+                BoardAccessPolicy.RegularUser |
                 BoardAccessPolicy.Administrator);
 
         var actual = resolver.IsAllowed(

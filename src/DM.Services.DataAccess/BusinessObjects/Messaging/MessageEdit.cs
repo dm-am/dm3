@@ -36,11 +36,11 @@ public class MessageEdit
     /// Parent message
     /// </summary>
     [ForeignKey(nameof(MessageId))]
-    public virtual Message Message { get; set; }
+    public virtual Message Message { get; set; } = null!;
 
     /// <summary>
     /// Editor user
     /// </summary>
     [ForeignKey(nameof(EditorUserId))]
-    public virtual User Editor { get; set; }
+    public virtual User Editor { get; set; } = null!;
 }

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SVG Icons Library
  * Все иконки с выверенными viewBox для единообразного отображения
  */
@@ -59,6 +59,13 @@ export const icons = {
   close: {
     viewBox: "3.1 3.1 17.8 17.8",
     path: '<path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="1.48" stroke-linecap="round"/>',
+    fill: "none",
+  },
+
+  /** Галочка (успех/подтверждение) */
+  checkmark: {
+    viewBox: "0 0 24 24",
+    path: '<polyline points="4 12 10 18 20 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>',
     fill: "none",
   },
 
@@ -154,7 +161,7 @@ export const icons = {
     fill: "none",
   },
 
-  /** Удалённый аватар */
+  /** Удаленный аватар */
   deletedAvatar: {
     viewBox: "0 0 56 56",
     path: '<circle cx="28" cy="28" r="26" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="4 2"/><path d="M18 18l20 20M38 18l-20 20" stroke="currentColor" stroke-width="1.5"/>',

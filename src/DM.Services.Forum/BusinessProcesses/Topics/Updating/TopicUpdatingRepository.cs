@@ -3,9 +3,9 @@ using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Services.DataAccess;
-using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.DataAccess.RelationalStorage;
-using DM.Services.Forum.Dto.Output;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
+using TopicDto = DM.Services.Forum.Dto.Output.Topic;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Services.Forum.BusinessProcesses.Topics.Updating;
@@ -26,14 +26,14 @@ internal class TopicUpdatingRepository : ITopicUpdatingRepository
     }
 
     /// <inheritdoc />
-    public async Task<Topic> Update(IUpdateBuilder<ForumTopic> updateBuilder)
+    public async Task<TopicDto> Update(IUpdateBuilder<TopicDal> updateBuilder)
     {
         var topicId = updateBuilder.AttachTo(_dbContext);
         await _dbContext.SaveChangesAsync();
-        return await _dbContext.ForumTopics
+        return await _dbContext.Topics
             .TagWith("DM.Forum.UpdatedTopic")
-            .Where(t => t.ForumTopicId == topicId)
-            .ProjectTo<Topic>(_mapper.ConfigurationProvider)
+            .Where(t => t.TopicId == topicId)
+            .ProjectTo<TopicDto>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }
 }

@@ -5,11 +5,13 @@ import "dayjs/locale/ru";
 import { createApp } from "vue";
 import { createPinia } from "pinia";
 import { createVfm } from "vue-final-modal";
+import Toast, { type PluginOptions, POSITION } from "vue-toastification";
 
 import App from "./App.vue";
 import router from "./router";
 
 import "vue-final-modal/style.css";
+import "vue-toastification/dist/index.css";
 import "@/assets/styles/ThemeVariables.css";
 import "@/assets/styles/Reset.sass";
 import "@/assets/styles/Fonts.sass";
@@ -21,7 +23,6 @@ import PageTitle from "@/components/layout/PageTitle.vue";
 import BlockTitle from "@/components/layout/BlockTitle.vue";
 import SidebarTitle from "@/components/layout/SidebarTitle.vue";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
-import TheLoader from "@/components/TheLoader.vue";
 import HumanDate from "@/components/dates/HumanDate.vue";
 import HumanTimespan from "@/components/dates/HumanTimespan.vue";
 import TheIcon from "@/components/icons/TheIcon.vue";
@@ -43,7 +44,6 @@ const application = createApp(App);
 application.config.globalProperties.IconType = IconType;
 
 application
-  .component("TheLoader", TheLoader)
   .component("TheIcon", TheIcon)
   .component("PageTitle", PageTitle)
   .component("BlockTitle", BlockTitle)
@@ -57,9 +57,15 @@ application
   .component("HumanTimespan", HumanTimespan)
   .component("UserLink", UserLink);
 
+const toastOptions: PluginOptions = {
+  position: POSITION.TOP_RIGHT,
+  timeout: 5000,
+};
+
 application
   .use(createPinia())
   .use(router)
   .use(createVfm())
   .use(i18n)
+  .use(Toast, toastOptions)
   .mount("#application");

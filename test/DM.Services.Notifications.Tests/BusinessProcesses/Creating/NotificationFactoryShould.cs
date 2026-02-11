@@ -66,8 +66,8 @@ public class NotificationFactoryShould : UnitTestBase
         var result = factory.Create(createNotification, createDate);
 
         // Assert
-        result.CreateDate.Should().Be(createDate.UtcDateTime);
-        result.CreateDate.Kind.Should().Be(DateTimeKind.Utc);
+        result.CreatedUtc.Should().Be(createDate.UtcDateTime);
+        result.CreatedUtc.Kind.Should().Be(DateTimeKind.Utc);
     }
 
     [Fact]

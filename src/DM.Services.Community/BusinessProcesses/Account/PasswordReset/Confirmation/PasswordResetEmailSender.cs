@@ -1,4 +1,5 @@
 using DM.Services.Core.Configuration;
+using DM.Services.Mail.Rendering.Assets;
 using DM.Services.Mail.Rendering.Rendering;
 using DM.Services.Mail.Rendering.ViewModels;
 using DM.Services.Mail.Sender;
@@ -13,16 +14,19 @@ internal class PasswordResetEmailSender : IPasswordResetEmailSender
 {
     private readonly IRenderer _renderer;
     private readonly IMailSender _mailSender;
+    private readonly IEmailAssetsProvider _emailAssetsProvider;
     private readonly IntegrationSettings _integrationSettings;
 
     /// <inheritdoc />
     public PasswordResetEmailSender(
         IRenderer renderer,
         IMailSender mailSender,
+        IEmailAssetsProvider emailAssetsProvider,
         IOptions<IntegrationSettings> integrationOptions)
     {
         _renderer = renderer;
         _mailSender = mailSender;
+        _emailAssetsProvider = emailAssetsProvider;
         _integrationSettings = integrationOptions.Value;
     }
 
@@ -37,7 +41,8 @@ internal class PasswordResetEmailSender : IPasswordResetEmailSender
         {
             Address = email,
             Subject = $"Подтверждение сброса пароля на DM.AM для {login}",
-            Body = emailBody
+            Body = emailBody,
+            LinkedResources = [_emailAssetsProvider.GetLogo()]
         });
     }
 }

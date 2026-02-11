@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using DM.Services.DataAccess;
 using DM.Services.DataAccess.BusinessObjects.Common;
@@ -28,8 +29,8 @@ internal class LikeRepository : ILikeRepository
     /// <inheritdoc />
     public async Task Delete(Guid topicId, Guid userId)
     {
-        var like = await _dbContext.Likes.FirstAsync(l => l.UserId == userId && l.EntityId == topicId);
-        _dbContext.Likes.Remove(like);
-        await _dbContext.SaveChangesAsync();
+        await _dbContext.Likes
+            .Where(l => l.UserId == userId && l.EntityId == topicId)
+            .ExecuteUpdateAsync(s => s.SetProperty(l => l.IsRemoved, true));
     }
 }

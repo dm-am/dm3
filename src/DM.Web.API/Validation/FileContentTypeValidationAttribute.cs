@@ -17,7 +17,7 @@ internal class FileContentTypeValidationAttribute : ValidationAttribute
     }
 
     /// <inheritdoc />
-    protected override ValidationResult IsValid(object value, ValidationContext validationContext) => value switch
+    protected override ValidationResult? IsValid(object? value, ValidationContext validationContext) => value switch
     {
         IFormFileCollection files => files.All(IsValid)
             ? ValidationResult.Success

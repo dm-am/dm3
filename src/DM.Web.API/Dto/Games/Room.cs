@@ -18,12 +18,12 @@ public class Room
     /// <summary>
     /// Previous room identifier
     /// </summary>
-    public Optional<Guid> PreviousRoomId { get; set; }
+    public Optional<Guid>? PreviousRoomId { get; set; }
 
     /// <summary>
     /// Room title
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Room access type
@@ -36,14 +36,14 @@ public class Room
     public RoomType? Type { get; set; }
 
     /// <summary>
-    /// Room claims
+    /// Room accesses
     /// </summary>
-    public IEnumerable<RoomClaim> Claims { get; set; }
+    public IEnumerable<RoomAccess> Accesses { get; set; } = [];
 
     /// <summary>
-    /// Post pendings
+    /// Post pendencies
     /// </summary>
-    public IEnumerable<PendingPost> Pendings { get; set; }
+    public IEnumerable<PostPendency> Pendencies { get; set; } = [];
 
     /// <summary>
     /// Number of unread posts
@@ -53,7 +53,7 @@ public class Room
     /// <summary>
     /// Room settings
     /// </summary>
-    public RoomSettings Settings { get; set; }
+    public RoomSettings Settings { get; set; } = null!;
 }
 
 /// <summary>

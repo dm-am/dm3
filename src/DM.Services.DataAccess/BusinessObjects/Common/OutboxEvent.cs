@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace DM.Services.DataAccess.BusinessObjects.Common;
 
@@ -42,4 +43,20 @@ public class OutboxEvent
     /// Whether the event has been processed
     /// </summary>
     public bool IsProcessed { get; set; }
+
+    /// <summary>
+    /// Number of processing attempts
+    /// </summary>
+    public int RetryCount { get; set; }
+
+    /// <summary>
+    /// Next retry time (null for immediate retry)
+    /// </summary>
+    public DateTimeOffset? NextRetryUtc { get; set; }
+
+    /// <summary>
+    /// Last error message (truncated to 2000 chars)
+    /// </summary>
+    [MaxLength(2000)]
+    public string? LastError { get; set; }
 }

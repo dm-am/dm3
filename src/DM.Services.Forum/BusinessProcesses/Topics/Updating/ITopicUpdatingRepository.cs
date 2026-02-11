@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
-using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.DataAccess.RelationalStorage;
-using DM.Services.Forum.Dto.Output;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
+using TopicDto = DM.Services.Forum.Dto.Output.Topic;
 
 namespace DM.Services.Forum.BusinessProcesses.Topics.Updating;
 
@@ -15,5 +15,5 @@ internal interface ITopicUpdatingRepository
     /// </summary>
     /// <param name="updateBuilder"></param>
     /// <returns>DTO model of updated topic</returns>
-    Task<Topic> Update(IUpdateBuilder<ForumTopic> updateBuilder);
+    Task<TopicDto> Update(IUpdateBuilder<TopicDal> updateBuilder);
 }

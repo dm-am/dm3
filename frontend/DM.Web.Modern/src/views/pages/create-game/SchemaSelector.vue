@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import type { AttributeSchema } from "@/api/models/gaming";
-import gamingApi from "@/api/requests/gamingApi";
+import type { AttributeSchema } from "@/api/models/game";
+import gameApi from "@/api/requests/gameApi";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
-import TheLoader from "@/components/TheLoader.vue";
 
 const model = defineModel<string | null>();
 
@@ -15,7 +14,7 @@ async function loadSchemas() {
   loading.value = true;
   error.value = null;
 
-  const { data, error: apiError } = await gamingApi.getSchemas();
+  const { data, error: apiError } = await gameApi.getSchemas();
 
   if (apiError) {
     error.value = apiError.title || "Failed to load schemas";
@@ -31,9 +30,7 @@ onMounted(loadSchemas);
 
 <template>
   <div class="schema-selector">
-    <the-loader v-if="loading" />
-
-    <div v-else-if="error" class="selector-error">
+    <div v-if="error" class="selector-error">
       {{ error }}
     </div>
 
@@ -51,8 +48,8 @@ onMounted(loadSchemas);
         <span class="option-label">Без системы атрибутов</span>
       </label>
       <label
-        v-for="schema in schemas"
-        :key="schema.id"
+        v-for="(schema, index) in schemas"
+        :key="schema.id ?? index"
         class="schema-option"
       >
         <input

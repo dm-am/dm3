@@ -118,7 +118,7 @@ function onSearchBlur() {
         class="search-results"
       >
         <div v-if="isSearching" class="search-loading">
-          <the-loader :small="true" />
+          ...
         </div>
         <div
           v-for="user in searchResults"
@@ -143,9 +143,7 @@ function onSearchBlur() {
       </div>
     </div>
 
-    <the-loader v-if="loadingConversations" :big="true" />
-
-    <div v-else-if="conversations?.resources.length" class="conversations-list">
+    <div v-if="conversations?.resources.length" class="conversations-list">
       <conversation-preview
         v-for="conv in conversations.resources"
         :key="conv.id"

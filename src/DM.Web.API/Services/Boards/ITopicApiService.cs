@@ -29,9 +29,9 @@ public interface ITopicApiService
     /// Create new topic
     /// </summary>
     /// <param name="forumId">Forum identifier</param>
-    /// <param name="topic">Topic model</param>
+    /// <param name="request">Topic creation request</param>
     /// <returns>Envelope of created topic</returns>
-    Task<Envelope<Topic>> Create(string forumId, Topic topic);
+    Task<Envelope<Topic>> Create(string forumId, CreateTopicRequest request);
 
     /// <summary>
     /// Updates topic

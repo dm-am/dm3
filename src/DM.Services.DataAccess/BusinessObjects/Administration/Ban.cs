@@ -38,7 +38,7 @@ public class Ban : IAdministrated
     /// <summary>
     /// Moderator commentary for the ban
     /// </summary>
-    public string Comment { get; set; }
+    public string Comment { get; set; } = null!;
 
     /// <summary>
     /// Restriction policy for banned user
@@ -55,9 +55,9 @@ public class Ban : IAdministrated
 
     /// <inheritdoc />
     [ForeignKey(nameof(UserId))]
-    public virtual User User { get; set; }
+    public virtual User User { get; set; } = null!;
 
     /// <inheritdoc />
     [ForeignKey(nameof(ModeratorId))]
-    public virtual User Moderator { get; set; }
+    public virtual User Moderator { get; set; } = null!;
 }

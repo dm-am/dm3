@@ -27,7 +27,7 @@ internal class NotificationsReadingRepository : NotificationQueriesRepository, I
     {
         return await Collection
             .Find(UserInterested(userId))
-            .Sort(Sort.Descending(n => n.CreateDate))
+            .Sort(Sort.Descending(n => n.CreatedUtc))
             .Skip(pagingData.Skip)
             .Limit(pagingData.Take)
             .Project(Project.As<UserNotification>())

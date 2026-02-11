@@ -45,12 +45,12 @@ internal class CommentaryReadingRepository : ICommentaryReadingRepository
     }
 
     /// <inheritdoc />
-    public Task<Comment> Get(Guid commentId)
+    public Task<Comment?> Get(Guid commentId)
     {
         return _dbContext.Comments
             .TagWith("DM.Forum.Comment")
             .Where(c => !c.IsRemoved && c.CommentId == commentId)
             .ProjectTo<Comment>(_mapper.ConfigurationProvider)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync()!;
     }
 }

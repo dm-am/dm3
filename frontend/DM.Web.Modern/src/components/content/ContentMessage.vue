@@ -116,11 +116,11 @@ const likesCount = computed(() => props.message.likes?.length ?? 0);
 
 const messageAnchor = computed(() => `#message-${props.message.id}`);
 
-const ONLINE_THRESHOLD_MINUTES = 15;
+const ONLINE_THRESHOLD_MINUTES = 5;
 const isAuthorOnline = computed(() => {
-  const onlineUtc = props.message.author?.onlineUtc;
-  if (!onlineUtc) return false;
-  const minutesSinceOnline = dayjs().diff(dayjs(onlineUtc), "minute", true);
+  const lastActivityUtc = props.message.author?.lastActivityUtc;
+  if (!lastActivityUtc) return false;
+  const minutesSinceOnline = dayjs().diff(dayjs(lastActivityUtc), "minute", true);
   return minutesSinceOnline <= ONLINE_THRESHOLD_MINUTES;
 });
 
@@ -563,12 +563,12 @@ watch(
   color: $text-muted
 
 .message-content
-  +bbcode-content
   word-wrap: break-word
   word-break: break-word
   overflow-wrap: break-word
   overflow: hidden
   color: $text
+  +bbcode-content
 
   &.collapsed
     overflow: hidden
@@ -738,12 +738,12 @@ watch(
     font-size: 11px
 
   .compact-content
-    +bbcode-content
     margin-top: $tiny
     color: $text
     line-height: 1.4
     word-break: break-word
     overflow-wrap: break-word
+    +bbcode-content
 
     :deep(p)
       margin: 0

@@ -14,7 +14,7 @@ internal class TopicIntentionResolver : IIntentionResolver<TopicIntention, Topic
     {
         TopicIntention.CreateComment when user.IsAuthenticated => !target.IsClosed,
         TopicIntention.Edit when user.IsAuthenticated => target.Author.UserId == user.UserId && !target.IsClosed ||
-                                                         target.Board.ModeratorIds.Contains(user.UserId) || user.Role >= UserRole.Admin,
+                                                         target.Board.ModeratorIds.Contains(user.UserId) || user.Role >= UserRole.Moderator,
         TopicIntention.Like when user.IsAuthenticated => target.Author.UserId != user.UserId,
         _ => false
     };

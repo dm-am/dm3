@@ -22,8 +22,7 @@ internal class TopicProfile : Profile
         CreateMap<LastComment, LastTopicComment>()
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(c => c.CreatedUtc));
 
-        CreateMap<Topic, CreateTopic>()
-            .ForMember(d => d.Text, s => s.MapFrom(t => t.Description));
+        CreateMap<CreateTopicRequest, CreateTopic>();
 
         CreateMap<Topic, UpdateTopic>()
             .ForMember(d => d.Text, s => s.MapFrom(t => t.Description))

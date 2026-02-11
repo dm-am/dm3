@@ -7,12 +7,12 @@ using DM.Services.Common.Authorization;
 using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Boards;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
 using DM.Services.Forum.Authorization;
 using DM.Services.Forum.BusinessProcesses.Boards;
 using DM.Services.Forum.BusinessProcesses.Topics.Creating;
 using DM.Services.Forum.Dto.Input;
-using DM.Services.Forum.Dto.Output;
+using TopicDto = DM.Services.Forum.Dto.Output.Topic;
 using DM.Services.MessageQueuing.GeneralBus;
 using DM.Tests.Core;
 using FluentAssertions;
@@ -28,9 +28,9 @@ public class TopicCreatingServiceShould : UnitTestBase
 {
     private readonly ISetup<IBoardReadingService, Task<Dto.Output.Board>> getBoardSetup;
     private readonly Mock<IIntentionManager> intentionManager;
-    private readonly ISetup<ITopicFactory, ForumTopic> createTopicSetup;
+    private readonly ISetup<ITopicFactory, TopicDal> createTopicSetup;
     private readonly Mock<ITopicCreatingRepository> creatingRepository;
-    private readonly ISetup<ITopicCreatingRepository, Task<Topic>> saveTopicSetup;
+    private readonly ISetup<ITopicCreatingRepository, Task<TopicDto>> saveTopicSetup;
     private readonly Mock<IUnreadCountersRepository> unreadCountersRepository;
     private readonly Mock<IInvokedEventProducer> publisher;
     private readonly TopicCreatingService service;
@@ -60,7 +60,7 @@ public class TopicCreatingServiceShould : UnitTestBase
             It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CreateTopic>()));
 
         creatingRepository = Mock<ITopicCreatingRepository>();
-        saveTopicSetup = creatingRepository.Setup(r => r.Create(It.IsAny<ForumTopic>(), It.IsAny<CancellationToken>()));
+        saveTopicSetup = creatingRepository.Setup(r => r.Create(It.IsAny<TopicDal>(), It.IsAny<CancellationToken>()));
 
         unreadCountersRepository = Mock<IUnreadCountersRepository>();
         unreadCountersRepository
@@ -88,9 +88,9 @@ public class TopicCreatingServiceShould : UnitTestBase
         var createTopic = new CreateTopic {BoardTitle = "Forum X"};
         var forum = new Dto.Output.Board {Id = Guid.NewGuid()};
         getBoardSetup.ReturnsAsync(forum);
-        var forumTopic = new ForumTopic();
+        var forumTopic = new TopicDal();
         createTopicSetup.Returns(forumTopic);
-        saveTopicSetup.ReturnsAsync(new Topic());
+        saveTopicSetup.ReturnsAsync(new TopicDto());
 
         await service.CreateTopic(createTopic);
 
@@ -103,9 +103,9 @@ public class TopicCreatingServiceShould : UnitTestBase
         var createTopic = new CreateTopic {BoardTitle = "Forum Y"};
         var forum = new Dto.Output.Board {Id = Guid.NewGuid()};
         getBoardSetup.ReturnsAsync(forum);
-        var forumTopic = new ForumTopic();
+        var forumTopic = new TopicDal();
         createTopicSetup.Returns(forumTopic);
-        var expected = new Topic();
+        var expected = new TopicDto();
         saveTopicSetup.ReturnsAsync(expected);
 
         var actual = await service.CreateTopic(createTopic);
@@ -123,9 +123,9 @@ public class TopicCreatingServiceShould : UnitTestBase
         var forum = new Dto.Output.Board {Id = forumId};
         getBoardSetup.ReturnsAsync(forum);
         var forumTopicId = Guid.NewGuid();
-        var forumTopic = new ForumTopic {ForumTopicId = forumTopicId};
+        var forumTopic = new TopicDal {TopicId = forumTopicId};
         createTopicSetup.Returns(forumTopic);
-        saveTopicSetup.ReturnsAsync(new Topic {Id = forumTopicId});
+        saveTopicSetup.ReturnsAsync(new TopicDto {Id = forumTopicId});
 
         await service.CreateTopic(createTopic);
 
@@ -140,9 +140,9 @@ public class TopicCreatingServiceShould : UnitTestBase
         var forum = new Dto.Output.Board {Id = Guid.NewGuid()};
         getBoardSetup.ReturnsAsync(forum);
         var forumTopicId = Guid.NewGuid();
-        var forumTopic = new ForumTopic {ForumTopicId = forumTopicId};
+        var forumTopic = new TopicDal {TopicId = forumTopicId};
         createTopicSetup.Returns(forumTopic);
-        saveTopicSetup.ReturnsAsync(new Topic {Id = forumTopicId});
+        saveTopicSetup.ReturnsAsync(new TopicDto {Id = forumTopicId});
 
         await service.CreateTopic(createTopic);
 

@@ -15,12 +15,12 @@ public class AttributeSpecification
     /// <summary>
     /// Display name
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Specification constraints
     /// </summary>
-    public AttributeConstraints Constraints { get; set; }
+    public AttributeConstraints Constraints { get; set; } = null!;
 
     /// <summary>
     /// Show on game main page as descriptor

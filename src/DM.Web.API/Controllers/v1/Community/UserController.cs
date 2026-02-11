@@ -1,34 +1,46 @@
-using System;
 using System.Threading.Tasks;
 using DM.Services.Core.Dto.Enums;
 using DM.Web.API.Authentication;
 using DM.Web.API.Dto.Contracts;
 using DM.Web.API.Dto.Users;
 using DM.Web.API.Services.Users;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DM.Web.API.Controllers.v1.Community;
 
-/// <inheritdoc />
+/// <summary>
+/// User management API for public user profiles
+/// </summary>
+/// <remarks>
+/// Provides read-only endpoints for viewing public user profiles and searching users.
+/// For profile updates use /v1/account endpoints.
+/// For moderation use /v1/moderation/users endpoints.
+/// </remarks>
 [ApiController]
 [Route("v1/users")]
 [ApiExplorerSettings(GroupName = "Community")]
+[Tags("Users")]
 public class UserController : ControllerBase
 {
     private readonly IUserApiService _userApiService;
+    private readonly ILoginHistoryApiService _loginHistoryApiService;
 
     /// <inheritdoc />
     public UserController(
-        IUserApiService userApiService)
+        IUserApiService userApiService,
+        ILoginHistoryApiService loginHistoryApiService)
     {
         _userApiService = userApiService;
+        _loginHistoryApiService = loginHistoryApiService;
     }
 
     /// <summary>
     /// Get list of activated users
     /// </summary>
-    /// <response code="200"></response>
-    [HttpGet("")]
+    /// <param name="query">Filtering and pagination parameters</param>
+    /// <response code="200">Paginated list of users</response>
+    [HttpGet("", Name = nameof(GetUsers))]
     [ProducesResponseType(typeof(ListEnvelope<User>), 200)]
     public async Task<IActionResult> GetUsers([FromQuery] UsersQuery query) =>
         Ok(await _userApiService.GetUsers(query));
@@ -36,128 +48,54 @@ public class UserController : ControllerBase
     /// <summary>
     /// Get users by role
     /// </summary>
-    /// <param name="role">User role</param>
-    /// <response code="200"></response>
+    /// <param name="role">User role to filter by (e.g., Admin, Moderator, Player)</param>
+    /// <response code="200">List of users with the specified role</response>
     [HttpGet("by-role/{role}", Name = nameof(GetUsersByRole))]
     [ProducesResponseType(typeof(ListEnvelope<User>), 200)]
     public async Task<IActionResult> GetUsersByRole(UserRole role) =>
         Ok(await _userApiService.GetUsersByRole(role));
 
     /// <summary>
-    /// Get current authenticated user
-    /// </summary>
-    /// <response code="200"></response>
-    /// <response code="401">User must be authenticated</response>
-    [HttpGet("me", Name = nameof(GetCurrentUser))]
-    [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<User>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    public async Task<IActionResult> GetCurrentUser() => Ok(await _userApiService.GetCurrentUser());
-
-    /// <summary>
-    /// Get user by ID
-    /// </summary>
-    /// <param name="id">User ID</param>
-    /// <response code="200"></response>
-    /// <response code="410">User not found</response>
-    [HttpGet("{id:guid}", Name = nameof(GetUserById))]
-    [ProducesResponseType(typeof(Envelope<User>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> GetUserById(Guid id) => Ok(await _userApiService.GetUser(id));
-
-    /// <summary>
     /// Get user by login
     /// </summary>
-    /// <param name="login"></param>
-    /// <response code="200"></response>
-    /// <response code="410">User not found</response>
-    [HttpGet("by-login/{login}", Name = nameof(GetUserByLogin))]
+    /// <param name="login">User login (username)</param>
+    /// <response code="200">User profile retrieved successfully</response>
+    /// <response code="404">User not found or was deleted</response>
+    [HttpGet("{login}", Name = nameof(GetUserByLogin))]
     [ProducesResponseType(typeof(Envelope<User>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
+    [ProducesResponseType(typeof(GeneralError), 404)]
     public async Task<IActionResult> GetUserByLogin(string login) => Ok(await _userApiService.GetUser(login));
-
-    /// <summary>
-    /// Get user (legacy endpoint, prefer by-login/{login})
-    /// </summary>
-    /// <param name="login"></param>
-    /// <response code="200"></response>
-    /// <response code="410">User not found</response>
-    [HttpGet("{login}", Name = nameof(GetUser))]
-    [ProducesResponseType(typeof(Envelope<User>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> GetUser(string login) => Ok(await _userApiService.GetUser(login));
-
-    /// <summary>
-    /// Get user details by ID
-    /// </summary>
-    /// <param name="id">User ID</param>
-    /// <response code="200"></response>
-    /// <response code="410">User not found</response>
-    [HttpGet("{id:guid}/details", Name = nameof(GetUserDetailsById))]
-    [ProducesResponseType(typeof(Envelope<UserDetails>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> GetUserDetailsById(Guid id) => Ok(await _userApiService.GetUserDetails(id));
 
     /// <summary>
     /// Get user details by login
     /// </summary>
-    /// <param name="login"></param>
-    /// <response code="200"></response>
-    /// <response code="410">User not found</response>
+    /// <param name="login">User login (username)</param>
+    /// <response code="200">User details retrieved successfully</response>
+    /// <response code="404">User not found or was deleted</response>
     [HttpGet("{login}/details", Name = nameof(GetUserDetails))]
     [ProducesResponseType(typeof(Envelope<UserDetails>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
+    [ProducesResponseType(typeof(GeneralError), 404)]
     public async Task<IActionResult> GetUserDetails(string login) => Ok(await _userApiService.GetUserDetails(login));
 
     /// <summary>
-    /// Update user details
+    /// Get login history for a user
     /// </summary>
-    /// <param name="login"></param>
-    /// <param name="user"></param>
-    /// <response code="200"></response>
-    /// <response code="400">Some parameters were incorrect</response>
-    /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User is not allowed to modify this user</response>
-    /// <response code="410">User not found</response>
-    [HttpPatch("{login}/details", Name = nameof(PatchUserDetails))]
-    [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<UserDetails>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PatchUserDetails(string login, [FromBody] UserDetails user) =>
-        Ok(await _userApiService.UpdateUser(login, user));
+    /// <param name="login">User login (username)</param>
+    /// <response code="200">Login history retrieved successfully</response>
+    /// <response code="404">User not found or was deleted</response>
+    [HttpGet("{login}/login-history", Name = nameof(GetLoginHistory))]
+    [ProducesResponseType(typeof(ListEnvelope<LoginHistoryDto>), 200)]
+    [ProducesResponseType(typeof(GeneralError), 404)]
+    public async Task<IActionResult> GetLoginHistory(string login) => Ok(await _loginHistoryApiService.GetByLogin(login));
 
     /// <summary>
-    /// Get user settings
+    /// Get best post (highest rated) by user from open rooms
     /// </summary>
-    /// <param name="login"></param>
-    /// <response code="200"></response>
-    /// <response code="410">User not found</response>
-    [HttpGet("{login}/settings", Name = nameof(GetUserSettings))]
-    [ProducesResponseType(typeof(Envelope<UserSettings>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> GetUserSettings(string login) =>
-        Ok(await _userApiService.GetUserSettings(login));
-
-    /// <summary>
-    /// Update user settings
-    /// </summary>
-    /// <param name="login"></param>
-    /// <param name="settings"></param>
-    /// <response code="200"></response>
-    /// <response code="400">Some parameters were incorrect</response>
-    /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User is not allowed to modify this user</response>
-    /// <response code="410">User not found</response>
-    [HttpPatch("{login}/settings", Name = nameof(PatchUserSettings))]
-    [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<UserSettings>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 410)]
-    public async Task<IActionResult> PatchUserSettings(string login, [FromBody] UserSettings settings) =>
-        Ok(await _userApiService.UpdateUserSettings(login, settings));
+    /// <param name="login">User login (username)</param>
+    /// <response code="200">Best post retrieved successfully</response>
+    /// <response code="404">User not found or no best post found</response>
+    [HttpGet("{login}/best-post", Name = nameof(GetBestPost))]
+    [ProducesResponseType(typeof(Envelope<BestPost>), 200)]
+    [ProducesResponseType(typeof(GeneralError), 404)]
+    public async Task<IActionResult> GetBestPost(string login) => Ok(await _userApiService.GetBestPost(login));
 }

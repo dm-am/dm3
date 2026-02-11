@@ -33,7 +33,7 @@ internal interface IConversationReadingRepository
     /// <param name="conversationId">Conversation identifier</param>
     /// <param name="userId">User identifier</param>
     /// <returns></returns>
-    Task<Conversation> Get(Guid conversationId, Guid userId);
+    Task<Conversation?> Get(Guid conversationId, Guid userId);
 
     /// <summary>
     /// Find user for conversation by login
@@ -43,19 +43,12 @@ internal interface IConversationReadingRepository
     Task<Guid?> FindUser(string login);
 
     /// <summary>
-    /// Check if user exists by ID
-    /// </summary>
-    /// <param name="userId">User ID</param>
-    /// <returns>True if user exists</returns>
-    Task<bool> UserExists(Guid userId);
-
-    /// <summary>
-    /// Find existing visavi conversation
+    /// Find existing direct (1-on-1) conversation
     /// </summary>
     /// <param name="userId">User identifier</param>
-    /// <param name="visaviId">Visavi user identifier</param>
+    /// <param name="otherUserId">Other user identifier</param>
     /// <returns></returns>
-    Task<Conversation> FindVisaviConversation(Guid userId, Guid visaviId);
+    Task<Conversation?> FindDirectConversation(Guid userId, Guid otherUserId);
 
     /// <summary>
     /// Save conversation

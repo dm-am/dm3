@@ -47,7 +47,6 @@ internal class PublicImageUploadRepository : IPublicImageUploadRepository
     public async Task RemoveObsoleteUploads(Guid entityId)
     {
         var uploadsInfo = await dbContext.Uploads
-            .Where(u => !u.IsRemoved)
             .Where(u => u.EntityId == entityId)
             .OrderByDescending(u => u.CreatedUtc)
             .Select(u => new {u.CreatedUtc, u.UploadId})

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Web.API.Dto.Contracts;
 using DM.Web.API.Dto.Users;
@@ -23,7 +24,6 @@ public interface ILoginApiService
     /// Logout as current user
     /// </summary>
     /// <param name="httpContext">HTTP context</param>
-    /// <returns></returns>
     Task Logout(HttpContext httpContext);
 
     /// <summary>
@@ -31,7 +31,6 @@ public interface ILoginApiService
     /// And create one new session
     /// </summary>
     /// <param name="httpContext">HTTP context</param>
-    /// <returns></returns>
     Task LogoutAll(HttpContext httpContext);
 
     /// <summary>
@@ -39,4 +38,23 @@ public interface ILoginApiService
     /// </summary>
     /// <returns>Current user</returns>
     Task<Envelope<UserDetails>> GetCurrent();
+
+    /// <summary>
+    /// Get all active sessions for current user
+    /// </summary>
+    /// <returns>List of sessions</returns>
+    Task<ListEnvelope<SessionInfo>> GetSessions();
+
+    /// <summary>
+    /// Update current user settings
+    /// </summary>
+    /// <param name="settings">New settings</param>
+    /// <returns>Updated settings</returns>
+    Task<Envelope<UserSettings>> UpdateSettings(UserSettings settings);
+
+    /// <summary>
+    /// Terminate a specific session
+    /// </summary>
+    /// <param name="sessionId">Session ID to terminate</param>
+    Task TerminateSession(System.Guid sessionId);
 }

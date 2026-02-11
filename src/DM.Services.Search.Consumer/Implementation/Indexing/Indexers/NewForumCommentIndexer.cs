@@ -38,12 +38,12 @@ internal class NewForumCommentIndexer : BaseIndexer
     {
         var comment = await _dbContext.Comments
             .Where(c => c.CommentId == message.EntityId)
-            .Select(c => new {c.Topic.Board.ViewPolicy, c.Topic.ForumTopicId, c.Text})
+            .Select(c => new {c.Topic!.Board.ViewPolicy, c.Topic!.TopicId, c.Text})
             .FirstAsync();
         await _repository.Index(new SearchEntity
         {
             Id = message.EntityId,
-            ParentEntityId = comment.ForumTopicId,
+            ParentEntityId = comment.TopicId,
             EntityType = SearchEntityType.ForumComment,
             Text = _parserProvider.CurrentCommon.Parse(comment.Text).ToHtml(),
             AuthorizedRoles = comment.ViewPolicy.GetAuthorizedRoles()

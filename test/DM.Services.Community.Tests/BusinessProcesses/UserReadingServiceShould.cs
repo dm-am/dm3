@@ -4,8 +4,10 @@ using System.Threading.Tasks;
 using DM.Services.Authentication.Dto;
 using DM.Services.Authentication.Implementation.UserIdentity;
 using DM.Services.Community.BusinessProcesses.Users.Reading;
+using DM.Services.Common.Authorization;
 using DM.Services.Core.Caching;
 using DM.Services.Core.Dto;
+using DM.Services.Core.Dto.Enums;
 using DM.Services.Core.Exceptions;
 using DM.Tests.Core;
 using FluentAssertions;
@@ -31,13 +33,14 @@ public class UserReadingServiceShould : UnitTestBase
         currentUserSettingsSetup = identity.Setup(i => i.Settings);
 
         readingRepository = Mock<IUserReadingRepository>();
+        var intentionManager = Mock<IIntentionManager>();
         var cache = Mock<ICache>();
         // Configure cache to invoke the factory function (pass-through)
         cache
             .Setup(c => c.GetOrCreate(It.IsAny<object>(), It.IsAny<Func<Task<UserDetails>>>(), It.IsAny<TimeSpan>()))
             .Returns((object key, Func<Task<UserDetails>> factory, TimeSpan ttl) => factory());
 
-        service = new UserReadingService(identityProvider.Object, readingRepository.Object, cache.Object);
+        service = new UserReadingService(identityProvider.Object, readingRepository.Object, intentionManager.Object, cache.Object);
     }
 
     [Fact]
@@ -45,7 +48,7 @@ public class UserReadingServiceShould : UnitTestBase
     {
         readingRepository
             .Setup(r => r.GetUserDetails(It.IsAny<string>()))
-            .ReturnsAsync((UserDetails) null);
+            .ReturnsAsync((UserDetails?)null!);
 
         (await service.Awaiting(s => s.GetDetails("User"))
             .Should().ThrowAsync<HttpException>())
@@ -72,7 +75,7 @@ public class UserReadingServiceShould : UnitTestBase
     {
         readingRepository
             .Setup(r => r.GetUser(It.IsAny<string>()))
-            .ReturnsAsync((GeneralUser) null);
+            .ReturnsAsync((GeneralUser?)null!);
 
         (await service.Awaiting(s => s.Get("User"))
             .Should().ThrowAsync<HttpException>())
@@ -99,16 +102,16 @@ public class UserReadingServiceShould : UnitTestBase
     {
         var expected = new GeneralUser[0];
         readingRepository
-            .Setup(r => r.CountUsers(It.IsAny<bool>(), It.IsAny<string>()))
+            .Setup(r => r.CountUsers(It.IsAny<UserActivityFilter>(), It.IsAny<string>()))
             .ReturnsAsync(10);
         readingRepository
-            .Setup(r => r.GetUsers(It.IsAny<PagingData>(), It.IsAny<bool>(), It.IsAny<string>()))
+            .Setup(r => r.GetUsers(It.IsAny<PagingData>(), It.IsAny<UserActivityFilter>(), It.IsAny<string>()))
             .ReturnsAsync(expected);
         currentUserSettingsSetup.Returns(new UserSettings{Paging = new PagingSettings{EntitiesPerPage = 10}});
 
-        var (actual, _) = await service.Get(new PagingQuery(), true);
+        var (actual, _) = await service.Get(new PagingQuery(), UserActivityFilter.Active);
         actual.Should().BeSameAs(expected);
-        readingRepository.Verify(r => r.CountUsers(true, null), Times.Once);
-        readingRepository.Verify(r => r.GetUsers(It.IsAny<PagingData>(), true, null));
+        readingRepository.Verify(r => r.CountUsers(UserActivityFilter.Active, null), Times.Once);
+        readingRepository.Verify(r => r.GetUsers(It.IsAny<PagingData>(), UserActivityFilter.Active, null));
     }
 }

@@ -8,12 +8,10 @@ namespace DM.Services.Community.BusinessProcesses.Account.Registration;
 internal interface IUserFactory
 {
     /// <summary>
-    /// Create new user from registration model
+    /// Create new user from pending registration and chosen login
     /// </summary>
-    /// <param name="registration">Registration DTO model</param>
-    /// <param name="salt">Password salt</param>
-    /// <param name="hash">Password hash</param>
-    /// <param name="hashVersion">Password hash algorithm version</param>
+    /// <param name="pending">Pending registration with email and password</param>
+    /// <param name="login">Chosen login (username)</param>
     /// <returns>DAL model for user</returns>
-    User Create(UserRegistration registration, string salt, string hash, int hashVersion);
+    User CreateFromPending(PendingRegistration pending, string login);
 }

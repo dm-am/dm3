@@ -6,47 +6,53 @@ import UserOnline from "@/components/community/UserOnline.vue";
 import { useCommunityStore } from "@/stores/community";
 import { useRoute } from "vue-router";
 
-const { users } = storeToRefs(useCommunityStore());
+const { users, usersError } = storeToRefs(useCommunityStore());
 const route = useRoute();
 </script>
 
 <template>
-  <the-paging
-    v-if="users"
-    :paging="users.paging!"
-    :to="{ name: 'community', params: route.params }"
-  />
+  <secondary-text v-if="usersError === 403" class="users-list-error">
+    Недостаточно прав для просмотра неактивированных пользователей
+  </secondary-text>
+
+  <template v-else>
+    <the-paging
+      v-if="users"
+      :paging="users.paging!"
+      :to="{ name: route.name, params: route.params }"
+    />
 
   <div class="users-list-table">
     <div class="users-list-header">
       <div>#</div>
-      <div>Логин</div>
+      <div>Имя пользователя</div>
       <div>Рейтинг</div>
       <div>В сети</div>
       <div>Имя</div>
       <div>Местоположение</div>
     </div>
 
-    <the-loader v-if="!users" :big="true" />
-    <secondary-text v-else-if="!users.resources.length" class="users-list-none"
-      >Пользователей нет...</secondary-text
+    <secondary-text v-if="users && !users.resources.length" class="users-list-none"
+      >Нет пользователей</secondary-text
     >
-    <div
-      class="users-list-row"
-      v-else
-      v-for="(user, number) in users.resources"
-      :key="user.login"
-    >
-      <span class="number">{{
-        number + users.paging!.size * (users.paging!.current - 1) + 1
-      }}</span>
+    <template v-else-if="users">
+      <div
+        class="users-list-row"
+        v-for="(user, number) in users.resources"
+        :key="user.login"
+      >
+        <span class="number">{{
+          number + users.paging!.size * (users.paging!.current - 1) + 1
+        }}</span>
       <user-link :user="user" />
       <user-rating :user="user" />
       <user-online :user="user" :detailed="true" />
       <span>{{ user.name }}</span>
       <span>{{ user.location }}</span>
-    </div>
+      </div>
+    </template>
   </div>
+  </template>
 </template>
 
 <style scoped lang="sass">
@@ -60,16 +66,20 @@ $grid-template: [number] 6% [login] auto [rating] 12% [online] 8% [name] 25% [lo
 .users-list-header
   display: grid
   grid-template-columns: $grid-template
-  +table-columns
   +table-header
+  +table-columns
 
 .users-list-row
   display: grid
   grid-template-columns: $grid-template
-  +table-columns
   +table-row
+  +table-columns
 
 .users-list-none
   margin: $medium 0
+  text-align: center
+
+.users-list-error
+  margin: $big 0
   text-align: center
 </style>

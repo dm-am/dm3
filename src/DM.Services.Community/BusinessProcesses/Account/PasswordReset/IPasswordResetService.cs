@@ -1,5 +1,4 @@
 using System.Threading.Tasks;
-using DM.Services.Core.Dto;
 
 namespace DM.Services.Community.BusinessProcesses.Account.PasswordReset;
 
@@ -9,9 +8,9 @@ namespace DM.Services.Community.BusinessProcesses.Account.PasswordReset;
 public interface IPasswordResetService
 {
     /// <summary>
-    /// Reset user password
+    /// Reset user password. Always completes silently regardless of whether the account exists
+    /// to prevent user enumeration attacks.
     /// </summary>
     /// <param name="passwordReset"></param>
-    /// <returns></returns>
-    Task<GeneralUser> Reset(UserPasswordReset passwordReset);
+    Task Reset(UserPasswordReset passwordReset);
 }

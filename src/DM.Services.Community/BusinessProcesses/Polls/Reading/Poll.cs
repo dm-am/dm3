@@ -26,12 +26,12 @@ public class Poll
     /// <summary>
     /// Question text
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Answers list
     /// </summary>
-    public IEnumerable<PollOption> Options { get; set; }
+    public IEnumerable<PollOption> Options { get; set; } = [];
 }
 
 /// <summary>
@@ -47,10 +47,10 @@ public class PollOption
     /// <summary>
     /// Answer text
     /// </summary>
-    public string Text { get; set; }
+    public string Text { get; set; } = null!;
 
     /// <summary>
     /// List of voted users
     /// </summary>
-    public IEnumerable<Guid> UserIds { get; set; }
+    public IEnumerable<Guid> UserIds { get; set; } = [];
 }

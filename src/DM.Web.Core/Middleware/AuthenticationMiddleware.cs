@@ -22,20 +22,24 @@ public class AuthenticationMiddleware
     /// <summary>
     /// Before request
     /// </summary>
-    /// <param name="httpContext"></param>
-    /// <param name="credentialsStorage"></param>
-    /// <param name="authenticationService"></param>
-    /// <param name="identityProvider"></param>
-    /// <returns></returns>
     public async Task InvokeAsync(HttpContext httpContext,
         ICredentialsStorage credentialsStorage,
         IWebAuthenticationService authenticationService,
-        IIdentityProvider identityProvider)
+        IIdentityProvider identityProvider,
+        IIdentitySetter identitySetter)
     {
         if (identityProvider.Current == null)
         {
             var tokenCredentials = await credentialsStorage.ExtractToken(httpContext);
-            await authenticationService.Authenticate(tokenCredentials, httpContext);
+            if (tokenCredentials != null)
+            {
+                await authenticationService.Authenticate(tokenCredentials, httpContext);
+            }
+            else
+            {
+                // Set guest identity for unauthenticated requests
+                identitySetter.Current = DM.Services.Authentication.Dto.Identity.Guest();
+            }
         }
 
         await next(httpContext);

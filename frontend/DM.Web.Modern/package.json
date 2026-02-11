@@ -35,7 +35,8 @@
     "vue": "^3.4.38",
     "vue-final-modal": "^4.5.4",
     "vue-i18n": "^9.14.0",
-    "vue-router": "^4.4.3"
+    "vue-router": "^4.4.3",
+    "vue-toastification": "^2.0.0-rc.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",
@@ -44,6 +45,7 @@
     "@types/node": "^22.4.1",
     "@types/qs": "^6.9.15",
     "@vitejs/plugin-vue": "^5.1.2",
+    "@vitest/coverage-v8": "^2.0.5",
     "@vue/eslint-config-prettier": "^9.0.0",
     "@vue/eslint-config-typescript": "^13.0.0",
     "@vue/test-utils": "^2.4.6",
@@ -59,7 +61,6 @@
     "start-server-and-test": "^2.0.5",
     "typescript": "^5.5.4",
     "vite": "^5.4.1",
-    "@vitest/coverage-v8": "^2.0.5",
     "vitest": "^2.0.5",
     "vue-tsc": "^2.0.29"
   }

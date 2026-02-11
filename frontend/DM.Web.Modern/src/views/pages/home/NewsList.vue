@@ -15,15 +15,16 @@ onMounted(() => store.fetchNews());
 // Initialize interactive BBCode elements when news loads
 watch(news, () => {
   nextTick(() => {
-    initBbcodeInteractive(newsContainer.value);
+    if (newsContainer.value) {
+      initBbcodeInteractive(newsContainer.value);
+    }
   });
 });
 </script>
 
 <template>
   <block-title>Последние новости</block-title>
-  <the-loader v-if="!news" />
-  <secondary-text v-else-if="!news.length">Ничего нового</secondary-text>
+  <secondary-text v-if="news && !news.length">Нет новостных тем</secondary-text>
 
   <div v-else ref="newsContainer">
     <div v-for="article in news" :key="article.id" class="article">
@@ -56,6 +57,6 @@ watch(news, () => {
   font-weight: bold
 
 .article-description
-  +bbcode-content
   margin: $small 0
+  +bbcode-content
 </style>

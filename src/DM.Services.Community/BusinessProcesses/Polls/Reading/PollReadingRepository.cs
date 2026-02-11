@@ -13,12 +13,12 @@ namespace DM.Services.Community.BusinessProcesses.Polls.Reading;
 /// <inheritdoc />
 internal class PollReadingRepository : MongoCollectionRepository<DbPoll>, IPollReadingRepository
 {
-    private readonly IMapper mapper;
+    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public PollReadingRepository(DmMongoClient client, IMapper mapper) : base(client)
     {
-        this.mapper = mapper;
+        _mapper = mapper;
     }
 
     /// <inheritdoc />
@@ -47,7 +47,7 @@ internal class PollReadingRepository : MongoCollectionRepository<DbPoll>, IPollR
             .Skip(pagingData.Skip)
             .Limit(pagingData.Take)
             .ToListAsync();
-        return dbPolls.Select(mapper.Map<Poll>);
+        return dbPolls.Select(_mapper.Map<Poll>);
     }
 
     /// <inheritdoc />
@@ -56,6 +56,6 @@ internal class PollReadingRepository : MongoCollectionRepository<DbPoll>, IPollR
         var dbPoll = await Collection
             .Find(Filter.Eq(p => p.Id, id) & Filter.Eq(p => p.IsRemoved, false))
             .FirstOrDefaultAsync();
-        return mapper.Map<Poll>(dbPoll);
+        return _mapper.Map<Poll>(dbPoll);
     }
 }

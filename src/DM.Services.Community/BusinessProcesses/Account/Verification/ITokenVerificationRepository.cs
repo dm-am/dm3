@@ -14,5 +14,5 @@ internal interface ITokenVerificationRepository
     /// </summary>
     /// <param name="tokenId"></param>
     /// <returns></returns>
-    Task<GeneralUser> GetTokenOwner(Guid tokenId);
+    Task<GeneralUser?> GetTokenOwner(Guid tokenId);
 }

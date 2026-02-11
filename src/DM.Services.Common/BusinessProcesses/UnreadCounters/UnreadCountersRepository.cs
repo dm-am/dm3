@@ -228,4 +228,32 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
             Filter.Eq(c => c.EntryType, entryType),
             Update.Set(c => c.ParentId, newParentId));
     }
+
+    /// <inheritdoc />
+    public async Task<DateTime?> GetLastReadTime(Guid userId, Guid entityId, UnreadEntryType entryType)
+    {
+        var counter = await Collection
+            .Find(
+                Filter.Eq(c => c.UserId, userId) &
+                Filter.Eq(c => c.EntityId, entityId) &
+                Filter.Eq(c => c.EntryType, entryType) &
+                Filter.Eq(c => c.IsRemoved, false))
+            .FirstOrDefaultAsync();
+
+        return counter?.LastRead;
+    }
+
+    /// <inheritdoc />
+    public async Task<IDictionary<Guid, DateTime>> GetLastReadTimes(Guid userId, UnreadEntryType entryType, params Guid[] entityIds)
+    {
+        var counters = await Collection
+            .Find(
+                Filter.Eq(c => c.UserId, userId) &
+                Filter.In(c => c.EntityId, entityIds) &
+                Filter.Eq(c => c.EntryType, entryType) &
+                Filter.Eq(c => c.IsRemoved, false))
+            .ToListAsync();
+
+        return counters.ToDictionary(c => c.EntityId, c => c.LastRead);
+    }
 }

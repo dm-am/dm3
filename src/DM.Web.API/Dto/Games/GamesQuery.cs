@@ -13,10 +13,30 @@ public class GamesQuery : PagingQuery
     /// <summary>
     /// Game statuses to filter by (optional)
     /// </summary>
-    public IEnumerable<GameStatus>? Statuses { get; set; }
+    public IEnumerable<ModuleStatus>? Statuses { get; set; }
 
     /// <summary>
     /// Game tags to filter by (optional)
     /// </summary>
     public IEnumerable<Guid>? Tag { get; set; }
+
+    /// <summary>
+    /// Filter by recruitment status (optional)
+    /// </summary>
+    public bool? IsRecruiting { get; set; }
+
+    /// <summary>
+    /// Filter by finished status (optional, for closed games)
+    /// </summary>
+    public bool? IsFinished { get; set; }
+
+    /// <summary>
+    /// Filter by master login (optional)
+    /// </summary>
+    public string? MasterLogin { get; set; }
+
+    /// <summary>
+    /// Filter by player login (optional, user has active character in game)
+    /// </summary>
+    public string? PlayerLogin { get; set; }
 }

@@ -16,7 +16,7 @@ public class AttributeSpecification
     /// <summary>
     /// Title
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Value is required
@@ -46,7 +46,7 @@ public class AttributeSpecification
     /// <summary>
     /// List of possible values for list constraints
     /// </summary>
-    public IEnumerable<AttributeValueSpecification> Values { get; set; }
+    public IEnumerable<AttributeValueSpecification> Values { get; set; } = [];
 
     /// <summary>
     /// Show on game main page as descriptor

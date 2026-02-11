@@ -26,26 +26,35 @@ public interface IMessagingApiService
     Task<Envelope<Conversation>> GetConversation(Guid id);
 
     /// <summary>
-    /// Get visavi conversation with user by login
+    /// Get or create direct conversation with user by login
     /// </summary>
-    /// <param name="login"></param>
+    /// <param name="login">User login</param>
     /// <returns></returns>
-    Task<Envelope<Conversation>> GetConversation(string login);
+    Task<Envelope<Conversation>> GetDirectConversation(string login);
 
     /// <summary>
-    /// Get visavi conversation with user by ID
-    /// </summary>
-    /// <param name="visaviUserId">Visavi user ID</param>
-    /// <returns></returns>
-    Task<Envelope<Conversation>> GetDirectConversation(Guid visaviUserId);
-
-    /// <summary>
-    /// Get list of conversation messages
+    /// Get list of conversation messages with offset-based paging (legacy)
     /// </summary>
     /// <param name="conversationId">Conversation identifier</param>
     /// <param name="query">Paging query</param>
     /// <returns></returns>
     Task<ListEnvelope<Message>> GetMessages(Guid conversationId, PagingQuery query);
+
+    /// <summary>
+    /// Get list of conversation messages with cursor-based pagination
+    /// </summary>
+    /// <param name="conversationId">Conversation identifier</param>
+    /// <param name="cursor">Opaque cursor for pagination</param>
+    /// <param name="aroundMessageId">Get messages around this message ID</param>
+    /// <param name="nearTimestampUtc">Get messages near this UTC timestamp</param>
+    /// <param name="limit">Maximum number of messages to return</param>
+    /// <returns></returns>
+    Task<CursorEnvelope<Message>> GetMessagesWithCursor(
+        Guid conversationId,
+        string? cursor = null,
+        Guid? aroundMessageId = null,
+        DateTimeOffset? nearTimestampUtc = null,
+        int limit = 50);
 
     /// <summary>
     /// Create new message

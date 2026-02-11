@@ -190,21 +190,21 @@ public class NotificationsReadingServiceShould : UnitTestBase
             {
                 NotificationId = Guid.NewGuid(),
                 EventType = EventType.NewForumTopic,
-                CreateDate = DateTimeOffset.UtcNow,
+                CreatedUtc = DateTimeOffset.UtcNow,
                 Metadata = new { TopicId = Guid.NewGuid() }
             },
             new()
             {
                 NotificationId = Guid.NewGuid(),
                 EventType = EventType.NewMessage,
-                CreateDate = DateTimeOffset.UtcNow.AddMinutes(-5),
+                CreatedUtc = DateTimeOffset.UtcNow.AddMinutes(-5),
                 Metadata = new { MessageId = Guid.NewGuid() }
             },
             new()
             {
                 NotificationId = Guid.NewGuid(),
                 EventType = EventType.NewCharacter,
-                CreateDate = DateTimeOffset.UtcNow.AddMinutes(-10),
+                CreatedUtc = DateTimeOffset.UtcNow.AddMinutes(-10),
                 Metadata = new { CharacterId = Guid.NewGuid() }
             }
         };

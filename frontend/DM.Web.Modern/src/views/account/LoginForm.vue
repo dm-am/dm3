@@ -1,102 +1,186 @@
 <script setup lang="ts">
 import { useUserStore } from "@/stores";
-import { useForm } from "vee-validate";
-import { object, string } from "yup";
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import type { LoginCredentials } from "@/api/models/account";
-import { ValidationErrorCode } from "@/api/models/common";
 import LightboxTitle from "@/components/layout/LightboxTitle.vue";
-import TheButton from "@/components/inputs/TheButton.vue";
+import { useValidatedField, validators } from "@/composables/useValidatedField";
+import { icons } from "@/utils/icons";
+
+const props = defineProps<{
+  prefillEmail?: string;
+}>();
 
 const emit = defineEmits<{
   (e: "success"): void;
   (e: "cancel"): void;
+  (e: "cantSignIn"): void;
+  (e: "resendActivation", email: string): void;
 }>();
 
-const { defineInputBinds, handleSubmit, meta, errorBag, setErrors } =
-  useForm<LoginCredentials>({
-    validationSchema: object({
-      login: string().required(ValidationErrorCode.Empty),
-      password: string().required(ValidationErrorCode.Empty),
-    }),
-  });
-const login = defineInputBinds("login", {
-  validateOnInput: true,
+// Track pending activation state
+const pendingActivation = ref(false);
+
+// Form fields
+const emailField = useValidatedField({
+  initialValue: props.prefillEmail || "",
+  validate: validators.required(),
 });
-const password = defineInputBinds("password", {
-  validateOnInput: true,
+
+const passwordField = useValidatedField({
+  validate: validators.required(),
 });
-const rememberMe = ref(true);
+
 const honeypot = ref("");
 const formLoadTime = ref(0);
+const showPassword = ref(false);
+const loading = ref(false);
+const rememberMe = ref(true);
 
-// Bot protection: track when form was loaded
+const canSubmit = computed(() =>
+  emailField.isReady.value && passwordField.isReady.value
+);
+
 onMounted(() => {
   formLoadTime.value = Date.now();
 });
 
-const loading = ref(false);
-const { signIn } = useUserStore();
+const userStore = useUserStore();
+const { signIn } = userStore;
 
-// Discord OAuth
-const apiHost = import.meta.env.VITE_API_HOST ?? "http://localhost:5051";
-function loginWithDiscord() {
-  const returnUrl = encodeURIComponent(window.location.origin + "/auth/callback");
-  window.location.href = `${apiHost}/connect/discord?returnUrl=${returnUrl}`;
-}
+const submit = async () => {
+  // Validate both fields
+  const emailValid = await emailField.validate();
+  const passwordValid = await passwordField.validate();
+  if (!emailValid || !passwordValid) return;
 
-const submit = handleSubmit(async (values, { setErrors: formSetErrors }) => {
-  // Bot protection: check minimum form fill time (2 seconds)
+  // Bot protection
   const timeSinceLoad = Date.now() - formLoadTime.value;
-  if (timeSinceLoad < 2000) {
-    setErrors({
-      login: "Please wait before submitting the form",
-    });
+  if (timeSinceLoad < 3000) {
+    emailField.setError("Подождите перед отправкой формы");
     return;
   }
 
   loading.value = true;
-  const badRequest = await signIn({
-    ...values,
+  pendingActivation.value = false;
+
+  const credentials: LoginCredentials = {
+    email: emailField.value.value.trim(),
+    password: passwordField.value.value,
+    website: honeypot.value,
     rememberMe: rememberMe.value,
-    website: honeypot.value, // Include honeypot field
-  });
+  };
+
+  const badRequest = await signIn(credentials);
   loading.value = false;
+
   if (badRequest) {
-    formSetErrors({
-      login: badRequest.errors["login"] as unknown as string,
-      password: badRequest.errors["password"] as unknown as string,
-    });
+    const rawProps = badRequest.invalidProperties ?? badRequest.errors ?? {};
+    const props: Record<string, string[]> = {};
+    for (const [key, value] of Object.entries(rawProps)) {
+      props[key.toLowerCase()] = value;
+    }
+
+    // Check for pending activation flag
+    if (props["_pendingactivation"]) {
+      pendingActivation.value = true;
+      passwordField.setError(props["email"]?.[0] || "Регистрация не завершена");
+    } else {
+      pendingActivation.value = false;
+      if (props["email"]?.[0]) {
+        emailField.setError(props["email"][0]);
+      }
+      if (props["password"]?.[0]) {
+        passwordField.setError(props["password"][0]);
+      }
+    }
   } else {
     emit("success");
   }
-});
+};
+
+const handleResendActivation = () => {
+  emit("resendActivation", emailField.value.value.trim());
+};
+
+const onEmailInput = () => {
+  emailField.onInput();
+  if (pendingActivation.value) {
+    pendingActivation.value = false;
+    passwordField.error.value = "";
+  }
+};
+
+const onPasswordInput = () => {
+  // Don't clear pending activation state - that's an email issue, not password
+  if (!pendingActivation.value) {
+    passwordField.onInput();
+  }
+};
 </script>
 
 <template>
-  <the-lightbox :with-form="true">
+  <the-lightbox narrow>
     <lightbox-title>Вход</lightbox-title>
 
     <the-form
       @submit="submit"
       @cancel="emit('cancel')"
-      :valid="meta.valid"
+      :valid="canSubmit"
       :loading="loading"
       action="Войти"
       cancel="Отмена"
     >
-      <form-field label="Логин" name="login" :errors="errorBag['login']">
-        <input v-bind="login" id="login" />
+      <form-field label="Почта" name="email" :errors="emailField.error.value ? [emailField.error.value] : []">
+        <input
+          v-model="emailField.value.value"
+          id="email"
+          type="email"
+          autocomplete="email"
+          @input="onEmailInput"
+          @blur="emailField.onBlur"
+        />
       </form-field>
-      <form-field label="Пароль" name="password" :errors="errorBag['password']">
-        <input v-bind="password" type="password" id="password" />
+
+      <form-field name="password" :errors="passwordField.error.value ? [passwordField.error.value] : []">
+        <template #label>
+          <div class="password-label-row">
+            <label for="password">Пароль</label>
+            <a v-if="pendingActivation" class="help-link" @click="handleResendActivation">Отправить повторное письмо?</a>
+            <a v-else class="help-link" @click="emit('cantSignIn')">Не могу войти</a>
+          </div>
+        </template>
+        <div class="password-wrapper">
+          <input
+            v-model="passwordField.value.value"
+            :type="showPassword ? 'text' : 'password'"
+            id="password"
+            autocomplete="current-password"
+            @input="onPasswordInput"
+            @blur="passwordField.onBlur"
+          />
+          <button
+            type="button"
+            class="password-toggle"
+            @click="showPassword = !showPassword"
+            tabindex="-1"
+            aria-label="Показать/скрыть пароль"
+          >
+            <svg
+              :viewBox="showPassword ? icons.eyeOpen.viewBox : icons.eyeClosed.viewBox"
+              fill="none"
+              v-html="showPassword ? icons.eyeOpen.path : icons.eyeClosed.path"
+            />
+          </button>
+        </div>
       </form-field>
-      <form-field name="rememberMe">
-        <label>
+
+      <div class="remember-me-row">
+        <label class="checkbox-label">
           <input type="checkbox" v-model="rememberMe" />
-          Запомнить меня
+          <span>Запомнить меня</span>
         </label>
-      </form-field>
+      </div>
+
       <!-- Honeypot field for bot protection -->
       <input
         name="website"
@@ -107,19 +191,6 @@ const submit = handleSubmit(async (values, { setErrors: formSetErrors }) => {
         aria-hidden="true"
       />
     </the-form>
-
-    <div class="oauth-divider">
-      <span>или</span>
-    </div>
-
-    <div class="oauth-buttons">
-      <the-button type="button" class="discord-btn" @click="loginWithDiscord">
-        <svg class="discord-icon" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
-        </svg>
-        Войти через Discord
-      </the-button>
-    </div>
   </the-lightbox>
 </template>
 
@@ -127,45 +198,71 @@ const submit = handleSubmit(async (values, { setErrors: formSetErrors }) => {
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
 
+.field-action
+  font-size: $secondary-font-size
+
 .hp-field
-  position: absolute
-  left: -9999px
-  width: 1px
-  height: 1px
-  opacity: 0
+  display: none
 
-.oauth-divider
+.password-label-row
   display: flex
+  justify-content: space-between
   align-items: center
-  margin: $medium 0
+  width: 100%
+
+  label
+    color: $text-muted
+    font-size: $secondary-font-size
+
+.help-link
+  cursor: pointer
+  font-size: $secondary-font-size
+
+.password-wrapper
+  position: relative
+  display: block
+  width: 100%
+
+:deep(.form-field-row .password-wrapper input)
+  padding-right: 36px
+
+.password-toggle
+  position: absolute
+  right: 4px
+  top: 50%
+  transform: translateY(-50%)
+  background: none
+  border: none
+  cursor: pointer
+  padding: 4px
   color: $text-muted
-
-  &::before, &::after
-    content: ""
-    flex: 1
-    border-bottom: 1px solid $border
-
-  span
-    padding: 0 $medium
-    font-size: 0.9em
-
-.oauth-buttons
-  display: flex
-  flex-direction: column
-  gap: $small
-
-.discord-btn
-  background-color: #5865F2
-  color: white
   display: flex
   align-items: center
   justify-content: center
-  gap: $small
+
+  svg
+    width: 18px
+    height: 18px
 
   &:hover
-    background-color: #4752C4
+    color: $text
 
-.discord-icon
-  width: 20px
-  height: 20px
+.remember-me-row
+  margin-top: $medium
+
+.checkbox-label
+  display: flex
+  align-items: center
+  gap: $small
+  cursor: pointer
+  font-size: $secondary-font-size
+  color: $text-muted
+
+  input[type="checkbox"]
+    width: 16px
+    height: 16px
+    cursor: pointer
+
+  &:hover span
+    color: $text
 </style>

@@ -1,9 +1,9 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { Game, Character, Room, Post } from "@/api/models/gaming";
+import type { Game, Character, Room, Post } from "@/api/models/game";
 import type { Paging } from "@/api/models/common";
 import type { Comment } from "@/api/models/forum";
-import gamingApi from "@/api/requests/gamingApi";
+import gameApi from "@/api/requests/gameApi";
 
 export const useGameDetailsStore = defineStore("gameDetails", () => {
   // Game data
@@ -56,7 +56,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     gameLoading.value = true;
     gameError.value = null;
 
-    const { data, error } = await gamingApi.getGame(id);
+    const { data, error } = await gameApi.getGame(id);
 
     if (error) {
       gameError.value = error.title || "Failed to load game";
@@ -73,7 +73,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     roomsLoading.value = true;
     roomsError.value = null;
 
-    const { data, error } = await gamingApi.getRooms(gameId);
+    const { data, error } = await gameApi.getRooms(gameId);
 
     if (error) {
       roomsError.value = error.title || "Failed to load rooms";
@@ -99,7 +99,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
       currentRoom.value = room;
     }
 
-    const { data, error } = await gamingApi.getPosts(roomId, { number: page });
+    const { data, error } = await gameApi.getPosts(roomId, { number: page });
 
     if (error) {
       postsError.value = error.title || "Failed to load posts";
@@ -118,7 +118,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     charactersLoading.value = true;
     charactersError.value = null;
 
-    const { data, error } = await gamingApi.getCharacters(gameId);
+    const { data, error } = await gameApi.getCharacters(gameId);
 
     if (error) {
       charactersError.value = error.title || "Failed to load characters";
@@ -135,7 +135,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     commentsLoading.value = true;
     commentsError.value = null;
 
-    const { data, error } = await gamingApi.getGameComments(gameId, { number: page });
+    const { data, error } = await gameApi.getGameComments(gameId, { number: page });
 
     if (error) {
       commentsError.value = error.title || "Failed to load comments";
@@ -179,7 +179,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   async function subscribe(): Promise<boolean> {
     if (!game.value) return false;
 
-    const { error } = await gamingApi.subscribe(game.value.id);
+    const { error } = await gameApi.subscribe(game.value.id);
     if (error) {
       return false;
     }
@@ -192,7 +192,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   async function unsubscribe(): Promise<boolean> {
     if (!game.value) return false;
 
-    const { error } = await gamingApi.unsubscribe(game.value.id);
+    const { error } = await gameApi.unsubscribe(game.value.id);
     if (error) {
       return false;
     }

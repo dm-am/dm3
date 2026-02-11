@@ -9,12 +9,11 @@ import type {
 import { HubConnection, HubConnectionBuilder } from "@microsoft/signalr";
 import type { ApiResult } from "@/api/models/common";
 import { BbRenderMode } from "./bbRenderMode";
+import { useToast } from "@/composables/useToast";
 
 type QueryParams = Record<string, string | number | boolean | undefined>;
 type RequestBody = object | FormData;
 
-const accessTokenKey = "dm-access-token";
-const refreshTokenKey = "dm-refresh-token";
 const renderKey = "x-dm-bb-render-mode";
 
 const defaultHeaders: { [key: string]: string } = {
@@ -24,94 +23,51 @@ const defaultHeaders: { [key: string]: string } = {
   [renderKey]: "html",
 };
 
-const apiHost = import.meta.env.VITE_API_HOST ?? "http://localhost:5051"; // Config - use ?? to allow empty string
+const apiHost = import.meta.env.VITE_API_HOST ?? "http://localhost:5000"; // Config - use ?? to allow empty string
 
 const configuration: AxiosRequestConfig = {
   baseURL: `${apiHost}/v1`,
   headers: defaultHeaders,
   responseType: "json",
+  timeout: 30000,
+  withCredentials: true, // Required for HttpOnly cookie authentication
 };
-
-interface TokenResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  expires_in: number;
-}
 
 class Api {
   private axios: AxiosInstance;
-  private isRefreshing = false;
-  private refreshQueue: Array<{
-    resolve: (token: string) => void;
-    reject: (error: unknown) => void;
-  }> = [];
 
   constructor() {
     this.axios = axios.create(configuration);
 
-    // Initialize with access token if present
-    const accessToken = localStorage.getItem(accessTokenKey);
-    if (accessToken) {
-      this.axios.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
-    }
-
-    // Add response interceptor for token refresh
+    // Add response interceptor for error handling
     this.axios.interceptors.response.use(
       (response) => response,
       async (error) => {
-        const originalRequest = error.config;
+        // Handle 403 Forbidden
+        if (error.response?.status === 403) {
+          const { error: showError } = useToast();
+          showError("Недостаточно прав для этого действия");
+        }
 
-        // Handle 401 errors with token refresh
-        if (error.response?.status === 401 && !originalRequest._retry) {
-          originalRequest._retry = true;
+        // Handle 429 Too Many Requests
+        if (error.response?.status === 429) {
+          const { warning } = useToast();
+          const retryAfter = error.response.headers?.["retry-after"];
+          warning(retryAfter
+            ? `Слишком много запросов. Повторите через ${retryAfter} сек.`
+            : "Слишком много запросов. Повторите позже.");
+        }
 
-          const refreshToken = localStorage.getItem(refreshTokenKey);
-          if (refreshToken) {
-            try {
-              // If already refreshing, queue this request
-              if (this.isRefreshing) {
-                return new Promise((resolve, reject) => {
-                  this.refreshQueue.push({ resolve, reject });
-                })
-                  .then((token) => {
-                    originalRequest.headers["Authorization"] = `Bearer ${token}`;
-                    return this.axios.request(originalRequest);
-                  })
-                  .catch((err) => Promise.reject(err));
-              }
+        // Handle 500+ Server Errors
+        if (error.response?.status >= 500) {
+          const { error: showError } = useToast();
+          showError("Ошибка сервера. Попробуйте позже.");
+        }
 
-              this.isRefreshing = true;
-
-              const tokens = await this.refreshAccessToken(refreshToken);
-              this.updateTokens(tokens);
-
-              // Process queued requests
-              this.refreshQueue.forEach((callback) => {
-                callback.resolve(tokens.access_token);
-              });
-              this.refreshQueue = [];
-
-              // Retry original request with new token
-              originalRequest.headers["Authorization"] = `Bearer ${tokens.access_token}`;
-              return this.axios.request(originalRequest);
-            } catch (refreshError) {
-              // Refresh failed, clear tokens and queue
-              this.refreshQueue.forEach((callback) => {
-                callback.reject(refreshError);
-              });
-              this.refreshQueue = [];
-              this.clearAuthenticationInfo();
-
-              // Don't redirect - let the app handle unauthenticated state
-              return Promise.reject(refreshError);
-            } finally {
-              this.isRefreshing = false;
-            }
-          } else {
-            // No refresh token, just clear auth (don't redirect)
-            this.clearAuthenticationInfo();
-          }
+        // Handle network errors (no response)
+        if (!error.response && error.code === "ERR_NETWORK") {
+          const { error: showError } = useToast();
+          showError("Нет соединения с сервером");
         }
 
         return Promise.reject(error);
@@ -120,77 +76,33 @@ class Api {
   }
 
   public isAuthenticated(): boolean {
-    return "Authorization" in this.axios.defaults.headers.common;
-  }
-
-  /**
-   * Refresh access token using refresh token
-   */
-  public async refreshAccessToken(refreshToken: string): Promise<TokenResponse> {
-    const response = await fetch(`${apiHost}/connect/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: refreshToken,
-        client_id: "dm3-web",
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Token refresh failed");
-    }
-
-    return response.json();
-  }
-
-  /**
-   * Fetch OAuth2 access token using password grant
-   */
-  public async fetchOAuthToken(
-    username: string,
-    password: string
-  ): Promise<TokenResponse> {
-    const response = await fetch(`${apiHost}/connect/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        grant_type: "password",
-        username,
-        password,
-        client_id: "dm3-web",
-        scope: "openid profile offline_access",
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error_description || "Authentication failed");
-    }
-
-    return response.json();
-  }
-
-  /**
-   * Update stored tokens
-   */
-  public updateTokens(tokens: TokenResponse): void {
-    localStorage.setItem(accessTokenKey, tokens.access_token);
-    localStorage.setItem(refreshTokenKey, tokens.refresh_token);
-    this.axios.defaults.headers.common["Authorization"] = `Bearer ${tokens.access_token}`;
+    // With cookie-based auth, we check if user is stored locally
+    // The actual auth state is determined by the HttpOnly cookie
+    return localStorage.getItem("user") !== null;
   }
 
   public get<T>(
     url: string,
     params?: QueryParams,
     bbRenderMode: BbRenderMode = BbRenderMode.Html,
+    options?: { skipAuth?: boolean },
   ): Promise<ApiResult<T>> {
+    const headers: Record<string, string> = { [renderKey]: bbRenderMode };
+
+    // For public endpoints, explicitly remove credentials
+    // This prevents activity tracking from background polling
+    if (options?.skipAuth) {
+      return this.send(() =>
+        this.axios.get(url, {
+          params,
+          headers,
+          withCredentials: false,
+        }),
+      );
+    }
+
     return this.send(() =>
-      this.axios.get(url, { params, headers: { [renderKey]: bbRenderMode } }),
+      this.axios.get(url, { params, headers }),
     );
   }
 
@@ -264,26 +176,22 @@ class Api {
   }
 
   public logout() {
-    this.clearAuthenticationInfo();
+    // With cookie-based auth, just clear local state
+    // The server will invalidate the session on DELETE /v1/account/login
+    localStorage.removeItem("user");
   }
 
+  /**
+   * Establish SignalR hub connection
+   * Cookies are sent automatically with withCredentials
+   */
   public establishHubConnection(path: string): HubConnection {
-    const token = localStorage.getItem(accessTokenKey);
-
     return new HubConnectionBuilder()
       .withAutomaticReconnect()
       .withUrl(`${apiHost}/${path}`, {
-        accessTokenFactory() {
-          return token ?? "";
-        },
+        withCredentials: true,
       })
       .build();
-  }
-
-  private clearAuthenticationInfo(): void {
-    delete this.axios.defaults.headers.common["Authorization"];
-    localStorage.removeItem(accessTokenKey);
-    localStorage.removeItem(refreshTokenKey);
   }
 }
 

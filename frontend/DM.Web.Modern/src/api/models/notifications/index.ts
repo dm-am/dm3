@@ -1,7 +1,7 @@
 import type { Id, Served } from "@/api/models";
 import type { UserLogin } from "@/api/models/community";
 import type { TopicId } from "@/api/models/forum";
-import type { GameId } from "@/api/models/gaming";
+import type { GameId } from "@/api/models/game";
 
 export enum NotificationType {
   NewCharacter = 361,

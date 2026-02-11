@@ -1,5 +1,5 @@
 <template>
-  <form @submit.prevent="submit">
+  <form @submit.prevent="submit" autocomplete="off">
     <slot />
     <div v-if="slots.controls" class="controls">
       <slot name="controls" />
@@ -8,9 +8,9 @@
       <the-button :disabled="valid === false" :loading="loading">{{
         action
       }}</the-button>
-      <a v-if="cancel" class="controls-cancel" @click="handleCancel">{{
-        cancel
-      }}</a>
+      <the-button v-if="cancel" type="button" secondary @click="handleCancel">
+        {{ cancel }}
+      </the-button>
     </div>
   </form>
 </template>
@@ -32,15 +32,13 @@ const slots = defineSlots();
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 
 .controls
-  margin: $small (-$medium) (-$medium)
+  display: flex
+  gap: $small
+  margin: $medium (-$medium) (-$medium)
   padding: $medium
-  border-radius: 0 0 $border-radius $border-radius
   background-color: $bg-element-accent
-
-.controls-cancel
-  display: inline-block
-  margin-left: $medium
+  border-radius: 0 0 $border-radius $border-radius
 </style>

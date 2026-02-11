@@ -82,8 +82,8 @@ internal class TemplateRenderer : ITemplateRenderer, IRenderer, IAsyncDisposable
         return _htmlRenderer.Dispatcher.InvokeAsync(async () =>
         {
             var output = await _htmlRenderer.RenderComponentAsync(
-                templateType,
-                ParameterView.FromDictionary(new Dictionary<string, object>()
+                templateType!,
+                ParameterView.FromDictionary(new Dictionary<string, object?>
                 {
                     { "Model", model }
                 }));

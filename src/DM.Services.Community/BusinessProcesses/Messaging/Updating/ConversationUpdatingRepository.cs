@@ -29,7 +29,7 @@ internal class ConversationUpdatingRepository : IConversationUpdatingRepository
     }
 
     /// <inheritdoc />
-    public Task<Conversation> Get(Guid conversationId) => _dbContext.Conversations
+    public Task<Conversation?> Get(Guid conversationId) => _dbContext.Conversations
         .Where(c => c.ConversationId == conversationId)
         .ProjectTo<Conversation>(_mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();

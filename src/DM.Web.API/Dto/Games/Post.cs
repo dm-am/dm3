@@ -18,17 +18,17 @@ public class Post
     /// <summary>
     /// Parent room
     /// </summary>
-    public Room Room { get; set; }
+    public Room Room { get; set; } = null!;
 
     /// <summary>
     /// Post character
     /// </summary>
-    public Character Character { get; set; }
+    public Character Character { get; set; } = null!;
 
     /// <summary>
     /// Post author
     /// </summary>
-    public User Author { get; set; }
+    public User Author { get; set; } = null!;
 
     /// <summary>
     /// Creation moment
@@ -43,20 +43,20 @@ public class Post
     /// <summary>
     /// Text
     /// </summary>
-    public PostBbText Text { get; set; }
+    public PostBbText Text { get; set; } = null!;
 
     /// <summary>
     /// Additional text
     /// </summary>
-    public CommonBbText Commentary { get; set; }
+    public CommonBbText Commentary { get; set; } = null!;
 
     /// <summary>
     /// Private text to master
     /// </summary>
-    public CommonBbText MasterMessage { get; set; }
+    public CommonBbText MasterMessage { get; set; } = null!;
 
     /// <summary>
     /// Dice roll results
     /// </summary>
-    public IEnumerable<DiceRoll> DiceRolls { get; set; }
+    public IEnumerable<DiceRoll> DiceRolls { get; set; } = [];
 }

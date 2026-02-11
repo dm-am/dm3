@@ -18,12 +18,12 @@ public class Board
     /// <summary>
     /// Board title
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Short description
     /// </summary>
-    public string Description { get; set; }
+    public string Description { get; set; } = null!;
 
     /// <summary>
     /// Create topic policy
@@ -38,7 +38,7 @@ public class Board
     /// <summary>
     /// Moderator identifiers
     /// </summary>
-    public IEnumerable<Guid> ModeratorIds { get; set; }
+    public IEnumerable<Guid> ModeratorIds { get; set; } = [];
 
     /// <summary>
     /// Total number of topics in the forum
@@ -63,7 +63,7 @@ public class Board
     /// <summary>
     /// Last comment in the board
     /// </summary>
-    public BoardLastComment LastComment { get; set; }
+    public BoardLastComment LastComment { get; set; } = null!;
 }
 
 /// <summary>
@@ -82,9 +82,9 @@ public class BoardLastComment
     public Guid TopicId { get; set; }
 
     /// <summary>
-    /// Author
+    /// Author (may be null for deleted users)
     /// </summary>
-    public GeneralUser Author { get; set; }
+    public GeneralUser? Author { get; set; }
 
     /// <summary>
     /// Creation moment (UTC)

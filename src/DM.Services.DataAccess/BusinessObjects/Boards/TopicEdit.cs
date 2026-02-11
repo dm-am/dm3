@@ -20,7 +20,7 @@ public class TopicEdit
     /// <summary>
     /// Topic identifier
     /// </summary>
-    public Guid ForumTopicId { get; set; }
+    public Guid TopicId { get; set; }
 
     /// <summary>
     /// Editor user identifier
@@ -35,12 +35,12 @@ public class TopicEdit
     /// <summary>
     /// Parent topic
     /// </summary>
-    [ForeignKey(nameof(ForumTopicId))]
-    public virtual ForumTopic Topic { get; set; }
+    [ForeignKey(nameof(TopicId))]
+    public virtual Topic Topic { get; set; } = null!;
 
     /// <summary>
     /// Editor user
     /// </summary>
     [ForeignKey(nameof(EditorUserId))]
-    public virtual User Editor { get; set; }
+    public virtual User Editor { get; set; } = null!;
 }

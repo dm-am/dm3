@@ -11,7 +11,7 @@ public class CreatePoll
     /// <summary>
     /// Poll title
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Desired poll end date
@@ -21,5 +21,5 @@ public class CreatePoll
     /// <summary>
     /// List of possible poll answers
     /// </summary>
-    public IEnumerable<string> Options { get; set; }
+    public IEnumerable<string> Options { get; set; } = [];
 }

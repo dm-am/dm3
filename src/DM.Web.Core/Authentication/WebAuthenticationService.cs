@@ -31,8 +31,8 @@ internal class WebAuthenticationService : IWebAuthenticationService
 
     private async Task<IIdentity> GetAuthenticationResult(AuthCredentials credentials) => credentials switch
     {
-        LoginCredentials loginCredentials => await authenticationService.Authenticate(loginCredentials.Login,
-            loginCredentials.Password, loginCredentials.RememberMe),
+        LoginCredentials loginCredentials => await authenticationService.Authenticate(
+            loginCredentials.Email, loginCredentials.Password, loginCredentials.RememberMe),
         TokenCredentials tokenCredentials => await authenticationService.Authenticate(tokenCredentials.Token),
         UnconditionalCredentials unconditionalCredentials => await authenticationService.Authenticate(
             unconditionalCredentials.UserId),

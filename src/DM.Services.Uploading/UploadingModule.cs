@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Amazon.S3;
 using Autofac;
 using DM.Services.Authentication;
 using DM.Services.Core;
@@ -27,6 +28,7 @@ public class UploadingModule : Module
                     .GetClient();
             })
             .AsSelf()
+            .As<IAmazonS3>()
             .SingleInstance();
 
         builder.RegisterModuleOnce<CoreModule>();

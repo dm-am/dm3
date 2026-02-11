@@ -1,84 +1,64 @@
-# DM3 Documentation
+# Документация DM3
 
-> Платформа для текстовых ролевых игр
+Навигация по документации проекта.
+
+---
+
+## Архитектура
+
+| Документ | Описание |
+|----------|----------|
+| [OVERVIEW.md](./architecture/OVERVIEW.md) | Общая архитектура системы |
+| [DATABASE.md](./architecture/DATABASE.md) | Схема базы данных (PostgreSQL + MongoDB) |
+| [AUTHENTICATION.md](./architecture/AUTHENTICATION.md) | Аутентификация и сессии |
+| [RBAC.md](./architecture/RBAC.md) | Роли и права доступа |
+
+---
+
+## Руководства
+
+| Документ | Описание |
+|----------|----------|
+| [SETUP.md](./guides/SETUP.md) | Установка и запуск |
+| [TESTING.md](./guides/TESTING.md) | Тестирование |
+| [DEPLOYMENT.md](./guides/DEPLOYMENT.md) | Деплоймент |
+| [MIRRORING.md](./guides/MIRRORING.md) | Настройка зеркал |
+
+---
+
+## Справочники
+
+| Документ | Описание |
+|----------|----------|
+| [API REFERENCE.md](./api/REFERENCE.md) | Справочник API |
+| [GLOSSARY.md](./reference/GLOSSARY.md) | Глоссарий терминов |
+| [CODE.md](./standards/CODE.md) | Стандарты кода |
+
+---
+
+## Задачи
+
+| Документ | Описание |
+|----------|----------|
+| [ROADMAP.md](./tasks/ROADMAP.md) | Дорожная карта |
+| [BACKLOG.md](./tasks/BACKLOG.md) | Бэклог задач |
 
 ---
 
 ## Быстрый старт
 
-```bash
-cd docker && docker-compose up -d           # Инфраструктура
-cd frontend/DM.Web.Modern && yarn && yarn dev  # Frontend
+```powershell
+.\scripts\dm.ps1 start    # Запуск (Docker + API)
+.\scripts\dm.ps1 seed     # Тестовые данные
+.\scripts\dm.ps1 reset    # Сброс БД + перезапуск
 ```
 
-- Frontend: http://localhost:5173
-- API: http://localhost:5051/swagger
-- MinIO: http://localhost:9001 (minio/miniokey) — создать bucket `dm-uploads`
-
-**Подробнее:** [guides/SETUP.md](./guides/SETUP.md)
-
----
-
-## Структура
-
-```
-docs/
-├── guides/           # Как делать
-│   ├── SETUP.md      # Установка и запуск
-│   ├── TESTING.md    # Тестирование
-│   └── DEPLOYMENT.md # Деплоймент
-│
-├── architecture/     # Как устроено
-│   ├── OVERVIEW.md   # Общая архитектура
-│   ├── DATABASE.md   # Схема БД (ER)
-│   └── AUTHENTICATION.md
-│
-├── api/              # API
-│   └── REFERENCE.md  # Эндпоинты
-│
-├── standards/        # Правила
-│   └── CODE.md       # Стандарты кода
-│
-├── tasks/            # Задачи
-│   ├── ROADMAP.md    # План развития
-│   └── BACKLOG.md    # Бэклог
-│
-└── reference/        # Справочники
-    ├── GLOSSARY.md   # Термины
-    └── 12_FACTOR.md  # Методология
-```
-
----
-
-## Навигация
-
-| Вопрос | Документ |
-|--------|----------|
-| Как запустить? | [guides/SETUP.md](./guides/SETUP.md) |
-| Как тестировать? | [guides/TESTING.md](./guides/TESTING.md) |
-| Как деплоить? | [guides/DEPLOYMENT.md](./guides/DEPLOYMENT.md) |
-| Какой API? | [api/REFERENCE.md](./api/REFERENCE.md) |
-| Как устроено? | [architecture/OVERVIEW.md](./architecture/OVERVIEW.md) |
-| Схема БД? | [architecture/DATABASE.md](./architecture/DATABASE.md) |
-| Какие стандарты? | [standards/CODE.md](./standards/CODE.md) |
-| Что такое X? | [reference/GLOSSARY.md](./reference/GLOSSARY.md) |
-| Какие задачи? | [tasks/ROADMAP.md](./tasks/ROADMAP.md) |
-
----
-
-## Технологии
-
-**Backend:** .NET 8, PostgreSQL, MongoDB, RabbitMQ, OpenIddict
-
-**Frontend:** Vue 3, TypeScript, Vite, Pinia, Tiptap
-
-**Инфраструктура:** Docker, Nginx, MinIO, OpenSearch
+Frontend: `cd frontend/DM.Web.Modern && npm install && npm run dev`
 
 ---
 
 ## Принципы документации
 
-- **Один README** — только здесь
 - **Минимум дублирования** — ссылки вместо копирования
 - **Код > документация** — паттерны смотреть в коде
 - **Только необходимое** — то, что нельзя узнать из кода

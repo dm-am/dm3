@@ -7,13 +7,11 @@ html.theme_Light {
   --text-meta: #7b532b;
   --accent-green: #696;
   --accent-red: #b22222;
-  --accent-blue: #4a7cb5;
-  --accent-orange: #cc7a00;
   --text-on-green: #363;
   --text-on-red: #633;
   --heading: #630;
   --heading-alt: #666;
-  --link: #304060;
+  --link: #3c6078;
   --link-hover: #3f78a8;
   --accent-green-hover: #7b7;
   --accent-red-hover: #d33;
@@ -52,9 +50,11 @@ html.theme_Light {
   --input-bg-disabled: #ddd;
   --shade-bg: rgba(0, 0, 0, 0.6);
   --shade-text: #fff;
-  --overlay-bg: rgba(0, 0, 0, 0.3);
-  --hover-overlay: rgba(0, 0, 0, 0.05);
-  --active-overlay: rgba(0, 0, 0, 0.1);
+  --overlay-bg: rgba(0, 0, 0, 0.25);
+  --overlay-subtle: rgba(0, 0, 0, 0.05);
+  --overlay-emphasis: rgba(0, 0, 0, 0.1);
+  --hover-overlay: rgba(0, 0, 0, 0.04);
+  --active-overlay: rgba(0, 0, 0, 0.08);
   --shadow-color: rgba(0, 0, 0, 0.12);
   --nsfw-overlay: rgba(230, 98, 126, 0.2);
   --highlight-overlay-green: rgba(122, 108, 8, 0.15);
@@ -65,6 +65,8 @@ html.theme_Light {
   --filter-invert: none;
   --hover-brightness: 0.7;
   --active-brightness: 0.5;
+  --partner-glow: transparent;
+  --partner-brightness: 1.05;
 }
 
 html.theme_Dark {
@@ -77,7 +79,7 @@ html.theme_Dark {
   --text-on-red: #d49a9a;
   --heading: #d4956a;
   --heading-alt: #a0a0a0;
-  --link: #6a9fd4;
+  --link: #7cb0e0;
   --link-hover: #8bb8e8;
   --accent-green-hover: #a8d4a8;
   --accent-red-hover: #e07070;
@@ -85,7 +87,7 @@ html.theme_Dark {
   --accent-red-muted: #b08080;
   --link-nav: #a0a0a0;
   --link-nav-hover: #fff;
-  --bg-page: #1a1a1a;
+  --bg-page: #222222;
   --bg-element: #2a2a2a;
   --bg-element-overlay: rgba(255, 255, 255, 0.07);
   --bg-element-hover: #303030;
@@ -116,9 +118,11 @@ html.theme_Dark {
   --input-bg-disabled: #444;
   --shade-bg: rgba(0, 0, 0, 0.7);
   --shade-text: #fff;
-  --overlay-bg: rgba(0, 0, 0, 0.5);
-  --hover-overlay: rgba(255, 255, 255, 0.05);
-  --active-overlay: rgba(255, 255, 255, 0.1);
+  --overlay-bg: rgba(0, 0, 0, 0.4);
+  --overlay-subtle: rgba(255, 255, 255, 0.05);
+  --overlay-emphasis: rgba(255, 255, 255, 0.1);
+  --hover-overlay: rgba(255, 255, 255, 0.06);
+  --active-overlay: rgba(255, 255, 255, 0.12);
   --shadow-color: rgba(0, 0, 0, 0.3);
   --nsfw-overlay: rgba(230, 98, 126, 0.25);
   --highlight-overlay-green: rgba(115, 165, 115, 0.18);
@@ -129,4 +133,11 @@ html.theme_Dark {
   --filter-invert: invert(87%);
   --hover-brightness: 1.4;
   --active-brightness: 1.6;
+  --partner-glow: rgba(255, 255, 255, 0.25);
+  --partner-brightness: 1;
+}
+
+/* vue-final-modal overlay override - loaded after vfm styles */
+.vfm__overlay.lightbox-overlay {
+  background-color: var(--overlay-bg);
 }

@@ -14,7 +14,6 @@
       <PackageReference Include="MongoDB.Driver" />
       <PackageReference Include="MongoDB.Driver.Core.Extensions.DiagnosticSources" />
       <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
-      <PackageReference Include="OpenIddict.EntityFrameworkCore" />
     </ItemGroup>
 
     <ItemGroup>

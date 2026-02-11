@@ -24,9 +24,9 @@ public enum AccessPolicy
     FullBan = 1 << 2,
 
     /// <summary>
-    /// Chat ban restrictions
+    /// Global chat ban restrictions
     /// </summary>
-    ChatBan = 1 << 3,
+    GlobalChatBan = 1 << 3,
 
     /// <summary>
     /// Content editing restrictions

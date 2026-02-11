@@ -1,31 +1,61 @@
+using DM.Services.Community.Configuration;
 using DM.Services.Core.Exceptions;
 using FluentValidation;
+using Microsoft.Extensions.Options;
 
 namespace DM.Services.Community.BusinessProcesses.Account.Registration;
 
 /// <summary>
-/// Validator for user registration DTO model
+/// Validator for user registration DTO model (email-first flow).
+/// Login validation happens during activation, not registration.
 /// </summary>
 internal class UserRegistrationValidator : AbstractValidator<UserRegistration>
 {
     /// <inheritdoc />
     public UserRegistrationValidator(
-        IRegistrationRepository registrationRepository)
+        IRegistrationRepository registrationRepository,
+        IOptions<PasswordPolicyConfiguration> passwordPolicyOptions)
     {
-        RuleFor(r => r.Login)
-            .NotEmpty().WithMessage(ValidationError.Empty)
-            .MinimumLength(2).WithMessage(ValidationError.Short)
-            .MaximumLength(20).WithMessage(ValidationError.Long)
-            .MustAsync(registrationRepository.LoginFree).WithMessage(ValidationError.Taken);
+        var passwordPolicy = passwordPolicyOptions.Value;
 
+        // Email must be unique across both Users and PendingRegistrations
         RuleFor(r => r.Email)
             .NotEmpty().WithMessage(ValidationError.Empty)
             .MaximumLength(100).WithMessage(ValidationError.Long)
             .EmailAddress().WithMessage(ValidationError.Invalid)
-            .MustAsync(registrationRepository.EmailFree).WithMessage(ValidationError.Taken);
+            .MustAsync(registrationRepository.EmailFreeForNewRegistration).WithMessage(ValidationError.Taken);
 
         RuleFor(r => r.Password)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MinimumLength(6).WithMessage(ValidationError.Short);
+            .MinimumLength(passwordPolicy.MinimumLength).WithMessage(ValidationError.Short)
+            .MaximumLength(passwordPolicy.MaximumLength).WithMessage(ValidationError.Long);
+
+        RuleFor(r => r.AcceptedRules)
+            .Equal(true).WithMessage("Необходимо принять правила сайта");
+
+        // Apply conditional password complexity rules based on configuration
+        if (passwordPolicy.RequireUppercase)
+        {
+            RuleFor(r => r.Password)
+                .Matches("[A-Z]").WithMessage(ValidationError.RequiresUppercase);
+        }
+
+        if (passwordPolicy.RequireLowercase)
+        {
+            RuleFor(r => r.Password)
+                .Matches("[a-z]").WithMessage(ValidationError.RequiresLowercase);
+        }
+
+        if (passwordPolicy.RequireDigit)
+        {
+            RuleFor(r => r.Password)
+                .Matches("[0-9]").WithMessage(ValidationError.RequiresDigit);
+        }
+
+        if (passwordPolicy.RequireSpecialCharacter)
+        {
+            RuleFor(r => r.Password)
+                .Matches("[^a-zA-Z0-9]").WithMessage(ValidationError.RequiresSpecialCharacter);
+        }
     }
 }

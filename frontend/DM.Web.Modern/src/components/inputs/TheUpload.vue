@@ -1,8 +1,16 @@
 <template>
-  <input type="file" class="upload-input" @change="upload" />
+  <input type="file" class="upload-input" :accept="accept" @change="upload" />
 </template>
 
 <script setup lang="ts">
+const props = withDefaults(
+  defineProps<{
+    accept?: string;
+  }>(),
+  {
+    accept: undefined,
+  },
+);
 const emits = defineEmits(["uploading"]);
 
 const upload = (event: Event) => {

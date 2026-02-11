@@ -7,7 +7,7 @@ namespace DM.Web.API.Binding;
 internal class ReadableGuidBinderProvider : IModelBinderProvider
 {
     /// <inheritdoc />
-    public IModelBinder GetBinder(ModelBinderProviderContext context)
+    public IModelBinder? GetBinder(ModelBinderProviderContext context)
     {
         if (context.Metadata.ModelType == typeof(Guid) ||
             context.Metadata.ModelType == typeof(Guid?))

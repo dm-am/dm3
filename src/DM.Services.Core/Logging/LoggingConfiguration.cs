@@ -57,7 +57,6 @@ public static class LoggingConfiguration
                 .AddSource("MongoDB.Driver.Core.Extensions.DiagnosticSources") // MongoDb is not too fancy
                 .AddSource(DM.Services.Core.Tracing.DmActivitySource.Name)
                 .AddJamqClientInstrumentation()
-                .AddConsoleExporter()
                 .AddOtlpExporter(options => options.Endpoint = new Uri(connectionStrings.TracingEndpoint)))
             .WithMetrics(builder => builder
                 .ConfigureResource(r => r.AddService(applicationName))

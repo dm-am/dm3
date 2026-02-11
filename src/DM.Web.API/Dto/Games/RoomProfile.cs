@@ -1,5 +1,6 @@
+using System;
 using AutoMapper;
-using DM.Services.Gaming.Dto.Input;
+using DM.Services.Game.Dto.Input;
 
 namespace DM.Web.API.Dto.Games;
 
@@ -11,25 +12,25 @@ internal class RoomProfile : Profile
     /// <inheritdoc />
     public RoomProfile()
     {
-        CreateMap<DM.Services.Gaming.Dto.Output.Room, Room>();
-        CreateMap<DM.Services.Gaming.Dto.Output.RoomSettings, RoomSettings>();
+        CreateMap<DM.Services.Game.Dto.Output.Room, Room>();
+        CreateMap<DM.Services.Game.Dto.Output.RoomSettings, RoomSettings>();
 
-        CreateMap<Room, CreateRoom>();
+        CreateMap<CreateRoomRequest, CreateRoom>();
         CreateMap<Room, UpdateRoom>();
 
-        CreateMap<DM.Services.Gaming.Dto.Output.RoomClaim, RoomClaim>();
+        CreateMap<DM.Services.Game.Dto.Output.RoomAccess, RoomAccess>();
 
-        CreateMap<RoomClaim, CreateRoomClaim>()
-            .ForMember(d => d.CharacterId, s => s.MapFrom(r => r.Character.Id))
+        CreateMap<RoomAccess, CreateRoomAccess>()
+            .ForMember(d => d.CharacterId, s => s.MapFrom(r => r.Character != null ? r.Character.Id : (Guid?)null))
             .ForMember(d => d.ReaderLogin, s => s.MapFrom(r => r.User != null ? r.User.Login : null));
-        CreateMap<RoomClaim, UpdateRoomClaim>()
-            .ForMember(d => d.ClaimId, s => s.MapFrom(r => r.Id));
+        CreateMap<RoomAccess, UpdateRoomAccess>()
+            .ForMember(d => d.AccessId, s => s.MapFrom(r => r.Id));
 
-        CreateMap<DM.Services.Gaming.Dto.Output.PendingPost, PendingPost>()
-            .ForMember(d => d.Awaiting, s => s.MapFrom(p => p.AwaitingUser))
-            .ForMember(d => d.Pending, s => s.MapFrom(p => p.PendingUser));
+        CreateMap<DM.Services.Game.Dto.Output.PostPendency, PostPendency>()
+            .ForMember(d => d.CreatedBy, s => s.MapFrom(p => p.CreatedBy))
+            .ForMember(d => d.WaitingFor, s => s.MapFrom(p => p.WaitingForUser));
 
-        CreateMap<PendingPost, CreatePendingPost>()
-            .ForMember(d => d.PendingUserLogin, s => s.MapFrom(p => p.Pending.Login));
+        CreateMap<PostPendency, CreatePostPendency>()
+            .ForMember(d => d.WaitingForUserLogin, s => s.MapFrom(p => p.WaitingFor != null ? p.WaitingFor.Login : null));
     }
 }

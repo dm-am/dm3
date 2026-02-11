@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DM.Services.Authentication.Configuration;
 using DM.Services.Authentication.Dto;
 using DM.Services.Authentication.Factories;
 using DM.Services.Authentication.Implementation;
@@ -7,9 +8,13 @@ using DM.Services.Authentication.Implementation.Security;
 using DM.Services.Authentication.Implementation.UserIdentity;
 using DM.Services.Authentication.Repositories;
 using DM.Services.Core.Dto.Enums;
+using DM.Services.Core.Implementation;
+using DM.Services.DataAccess.BusinessObjects.Users;
+using DM.Services.DataAccess.RelationalStorage;
 using DM.Tests.Core;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Language.Flow;
 using Xunit;
@@ -19,7 +24,7 @@ namespace DM.Services.Authentication.Tests;
 
 public class AuthenticationServiceLoginShould : UnitTestBase
 {
-    private readonly ISetup<IAuthenticationRepository, Task<(bool Success, AuthenticatedUser User)>>
+    private readonly ISetup<IAuthenticationRepository, Task<(bool Success, AuthenticatedUser? User)>>
         userSearchSetup;
 
     private readonly AuthenticationService service;
@@ -27,53 +32,51 @@ public class AuthenticationServiceLoginShould : UnitTestBase
     private readonly Mock<ISecurityManager> securityManager;
     private readonly Mock<ISessionFactory> sessionFactory;
     private readonly Mock<ISymmetricCryptoService> cryptoService;
-    private const string Username = nameof(Username);
+    private const string Email = "test@example.com";
 
     public AuthenticationServiceLoginShould()
     {
         securityManager = Mock<ISecurityManager>();
         cryptoService = Mock<ISymmetricCryptoService>();
         authenticationRepository = Mock<IAuthenticationRepository>();
-        userSearchSetup = authenticationRepository.Setup(r => r.TryFindUser(It.IsAny<string>()));
+        // Mock pending registration check - return false (not pending)
+        authenticationRepository.Setup(r => r.IsPendingRegistration(It.IsAny<string>())).ReturnsAsync(false);
+        userSearchSetup = authenticationRepository.Setup(r => r.TryFindUserByEmail(It.IsAny<string>()));
         sessionFactory = Mock<ISessionFactory>();
         var identityProvider = Mock<IIdentityProvider>();
         identityProvider.Setup(p => p.Current).Returns(Identity.Guest);
         var loginAttemptTracker = Mock<ILoginAttemptTracker>();
         loginAttemptTracker.Setup(t => t.GetDelayForUser(It.IsAny<string>())).ReturnsAsync(0);
         var logger = Mock<ILogger<AuthenticationService>>();
+        var authConfig = Options.Create(new AuthenticationConfiguration());
+        var dateTimeProvider = Mock<IDateTimeProvider>();
+        dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        var updateBuilderFactory = Mock<IUpdateBuilderFactory>();
+        var updateBuilder = Mock<IUpdateBuilder<User>>();
+        updateBuilder.Setup(b => b.Field(It.IsAny<System.Linq.Expressions.Expression<Func<User, DateTimeOffset?>>>(), It.IsAny<DateTimeOffset>())).Returns(updateBuilder.Object);
+        updateBuilderFactory.Setup(f => f.Create<User>(It.IsAny<Guid>())).Returns(updateBuilder.Object);
+        authenticationRepository
+            .Setup(r => r.UpdateActivity(It.IsAny<IUpdateBuilder<User>>()))
+            .Returns(Task.CompletedTask);
         service = new AuthenticationService(securityManager.Object, cryptoService.Object,
-            authenticationRepository.Object, sessionFactory.Object, null!, identityProvider.Object, null!, loginAttemptTracker.Object, logger.Object);
+            authenticationRepository.Object, sessionFactory.Object, dateTimeProvider.Object, identityProvider.Object, updateBuilderFactory.Object, loginAttemptTracker.Object, logger.Object, authConfig);
     }
 
     [Fact]
     public async Task FailIfNoUserFoundByLogin()
     {
-        userSearchSetup.ReturnsAsync((false, null));
-        var actual = await service.Authenticate(Username, "qwerty", false);
+        userSearchSetup.ReturnsAsync((false, null!));
+        var actual = await service.Authenticate(Email, "qwerty");
 
         actual.Error.Should().Be(AuthenticationError.WrongLogin);
     }
 
     [Fact]
-    public async Task FailIfInactiveUserFound()
-    {
-        var user = new AuthenticatedUser {Activated = false};
-        userSearchSetup.ReturnsAsync((true, user));
-        var actual = await service.Authenticate(Username, "qwerty", false);
-
-        actual.Error.Should().Be(AuthenticationError.Inactive);
-        actual.User.Should().Be(AuthenticatedUser.Guest);
-        actual.Session.Should().BeNull();
-        actual.Settings.Should().Be(UserSettings.Default);
-        actual.AuthenticationToken.Should().BeNull();
-    }
-
-    [Fact]
     public async Task FailIfRemovedUserFound()
     {
-        var user = new AuthenticatedUser {Activated = true, IsRemoved = true};
+        var user = new AuthenticatedUser {IsRemoved = true};
         userSearchSetup.ReturnsAsync((true, user));
-        var actual = await service.Authenticate(Username, "qwerty", false);
+        var actual = await service.Authenticate(Email, "qwerty");
 
         actual.Error.Should().Be(AuthenticationError.Removed);
         actual.User.Should().Be(AuthenticatedUser.Guest);
@@ -87,12 +90,11 @@ public class AuthenticationServiceLoginShould : UnitTestBase
     {
         var user = new AuthenticatedUser
         {
-            Activated = true,
             IsRemoved = false,
             AccessPolicy = AccessPolicy.FullBan | AccessPolicy.RestrictContentEditing
         };
         userSearchSetup.ReturnsAsync((true, user));
-        var actual = await service.Authenticate(Username, "qwerty", false);
+        var actual = await service.Authenticate(Email, "qwerty");
 
         actual.Error.Should().Be(AuthenticationError.Banned);
         actual.User.Should().Be(AuthenticatedUser.Guest);
@@ -106,9 +108,8 @@ public class AuthenticationServiceLoginShould : UnitTestBase
     {
         var user = new AuthenticatedUser
         {
-            Activated = true,
             IsRemoved = false,
-            AccessPolicy = AccessPolicy.ChatBan | AccessPolicy.DemocraticBan,
+            AccessPolicy = AccessPolicy.GlobalChatBan | AccessPolicy.DemocraticBan,
             PasswordHash = "hash",
             Salt = "salt"
         };
@@ -117,7 +118,7 @@ public class AuthenticationServiceLoginShould : UnitTestBase
             .Setup(m => m.ComparePasswords(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>()))
             .Returns(false);
 
-        var actual = await service.Authenticate(Username, "qwerty", false);
+        var actual = await service.Authenticate(Email, "qwerty");
 
         actual.Error.Should().Be(AuthenticationError.WrongPassword);
         actual.User.Should().Be(AuthenticatedUser.Guest);
@@ -137,7 +138,6 @@ public class AuthenticationServiceLoginShould : UnitTestBase
         var user = new AuthenticatedUser
         {
             UserId = userId,
-            Activated = true,
             IsRemoved = false,
             AccessPolicy = AccessPolicy.NotSpecified,
             PasswordHash = "hash",
@@ -161,7 +161,7 @@ public class AuthenticationServiceLoginShould : UnitTestBase
             .Setup(s => s.Encrypt(It.IsAny<string>()))
             .ReturnsAsync("token");
 
-        var actual = await service.Authenticate(Username, "qwerty", true);
+        var actual = await service.Authenticate(Email, "qwerty");
 
         actual.Error.Should().Be(AuthenticationError.NoError);
         actual.User.Should().Be(user);
@@ -169,6 +169,7 @@ public class AuthenticationServiceLoginShould : UnitTestBase
         actual.Settings.Should().Be(userSettings);
         actual.AuthenticationToken.Should().Be("token");
         securityManager.Verify(m => m.ComparePasswords("qwerty", "salt", "hash", It.IsAny<int>()));
+        // Default is persistent (rememberMe=true)
         sessionFactory.Verify(f => f.Create(true, false));
         authenticationRepository.Verify(r => r.FindUserSettings(userId), Times.Once);
         authenticationRepository.Verify(r => r.AddSession(userId, session), Times.Once);

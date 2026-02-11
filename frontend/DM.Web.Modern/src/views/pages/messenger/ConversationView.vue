@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
@@ -27,7 +27,7 @@ const {
   hasMoreAfter,
 } = storeToRefs(messagingStore);
 
-const ONLINE_THRESHOLD_MINUTES = 15;
+const ONLINE_THRESHOLD_MINUTES = 5;
 const EDIT_TIME_LIMIT_MINUTES = 15;
 const MAX_MESSAGE_HEIGHT = 200;
 const CONTINUATION_TIME_LIMIT_MINUTES = 5;
@@ -329,15 +329,15 @@ function formatDeletedDate(msg: Message) {
   return result;
 }
 
-// Track latest online status per login
-const latestOnlineByLogin = computed(() => {
+// Track latest activity per login
+const latestActivityByLogin = computed(() => {
   const map = new Map<string, string>();
   if (!messagesList.value?.length) return map;
   for (const msg of messagesList.value) {
-    if (!msg.author?.login || !msg.author?.onlineUtc) continue;
+    if (!msg.author?.login || !msg.author?.lastActivityUtc) continue;
     const existing = map.get(msg.author.login);
-    if (!existing || dayjs(msg.author.onlineUtc).isAfter(dayjs(existing))) {
-      map.set(msg.author.login, msg.author.onlineUtc);
+    if (!existing || dayjs(msg.author.lastActivityUtc).isAfter(dayjs(existing))) {
+      map.set(msg.author.login, msg.author.lastActivityUtc);
     }
   }
   return map;
@@ -345,9 +345,9 @@ const latestOnlineByLogin = computed(() => {
 
 function isOnline(author: any) {
   if (!author?.login) return false;
-  const onlineUtc = latestOnlineByLogin.value.get(author.login);
-  if (!onlineUtc) return false;
-  const minutesSinceOnline = dayjs().diff(dayjs(onlineUtc), "minute", true);
+  const lastActivityUtc = latestActivityByLogin.value.get(author.login);
+  if (!lastActivityUtc) return false;
+  const minutesSinceOnline = dayjs().diff(dayjs(lastActivityUtc), "minute", true);
   return minutesSinceOnline <= ONLINE_THRESHOLD_MINUTES;
 }
 
@@ -392,7 +392,7 @@ function getLikesTooltip(msg: Message) {
   }
   const shown = names.slice(0, 3);
   const remaining = count - 3;
-  return `${shown.join(", ")} и ещё ${remaining} оценили это`;
+  return `${shown.join(", ")} и еще ${remaining} оценили это`;
 }
 
 // Edit
@@ -574,9 +574,7 @@ onUnmounted(() => {
 
 <template>
   <div class="conversation-view">
-    <the-loader v-if="loadingConversation" :big="true" />
-
-    <template v-else-if="selectedConversation">
+    <template v-if="selectedConversation">
       <page-title v-if="interlocutor">Переписка с {{ interlocutor.login }}</page-title>
       <page-title v-else>Переписка</page-title>
 
@@ -599,23 +597,19 @@ onUnmounted(() => {
 
       <div class="messages-wrapper">
         <div ref="messagesContainer" class="messages-container">
-          <the-loader v-if="loadingMessages" :big="true" />
-
-          <secondary-text
-            v-else-if="!messagesList?.length"
-            class="empty-messages"
-          >
+          <template v-if="!messagesList?.length">
+          <secondary-text class="empty-messages">
             Начните переписку, отправив первое сообщение
           </secondary-text>
+        </template>
 
-          <template v-else>
+        <template v-else>
             <!-- Top sentinel for loading older messages -->
             <div
               v-if="hasMoreBefore"
               ref="topSentinel"
               class="scroll-sentinel top-sentinel"
             >
-              <the-loader v-if="loadingBefore" :small="true" />
             </div>
 
             <template

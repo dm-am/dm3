@@ -14,8 +14,8 @@ export enum EventType {
   NewMessage = 11,
   ChangedMessage = 12,
   LikedMessage = 13,
-  NewChatMessage = 31,
-  LikedChatMessage = 32,
+  NewGlobalChatMessage = 31,
+  LikedGlobalChatMessage = 32,
   NewPoll = 51,
 
   // Forum events (100-199)

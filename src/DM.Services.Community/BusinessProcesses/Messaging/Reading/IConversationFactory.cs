@@ -11,12 +11,12 @@ namespace DM.Services.Community.BusinessProcesses.Messaging.Reading;
 internal interface IConversationFactory
 {
     /// <summary>
-    /// Create DAL entities for visavi conversation
+    /// Create DAL entities for direct (1-on-1) conversation
     /// </summary>
     /// <param name="userId">User identifier</param>
-    /// <param name="visaviId">Visavi user identifier</param>
+    /// <param name="otherUserId">Other user identifier</param>
     /// <returns></returns>
-    (DbConversation conversation, IEnumerable<DbConversationLink>) CreateVisavi(Guid userId, Guid visaviId);
+    (DbConversation conversation, IEnumerable<DbConversationLink>) CreateDirect(Guid userId, Guid otherUserId);
 
     /// <summary>
     /// Create DAL entities for group conversation

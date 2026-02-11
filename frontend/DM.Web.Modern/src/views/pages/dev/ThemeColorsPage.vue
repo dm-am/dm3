@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /**
  * Theme Colors Test Page
  * Полная демонстрация всех цветовых переменных и UI элементов системы тем
@@ -103,13 +103,13 @@ const colorGroups = [
       {
         var: "--text-muted",
         sass: "$text-muted",
-        usage: "Приглушённый, подписи",
+        usage: "Приглушенный, подписи",
       },
       { var: "--text-meta", sass: "$text-meta", usage: "Акцентный коричневый" },
       {
         var: "--text-on-green",
         sass: "$text-on-green",
-        usage: "Текст на зелёном фоне",
+        usage: "Текст на зеленом фоне",
       },
       {
         var: "--text-on-red",
@@ -177,12 +177,12 @@ const colorGroups = [
       {
         var: "--bg-highlight-yellow",
         sass: "$bg-highlight-yellow",
-        usage: "Жёлтый (спойлеры)",
+        usage: "Желтый (спойлеры)",
       },
       {
         var: "--bg-highlight-green",
         sass: "$bg-highlight-green",
-        usage: "Зелёный (приват)",
+        usage: "Зеленый (приват)",
       },
       {
         var: "--bg-highlight-red",
@@ -241,7 +241,7 @@ const colorGroups = [
       {
         var: "--border-accent-green",
         sass: "$border-accent-green",
-        usage: "Зелёные (мод-блок)",
+        usage: "Зеленые (мод-блок)",
       },
       {
         var: "--border-accent-red",
@@ -257,7 +257,7 @@ const colorGroups = [
       {
         var: "--input-bg-disabled",
         sass: "$input-bg-disabled",
-        usage: "Фон отключённого",
+        usage: "Фон отключенного",
       },
       {
         var: "--progress-bg",
@@ -280,7 +280,7 @@ const colorGroups = [
         sass: "$shade-text",
         usage: "Текст на затемнении",
       },
-      { var: "--overlay-bg", sass: "$overlay-bg", usage: "Лёгкий оверлей" },
+      { var: "--overlay-bg", sass: "$overlay-bg", usage: "Легкий оверлей" },
       { var: "--hover-overlay", sass: "$hover-overlay", usage: "Hover эффект" },
       {
         var: "--active-overlay",
@@ -291,7 +291,7 @@ const colorGroups = [
       {
         var: "--highlight-overlay-green",
         sass: "$highlight-overlay-green",
-        usage: "Зелёный (мод, приват)",
+        usage: "Зеленый (мод, приват)",
       },
       {
         var: "--highlight-overlay-red",
@@ -452,12 +452,12 @@ function confirmNsfw() {
         <h3 class="example-title">Текст</h3>
         <div class="example-content">
           <p class="demo-text">Основной текст ($text)</p>
-          <p class="demo-text-muted">Приглушённый текст ($text-muted)</p>
+          <p class="demo-text-muted">Приглушенный текст ($text-muted)</p>
           <p class="demo-text-meta">Акцентный коричневый текст ($text-meta)</p>
-          <p class="demo-text-green">Зелёный акцент ($accent-green)</p>
+          <p class="demo-text-green">Зеленый акцент ($accent-green)</p>
           <p class="demo-text-red">Красный акцент ($accent-red)</p>
           <p class="demo-text-on-green">
-            Текст на зелёном фоне ($text-on-green)
+            Текст на зеленом фоне ($text-on-green)
           </p>
           <p class="demo-text-on-red">Текст на красном фоне ($text-on-red)</p>
         </div>
@@ -470,7 +470,7 @@ function confirmNsfw() {
           <p>
             <a href="#" class="demo-link">Обычная ссылка</a> ·
             <a href="#" class="demo-link-nav">Навигация</a> ·
-            <a href="#" class="demo-link-green">Зелёная</a> ·
+            <a href="#" class="demo-link-green">Зеленая</a> ·
             <a href="#" class="demo-link-red">Красная</a>
           </p>
         </div>
@@ -535,7 +535,7 @@ function confirmNsfw() {
           <div class="demo-checkboxes">
             <label><input type="checkbox" checked /> Отмечен</label>
             <label><input type="checkbox" /> Не отмечен</label>
-            <label><input type="checkbox" disabled /> Отключён</label>
+            <label><input type="checkbox" disabled /> Отключен</label>
           </div>
           <p class="demo-hint">+input(): сплошная рамка, box-shadow на focus</p>
         </div>
@@ -626,8 +626,8 @@ function confirmNsfw() {
         <div class="example-content demo-bbcode-content">
           <!-- Типографика -->
           <p>
-            <strong>Жирный текст</strong>, <em>курсив</em>, <u>подчёркнутый</u>,
-            <s>зачёркнутый</s>
+            <strong>Жирный текст</strong>, <em>курсив</em>, <u>подчеркнутый</u>,
+            <s>зачеркнутый</s>
           </p>
 
           <!-- Цитата -->
@@ -727,7 +727,7 @@ function confirmNsfw() {
               </span>
             </div>
           </div>
-          <p class="demo-hint">Скруглённые углы: $border-radius</p>
+          <p class="demo-hint">Скругленные углы: $border-radius</p>
         </div>
       </div>
 
@@ -778,7 +778,7 @@ function confirmNsfw() {
             <div class="demo-invert-box">
               <div class="demo-invert-square"></div>
               <div class="demo-invert-square demo-inverted"></div>
-              <span>$filter-invert (чёрный → белый в тёмной теме)</span>
+              <span>$filter-invert (черный → белый в темной теме)</span>
             </div>
           </div>
         </div>

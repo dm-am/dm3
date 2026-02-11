@@ -28,5 +28,25 @@ public enum TokenType
     /// <summary>
     /// Game reader invitation
     /// </summary>
-    ReaderInvitation = 4
+    ReaderInvitation = 4,
+
+    /// <summary>
+    /// Blog assistant invitation
+    /// </summary>
+    BlogAssistantInvitation = 5,
+
+    /// <summary>
+    /// Blog reader invitation
+    /// </summary>
+    BlogReaderInvitation = 6,
+
+    /// <summary>
+    /// Bot account linking verification code
+    /// </summary>
+    BotLink = 7,
+
+    /// <summary>
+    /// Email change confirmation
+    /// </summary>
+    EmailChange = 8
 }

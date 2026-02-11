@@ -1,29 +1,51 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace DM.Web.API.Dto.Users;
 
 /// <summary>
-/// API DTO model for password changing
+/// DTO model for password changing
 /// </summary>
+/// <remarks>
+/// Two authentication methods are supported:
+/// - Using OldPassword: User knows their current password
+/// - Using Token: User received a password reset token via email
+///
+/// At least one of Token or OldPassword must be provided.
+/// </remarks>
 public class ChangePassword
 {
     /// <summary>
     /// User login
     /// </summary>
-    public string Login { get; set; }
+    /// <example>JohnDoe</example>
+    [Required(ErrorMessage = "Login is required")]
+    [StringLength(20, MinimumLength = 2, ErrorMessage = "Login must be between 2 and 20 characters")]
+    public string Login { get; set; } = "";
 
     /// <summary>
-    /// Password reset token
+    /// Password reset token (received via email)
     /// </summary>
+    /// <remarks>
+    /// Required when resetting password without knowing the old password.
+    /// Either Token or OldPassword must be provided.
+    /// </remarks>
     public Guid? Token { get; set; }
 
     /// <summary>
-    /// Old password
+    /// Current password for verification
     /// </summary>
-    public string OldPassword { get; set; }
+    /// <remarks>
+    /// Required when changing password while logged in.
+    /// Either Token or OldPassword must be provided.
+    /// </remarks>
+    [StringLength(128, ErrorMessage = "Old password must not exceed 128 characters")]
+    public string? OldPassword { get; set; }
 
     /// <summary>
-    /// New password
+    /// New password (minimum 8 characters)
     /// </summary>
-    public string NewPassword { get; set; }
+    [Required(ErrorMessage = "New password is required")]
+    [StringLength(128, MinimumLength = 8, ErrorMessage = "Password must be between 8 and 128 characters")]
+    public string NewPassword { get; set; } = "";
 }

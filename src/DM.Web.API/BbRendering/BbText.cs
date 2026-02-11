@@ -8,19 +8,12 @@ public abstract class BbText
     /// <summary>
     /// Text
     /// </summary>
-    public string Value { get; set; }
+    public string Value { get; set; } = null!;
 
     /// <summary>
     /// Parse mode
     /// </summary>
     public abstract BbParseMode ParseMode { get; }
-}
-
-/// <inheritdoc />
-public class ChatBbText : BbText
-{
-    /// <inheritdoc />
-    public override BbParseMode ParseMode => BbParseMode.Chat;
 }
 
 /// <inheritdoc />

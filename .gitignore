@@ -5,6 +5,18 @@ bundles
 .vs
 *.user
 launchSettings.json
+
+# Configuration files with secrets - NEVER commit these
+**/appsettings.json
 appsettings.*.json
+
+# Nginx credentials
+docker/nginx/.htpasswd
+
+# Docker environment secrets
+docker/.env
+docker/.env.mirror
+
+# Claude Code
 .claude/
 .gitignore

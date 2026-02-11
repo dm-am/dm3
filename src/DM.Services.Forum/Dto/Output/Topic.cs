@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using DM.Services.Common.Dto;
 using DM.Services.Core.Dto;
+using DM.Services.Core.Dto.Enums;
 
 namespace DM.Services.Forum.Dto.Output;
 
@@ -13,20 +14,23 @@ public class Topic : ILikable
     /// <inheritdoc />
     public Guid Id { get; set; }
 
+    /// <inheritdoc />
+    public LikeEntityType LikeEntityType => LikeEntityType.Topic;
+
     /// <summary>
     /// Board
     /// </summary>
-    public Board Board { get; set; }
+    public Board Board { get; set; } = null!;
 
     /// <summary>
     /// Title
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Text
     /// </summary>
-    public string Text { get; set; }
+    public string Text { get; set; } = null!;
 
     /// <summary>
     /// Creation moment (UTC)
@@ -41,7 +45,7 @@ public class Topic : ILikable
     /// <summary>
     /// Author
     /// </summary>
-    public GeneralUser Author { get; set; }
+    public GeneralUser Author { get; set; } = null!;
 
     /// <summary>
     /// Total comments count
@@ -56,7 +60,7 @@ public class Topic : ILikable
     /// <summary>
     /// Last comment
     /// </summary>
-    public LastComment LastComment { get; set; }
+    public LastComment LastComment { get; set; } = null!;
 
     /// <summary>
     /// Attached
@@ -74,7 +78,7 @@ public class Topic : ILikable
     public DateTimeOffset LastActivityUtc { get; set; }
 
     /// <inheritdoc />
-    public IEnumerable<GeneralUser> Likes { get; set; }
+    public IEnumerable<GeneralUser> Likes { get; set; } = [];
 }
 
 /// <summary>
@@ -85,7 +89,7 @@ public class LastComment
     /// <summary>
     /// Author
     /// </summary>
-    public GeneralUser Author { get; set; }
+    public GeneralUser Author { get; set; } = null!;
 
     /// <summary>
     /// Creation moment (UTC)

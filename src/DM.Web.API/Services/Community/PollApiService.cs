@@ -55,9 +55,14 @@ internal class PollApiService : IPollApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Poll>> Create(Poll poll)
+    public async Task<Envelope<Poll>> Create(CreatePollRequest request)
     {
-        var createPoll = mapper.Map<CreatePoll>(poll);
+        var createPoll = new CreatePoll
+        {
+            Title = request.Title,
+            EndDate = DateTimeOffset.UtcNow.AddDays(request.DurationDays),
+            Options = request.Options
+        };
         var createdPoll = await creatingService.Create(createPoll);
         return new Envelope<Poll>(mapper.Map<Poll>(createdPoll));
     }
@@ -77,13 +82,13 @@ internal class PollApiService : IPollApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Poll>> Update(Guid id, Poll poll)
+    public async Task<Envelope<Poll>> Update(Guid id, UpdatePollRequest request)
     {
         var updatePoll = new UpdatePoll
         {
             Id = id,
-            Title = poll.Title,
-            EndDate = poll.EndsUtc
+            Title = request.Title,
+            EndDate = request.EndsUtc
         };
         var updatedPoll = await updatingService.Update(updatePoll);
         return new Envelope<Poll>(mapper.Map<Poll>(updatedPoll));

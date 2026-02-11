@@ -1,4 +1,3 @@
-using System.Linq;
 using AutoMapper;
 
 namespace DM.Services.Common.Dto;
@@ -13,6 +12,6 @@ internal class CommentProfile : Profile
     {
         CreateMap<DataAccess.BusinessObjects.Common.Comment, Comment>()
             .ForMember(d => d.Id, s => s.MapFrom(c => c.CommentId))
-            .ForMember(d => d.Likes, s => s.MapFrom(c => c.Likes.Select(l => l.User)));
+            .ForMember(d => d.Likes, s => s.Ignore()); // Likes fetched via EntityType+EntityId pattern
     }
 }

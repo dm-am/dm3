@@ -18,7 +18,7 @@ internal interface IConversationUpdatingRepository
     /// </summary>
     /// <param name="conversationId">Conversation ID</param>
     /// <returns>Conversation with participants</returns>
-    Task<Conversation> Get(Guid conversationId);
+    Task<Conversation?> Get(Guid conversationId);
 
     /// <summary>
     /// Update conversation

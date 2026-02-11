@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
+using DM.Services.Core.Dto.Enums;
 
 namespace DM.Services.DataAccess.BusinessObjects.Messaging;
 
@@ -11,19 +12,24 @@ namespace DM.Services.DataAccess.BusinessObjects.Messaging;
 public class Conversation
 {
     /// <summary>
+    /// Well-known ID for global chat conversation
+    /// </summary>
+    public static readonly Guid GlobalChatId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+
+    /// <summary>
     /// Conversation identifier
     /// </summary>
     public Guid ConversationId { get; set; }
 
     /// <summary>
-    /// Sign of a basic conversation between two users
+    /// Conversation type (Direct, Group, or Global)
     /// </summary>
-    public bool Visavi { get; set; }
+    public ConversationType Type { get; set; }
 
     /// <summary>
-    /// Conversation title (for group conversations)
+    /// Conversation title (for group conversations, null for direct)
     /// </summary>
-    public string Title { get; set; }
+    public string? Title { get; set; }
 
     /// <summary>
     /// Last message identifier
@@ -34,17 +40,17 @@ public class Conversation
     /// Links with conversation participants
     /// </summary>
     [InverseProperty(nameof(UserConversationLink.Conversation))]
-    public virtual ICollection<UserConversationLink> UserLinks { get; set; }
+    public virtual ICollection<UserConversationLink> UserLinks { get; set; } = [];
 
     /// <summary>
     /// Messages
     /// </summary>
     [InverseProperty(nameof(Message.Conversation))]
-    public virtual ICollection<Message> Messages { get; set; }
+    public virtual ICollection<Message> Messages { get; set; } = [];
 
     /// <summary>
     /// Last message
     /// </summary>
     [ForeignKey(nameof(LastMessageId))]
-    public virtual Message LastMessage { get; set; }
+    public virtual Message? LastMessage { get; set; }
 }

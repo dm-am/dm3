@@ -1,7 +1,7 @@
 # Preview deployment with nginx basic auth
 # Usage:
 #   1. Generate password: docker run --rm httpd htpasswd -nb preview yourpassword > docker/nginx/.htpasswd
-#   2. Run: docker-compose -f docker/docker-compose.yml -f docker/docker-compose.preview.yml up -d
+#   2. Run: docker compose -f docker/docker-compose.yml -f docker/docker-compose.preview.yml up -d
 
 networks:
   default:
@@ -17,8 +17,21 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
     depends_on:
-      - dmapi
-      - dmfront
+      dmapi:
+        condition: service_healthy
+      dmfront:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/nginx-health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
 
   dmapi:
     environment:
@@ -33,4 +46,5 @@ services:
       args:
         VITE_API_URL: ""
     depends_on:
-      - dmapi
+      dmapi:
+        condition: service_healthy

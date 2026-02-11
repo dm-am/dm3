@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using DM.Services.Core.Dto.Enums;
-using DM.Services.Gaming.Dto;
+using DM.Services.Game.Dto;
 using DM.Web.API.Dto.Users;
 
 namespace DM.Web.API.Dto.Games;
@@ -19,17 +19,17 @@ public class Game
     /// <summary>
     /// Game title
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// RPG system name
     /// </summary>
-    public string System { get; set; }
+    public string System { get; set; } = null!;
 
     /// <summary>
     /// RPG setting name
     /// </summary>
-    public string Setting { get; set; }
+    public string Setting { get; set; } = null!;
 
     /// <summary>
     /// Attribute schema identifier (for referencing, full schema in GameDetails)
@@ -39,7 +39,7 @@ public class Game
     /// <summary>
     /// Game status
     /// </summary>
-    public GameStatus? Status { get; set; }
+    public ModuleStatus? Status { get; set; }
 
     /// <summary>
     /// Game first release date
@@ -49,32 +49,32 @@ public class Game
     /// <summary>
     /// Game master
     /// </summary>
-    public User Master { get; set; }
+    public User Master { get; set; } = null!;
 
     /// <summary>
     /// Game master's assistant
     /// </summary>
-    public User Assistant { get; set; }
+    public User? Assistant { get; set; }
 
     /// <summary>
     /// Responsible for premoderation
     /// </summary>
-    public User Mentor { get; set; }
+    public User? Mentor { get; set; }
 
     /// <summary>
     /// Game master's pending assistant
     /// </summary>
-    public User PendingAssistant { get; set; }
+    public User? PendingAssistant { get; set; }
 
     /// <summary>
     /// Requesting user participates in game
     /// </summary>
-    public IEnumerable<GameParticipation> Participation { get; set; }
+    public IEnumerable<GameParticipation> Participation { get; set; } = [];
 
     /// <summary>
     /// Game tags
     /// </summary>
-    public IEnumerable<Tag> Tags { get; set; }
+    public IEnumerable<Tag> Tags { get; set; } = [];
 
     /// <summary>
     /// Number of unread posts
@@ -94,12 +94,12 @@ public class Game
     /// <summary>
     /// User IDs of active character owners (for player count in sidebar)
     /// </summary>
-    public IEnumerable<Guid> ActiveCharacterUserIds { get; set; }
+    public IEnumerable<Guid> ActiveCharacterUserIds { get; set; } = [];
 
     /// <summary>
     /// Recruitment information
     /// </summary>
-    public GameRecruitment Recruitment { get; set; }
+    public GameRecruitment Recruitment { get; set; } = null!;
 }
 
 /// <summary>
@@ -162,6 +162,11 @@ public class GamePrivacySettings
     /// User can see other players dice rolls and results
     /// </summary>
     public bool? ViewDice { get; set; }
+
+    /// <summary>
+    /// User can see post statistics (post count, last post date) for participants
+    /// </summary>
+    public bool? ViewPostStats { get; set; }
 
     /// <summary>
     /// Access mode to the game commentaries

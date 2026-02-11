@@ -15,7 +15,7 @@ public class UpdatePoll
     /// <summary>
     /// Poll title
     /// </summary>
-    public string Title { get; set; }
+    public string? Title { get; set; }
 
     /// <summary>
     /// Desired poll end date

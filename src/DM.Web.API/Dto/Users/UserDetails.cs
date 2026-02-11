@@ -1,73 +1,25 @@
 using System;
-using System.Collections.Generic;
-using DM.Services.Core.Dto.Enums;
-using DM.Web.API.BbRendering;
 
 namespace DM.Web.API.Dto.Users;
 
 /// <summary>
-/// DTO model for user details
+/// DTO model for user account (private view with settings)
+/// This class represents the full account information available only to the account owner
 /// </summary>
 public class UserDetails : User
 {
     /// <summary>
-    /// Profile picture identifier
+    /// User email address (only visible to account owner)
     /// </summary>
-    public Guid? PictureGuid { get; set; }
+    public string? Email { get; set; }
 
     /// <summary>
-    /// URL of profile picture original
+    /// Given post review text (user's default review text)
     /// </summary>
-    public string OriginalPictureUrl { get; set; }
+    public string? GivenPostReview { get; set; }
 
     /// <summary>
-    /// User defined status
+    /// User settings (only visible to account owner)
     /// </summary>
-    public string Status { get; set; }
-
-    /// <summary>
-    /// Given post review text
-    /// </summary>
-    public string GivenPostReview { get; set; }
-
-    /// <summary>
-    /// User real name
-    /// </summary>
-    public string Name { get; set; }
-
-    /// <summary>
-    /// User real location
-    /// </summary>
-    public string Location { get; set; }
-
-    /// <summary>
-    /// User contact information
-    /// </summary>
-    public IEnumerable<UserContact> Contacts { get; set; }
-
-    /// <summary>
-    /// User-defined extended information
-    /// </summary>
-    public InfoBbText Info { get; set; }
-
-    /// <summary>
-    /// User settings
-    /// </summary>
-    public UserSettings Settings { get; set; }
-}
-
-/// <summary>
-/// User contact information
-/// </summary>
-public class UserContact
-{
-    /// <summary>
-    /// Contact type title (e.g., "Telegram", "Discord", "Email")
-    /// </summary>
-    public string Title { get; set; }
-
-    /// <summary>
-    /// Contact value
-    /// </summary>
-    public string Value { get; set; }
+    public UserSettings Settings { get; set; } = new();
 }

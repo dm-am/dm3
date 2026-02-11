@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
@@ -33,7 +34,7 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
     }
 
     /// <inheritdoc />
-    public async Task<(bool Success, AuthenticatedUser User)> TryFindUser(string login)
+    public async Task<(bool Success, AuthenticatedUser? User)> TryFindUser(string login)
     {
         var result = await _dbContext.Users
             .Where(u => u.Login.ToLower() == login.ToLower())
@@ -43,7 +44,17 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
     }
 
     /// <inheritdoc />
-    public Task<AuthenticatedUser> FindUser(Guid userId)
+    public async Task<(bool Success, AuthenticatedUser? User)> TryFindUserByEmail(string email)
+    {
+        var result = await _dbContext.Users
+            .Where(u => u.Email.ToLower() == email.ToLower())
+            .ProjectTo<AuthenticatedUser>(_mapper.ConfigurationProvider)
+            .FirstOrDefaultAsync();
+        return (result != null, result);
+    }
+
+    /// <inheritdoc />
+    public Task<AuthenticatedUser?> FindUser(Guid userId)
     {
         return _dbContext.Users
             .Where(u => u.UserId == userId)
@@ -52,7 +63,7 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
     }
 
     /// <inheritdoc />
-    public async Task<Session> FindUserSession(Guid sessionId)
+    public async Task<Session?> FindUserSession(Guid sessionId)
     {
         var userSessions = await Collection<UserSessions>()
             .Find(Filter<UserSessions>()
@@ -130,5 +141,29 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
     {
         userUpdate.AttachTo(_dbContext);
         return _dbContext.SaveChangesAsync();
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<Session>> GetUserSessions(Guid userId)
+    {
+        var userSessions = await Collection<UserSessions>()
+            .Find(Filter<UserSessions>().Eq(u => u.Id, userId))
+            .FirstOrDefaultAsync();
+
+        if (userSessions?.Sessions == null)
+        {
+            return Array.Empty<Session>();
+        }
+
+        return userSessions.Sessions
+            .Select(s => _mapper.Map<Session>(s))
+            .ToList();
+    }
+
+    /// <inheritdoc />
+    public Task<bool> IsPendingRegistration(string email)
+    {
+        return _dbContext.PendingRegistrations
+            .AnyAsync(p => p.Email.ToLower() == email.ToLower());
     }
 }

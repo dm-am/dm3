@@ -1,355 +1,224 @@
 <script setup lang="ts">
+import { computed, toRef } from "vue";
 import { useRoute } from "vue-router";
-import { useCommunityStore } from "@/stores/community";
 import { storeToRefs } from "pinia";
-import { computed, ref, watch } from "vue";
-import { type UserLogin, UserRole, Gender } from "@/api/models/community";
-import SecondaryText from "@/components/layout/SecondaryText.vue";
-import ProfileStat from "@/views/pages/profile/ProfileStat.vue";
-import ProfilePicture from "@/views/pages/profile/ProfilePicture.vue";
-import TheButton from "@/components/inputs/TheButton.vue";
-import { useUserStore } from "@/stores";
+import { useCommunityStore } from "@/stores/community";
+import { type UserLogin } from "@/api/models/community";
 import { useFetchData } from "@/composables/useFetchData";
-import defaultPicture from "@/assets/images/userpic.png";
-import dayjs from "dayjs";
-import { ROLE_INFO, STAFF_ROLES } from "@/constants/roles";
+import { useModerationProfile } from "@/composables/useModerationProfile";
+import { useProfileEdit } from "@/composables/useProfileEdit";
+import ModerationBlock from "./ModerationBlock.vue";
+import ProfileHeader from "./ProfileHeader.vue";
+import ProfileViolations from "./ProfileViolations.vue";
+import ProfilePersonalInfo from "./ProfilePersonalInfo.vue";
+import ProfileContacts from "./ProfileContacts.vue";
+import ProfilePersonalNote from "./ProfilePersonalNote.vue";
+import ProfileAbout from "./ProfileAbout.vue";
+import ProfileGames from "./ProfileGames.vue";
+import ProfileBlogs from "./ProfileBlogs.vue";
+import ProfileBestPost from "./ProfileBestPost.vue";
 
 const route = useRoute();
-const { user: currentUser } = storeToRefs(useUserStore());
 const communityStore = useCommunityStore();
-const { selectedUser: user } = storeToRefs(communityStore);
-const { trySelectProfile, updateUser } = communityStore;
+const { selectedUser: user, loadingProfile } = storeToRefs(communityStore);
+const { trySelectProfile, fetchEditableUser } = communityStore;
 
-const userRoles = computed(() => {
-  const roles =
-    user.value?.roles
-      .filter((r) => STAFF_ROLES.includes(r as UserRole))
-      .map((r) => ROLE_INFO[r as UserRole].nickname)
-      .filter(Boolean) || [];
-  if (user.value?.isHonorary) {
-    roles.push("Почётный гоблин");
-  }
-  return roles;
-});
-const isCurrentUser = computed(() => {
-  const currentLogin = currentUser.value?.login;
-  const profileLogin = user.value?.login;
-  return !!(currentLogin && profileLogin && currentLogin === profileLogin);
-});
-const pictureUrl = computed(
-  () => user.value?.originalPictureUrl || defaultPicture,
+// Profile not found state
+const profileNotFound = computed(() => !loadingProfile.value && !user.value);
+
+// Login ref for composables
+const login = computed(() => route.params.login as string);
+
+// Moderation profile (for moderators)
+const { moderationProfile, refresh: refreshModeration } = useModerationProfile(
+  () => route.params.login as string,
 );
 
-const isEditingProfile = ref(false);
-const isSaving = ref(false);
-const editedStatus = ref("");
-const editedName = ref("");
-const editedLocation = ref("");
-const editedSkype = ref("");
-const editedInfo = ref("");
+// Edit mode management
+const {
+  isEditMode,
+  canEdit,
+  hasChanges,
+  isSaving,
+  saveError,
+  toggleEditMode,
+  setField,
+  saveChanges,
+  cancelEdit,
+} = useProfileEdit(toRef(() => route.params.login as string));
 
-const userSkype = computed(
-  () => user.value?.contacts?.find((c) => c.title === "Skype")?.value || "",
-);
-
-const userIcq = computed(
-  () => user.value?.contacts?.find((c) => c.title === "ICQ")?.value || "",
-);
-
-const userRegistration = computed(() => {
-  if (!user.value?.registrationDateUtc) return "";
-  return dayjs(user.value.registrationDateUtc).format("DD.MM.YYYY HH:mm");
-});
-
-const userOnline = computed(() => {
-  if (!user.value?.onlineUtc) return "";
-  return dayjs(user.value.onlineUtc).format("DD.MM.YYYY HH:mm");
-});
-
-const genderNames: Record<Gender, string> = {
-  [Gender.Unknown]: "",
-  [Gender.Male]: "Мужской",
-  [Gender.Female]: "Женский",
-};
-
-const userGender = computed(() =>
-  user.value?.gender ? genderNames[user.value.gender as Gender] : "",
-);
-
-const userBirthday = computed(() => {
-  if (!user.value?.birthdayDate) return "";
-  return dayjs(user.value.birthdayDate).format("DD.MM");
-});
-
-const startEditProfile = () => {
-  if (!user.value) return;
-  editedStatus.value = user.value.status || "";
-  editedName.value = user.value.name || "";
-  editedLocation.value = user.value.location || "";
-  editedSkype.value = userSkype.value;
-  editedInfo.value = user.value.info || "";
-  isEditingProfile.value = true;
-};
-
-const cancelEditProfile = () => {
-  isEditingProfile.value = false;
-};
-
-const saveProfile = async () => {
-  if (!user.value) return;
-  isSaving.value = true;
-  await updateUser(user.value.login, {
-    status: editedStatus.value,
-    name: editedName.value,
-    location: editedLocation.value,
-    skype: editedSkype.value,
-    info: editedInfo.value,
-  });
-  isSaving.value = false;
-  isEditingProfile.value = false;
-};
-
-watch(
-  () => user.value?.login,
-  () => {
-    isEditingProfile.value = false;
-  },
-);
-
+// Fetch profile data
 useFetchData(
-  () => trySelectProfile(route.params.login as UserLogin),
+  async () => {
+    const success = await trySelectProfile(route.params.login as UserLogin);
+    if (success && canEdit.value) {
+      await fetchEditableUser(route.params.login as UserLogin);
+    }
+  },
   [
     {
       param: (p) => p.login,
-      callback: (login) => trySelectProfile(login as UserLogin),
+      callback: async (loginParam) => {
+        const success = await trySelectProfile(loginParam as UserLogin);
+        if (success && canEdit.value) {
+          await fetchEditableUser(loginParam as UserLogin);
+        }
+      },
     },
   ],
 );
+
+// Handle field updates from child components
+const handleFieldUpdate = (field: string, value: string) => {
+  setField(field as any, value);
+};
+
+// Handle save
+const handleSave = async () => {
+  await saveChanges();
+};
 </script>
 
 <template>
-  <template v-if="user">
-    <page-title class="profile_title">{{ route.params.login }}</page-title>
-    <secondary-text class="profile_roles">{{
-      userRoles!.join(", ")
-    }}</secondary-text>
+  <!-- Loading state -->
+  <div v-if="loadingProfile" class="profile-loading">
+    <p>Загрузка профиля...</p>
+  </div>
 
-    <div class="profile_container">
-      <div class="profile_short-info">
-        <div class="profile_short-info_picture-wrapper">
-          <img
-            :src="pictureUrl"
-            :alt="user.login"
-            class="profile_short-info_picture"
-          />
-          <profile-picture v-if="isCurrentUser" :login="user.login" />
-        </div>
+  <!-- Not found state -->
+  <div v-else-if="profileNotFound" class="profile-not-found">
+    <h2>Пользователь не найден</h2>
+    <p>Пользователь <strong>{{ route.params.login }}</strong> не существует или был удалён.</p>
+    <router-link to="/">На главную</router-link>
+  </div>
 
-        <template v-if="isEditingProfile">
-          <profile-stat
-            title="Статус"
-            empty="Не указан"
-            v-model="editedStatus"
-            :editable="true"
-          />
-          <profile-stat
-            title="Имя"
-            empty="Не указано"
-            v-model="editedName"
-            :editable="true"
-          />
-          <profile-stat
-            title="Местоположение"
-            empty="Не указано"
-            v-model="editedLocation"
-            :editable="true"
-          />
-          <profile-stat
-            title="Skype"
-            empty="Не указан"
-            v-model="editedSkype"
-            :editable="true"
-          />
-          <div class="profile-edit-section">
-            <h4>О себе</h4>
-            <textarea
-              v-model="editedInfo"
-              class="profile-info-edit"
-              placeholder="Расскажите о себе..."
-            />
-          </div>
-          <div class="profile-edit-actions">
-            <the-button :loading="isSaving" @click="saveProfile">
-              Сохранить
-            </the-button>
-            <the-button :disabled="isSaving" @click="cancelEditProfile">
-              Отмена
-            </the-button>
-          </div>
-        </template>
+  <!-- Profile content -->
+  <div v-else-if="user" class="profile-page">
+    <!-- Error message -->
+    <div v-if="saveError" class="save-error">
+      {{ saveError }}
+    </div>
 
-        <template v-else>
-          <profile-stat
-            title="Статус"
-            empty="Не указан"
-            v-model="user.status"
-          />
-          <profile-stat title="Имя" empty="Не указано" v-model="user.name" />
-          <profile-stat
-            title="Местоположение"
-            empty="Не указано"
-            v-model="user.location"
-          />
-          <profile-stat
-            title="Пол"
-            empty="Не указан"
-            :modelValue="userGender"
-          />
-          <profile-stat
-            title="День рождения"
-            empty="Не указан"
-            :modelValue="userBirthday"
-          />
-          <profile-stat
-            title="Skype"
-            empty="Не указан"
-            :modelValue="userSkype"
-          />
-          <profile-stat v-if="userIcq" title="ICQ" :modelValue="userIcq" />
-          <profile-stat title="Регистрация" :modelValue="userRegistration" />
-          <profile-stat title="Был(а) онлайн" :modelValue="userOnline" />
-          <the-button
-            v-if="isCurrentUser"
-            @click="startEditProfile"
-            class="edit-profile-btn"
-          >
-            Редактировать профиль
-          </the-button>
-          <router-link
-            v-else-if="currentUser"
-            :to="{ name: 'direct-message', params: { login: user.login } }"
-            class="message-link"
-          >
-            <the-button>Написать сообщение</the-button>
-          </router-link>
-        </template>
+    <!-- Header with avatar, name, status, actions -->
+    <profile-header
+      :user="user"
+      :isEditMode="isEditMode"
+      :canEdit="canEdit"
+      :hasChanges="hasChanges"
+      :isSaving="isSaving"
+      @toggleEdit="toggleEditMode"
+      @save="handleSave"
+      @cancel="cancelEdit"
+      @updateField="handleFieldUpdate"
+    />
+
+    <!-- Violations (public bans/warnings) -->
+    <profile-violations :login="(login as UserLogin)" />
+
+    <!-- Moderation block (for moderators only) -->
+    <moderation-block
+      v-if="moderationProfile"
+      :profile="moderationProfile"
+      :target-login="login"
+      @updated="refreshModeration"
+    />
+
+    <!-- Main content area -->
+    <div class="profile-content">
+      <div class="content-primary">
+        <!-- About section -->
+        <profile-about
+          :user="user"
+          :isEditMode="isEditMode"
+          @updateField="handleFieldUpdate"
+        />
+
+        <!-- Games section -->
+        <profile-games :login="login" />
+
+        <!-- Blogs section -->
+        <profile-blogs :login="login" />
+
+        <!-- Best post section -->
+        <profile-best-post :login="(login as UserLogin)" />
       </div>
-      <div class="profile_content">
-        <nav>
-          <router-link
-            class="tabs-link"
-            :to="{ name: 'profile', params: route.params }"
-            >Информация</router-link
-          >
-          <router-link
-            class="tabs-link"
-            :to="{ name: 'user-games', params: route.params }"
-            >Игры</router-link
-          >
-          <router-link
-            class="tabs-link"
-            :to="{ name: 'user-characters', params: route.params }"
-            >Персонажи</router-link
-          >
-          <router-link
-            v-if="isCurrentUser"
-            class="tabs-link"
-            :to="{ name: 'user-settings', params: route.params }"
-            >Настройки</router-link
-          >
-        </nav>
-        <router-view />
+
+      <div class="content-sidebar">
+        <!-- Personal info -->
+        <profile-personal-info
+          :user="user"
+          :isEditMode="isEditMode"
+          @updateField="handleFieldUpdate"
+        />
+
+        <!-- Contacts -->
+        <profile-contacts
+          :user="user"
+          :isEditMode="isEditMode"
+        />
+
+        <!-- Personal note (only for authenticated users) -->
+        <profile-personal-note :login="(login as UserLogin)" />
       </div>
     </div>
-  </template>
-
-  <the-loader v-else :big="true" />
+  </div>
 </template>
 
 <style scoped lang="sass">
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
 
-.profile_title
-  display: inline-block
-.profile_roles
-  display: inline-block
-  margin-left: $small
+.profile-page
+  max-width: $grid-step * 240
+  margin: 0 auto
 
-.profile_container
-  display: flex
-
-.profile_short-info
-  width: $grid-step * 40
-
-.profile_short-info_picture-wrapper
-  position: relative
-  display: inline-block
-
-.profile_short-info_picture
-  width: 100%
-  max-height: $grid-step * 200
+.save-error
+  background: rgba($accent-red, 0.1)
+  border: 1px solid $accent-red
+  color: $accent-red
+  padding: $small $medium
   border-radius: $border-radius
-  display: block
+  margin-bottom: $medium
 
-.profile_content
-  margin-left: $big
+.profile-content
+  display: grid
+  grid-template-columns: 1fr $grid-step * 60
+  gap: $big
 
-nav
-  margin-bottom: $small
-  & a
-    display: inline-block
-    margin-right: $medium
-    text-transform: uppercase
-    font-weight: bold
-    color: $link-nav
-    text-decoration: none
+.content-primary
+  min-width: 0
 
-    &:hover
-      color: $link-nav-hover
-      text-decoration: underline
+.content-sidebar
+  min-width: 0
 
-    &.router-link-exact-active
-      color: $text
-      text-decoration: none
-      cursor: default
+.profile-loading
+  text-align: center
+  padding: $big
+  color: $text-muted
 
-.profile-edit-actions
-  display: flex
-  gap: $small
-  margin-top: $small
+.profile-not-found
+  text-align: center
+  padding: $big
+  max-width: 400px
+  margin: 0 auto
 
-.edit-profile-btn
-  margin-top: $small
+  h2
+    margin: 0 0 $medium
+    color: $text
 
-.message-link
-  display: inline-block
-  margin-top: $small
-  text-decoration: none
-
-.profile-edit-section
-  margin-top: $small
-
-  h4
-    margin-bottom: $tiny
-    font-size: $secondary-font-size
+  p
+    margin: 0 0 $medium
     color: $text-muted
+    line-height: 1.5
 
-.profile-info-edit
-  width: 100%
-  min-height: $grid-step * 25
-  padding: $small
-  box-sizing: border-box
-  border-radius: $border-radius
-  font-family: inherit
-  font-size: inherit
-  resize: vertical
-  background-color: $input-bg
-  border: 1px dashed $border
-  color: $text
+  a
+    font-weight: bold
 
-  &:focus
-    outline: none
-    border-style: solid
-    border-color: $button-border-hover
+@media (max-width: 768px)
+  .profile-content
+    grid-template-columns: 1fr
+    gap: $medium
+
+  .content-sidebar
+    order: -1
 </style>

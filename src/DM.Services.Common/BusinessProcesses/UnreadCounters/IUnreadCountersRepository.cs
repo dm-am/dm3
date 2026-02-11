@@ -126,4 +126,22 @@ public interface IUnreadCountersRepository
     /// <param name="newParentId">New parent Id</param>
     /// <returns></returns>
     Task ChangeParent(Guid parentId, UnreadEntryType entryType, Guid newParentId);
+
+    /// <summary>
+    /// Get the last read time for a specific entity
+    /// </summary>
+    /// <param name="userId">User Id</param>
+    /// <param name="entityId">Entity Id</param>
+    /// <param name="entryType">Entry type</param>
+    /// <returns>Last read time or null if never read</returns>
+    Task<DateTime?> GetLastReadTime(Guid userId, Guid entityId, UnreadEntryType entryType);
+
+    /// <summary>
+    /// Get the last read times for multiple entities
+    /// </summary>
+    /// <param name="userId">User Id</param>
+    /// <param name="entryType">Entry type</param>
+    /// <param name="entityIds">Entity Ids</param>
+    /// <returns>Dictionary of entity Id to last read time</returns>
+    Task<IDictionary<Guid, DateTime>> GetLastReadTimes(Guid userId, UnreadEntryType entryType, params Guid[] entityIds);
 }

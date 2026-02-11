@@ -6,6 +6,7 @@ using DM.Services.Core.Extensions;
 using DM.Services.DataAccess;
 using DM.Services.Mail.Rendering;
 using DM.Services.Mail.Sender;
+using DM.Services.MessageQueuing;
 using DM.Services.Uploading;
 
 namespace DM.Services.Community;
@@ -26,6 +27,7 @@ public class CommunityModule : Module
         builder.RegisterModuleOnce<DataAccessModule>();
         builder.RegisterModuleOnce<MailSenderModule>();
         builder.RegisterModuleOnce<RenderingModule>();
+        builder.RegisterModuleOnce<MessageQueuingModule>();
 
         base.Load(builder);
     }

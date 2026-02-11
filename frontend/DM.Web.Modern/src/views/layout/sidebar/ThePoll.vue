@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import type { Poll, PollOptionId } from "@/api/models/community";
 import ProgressBar from "@/components/ProgressBar.vue";
 import { IconType } from "@/components/icons/iconType";
@@ -103,7 +103,7 @@ async function cancelVote() {
           <the-button :disabled="isSubmitting" @click="saveEdit">
             {{ isSubmitting ? "Сохранение..." : "Сохранить" }}
           </the-button>
-          <the-button @click="cancelEditing">Отмена</the-button>
+          <the-button secondary @click="cancelEditing">Отмена</the-button>
           <span v-if="editError" class="edit-error">{{ editError }}</span>
         </div>
       </div>
@@ -119,7 +119,7 @@ async function cancelVote() {
       </div>
       <div v-if="detailed" class="poll-meta">
         <secondary-text v-if="closed" class="poll-status poll-status--closed">
-          Завершён
+          Завершен
         </secondary-text>
         <secondary-text v-else class="poll-status poll-status--active">
           Активен до {{ endsFormatted }}
@@ -129,7 +129,7 @@ async function cancelVote() {
         </secondary-text>
       </div>
     <div v-else class="poll-status-inline">
-      <secondary-text v-if="closed">Завершён</secondary-text>
+      <secondary-text v-if="closed">Завершен</secondary-text>
       <secondary-text v-else>Активен до {{ endsFormatted }}</secondary-text>
     </div>
     <progress-bar

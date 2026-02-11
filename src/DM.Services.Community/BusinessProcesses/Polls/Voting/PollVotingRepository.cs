@@ -12,12 +12,12 @@ namespace DM.Services.Community.BusinessProcesses.Polls.Voting;
 /// <inheritdoc />
 internal class PollVotingRepository : MongoCollectionRepository<DbPoll>, IPollVotingRepository
 {
-    private readonly IMapper mapper;
+    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public PollVotingRepository(DmMongoClient client, IMapper mapper) : base(client)
     {
-        this.mapper = mapper;
+        _mapper = mapper;
     }
 
     /// <inheritdoc />
@@ -26,12 +26,12 @@ internal class PollVotingRepository : MongoCollectionRepository<DbPoll>, IPollVo
         var dbPoll = await Collection.FindOneAndUpdateAsync(
             Filter.Eq(p => p.Id, pollId) &
             Filter.ElemMatch(p => p.Options, o => o.Id == optionId),
-            Update.Push(u => u.Options.FirstMatchingElement().UserIds, userId),
+            Update.AddToSet(u => u.Options.FirstMatchingElement().UserIds, userId),
             new FindOneAndUpdateOptions<DbPoll>
             {
                 ReturnDocument = ReturnDocument.After
             });
-        return mapper.Map<Poll>(dbPoll);
+        return _mapper.Map<Poll>(dbPoll);
     }
 
     /// <inheritdoc />
@@ -44,6 +44,6 @@ internal class PollVotingRepository : MongoCollectionRepository<DbPoll>, IPollVo
             {
                 ReturnDocument = ReturnDocument.After
             });
-        return mapper.Map<Poll>(dbPoll);
+        return _mapper.Map<Poll>(dbPoll);
     }
 }

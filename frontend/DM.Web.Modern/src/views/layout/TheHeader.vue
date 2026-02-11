@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useUserStore, useUiStore, useMessagingStore } from "@/stores";
 import { storeToRefs } from "pinia";
 import GuestActions from "@/views/layout/header/GuestActions.vue";
+import SiteStatistics from "@/views/layout/header/SiteStatistics.vue";
 import { ColorSchema, UserRole } from "@/api/models/community";
 
 const userStore = useUserStore();
@@ -65,6 +66,8 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
             >0</router-link
           ><span class="muted">)</span>
           |
+          <router-link :to="{ name: 'account' }" class="settings-link" title="Настройки аккаунта">⚙</router-link>
+          |
           <a @click="signOut" data-testid="logout-button">Выйти</a>
         </template>
         <template v-else>
@@ -83,7 +86,7 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
       <router-link class="link" :to="{ name: 'forum-index' }"
         >Форум</router-link
       >
-      <router-link class="link" :to="{ name: 'chat' }">Чат</router-link>
+      <router-link class="link" :to="{ name: 'globalChat' }">Чат</router-link>
       <router-link
         v-if="isMentor || isNewbie"
         class="link"
@@ -94,11 +97,13 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
         >Модерация</router-link
       >
     </div>
-    <div class="controls">
-      <!--      <notifications v-if="user" />-->
+    <div class="stats-col">
+      <site-statistics />
+    </div>
+    <div class="theme-col">
       <label
         class="theme-switch"
-        :title="isDarkTheme ? 'Включить светлую тему' : 'Включить тёмную тему'"
+        :title="isDarkTheme ? 'Включить светлую тему' : 'Включить темную тему'"
       >
         <input type="checkbox" :checked="isDarkTheme" @change="toggleTheme" />
         <span class="slider" />
@@ -112,6 +117,7 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
 @import "src/assets/styles/Themes"
 
 .header
+  position: relative
   display: flex
   align-items: center
   box-sizing: border-box
@@ -121,14 +127,19 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
   width: $sidebar-width
   flex-shrink: 0
   padding-left: $big
-  padding-bottom: $small
+  padding-bottom: 9px
   box-sizing: border-box
   white-space: nowrap
   cursor: default
+  align-self: stretch
+  display: flex
+  flex-direction: column
+  justify-content: center
 
 .logo
   display: block
   margin-bottom: $tiny
+  margin-left: -5px
   height: $header-row-height
   width: 275px
   background: transparent url('@/assets/images/logo.svg') no-repeat
@@ -147,13 +158,17 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
     &:hover
       color: $accent-green-hover
 
+  .settings-link
+    text-decoration: none
+    &:hover
+      color: $link-hover
+
 .top-menu
   flex-grow: 1
   display: flex
-  align-items: flex-end
-  align-self: flex-start
-  padding: 0 $big
-  height: $header-row-height
+  align-items: center
+  align-self: stretch
+  padding: 0 $big 9px
   box-sizing: border-box
 
 .link
@@ -176,15 +191,27 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
     &:hover
       background: $bg-highlight-blue
 
-.controls
-  width: $sidebar-width
+.stats-col
+  width: calc($sidebar-width - 80px)
   flex-shrink: 0
+  display: flex
+  align-items: center
+  justify-content: flex-start
+  padding-bottom: 9px
   padding-right: $big
   box-sizing: border-box
+  align-self: stretch
+
+.theme-col
+  width: 80px
+  flex-shrink: 0
   display: flex
-  align-items: flex-end
-  align-self: flex-start
-  height: $header-row-height
+  align-items: center
+  justify-content: center
+  padding-bottom: 9px
+  padding-right: $big
+  box-sizing: border-box
+  align-self: stretch
 
 .theme-switch
   position: relative
@@ -226,12 +253,12 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
       left: -1px
       bottom: 5px
       border-radius: 50%
-      background: $bg-highlight-blue
+      background: $bg-page
       z-index: 1
       opacity: 0
 
   input:checked + .slider
-    background: $bg-highlight-blue
+    background: $bg-page
 
   input:checked + .slider:before,
   input:checked + .slider:after

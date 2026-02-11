@@ -21,22 +21,22 @@ public class Notification
     /// Creation moment
     /// </summary>
     [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
-    public DateTime CreateDate { get; set; }
+    public DateTime CreatedUtc { get; set; }
 
     /// <summary>
     /// List of users who should receive the notification
     /// </summary>
-    public IEnumerable<Guid> UsersInterested { get; set; }
+    public IEnumerable<Guid> UsersInterested { get; set; } = [];
 
     /// <summary>
     /// List of users who already received the notification
     /// </summary>
-    public IEnumerable<Guid> UsersNotified { get; set; }
+    public IEnumerable<Guid> UsersNotified { get; set; } = [];
 
     /// <summary>
     /// Notification metadata
     /// </summary>
-    public object Metadata { get; set; }
+    public object Metadata { get; set; } = null!;
 
     /// <summary>
     /// Event type

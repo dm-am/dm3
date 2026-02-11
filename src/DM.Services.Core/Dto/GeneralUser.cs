@@ -83,6 +83,11 @@ public class GeneralUser : IUser
     public int QuantityRating { get; set; }
 
     /// <summary>
+    /// Number of post reviews given by this user
+    /// </summary>
+    public int PostReviewsGivenCount { get; set; }
+
+    /// <summary>
     /// Whether user is authenticated or not
     /// </summary>
     public bool IsAuthenticated => Role != UserRole.Guest;

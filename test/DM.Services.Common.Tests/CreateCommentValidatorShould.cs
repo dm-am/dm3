@@ -17,7 +17,7 @@ public class CreateCommentValidatorShould
     [InlineData(null!)]
     public async Task ThrowValidationExceptionWhenTextIsEmpty(string? text)
     {
-        var err = await validator.Awaiting(v => v.ValidateAndThrowAsync(new CreateComment { Text = text }))
+        var err = await validator.Awaiting(v => v.ValidateAndThrowAsync(new CreateComment { Text = text! }))
             .Should().ThrowAsync<ValidationException>();
         err.And.Errors.Should().ContainSingle(e => e.PropertyName == "Text");
     }

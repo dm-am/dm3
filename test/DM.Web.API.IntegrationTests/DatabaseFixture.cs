@@ -1,4 +1,5 @@
 using DM.Services.DataAccess;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
 using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.DataAccess.BusinessObjects.Games;
 using DM.Services.DataAccess.BusinessObjects.Games.Posts;
@@ -6,7 +7,9 @@ using DM.Services.DataAccess.BusinessObjects.Messaging;
 using DM.Services.DataAccess.BusinessObjects.Users;
 using DM.Services.Core.Dto.Enums;
 using Microsoft.EntityFrameworkCore;
+using Testcontainers.MongoDb;
 using Testcontainers.PostgreSql;
+using Testcontainers.RabbitMq;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests;
@@ -18,13 +21,25 @@ namespace DM.Web.API.IntegrationTests;
 /// </summary>
 public class DatabaseFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container;
+    private readonly PostgreSqlContainer _postgresContainer;
+    private readonly MongoDbContainer _mongoContainer;
+    private readonly RabbitMqContainer _rabbitMqContainer;
     private CustomWebApplicationFactory? _sharedFactory;
 
     /// <summary>
     /// Connection string for the PostgreSQL container
     /// </summary>
     public string ConnectionString { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Connection string for the MongoDB container
+    /// </summary>
+    public string MongoConnectionString { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Connection string for the RabbitMQ container
+    /// </summary>
+    public string RabbitMqConnectionString { get; private set; } = string.Empty;
 
     /// <summary>
     /// Indicates whether the database has been seeded
@@ -45,21 +60,47 @@ public class DatabaseFixture : IAsyncLifetime
 
     public DatabaseFixture()
     {
-        _container = new PostgreSqlBuilder()
+        _postgresContainer = new PostgreSqlBuilder()
             .WithImage("postgres:16-alpine")
             .WithDatabase("dm3_test")
             .WithUsername("test")
             .WithPassword("test")
             .Build();
+
+        _mongoContainer = new MongoDbBuilder()
+            .WithImage("mongo:7")
+            .Build();
+
+        _rabbitMqContainer = new RabbitMqBuilder()
+            .WithImage("rabbitmq:3-management-alpine")
+            .WithUsername("guest")
+            .WithPassword("guest")
+            .Build();
     }
 
     /// <summary>
-    /// Initialize the container and seed the database
+    /// Initialize containers and seed the database
     /// </summary>
     public async Task InitializeAsync()
     {
-        await _container.StartAsync();
-        ConnectionString = _container.GetConnectionString();
+        // Start all containers in parallel
+        await Task.WhenAll(
+            _postgresContainer.StartAsync(),
+            _mongoContainer.StartAsync(),
+            _rabbitMqContainer.StartAsync());
+
+        ConnectionString = _postgresContainer.GetConnectionString();
+
+        // Insert database name into connection string, keeping authSource=admin
+        // Testcontainers returns: mongodb://user:pass@host:port/?directConnection=true
+        // We need:               mongodb://user:pass@host:port/dm3_test?authSource=admin&directConnection=true
+        var rawMongoUrl = _mongoContainer.GetConnectionString();
+        MongoConnectionString = rawMongoUrl.Contains("/?")
+            ? rawMongoUrl.Replace("/?", "/dm3_test?authSource=admin&")
+            : rawMongoUrl.TrimEnd('/') + "/dm3_test";
+
+        // RabbitMQ connection string
+        RabbitMqConnectionString = _rabbitMqContainer.GetConnectionString();
 
         // Create schema (note: schema has complex FK constraints that may need adjustment)
         await using var context = CreateDbContext();
@@ -69,12 +110,15 @@ public class DatabaseFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// Stop the container and dispose factory
+    /// Stop containers and dispose factory
     /// </summary>
     public async Task DisposeAsync()
     {
         _sharedFactory?.Dispose();
-        await _container.DisposeAsync();
+        await Task.WhenAll(
+            _postgresContainer.DisposeAsync().AsTask(),
+            _mongoContainer.DisposeAsync().AsTask(),
+            _rabbitMqContainer.DisposeAsync().AsTask());
     }
 
     /// <summary>
@@ -107,7 +151,7 @@ public class DatabaseFixture : IAsyncLifetime
         await db.SaveChangesAsync();
 
         // Note: Comment seeding is disabled because the database schema has
-        // FK constraints on EntityId to BOTH Games AND ForumTopics tables,
+        // FK constraints on EntityId to BOTH Games AND Topics tables,
         // which cannot both be satisfied simultaneously.
         // SeedComments(db);
         // await db.SaveChangesAsync();
@@ -132,7 +176,6 @@ public class DatabaseFixture : IAsyncLifetime
                 PasswordHash = "fakehash",
                 Salt = "fakesalt",
                 PasswordHashVersion = 2,
-                Activated = true,
                 Role = UserRole.RegularUser,
                 CreatedUtc = DateTimeOffset.UtcNow.AddDays(-30),
                 LastActivityUtc = DateTimeOffset.UtcNow,
@@ -142,13 +185,7 @@ public class DatabaseFixture : IAsyncLifetime
                 Location = string.Empty,
                 Info = string.Empty,
                 Icq = string.Empty,
-                Skype = string.Empty,
-                ProfilePictureUrl = string.Empty,
-                SmallProfilePictureUrl = string.Empty,
-                MediumProfilePictureUrl = string.Empty,
-#pragma warning disable CS0618 // TimezoneId is obsolete
-                TimezoneId = "UTC"
-#pragma warning restore CS0618
+                Skype = string.Empty
             });
         }
 
@@ -163,7 +200,6 @@ public class DatabaseFixture : IAsyncLifetime
                 PasswordHash = "fakehash",
                 Salt = "fakesalt",
                 PasswordHashVersion = 2,
-                Activated = true,
                 Role = UserRole.Admin,
                 CreatedUtc = DateTimeOffset.UtcNow.AddDays(-365),
                 LastActivityUtc = DateTimeOffset.UtcNow,
@@ -173,13 +209,7 @@ public class DatabaseFixture : IAsyncLifetime
                 Location = string.Empty,
                 Info = string.Empty,
                 Icq = string.Empty,
-                Skype = string.Empty,
-                ProfilePictureUrl = string.Empty,
-                SmallProfilePictureUrl = string.Empty,
-                MediumProfilePictureUrl = string.Empty,
-#pragma warning disable CS0618 // TimezoneId is obsolete
-                TimezoneId = "UTC"
-#pragma warning restore CS0618
+                Skype = string.Empty
             });
         }
 
@@ -194,7 +224,6 @@ public class DatabaseFixture : IAsyncLifetime
                 PasswordHash = "fakehash",
                 Salt = "fakesalt",
                 PasswordHashVersion = 2,
-                Activated = true,
                 Role = UserRole.RegularUser,
                 CreatedUtc = DateTimeOffset.UtcNow.AddDays(-15),
                 LastActivityUtc = DateTimeOffset.UtcNow,
@@ -204,13 +233,7 @@ public class DatabaseFixture : IAsyncLifetime
                 Location = string.Empty,
                 Info = string.Empty,
                 Icq = string.Empty,
-                Skype = string.Empty,
-                ProfilePictureUrl = string.Empty,
-                SmallProfilePictureUrl = string.Empty,
-                MediumProfilePictureUrl = string.Empty,
-#pragma warning disable CS0618 // TimezoneId is obsolete
-                TimezoneId = "UTC"
-#pragma warning restore CS0618
+                Skype = string.Empty
             });
         }
 
@@ -225,7 +248,6 @@ public class DatabaseFixture : IAsyncLifetime
                 PasswordHash = "fakehash",
                 Salt = "fakesalt",
                 PasswordHashVersion = 2,
-                Activated = true,
                 Role = UserRole.Moderator,
                 CreatedUtc = DateTimeOffset.UtcNow.AddDays(-100),
                 LastActivityUtc = DateTimeOffset.UtcNow,
@@ -235,13 +257,7 @@ public class DatabaseFixture : IAsyncLifetime
                 Location = string.Empty,
                 Info = string.Empty,
                 Icq = string.Empty,
-                Skype = string.Empty,
-                ProfilePictureUrl = string.Empty,
-                SmallProfilePictureUrl = string.Empty,
-                MediumProfilePictureUrl = string.Empty,
-#pragma warning disable CS0618 // TimezoneId is obsolete
-                TimezoneId = "UTC"
-#pragma warning restore CS0618
+                Skype = string.Empty
             });
         }
     }
@@ -256,7 +272,7 @@ public class DatabaseFixture : IAsyncLifetime
                 Title = "Test Board",
                 Description = "Test board for integration tests",
                 ViewPolicy = BoardAccessPolicy.Guest,
-                CreateTopicPolicy = BoardAccessPolicy.Player,
+                CreateTopicPolicy = BoardAccessPolicy.RegularUser,
                 TopicsCount = 1,
                 Order = 1
             });
@@ -265,11 +281,11 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedTopics(DmDbContext db)
     {
-        if (!db.Set<ForumTopic>().Any())
+        if (!db.Set<TopicDal>().Any())
         {
-            db.Set<ForumTopic>().Add(new ForumTopic
+            db.Set<TopicDal>().Add(new TopicDal
             {
-                ForumTopicId = TestConstants.TestTopicId,
+                TopicId = TestConstants.TestTopicId,
                 BoardId = TestConstants.TestBoardId,
                 UserId = TestConstants.TestUserId,
                 Title = "Test Topic",
@@ -280,9 +296,9 @@ public class DatabaseFixture : IAsyncLifetime
                 IsClosed = false
             });
 
-            db.Set<ForumTopic>().Add(new ForumTopic
+            db.Set<TopicDal>().Add(new TopicDal
             {
-                ForumTopicId = TestConstants.SecondTopicId,
+                TopicId = TestConstants.SecondTopicId,
                 BoardId = TestConstants.TestBoardId,
                 UserId = TestConstants.SecondUserId,
                 Title = "Second Test Topic",
@@ -327,7 +343,7 @@ public class DatabaseFixture : IAsyncLifetime
                 Info = "This is a test game for integration tests.",
                 Notepad = string.Empty,
                 CreatedUtc = DateTimeOffset.UtcNow.AddDays(-10),
-                Status = GameStatus.Active,
+                Status = ModuleStatus.Active,
                 PremoderationStatus = PremoderationStatus.Approved,
                 IsRecruitmentOpen = true,
                 CommentariesAccessMode = CommentariesAccessMode.Public,
@@ -344,7 +360,7 @@ public class DatabaseFixture : IAsyncLifetime
                 Info = "This is another test game owned by a different user.",
                 Notepad = string.Empty,
                 CreatedUtc = DateTimeOffset.UtcNow.AddDays(-5),
-                Status = GameStatus.Active,
+                Status = ModuleStatus.Active,
                 PremoderationStatus = PremoderationStatus.Approved,
                 IsRecruitmentOpen = false,
                 CommentariesAccessMode = CommentariesAccessMode.Readonly,
@@ -380,7 +396,7 @@ public class DatabaseFixture : IAsyncLifetime
             var conversation = new Conversation
             {
                 ConversationId = TestConstants.TestConversationId,
-                Visavi = true,
+                Type = DM.Services.Core.Dto.Enums.ConversationType.Direct,
                 Title = string.Empty
             };
             db.Set<Conversation>().Add(conversation);

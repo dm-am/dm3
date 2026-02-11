@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Services.Core.Dto;
+using DM.Services.Core.Dto.Enums;
 using DM.Services.Core.Extensions;
 using DM.Services.DataAccess;
 using DM.Services.DataAccess.BusinessObjects.Messaging;
@@ -47,32 +48,29 @@ internal class ConversationReadingRepository : IConversationReadingRepository
         await _dbContext.Conversations
             .Where(UserParticipates(userId))
             .Where(c => c.LastMessageId.HasValue)
-            .OrderByDescending(c => c.LastMessage.CreatedUtc)
+            .OrderByDescending(c => c.LastMessage!.CreatedUtc)
             .Page(paging)
             .ProjectTo<Conversation>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
 
     /// <inheritdoc />
-    public Task<Conversation> Get(Guid conversationId, Guid userId) => _dbContext.Conversations
+    public Task<Conversation?> Get(Guid conversationId, Guid userId) => _dbContext.Conversations
+        .Where(c => c.ConversationId == conversationId)
         .Where(UserParticipates(userId))
         .ProjectTo<Conversation>(_mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
     public async Task<Guid?> FindUser(string login) => (await _dbContext.Users
-        .Where(u => u.Login.ToLower() == login.ToLower() && !u.IsRemoved && u.Activated)
+        .Where(u => EF.Functions.ILike(u.Login, login) && !u.IsRemoved)
         .Select(u => new {u.UserId})
         .FirstOrDefaultAsync())?.UserId;
 
     /// <inheritdoc />
-    public Task<bool> UserExists(Guid userId) => _dbContext.Users
-        .AnyAsync(u => u.UserId == userId && !u.IsRemoved && u.Activated);
-
-    /// <inheritdoc />
-    public Task<Conversation> FindVisaviConversation(Guid userId, Guid visaviId) => _dbContext.Conversations
-        .Where(c => c.Visavi)
+    public Task<Conversation?> FindDirectConversation(Guid userId, Guid otherUserId) => _dbContext.Conversations
+        .Where(c => c.Type == ConversationType.Direct)
         .Where(UserParticipates(userId))
-        .Where(UserParticipates(visaviId))
+        .Where(UserParticipates(otherUserId))
         .ProjectTo<Conversation>(_mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();
 

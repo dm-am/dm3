@@ -1,4 +1,5 @@
 using System;
+using DM.Services.Core.Dto.Enums;
 using DM.Services.Core.Implementation;
 using DM.Services.DataAccess.BusinessObjects.Common;
 
@@ -17,13 +18,14 @@ internal class LikeFactory : ILikeFactory
     }
 
     /// <inheritdoc />
-    public Like Create(Guid entityId, Guid userId)
+    public Like Create(Guid entityId, LikeEntityType entityType, Guid userId)
     {
         return new Like
         {
             LikeId = _guidFactory.Create(),
             UserId = userId,
-            EntityId = entityId
+            EntityId = entityId,
+            EntityType = entityType
         };
     }
 }

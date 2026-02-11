@@ -11,12 +11,12 @@ public class Board
     /// <summary>
     /// Board identifier (title)
     /// </summary>
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>
     /// Short description
     /// </summary>
-    public string Description { get; set; }
+    public string Description { get; set; } = null!;
 
     /// <summary>
     /// Total number of topics in the board
@@ -41,7 +41,7 @@ public class Board
     /// <summary>
     /// Last comment in the board
     /// </summary>
-    public BoardLastComment LastComment { get; set; }
+    public BoardLastComment LastComment { get; set; } = null!;
 }
 
 /// <summary>
@@ -62,7 +62,7 @@ public class BoardLastComment
     /// <summary>
     /// Author
     /// </summary>
-    public User Author { get; set; }
+    public User Author { get; set; } = null!;
 
     /// <summary>
     /// Creation moment

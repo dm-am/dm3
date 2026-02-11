@@ -43,10 +43,7 @@ watch(() => route.params.login, loadDirectConversation, { immediate: true });
       <secondary-text class="error-text">{{ error }}</secondary-text>
       <the-button @click="goBack">Назад к списку</the-button>
     </template>
-    <template v-else>
-      <the-loader :big="true" />
-      <secondary-text>Загрузка переписки...</secondary-text>
-    </template>
+    <secondary-text v-else>Загрузка переписки...</secondary-text>
   </div>
 </template>
 

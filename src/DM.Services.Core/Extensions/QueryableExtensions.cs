@@ -16,7 +16,7 @@ public static class QueryableExtensions
     /// <typeparam name="T"></typeparam>
     /// <returns></returns>
     public static IQueryable<T> Page<T>(this IOrderedQueryable<T> queryable,
-        PagingData paging)
+        PagingData? paging)
     {
         return paging == null
             ? queryable

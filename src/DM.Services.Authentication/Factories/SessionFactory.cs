@@ -1,5 +1,7 @@
+using DM.Services.Authentication.Configuration;
 using DM.Services.Core.Implementation;
 using DM.Services.DataAccess.BusinessObjects.Users;
+using Microsoft.Extensions.Options;
 
 namespace DM.Services.Authentication.Factories;
 
@@ -8,14 +10,17 @@ internal class SessionFactory : ISessionFactory
 {
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly AuthenticationConfiguration _config;
 
     /// <inheritdoc />
     public SessionFactory(
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IOptions<AuthenticationConfiguration> authConfig)
     {
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
+        _config = authConfig.Value;
     }
 
     /// <inheritdoc />
@@ -28,8 +33,8 @@ internal class SessionFactory : ISessionFactory
             Persistent = persistent,
             Invisible = invisible,
             ExpirationDate = persistent
-                ? rightNow.AddMonths(1)
-                : rightNow.AddDays(1)
+                ? rightNow.AddDays(_config.PersistentSessionExpirationDays)
+                : rightNow.AddHours(_config.SessionExpirationHours)
         };
     }
 }

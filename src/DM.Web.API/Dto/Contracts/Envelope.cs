@@ -9,7 +9,7 @@ namespace DM.Web.API.Dto.Contracts;
 public class Envelope<T>
 {
     /// <inheritdoc />
-    public Envelope(T resource, object metadata = null)
+    public Envelope(T resource, object? metadata = null)
     {
         Resource = resource;
         Metadata = metadata;
@@ -23,7 +23,7 @@ public class Envelope<T>
     /// <summary>
     /// Additional metadata
     /// </summary>
-    public object Metadata { get; }
+    public object? Metadata { get; }
 }
 
 /// <summary>
@@ -33,7 +33,7 @@ public class Envelope<T>
 public class ListEnvelope<T>
 {
     /// <inheritdoc />
-    public ListEnvelope(IEnumerable<T> resources, Paging paging = null)
+    public ListEnvelope(IEnumerable<T> resources, Paging? paging = null)
     {
         Resources = resources;
         Paging = paging;
@@ -47,5 +47,5 @@ public class ListEnvelope<T>
     /// <summary>
     /// Paging data
     /// </summary>
-    public Paging Paging { get; }
+    public Paging? Paging { get; }
 }

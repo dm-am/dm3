@@ -15,7 +15,7 @@ public class AuthenticatedUserShould : UnitTestBase
         {
             AccessRestrictionPolicies = new[]
             {
-                AccessPolicy.ChatBan,
+                AccessPolicy.GlobalChatBan,
                 AccessPolicy.DemocraticBan,
                 AccessPolicy.RestrictContentEditing
             },
@@ -23,7 +23,7 @@ public class AuthenticatedUserShould : UnitTestBase
         };
         var actual = authenticatedUser.GeneralAccessPolicy;
         actual.Should().Be(
-            AccessPolicy.ChatBan |
+            AccessPolicy.GlobalChatBan |
             AccessPolicy.DemocraticBan |
             AccessPolicy.RestrictContentEditing);
     }

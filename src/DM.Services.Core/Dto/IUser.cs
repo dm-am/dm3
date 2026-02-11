@@ -39,7 +39,7 @@ public interface IUser
     bool RatingDisabled { get; set; }
 
     /// <summary>
-    /// Sum of positive and negative votes for user's posts
+    /// Sum of positive and negative reviews for user's posts
     /// </summary>
     int QualityRating { get; set; }
 

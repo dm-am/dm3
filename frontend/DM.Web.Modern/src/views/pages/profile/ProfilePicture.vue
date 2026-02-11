@@ -3,6 +3,7 @@ import { ref, computed, onUnmounted } from "vue";
 import type { AxiosProgressEvent } from "axios";
 import type { UserLogin } from "@/api/models/community";
 import { useCommunityStore } from "@/stores/community";
+import uploadApi from "@/api/requests/uploadApi";
 import TheUpload from "@/components/inputs/TheUpload.vue";
 
 const props = defineProps<{
@@ -43,27 +44,57 @@ const onProgress = (e: AxiosProgressEvent) => {
 };
 
 const onUploading = async (formData: FormData) => {
+  const file = formData.get("file") as File | null;
+  if (!file) return;
+
+  // Client-side validation
+  const maxSize = 10 * 1024 * 1024; // 10 MB
+  if (file.size > maxSize) {
+    uploadState.value = "error";
+    errorMessage.value = "Макс. 10 МБ";
+    resetTimeout = setTimeout(() => {
+      uploadState.value = "idle";
+    }, 3000);
+    return;
+  }
+
   uploadState.value = "uploading";
   progress.value = 0;
 
-  const { error } = await communityStore.uploadPicture(
-    props.login,
-    formData,
-    onProgress,
+  // Step 1: Upload through Common Upload system
+  const { data: uploadData, error: uploadError } = await uploadApi.directUpload(
+    file,
+    "UserAvatar",
+    { onProgress },
   );
 
-  if (error) {
+  if (uploadError || !uploadData) {
     uploadState.value = "error";
     errorMessage.value = "Ошибка загрузки";
     resetTimeout = setTimeout(() => {
       uploadState.value = "idle";
     }, 2000);
-  } else {
-    uploadState.value = "success";
+    return;
+  }
+
+  // Step 2: Attach to profile
+  const { error: profileError } = await communityStore.updateUser(props.login, {
+    avatarUploadId: uploadData.resource.id,
+  });
+
+  if (profileError) {
+    uploadState.value = "error";
+    errorMessage.value = "Ошибка профиля";
     resetTimeout = setTimeout(() => {
       uploadState.value = "idle";
-    }, 1500);
+    }, 2000);
+    return;
   }
+
+  uploadState.value = "success";
+  resetTimeout = setTimeout(() => {
+    uploadState.value = "idle";
+  }, 1500);
 };
 </script>
 
@@ -71,7 +102,11 @@ const onUploading = async (formData: FormData) => {
   <div class="profile-picture-upload">
     <div class="upload-overlay">
       <span class="upload-label">{{ stateLabel }}</span>
-      <the-upload v-if="uploadState === 'idle'" @uploading="onUploading" />
+      <the-upload
+        v-if="uploadState === 'idle'"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        @uploading="onUploading"
+      />
     </div>
   </div>
 </template>

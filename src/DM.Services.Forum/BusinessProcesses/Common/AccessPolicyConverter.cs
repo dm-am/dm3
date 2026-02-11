@@ -13,7 +13,7 @@ internal class AccessPolicyConverter : IAccessPolicyConverter
             return BoardAccessPolicy.Guest;
         }
 
-        var result = BoardAccessPolicy.Guest | BoardAccessPolicy.Player;
+        var result = BoardAccessPolicy.Guest | BoardAccessPolicy.RegularUser;
 
         if (role >= UserRole.Admin)
         {
@@ -27,12 +27,12 @@ internal class AccessPolicyConverter : IAccessPolicyConverter
 
         if (role >= UserRole.Moderator)
         {
-            result |= BoardAccessPolicy.RegularModerator;
+            result |= BoardAccessPolicy.Moderator;
         }
 
         if (role >= UserRole.Mentor)
         {
-            result |= BoardAccessPolicy.MentorModerator;
+            result |= BoardAccessPolicy.Mentor;
         }
 
         return result;

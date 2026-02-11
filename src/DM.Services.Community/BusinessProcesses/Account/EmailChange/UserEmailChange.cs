@@ -8,15 +8,15 @@ public class UserEmailChange
     /// <summary>
     /// User login
     /// </summary>
-    public string Login { get; set; }
+    public string Login { get; set; } = null!;
 
     /// <summary>
     /// User password
     /// </summary>
-    public string Password { get; set; }
+    public string Password { get; set; } = null!;
 
     /// <summary>
     /// New user email
     /// </summary>
-    public string Email { get; set; }
+    public string Email { get; set; } = null!;
 }

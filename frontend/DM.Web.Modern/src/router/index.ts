@@ -49,12 +49,12 @@ const router = createRouter({
       },
     },
     {
-      name: "chat",
+      name: "globalChat",
       path: "/chat",
       components: {
         menu: GeneralMenu,
         sidebar: GeneralSidebar,
-        page: () => import("@/views/pages/chat/ChatPage.vue"),
+        page: () => import("@/views/pages/globalChat/GlobalChatPage.vue"),
       },
     },
     {
@@ -88,12 +88,12 @@ const router = createRouter({
     {
       name: "notifications",
       path: "/notifications",
-      component: () => import("@/components/TheLoader.vue"),
+      redirect: "/",
     },
     {
       name: "donate",
       path: "/donate",
-      component: () => import("@/components/TheLoader.vue"),
+      redirect: "/",
     },
 
     {
@@ -107,6 +107,19 @@ const router = createRouter({
         {
           name: "community",
           path: ":n?",
+          meta: { filter: "Active" },
+          component: () => import("@/views/pages/community/UsersList.vue"),
+        },
+        {
+          name: "community-all",
+          path: "all/:n?",
+          meta: { filter: "All" },
+          component: () => import("@/views/pages/community/UsersList.vue"),
+        },
+        {
+          name: "community-pending",
+          path: "pending/:n?",
+          meta: { filter: "Pending" },
           component: () => import("@/views/pages/community/UsersList.vue"),
         },
       ],
@@ -118,37 +131,25 @@ const router = createRouter({
         window.location.href = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
         return false;
       },
-      component: () => import("@/components/TheLoader.vue"),
+      redirect: "/",
     },
     {
-      path: "/profile",
+      name: "profile",
+      path: "/users/:login",
       components: {
         menu: GeneralMenu,
         sidebar: GeneralSidebar,
         page: () => import("@/views/pages/profile/ProfilePage.vue"),
       },
-      children: [
-        {
-          name: "profile",
-          path: "/:login",
-          component: () => import("@/views/pages/profile/UserInformation.vue"),
-        },
-        {
-          name: "user-games",
-          path: "/:login/games",
-          component: () => import("@/views/pages/profile/UserGames.vue"),
-        },
-        {
-          name: "user-characters",
-          path: "/:login/characters",
-          component: () => import("@/views/pages/profile/UserCharacters.vue"),
-        },
-        {
-          name: "user-settings",
-          path: "/:login/settings",
-          component: () => import("@/views/pages/profile/UserSettings.vue"),
-        },
-      ],
+    },
+    // Legacy routes redirect to main profile
+    {
+      path: "/users/:login/games",
+      redirect: (to) => ({ name: "profile", params: { login: to.params.login } }),
+    },
+    {
+      path: "/users/:login/characters",
+      redirect: (to) => ({ name: "profile", params: { login: to.params.login } }),
     },
 
     {
@@ -235,13 +236,25 @@ const router = createRouter({
       },
     },
     {
-      name: "moderation",
       path: "/moderation",
+      meta: { requiresAuth: true },
       components: {
         menu: GeneralMenu,
         sidebar: GeneralSidebar,
         page: () => import("@/views/pages/moderation/ModerationPage.vue"),
       },
+      children: [
+        {
+          name: "moderation",
+          path: "",
+          component: () => import("@/views/pages/moderation/ModerationOverview.vue"),
+        },
+        {
+          name: "moderation-login-changes",
+          path: "login-changes",
+          component: () => import("@/views/pages/moderation/ModerationLoginChanges.vue"),
+        },
+      ],
     },
     {
       name: "create-game",
@@ -290,7 +303,20 @@ const router = createRouter({
     {
       name: "game-first-unread-post",
       path: "/game/:id/posts/unread",
-      component: () => import("@/components/TheLoader.vue"),
+      components: {
+        menu: GeneralMenu,
+        sidebar: GeneralSidebar,
+        page: () => import("@/views/pages/game/GameFirstUnreadPost.vue"),
+      },
+    },
+    {
+      name: "game-first-unread-comment",
+      path: "/game/:id/comments/unread",
+      components: {
+        menu: GeneralMenu,
+        sidebar: GeneralSidebar,
+        page: () => import("@/views/pages/game/GameFirstUnreadComment.vue"),
+      },
     },
     // Auth callback for OAuth (Discord, etc.)
     {
@@ -298,6 +324,53 @@ const router = createRouter({
       path: "/auth/callback",
       components: {
         page: () => import("@/views/account/AuthCallback.vue"),
+      },
+    },
+    // Session transfer from another mirror
+    {
+      name: "auth-transfer",
+      path: "/auth/transfer",
+      components: {
+        menu: GeneralMenu,
+        sidebar: GeneralSidebar,
+        page: () => import("@/views/account/TransferPage.vue"),
+      },
+    },
+    {
+      name: "account",
+      path: "/account",
+      meta: { requiresAuth: true },
+      components: {
+        menu: GeneralMenu,
+        sidebar: GeneralSidebar,
+        page: () => import("@/views/pages/account/AccountPage.vue"),
+      },
+    },
+    {
+      name: "activation",
+      path: "/activate/:token",
+      components: {
+        menu: GeneralMenu,
+        sidebar: GeneralSidebar,
+        page: () => import("@/views/account/ActivationPage.vue"),
+      },
+    },
+    {
+      name: "confirm-email",
+      path: "/confirm-email/:token",
+      components: {
+        menu: GeneralMenu,
+        sidebar: GeneralSidebar,
+        page: () => import("@/views/account/EmailChangeConfirmPage.vue"),
+      },
+    },
+    {
+      name: "reset-password",
+      path: "/reset-password/:token",
+      components: {
+        menu: GeneralMenu,
+        sidebar: GeneralSidebar,
+        page: () => import("@/views/account/ResetPasswordConfirm.vue"),
       },
     },
     // Dev tools
@@ -320,6 +393,16 @@ const router = createRouter({
       },
     },
   ],
+});
+
+router.beforeEach((to) => {
+  if (to.meta.requiresAuth) {
+    // Lazy import to avoid circular dependency
+    const userJson = localStorage.getItem("user");
+    if (!userJson) {
+      return { name: "home" };
+    }
+  }
 });
 
 export default router;

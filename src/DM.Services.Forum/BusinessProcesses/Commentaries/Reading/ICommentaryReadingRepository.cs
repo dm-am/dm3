@@ -31,5 +31,5 @@ internal interface ICommentaryReadingRepository
     /// </summary>
     /// <param name="commentId">Commentary identifier</param>
     /// <returns>Found commentary</returns>
-    Task<Comment> Get(Guid commentId);
+    Task<Comment?> Get(Guid commentId);
 }

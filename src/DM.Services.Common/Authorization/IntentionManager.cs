@@ -78,6 +78,6 @@ internal class IntentionManager : IIntentionManager
 
     private static Enum GetIntentionEnum<TIntention>(TIntention intention)
     {
-        return (Enum) Enum.Parse(typeof(TIntention), intention.ToString());
+        return (Enum) Enum.Parse(typeof(TIntention), intention?.ToString() ?? string.Empty);
     }
 }

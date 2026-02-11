@@ -31,7 +31,7 @@ public class NotificationHub : Hub<INotificationHub>
     }
 
     /// <inheritdoc />
-    public override Task OnDisconnectedAsync(Exception exception)
+    public override Task OnDisconnectedAsync(Exception? exception)
     {
         var (hasToken, token) = TryExtractAuthToken();
         if (hasToken)
@@ -44,11 +44,13 @@ public class NotificationHub : Hub<INotificationHub>
 
     private (bool success, string token) TryExtractAuthToken()
     {
-        string token;
-        if (!Context.GetHttpContext().Request.Query.TryGetValue("access_token", out var queryValues) ||
+        string? token = null;
+        var httpContext = Context.GetHttpContext();
+        if (httpContext == null ||
+            !httpContext.Request.Query.TryGetValue("access_token", out var queryValues) ||
             !queryValues.Any() || string.IsNullOrEmpty(token = queryValues.First()))
         {
-            return (false, null);
+            return (false, string.Empty);
         }
 
         return (true, token);

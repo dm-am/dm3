@@ -33,6 +33,10 @@ public class DataAccessModule : Module
             {
                 var connectionString = MongoUrl.Create(ctx.Resolve<IOptions<ConnectionStrings>>().Value.Mongo);
                 var settings = MongoClientSettings.FromUrl(connectionString);
+                settings.ServerSelectionTimeout = TimeSpan.FromSeconds(5);
+                settings.ConnectTimeout = TimeSpan.FromSeconds(10);
+                settings.RetryWrites = true;
+                settings.RetryReads = true;
                 settings.ClusterConfigurator = cb => cb.Subscribe(
                     new DiagnosticsActivityEventSubscriber(new InstrumentationOptions { CaptureCommandText = true }));
                 return new DmMongoClient(settings, connectionString);

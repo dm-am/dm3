@@ -1,10 +1,12 @@
 ﻿using Autofac;
+using DM.Services.Community;
 using DM.Services.Core;
 using DM.Services.Core.Configuration;
 using DM.Services.Core.Extensions;
 using DM.Services.Core.Logging;
 using DM.Services.DataAccess;
 using DM.Services.MessageQueuing;
+using DM.Services.MessageQueuing.Outbox;
 using Jamq.Client.Abstractions.Consuming;
 using Jamq.Client.DependencyInjection;
 using Jamq.Client.Rabbit.DependencyInjection;
@@ -42,6 +44,8 @@ public class Startup
             .AddOptions()
             .Configure<ConnectionStrings>(_configuration.GetSection(nameof(ConnectionStrings)).Bind)
             .Configure<RabbitMqConfiguration>(_configuration.GetSection(nameof(RabbitMqConfiguration)).Bind)
+            .Configure<BotConfiguration>(_configuration.GetSection(nameof(BotConfiguration)).Bind)
+            .Configure<OutboxConfiguration>(_configuration.GetSection(nameof(OutboxConfiguration)).Bind)
             .AddDmLogging("DM.Notifications.Consumer", _configuration);
 
         services.AddJamqClient(
@@ -66,6 +70,7 @@ public class Startup
         builder.RegisterDefaultTypes();
 
         builder.RegisterModuleOnce<CoreModule>();
+        builder.RegisterModuleOnce<CommunityModule>();
         builder.RegisterModuleOnce<DataAccessModule>();
         builder.RegisterModuleOnce<MessageQueuingModule>();
         builder.RegisterModuleOnce<NotificationsModule>();

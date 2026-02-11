@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using DM.Services.DataAccess.BusinessObjects.Users;
 
@@ -9,9 +10,10 @@ namespace DM.Services.Community.BusinessProcesses.Account.PasswordReset;
 internal interface IPasswordResetRepository
 {
     /// <summary>
-    /// Create password restoration token
+    /// Invalidate old password reset tokens and create new one
     /// </summary>
-    /// <param name="token"></param>
+    /// <param name="userId">User identifier</param>
+    /// <param name="token">New token</param>
     /// <returns></returns>
-    Task CreateToken(Token token);
+    Task ReplacePasswordResetToken(Guid userId, Token token);
 }

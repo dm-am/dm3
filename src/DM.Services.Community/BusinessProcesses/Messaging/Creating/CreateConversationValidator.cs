@@ -1,3 +1,4 @@
+using System.Linq;
 using DM.Services.Core.Exceptions;
 using FluentValidation;
 
@@ -14,6 +15,7 @@ internal class CreateConversationValidator : AbstractValidator<CreateConversatio
             .MaximumLength(200).WithMessage(ValidationError.Long);
 
         RuleFor(c => c.ParticipantIds)
-            .NotEmpty().WithMessage(ValidationError.Empty);
+            .NotEmpty().WithMessage(ValidationError.Empty)
+            .Must(p => p.Count() <= 50).WithMessage(ValidationError.TooMany);
     }
 }

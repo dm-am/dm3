@@ -26,17 +26,17 @@ public class Tag
     /// <summary>
     /// Title
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Tag group
     /// </summary>
     [ForeignKey(nameof(TagGroupId))]
-    public virtual TagGroup TagGroup { get; set; }
+    public virtual TagGroup TagGroup { get; set; } = null!;
 
     /// <summary>
     /// Games under the tag
     /// </summary>
     [InverseProperty(nameof(GameTag.Tag))]
-    public virtual ICollection<GameTag> GameTags { get; set; }
+    public virtual ICollection<GameTag> GameTags { get; set; } = [];
 }

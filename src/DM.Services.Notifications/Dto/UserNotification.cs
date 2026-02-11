@@ -21,10 +21,10 @@ public class UserNotification
     /// <summary>
     /// Creation moment
     /// </summary>
-    public DateTimeOffset CreateDate { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Notification metadata
     /// </summary>
-    public object Metadata { get; set; }
+    public object Metadata { get; set; } = null!;
 }

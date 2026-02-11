@@ -48,13 +48,11 @@ watch(
     <div class="website-review-info">
       <user-link :user="review.author" :hide-badge="true" />
       <secondary-text v-if="canAdministrate" class="website-review-controls">
-        <template v-if="!loading">
-          <a @click="remove">
-            <the-icon :font="IconType.Close" />
-            Удалить</a
-          >
-        </template>
-        <the-loader v-else />
+        <a v-if="!loading" @click="remove">
+          <the-icon :font="IconType.Close" />
+          Удалить
+        </a>
+        <span v-else>...</span>
       </secondary-text>
     </div>
   </article>
@@ -68,15 +66,13 @@ watch(
   margin: 0
 
 .website-review-text
-  +bbcode-content
-
   position: relative
   padding: $medium
   margin-bottom: $small
-
   border-radius: $border-radius
   background-color: $bg-highlight-green
   color: $text-on-green
+  +bbcode-content
 
   // Speech bubble arrow
   &::after

@@ -9,10 +9,10 @@ namespace DM.Services.Community.BusinessProcesses.Polls.Voting;
 /// <inheritdoc />
 internal class PollVotingService : IPollVotingService
 {
-    private readonly IPollReadingService readingService;
-    private readonly IPollVotingRepository repository;
-    private readonly IIntentionManager intentionManager;
-    private readonly IIdentityProvider identityProvider;
+    private readonly IPollReadingService _readingService;
+    private readonly IPollVotingRepository _repository;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IIdentityProvider _identityProvider;
 
     /// <inheritdoc />
     public PollVotingService(
@@ -21,27 +21,27 @@ internal class PollVotingService : IPollVotingService
         IIntentionManager intentionManager,
         IIdentityProvider identityProvider)
     {
-        this.readingService = readingService;
-        this.repository = repository;
-        this.intentionManager = intentionManager;
-        this.identityProvider = identityProvider;
+        _readingService = readingService;
+        _repository = repository;
+        _intentionManager = intentionManager;
+        _identityProvider = identityProvider;
     }
         
     /// <inheritdoc />
     public async Task<Poll> Vote(Guid pollId, Guid optionId)
     {
-        var poll = await readingService.Get(pollId);
-        intentionManager.ThrowIfForbidden(PollIntention.Vote, (poll, optionId));
+        var poll = await _readingService.Get(pollId);
+        _intentionManager.ThrowIfForbidden(PollIntention.Vote, (poll, optionId));
 
-        return await repository.Vote(pollId, optionId, identityProvider.Current.User.UserId);
+        return await _repository.Vote(pollId, optionId, _identityProvider.Current.User.UserId);
     }
 
     /// <inheritdoc />
     public async Task<Poll> Unvote(Guid pollId)
     {
-        var poll = await readingService.Get(pollId);
-        intentionManager.ThrowIfForbidden(PollIntention.Unvote, poll);
+        var poll = await _readingService.Get(pollId);
+        _intentionManager.ThrowIfForbidden(PollIntention.Unvote, poll);
 
-        return await repository.Unvote(pollId, identityProvider.Current.User.UserId);
+        return await _repository.Unvote(pollId, _identityProvider.Current.User.UserId);
     }
 }

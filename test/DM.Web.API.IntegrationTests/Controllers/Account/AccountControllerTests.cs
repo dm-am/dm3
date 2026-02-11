@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using DM.Web.API.IntegrationTests.Helpers;
 using FluentAssertions;
 using Xunit;
 
@@ -14,175 +15,75 @@ public class AccountControllerTests : IntegrationTestBase
     {
     }
 
-    #region Register Tests
+    #region Register Tests (Email-First Flow)
 
-    /// <summary>
-    /// Registration with valid data should return Created
-    /// </summary>
     [Fact]
     public async Task Register_WithValidData_ReturnsCreated()
     {
-        // Arrange
         var uniqueId = Guid.NewGuid().ToString("N")[..8];
         var registration = new
         {
-            login = $"newuser{uniqueId}",
             email = $"newuser{uniqueId}@example.com",
-            password = "ValidPassword123!"
+            password = "ValidPassword123!",
+            acceptedRules = true
         };
-
-        // Act
         var response = await Client.PostAsJsonAsync("/v1/account", registration);
-
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        response.Headers.Location.Should().NotBeNull();
+        // Email-first flow: no Location header since we don't have a user yet
     }
 
-    /// <summary>
-    /// Registration with empty login should return BadRequest
-    /// </summary>
     [Fact]
-    public async Task Register_WithEmptyLogin_ReturnsBadRequest()
+    public async Task Register_WithoutAcceptedRules_ReturnsBadRequest()
     {
-        // Arrange
+        var uniqueId = Guid.NewGuid().ToString("N")[..8];
         var registration = new
         {
-            login = "",
-            email = "test@example.com",
-            password = "ValidPassword123!"
+            email = $"newuser{uniqueId}@example.com",
+            password = "ValidPassword123!",
+            acceptedRules = false
         };
-
-        // Act
         var response = await Client.PostAsJsonAsync("/v1/account", registration);
-
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    /// <summary>
-    /// Registration with empty email should return BadRequest
-    /// </summary>
     [Fact]
     public async Task Register_WithEmptyEmail_ReturnsBadRequest()
     {
-        // Arrange
-        var registration = new
-        {
-            login = "validlogin",
-            email = "",
-            password = "ValidPassword123!"
-        };
-
-        // Act
+        var registration = new { email = "", password = "ValidPassword123!", acceptedRules = true };
         var response = await Client.PostAsJsonAsync("/v1/account", registration);
-
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    /// <summary>
-    /// Registration with invalid email format should return BadRequest
-    /// </summary>
     [Fact]
     public async Task Register_WithInvalidEmail_ReturnsBadRequest()
     {
-        // Arrange
-        var registration = new
-        {
-            login = "validlogin",
-            email = "notanemail",
-            password = "ValidPassword123!"
-        };
-
-        // Act
+        var registration = new { email = "notanemail", password = "ValidPassword123!", acceptedRules = true };
         var response = await Client.PostAsJsonAsync("/v1/account", registration);
-
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    /// <summary>
-    /// Registration with empty password should return BadRequest
-    /// </summary>
     [Fact]
     public async Task Register_WithEmptyPassword_ReturnsBadRequest()
     {
-        // Arrange
-        var registration = new
-        {
-            login = "validlogin",
-            email = "valid@example.com",
-            password = ""
-        };
-
-        // Act
+        var registration = new { email = "valid@example.com", password = "", acceptedRules = true };
         var response = await Client.PostAsJsonAsync("/v1/account", registration);
-
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    /// <summary>
-    /// Registration with short password should return BadRequest
-    /// </summary>
     [Fact]
     public async Task Register_WithShortPassword_ReturnsBadRequest()
     {
-        // Arrange
-        var registration = new
-        {
-            login = "validlogin",
-            email = "valid@example.com",
-            password = "short"
-        };
-
-        // Act
+        var registration = new { email = "valid@example.com", password = "short", acceptedRules = true };
         var response = await Client.PostAsJsonAsync("/v1/account", registration);
-
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    /// <summary>
-    /// Registration with duplicate login should return BadRequest
-    /// </summary>
     [Fact]
-    public async Task Register_WithDuplicateLogin_ReturnsBadRequest()
+    public async Task Register_WithExistingUserEmail_ReturnsBadRequest()
     {
-        // Arrange - using existing test user login
-        var registration = new
-        {
-            login = TestConstants.TestUserLogin,
-            email = "unique@example.com",
-            password = "ValidPassword123!"
-        };
-
-        // Act
+        // test@example.com is used by seed data
+        var registration = new { email = "test@example.com", password = "ValidPassword123!", acceptedRules = true };
         var response = await Client.PostAsJsonAsync("/v1/account", registration);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
-
-    /// <summary>
-    /// Registration with duplicate email should return BadRequest
-    /// </summary>
-    [Fact]
-    public async Task Register_WithDuplicateEmail_ReturnsBadRequest()
-    {
-        // Arrange - using existing test user email
-        var registration = new
-        {
-            login = "uniquelogin",
-            email = "test@example.com",
-            password = "ValidPassword123!"
-        };
-
-        // Act
-        var response = await Client.PostAsJsonAsync("/v1/account", registration);
-
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -190,75 +91,69 @@ public class AccountControllerTests : IntegrationTestBase
 
     #region Activate Tests
 
-    /// <summary>
-    /// Activation with invalid token should return BadRequest, Gone, or NotFound
-    /// </summary>
     [Fact]
-    public async Task Activate_WithInvalidToken_ReturnsError()
+    public async Task Activate_WithInvalidToken_ReturnsGone()
     {
-        // Arrange
         var invalidToken = Guid.NewGuid();
+        var activateRequest = new { token = invalidToken, login = "testlogin" };
+        var response = await Client.PostAsJsonAsync("/v1/account/activate", activateRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+    }
 
-        // Act
-        var response = await Client.PutAsync($"/v1/account/{invalidToken}", null);
+    [Fact]
+    public async Task GetActivationInfo_WithInvalidToken_ReturnsNotFound()
+    {
+        var invalidToken = Guid.NewGuid();
+        var response = await Client.GetAsync($"/v1/account/activate/{invalidToken}");
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
 
-        // Assert - various error codes are acceptable
-        response.StatusCode.Should().BeOneOf(
-            HttpStatusCode.BadRequest,
-            HttpStatusCode.Gone,
-            HttpStatusCode.NotFound);
+    [Fact]
+    public async Task CheckLogin_WithAvailableLogin_ReturnsAvailable()
+    {
+        var uniqueLogin = $"available{Guid.NewGuid():N}"[..15];
+        var response = await Client.GetAsync($"/v1/account/check-login?login={uniqueLogin}");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().Contain("\"isAvailable\":true");
+    }
+
+    [Fact]
+    public async Task CheckLogin_WithTakenLogin_ReturnsNotAvailable()
+    {
+        // TestUser is from seed data
+        var response = await Client.GetAsync($"/v1/account/check-login?login={TestConstants.TestUserLogin}");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().Contain("\"isAvailable\":false");
     }
 
     #endregion
 
     #region GetCurrent Tests
 
-    /// <summary>
-    /// GetCurrent when authenticated should return user details
-    /// </summary>
     [Fact]
     public async Task GetCurrent_WhenAuthenticated_ReturnsOkWithUserDetails()
     {
-        // Arrange
-        var factory = CreateAuthenticatedFactory(CustomWebApplicationFactory.CreateTestUser());
-        var client = factory.CreateClient();
-
-        // Act
-        var response = await client.GetAsync("/v1/account");
-
-        // Assert
+        var request = CreateAuthenticatedRequest(HttpMethod.Get, "/v1/account");
+        var response = await Client.SendAsync(request);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var content = await response.Content.ReadAsStringAsync();
         content.Should().Contain(TestConstants.TestUserLogin);
     }
 
-    /// <summary>
-    /// GetCurrent when not authenticated should return Unauthorized
-    /// </summary>
     [Fact]
     public async Task GetCurrent_WhenNotAuthenticated_ReturnsUnauthorized()
     {
-        // Act
         var response = await Client.GetAsync("/v1/account");
-
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    /// <summary>
-    /// GetCurrent as admin should return admin details
-    /// </summary>
     [Fact]
     public async Task GetCurrent_AsAdmin_ReturnsOkWithAdminDetails()
     {
-        // Arrange
-        var factory = CreateAuthenticatedFactory(CustomWebApplicationFactory.CreateAdminUser());
-        var client = factory.CreateClient();
-
-        // Act
-        var response = await client.GetAsync("/v1/account");
-
-        // Assert
+        var request = CreateAdminRequest(HttpMethod.Get, "/v1/account");
+        var response = await Client.SendAsync(request);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var content = await response.Content.ReadAsStringAsync();
         content.Should().Contain(TestConstants.AdminUserLogin);
@@ -268,134 +163,178 @@ public class AccountControllerTests : IntegrationTestBase
 
     #region ResetPassword Tests
 
-    /// <summary>
-    /// ResetPassword with empty login should return BadRequest
-    /// </summary>
     [Fact]
     public async Task ResetPassword_WithEmptyLogin_ReturnsBadRequest()
     {
-        // Arrange
-        var resetData = new
-        {
-            login = "",
-            email = "test@example.com"
-        };
-
-        // Act
+        var resetData = new { login = "", email = "test@example.com" };
         var response = await Client.PostAsJsonAsync("/v1/account/password", resetData);
-
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    /// <summary>
-    /// ResetPassword with nonexistent user should return BadRequest
-    /// </summary>
     [Fact]
-    public async Task ResetPassword_WithNonexistentUser_ReturnsBadRequest()
+    public async Task ResetPassword_WithNonexistentUser_ReturnsOk()
     {
-        // Arrange
-        var resetData = new
-        {
-            login = "nonexistentuser",
-            email = "nonexistent@example.com"
-        };
-
-        // Act
+        var resetData = new { login = "nonexistentuser", email = "nonexistent@example.com" };
         var response = await Client.PostAsJsonAsync("/v1/account/password", resetData);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     #endregion
 
-    #region ChangePassword Tests
+    #region ChangePassword Tests (validation)
 
-    /// <summary>
-    /// ChangePassword when not authenticated should return BadRequest (validation before auth)
-    /// </summary>
     [Fact]
-    public async Task ChangePassword_WhenNotAuthenticated_ReturnsBadRequest()
+    public async Task ChangePassword_WhenNotAuthenticated_ReturnsUnauthorized()
     {
-        // Arrange
-        var changeData = new
+        var changeData = new { oldPassword = "oldpassword", newPassword = "newpassword123" };
+        var request = new HttpRequestMessage(HttpMethod.Patch, "/v1/account/password")
         {
-            oldPassword = "oldpassword",
-            newPassword = "newpassword123"
+            Content = JsonContent.Create(changeData)
         };
-
-        // Act
-        var response = await Client.PutAsJsonAsync("/v1/account/password", changeData);
-
-        // Assert - validation happens before auth check
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var response = await Client.SendAsync(request);
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    /// <summary>
-    /// ChangePassword with empty old password should return BadRequest
-    /// </summary>
     [Fact]
-    public async Task ChangePassword_WithEmptyOldPassword_ReturnsBadRequest()
+    public async Task ChangePassword_WithEmptyOldPassword_WhenNotAuthenticated_ReturnsUnauthorized()
     {
-        // Arrange
-        var changeData = new
+        var changeData = new { oldPassword = "", newPassword = "newpassword123" };
+        var request = new HttpRequestMessage(HttpMethod.Patch, "/v1/account/password")
         {
-            oldPassword = "",
-            newPassword = "newpassword123"
+            Content = JsonContent.Create(changeData)
         };
-
-        // Act
-        var response = await Client.PutAsJsonAsync("/v1/account/password", changeData);
-
-        // Assert - validation happens before auth check
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var response = await Client.SendAsync(request);
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     #endregion
 
-    #region ChangeEmail Tests
+    #region Happy Path: Password Change (6.2)
 
-    /// <summary>
-    /// ChangeEmail when not authenticated should return BadRequest (validation before auth)
-    /// </summary>
     [Fact]
-    public async Task ChangeEmail_WhenNotAuthenticated_ReturnsBadRequest()
+    public async Task ChangePassword_WithValidOldPassword_ReturnsOk()
     {
-        // Arrange
-        var changeData = new
-        {
-            login = "testuser",
-            email = "newemail@example.com",
-            password = "password"
-        };
+        // Arrange — create user and login
+        var uid = Guid.NewGuid().ToString("N")[..8];
+        var login = $"pwchg{uid}";
+        var email = $"{login}@test.example.com";
+        var oldPassword = "OldPassword123";
+        var newPassword = "NewPassword456";
+        await UserTestHelper.CreateActivatedUser(Client, DatabaseFixture, login, oldPassword, email);
+        var sessionCookie = await UserTestHelper.Login(Client, email, oldPassword);
 
-        // Act
-        var response = await Client.PutAsJsonAsync("/v1/account/email", changeData);
+        // Act — change password
+        var changeData = new { oldPassword, newPassword };
+        var request = UserTestHelper.CreateCookieAuthRequest(HttpMethod.Patch, "/v1/account/password", sessionCookie);
+        request.Content = JsonContent.Create(changeData);
+        var response = await Client.SendAsync(request);
 
-        // Assert - validation happens before auth check
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Verify: old password no longer works
+        var oldLoginResponse = await Client.PostAsJsonAsync("/v1/account/login",
+            new { email, password = oldPassword });
+        oldLoginResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        // Verify: new password works
+        var newLoginResponse = await Client.PostAsJsonAsync("/v1/account/login",
+            new { email, password = newPassword });
+        newLoginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// ChangeEmail with invalid email format should return BadRequest
-    /// </summary>
+    #endregion
+
+    #region Happy Path: Email Change (6.3)
+
     [Fact]
-    public async Task ChangeEmail_WithInvalidEmail_ReturnsBadRequest()
+    public async Task ChangeEmail_WithValidPassword_ReturnsOk()
     {
-        // Arrange
-        var changeData = new
+        // Arrange — create user and login
+        var uid = Guid.NewGuid().ToString("N")[..8];
+        var login = $"emchg{uid}";
+        var email = $"{login}@test.example.com";
+        var password = "TestPass123ok";
+        var newEmail = $"new{uid}@test.example.com";
+        await UserTestHelper.CreateActivatedUser(Client, DatabaseFixture, login, password, email);
+        var sessionCookie = await UserTestHelper.Login(Client, email, password);
+
+        // Act — change email
+        var changeData = new { password, email = newEmail };
+        var request = UserTestHelper.CreateCookieAuthRequest(HttpMethod.Patch, "/v1/account/email", sessionCookie);
+        request.Content = JsonContent.Create(changeData);
+        var response = await Client.SendAsync(request);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    #endregion
+
+    #region ChangeEmail Tests (validation)
+
+    [Fact]
+    public async Task ChangeEmail_WhenNotAuthenticated_ReturnsUnauthorized()
+    {
+        var changeData = new { email = "newemail@example.com", password = "password" };
+        var request = new HttpRequestMessage(HttpMethod.Patch, "/v1/account/email")
         {
-            login = TestConstants.TestUserLogin,
-            email = "notanemail",
-            password = "password123"
+            Content = JsonContent.Create(changeData)
         };
+        var response = await Client.SendAsync(request);
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
 
-        // Act
-        var response = await Client.PutAsJsonAsync("/v1/account/email", changeData);
+    [Fact]
+    public async Task ChangeEmail_WithInvalidEmail_WhenNotAuthenticated_ReturnsUnauthorized()
+    {
+        var changeData = new { email = "notanemail", password = "password123" };
+        var request = new HttpRequestMessage(HttpMethod.Patch, "/v1/account/email")
+        {
+            Content = JsonContent.Create(changeData)
+        };
+        var response = await Client.SendAsync(request);
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
 
-        // Assert - validation happens before auth check
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    #endregion
+
+    #region Password Reuse Rejection (6.6)
+
+    [Fact]
+    public async Task ChangePassword_ToRecentlyUsedPassword_ReturnsBadRequest()
+    {
+        // Arrange — create user
+        var uid = Guid.NewGuid().ToString("N")[..8];
+        var login = $"pwreuse{uid}";
+        var email = $"{login}@test.example.com";
+        var passwordA = "PasswordAAA111";
+        var passwordB = "PasswordBBB222";
+        var passwordC = "PasswordCCC333";
+        await UserTestHelper.CreateActivatedUser(Client, DatabaseFixture, login, passwordA, email);
+
+        // Change A → B
+        var session1 = await UserTestHelper.Login(Client, email, passwordA);
+        var req1 = UserTestHelper.CreateCookieAuthRequest(HttpMethod.Patch, "/v1/account/password", session1);
+        req1.Content = JsonContent.Create(new { oldPassword = passwordA, newPassword = passwordB });
+        var res1 = await Client.SendAsync(req1);
+        res1.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Change B → C
+        var session2 = await UserTestHelper.Login(Client, email, passwordB);
+        var req2 = UserTestHelper.CreateCookieAuthRequest(HttpMethod.Patch, "/v1/account/password", session2);
+        req2.Content = JsonContent.Create(new { oldPassword = passwordB, newPassword = passwordC });
+        var res2 = await Client.SendAsync(req2);
+        res2.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Act — try to change C → A (reuse)
+        var session3 = await UserTestHelper.Login(Client, email, passwordC);
+        var req3 = UserTestHelper.CreateCookieAuthRequest(HttpMethod.Patch, "/v1/account/password", session3);
+        req3.Content = JsonContent.Create(new { oldPassword = passwordC, newPassword = passwordA });
+        var res3 = await Client.SendAsync(req3);
+
+        // Assert — should be rejected due to password reuse
+        res3.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     #endregion

@@ -9,11 +9,28 @@
     <secondary-text v-if="store.ownGamesError" class="error">
       {{ store.ownGamesError.title || "Ошибка загрузки" }}
     </secondary-text>
-    <the-loader v-else-if="!store.ownGames" />
-    <template v-else-if="store.ownGames.length === 0">
-      <secondary-text>Пока тут ничего нет...</secondary-text>
+    <template v-else-if="!store.ownGames || store.ownGames.length === 0">
+      <secondary-text>У вас нет игр</secondary-text>
     </template>
     <template v-else>
+      <!-- Курируемые игры (ментор) -->
+      <template v-if="mentorGames.length > 0">
+        <game-menu-link
+          v-for="game in mentorGames"
+          :key="game.id"
+          :game="game"
+          :counters="true"
+          :always-show-counters="true"
+          prefix="~ "
+        />
+      </template>
+      <!-- Разделитель между курируемыми и ведомыми -->
+      <div
+        v-if="mentorGames.length > 0 && (ownedGames.length > 0 || playingGames.length > 0 || readingGames.length > 0)"
+        class="separator"
+      >
+        - - - - - - - - - - - - - - - - - - - - - - - - - -
+      </div>
       <!-- Ведомые игры -->
       <template v-if="ownedGames.length > 0">
         <game-menu-link
@@ -66,23 +83,21 @@
 </template>
 
 <script setup lang="ts">
-import TheLoader from "@/components/TheLoader.vue";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
 import GameMenuLink from "@/views/layout/menu/GameMenuLink.vue";
 import { useUserStore } from "@/stores";
 import { useGamesStore } from "@/stores/games";
 import { computed, watch } from "vue";
-import { GameParticipation, GameStatus, type Game } from "@/api/models/gaming";
+import { GameParticipation, GameStatus, type Game } from "@/api/models/game";
 import GamesList from "@/views/layout/menu/GamesList.vue";
 
 const userStore = useUserStore();
 const store = useGamesStore();
 
-// Роли владения игрой
+// Роли владения игрой (без Moderator - он отдельно для менторов)
 const ownerRoles = [
   GameParticipation.Owner,
   GameParticipation.Authority,
-  GameParticipation.Moderator,
 ];
 
 // Проверка участия с null safety
@@ -91,7 +106,16 @@ const hasRole = (game: Game, role: GameParticipation) =>
 const hasAnyOwnerRole = (game: Game) =>
   game.participation?.some((p) => ownerRoles.includes(p)) ?? false;
 
-// Ведомые (Owner, Authority, Moderator)
+// Курируемые (Moderator/Ментор, но не Owner/Authority)
+const mentorGames = computed(
+  () =>
+    store.ownGames?.filter(
+      (game) =>
+        hasRole(game, GameParticipation.Moderator) && !hasAnyOwnerRole(game),
+    ) ?? [],
+);
+
+// Ведомые (Owner, Authority)
 const ownedGames = computed(
   () => store.ownGames?.filter(hasAnyOwnerRole) ?? [],
 );

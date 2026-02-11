@@ -99,8 +99,12 @@ const toggle = () => {
 
 .list
   overflow: hidden
-  transition: height $animation-time
+  transition: height $animation-time, padding $animation-time, margin $animation-time
+  padding: 6px
+  margin: -6px
 
   &.collapsed
     height: 0
+    padding: 0
+    margin: 0
 </style>

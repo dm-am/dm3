@@ -13,15 +13,15 @@ public class SearchEngineConfiguration
     /// <summary>
     /// Connection string
     /// </summary>
-    public string Endpoint { get; set; }
+    public string Endpoint { get; set; } = string.Empty;
 
     /// <summary>
     /// Basic auth username
     /// </summary>
-    public string Username { get; set; }
+    public string Username { get; set; } = string.Empty;
 
     /// <summary>
     /// Basic auth password
     /// </summary>
-    public string Password { get; set; }
+    public string Password { get; set; } = string.Empty;
 }

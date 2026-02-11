@@ -20,11 +20,11 @@ public class TagGroup
     /// <summary>
     /// Title
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Tags under the group
     /// </summary>
     [InverseProperty(nameof(Tag.TagGroup))]
-    public virtual ICollection<Tag> Tags { get; set; }
+    public virtual ICollection<Tag> Tags { get; set; } = [];
 }

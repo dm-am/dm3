@@ -1,4 +1,4 @@
-import { defineStore } from "pinia";
+﻿import { defineStore } from "pinia";
 import type { User } from "@/api/models/community";
 import { ColorSchema } from "@/api/models/community";
 import { ref, computed } from "vue";
@@ -29,19 +29,24 @@ export const useUserStore = defineStore("root", () => {
 
   async function register(credentials: RegisterCredentials) {
     const { error } = await accountApi.register(credentials);
-    if (error && "errors" in error) return error as BadRequestError;
+    if (error && ("invalidProperties" in error || "errors" in error)) return error as BadRequestError;
     return null;
   }
 
   async function signIn(credentials: LoginCredentials) {
-    const result = await accountApi.signInOAuth(credentials);
+    // Use cookie-based auth (signIn sets HttpOnly cookie)
+    const { data, error } = await accountApi.signIn(credentials);
 
-    if (result.success && result.user) {
-      updateUser(result.user);
+    if (data?.resource) {
+      updateUser(data.resource);
       return null;
     }
 
-    return result.error ?? null;
+    if (error && ("invalidProperties" in error || "errors" in error)) {
+      return error as BadRequestError;
+    }
+
+    return null;
   }
 
   async function signOut() {
@@ -58,22 +63,7 @@ export const useUserStore = defineStore("root", () => {
     updateUser(data?.resource ?? null);
   }
 
-  /**
-   * Set OAuth tokens from external auth callback (Discord, etc.)
-   */
-  function setOAuthTokens(accessToken: string, refreshToken?: string) {
-    // Import Api dynamically to avoid circular deps
-    import("@/api").then((module) => {
-      module.default.updateTokens({
-        access_token: accessToken,
-        refresh_token: refreshToken || "",
-        token_type: "Bearer",
-        expires_in: 3600,
-      });
-    });
-  }
-
-  // Инициализируем тему сразу на основе сохранённого пользователя
+  // Инициализируем тему сразу на основе сохраненного пользователя
   if (user.value) {
     const { updateTheme } = useUiStore();
     updateTheme(user.value.settings?.colorSchema ?? ColorSchema.Light);
@@ -81,5 +71,24 @@ export const useUserStore = defineStore("root", () => {
 
   const isAuthenticated = computed(() => user.value !== null);
 
-  return { user, isAuthenticated, register, signIn, signOut, fetchUser, setOAuthTokens };
+  // Sync logout across browser tabs via localStorage events
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", (e) => {
+      if (e.key === userKey && !e.newValue) {
+        user.value = null;
+        const { updateTheme } = useUiStore();
+        updateTheme(ColorSchema.Light);
+      } else if (e.key === userKey && e.newValue) {
+        try {
+          user.value = JSON.parse(e.newValue);
+          const { updateTheme } = useUiStore();
+          updateTheme(user.value?.settings?.colorSchema ?? ColorSchema.Light);
+        } catch {
+          // Ignore malformed JSON
+        }
+      }
+    });
+  }
+
+  return { user, isAuthenticated, register, signIn, signOut, fetchUser, updateUser };
 });

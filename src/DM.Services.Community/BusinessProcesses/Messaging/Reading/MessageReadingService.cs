@@ -50,4 +50,14 @@ internal class MessageReadingService : IMessageReadingService
 
         return message;
     }
+
+    /// <inheritdoc />
+    public async Task<CursorResult<Message>> GetWithCursor(
+        Guid conversationId, CursorQuery query, CancellationToken ct = default)
+    {
+        // Validate conversation access (throws if user doesn't have access)
+        await _conversationReadingService.Get(conversationId);
+
+        return await _repository.GetWithCursor(conversationId, query, ct);
+    }
 }

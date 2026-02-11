@@ -13,8 +13,8 @@ public interface ICredentialsStorage
     /// Extract authentication token from request
     /// </summary>
     /// <param name="httpContext">HTTP context</param>
-    /// <returns>Token</returns>
-    Task<TokenCredentials> ExtractToken(HttpContext httpContext);
+    /// <returns>Token or null if not authenticated</returns>
+    Task<TokenCredentials?> ExtractToken(HttpContext httpContext);
 
     /// <summary>
     /// Append authentication token to response

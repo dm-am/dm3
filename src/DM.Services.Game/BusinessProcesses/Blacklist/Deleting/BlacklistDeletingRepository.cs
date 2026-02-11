@@ -1,0 +1,26 @@
+using System.Threading.Tasks;
+using DM.Services.DataAccess;
+using DM.Services.DataAccess.BusinessObjects.Games.Links;
+using DM.Services.DataAccess.RelationalStorage;
+
+namespace DM.Services.Game.BusinessProcesses.Blacklist.Deleting;
+
+/// <inheritdoc />
+internal class BlacklistDeletingRepository : IBlacklistDeletingRepository
+{
+    private readonly DmDbContext _dbContext;
+
+    /// <inheritdoc />
+    public BlacklistDeletingRepository(
+        DmDbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
+
+    /// <inheritdoc />
+    public Task Delete(IUpdateBuilder<GameBlacklist> updateBuilder)
+    {
+        updateBuilder.AttachTo(_dbContext);
+        return _dbContext.SaveChangesAsync();
+    }
+}

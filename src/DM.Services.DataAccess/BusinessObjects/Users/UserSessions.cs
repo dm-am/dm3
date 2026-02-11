@@ -19,7 +19,7 @@ public class UserSessions
     /// <summary>
     /// Authentication sessions
     /// </summary>
-    public List<Session> Sessions { get; set; }
+    public List<Session> Sessions { get; set; } = [];
 }
 
 /// <summary>

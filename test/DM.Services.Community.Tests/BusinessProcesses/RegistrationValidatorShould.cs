@@ -1,8 +1,10 @@
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Services.Community.BusinessProcesses.Account.Registration;
+using DM.Services.Community.Configuration;
 using DM.Tests.Core;
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -17,35 +19,13 @@ public class RegistrationValidatorShould : UnitTestBase
     {
         registrationRepository = Mock<IRegistrationRepository>(MockBehavior.Loose);
         registrationRepository
-            .Setup(r => r.EmailFree("EmailTaken", It.IsAny<CancellationToken>()))
+            .Setup(r => r.EmailFreeForNewRegistration("EmailTaken@test.com", It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
         registrationRepository
-            .Setup(r => r.EmailFree(It.Is<string>(e => e != "EmailTaken"), It.IsAny<CancellationToken>()))
+            .Setup(r => r.EmailFreeForNewRegistration(It.Is<string>(e => e != "EmailTaken@test.com"), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
-        registrationRepository
-            .Setup(r => r.LoginFree("LoginTaken", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
-        registrationRepository
-            .Setup(r => r.LoginFree(It.Is<string>(e => e != "LoginTaken"), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        validator = new UserRegistrationValidator(registrationRepository.Object);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData(null!)]
-    [InlineData("  ")]
-    [InlineData("the very long string that could not be user's login in any way")]
-    [InlineData("LoginTaken")]
-    public async Task ValidateUserLogin(string? login)
-    {
-        var userRegistration = new UserRegistration
-        {
-            Login = login,
-            Password = "qwerty",
-            Email = "user@email.com"
-        };
-        (await validator.ValidateAsync(userRegistration)).IsValid.Should().BeFalse();
+        var passwordPolicyOptions = Options.Create(new PasswordPolicyConfiguration());
+        validator = new UserRegistrationValidator(registrationRepository.Object, passwordPolicyOptions);
     }
 
     [Theory]
@@ -57,15 +37,11 @@ public class RegistrationValidatorShould : UnitTestBase
     {
         var userRegistration = new UserRegistration
         {
-            Login = "User",
-            Password = password,
+            Password = password!,
             Email = "user@email.com"
         };
         registrationRepository
-            .Setup(r => r.EmailFree(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        registrationRepository
-            .Setup(r => r.LoginFree(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.EmailFreeForNewRegistration(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
         (await validator.ValidateAsync(userRegistration)).IsValid.Should().BeFalse();
     }
@@ -76,29 +52,41 @@ public class RegistrationValidatorShould : UnitTestBase
     [InlineData("  ")]
     [InlineData("kajlsdhfaksjdhlfaksljdhfklasdhfaksdhadfasdfaslkdhfaskdjhfasldfaslkdjhaskdhfaskldfhaskjldfhaskdhfsakdhfaskldhf@gmail.com")]
     [InlineData("someInvalidEmail")]
-    [InlineData("EmailTaken")]
+    [InlineData("EmailTaken@test.com")]
     public async Task ValidateUserEmail(string? email)
     {
         var userRegistration = new UserRegistration
         {
-            Login = "User",
-            Password = "qwerty",
-            Email = email
+            Password = "AmazingPass123",
+            Email = email!
         };
-        registrationRepository
-            .Setup(r => r.LoginFree(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
         (await validator.ValidateAsync(userRegistration)).IsValid.Should().BeFalse();
     }
 
     [Fact]
     public async Task ValidateWholeModel()
     {
+        // Password must meet policy: min 10 chars, uppercase, lowercase, digit
         (await validator.ValidateAsync(new UserRegistration
         {
             Email = "my@email.com",
-            Password = "amazing_password",
-            Login = "NewUser"
+            Password = "AmazingPass123",
+            AcceptedRules = true
         })).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RejectExistingEmail()
+    {
+        var userRegistration = new UserRegistration
+        {
+            Email = "EmailTaken@test.com",
+            Password = "AmazingPass123"
+        };
+
+        var result = await validator.ValidateAsync(userRegistration);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "Email");
     }
 }

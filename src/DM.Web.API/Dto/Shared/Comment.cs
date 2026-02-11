@@ -18,7 +18,7 @@ public class Comment
     /// <summary>
     /// Author
     /// </summary>
-    public User Author { get; set; }
+    public User Author { get; set; } = null!;
 
     /// <summary>
     /// Creation moment
@@ -33,10 +33,10 @@ public class Comment
     /// <summary>
     /// Text
     /// </summary>
-    public CommonBbText Text { get; set; }
+    public CommonBbText Text { get; set; } = null!;
 
     /// <summary>
     /// Users who liked it
     /// </summary>
-    public IEnumerable<User> Likes { get; set; }
+    public IEnumerable<User> Likes { get; set; } = [];
 }

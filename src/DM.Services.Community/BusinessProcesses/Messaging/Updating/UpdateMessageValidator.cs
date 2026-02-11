@@ -13,6 +13,8 @@ internal class UpdateMessageValidator : AbstractValidator<UpdateMessage>
             .NotEmpty().WithMessage(ValidationError.Empty);
 
         RuleFor(m => m.Text)
-            .NotEmpty().WithMessage(ValidationError.Empty);
+            .NotEmpty().WithMessage(ValidationError.Empty)
+            .MaximumLength(50000).WithMessage(ValidationError.Long)
+            .When(m => m.Text != null);
     }
 }

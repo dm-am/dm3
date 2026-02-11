@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using DM.Services.Core.Dto;
 
@@ -17,9 +18,10 @@ public static class UpdateBuilderExtensions
     /// <param name="value"></param>
     /// <typeparam name="TEntity"></typeparam>
     /// <returns></returns>
+    [return: NotNullIfNotNull(nameof(updateBuilder))]
     public static IUpdateBuilder<TEntity> MaybeField<TEntity>(this IUpdateBuilder<TEntity> updateBuilder,
-        Expression<Func<TEntity, string>> field, string value) where TEntity : class, new() =>
-        value == default ? updateBuilder : updateBuilder.Field(field, value);
+        Expression<Func<TEntity, string>> field, string? value) where TEntity : class, new() =>
+        string.IsNullOrEmpty(value) ? updateBuilder : updateBuilder.Field(field, value);
 
     /// <summary>
     /// Update field conditionally, if the value is not default
@@ -30,6 +32,7 @@ public static class UpdateBuilderExtensions
     /// <typeparam name="TEntity"></typeparam>
     /// <typeparam name="TValue"></typeparam>
     /// <returns></returns>
+    [return: NotNullIfNotNull(nameof(updateBuilder))]
     public static IUpdateBuilder<TEntity> MaybeField<TEntity, TValue>(this IUpdateBuilder<TEntity> updateBuilder,
         Expression<Func<TEntity, TValue>> field, TValue? value)
         where TEntity : class, new()
@@ -45,6 +48,7 @@ public static class UpdateBuilderExtensions
     /// <typeparam name="TEntity"></typeparam>
     /// <typeparam name="TValue"></typeparam>
     /// <returns></returns>
+    [return: NotNullIfNotNull(nameof(updateBuilder))]
     public static IUpdateBuilder<TEntity> MaybeField<TEntity, TValue>(this IUpdateBuilder<TEntity> updateBuilder,
         Expression<Func<TEntity, TValue?>> field, Optional<TValue> value)
         where TEntity : class, new()

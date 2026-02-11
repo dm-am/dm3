@@ -8,7 +8,7 @@ public class AttributeValueSpecification
     /// <summary>
     /// Value
     /// </summary>
-    public string Value { get; set; }
+    public string Value { get; set; } = null!;
 
     /// <summary>
     /// Value modifier

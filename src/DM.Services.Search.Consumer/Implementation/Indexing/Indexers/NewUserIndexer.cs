@@ -38,7 +38,7 @@ internal class NewUserIndexer : BaseIndexer
         {
             Id = message.EntityId,
             Title = userInfo.Login,
-            Text = userInfo.Name,
+            Text = userInfo.Name ?? string.Empty,
             EntityType = SearchEntityType.User
         });
     }

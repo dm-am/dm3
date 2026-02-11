@@ -6,10 +6,9 @@ import { useGameDetailsStore, useUserStore } from "@/stores";
 import { useFetchData } from "@/composables/useFetchData";
 import PageTitle from "@/components/layout/PageTitle.vue";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
-import TheLoader from "@/components/TheLoader.vue";
 import UserLink from "@/components/community/UserLink.vue";
 import TheButton from "@/components/inputs/TheButton.vue";
-import { GameParticipation, GameStatus } from "@/api/models/gaming";
+import { GameParticipation, GameStatus } from "@/api/models/game";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
@@ -18,16 +17,10 @@ const { game, gameLoading, gameError } = storeToRefs(gameStore);
 
 const gameId = computed(() => route.params.id as string);
 
-const statusLabels: Record<GameStatus, string> = {
+const statusLabels: Partial<Record<GameStatus, string>> = {
   [GameStatus.Draft]: "Черновик",
-  [GameStatus.Recruiting]: "Набор игроков",
-  [GameStatus.Requirement]: "Набор игроков",
   [GameStatus.Active]: "Активная",
-  [GameStatus.Frozen]: "Заморожена",
-  [GameStatus.Finished]: "Завершена",
   [GameStatus.Closed]: "Закрыта",
-  [GameStatus.RequiresModeration]: "На модерации",
-  [GameStatus.Moderation]: "На модерации",
 };
 
 const statusClass = computed(() => {
@@ -35,13 +28,8 @@ const statusClass = computed(() => {
   switch (game.value.status) {
     case GameStatus.Active:
       return "status-active";
-    case GameStatus.Recruiting:
-    case GameStatus.Requirement:
-      return "status-recruiting";
-    case GameStatus.Finished:
+    case GameStatus.Closed:
       return "status-finished";
-    case GameStatus.Frozen:
-      return "status-frozen";
     default:
       return "";
   }
@@ -99,7 +87,7 @@ onUnmounted(() => {
       <div class="game-title-row">
         <page-title>{{ game.title }}</page-title>
         <span :class="['game-status', statusClass]">
-          {{ statusLabels[game.status] }}
+          {{ statusLabels[game.status] ?? game.status }}
         </span>
       </div>
       <secondary-text class="game-meta">
@@ -110,7 +98,7 @@ onUnmounted(() => {
           Мастер: <user-link :user="game.master" />
         </span>
         <span v-if="game.assistant" class="game-assistant">
-          Помощник: <user-link :user="game.assistant" />
+          Ассистент: <user-link :user="game.assistant" />
         </span>
       </secondary-text>
     </div>
@@ -148,10 +136,6 @@ onUnmounted(() => {
     <router-view />
   </template>
 
-  <div v-else-if="gameLoading" class="game-loading">
-    <the-loader :big="true" />
-  </div>
-
   <div v-else-if="gameError" class="game-error">
     <p>{{ gameError }}</p>
     <router-link to="/games">Вернуться к списку игр</router-link>
@@ -183,16 +167,16 @@ onUnmounted(() => {
     color: $accent-green
 
   &.status-recruiting
-    background-color: rgba($accent-blue, 0.2)
-    color: $accent-blue
+    background-color: rgba($accent-green, 0.2)
+    color: $accent-green
 
   &.status-finished
     background-color: rgba($text-muted, 0.2)
     color: $text-muted
 
   &.status-frozen
-    background-color: rgba($accent-orange, 0.2)
-    color: $accent-orange
+    background-color: rgba($text-muted, 0.2)
+    color: $text-muted
 
 .game-meta
   display: flex

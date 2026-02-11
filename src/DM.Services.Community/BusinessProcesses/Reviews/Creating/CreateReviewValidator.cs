@@ -10,6 +10,7 @@ internal class CreateReviewValidator : AbstractValidator<CreateReview>
     public CreateReviewValidator()
     {
         RuleFor(r => r.Text)
-            .NotEmpty().WithMessage(ValidationError.Empty);
+            .NotEmpty().WithMessage(ValidationError.Empty)
+            .MaximumLength(50000).WithMessage(ValidationError.Long);
     }
 }

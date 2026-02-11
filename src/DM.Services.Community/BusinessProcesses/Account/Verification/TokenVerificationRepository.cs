@@ -25,8 +25,8 @@ internal class TokenVerificationRepository : ITokenVerificationRepository
     }
 
     /// <inheritdoc />
-    public Task<GeneralUser> GetTokenOwner(Guid tokenId) => _dbContext.Tokens
-        .Where(t => t.TokenId == tokenId && !t.IsRemoved)
+    public Task<GeneralUser?> GetTokenOwner(Guid tokenId) => _dbContext.Tokens
+        .Where(t => t.TokenId == tokenId)
         .Select(t => t.User)
         .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();

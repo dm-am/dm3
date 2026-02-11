@@ -29,11 +29,11 @@ public class CharacterAttribute
     /// <summary>
     /// Attribute value
     /// </summary>
-    public string Value { get; set; }
+    public string Value { get; set; } = null!;
 
     /// <summary>
     /// Character
     /// </summary>
     [ForeignKey(nameof(CharacterId))]
-    public virtual Character Character { get; set; }
+    public virtual Character Character { get; set; } = null!;
 }

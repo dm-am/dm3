@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using DM.Web.API.Dto.Contracts;
 using DM.Web.API.Dto.Users;
@@ -10,9 +11,12 @@ namespace DM.Web.API.Services.Users;
 public interface IEmailChangeApiService
 {
     /// <summary>
-    /// Change user email
+    /// Change user email (requires password verification)
     /// </summary>
-    /// <param name="changeEmail"></param>
-    /// <returns></returns>
     Task<Envelope<User>> Change(ChangeEmail changeEmail);
+
+    /// <summary>
+    /// Confirm email change by token
+    /// </summary>
+    Task ConfirmEmailChange(Guid token);
 }

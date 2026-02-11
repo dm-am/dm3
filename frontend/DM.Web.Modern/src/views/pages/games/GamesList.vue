@@ -4,11 +4,10 @@ import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useGamesStore } from "@/stores/games";
 import ThePaging from "@/components/ThePaging.vue";
-import TheLoader from "@/components/TheLoader.vue";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
 import UserLink from "@/components/community/UserLink.vue";
 import HumanDate from "@/components/dates/HumanDate.vue";
-import { GameStatus } from "@/api/models/gaming";
+import { GameStatus } from "@/api/models/game";
 
 const route = useRoute();
 const gamesStore = useGamesStore();
@@ -71,14 +70,9 @@ const routeName = computed(() => {
 });
 
 const statusLabels: Record<string, string> = {
-  [GameStatus.Active]: "Активная",
-  [GameStatus.Recruiting]: "Набор",
-  [GameStatus.Finished]: "Завершена",
-  [GameStatus.Closed]: "Закрыта",
-  [GameStatus.Frozen]: "Заморожена",
   [GameStatus.Draft]: "Черновик",
-  [GameStatus.RequiresModeration]: "На модерации",
-  [GameStatus.Moderation]: "Модерация",
+  [GameStatus.Active]: "Активная",
+  [GameStatus.Closed]: "Закрыта",
 };
 
 function formatStatus(gameStatus: string): string {
@@ -135,9 +129,8 @@ watch(
       <div class="col-date">Дата</div>
     </div>
 
-    <the-loader v-if="isLoading && !currentGames" :big="true" />
     <secondary-text
-      v-else-if="!currentGames?.resources?.length"
+      v-if="!currentGames?.resources?.length"
       class="games-empty"
     >
       Нет игр в этой категории

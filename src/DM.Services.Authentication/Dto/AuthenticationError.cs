@@ -26,9 +26,9 @@ public enum AuthenticationError
     Banned = 3,
 
     /// <summary>
-    /// Credentials are correct, but the user was never activated by email
+    /// Email exists in PendingRegistrations (user needs to confirm email and complete registration)
     /// </summary>
-    Inactive = 4,
+    PendingRegistration = 4,
 
     /// <summary>
     /// Credentials are correct, but the user was removed from DB
@@ -49,4 +49,9 @@ public enum AuthenticationError
     /// Token is supposedly forged
     /// </summary>
     ForgedToken = 8,
+
+    /// <summary>
+    /// Account is temporarily locked due to too many failed login attempts
+    /// </summary>
+    AccountLocked = 9,
 }

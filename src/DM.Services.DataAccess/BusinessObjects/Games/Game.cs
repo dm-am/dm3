@@ -8,7 +8,6 @@ using DM.Services.DataAccess.BusinessObjects.DataContracts;
 using DM.Services.DataAccess.BusinessObjects.Games.Characters;
 using DM.Services.DataAccess.BusinessObjects.Games.Links;
 using DM.Services.DataAccess.BusinessObjects.Games.Posts;
-using DM.Services.DataAccess.BusinessObjects.Games.Rating;
 using DM.Services.DataAccess.BusinessObjects.Users;
 
 namespace DM.Services.DataAccess.BusinessObjects.Games;
@@ -38,7 +37,7 @@ public class Game : IRemovable
     /// <summary>
     /// Status
     /// </summary>
-    public GameStatus Status { get; set; }
+    public ModuleStatus Status { get; set; }
 
     /// <summary>
     /// Premoderation status for newbie GMs
@@ -98,22 +97,22 @@ public class Game : IRemovable
     /// <summary>
     /// Title
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// System name (e.g. D&amp;D, WoD)
     /// </summary>
-    public string SystemName { get; set; }
+    public string? SystemName { get; set; }
 
     /// <summary>
     /// Narrative setting (e.g. Mass Effect, WarHammer, Our world)
     /// </summary>
-    public string NarrativeSetting { get; set; }
+    public string? NarrativeSetting { get; set; }
 
     /// <summary>
     /// Full game information
     /// </summary>
-    public string Info { get; set; }
+    public string? Info { get; set; }
 
     /// <summary>
     /// Only GM and character author can see character temper
@@ -151,6 +150,11 @@ public class Game : IRemovable
     public bool ShowPrivateMessages { get; set; }
 
     /// <summary>
+    /// Hide posts count and last post date for all participants (except Master/Assistant)
+    /// </summary>
+    public bool HidePostStats { get; set; }
+
+    /// <summary>
     /// Policy for game commentaries read/write access
     /// </summary>
     public CommentariesAccessMode CommentariesAccessMode { get; set; }
@@ -158,7 +162,7 @@ public class Game : IRemovable
     /// <summary>
     /// Private notes for GM and assistant
     /// </summary>
-    public string Notepad { get; set; }
+    public string? Notepad { get; set; }
 
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
@@ -167,71 +171,65 @@ public class Game : IRemovable
     /// GM
     /// </summary>
     [ForeignKey(nameof(MasterId))]
-    public User Master { get; set; }
+    public User Master { get; set; } = null!;
 
     /// <summary>
     /// GM assistant
     /// </summary>
     [ForeignKey(nameof(AssistantId))]
-    public User Assistant { get; set; }
+    public User? Assistant { get; set; }
 
     /// <summary>
     /// Premoderation assistant
     /// </summary>
     [ForeignKey(nameof(MentorId))]
-    public User Mentor { get; set; }
+    public User? Mentor { get; set; }
 
     /// <summary>
     /// Blacklist links
     /// </summary>
-    [InverseProperty(nameof(BlackListLink.Game))]
-    public virtual ICollection<BlackListLink> BlackList { get; set; }
+    [InverseProperty(nameof(GameBlacklist.Game))]
+    public virtual ICollection<GameBlacklist> BlackList { get; set; } = [];
 
     /// <summary>
     /// Game tags
     /// </summary>
     [InverseProperty(nameof(GameTag.Game))]
-    public virtual ICollection<GameTag> GameTags { get; set; }
+    public virtual ICollection<GameTag> GameTags { get; set; } = [];
 
     /// <summary>
     /// Readers
     /// </summary>
     [InverseProperty(nameof(Reader.Game))]
-    public virtual ICollection<Reader> Readers { get; set; }
+    public virtual ICollection<Reader> Readers { get; set; } = [];
 
     /// <summary>
     /// Characters
     /// </summary>
     [InverseProperty(nameof(Character.Game))]
-    public virtual ICollection<Character> Characters { get; set; }
+    public virtual ICollection<Character> Characters { get; set; } = [];
 
     /// <summary>
     /// Rooms
     /// </summary>
     [InverseProperty(nameof(Room.Game))]
-    public virtual ICollection<Room> Rooms { get; set; }
+    public virtual ICollection<Room> Rooms { get; set; } = [];
 
     /// <summary>
-    /// Votes for game posts
+    /// Commentaries (polymorphic - loaded manually via EntityId)
     /// </summary>
-    [InverseProperty(nameof(Vote.Game))]
-    public virtual ICollection<Vote> Votes { get; set; }
-
-    /// <summary>
-    /// Commentaries
-    /// </summary>
-    [InverseProperty(nameof(Comment.Game))]
-    public virtual ICollection<Comment> Comments { get; set; }
+    [NotMapped]
+    public virtual ICollection<Comment> Comments { get; set; } = [];
 
     /// <summary>
     /// Game preview picture
     /// </summary>
     [InverseProperty(nameof(Upload.Game))]
-    public virtual ICollection<Upload> Pictures { get; set; }
+    public virtual ICollection<Upload> Pictures { get; set; } = [];
 
     /// <summary>
     /// Game authorization tokens
     /// </summary>
     [InverseProperty(nameof(Token.Game))]
-    public virtual ICollection<Token> Tokens { get; set; }
+    public virtual ICollection<Token> Tokens { get; set; } = [];
 }

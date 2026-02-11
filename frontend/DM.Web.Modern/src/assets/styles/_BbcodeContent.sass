@@ -122,12 +122,12 @@
   // Base quote styling - works for both div.quote and blockquote.bb-quote
   // Uses overlay approach: bg-element + semi-transparent blue tint
   blockquote, .quote, .bb-quote
-    +overlay-bg($highlight-overlay-blue)
     margin: $tiny 0
     padding: 2px 6px
     border-left: 10px solid $border-accent-blue
     background-color: $bg-element
     color: $text
+    +overlay-bg($highlight-overlay-blue)
 
   // Quote author - works for cite, div.quote-author, .quote-author
   blockquote cite,
@@ -230,12 +230,12 @@
 
   // Block private message (backend) - uses overlay approach
   .private-message
-    +overlay-bg($highlight-overlay-green, $border-radius)
     color: $text-on-green
     background-color: $bg-element
     padding: $small $medium
     border-radius: $border-radius
     margin: $small 0
+    +overlay-bg($highlight-overlay-green, $border-radius)
 
   .private-message-header
     font-size: $secondary-font-size
@@ -250,12 +250,12 @@
 
   // Mod block - uses overlay approach: bg-element + semi-transparent green tint
   .mod-block, .bb-mod
-    +overlay-bg($highlight-overlay-green)
     margin: $tiny 0
     padding: 2px 6px
     border-left: 10px solid $border-accent-green
     background-color: $bg-element
     color: $text-on-green
+    +overlay-bg($highlight-overlay-green)
 
   // ──────────────────────────────────────────────────────────────────────────
   // Warning Block
@@ -264,12 +264,12 @@
 
   // Warning block - uses overlay approach: bg-element + semi-transparent red tint
   .warning-block, .bb-warning
-    +overlay-bg($highlight-overlay-red)
     margin: $tiny 0
     padding: 2px 6px
     border-left: 10px solid $border-accent-red
     background-color: $bg-element
     color: $text-on-red
+    +overlay-bg($highlight-overlay-red)
 
   // ──────────────────────────────────────────────────────────────────────────
   // Tab
@@ -309,11 +309,11 @@
   // Quote with structured content (Tiptap generates .quote-author + .quote-content)
   .bb-quote
     .quote-author
-      +overlay-bg($highlight-overlay-blue)
       padding: $small $medium
       background-color: $bg-element
       border-bottom: 1px solid $border
       margin-bottom: 0
+      +overlay-bg($highlight-overlay-blue)
 
     .quote-content
       padding: $small $medium

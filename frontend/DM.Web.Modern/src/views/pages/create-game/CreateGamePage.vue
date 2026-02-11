@@ -11,8 +11,8 @@ import BBCodeEditor from "@/components/inputs/BBCodeEditor.vue";
 import SchemaSelector from "./SchemaSelector.vue";
 import TagSelector from "./TagSelector.vue";
 import AssistantSelector from "./AssistantSelector.vue";
-import gamingApi from "@/api/requests/gamingApi";
-import type { Game, CommentariesAccessMode } from "@/api/models/gaming";
+import gameApi from "@/api/requests/gameApi";
+import { CommentariesAccessMode, type Game } from "@/api/models/game";
 
 const router = useRouter();
 const { user } = storeToRefs(useUserStore());
@@ -25,7 +25,7 @@ const information = ref("");
 const hideTemper = ref(false);
 const hideDiceResult = ref(false);
 const showPrivateMessages = ref(false);
-const commentariesAccessMode = ref<CommentariesAccessMode>("Public");
+const commentariesAccessMode = ref(CommentariesAccessMode.Public);
 const disableAlignment = ref(false);
 const attributeSchemaId = ref<string | null>(null);
 const assistantLogin = ref<string | null>(null);
@@ -60,7 +60,7 @@ async function handleSubmit() {
       tagIds: selectedTags.value,
     } as unknown as Game;
 
-    const { data, error: apiError } = await gamingApi.createGame(gameData);
+    const { data, error: apiError } = await gameApi.createGame(gameData);
 
     if (apiError) {
       error.value = apiError.title || "Failed to create game";
@@ -146,7 +146,7 @@ async function handleSubmit() {
 
     <!-- Assistant -->
     <section class="form-section">
-      <block-title>Помощник мастера</block-title>
+      <block-title>Ассистент</block-title>
       <assistant-selector v-model="assistantLogin" />
     </section>
 
@@ -241,9 +241,6 @@ async function handleSubmit() {
   align-items: center
   gap: $small
   cursor: pointer
-
-  input[type="checkbox"]
-    width: auto
 
 .form-error
   padding: $small

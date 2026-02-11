@@ -3,9 +3,9 @@ using System;
 namespace DM.Web.Core.Authentication.Credentials;
 
 /// <summary>
-/// Unconditional login credentials
+/// Unconditional login credentials (for auto-login after activation)
 /// </summary>
-internal class UnconditionalCredentials : AuthCredentials
+public class UnconditionalCredentials : AuthCredentials
 {
     /// <summary>
     /// User identifier

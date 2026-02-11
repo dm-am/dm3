@@ -1,12 +1,18 @@
-<script setup lang="ts">
-import type { Game } from "@/api/models/gaming";
+﻿<script setup lang="ts">
+import type { Game } from "@/api/models/game";
 import { computed, ref } from "vue";
 
-const props = defineProps<{
-  game: Game;
-  counters: boolean;
-  alwaysShowCounters?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    game: Game;
+    counters: boolean;
+    alwaysShowCounters?: boolean;
+    prefix?: string;
+  }>(),
+  {
+    prefix: "- ",
+  },
+);
 const params = computed(() => ({ id: props.game.id }));
 const hovered = ref(false);
 const showCounters = computed(
@@ -25,11 +31,13 @@ const commentsAriaLabel = computed(
   () => `${commentsCount.value} непрочитанных комментариев`,
 );
 
-// Tooltip: [Master] | [System] | Players: X
-const playersCount = computed(() => {
-  const uniqueIds = new Set(props.game.activeCharacterUserIds ?? []);
-  return uniqueIds.size;
+// Tooltip: Master | System | Игроков: X/Y | Читателей: Z
+const playersInfo = computed(() => {
+  const current = props.game.recruitment?.playerCount ?? 0;
+  const limit = props.game.recruitment?.playerLimit;
+  return limit ? `${current}/${limit}` : `${current}`;
 });
+const readersCount = computed(() => props.game.readerUserIds?.length ?? 0);
 const gameTooltip = computed(() => {
   const parts: string[] = [];
   if (props.game.master?.login) {
@@ -38,14 +46,15 @@ const gameTooltip = computed(() => {
   if (props.game.system) {
     parts.push(props.game.system);
   }
-  parts.push(`Игроков: ${playersCount.value}`);
+  parts.push(`Игроков: ${playersInfo.value}`);
+  parts.push(`Читателей: ${readersCount.value}`);
   return parts.join(" | ");
 });
 </script>
 
 <template>
   <div class="link" @mouseenter="hovered = true" @mouseleave="hovered = false">
-    <span class="muted" aria-hidden="true">- </span>
+    <span class="muted" aria-hidden="true">{{ prefix }}</span>
     <router-link :to="{ name: 'game', params }" :title="gameTooltip">{{
       game.title
     }}</router-link>{{ " "
@@ -53,7 +62,7 @@ const gameTooltip = computed(() => {
       v-if="showCounters"
       class="counters"
       role="status"
-      :aria-label="`Счётчики: ${postsCount} постов, ${commentsCount} комментариев`"
+      :aria-label="`Счетчики: ${postsCount} постов, ${commentsCount} комментариев`"
     ><span class="muted" aria-hidden="true">(</span>
       <router-link
         :to="{ name: 'game-first-unread-post', params }"
@@ -63,7 +72,7 @@ const gameTooltip = computed(() => {
       >
       <span class="muted" aria-hidden="true">/</span>
       <router-link
-        :to="{ name: 'game-comments', params }"
+        :to="{ name: 'game-first-unread-comment', params }"
         :aria-label="commentsAriaLabel"
         :title="`Непрочитанные комментарии: ${commentsCount}`"
         >{{ commentsCount }}</router-link
@@ -81,4 +90,6 @@ const gameTooltip = computed(() => {
 
 .counters
   transition: opacity 0.15s ease
+  .muted
+    user-select: text
 </style>

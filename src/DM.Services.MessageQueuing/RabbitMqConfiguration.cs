@@ -10,22 +10,22 @@ public class RabbitMqConfiguration
     /// <summary>
     /// Broker endpoint url
     /// </summary>
-    public string Endpoint { get; set; }
+    public string Endpoint { get; set; } = string.Empty;
 
     /// <summary>
     /// Broker virtual host
     /// </summary>
-    public string VirtualHost { get; set; }
+    public string VirtualHost { get; set; } = string.Empty;
 
     /// <summary>
     /// User name
     /// </summary>
-    public string Username { get; set; }
+    public string Username { get; set; } = string.Empty;
 
     /// <summary>
     /// Password
     /// </summary>
-    public string Password { get; set; }
+    public string Password { get; set; } = string.Empty;
 
     /// <summary>
     /// Bind configuration parameters to new instance

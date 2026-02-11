@@ -10,16 +10,16 @@ namespace DM.Web.API.Services.Users;
 public interface IPasswordResetApiService
 {
     /// <summary>
-    /// Reset user password
+    /// Reset user password (sends reset token via email).
+    /// Always completes silently to prevent user enumeration.
     /// </summary>
-    /// <param name="resetPassword"></param>
-    /// <returns></returns>
-    Task<Envelope<User>> Reset(ResetPassword resetPassword);
+    /// <param name="resetPassword">Login and email for verification</param>
+    Task Reset(ResetPassword resetPassword);
 
     /// <summary>
-    /// Change user password
+    /// Change user password using old password or reset token
     /// </summary>
-    /// <param name="changePassword"></param>
-    /// <returns></returns>
+    /// <param name="changePassword">Password change request with credentials</param>
+    /// <returns>Updated user wrapped in envelope</returns>
     Task<Envelope<User>> Change(ChangePassword changePassword);
 }

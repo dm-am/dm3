@@ -16,15 +16,15 @@ public class UpdateConversation
     /// <summary>
     /// New title (null to keep current)
     /// </summary>
-    public string Title { get; set; }
+    public string? Title { get; set; }
 
     /// <summary>
     /// User IDs to add as participants
     /// </summary>
-    public IEnumerable<Guid> AddParticipants { get; set; }
+    public IEnumerable<Guid>? AddParticipants { get; set; }
 
     /// <summary>
     /// User IDs to remove from participants
     /// </summary>
-    public IEnumerable<Guid> RemoveParticipants { get; set; }
+    public IEnumerable<Guid>? RemoveParticipants { get; set; }
 }

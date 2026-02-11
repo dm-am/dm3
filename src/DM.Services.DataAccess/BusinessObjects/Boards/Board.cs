@@ -23,12 +23,12 @@ public class Board
     /// <summary>
     /// Board title
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Short description
     /// </summary>
-    public string Description { get; set; }
+    public string? Description { get; set; }
 
     /// <summary>
     /// Display order number
@@ -79,23 +79,23 @@ public class Board
     /// Board moderators
     /// </summary>
     [InverseProperty(nameof(BoardModerator.Board))]
-    public virtual ICollection<BoardModerator> Moderators { get; set; }
+    public virtual ICollection<BoardModerator> Moderators { get; set; } = [];
 
     /// <summary>
     /// Board topics
     /// </summary>
-    [InverseProperty(nameof(ForumTopic.Board))]
-    public virtual ICollection<ForumTopic> Topics { get; set; }
+    [InverseProperty(nameof(Topic.Board))]
+    public virtual ICollection<Topic> Topics { get; set; } = [];
 
     /// <summary>
     /// Last comment (navigation)
     /// </summary>
     [ForeignKey(nameof(LastCommentId))]
-    public virtual Comment LastComment { get; set; }
+    public virtual Comment? LastComment { get; set; }
 
     /// <summary>
     /// Last comment author (navigation)
     /// </summary>
     [ForeignKey(nameof(LastCommentAuthorId))]
-    public virtual User LastCommentAuthor { get; set; }
+    public virtual User? LastCommentAuthor { get; set; }
 }

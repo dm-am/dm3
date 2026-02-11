@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Services.Authentication.Dto;
 using DM.Services.DataAccess.BusinessObjects.Users;
@@ -18,21 +19,28 @@ internal interface IAuthenticationRepository
     /// </summary>
     /// <param name="login">User login</param>
     /// <returns>Pair of operation success flag and the user data. If no user is found, the user will be null</returns>
-    Task<(bool Success, AuthenticatedUser User)> TryFindUser(string login);
+    Task<(bool Success, AuthenticatedUser? User)> TryFindUser(string login);
+
+    /// <summary>
+    /// Search for user by its email
+    /// </summary>
+    /// <param name="email">User email</param>
+    /// <returns>Pair of operation success flag and the user data. If no user is found, the user will be null</returns>
+    Task<(bool Success, AuthenticatedUser? User)> TryFindUserByEmail(string email);
 
     /// <summary>
     /// Search for user by its id
     /// </summary>
     /// <param name="userId">User id</param>
-    /// <returns>User data</returns>
-    Task<AuthenticatedUser> FindUser(Guid userId);
+    /// <returns>User data, or null if not found</returns>
+    Task<AuthenticatedUser?> FindUser(Guid userId);
 
     /// <summary>
     /// Search for authentication session by its id
     /// </summary>
     /// <param name="sessionId">Authentication session id</param>
-    /// <returns>Session</returns>
-    Task<Session> FindUserSession(Guid sessionId);
+    /// <returns>Session, or null if not found</returns>
+    Task<Session?> FindUserSession(Guid sessionId);
 
     /// <summary>
     /// Search for user settings by user id
@@ -80,4 +88,18 @@ internal interface IAuthenticationRepository
     /// <param name="userUpdate"></param>
     /// <returns></returns>
     Task UpdateActivity(IUpdateBuilder<User> userUpdate);
+
+    /// <summary>
+    /// Get all active sessions for user
+    /// </summary>
+    /// <param name="userId">User identifier</param>
+    /// <returns>List of active sessions</returns>
+    Task<IReadOnlyCollection<Session>> GetUserSessions(Guid userId);
+
+    /// <summary>
+    /// Check if email exists in PendingRegistrations (registration not completed)
+    /// </summary>
+    /// <param name="email">User email</param>
+    /// <returns>True if pending registration exists</returns>
+    Task<bool> IsPendingRegistration(string email);
 }

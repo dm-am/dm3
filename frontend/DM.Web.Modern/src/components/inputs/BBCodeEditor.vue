@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { useEditor, EditorContent } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
@@ -981,8 +981,8 @@ defineExpose({
         :aria-pressed="mode === 'wysiwyg' && editor?.isActive('underline')"
         :disabled="disabled"
         @click="toggleUnderline"
-        title="Подчёркнутый (Ctrl+U)"
-        aria-label="Подчёркнутый"
+        title="Подчеркнутый (Ctrl+U)"
+        aria-label="Подчеркнутый"
       >
         <u>u</u>
       </button>
@@ -994,8 +994,8 @@ defineExpose({
         :aria-pressed="mode === 'wysiwyg' && editor?.isActive('strike')"
         :disabled="disabled"
         @click="toggleStrike"
-        title="Зачёркнутый"
-        aria-label="Зачёркнутый"
+        title="Зачеркнутый"
+        aria-label="Зачеркнутый"
       >
         <s>strike</s>
       </button>
@@ -1305,12 +1305,12 @@ defineExpose({
                   <kbd>Ctrl+I</kbd>
                 </div>
                 <div class="help-item">
-                  <code>[u]</code>текст<code>[/u]</code> — <u>подчёркнутый</u>
+                  <code>[u]</code>текст<code>[/u]</code> — <u>подчеркнутый</u>
                   <kbd>Ctrl+U</kbd>
                 </div>
                 <div class="help-item">
                   <code>[strike]</code>текст<code>[/strike]</code> —
-                  <s>зачёркнутый</s>
+                  <s>зачеркнутый</s>
                 </div>
               </section>
 

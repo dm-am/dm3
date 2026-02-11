@@ -5,7 +5,7 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Services.DataAccess;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Boards;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Services.Forum.Dto.Internal;
 using Microsoft.EntityFrameworkCore;
@@ -28,17 +28,17 @@ internal class CommentaryDeletingRepository : ICommentaryDeletingRepository
     }
 
     /// <inheritdoc />
-    public Task<CommentToDelete> GetForDelete(Guid commentId)
+    public Task<CommentToDelete?> GetForDelete(Guid commentId)
     {
         return _dbContext.Comments
             .TagWith("DM.Forum.CommentToDelete")
             .Where(c => !c.IsRemoved && c.CommentId == commentId)
             .ProjectTo<CommentToDelete>(_mapper.ConfigurationProvider)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync()!;
     }
 
     /// <inheritdoc />
-    public Task Delete(IUpdateBuilder<Comment> update, IUpdateBuilder<ForumTopic> topicUpdate)
+    public Task Delete(IUpdateBuilder<Comment> update, IUpdateBuilder<TopicDal> topicUpdate)
     {
         update.AttachTo(_dbContext);
         topicUpdate.AttachTo(_dbContext);

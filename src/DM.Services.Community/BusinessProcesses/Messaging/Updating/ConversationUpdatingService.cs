@@ -59,8 +59,10 @@ internal class ConversationUpdatingService : IConversationUpdatingService
 
         _intentionManager.ThrowIfForbidden(ConversationIntention.UpdateConversation, conversation);
 
+        #pragma warning disable CS8603 // Possible null reference return - false positive with MaybeField fluent chain
         var updateBuilder = _updateBuilderFactory.Create<DbConversation>(updateConversation.ConversationId)
             .MaybeField(c => c.Title, updateConversation.Title?.Trim());
+        #pragma warning restore CS8603
 
         var addParticipants = updateConversation.AddParticipants?
             .Except(conversation.Participants.Select(p => p.UserId))

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using DM.Services.Core.Dto.Enums;
 using DM.Services.Core.Implementation;
 using DbConversation = DM.Services.DataAccess.BusinessObjects.Messaging.Conversation;
 using DbConversationLink = DM.Services.DataAccess.BusinessObjects.Messaging.UserConversationLink;
@@ -20,17 +21,21 @@ internal class ConversationFactory : IConversationFactory
     }
 
     /// <inheritdoc />
-    public (DbConversation conversation, IEnumerable<DbConversationLink>) CreateVisavi(Guid userId, Guid visaviId)
+    public (DbConversation conversation, IEnumerable<DbConversationLink>) CreateDirect(Guid userId, Guid otherUserId)
     {
+        if (userId == otherUserId)
+        {
+            throw new ArgumentException("Cannot create a direct conversation with yourself", nameof(otherUserId));
+        }
+
         var conversationId = _guidFactory.Create();
         var conversation = new DbConversation
         {
             ConversationId = conversationId,
             LastMessageId = null,
-            Visavi = true
+            Type = ConversationType.Direct
         };
-        var links = new[] {userId, visaviId}
-            .Distinct()
+        var links = new[] {userId, otherUserId}
             .Select(id => new DbConversationLink
             {
                 UserConversationLinkId = _guidFactory.Create(),
@@ -50,7 +55,7 @@ internal class ConversationFactory : IConversationFactory
         {
             ConversationId = conversationId,
             LastMessageId = null,
-            Visavi = false,
+            Type = ConversationType.Group,
             Title = title
         };
         var links = participantIds

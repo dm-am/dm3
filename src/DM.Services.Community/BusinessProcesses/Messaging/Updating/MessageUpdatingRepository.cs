@@ -13,27 +13,27 @@ namespace DM.Services.Community.BusinessProcesses.Messaging.Updating;
 /// <inheritdoc />
 internal class MessageUpdatingRepository : IMessageUpdatingRepository
 {
-    private readonly DmDbContext dbContext;
-    private readonly IMapper mapper;
+    private readonly DmDbContext _dbContext;
+    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public MessageUpdatingRepository(
         DmDbContext dbContext,
         IMapper mapper)
     {
-        this.dbContext = dbContext;
-        this.mapper = mapper;
+        _dbContext = dbContext;
+        _mapper = mapper;
     }
 
     /// <inheritdoc />
     public async Task<Message> Update(IUpdateBuilder<MessageDal> update)
     {
-        var messageId = update.AttachTo(dbContext);
-        await dbContext.SaveChangesAsync();
-        return await dbContext.Messages
+        var messageId = update.AttachTo(_dbContext);
+        await _dbContext.SaveChangesAsync();
+        return await _dbContext.Messages
             .TagWith("DM.Community.UpdatedMessage")
             .Where(m => m.MessageId == messageId)
-            .ProjectTo<Message>(mapper.ConfigurationProvider)
+            .ProjectTo<Message>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using DM.Services.Core.Dto;
+using DM.Services.Core.Dto.Enums;
 
 namespace DM.Services.Common.Dto;
 
@@ -11,7 +12,10 @@ public class Comment : ILikable
 {
     /// <inheritdoc />
     public Guid Id { get; set; }
-        
+
+    /// <inheritdoc />
+    public LikeEntityType LikeEntityType => LikeEntityType.Comment;
+
     /// <summary>
     /// Parent entity identifier
     /// </summary>
@@ -30,13 +34,13 @@ public class Comment : ILikable
     /// <summary>
     /// Text
     /// </summary>
-    public string Text { get; set; }
+    public string Text { get; set; } = null!;
 
     /// <summary>
     /// Author
     /// </summary>
-    public GeneralUser Author { get; set; }
+    public GeneralUser Author { get; set; } = null!;
 
     /// <inheritdoc />
-    public IEnumerable<GeneralUser> Likes { get; set; }
+    public IEnumerable<GeneralUser> Likes { get; set; } = [];
 }

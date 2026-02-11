@@ -25,10 +25,7 @@ public static class ModuleRegistrationExtensions
     public static ContainerBuilder RegisterModuleOnce<TModule>(this ContainerBuilder builder)
         where TModule : IModule, new()
     {
-        var registeredModules = builder.Properties.TryGetValue(RegisteredModulesKey, out var modulesWrapper) &&
-                                modulesWrapper is HashSet<Type> modules
-            ? modules
-            : new HashSet<Type>();
+        var registeredModules = GetRegisteredModules(builder);
 
         if (registeredModules.Contains(typeof(TModule)))
         {
@@ -39,6 +36,37 @@ public static class ModuleRegistrationExtensions
         registeredModules.Add(typeof(TModule));
         builder.Properties[RegisteredModulesKey] = registeredModules;
         return builder;
+    }
+
+    /// <summary>
+    /// Register module instance and mark it as registered to prevent duplicate registration
+    /// </summary>
+    /// <param name="builder"></param>
+    /// <param name="module">Module instance to register</param>
+    /// <typeparam name="TModule"></typeparam>
+    /// <returns></returns>
+    public static ContainerBuilder RegisterModuleOnce<TModule>(this ContainerBuilder builder, TModule module)
+        where TModule : IModule
+    {
+        var registeredModules = GetRegisteredModules(builder);
+
+        if (registeredModules.Contains(typeof(TModule)))
+        {
+            return builder;
+        }
+
+        builder.RegisterModule(module);
+        registeredModules.Add(typeof(TModule));
+        builder.Properties[RegisteredModulesKey] = registeredModules;
+        return builder;
+    }
+
+    private static HashSet<Type> GetRegisteredModules(ContainerBuilder builder)
+    {
+        return builder.Properties.TryGetValue(RegisteredModulesKey, out var modulesWrapper) &&
+               modulesWrapper is HashSet<Type> modules
+            ? modules
+            : new HashSet<Type>();
     }
 
     /// <summary>

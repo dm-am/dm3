@@ -30,12 +30,12 @@ public class AttributeSchema : IRemovable
     /// <summary>
     /// Display name
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Attribute specifications
     /// </summary>
-    public IEnumerable<AttributeSpecification> Specifications { get; set; }
+    public IEnumerable<AttributeSpecification> Specifications { get; set; } = [];
 
     /// <inheritdoc />
     public bool IsRemoved { get; set; }

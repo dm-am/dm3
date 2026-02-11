@@ -1,4 +1,5 @@
 using Autofac;
+using DM.Services.Mail.Rendering.Assets;
 using DM.Services.Mail.Rendering.Rendering;
 using Microsoft.AspNetCore.Components.Web;
 
@@ -15,6 +16,10 @@ public class RenderingModule : Module
             .SingleInstance();
 
         builder.RegisterType<TemplateRenderer>()
+            .AsImplementedInterfaces()
+            .SingleInstance();
+
+        builder.RegisterType<EmailAssetsProvider>()
             .AsImplementedInterfaces()
             .SingleInstance();
 

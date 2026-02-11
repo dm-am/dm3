@@ -25,7 +25,7 @@ internal class BoardIntentionResolver : IIntentionResolver<ForumIntention, Dto.O
         {
             case ForumIntention.CreateTopic when user.IsAuthenticated:
                 var userPolicy = _accessPolicyConverter.Convert(user.Role);
-                return (target.CreateTopicPolicy & userPolicy) != BoardAccessPolicy.NoOne;
+                return (target.CreateTopicPolicy & userPolicy) != BoardAccessPolicy.None;
             case ForumIntention.AdministrateTopics when user.IsAuthenticated:
                 return user.Role >= UserRole.Admin ||
                        target.ModeratorIds.Contains(user.UserId);

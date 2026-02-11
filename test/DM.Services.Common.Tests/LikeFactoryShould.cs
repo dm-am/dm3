@@ -1,5 +1,6 @@
 using System;
 using DM.Services.Common.BusinessProcesses.Likes;
+using DM.Services.Core.Dto.Enums;
 using DM.Services.Core.Implementation;
 using DM.Services.DataAccess.BusinessObjects.Common;
 using DM.Tests.Core;
@@ -29,13 +30,14 @@ public class LikeFactoryShould : UnitTestBase
         var likeId = Guid.NewGuid();
         idSetup.Returns(likeId);
 
-        var actual = factory.Create(entityId, userId);
+        var actual = factory.Create(entityId, LikeEntityType.Comment, userId);
 
         actual.Should().BeEquivalentTo(new Like
         {
             LikeId = likeId,
             UserId = userId,
-            EntityId = entityId
+            EntityId = entityId,
+            EntityType = LikeEntityType.Comment
         });
     }
 }

@@ -1,9 +1,8 @@
 <template>
   <menu-block token="ModerationGames">
     <template #title>Требуют премодерации</template>
-    <the-loader v-if="!store.moderationGames" />
-    <template v-else-if="store.moderationGames.length === 0">
-      <secondary-text>Пока тут ничего нет...</secondary-text>
+    <template v-if="!store.moderationGames || store.moderationGames.length === 0">
+      <secondary-text>У вас нет курируемых игр</secondary-text>
     </template>
     <game-menu-link
       v-else
@@ -29,7 +28,6 @@
 
 <script setup lang="ts">
 import MenuBlock from "@/views/layout/MenuBlock.vue";
-import TheLoader from "@/components/TheLoader.vue";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
 import GameMenuLink from "@/views/layout/menu/GameMenuLink.vue";
 import { useGamesStore } from "@/stores/games";

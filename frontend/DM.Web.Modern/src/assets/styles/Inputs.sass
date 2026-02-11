@@ -26,32 +26,60 @@ $input-padding: ($minor + 1px) $small
   &:disabled
     background-color: $input-bg-disabled
 
-/// Standard button styling - dashed border, bold text
+/// Legacy button mixin - use primary-button() for new code
 @mixin button()
-  padding: $minor $small
-  border: 1px dashed
-  font-family: "PT Sans", sans-serif
+  +primary-button
+
+/// Legacy interactive button - use secondary-button() for new code
+@mixin interactive-button()
+  +secondary-button
+
+/// Primary button - main action button (solid background)
+@mixin primary-button()
+  padding: $button-padding
   font-size: $font-size
-  font-weight: bold
+  font-family: "PT Sans", sans-serif
+  font-weight: $button-font-weight
   cursor: pointer
   transition: all 0.15s
-  background-color: $button-bg
-  color: $button-text
-  border-color: $button-border
+  background-color: $link
+  color: #fff
+  border: none
+  border-radius: $button-border-radius
 
-  &:hover
-    background-color: $button-bg-hover
-    color: $button-text-hover
-    border-color: $button-border-hover
+  &:hover:not(:disabled)
+    background-color: $link-hover
 
   &:focus
     outline: none
-    border-color: $button-border-hover
 
   &:disabled
-    background-color: $button-bg-disabled
-    color: $button-text-disabled
-    border-color: $button-border-disabled
+    opacity: 0.5
+    cursor: not-allowed
+
+/// Secondary button - outline style
+@mixin secondary-button()
+  padding: $button-padding
+  font-size: $font-size
+  font-family: "PT Sans", sans-serif
+  font-weight: $button-font-weight
+  cursor: pointer
+  background: transparent
+  color: $link
+  border: 1px solid $link
+  border-radius: $button-border-radius
+  transition: all 0.15s
+
+  &:hover:not(:disabled)
+    color: $link-hover
+    border-color: $link-hover
+    background-color: $hover-overlay
+
+  &:focus
+    outline: none
+
+  &:disabled
+    opacity: 0.5
     cursor: not-allowed
 
 /// Badge/tag styling - small label with background
@@ -63,6 +91,39 @@ $input-padding: ($minor + 1px) $small
   background-color: $button-bg
   color: $button-text
 
+/// Custom checkbox styling
+@mixin checkbox()
+  appearance: none
+  width: 16px
+  height: 16px
+  flex-shrink: 0
+  cursor: pointer
+  background-color: $overlay-subtle
+  border: 1px solid $border
+  border-radius: 2px
+  position: relative
+
+  &:checked
+    background-color: $button-bg
+
+    &::after
+      content: ""
+      position: absolute
+      left: 50%
+      top: 40%
+      width: 4px
+      height: 8px
+      border: solid $text
+      border-width: 0 2px 2px 0
+      transform: translate(-50%, -50%) rotate(45deg)
+
+  &:disabled
+    cursor: not-allowed
+    opacity: 0.5
+
 input,
 textarea
   +input()
+
+input[type="checkbox"]
+  +checkbox()

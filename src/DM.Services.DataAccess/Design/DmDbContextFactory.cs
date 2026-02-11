@@ -11,10 +11,9 @@ internal class DmDbContextFactory : IDesignTimeDbContextFactory<DmDbContext>
     public DmDbContext CreateDbContext(string[] args)
     {
         var connectionString = Environment.GetEnvironmentVariable("DM_ConnectionStrings__Rdb") ??
-                               throw new ArgumentNullException();
+                               "Host=localhost;Database=dm3_dev;Username=postgres;Password=postgres";
         return new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
             .UseNpgsql(connectionString)
-            .UseOpenIddict()
             .Options);
     }
 }

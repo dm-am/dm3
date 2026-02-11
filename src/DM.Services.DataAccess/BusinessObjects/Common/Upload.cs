@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.DataContracts;
 using DM.Services.DataAccess.BusinessObjects.Games;
 using DM.Services.DataAccess.BusinessObjects.Games.Characters;
@@ -27,6 +28,11 @@ public class Upload : IRemovable
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
+    /// Confirmation moment (UTC) - when file was uploaded and confirmed
+    /// </summary>
+    public DateTimeOffset? ConfirmedUtc { get; set; }
+
+    /// <summary>
     /// Linked entity identifier
     /// </summary>
     public Guid? EntityId { get; set; }
@@ -37,21 +43,60 @@ public class Upload : IRemovable
     public Guid UserId { get; set; }
 
     /// <summary>
+    /// Upload type/purpose
+    /// </summary>
+    public UploadType Type { get; set; }
+
+    /// <summary>
+    /// Upload processing status
+    /// </summary>
+    public UploadStatus Status { get; set; }
+
+    /// <summary>
     /// Flag of file source: original or modified
     /// </summary>
     public bool Original { get; set; }
 
     /// <summary>
-    /// Path to download or view the file
+    /// MIME content type
     /// </summary>
-    [MaxLength(200)]
-    public string FilePath { get; set; }
+    [MaxLength(100)]
+    public string ContentType { get; set; } = null!;
+
+    /// <summary>
+    /// File size in bytes
+    /// </summary>
+    public long SizeBytes { get; set; }
+
+    /// <summary>
+    /// S3 object key (for presigned URL workflow)
+    /// </summary>
+    [MaxLength(500)]
+    public string ObjectKey { get; set; } = null!;
+
+    /// <summary>
+    /// Path to download or view the file (public URL)
+    /// </summary>
+    [MaxLength(500)]
+    public string? FilePath { get; set; }
+
+    /// <summary>
+    /// Medium size file path (for images)
+    /// </summary>
+    [MaxLength(500)]
+    public string? MediumFilePath { get; set; }
+
+    /// <summary>
+    /// Small/thumbnail file path (for images)
+    /// </summary>
+    [MaxLength(500)]
+    public string? SmallFilePath { get; set; }
 
     /// <summary>
     /// Display name for the file
     /// </summary>
-    [MaxLength(100)]
-    public string FileName { get; set; }
+    [MaxLength(255)]
+    public string? FileName { get; set; }
 
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
@@ -60,29 +105,29 @@ public class Upload : IRemovable
     /// Owner
     /// </summary>
     [ForeignKey(nameof(UserId))]
-    public virtual User Owner { get; set; }
+    public virtual User Owner { get; set; } = null!;
 
     /// <summary>
     /// User profile (for user profile picture)
     /// </summary>
     [ForeignKey(nameof(EntityId))]
-    public virtual User UserProfile { get; set; }
+    public virtual User? UserProfile { get; set; }
 
     /// <summary>
     /// Game (for game preview picture)
     /// </summary>
     [ForeignKey(nameof(EntityId))]
-    public virtual Game Game { get; set; }
+    public virtual Game? Game { get; set; }
 
     /// <summary>
     /// Character (for character portrait)
     /// </summary>
     [ForeignKey(nameof(EntityId))]
-    public virtual Character Character { get; set; }
+    public virtual Character? Character { get; set; }
 
     /// <summary>
     /// Post (for post attachment)
     /// </summary>
     [ForeignKey(nameof(EntityId))]
-    public virtual Post Post { get; set; }
+    public virtual Post? Post { get; set; }
 }

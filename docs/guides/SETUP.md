@@ -1,169 +1,262 @@
 # Установка и запуск DM3
 
-> **Обновлено:** 2026-01-27
-
----
-
 ## Требования
 
 - **Docker Desktop** (с WSL2 на Windows)
-- **Node.js 20+** и **Yarn** (для frontend)
+- **Node.js 20+** и **npm**
 - **Git**
-
-Проверка:
-```bash
-docker --version
-node --version
-yarn --version
-```
 
 ---
 
-## Быстрый старт (5 минут)
+## Быстрый старт
 
-### 1. Запуск инфраструктуры
+```bash
+# Windows (PowerShell)
+.\scripts\dm.ps1 start                        # Запуск всех сервисов
+.\scripts\dm.ps1 seed                         # Тестовые данные (после запуска API)
+
+# Linux/Mac
+./scripts/dm.sh start
+./scripts/dm.sh seed
+
+# Frontend (отдельно)
+cd frontend/DM.Web.Modern && npm install && npm run dev
+```
+
+### Альтернатива (ручной запуск)
 
 ```bash
 cd docker
-docker-compose up -d
+cp .env.example .env                          # Создать файл с секретами
+docker compose up -d                          # Инфраструктура
+
+cd frontend/DM.Web.Modern && npm install && npm run dev  # Frontend
 ```
 
-Запустится: PostgreSQL, MongoDB, RabbitMQ, MinIO, OpenSearch, MailHog, Jaeger, Backend API.
-
-Проверка: `docker ps` — должно быть ~10 контейнеров.
-
-### 2. Настройка MinIO
-
-1. Откройте http://localhost:9001
-2. Войдите: `minio` / `miniokey`
-3. Создайте bucket `dm-uploads`
-4. Access Policy → `Public`
-
-### 3. Запуск Frontend
-
-```bash
-cd frontend/DM.Web.Modern
-yarn install
-yarn dev
-```
-
-Frontend: http://localhost:5173
-
-### 4. Создание тестовых аккаунтов
-
-1. Откройте http://localhost:5173/dev/accounts
-2. Нажмите "Создать/обновить тестовые аккаунты"
+- **Frontend:** http://localhost:5173
+- **API/Swagger:** http://localhost:5000
+- **Health:** http://localhost:5000/_health (liveness), http://localhost:5000/_ready (readiness)
+- **MinIO:** http://localhost:9001 (credentials из `docker/.env`)  — создать bucket `dm-uploads` с Access Policy = `Public`
 
 ---
 
 ## Порты сервисов
 
-| Сервис | URL | Credentials |
-|--------|-----|-------------|
-| **Frontend** | http://localhost:5173 | — |
-| **API** | http://localhost:5051 | — |
-| **Swagger** | http://localhost:5051/swagger | — |
-| **PostgreSQL** | localhost:5432 | postgres/admin |
-| **MongoDB** | localhost:27017 | — |
-| **RabbitMQ** | http://localhost:15672 | guest/guest |
-| **MinIO** | http://localhost:9001 | minio/miniokey |
-| **MailHog** | http://localhost:5025 | — |
-| **Grafana** | http://localhost:3000 | admin/admin |
+**Источник истины:** [`docker/docker-compose.yml`](../../docker/docker-compose.yml)
+
+| Сервис | Порт | Credentials |
+|--------|------|-------------|
+| Frontend (Vite) | 5173 | — |
+| API (Swagger) | 5000 | — |
+| Search Consumer | 5001 | — |
+| Notification Consumer | 5002 | — |
+| Email Consumer | 5003 | — |
+| PostgreSQL | 5432 | из `docker/.env` |
+| MongoDB | 27017 | — |
+| RabbitMQ | 5672, 15672 | из `docker/.env` |
+| MinIO | 9000, 9001 | из `docker/.env` |
+| MailHog | 1025, 8025 | — |
+| OpenSearch | 9200, 5601 | — |
+| Jaeger | 16686 | — |
+| Prometheus | 9090 | — |
+| Grafana | 3000 | из `docker/.env` |
+
+**Credentials:** Все пароли в `docker/.env` (создать из `docker/.env.example`).
+
+**Все порты:** `docker ps --format "table {{.Names}}\t{{.Ports}}"`
 
 ---
 
-## Тестовые аккаунты
+## Тестовые данные
 
-| Логин | Пароль | Роль |
-|-------|--------|------|
-| Rayzen | `Test123!` | SeniorModerator |
-| Akkarin | `Test123!` | Moderator |
-| Alice | `Test123!` | RegularUser |
-| Bob | `Test123!` | RegularUser |
+### Справочные данные (автоматически)
+
+При запуске API EF Core применяет миграции, которые создают:
+- **Доски форума** — 11 разделов
+- **Теги игр** — 57 тегов в 3 группах
+
+### Тестовые пользователи
+
+```bash
+.\scripts\dm.ps1 seed   # Windows
+./scripts/dm.sh seed    # Linux/Mac
+```
+
+**Требования:** API запущен (порт 5000).
+
+Скрипт вызывает `POST /v1/moderation/seed` (доступен только в Development).
+
+**Тестовые аккаунты (пароль: `Test123!`):**
+
+| Роль | Логин | Email |
+|------|-------|-------|
+| Admin | `TestAdmin` | admin@test.local |
+| SeniorModerator | `TestSeniorMod` | seniormod@test.local |
+| Moderator | `TestModerator` | mod@test.local |
+| Mentor | `TestMentor` | mentor@test.local |
+| RegularUser | `TestUser` | user@test.local |
+| RegularUser | `Ab` | ab@test.local |
+| RegularUser | `LongestLoginPossible` | longest@test.local |
+| RegularUser | `Player_One` | player1@test.local |
+| RegularUser | `Player-Two` | player2@test.local |
+| RegularUser (honorary) | `TestHonorary` | honorary@test.local |
+
+**Pending Registrations (для тестирования активации):**
+
+| Email | Назначение |
+|-------|------------|
+| inactive@test.local | Тестирование flow "регистрация не завершена" |
+
+Все пользователи начинают с 0 постов (статус "новичок").
+
+### Ручная регистрация
+
+1. http://localhost:5173 → Регистрация
+2. MailHog: http://localhost:8025 (письмо активации)
+3. Смена роли: http://localhost:5173/dev/accounts
 
 ---
 
 ## Команды
 
-### Docker
+### CLI-скрипты (рекомендуется)
 
 ```bash
-docker ps                           # Статус
-docker logs dm-api --tail 50 -f     # Логи API
-docker restart dm-api               # Перезапуск
-cd docker && docker-compose down    # Остановка
+# Windows (PowerShell)
+.\scripts\dm.ps1 start    # Запуск всех сервисов
+.\scripts\dm.ps1 stop     # Остановка
+.\scripts\dm.ps1 reset    # Сброс БД и перезапуск
+.\scripts\dm.ps1 seed     # Тестовые данные
+.\scripts\dm.ps1 status   # Статус сервисов
+.\scripts\dm.ps1 logs     # Логи (или logs dm-api)
+
+# Linux/Mac
+./scripts/dm.sh start
+./scripts/dm.sh stop
+./scripts/dm.sh reset
+./scripts/dm.sh seed
+./scripts/dm.sh status
+./scripts/dm.sh logs
+```
+
+### Docker (ручные команды)
+
+```bash
+docker compose up -d --build          # Запуск с пересборкой
+docker compose down                   # Остановка
+docker logs dm-api --tail 50 -f       # Логи API
+docker exec -it dm-api /bin/sh        # Shell в контейнере
 ```
 
 ### Frontend
 
 ```bash
 cd frontend/DM.Web.Modern
-yarn dev           # Dev server
-yarn build         # Production
-yarn test:unit     # Тесты
-yarn lint          # Линтинг
+npm run dev           # Dev server
+npm run build         # Production
+npm run test:unit     # Тесты
 ```
 
 ### Backend (локальная разработка)
 
 ```bash
 docker stop dm-api
-dotnet run --project src/DM.Web.API --urls "http://localhost:5051"
+dotnet run --project src/DM.Web.API --urls "http://localhost:5000"
 ```
 
 ### Миграции
 
 ```bash
-dotnet ef migrations add YYYYMMDD_Name -p src/DM.Services.DataAccess
-dotnet ef database update -p src/DM.Services.DataAccess
+dotnet ef migrations add YYYYMMDD_Name -p src/DM.Services.DataAccess -s src/DM.Web.API
+dotnet ef database update -p src/DM.Services.DataAccess -s src/DM.Web.API
 ```
 
 ---
 
 ## Конфигурация
 
-### Frontend (.env.local)
+### Файлы конфигурации
+
+| Файл | Назначение |
+|------|------------|
+| [`docker/.env`](../../docker/.env.example) | Секреты Docker (пароли БД, MinIO, RabbitMQ) |
+| [`src/DM.Web.API/appsettings.json`](../../src/DM.Web.API/appsettings.json) | Главный конфиг API (сессии, пароли, токены, CDN) |
+| [`frontend/DM.Web.Modern/.env.local`](../../frontend/DM.Web.Modern/) | Frontend (API URL) |
+
+### Consumers (наследуют от API через docker-compose)
+
+| Файл | Назначение |
+|------|------------|
+| [`src/DM.Services.Mail.Sender.Consumer/appsettings.json`](../../src/DM.Services.Mail.Sender.Consumer/appsettings.json) | Email: SMTP настройки |
+| [`src/DM.Services.Search.Consumer/appsettings.json`](../../src/DM.Services.Search.Consumer/appsettings.json) | Search: OpenSearch подключение |
+| [`src/DM.Services.Notifications.Consumer/appsettings.json`](../../src/DM.Services.Notifications.Consumer/appsettings.json) | Notifications: MongoDB, RabbitMQ |
+
+### Основные секции appsettings.json
+
+| Секция | Что настраивает | См. документацию |
+|--------|-----------------|------------------|
+| `AuthenticationConfiguration` | Сессии (1 год), throttling, lockout | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
+| `PasswordPolicyConfiguration` | Требования к паролям (8+ символов) | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
+| `TokenConfiguration` | Срок жизни токенов (активация, сброс пароля) | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
+| `CdnConfiguration` | MinIO/S3 для загрузки файлов | — |
+| `MirrorConfiguration` | Зеркала (dm.am, ru.l.dm.am) | [MIRRORING.md](./MIRRORING.md) |
+
+### Frontend
 
 ```bash
-VITE_API_HOST=http://localhost:5051
+# frontend/DM.Web.Modern/.env.local
+VITE_API_HOST=http://localhost:5000
 ```
 
-### Backend
+### Docker
 
-Connection strings настроены для Docker по умолчанию. Переопределение:
-- `appsettings.Development.json`
-- Environment: `ConnectionStrings__Rdb=...`
+Все секреты — в `docker/.env` (создать из `.env.example`):
+```bash
+POSTGRES_PASSWORD=...
+RABBITMQ_DEFAULT_PASS=...
+MINIO_ROOT_PASSWORD=...
+```
 
 ---
 
 ## Частые проблемы
 
-### Порт занят
-
-```bash
-# Windows
-taskkill //F //IM node.exe
-
-# Linux/Mac
-pkill -f node
-```
-
-### Frontend не видит API
-
-Проверьте `.env.local`: `VITE_API_HOST=http://localhost:5051`
-
-### Изображения не загружаются
-
-Проверьте MinIO bucket `dm-uploads` и Access Policy = `Public`.
+| Проблема | Решение |
+|----------|---------|
+| Порт занят | `taskkill //F //IM node.exe` (Windows) |
+| Frontend не видит API | Проверить `.env.local`: `VITE_API_HOST=http://localhost:5000` |
+| Изображения не загружаются | MinIO bucket `dm-uploads` с Access Policy = `Public` |
+| Seed: письма не доходят | Используй `node scripts/seed.js` без `--with-email` |
+| Seed: "API not available" | Запусти API: `dotnet run --project src/DM.Web.API` |
+| Seed: "PostgreSQL not available" | Запусти: `docker compose up -d dm-pg` |
+| Пользователи не в "Активных" | Seed обновляет `LastActivityUtc`, перезапусти seed |
 
 ---
 
-## Preview режим (для показа)
+## Preview режим
 
 ```bash
 cd docker
-docker-compose -f docker-compose.yml -f docker-compose.preview.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.preview.yml up -d --build
 ```
 
-URL: http://localhost:80
-Basic Auth: `preview` / `dm2026preview`
+URL: http://localhost:80 (Basic Auth: `preview` / `dm2026preview`)
+
+---
+
+## Ссылки
+
+- [README](../README.md)
+- [Архитектура](../architecture/OVERVIEW.md)
+- [Тестирование](./TESTING.md)
+- [Деплоймент](./DEPLOYMENT.md)
+- [API Reference](../api/REFERENCE.md)
+
+---
+
+## Принципы документации
+
+
+- **Минимум дублирования** — ссылки вместо копирования
+- **Код > документация** — паттерны смотреть в коде
+- **Только необходимое** — то, что нельзя узнать из кода

@@ -27,9 +27,9 @@ public interface IPollApiService
     /// <summary>
     /// Create new poll
     /// </summary>
-    /// <param name="poll"></param>
+    /// <param name="request">Poll creation request</param>
     /// <returns></returns>
-    Task<Envelope<Poll>> Create(Poll poll);
+    Task<Envelope<Poll>> Create(CreatePollRequest request);
 
     /// <summary>
     /// Vote for the poll option
@@ -50,9 +50,9 @@ public interface IPollApiService
     /// Update existing poll
     /// </summary>
     /// <param name="id">Poll identifier</param>
-    /// <param name="poll">Poll update data</param>
+    /// <param name="request">Poll update request</param>
     /// <returns></returns>
-    Task<Envelope<Poll>> Update(Guid id, Poll poll);
+    Task<Envelope<Poll>> Update(Guid id, UpdatePollRequest request);
 
     /// <summary>
     /// Delete poll (soft delete)

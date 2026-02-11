@@ -8,5 +8,5 @@ public class GameNotes
     /// <summary>
     /// Game private notes content
     /// </summary>
-    public string Notes { get; set; }
+    public string? Notes { get; set; }
 }

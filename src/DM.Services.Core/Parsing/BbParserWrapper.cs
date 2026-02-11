@@ -1,5 +1,7 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using BBCodeParser;
 using BBCodeParser.Nodes;
@@ -48,8 +50,34 @@ public partial class BbParserWrapper : IBbParser
     private static readonly string[] DangerousProtocols = { "javascript:", "data:", "vbscript:" };
 
     /// <summary>
-    /// Sanitize URL to prevent XSS attacks.
-    /// Returns sanitized URL or "#" if dangerous protocol detected.
+    /// Blocked hostname patterns for SSRF protection.
+    /// Prevents links/images to internal networks.
+    /// </summary>
+    private static readonly string[] BlockedHostPatterns =
+    {
+        "localhost",
+        "127.",
+        "10.",
+        "172.16.", "172.17.", "172.18.", "172.19.",
+        "172.20.", "172.21.", "172.22.", "172.23.",
+        "172.24.", "172.25.", "172.26.", "172.27.",
+        "172.28.", "172.29.", "172.30.", "172.31.",
+        "192.168.",
+        "169.254.",  // Link-local
+        "[::1]",     // IPv6 localhost
+        "[fe80:",    // IPv6 link-local
+        "[fc00:",    // IPv6 unique local
+        "[fd00:",    // IPv6 unique local
+    };
+
+    /// <summary>
+    /// Allowed URL schemes for links and images.
+    /// </summary>
+    private static readonly string[] AllowedSchemes = { "http://", "https://" };
+
+    /// <summary>
+    /// Sanitize URL to prevent XSS attacks and SSRF attacks.
+    /// Returns sanitized URL or "#" if dangerous protocol or blocked host detected.
     /// </summary>
     private static string SanitizeUrl(string url)
     {
@@ -58,11 +86,34 @@ public partial class BbParserWrapper : IBbParser
         var trimmed = url.Trim();
         var lower = trimmed.ToLowerInvariant();
 
-        // Block dangerous protocols
+        // Block dangerous protocols (javascript:, data:, vbscript:)
         foreach (var protocol in DangerousProtocols)
         {
             if (lower.StartsWith(protocol))
                 return "#";
+        }
+
+        // Only allow http:// and https:// schemes
+        if (!AllowedSchemes.Any(s => lower.StartsWith(s)))
+            return "#";
+
+        // Extract hostname for SSRF check
+        try
+        {
+            var uri = new Uri(trimmed);
+            var host = uri.Host.ToLowerInvariant();
+
+            // Block internal/private network addresses
+            foreach (var pattern in BlockedHostPatterns)
+            {
+                if (host.StartsWith(pattern) || host == pattern.TrimEnd('.'))
+                    return "#";
+            }
+        }
+        catch
+        {
+            // Invalid URI - block it
+            return "#";
         }
 
         return trimmed;

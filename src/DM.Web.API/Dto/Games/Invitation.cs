@@ -21,22 +21,22 @@ public class Invitation
     /// <summary>
     /// Game title
     /// </summary>
-    public string GameTitle { get; set; }
+    public string GameTitle { get; set; } = null!;
 
     /// <summary>
     /// Invited user
     /// </summary>
-    public User InvitedUser { get; set; }
+    public User InvitedUser { get; set; } = null!;
 
     /// <summary>
     /// User who sent the invitation (master)
     /// </summary>
-    public string InviterLogin { get; set; }
+    public string InviterLogin { get; set; } = null!;
 
     /// <summary>
     /// Invitation type
     /// </summary>
-    public string Type { get; set; }
+    public string Type { get; set; } = null!;
 
     /// <summary>
     /// Creation date
@@ -52,5 +52,5 @@ public class CreateInvitation
     /// <summary>
     /// User login to invite
     /// </summary>
-    public string Login { get; set; }
+    public string Login { get; set; } = null!;
 }

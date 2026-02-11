@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Services.Authentication.Dto;
 
@@ -10,13 +11,13 @@ namespace DM.Services.Authentication.Implementation;
 public interface IAuthenticationService
 {
     /// <summary>
-    /// Authenticate via login credentials
+    /// Authenticate via email credentials
     /// </summary>
-    /// <param name="login">User login</param>
+    /// <param name="email">User email address</param>
     /// <param name="password">User password</param>
-    /// <param name="persistent">Persistence flag</param>
+    /// <param name="rememberMe">If true, session is persistent (1 year); otherwise 24 hours</param>
     /// <returns>Authentication identity</returns>
-    Task<IIdentity> Authenticate(string login, string password, bool persistent);
+    Task<IIdentity> Authenticate(string email, string password, bool rememberMe = true);
 
     /// <summary>
     /// Authenticate via token credentials
@@ -43,4 +44,18 @@ public interface IAuthenticationService
     /// </summary>
     /// <returns>Newly created authentication identity</returns>
     Task<IIdentity> LogoutElsewhere();
+
+    /// <summary>
+    /// Get all active sessions for current user
+    /// </summary>
+    /// <returns>Collection of user sessions</returns>
+    Task<IReadOnlyCollection<Dto.Session>> GetCurrentUserSessions();
+
+    /// <summary>
+    /// Terminate a specific session for a user
+    /// </summary>
+    /// <param name="userId">User ID who owns the session</param>
+    /// <param name="sessionId">Session ID to terminate</param>
+    /// <returns></returns>
+    Task TerminateSession(Guid userId, Guid sessionId);
 }

@@ -28,7 +28,7 @@ public class Room : IRemovable
     /// <summary>
     /// Title
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Room access type
@@ -77,35 +77,35 @@ public class Room : IRemovable
     /// Game
     /// </summary>
     [ForeignKey(nameof(GameId))]
-    public virtual Game Game { get; set; }
+    public virtual Game Game { get; set; } = null!;
 
     /// <summary>
     /// Previous room (for 2-linked-list)
     /// </summary>
     [ForeignKey(nameof(PreviousRoomId))]
-    public virtual Room PreviousRoom { get; set; }
+    public virtual Room? PreviousRoom { get; set; }
 
     /// <summary>
     /// Next room (for 2-linked-list)
     /// </summary>
     [ForeignKey(nameof(NextRoomId))]
-    public virtual Room NextRoom { get; set; }
+    public virtual Room? NextRoom { get; set; }
 
     /// <summary>
-    /// Character access links
+    /// Room access links (characters and readers)
     /// </summary>
-    [InverseProperty(nameof(RoomClaim.Room))]
-    public virtual ICollection<RoomClaim> RoomClaims { get; set; }
+    [InverseProperty(nameof(RoomAccess.Room))]
+    public virtual ICollection<RoomAccess> RoomAccesses { get; set; } = [];
 
     /// <summary>
     /// Posts
     /// </summary>
     [InverseProperty(nameof(Post.Room))]
-    public virtual ICollection<Post> Posts { get; set; }
+    public virtual ICollection<Post> Posts { get; set; } = [];
 
     /// <summary>
-    /// Post anticipations in room
+    /// Post pendencies in room
     /// </summary>
-    [InverseProperty(nameof(PendingPost.Room))]
-    public virtual ICollection<PendingPost> PendingPosts { get; set; }
+    [InverseProperty(nameof(PostPendency.Room))]
+    public virtual ICollection<PostPendency> PostPendencies { get; set; } = [];
 }

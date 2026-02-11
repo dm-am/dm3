@@ -1,10 +1,12 @@
 using System;
+using System.Net;
 using System.Threading.Tasks;
 using DM.Services.Common.Authorization;
 using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Core.Dto.Enums;
+using DM.Services.Core.Exceptions;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Boards;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Services.Forum.Authorization;
 using DM.Services.MessageQueuing.GeneralBus;
@@ -39,10 +41,11 @@ internal class CommentaryDeletingService : ICommentaryDeletingService
     /// <inheritdoc />
     public async Task Delete(Guid commentId)
     {
-        var comment = await _repository.GetForDelete(commentId);
-        _intentionManager.ThrowIfForbidden(CommentIntention.Delete, (Services.Common.Dto.Comment) comment);
+        var comment = await _repository.GetForDelete(commentId) ??
+            throw new HttpException(HttpStatusCode.Gone, $"Comment {commentId} not found");
+        _intentionManager.ThrowIfForbidden(CommentIntention.Delete, comment);
 
-        var updateTopic = _updateBuilderFactory.Create<ForumTopic>(comment.EntityId);
+        var updateTopic = _updateBuilderFactory.Create<TopicDal>(comment.EntityId);
         if (comment.IsLastCommentOfTopic)
         {
             var previousCommentaryId = await _repository.GetSecondLastCommentId(comment.EntityId);

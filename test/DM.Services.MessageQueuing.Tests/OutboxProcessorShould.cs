@@ -5,6 +5,7 @@ using DM.Services.MessageQueuing.Outbox;
 using FluentAssertions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -14,17 +15,19 @@ public class OutboxProcessorShould
 {
     private readonly Mock<IServiceProvider> serviceProvider;
     private readonly Mock<ILogger<OutboxProcessor>> logger;
+    private readonly IOptions<OutboxConfiguration> options;
 
     public OutboxProcessorShould()
     {
         logger = new Mock<ILogger<OutboxProcessor>>();
         serviceProvider = new Mock<IServiceProvider>();
+        options = Options.Create(new OutboxConfiguration());
     }
 
     [Fact]
     public void InheritFromBackgroundService()
     {
-        var processor = new OutboxProcessor(serviceProvider.Object, logger.Object);
+        var processor = new OutboxProcessor(serviceProvider.Object, logger.Object, options);
 
         processor.Should().BeAssignableTo<BackgroundService>();
     }
@@ -32,7 +35,7 @@ public class OutboxProcessorShould
     [Fact]
     public async Task StartWithoutThrowingException()
     {
-        var processor = new OutboxProcessor(serviceProvider.Object, logger.Object);
+        var processor = new OutboxProcessor(serviceProvider.Object, logger.Object, options);
         var cts = new CancellationTokenSource();
 
         var act = async () =>
@@ -50,7 +53,7 @@ public class OutboxProcessorShould
     [Fact]
     public async Task StopGracefully()
     {
-        var processor = new OutboxProcessor(serviceProvider.Object, logger.Object);
+        var processor = new OutboxProcessor(serviceProvider.Object, logger.Object, options);
         var cts = new CancellationTokenSource();
 
         var task = processor.StartAsync(cts.Token);
@@ -65,7 +68,7 @@ public class OutboxProcessorShould
     [Fact]
     public async Task HandleCancellationToken()
     {
-        var processor = new OutboxProcessor(serviceProvider.Object, logger.Object);
+        var processor = new OutboxProcessor(serviceProvider.Object, logger.Object, options);
         var cts = new CancellationTokenSource();
 
         var task = processor.StartAsync(cts.Token);

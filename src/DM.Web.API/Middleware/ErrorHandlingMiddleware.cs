@@ -53,6 +53,9 @@ internal class ErrorHandlingMiddleware
                 case HttpBadRequestException badRequestException:
                     error = problemDetailsFactory.CreateFrom(badRequestException, httpContext);
                     break;
+                case HttpValidationException validationException:
+                    error = problemDetailsFactory.CreateFrom(validationException, httpContext);
+                    break;
                 case IntentionManagerException securityException:
                     logger.LogWarning(securityException, "Security breach attempt: {Message}", e.Message);
                     error = problemDetailsFactory.CreateFrom(securityException, httpContext);
@@ -75,6 +78,7 @@ internal class ErrorHandlingMiddleware
             httpContext.Response.StatusCode = error is ProblemDetails { Status: not null } problemDetails
                 ? problemDetails.Status.Value
                 : StatusCodes.Status500InternalServerError;
+            httpContext.Response.ContentType = "application/problem+json";
             await httpContext.Response.WriteAsJsonAsync(error);
         }
     }

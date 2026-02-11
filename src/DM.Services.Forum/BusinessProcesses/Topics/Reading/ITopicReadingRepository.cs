@@ -29,7 +29,7 @@ internal interface ITopicReadingRepository
     /// <param name="attached">Select attached/not attached topics exclusively</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns></returns>
-    Task<IEnumerable<Topic>> Get(Guid boardId, PagingData pagingData, bool attached, CancellationToken ct = default);
+    Task<IEnumerable<Topic>> Get(Guid boardId, PagingData? pagingData, bool attached, CancellationToken ct = default);
 
     /// <summary>
     /// Get topic
@@ -38,5 +38,5 @@ internal interface ITopicReadingRepository
     /// <param name="accessPolicy">Board access policy</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns></returns>
-    Task<Topic> Get(Guid topicId, BoardAccessPolicy accessPolicy, CancellationToken ct = default);
+    Task<Topic?> Get(Guid topicId, BoardAccessPolicy accessPolicy, CancellationToken ct = default);
 }

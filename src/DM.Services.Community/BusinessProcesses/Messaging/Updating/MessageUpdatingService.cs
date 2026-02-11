@@ -12,12 +12,12 @@ namespace DM.Services.Community.BusinessProcesses.Messaging.Updating;
 /// <inheritdoc />
 internal class MessageUpdatingService : IMessageUpdatingService
 {
-    private readonly IValidator<UpdateMessage> validator;
-    private readonly IMessageReadingService messageReadingService;
-    private readonly IIntentionManager intentionManager;
-    private readonly IUpdateBuilderFactory updateBuilderFactory;
-    private readonly IMessageUpdatingRepository repository;
-    private readonly IInvokedEventProducer producer;
+    private readonly IValidator<UpdateMessage> _validator;
+    private readonly IMessageReadingService _messageReadingService;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IUpdateBuilderFactory _updateBuilderFactory;
+    private readonly IMessageUpdatingRepository _repository;
+    private readonly IInvokedEventProducer _producer;
 
     /// <inheritdoc />
     public MessageUpdatingService(
@@ -28,26 +28,26 @@ internal class MessageUpdatingService : IMessageUpdatingService
         IMessageUpdatingRepository repository,
         IInvokedEventProducer producer)
     {
-        this.validator = validator;
-        this.messageReadingService = messageReadingService;
-        this.intentionManager = intentionManager;
-        this.updateBuilderFactory = updateBuilderFactory;
-        this.repository = repository;
-        this.producer = producer;
+        _validator = validator;
+        _messageReadingService = messageReadingService;
+        _intentionManager = intentionManager;
+        _updateBuilderFactory = updateBuilderFactory;
+        _repository = repository;
+        _producer = producer;
     }
 
     /// <inheritdoc />
     public async Task<Message> Update(UpdateMessage updateMessage)
     {
-        await validator.ValidateAndThrowAsync(updateMessage);
-        var message = await messageReadingService.Get(updateMessage.MessageId);
+        await _validator.ValidateAndThrowAsync(updateMessage);
+        var message = await _messageReadingService.Get(updateMessage.MessageId);
 
-        intentionManager.ThrowIfForbidden(MessageIntention.Edit, message);
-        var updateBuilder = updateBuilderFactory.Create<MessageDal>(updateMessage.MessageId)
+        _intentionManager.ThrowIfForbidden(MessageIntention.Edit, message);
+        var updateBuilder = _updateBuilderFactory.Create<MessageDal>(updateMessage.MessageId)
             .MaybeField(f => f.Text, updateMessage.Text?.Trim());
 
-        var updatedMessage = await repository.Update(updateBuilder);
-        await producer.Send(EventType.ChangedMessage, updatedMessage.Id);
+        var updatedMessage = await _repository.Update(updateBuilder);
+        await _producer.Send(EventType.ChangedMessage, updatedMessage.Id);
         return updatedMessage;
     }
 }

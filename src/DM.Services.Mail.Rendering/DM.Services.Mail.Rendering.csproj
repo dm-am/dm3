@@ -11,6 +11,11 @@
 
     <ItemGroup>
       <ProjectReference Include="..\DM.Services.Core\DM.Services.Core.csproj" />
+      <ProjectReference Include="..\DM.Services.Mail.Sender\DM.Services.Mail.Sender.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="Assets\logo.png" LogicalName="logo.png" />
     </ItemGroup>
 
 </Project>

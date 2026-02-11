@@ -8,10 +8,10 @@ public class UserPasswordReset
     /// <summary>
     /// User login
     /// </summary>
-    public string Login { get; set; }
+    public string Login { get; set; } = null!;
 
     /// <summary>
     /// User email
     /// </summary>
-    public string Email { get; set; }
+    public string Email { get; set; } = null!;
 }

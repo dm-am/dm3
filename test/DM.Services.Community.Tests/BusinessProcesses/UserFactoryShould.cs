@@ -26,35 +26,37 @@ public class UserFactoryShould : UnitTestBase
     }
 
     [Fact]
-    public void CreateNewUser()
+    public void CreateNewUserFromPendingRegistration()
     {
         var userId = Guid.NewGuid();
         newIdSetup.Returns(userId);
         var rightNow = new DateTimeOffset(2019, 05, 12, 11, 07, 10, TimeSpan.Zero);
         currentMomentSetup.Returns(rightNow);
-        var actual = factory.Create(new UserRegistration
+
+        var pending = new PendingRegistration
         {
-            Email = "email  ",
-            Login = "   login",
-            Password = "whatever"
-        }, "salt", "hash", 2);
+            Email = "email@test.com",
+            PasswordHash = "hash",
+            Salt = "salt",
+            PasswordHashVersion = 2,
+            AcceptedRules = true
+        };
+
+        var actual = factory.CreateFromPending(pending, "  TestLogin  ");
 
         actual.Should().BeEquivalentTo(new User
         {
             UserId = userId,
-            Email = "email",
-            Login = "login",
+            Email = "email@test.com",
+            Login = "TestLogin",
             Salt = "salt",
             PasswordHash = "hash",
-            Activated = false,
             LastActivityUtc = null,
             Role = UserRole.RegularUser,
             AccessPolicy = AccessPolicy.NotSpecified,
             QualityRating = 0,
             QuantityRating = 0,
             RatingDisabled = false,
-            CanMerge = false,
-            MergeRequested = null,
             IsRemoved = false,
             CreatedUtc = rightNow,
             PasswordHashVersion = 2,
@@ -64,13 +66,28 @@ public class UserFactoryShould : UnitTestBase
             Location = string.Empty,
             Icq = string.Empty,
             Skype = string.Empty,
-            Info = string.Empty,
-            ProfilePictureUrl = string.Empty,
-            SmallProfilePictureUrl = string.Empty,
-            MediumProfilePictureUrl = string.Empty,
-#pragma warning disable CS0618
-            TimezoneId = "UTC"
-#pragma warning restore CS0618
+            Info = string.Empty
         });
     }
+
+    [Fact]
+    public void TrimLoginWhenCreatingFromPending()
+    {
+        var userId = Guid.NewGuid();
+        newIdSetup.Returns(userId);
+        currentMomentSetup.Returns(DateTimeOffset.UtcNow);
+
+        var pending = new PendingRegistration
+        {
+            Email = "email@test.com",
+            PasswordHash = "hash",
+            Salt = "salt",
+            PasswordHashVersion = 2
+        };
+
+        var actual = factory.CreateFromPending(pending, "   spacedLogin   ");
+
+        actual.Login.Should().Be("spacedLogin");
+    }
+
 }

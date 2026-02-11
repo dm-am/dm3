@@ -27,8 +27,8 @@ internal class ValidationRequiredAttribute : TypeFilterAttribute
         {
             if (context.ModelState.IsValid) return;
             var failures = context.ModelState
-                .Where(s => s.Value.ValidationState == ModelValidationState.Invalid)
-                .SelectMany(s => s.Value.Errors.Select(e => new ValidationFailure(s.Key, e.ErrorMessage)));
+                .Where(s => s.Value?.ValidationState == ModelValidationState.Invalid)
+                .SelectMany(s => s.Value!.Errors.Select(e => new ValidationFailure(s.Key, e.ErrorMessage)));
             throw new ValidationException(failures);
         }
     }

@@ -1,12 +1,11 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/stores";
-import TheLoader from "@/components/TheLoader.vue";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
 import GameCharacter from "./GameCharacter.vue";
-import { CharacterStatus } from "@/api/models/gaming";
+import { CharacterStatus } from "@/api/models/game";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
@@ -40,9 +39,7 @@ onMounted(() => {
 
 <template>
   <div class="game-characters">
-    <the-loader v-if="charactersLoading" />
-
-    <div v-else-if="charactersError" class="characters-error">
+    <div v-if="charactersError" class="characters-error">
       {{ charactersError }}
     </div>
 
@@ -101,7 +98,7 @@ onMounted(() => {
 
       <!-- Declined characters -->
       <section v-if="declinedCharacters.length" class="characters-section">
-        <h3 class="section-title">Отклонённые</h3>
+        <h3 class="section-title">Отклоненные</h3>
         <div class="characters-grid">
           <game-character
             v-for="character in declinedCharacters"

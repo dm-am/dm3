@@ -4,16 +4,18 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using DM.Services.Core.Configuration;
 using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess;
 using DM.Services.DataAccess.BusinessObjects.Common;
 using DM.Services.DataAccess.MongoIntegration;
-using DM.Services.Gaming.BusinessProcesses.Shared;
-using DM.Services.Gaming.Dto.Output;
+using DM.Services.Game.BusinessProcesses.Shared;
+using DM.Services.Game.Dto.Output;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 
 namespace DM.Web.API.Warmup;
@@ -43,6 +45,9 @@ internal class WarmupService : IHostedService
 
             try
             {
+                // Validate configuration
+                ValidateConfiguration();
+
                 // Phase 1: DB, MongoDB and AutoMapper warmup (all in parallel)
                 var tasks = new[]
                 {
@@ -64,6 +69,19 @@ internal class WarmupService : IHostedService
         return Task.CompletedTask;
     }
 
+    private void ValidateConfiguration()
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var probationConfig = scope.ServiceProvider.GetRequiredService<IOptions<ProbationConfiguration>>().Value;
+
+        if (probationConfig.NewbiePostThreshold != 100)
+        {
+            _logger.LogWarning(
+                "[Warmup] ProbationConfiguration.NewbiePostThreshold is {Threshold} but DB computed column uses hardcoded 100. Run migration to sync.",
+                probationConfig.NewbiePostThreshold);
+        }
+    }
+
     private void WarmupAutoMapper()
     {
         using var scope = _serviceProvider.CreateScope();
@@ -78,7 +96,7 @@ internal class WarmupService : IHostedService
         var mapper = scope.ServiceProvider.GetRequiredService<IMapper>();
 
         // Warmup simple games query
-        await db.Games.Where(g => !g.IsRemoved && g.Status == GameStatus.Active)
+        await db.Games.Where(g => !g.IsRemoved && g.Status == ModuleStatus.Active)
             .Take(10).Select(g => g.GameId).ToListAsync(ct);
 
         // Warmup tags

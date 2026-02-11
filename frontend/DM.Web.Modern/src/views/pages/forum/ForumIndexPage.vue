@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { useBoardsStore, useUserStore } from "@/stores";
 import { storeToRefs } from "pinia";
 import { onMounted, ref } from "vue";
@@ -40,7 +40,7 @@ onMounted(() => store.fetchBoards());
       :disabled="markingAllAsRead || !boards.some((b) => b.unreadCommentsCount)"
       @click="markAllAsRead"
     >
-      {{ markingAllAsRead ? "Отмечаю..." : "Пометить всё прочитанным" }}
+      {{ markingAllAsRead ? "Отмечаю..." : "Пометить все прочитанным" }}
     </button>
   </div>
 
@@ -53,8 +53,7 @@ onMounted(() => store.fetchBoards());
       <div class="col-last">Последняя активность</div>
     </div>
 
-    <the-loader v-if="!boards" :big="true" />
-    <secondary-text v-else-if="!boards.length" class="boards-empty">
+    <secondary-text v-if="!boards?.length" class="boards-empty">
       Нет доступных разделов
     </secondary-text>
     <template v-else>

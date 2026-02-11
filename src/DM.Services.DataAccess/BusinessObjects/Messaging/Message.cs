@@ -18,7 +18,7 @@ public class Message : IRemovable
     /// <summary>
     /// Well-known ID for global chat conversation
     /// </summary>
-    public static readonly Guid GlobalChatId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    public static readonly Guid GlobalChatId = Conversation.GlobalChatId;
 
     /// <summary>
     /// Message identifier
@@ -54,7 +54,7 @@ public class Message : IRemovable
     /// <summary>
     /// Text content
     /// </summary>
-    public string Text { get; set; }
+    public string Text { get; set; } = null!;
 
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
@@ -70,44 +70,44 @@ public class Message : IRemovable
     public DateTimeOffset? DeletedAtUtc { get; set; }
 
     /// <summary>
+    /// Global chat event identifier (for messages sent during an event in global chat).
+    /// Null for messages outside of events.
+    /// </summary>
+    public Guid? GlobalChatEventId { get; set; }
+
+    /// <summary>
     /// Author
     /// </summary>
     [ForeignKey(nameof(UserId))]
-    public virtual User Author { get; set; }
+    public virtual User Author { get; set; } = null!;
 
     /// <summary>
     /// User who last updated the message
     /// </summary>
     [ForeignKey(nameof(ModifiedByUserId))]
-    public virtual User ModifiedBy { get; set; }
+    public virtual User? ModifiedBy { get; set; }
 
     /// <summary>
     /// User who deleted the message
     /// </summary>
     [ForeignKey(nameof(DeletedByUserId))]
-    public virtual User DeletedBy { get; set; }
+    public virtual User? DeletedBy { get; set; }
 
     /// <summary>
     /// Conversation
     /// </summary>
     [ForeignKey(nameof(ConversationId))]
-    public virtual Conversation Conversation { get; set; }
+    public virtual Conversation Conversation { get; set; } = null!;
+
+    /// <summary>
+    /// Global chat event (if message was sent during an event)
+    /// </summary>
+    [ForeignKey(nameof(GlobalChatEventId))]
+    public virtual GlobalChatEvent? GlobalChatEvent { get; set; }
 
     /// <summary>
     /// Edit history
     /// </summary>
     [InverseProperty(nameof(MessageEdit.Message))]
-    public virtual ICollection<MessageEdit> Edits { get; set; }
-
-    /// <summary>
-    /// Likes
-    /// </summary>
-    [InverseProperty(nameof(Like.Message))]
-    public virtual ICollection<Like> Likes { get; set; }
-
-    /// <summary>
-    /// Administrative warnings
-    /// </summary>
-    [InverseProperty(nameof(Warning.Message))]
-    public virtual ICollection<Warning> Warnings { get; set; }
+    public virtual ICollection<MessageEdit> Edits { get; set; } = [];
 }

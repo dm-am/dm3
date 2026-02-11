@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DM.Services.Authentication.Configuration;
 using DM.Services.Authentication.Dto;
 using DM.Services.Authentication.Factories;
 using DM.Services.Authentication.Implementation;
@@ -12,6 +13,7 @@ using DM.Services.DataAccess.RelationalStorage;
 using DM.Tests.Core;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Language.Flow;
 using Xunit;
@@ -50,15 +52,16 @@ public class AuthenticationServiceTokenShould : UnitTestBase
 
         var loginAttemptTracker = Mock<ILoginAttemptTracker>();
         var logger = Mock<ILogger<AuthenticationService>>();
+        var authConfig = Options.Create(new AuthenticationConfiguration { SessionRefreshMinutes = 20 });
         service = new AuthenticationService(securityManager.Object, cryptoService.Object,
             authenticationRepository.Object, sessionFactory.Object, dateTimeProvider.Object,
-            identityProvider.Object, updateBuilderFactory.Object, loginAttemptTracker.Object, logger.Object);
+            identityProvider.Object, updateBuilderFactory.Object, loginAttemptTracker.Object, logger.Object, authConfig);
     }
 
     [Fact]
     public async Task FailIfErrorOnDecryptingToken()
     {
-        tokenDecryptSetup.ThrowsAsync(new Exception());
+        tokenDecryptSetup.ThrowsAsync(new System.Security.Cryptography.CryptographicException());
         var actual = await service.Authenticate("token");
         actual.Error.Should().Be(AuthenticationError.ForgedToken);
         cryptoService.Verify(s => s.Decrypt("token"));
@@ -127,7 +130,7 @@ public class AuthenticationServiceTokenShould : UnitTestBase
         tokenDecryptSetup.ReturnsAsync(
             "{\"userId\": \"7932d1d9-0a1a-4e16-b53f-5c213a2fc097\"," +
             " \"sessionId\": \"6f9e570c-1dca-4cca-be93-d7418b85959e\"}");
-            
+
         authenticationRepository
             .Setup(r => r.FindUser(It.IsAny<Guid>()))
             .ReturnsAsync(new AuthenticatedUser());
@@ -136,8 +139,8 @@ public class AuthenticationServiceTokenShould : UnitTestBase
             .ReturnsAsync(new UserSettings());
         authenticationRepository
             .Setup(r => r.FindUserSession(It.IsAny<Guid>()))
-            .ReturnsAsync((Session) null);
-            
+            .ReturnsAsync((Session?)null!);
+
         var actual = await service.Authenticate("token");
         actual.Error.Should().Be(AuthenticationError.SessionExpired);
     }

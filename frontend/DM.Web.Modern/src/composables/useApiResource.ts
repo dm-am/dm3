@@ -33,7 +33,7 @@ export interface UseApiResourceReturn<T> {
  * @example
  * ```ts
  * const { data: games, fetch, reset } = useApiResource(
- *   () => gamingApi.getOwnGames(),
+ *   () => gameApi.getOwnGames(),
  *   { cacheMs: 60_000 }
  * );
  *

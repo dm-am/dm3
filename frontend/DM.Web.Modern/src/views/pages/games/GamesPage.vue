@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import PageTitle from "@/components/layout/PageTitle.vue";
 </script>
 
@@ -13,7 +13,7 @@ import PageTitle from "@/components/layout/PageTitle.vue";
       Набор игроков
     </router-link>
     <router-link :to="{ name: 'games-finished' }" class="tabs-link" data-testid="tab-finished">
-      Завершённые
+      Завершенные
     </router-link>
   </nav>
 

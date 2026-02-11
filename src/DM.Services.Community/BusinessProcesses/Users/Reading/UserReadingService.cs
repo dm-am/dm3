@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Services.Authentication.Implementation.UserIdentity;
+using DM.Services.Common.Authorization;
 using DM.Services.Core.Caching;
 using DM.Services.Core.Dto;
 using DM.Services.Core.Dto.Enums;
@@ -15,26 +16,34 @@ internal class UserReadingService : IUserReadingService
 {
     private readonly IIdentityProvider _identityProvider;
     private readonly IUserReadingRepository _readingRepository;
+    private readonly IIntentionManager _intentionManager;
     private readonly ICache _cache;
 
     /// <inheritdoc />
     public UserReadingService(
         IIdentityProvider identityProvider,
         IUserReadingRepository readingRepository,
+        IIntentionManager intentionManager,
         ICache cache)
     {
         _identityProvider = identityProvider;
         _readingRepository = readingRepository;
+        _intentionManager = intentionManager;
         _cache = cache;
     }
 
     /// <inheritdoc />
     public async Task<(IEnumerable<GeneralUser> users, PagingResult paging)> Get(
-        PagingQuery query, bool withInactive, string search = null)
+        PagingQuery query, UserActivityFilter filter, string? search = null)
     {
-        var totalCount = await _readingRepository.CountUsers(withInactive, search);
+        if (filter == UserActivityFilter.Pending)
+        {
+            _intentionManager.ThrowIfForbidden(UserIntention.ViewPendingUsers);
+        }
+
+        var totalCount = await _readingRepository.CountUsers(filter, search);
         var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
-        var users = await _readingRepository.GetUsers(paging, withInactive, search);
+        var users = await _readingRepository.GetUsers(paging, filter, search);
         return (users, paging.Result);
     }
 

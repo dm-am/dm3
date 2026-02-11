@@ -1,5 +1,6 @@
 using Autofac;
 using DM.Services.Core.Extensions;
+using DM.Services.Core.Implementation;
 using DM.Services.Core.Implementation.CorrelationToken;
 
 namespace DM.Services.Core;
@@ -16,6 +17,10 @@ public class CoreModule : Module
             .AsSelf()
             .AsImplementedInterfaces()
             .InstancePerLifetimeScope();
+
+        builder.RegisterType<CursorService>()
+            .As<ICursorService>()
+            .SingleInstance();
 
         base.Load(builder);
     }

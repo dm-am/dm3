@@ -16,11 +16,11 @@ public class AccessPolicyConverterShould
     }
 
     [Theory]
-    [InlineData(UserRole.RegularUser, BoardAccessPolicy.Player)]
+    [InlineData(UserRole.RegularUser, BoardAccessPolicy.RegularUser)]
     [InlineData(UserRole.Admin, BoardAccessPolicy.Administrator)]
     [InlineData(UserRole.SeniorModerator, BoardAccessPolicy.SeniorModerator)]
-    [InlineData(UserRole.Moderator, BoardAccessPolicy.RegularModerator)]
-    [InlineData(UserRole.Mentor, BoardAccessPolicy.MentorModerator)]
+    [InlineData(UserRole.Moderator, BoardAccessPolicy.Moderator)]
+    [InlineData(UserRole.Mentor, BoardAccessPolicy.Mentor)]
     public void MapRolesAndPoliciesAccordingly(UserRole role, BoardAccessPolicy policy)
     {
         converter.Convert(role).Should().HaveFlag(policy);
@@ -42,9 +42,9 @@ public class AccessPolicyConverterShould
     {
         var result = converter.Convert(UserRole.Admin);
         result.Should().HaveFlag(BoardAccessPolicy.Guest);
-        result.Should().HaveFlag(BoardAccessPolicy.Player);
-        result.Should().HaveFlag(BoardAccessPolicy.MentorModerator);
-        result.Should().HaveFlag(BoardAccessPolicy.RegularModerator);
+        result.Should().HaveFlag(BoardAccessPolicy.RegularUser);
+        result.Should().HaveFlag(BoardAccessPolicy.Mentor);
+        result.Should().HaveFlag(BoardAccessPolicy.Moderator);
         result.Should().HaveFlag(BoardAccessPolicy.SeniorModerator);
         result.Should().HaveFlag(BoardAccessPolicy.Administrator);
     }
@@ -53,8 +53,8 @@ public class AccessPolicyConverterShould
     public void MentorShouldNotHaveModeratorPolicies()
     {
         var result = converter.Convert(UserRole.Mentor);
-        result.Should().HaveFlag(BoardAccessPolicy.MentorModerator);
-        result.Should().NotHaveFlag(BoardAccessPolicy.RegularModerator);
+        result.Should().HaveFlag(BoardAccessPolicy.Mentor);
+        result.Should().NotHaveFlag(BoardAccessPolicy.Moderator);
         result.Should().NotHaveFlag(BoardAccessPolicy.SeniorModerator);
         result.Should().NotHaveFlag(BoardAccessPolicy.Administrator);
     }

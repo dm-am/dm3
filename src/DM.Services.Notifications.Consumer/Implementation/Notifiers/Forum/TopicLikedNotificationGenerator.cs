@@ -27,14 +27,16 @@ internal class TopicLikedNotificationGenerator : BaseNotificationGenerator
     /// <inheritdoc />
     public override async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
-        var likedTopicData = await _dbContext.Likes
-            .Where(like => like.LikeId == entityId)
-            .Select(like => new
+        var likedTopicData = await (
+            from like in _dbContext.Likes
+            join topic in _dbContext.Topics on like.EntityId equals topic.TopicId
+            where like.LikeId == entityId && like.EntityType == LikeEntityType.Topic
+            select new
             {
-                like.User.Login,
-                like.Topic.ForumTopicId,
-                like.Topic.UserId,
-                like.Topic.Title
+                like.User!.Login,
+                topic.TopicId,
+                topic.UserId,
+                topic.Title
             })
             .FirstAsync();
 
@@ -45,7 +47,7 @@ internal class TopicLikedNotificationGenerator : BaseNotificationGenerator
             {
                 AuthorLogin = likedTopicData.Login,
                 TopicTitle = likedTopicData.Title,
-                TopicId = likedTopicData.ForumTopicId.EncodeToReadable(likedTopicData.Title)
+                TopicId = likedTopicData.TopicId.EncodeToReadable(likedTopicData.Title)
             }
         };
     }

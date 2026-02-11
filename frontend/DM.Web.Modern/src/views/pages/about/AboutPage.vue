@@ -164,7 +164,7 @@ async function submitReview() {
         <label class="form-label"><strong>Автор</strong></label>
         <user-autocomplete
           v-model="authorLogin"
-          placeholder="Начните вводить логин..."
+          placeholder=""
         />
       </div>
       <div class="form-field">
@@ -186,8 +186,7 @@ async function submitReview() {
     :to="{ name: 'about', params: route.params }"
   />
 
-  <the-loader v-if="websiteReviews === null" />
-  <div v-else class="reviews-list">
+  <div v-if="websiteReviews" class="reviews-list">
     <website-review-item
       v-for="websiteReview in websiteReviews.resources"
       :key="websiteReview.id"

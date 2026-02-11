@@ -36,8 +36,8 @@ internal class TopicChangedIndexer : BaseIndexer
     /// <inheritdoc />
     public override async Task Index(InvokedEvent message)
     {
-        var topic = await _dbContext.ForumTopics
-            .Where(t => t.ForumTopicId == message.EntityId)
+        var topic = await _dbContext.Topics
+            .Where(t => t.TopicId == message.EntityId)
             .Select(t => new {t.Board.ViewPolicy, t.Title, t.Text})
             .FirstAsync();
         var authorizedRoles = topic.ViewPolicy.GetAuthorizedRoles().ToArray();

@@ -15,10 +15,10 @@ public class UserPasswordChange
     /// <summary>
     /// Old password
     /// </summary>
-    public string OldPassword { get; set; }
+    public string OldPassword { get; set; } = null!;
 
     /// <summary>
     /// New password
     /// </summary>
-    public string NewPassword { get; set; }
+    public string NewPassword { get; set; } = null!;
 }

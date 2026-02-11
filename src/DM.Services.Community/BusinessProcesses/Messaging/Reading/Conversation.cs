@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using DM.Services.Core.Dto;
+using DM.Services.Core.Dto.Enums;
 
 namespace DM.Services.Community.BusinessProcesses.Messaging.Reading;
 
@@ -15,24 +16,24 @@ public class Conversation
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Sign of a basic conversation between two users
+    /// Conversation type (Direct, Group, or Global)
     /// </summary>
-    public bool Visavi { get; set; }
+    public ConversationType Type { get; set; }
 
     /// <summary>
-    /// Conversation title (for group conversations, null for visavi)
+    /// Conversation title (for group conversations, null for direct)
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// List of conversation participants
     /// </summary>
-    public IEnumerable<GeneralUser> Participants { get; set; }
+    public IEnumerable<GeneralUser> Participants { get; set; } = [];
 
     /// <summary>
     /// Last conversation message
     /// </summary>
-    public Message LastMessage { get; set; }
+    public Message LastMessage { get; set; } = null!;
 
     /// <summary>
     /// Number of unread messages

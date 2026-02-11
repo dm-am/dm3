@@ -1,8 +1,8 @@
 import { defineStore, storeToRefs } from "pinia";
 import { ref } from "vue";
-import type { AxiosProgressEvent } from "axios";
 import type { ListEnvelope } from "@/api/models/common";
 import type { User, UserLogin } from "@/api/models/community";
+import { UserActivityFilter } from "@/api/models/community";
 import type { UserSettings } from "@/api/models/community/user-settings";
 import communityApi from "@/api/requests/communityApi";
 import { useUserStore } from "@/stores/user";
@@ -12,20 +12,29 @@ export type UpdateUserPayload = {
   status?: string;
   name?: string;
   location?: string;
-  skype?: string;
-  icq?: string;
   info?: string;
   ratingDisabled?: boolean;
+  avatarUploadId?: string;
   settings?: Partial<UserSettings>;
+  contacts?: Array<{ contactType: string; contactValue: string; sortOrder: number }>;
 };
 
 export const useCommunityStore = defineStore("community", () => {
   const { user: currentUser } = storeToRefs(useUserStore());
   const users = ref<ListEnvelope<User> | null>(null);
+  const usersError = ref<number | null>(null);
 
-  async function fetchUsers(number: number) {
+  async function fetchUsers(number: number, filter: UserActivityFilter = UserActivityFilter.Active) {
     const size = currentUser.value?.settings?.pagingLimits?.entitiesPerPage;
-    const { data } = await communityApi.getUsers({ number, size });
+    const { data, error } = await communityApi.getUsers({ number, size, filter });
+
+    if (error?.status === 403) {
+      users.value = null;
+      usersError.value = 403;
+      return;
+    }
+
+    usersError.value = null;
     users.value = data;
   }
 
@@ -41,7 +50,7 @@ export const useCommunityStore = defineStore("community", () => {
 
     if (error) return false;
 
-    selectedUser.value = data!.resource;
+    selectedUser.value = data?.resource ?? null;
     return true;
   }
 
@@ -70,24 +79,9 @@ export const useCommunityStore = defineStore("community", () => {
     return { data, error };
   }
 
-  async function uploadPicture(
-    login: UserLogin,
-    files: FormData,
-    onProgress?: (e: AxiosProgressEvent) => void,
-  ) {
-    const { data, error } = await communityApi.uploadUserPicture(
-      login,
-      files,
-      onProgress ?? (() => {}),
-    );
-    if (!error && data) {
-      selectedUser.value = data.resource;
-    }
-    return { data, error };
-  }
-
   return {
     users,
+    usersError,
     fetchUsers,
     selectedUser,
     loadingProfile,
@@ -95,6 +89,5 @@ export const useCommunityStore = defineStore("community", () => {
     editableUser,
     fetchEditableUser,
     updateUser,
-    uploadPicture,
   };
 });

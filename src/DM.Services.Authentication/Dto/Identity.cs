@@ -8,19 +8,19 @@ public class Identity : IIdentity
     }
 
     /// <inheritdoc />
-    public AuthenticatedUser User { get; private init; }
+    public AuthenticatedUser User { get; private init; } = null!;
 
     /// <inheritdoc />
-    public Session Session { get; private init; }
+    public Session? Session { get; private init; }
 
     /// <inheritdoc />
-    public UserSettings Settings { get; private init; }
+    public UserSettings Settings { get; private init; } = null!;
 
     /// <inheritdoc />
     public AuthenticationError Error { get; private init; }
 
     /// <inheritdoc />
-    public string AuthenticationToken { get; private init; }
+    public string? AuthenticationToken { get; private init; }
 
     /// <summary>
     /// Creates identity for an unauthenticated user

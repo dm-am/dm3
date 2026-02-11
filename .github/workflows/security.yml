@@ -17,29 +17,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Start PostgreSQL
+      - name: Create .env for Docker Compose
+        run: cp docker/.env.example docker/.env
+
+      - name: Start infrastructure with Docker Compose
         run: |
-          docker run -d --name dm-pg -p 5432:5432 \
-            -e POSTGRES_USER=postgres \
-            -e POSTGRES_PASSWORD=admin \
-            -e POSTGRES_DB=dm3.5 \
-            postgres:16
-          sleep 10
+          cd docker
+          docker compose up -d postgres mongo rabbitmq minio mailhog opensearch jaeger
+          docker compose up -d --wait migration
 
       - name: Build and start API
         run: |
-          docker build -t dm-api:test -f docker/app.Dockerfile .
-          docker run -d --name dm-api -p 5051:5050 \
-            -e ConnectionStrings__Rdb="Host=host.docker.internal;Database=dm3.5;Username=postgres;Password=admin" \
-            dm-api:test
+          cd docker
+          docker compose up -d --build --wait dmapi
 
-      - name: Wait for API
-        run: timeout 60 bash -c 'until curl -sf http://localhost:5051/_health; do sleep 2; done'
+      - name: Wait for API health
+        run: timeout 60 bash -c 'until curl -sf http://localhost:5000/_health; do sleep 2; done'
 
       - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
         with:
-          target: 'http://localhost:5051'
+          target: 'http://localhost:5000'
           rules_file_name: '.zap/rules.tsv'
           allow_issue_writing: false
 
@@ -49,3 +47,7 @@ jobs:
         with:
           name: zap-report
           path: report_html.html
+
+      - name: Cleanup
+        if: always()
+        run: cd docker && docker compose down -v

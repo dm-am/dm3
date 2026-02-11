@@ -21,15 +21,15 @@ public class FoundEntity
     /// <summary>
     /// Title with highlights
     /// </summary>
-    public string FoundTitle { get; set; }
+    public string FoundTitle { get; set; } = null!;
 
     /// <summary>
     /// Original title
     /// </summary>
-    public string OriginalTitle { get; set; }
+    public string OriginalTitle { get; set; } = null!;
 
     /// <summary>
     /// Text with highlights
     /// </summary>
-    public string FoundText { get; set; }
+    public string FoundText { get; set; } = null!;
 }

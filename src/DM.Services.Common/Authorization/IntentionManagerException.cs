@@ -13,7 +13,7 @@ namespace DM.Services.Common.Authorization;
 public class IntentionManagerException : HttpException
 {
     /// <inheritdoc />
-    public IntentionManagerException(IUser user, Enum intention, object target)
+    public IntentionManagerException(IUser user, Enum intention, object? target)
         : base(HttpStatusCode.Forbidden, GenerateMessage(user, intention, target))
     {
     }
@@ -24,7 +24,7 @@ public class IntentionManagerException : HttpException
     {
     }
 
-    private static string GenerateMessage(IUser user, Enum intention, object target = default)
+    private static string GenerateMessage(IUser user, Enum intention, object? target = null)
     {
         var result = new StringBuilder($"User is not allowed to perform {intention} action");
         if (target == null)

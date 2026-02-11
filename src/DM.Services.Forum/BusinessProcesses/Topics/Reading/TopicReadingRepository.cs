@@ -23,14 +23,14 @@ internal class TopicReadingRepository(
     private static readonly Guid ErrorsBoardId = Guid.Parse("00000000-0000-0000-0000-000000000006");
 
     /// <inheritdoc />
-    public Task<int> Count(Guid boardId, CancellationToken ct = default) => dbContext.ForumTopics
+    public Task<int> Count(Guid boardId, CancellationToken ct = default) => dbContext.Topics
         .TagWith("DM.Forum.TopicsCount")
         .CountAsync(t => !t.IsRemoved && t.BoardId == boardId && !t.IsAttached, ct);
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Topic>> Get(Guid boardId, PagingData pagingData, bool attached, CancellationToken ct = default)
+    public async Task<IEnumerable<Topic>> Get(Guid boardId, PagingData? pagingData, bool attached, CancellationToken ct = default)
     {
-        var query = dbContext.ForumTopics
+        var query = dbContext.Topics
             .TagWith("DM.Forum.TopicsList")
             .Where(t => !t.IsRemoved && t.BoardId == boardId && t.IsAttached == attached)
             .ProjectTo<Topic>(mapper.ConfigurationProvider);
@@ -53,12 +53,12 @@ internal class TopicReadingRepository(
     }
 
     /// <inheritdoc />
-    public async Task<Topic> Get(Guid topicId, BoardAccessPolicy accessPolicy, CancellationToken ct = default)
+    public async Task<Topic?> Get(Guid topicId, BoardAccessPolicy accessPolicy, CancellationToken ct = default)
     {
-        return await dbContext.ForumTopics
+        return await dbContext.Topics
             .TagWith("DM.Forum.Topic")
-            .Where(t => !t.IsRemoved && t.ForumTopicId == topicId &&
-                        (t.Board.ViewPolicy & accessPolicy) != BoardAccessPolicy.NoOne)
+            .Where(t => !t.IsRemoved && t.TopicId == topicId &&
+                        (t.Board.ViewPolicy & accessPolicy) != BoardAccessPolicy.None)
             .ProjectTo<Topic>(mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
     }

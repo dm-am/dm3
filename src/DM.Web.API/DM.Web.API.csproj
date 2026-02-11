@@ -3,12 +3,20 @@
     <PropertyGroup>
         <TargetFramework>net8.0</TargetFramework>
         <AspNetCoreHostingModel>InProcess</AspNetCoreHostingModel>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>$(NoWarn);1591</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="AspNetCore.HealthChecks.MongoDb" />
+        <PackageReference Include="AspNetCore.HealthChecks.Npgsql" />
+        <PackageReference Include="AspNetCore.HealthChecks.Rabbitmq" />
+        <PackageReference Include="AspNetCore.HealthChecks.UI.Client" />
+        <PackageReference Include="AspNetCore.HealthChecks.Uris" />
         <PackageReference Include="Autofac.Extensions.DependencyInjection" />
         <PackageReference Include="Grpc.AspNetCore" />
         <PackageReference Include="Grpc.Net.Client" />
+        <PackageReference Include="Grpc.Net.ClientFactory" />
         <PackageReference Include="Grpc.Tools">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -19,9 +27,6 @@
           <PrivateAssets>all</PrivateAssets>
         </PackageReference>
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
-        <PackageReference Include="OpenIddict.AspNetCore" />
-        <PackageReference Include="OpenIddict.EntityFrameworkCore" />
-        <PackageReference Include="AspNet.Security.OAuth.Discord" />
         <PackageReference Include="Swashbuckle.AspNetCore" />
         <PackageReference Include="Swashbuckle.AspNetCore.Swagger" />
         <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
@@ -32,7 +37,7 @@
         <ProjectReference Include="..\DM.Services.Community\DM.Services.Community.csproj" />
         <ProjectReference Include="..\DM.Services.DataAccess\DM.Services.DataAccess.csproj" />
         <ProjectReference Include="..\DM.Services.Forum\DM.Services.Forum.csproj" />
-        <ProjectReference Include="..\DM.Services.Gaming\DM.Services.Gaming.csproj" />
+        <ProjectReference Include="..\DM.Services.Game\DM.Services.Game.csproj" />
         <ProjectReference Include="..\DM.Services.Notifications\DM.Services.Notifications.csproj" />
         <ProjectReference Include="..\DM.Web.Core\DM.Web.Core.csproj" />
     </ItemGroup>

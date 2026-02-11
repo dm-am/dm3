@@ -36,11 +36,11 @@ public class CommentEdit
     /// Parent comment
     /// </summary>
     [ForeignKey(nameof(CommentId))]
-    public virtual Comment Comment { get; set; }
+    public virtual Comment Comment { get; set; } = null!;
 
     /// <summary>
     /// Editor user
     /// </summary>
     [ForeignKey(nameof(EditorUserId))]
-    public virtual User Editor { get; set; }
+    public virtual User Editor { get; set; } = null!;
 }

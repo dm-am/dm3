@@ -1,77 +1,118 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
-using DM.Services.Core.Caching;
+using DM.Services.Authentication.Configuration;
+using DM.Services.Authentication.Repositories;
+using DM.Services.Core.Implementation;
+using Microsoft.Extensions.Options;
 
 namespace DM.Services.Authentication.Implementation;
 
 /// <inheritdoc />
+/// <remarks>
+/// Uses MongoDB for cluster-safe storage of login attempts.
+/// All nodes share the same state, enabling proper rate limiting across the cluster.
+/// </remarks>
 internal class LoginAttemptTracker : ILoginAttemptTracker
 {
-    private readonly ICache _cache;
-    private const string CacheKeyPrefix = "login_attempts:";
-    private static readonly TimeSpan CacheExpiration = TimeSpan.FromHours(24);
+    private readonly ILoginAttemptRepository _repository;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly AuthenticationConfiguration _config;
 
     /// <inheritdoc />
-    public LoginAttemptTracker(ICache cache)
+    public LoginAttemptTracker(
+        ILoginAttemptRepository repository,
+        IDateTimeProvider dateTimeProvider,
+        IOptions<AuthenticationConfiguration> authConfig)
     {
-        _cache = cache;
+        _repository = repository;
+        _dateTimeProvider = dateTimeProvider;
+        _config = authConfig.Value;
     }
 
     /// <inheritdoc />
     public async Task<int> GetDelayForUser(string login)
     {
-        var attempts = await GetAttemptCount(login);
+        var attempts = await _repository.GetFailedAttemptCount(login);
         return CalculateDelay(attempts);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> IsAccountLocked(string login)
+    {
+        var lockoutStart = await _repository.GetLockoutStart(login);
+        if (lockoutStart == null)
+        {
+            return false;
+        }
+
+        var lockoutEnd = lockoutStart.Value.AddMinutes(_config.AccountLockoutDurationMinutes);
+        var isLocked = _dateTimeProvider.Now.UtcDateTime < lockoutEnd;
+
+        // Clear expired lockout
+        if (!isLocked)
+        {
+            await _repository.ResetAttempts(login);
+        }
+
+        return isLocked;
+    }
+
+    /// <inheritdoc />
+    public async Task<int> GetRemainingLockoutSeconds(string login)
+    {
+        var lockoutStart = await _repository.GetLockoutStart(login);
+        if (lockoutStart == null)
+        {
+            return 0;
+        }
+
+        var lockoutEnd = lockoutStart.Value.AddMinutes(_config.AccountLockoutDurationMinutes);
+        var remaining = lockoutEnd - _dateTimeProvider.Now.UtcDateTime;
+
+        return remaining.TotalSeconds > 0 ? (int)remaining.TotalSeconds : 0;
     }
 
     /// <inheritdoc />
     public async Task RecordFailedAttempt(string login)
     {
-        var cacheKey = GetCacheKey(login);
-        var currentAttempts = await GetAttemptCount(login);
-        var newAttempts = currentAttempts + 1;
+        var newAttempts = await _repository.RecordFailedAttempt(login);
 
-        // Store the new count with 24-hour expiration
-        await _cache.GetOrCreate(
-            cacheKey,
-            () => Task.FromResult(newAttempts),
-            CacheExpiration);
+        // Check if we should lock the account
+        if (newAttempts >= _config.AccountLockoutThreshold)
+        {
+            await _repository.SetLockout(login, _dateTimeProvider.Now.UtcDateTime);
+        }
     }
 
     /// <inheritdoc />
-    public async Task ResetAttempts(string login)
+    public Task ResetAttempts(string login)
     {
-        var cacheKey = GetCacheKey(login);
-        await _cache.Invalidate(cacheKey);
+        return _repository.ResetAttempts(login);
     }
 
-    private async Task<int> GetAttemptCount(string login)
+    private int CalculateDelay(int attempts)
     {
-        var cacheKey = GetCacheKey(login);
-        try
+        // Use configured delay schedule, or fallback to defaults
+        var schedule = _config.LoginDelaySchedule;
+        if (schedule == null || schedule.Length == 0)
         {
-            return await _cache.GetOrCreate(
-                cacheKey,
-                () => Task.FromResult(0),
-                CacheExpiration);
+            // Default schedule if not configured
+            return attempts switch
+            {
+                < 3 => 0,
+                < 5 => 1,
+                < 10 => 5,
+                _ => 30
+            };
         }
-        catch
-        {
-            return 0;
-        }
-    }
 
-    private static string GetCacheKey(string login) =>
-        $"{CacheKeyPrefix}{login.ToLowerInvariant()}";
+        // Find the highest matching threshold
+        var matchingEntry = schedule
+            .Where(entry => entry.Length >= 2 && attempts >= entry[0])
+            .OrderByDescending(entry => entry[0])
+            .FirstOrDefault();
 
-    private static int CalculateDelay(int attempts)
-    {
-        return attempts switch
-        {
-            < 3 => 0,      // 0-2 attempts: no delay
-            < 5 => 1,      // 3-4 attempts: 1 second
-            < 10 => 5,     // 5-9 attempts: 5 seconds
-            _ => 30        // 10+ attempts: 30 seconds
-        };
+        return matchingEntry?[1] ?? 0;
     }
 }

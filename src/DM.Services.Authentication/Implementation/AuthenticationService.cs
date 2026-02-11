@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.Tasks;
+using DM.Services.Authentication.Configuration;
 using DM.Services.Authentication.Dto;
 using DM.Services.Authentication.Factories;
 using DM.Services.Authentication.Implementation.Security;
@@ -12,6 +14,7 @@ using DM.Services.Core.Implementation;
 using DM.Services.DataAccess.BusinessObjects.Users;
 using DM.Services.DataAccess.RelationalStorage;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using DbSession = DM.Services.DataAccess.BusinessObjects.Users.Session;
 
 namespace DM.Services.Authentication.Implementation;
@@ -28,6 +31,7 @@ internal class AuthenticationService : IAuthenticationService
     private readonly IUpdateBuilderFactory _updateBuilderFactory;
     private readonly ILoginAttemptTracker _loginAttemptTracker;
     private readonly ILogger<AuthenticationService> _logger;
+    private readonly AuthenticationConfiguration _config;
 
     private const string UserIdKey = "userId";
     private const string SessionIdKey = "sessionId";
@@ -42,7 +46,8 @@ internal class AuthenticationService : IAuthenticationService
         IIdentityProvider identityProvider,
         IUpdateBuilderFactory updateBuilderFactory,
         ILoginAttemptTracker loginAttemptTracker,
-        ILogger<AuthenticationService> logger)
+        ILogger<AuthenticationService> logger,
+        IOptions<AuthenticationConfiguration> authConfig)
     {
         _securityManager = securityManager;
         _cryptoService = cryptoService;
@@ -53,42 +58,59 @@ internal class AuthenticationService : IAuthenticationService
         _updateBuilderFactory = updateBuilderFactory;
         _loginAttemptTracker = loginAttemptTracker;
         _logger = logger;
+        _config = authConfig.Value;
     }
 
     /// <inheritdoc />
-    public async Task<IIdentity> Authenticate(string login, string password, bool persistent)
+    public async Task<IIdentity> Authenticate(string email, string password, bool rememberMe = true)
     {
+        // 1. PENDING CHECK - fast path, no throttling needed
+        // Pending registrations have no password to brute-force
+        if (await _repository.IsPendingRegistration(email))
+        {
+            _logger.LogInformation("Login failed: pending registration. Email={Email}", email);
+            return Identity.Fail(AuthenticationError.PendingRegistration);
+        }
+
+        // 2. THROTTLING - only for actual login attempts
+        if (await _loginAttemptTracker.IsAccountLocked(email))
+        {
+            var remainingSeconds = await _loginAttemptTracker.GetRemainingLockoutSeconds(email);
+            _logger.LogWarning("Login failed: account locked due to too many failed attempts. Email={Email}, RemainingSeconds={RemainingSeconds}",
+                email, remainingSeconds);
+            return Identity.Fail(AuthenticationError.AccountLocked);
+        }
+
         // Progressive delay for bot protection
-        var delaySeconds = await _loginAttemptTracker.GetDelayForUser(login);
+        var delaySeconds = await _loginAttemptTracker.GetDelayForUser(email);
         if (delaySeconds > 0)
         {
             await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
         }
 
-        var (userFound, user) = await _repository.TryFindUser(login);
+        // 3. FIND USER BY EMAIL
+        var (userFound, user) = await _repository.TryFindUserByEmail(email);
+
         switch (userFound)
         {
             case false:
-                await _loginAttemptTracker.RecordFailedAttempt(login);
-                _logger.LogWarning("Login failed: user not found. Login={Login}", login);
+                await _loginAttemptTracker.RecordFailedAttempt(email);
+                _logger.LogWarning("Login failed: user not found. Email={Email}", email);
                 return Identity.Fail(AuthenticationError.WrongLogin);
-            case true when !user.Activated:
-                _logger.LogWarning("Login failed: account not activated. UserId={UserId}, Login={Login}", user.UserId, login);
-                return Identity.Fail(AuthenticationError.Inactive);
-            case true when user.IsRemoved:
-                _logger.LogWarning("Login failed: account removed. UserId={UserId}, Login={Login}", user.UserId, login);
+            case true when user!.IsRemoved:
+                _logger.LogWarning("Login failed: account removed. UserId={UserId}, Email={Email}", user.UserId, email);
                 return Identity.Fail(AuthenticationError.Removed);
             case true when user.AccessPolicy.HasFlag(AccessPolicy.FullBan):
-                _logger.LogWarning("Login failed: account banned. UserId={UserId}, Login={Login}", user.UserId, login);
+                _logger.LogWarning("Login failed: account banned. UserId={UserId}, Email={Email}", user.UserId, email);
                 return Identity.Fail(AuthenticationError.Banned);
             case true when !_securityManager.ComparePasswords(password, user.Salt, user.PasswordHash, user.PasswordHashVersion):
-                await _loginAttemptTracker.RecordFailedAttempt(login);
-                _logger.LogWarning("Login failed: wrong password. UserId={UserId}, Login={Login}", user.UserId, login);
+                await _loginAttemptTracker.RecordFailedAttempt(email);
+                _logger.LogWarning("Login failed: wrong password. UserId={UserId}, Email={Email}", user.UserId, email);
                 return Identity.Fail(AuthenticationError.WrongPassword);
 
             default:
                 // Successful login - reset attempt counter
-                await _loginAttemptTracker.ResetAttempts(login);
+                await _loginAttemptTracker.ResetAttempts(email);
 
                 // Opportunistic rehashing: upgrade password hash on successful login
                 if (_securityManager.NeedsRehash(user.PasswordHashVersion))
@@ -97,10 +119,16 @@ internal class AuthenticationService : IAuthenticationService
                     _logger.LogInformation("Password hash upgraded for user. UserId={UserId}", user.UserId);
                 }
 
-                var session = _sessionFactory.Create(persistent, false);
+                // Update activity on login
+                var userUpdate = _updateBuilderFactory.Create<User>(user.UserId)
+                    .Field(u => u.LastActivityUtc, _dateTimeProvider.Now);
+                await _repository.UpdateActivity(userUpdate);
+
+                // Session persistence based on "remember me" checkbox
+                var session = _sessionFactory.Create(persistent: rememberMe, invisible: false);
                 var settings = await _repository.FindUserSettings(user.UserId);
-                _logger.LogInformation("User authenticated successfully. UserId={UserId}, Login={Login}, Persistent={Persistent}",
-                    user.UserId, login, persistent);
+                _logger.LogInformation("User authenticated successfully. UserId={UserId}, Email={Email}",
+                    user.UserId, email);
                 return await CreateAuthenticationResult(user, session, settings);
         }
     }
@@ -115,12 +143,12 @@ internal class AuthenticationService : IAuthenticationService
         {
             var decryptedString = await _cryptoService.Decrypt(authToken);
             var authData = JsonSerializer.Deserialize<Dictionary<string, Guid>>(decryptedString);
-            userId = authData[UserIdKey];
+            userId = authData![UserIdKey];
             sessionId = authData[SessionIdKey];
         }
-        catch
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or FormatException or System.Security.Cryptography.CryptographicException)
         {
-            _logger.LogWarning("Token authentication failed: forged or corrupted token");
+            _logger.LogWarning(ex, "Token authentication failed: forged or corrupted token");
             return Identity.Fail(AuthenticationError.ForgedToken);
         }
 
@@ -133,6 +161,25 @@ internal class AuthenticationService : IAuthenticationService
         var user = await fetchUser;
         var session = await fetchSession;
         var settings = await fetchSettings;
+
+        // Validate user state (could have changed since token was issued)
+        if (user == null)
+        {
+            _logger.LogWarning("Token authentication failed: user not found. UserId={UserId}", userId);
+            return Identity.Fail(AuthenticationError.SessionExpired);
+        }
+
+        if (user.IsRemoved)
+        {
+            _logger.LogWarning("Token authentication failed: user removed. UserId={UserId}", userId);
+            return Identity.Fail(AuthenticationError.Removed);
+        }
+
+        if (user.AccessPolicy.HasFlag(AccessPolicy.FullBan))
+        {
+            _logger.LogWarning("Token authentication failed: user banned. UserId={UserId}", userId);
+            return Identity.Fail(AuthenticationError.Banned);
+        }
 
         if (session == null)
         {
@@ -148,16 +195,17 @@ internal class AuthenticationService : IAuthenticationService
             return Identity.Fail(AuthenticationError.SessionExpired);
         }
 
-        var sessionRefreshDelta = TimeSpan.FromMinutes(20);
+        var sessionRefreshDelta = TimeSpan.FromMinutes(_config.SessionRefreshMinutes);
         if (!session.Persistent &&
             session.ExpirationDate < _dateTimeProvider.Now + sessionRefreshDelta)
         {
             await _repository.RefreshSession(userId, sessionId, session.ExpirationDate + sessionRefreshDelta);
         }
 
+        var activityTrackingInterval = TimeSpan.FromMinutes(_config.ActivityTrackingMinutes);
         if (!session.Invisible && (
                 !user.LastActivityUtc.HasValue ||
-                _dateTimeProvider.Now - user.LastActivityUtc.Value > TimeSpan.FromMinutes(1)))
+                _dateTimeProvider.Now - user.LastActivityUtc.Value > activityTrackingInterval))
         {
             var userUpdate = _updateBuilderFactory.Create<User>(user.UserId)
                 .Field(u => u.LastActivityUtc, _dateTimeProvider.Now);
@@ -171,6 +219,11 @@ internal class AuthenticationService : IAuthenticationService
     public async Task<IIdentity> Authenticate(Guid userId)
     {
         var user = await _repository.FindUser(userId);
+        if (user == null)
+        {
+            return Identity.Guest();
+        }
+
         var session = _sessionFactory.Create(false, true);
         var settings = await _repository.FindUserSettings(userId);
         return await CreateAuthenticationResult(user, session, settings);
@@ -180,7 +233,13 @@ internal class AuthenticationService : IAuthenticationService
     public async Task<IIdentity> Logout()
     {
         var identity = _identityProvider.Current;
-        await _repository.RemoveSession(identity.User.UserId, identity.Session.Id);
+
+        // Update activity on logout - this marks the last moment user was active
+        var userUpdate = _updateBuilderFactory.Create<User>(identity.User.UserId)
+            .Field(u => u.LastActivityUtc, _dateTimeProvider.Now);
+        await _repository.UpdateActivity(userUpdate);
+
+        await _repository.RemoveSession(identity.User.UserId, identity.Session!.Id);
         _logger.LogInformation("User logged out. UserId={UserId}", identity.User.UserId);
         return Identity.Guest();
     }
@@ -189,8 +248,36 @@ internal class AuthenticationService : IAuthenticationService
     public async Task<IIdentity> LogoutElsewhere()
     {
         var identity = _identityProvider.Current;
-        await _repository.RemoveSessionsExcept(identity.User.UserId, identity.Session.Id);
+        await _repository.RemoveSessionsExcept(identity.User.UserId, identity.Session!.Id);
         return identity;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<Dto.Session>> GetCurrentUserSessions()
+    {
+        var identity = _identityProvider.Current;
+        return await _repository.GetUserSessions(identity.User.UserId);
+    }
+
+    /// <inheritdoc />
+    public async Task TerminateSession(Guid userId, Guid sessionId)
+    {
+        var identity = _identityProvider.Current;
+
+        // Security check: can only terminate own sessions
+        if (identity.User.UserId != userId)
+        {
+            throw new UnauthorizedAccessException("Cannot terminate sessions of other users");
+        }
+
+        // Cannot terminate current session - use Logout instead
+        if (identity.Session?.Id == sessionId)
+        {
+            throw new InvalidOperationException("Cannot terminate current session. Use logout instead.");
+        }
+
+        await _repository.RemoveSession(userId, sessionId);
+        _logger.LogInformation("Session terminated. UserId={UserId}, SessionId={SessionId}", userId, sessionId);
     }
 
     private async Task RehashPassword(Guid userId, string password)

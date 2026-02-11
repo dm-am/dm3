@@ -67,7 +67,7 @@ export const useMessagingStore = defineStore("messaging", () => {
   async function selectDirectConversation(login: UserLogin) {
     loadingConversation.value = true;
     try {
-      const { data, error: err } = await messagingApi.getDirectConversation(login);
+      const { data, error: err } = await messagingApi.getOrCreateDirectConversation(login);
       if (err) {
         error.value = "Не удалось загрузить прямую переписку";
         selectedConversation.value = null;

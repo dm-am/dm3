@@ -22,15 +22,30 @@ public class UserSettings
     /// <summary>
     /// Paging settings
     /// </summary>
-    public PagingSettings Paging { get; set; }
+    public PagingSettings Paging { get; set; } = null!;
 
     /// <summary>
     /// Message that user's newbies will receive once they are connected
     /// </summary>
-    public string MentorGreetingsMessage { get; set; }
+    public string? MentorGreetingsMessage { get; set; }
 
     /// <summary>
     /// Website color scheme
     /// </summary>
     public ColorSchema ColorSchema { get; set; }
+
+    /// <summary>
+    /// Personal blacklist behavior settings
+    /// </summary>
+    public UserBlacklistSettings BlacklistSettings { get; set; }
+
+    /// <summary>
+    /// Discord notification channel preferences. Null = channel not connected.
+    /// </summary>
+    public NotificationChannelPreferences? DiscordPreferences { get; set; }
+
+    /// <summary>
+    /// Telegram notification channel preferences. Null = channel not connected.
+    /// </summary>
+    public NotificationChannelPreferences? TelegramPreferences { get; set; }
 }

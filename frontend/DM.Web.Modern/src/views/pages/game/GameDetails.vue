@@ -2,11 +2,11 @@
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore, useUserStore } from "@/stores";
-import ContentMessage from "@/components/content/ContentMessage.vue";
+import ContentText from "@/components/content/ContentText.vue";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
 import BlockTitle from "@/components/layout/BlockTitle.vue";
 import UserLink from "@/components/community/UserLink.vue";
-import { GameParticipation } from "@/api/models/gaming";
+import { GameParticipation } from "@/api/models/game";
 
 const gameStore = useGameDetailsStore();
 const { game, rooms, characters } = storeToRefs(gameStore);
@@ -38,13 +38,13 @@ const tags = computed(() => game.value?.tags ?? []);
     <!-- Game Description -->
     <section class="game-section" v-if="game.info">
       <block-title>Описание игры</block-title>
-      <content-message :text="game.info" />
+      <content-text :html="game.info" />
     </section>
 
     <!-- Noteworthy (master's notes visible to all) -->
     <section class="game-section" v-if="game.notes && isAuthority">
       <block-title>Заметки мастера</block-title>
-      <content-message :text="game.notes" />
+      <content-text :html="game.notes" />
     </section>
 
     <!-- Game Stats -->

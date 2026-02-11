@@ -41,3 +41,24 @@ public class HttpBadRequestException : HttpException
         string message = "Invalid request parameters")
         : base(HttpStatusCode.BadRequest, message) => ValidationErrors = errors;
 }
+
+/// <summary>
+/// HTTP exception with validation errors and custom status code
+/// </summary>
+public class HttpValidationException : HttpException
+{
+    /// <summary>
+    /// Key-value list of invalid fields and validation errors
+    /// </summary>
+    public IDictionary<string, string> ValidationErrors { get; }
+
+    /// <summary>
+    /// New HTTP Validation exception with custom status code
+    /// </summary>
+    /// <param name="statusCode">HTTP status code (e.g., 401, 429)</param>
+    /// <param name="errors">Key-value list of invalid client fields and errors</param>
+    /// <param name="message">Client message</param>
+    public HttpValidationException(HttpStatusCode statusCode, IDictionary<string, string> errors,
+        string message = "Validation failed")
+        : base(statusCode, message) => ValidationErrors = errors;
+}

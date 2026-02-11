@@ -22,7 +22,7 @@ internal class NotificationFactory : INotificationFactory
     public Notification Create(CreateNotification createNotification, DateTimeOffset createDate) => new()
     {
         NotificationId = _guidFactory.Create(),
-        CreateDate = createDate.UtcDateTime,
+        CreatedUtc = createDate.UtcDateTime,
         EventType = createNotification.EventType,
         UsersNotified = new List<Guid>(),
         UsersInterested = createNotification.UsersInterested,

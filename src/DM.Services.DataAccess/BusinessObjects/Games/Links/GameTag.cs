@@ -31,11 +31,11 @@ public class GameTag
     /// Game
     /// </summary>
     [ForeignKey(nameof(GameId))]
-    public virtual Game Game { get; set; }
+    public virtual Game Game { get; set; } = null!;
 
     /// <summary>
     /// Tag
     /// </summary>
     [ForeignKey(nameof(TagId))]
-    public virtual Tag Tag { get; set; }
+    public virtual Tag Tag { get; set; } = null!;
 }

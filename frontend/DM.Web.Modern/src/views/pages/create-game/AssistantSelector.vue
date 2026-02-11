@@ -22,10 +22,10 @@ watch(model, (newValue) => {
   <div class="assistant-selector">
     <user-autocomplete
       v-model="selectedLogin"
-      placeholder="Введите логин помощника..."
+      placeholder=""
     />
     <secondary-text class="helper-text">
-      Помощник сможет управлять персонажами и постами в игре
+      Ассистент сможет управлять персонажами и постами в игре
     </secondary-text>
   </div>
 </template>

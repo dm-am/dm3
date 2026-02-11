@@ -10,23 +10,23 @@ namespace DM.Services.Community.BusinessProcesses.Users.Updating;
 /// <inheritdoc />
 internal class UserUpdatingRepository : MongoCollectionRepository<UserSettings>, IUserUpdatingRepository
 {
-    private readonly DmDbContext dbContext;
-    private readonly DmMongoClient mongoClient;
+    private readonly DmDbContext _dbContext;
+    private readonly DmMongoClient _mongoClient;
 
     /// <inheritdoc />
     public UserUpdatingRepository(
         DmDbContext dbContext,
         DmMongoClient mongoClient) : base(mongoClient)
     {
-        this.dbContext = dbContext;
-        this.mongoClient = mongoClient;
+        _dbContext = dbContext;
+        _mongoClient = mongoClient;
     }
 
     /// <inheritdoc />
     public async Task UpdateUser(IUpdateBuilder<User> updateUser, IUpdateBuilder<UserSettings> settingsUpdate)
     {
-        updateUser.AttachTo(dbContext);
-        await dbContext.SaveChangesAsync();
-        await settingsUpdate.UpdateFor(mongoClient, true);
+        updateUser.AttachTo(_dbContext);
+        await _dbContext.SaveChangesAsync();
+        await settingsUpdate.UpdateFor(_mongoClient, true);
     }
 }

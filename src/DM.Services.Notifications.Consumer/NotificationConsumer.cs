@@ -74,7 +74,7 @@ internal class NotificationConsumer : BackgroundService
                 EventType.StatusCharacterReturned,
 
                 // Posts
-                EventType.PostVoted
+                EventType.PostReviewed
             }.ToRoutingKeys(),
         };
         var consumer = _consumerBuilder.BuildRabbit<InvokedEvent, NotificationProcessor>(parameters);

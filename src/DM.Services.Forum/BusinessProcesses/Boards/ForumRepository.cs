@@ -33,6 +33,6 @@ internal class BoardRepository(
             return boards;
         }
 
-        return boards.Where(b => (b.ViewPolicy & accessPolicy) != BoardAccessPolicy.NoOne).ToArray();
+        return boards.Where(b => (b.ViewPolicy & accessPolicy) != BoardAccessPolicy.None).ToArray();
     }
 }

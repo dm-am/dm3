@@ -36,13 +36,13 @@ internal class CommentChangedIndexer : BaseIndexer
     {
         var comment = await _dbContext.Comments
             .Where(c => c.CommentId == message.EntityId)
-            .Select(c => new {c.Text, c.Topic.Board.ViewPolicy, c.Topic.ForumTopicId})
+            .Select(c => new {c.Text, c.Topic!.Board.ViewPolicy, c.Topic!.TopicId})
             .FirstAsync();
 
         await _indexingRepository.Index(new SearchEntity
         {
             Id = message.EntityId,
-            ParentEntityId = comment.ForumTopicId,
+            ParentEntityId = comment.TopicId,
             EntityType = SearchEntityType.ForumComment,
             Text = _bbParserProvider.CurrentCommon.Parse(comment.Text).ToHtml(),
             AuthorizedRoles = comment.ViewPolicy.GetAuthorizedRoles()

@@ -11,27 +11,27 @@ public class CharacterDetails : Character
     /// <summary>
     /// Character appearance
     /// </summary>
-    public string Appearance { get; set; }
+    public string Appearance { get; set; } = null!;
 
     /// <summary>
     /// Character temper
     /// </summary>
-    public string Temper { get; set; }
+    public string Temper { get; set; } = null!;
 
     /// <summary>
     /// Character story
     /// </summary>
-    public string Story { get; set; }
+    public string Story { get; set; } = null!;
 
     /// <summary>
     /// Character skills
     /// </summary>
-    public string Skills { get; set; }
+    public string Skills { get; set; } = null!;
 
     /// <summary>
     /// Character inventory
     /// </summary>
-    public string Inventory { get; set; }
+    public string Inventory { get; set; } = null!;
 
     /// <summary>
     /// Character alignment
@@ -41,10 +41,10 @@ public class CharacterDetails : Character
     /// <summary>
     /// Character attributes
     /// </summary>
-    public IEnumerable<CharacterAttribute> Attributes { get; set; }
+    public IEnumerable<CharacterAttribute> Attributes { get; set; } = [];
 
     /// <summary>
     /// Character privacy settings
     /// </summary>
-    public CharacterPrivacySettings Privacy { get; set; }
+    public CharacterPrivacySettings Privacy { get; set; } = null!;
 }

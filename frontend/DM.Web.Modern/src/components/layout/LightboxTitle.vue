@@ -6,7 +6,10 @@
 @import "src/assets/styles/Themes"
 
 h2
-  margin-bottom: $small
-  font-size: $title-font-size
+  margin: 0 0 $small
+  font-size: $font-size
+  font-weight: bold
+  text-transform: uppercase
+  letter-spacing: 0.5px
   color: $heading
 </style>

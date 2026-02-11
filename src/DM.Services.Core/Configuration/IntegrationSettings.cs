@@ -29,4 +29,9 @@ public class IntegrationSettings
     /// External URLs for CORS policies
     /// </summary>
     public string[] CorsUrls { get; set; } = [];
+
+    /// <summary>
+    /// Base URL for static assets (logo, images in emails)
+    /// </summary>
+    public string StaticAssetsUrl { get; set; } = null!;
 }

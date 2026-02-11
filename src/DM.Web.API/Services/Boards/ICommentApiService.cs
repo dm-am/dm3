@@ -12,6 +12,14 @@ namespace DM.Web.API.Services.Boards;
 public interface ICommentApiService
 {
     /// <summary>
+    /// Get topic discussion with permission flags
+    /// </summary>
+    /// <param name="topicId">Topic identifier</param>
+    /// <param name="query">Paging query</param>
+    /// <returns>Discussion response with comments and metadata</returns>
+    Task<DiscussionResponse> GetDiscussion(Guid topicId, PagingQuery query);
+
+    /// <summary>
     /// Get topics commentaries
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
@@ -23,9 +31,9 @@ public interface ICommentApiService
     /// Create new comment
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
-    /// <param name="comment">Comment model</param>
+    /// <param name="request">Comment creation request</param>
     /// <returns>Envelope of created comment</returns>
-    Task<Envelope<Comment>> Create(Guid topicId, Comment comment);
+    Task<Envelope<Comment>> Create(Guid topicId, CreateCommentRequest request);
 
     /// <summary>
     /// Get comment by identifier

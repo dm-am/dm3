@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using AutoMapper;
 using DM.Services.Authentication.Implementation.UserIdentity;
-using DM.Services.Gaming.Dto;
-using DM.Services.Gaming.Dto.Output;
-using ServiceGame = DM.Services.Gaming.Dto.Output.Game;
+using DM.Services.Game.Dto;
+using DM.Services.Game.Dto.Output;
+using ServiceGame = DM.Services.Game.Dto.Output.Game;
 
 namespace DM.Web.API.Dto.Games;
 

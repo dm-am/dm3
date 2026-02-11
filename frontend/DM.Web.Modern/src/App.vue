@@ -20,6 +20,7 @@
       </div>
     </div>
     <modals-container />
+    <TheToastContainer />
   </div>
 </template>
 
@@ -29,6 +30,7 @@ import { onMounted, watch } from "vue";
 import { ModalsContainer } from "vue-final-modal";
 import TheHeader from "@/views/layout/TheHeader.vue";
 import TheFooter from "@/views/layout/TheFooter.vue";
+import TheToastContainer from "@/components/TheToastContainer.vue";
 import { useGlobalSignalR } from "@/composables/useSignalR";
 import { EventType } from "@/api/models/notifications/signalr";
 import type { SignalRNotification } from "@/api/models/notifications/signalr";
@@ -57,7 +59,7 @@ watch(
 function handleNotification(notification: SignalRNotification) {
   switch (notification.eventType) {
     case EventType.NewMessage:
-    case EventType.NewChatMessage:
+    case EventType.NewGlobalChatMessage:
       // Refresh unread count when new message arrives
       messagingStore.fetchUnreadCount();
       break;
@@ -108,7 +110,9 @@ onMounted(async () => {
 
 .content-container
   position: relative
-  min-height: 100%
+  display: flex
+  flex-direction: column
+  min-height: 100vh
   min-width: $min-width
   &:before
     content: ''
@@ -123,13 +127,12 @@ onMounted(async () => {
 
 .content-wrapper
   position: relative
-  min-height: 100%
+  flex: 1 0 auto
   min-width: $min-width
-  padding-bottom: $footer-height
 
 .content-body
   display: flex
-  padding-bottom: $footer-height + $big
+  padding-bottom: $big
 
 .content-menu
   width: $sidebar-width

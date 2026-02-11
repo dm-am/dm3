@@ -1,5 +1,5 @@
 using System;
-using DM.Services.DataAccess.BusinessObjects.Boards;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
 using DM.Services.Forum.Dto.Input;
 
 namespace DM.Services.Forum.BusinessProcesses.Topics.Creating;
@@ -16,5 +16,5 @@ internal interface ITopicFactory
     /// <param name="userId">Author identifier</param>
     /// <param name="createTopic">Topic DTO</param>
     /// <returns></returns>
-    ForumTopic Create(Guid forumId, Guid userId, CreateTopic createTopic);
+    TopicDal Create(Guid forumId, Guid userId, CreateTopic createTopic);
 }

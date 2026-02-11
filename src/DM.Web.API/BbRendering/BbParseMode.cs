@@ -6,7 +6,7 @@ namespace DM.Web.API.BbRendering;
 public enum BbParseMode
 {
     /// <summary>
-    /// General text parse mode
+    /// General text parse mode (used for messages, comments, etc.)
     /// </summary>
     Common = 0,
 
@@ -18,10 +18,5 @@ public enum BbParseMode
     /// <summary>
     /// Game post parse mode
     /// </summary>
-    Post = 3,
-
-    /// <summary>
-    /// Chat message parse mode
-    /// </summary>
-    Chat = 4
+    Post = 3
 }

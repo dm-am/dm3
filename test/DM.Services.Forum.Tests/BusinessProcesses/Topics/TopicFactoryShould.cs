@@ -1,6 +1,6 @@
 using System;
 using DM.Services.Core.Implementation;
-using DM.Services.DataAccess.BusinessObjects.Boards;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
 using DM.Services.Forum.BusinessProcesses.Topics.Creating;
 using DM.Services.Forum.Dto.Input;
 using DM.Tests.Core;
@@ -40,9 +40,9 @@ public class TopicFactoryShould : UnitTestBase
             Title = "title"
         });
 
-        actual.Should().BeEquivalentTo(new ForumTopic
+        actual.Should().BeEquivalentTo(new TopicDal
         {
-            ForumTopicId = topicId,
+            TopicId = topicId,
             BoardId = forumId,
             UserId = userId,
             CreatedUtc = rightNow,

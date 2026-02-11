@@ -114,7 +114,6 @@ function handleWarn(_id: string) {
       @warn="handleWarn"
     />
   </template>
-  <the-loader v-else :big="true" />
   <router-view />
 
   <!-- Comment input area -->

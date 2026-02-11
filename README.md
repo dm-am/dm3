@@ -2,65 +2,73 @@
 
 Платформа для текстовых ролевых игр.
 
----
-
-## Документация
-
-| Документ | Описание |
-|----------|----------|
-| [docs/README.md](./docs/README.md) | **Индекс документации** |
-| [docs/SETUP.md](./docs/SETUP.md) | Установка и запуск |
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Архитектура проекта |
-| [docs/PROJECT_STANDARDS.md](./docs/PROJECT_STANDARDS.md) | Стандарты разработки |
+**Стек:** .NET 8, PostgreSQL, MongoDB, RabbitMQ, Vue 3, TypeScript
 
 ---
 
 ## Быстрый старт
 
-### 1. Требования
+```powershell
+# Windows
+.\scripts\dm.ps1 start    # Запуск Docker + API
+.\scripts\dm.ps1 seed     # Тестовые данные
+.\scripts\dm.ps1 stop     # Остановка
+.\scripts\dm.ps1 reset    # Сброс БД и перезапуск
+.\scripts\dm.ps1 status   # Статус сервисов
+.\scripts\dm.ps1 logs     # Логи (или logs dm-api)
 
-- Docker Desktop (WSL2 на Windows)
-- Node.js 20+
-- Yarn
+# Linux/Mac — те же команды через ./scripts/dm.sh
 
-### 2. Запуск
-
-```bash
-# Инфраструктура
-cd docker && docker-compose up -d
-
-# Frontend
-cd frontend/DM.Web.Modern
-yarn install && yarn dev
+# Frontend (отдельно)
+cd frontend/DM.Web.Modern && npm install && npm run dev
 ```
-
-### 3. Доступ
 
 | Сервис | URL |
 |--------|-----|
 | Frontend | http://localhost:5173 |
-| API | http://localhost:5051 |
-| Swagger | http://localhost:5051/swagger |
-| MinIO | http://localhost:9001 (minio/miniokey) |
-| RabbitMQ | http://localhost:15672 (guest/guest) |
-| MailHog | http://localhost:5025 |
+| API / Swagger | http://localhost:5000 |
+| MinIO | http://localhost:9001 |
+| MailHog | http://localhost:8025 |
 
-### 4. Настройка MinIO
-
-1. Откройте http://localhost:9001, войдите `minio` / `miniokey`
-2. Создайте bucket `dm-uploads`
-3. Установите Access Policy: `Public`
+**Подробнее:** [docs/guides/SETUP.md](./docs/guides/SETUP.md)
 
 ---
 
-## Тестовые аккаунты
+## Документация
 
-Перейдите на `/dev/accounts` и нажмите "Создать тестовые аккаунты".
+### Guides (как делать)
 
-| Логин | Пароль | Роль |
-|-------|--------|------|
-| Alice | `Test123!` | RegularUser |
-| Rayzen | `Test123!` | SeniorModerator |
+| Документ | Описание |
+|----------|----------|
+| [SETUP.md](./docs/guides/SETUP.md) | Установка, порты, тестовые аккаунты |
+| [TESTING.md](./docs/guides/TESTING.md) | Тестирование |
+| [DEPLOYMENT.md](./docs/guides/DEPLOYMENT.md) | Деплоймент и бэкапы |
+| [MIRRORING.md](./docs/guides/MIRRORING.md) | Настройка зеркал |
+
+### Architecture (как устроено)
+
+| Документ | Описание |
+|----------|----------|
+| [OVERVIEW.md](./docs/architecture/OVERVIEW.md) | Общая архитектура |
+| [DATABASE.md](./docs/architecture/DATABASE.md) | Схема БД |
+| [AUTHENTICATION.md](./docs/architecture/AUTHENTICATION.md) | Аутентификация и безопасность |
+| [RBAC.md](./docs/architecture/RBAC.md) | Роли и права доступа |
+
+### Reference
+
+| Документ | Описание |
+|----------|----------|
+| [API REFERENCE.md](./docs/api/REFERENCE.md) | API эндпоинты |
+| [CODE.md](./docs/standards/CODE.md) | Стандарты кода |
+| [GLOSSARY.md](./docs/reference/GLOSSARY.md) | Термины |
+
+### Tasks
+
+| Документ | Описание |
+|----------|----------|
+| [ROADMAP.md](./docs/tasks/ROADMAP.md) | План развития |
+| [BACKLOG.md](./docs/tasks/BACKLOG.md) | Бэклог задач |
+| [AUDIT.md](./docs/tasks/AUDIT.md) | План аудита |
 
 ---
 
@@ -70,17 +78,19 @@ yarn install && yarn dev
 dm3/
 ├── src/                    # Backend (.NET 8)
 │   ├── DM.Services.*/      # Доменные сервисы
-│   ├── DM.Web.API/         # REST API
+│   ├── DM.Web.API/         # REST API + appsettings.json
 │   └── DM.Web.Core/        # Web инфраструктура
 ├── test/                   # Backend тесты
-├── frontend/
-│   └── DM.Web.Modern/      # Frontend (Vue 3 + TypeScript)
-├── docker/                 # Docker конфигурация
+├── frontend/DM.Web.Modern/ # Frontend (Vue 3 + TypeScript)
+├── docker/                 # Docker конфигурация + .env
+├── scripts/                # CLI скрипты (dm.ps1, dm.sh, seed.js)
 └── docs/                   # Документация
 ```
 
 ---
 
-## Работа с почтой
+## Принципы документации
 
-Email-ы отправляются в MailHog: http://localhost:5025
+- **Минимум дублирования** — ссылки вместо копирования
+- **Код > документация** — паттерны смотреть в коде
+- **Только необходимое** — то, что нельзя узнать из кода

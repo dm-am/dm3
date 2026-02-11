@@ -27,25 +27,25 @@ public class SearchEntity
     /// <summary>
     /// Title to index
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Text to index
     /// </summary>
-    public string Text { get; set; }
+    public string Text { get; set; } = null!;
 
     /// <summary>
     /// Authorized roles list
     /// </summary>
-    public IEnumerable<UserRole> AuthorizedRoles { get; set; }
+    public IEnumerable<UserRole> AuthorizedRoles { get; set; } = [];
 
     /// <summary>
     /// Authorized user ids list
     /// </summary>
-    public IEnumerable<Guid> AuthorizedUsers { get; set; }
+    public IEnumerable<Guid> AuthorizedUsers { get; set; } = [];
 
     /// <summary>
     /// Unauthorized user ids list
     /// </summary>
-    public IEnumerable<Guid> UnauthorizedUsers { get; set; }
+    public IEnumerable<Guid> UnauthorizedUsers { get; set; } = [];
 }

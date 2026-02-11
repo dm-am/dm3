@@ -11,5 +11,5 @@ public class RealtimeNotification : UserNotification
     /// <summary>
     /// Identifiers of users who might be interested in this notification
     /// </summary>
-    public IEnumerable<Guid> RecipientIds { get; set; }
+    public IEnumerable<Guid> RecipientIds { get; set; } = [];
 }

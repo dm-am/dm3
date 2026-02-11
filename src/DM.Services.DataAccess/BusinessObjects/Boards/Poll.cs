@@ -38,12 +38,12 @@ public class Poll : IRemovable
     /// <summary>
     /// Question text
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Options
     /// </summary>
-    public List<PollOption> Options { get; set; }
+    public List<PollOption> Options { get; set; } = [];
 
     /// <summary>
     /// Removed flag
@@ -65,10 +65,10 @@ public class PollOption
     /// <summary>
     /// Answer text
     /// </summary>
-    public string Text { get; set; }
+    public string Text { get; set; } = null!;
 
     /// <summary>
     /// Voted users identifiers
     /// </summary>
-    public List<Guid> UserIds { get; set; }
+    public List<Guid> UserIds { get; set; } = [];
 }

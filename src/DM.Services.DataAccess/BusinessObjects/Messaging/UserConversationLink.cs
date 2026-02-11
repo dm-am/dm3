@@ -33,11 +33,11 @@ public class UserConversationLink : IRemovable
     /// Participant
     /// </summary>
     [ForeignKey(nameof(UserId))]
-    public virtual User User { get; set; }
+    public virtual User User { get; set; } = null!;
 
     /// <summary>
     /// Conversation
     /// </summary>
     [ForeignKey(nameof(ConversationId))]
-    public virtual Conversation Conversation { get; set; }
+    public virtual Conversation Conversation { get; set; } = null!;
 }

@@ -13,7 +13,7 @@ public interface IIdentity
     /// <summary>
     /// Current authentication session
     /// </summary>
-    Session Session { get; }
+    Session? Session { get; }
 
     /// <summary>
     /// Current authenticated user settings
@@ -28,5 +28,5 @@ public interface IIdentity
     /// <summary>
     /// Current authentication token, provided or generated
     /// </summary>
-    string AuthenticationToken { get; }
+    string? AuthenticationToken { get; }
 }

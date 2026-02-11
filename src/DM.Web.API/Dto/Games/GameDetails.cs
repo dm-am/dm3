@@ -13,27 +13,27 @@ public class GameDetails : Game
     /// <summary>
     /// Game public information (BBCode)
     /// </summary>
-    public InfoBbText Info { get; set; }
+    public InfoBbText Info { get; set; } = null!;
 
     /// <summary>
     /// Game privacy settings
     /// </summary>
-    public GamePrivacySettings PrivacySettings { get; set; }
+    public GamePrivacySettings PrivacySettings { get; set; } = null!;
 
     /// <summary>
     /// Attribute schema details
     /// </summary>
-    public AttributeSchema Schema { get; set; }
+    public AttributeSchema Schema { get; set; } = null!;
 
     /// <summary>
     /// Game readers
     /// </summary>
-    public IEnumerable<User> Readers { get; set; }
+    public IEnumerable<User> Readers { get; set; } = [];
 
     /// <summary>
     /// Game characters (short info)
     /// </summary>
-    public IEnumerable<CharacterShortInfo> Characters { get; set; }
+    public IEnumerable<CharacterShortInfo> Characters { get; set; } = [];
 }
 
 /// <summary>
@@ -49,12 +49,12 @@ public class CharacterShortInfo
     /// <summary>
     /// Character name
     /// </summary>
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 
     /// <summary>
     /// Character owner
     /// </summary>
-    public User Author { get; set; }
+    public User Author { get; set; } = null!;
 
     /// <summary>
     /// Character status

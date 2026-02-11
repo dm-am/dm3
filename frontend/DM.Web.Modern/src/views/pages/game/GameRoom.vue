@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
-import { useGameDetailsStore } from "@/stores";
+import { useGameDetailsStore, useUserStore } from "@/stores";
 import { extractNumberParam } from "@/router";
 import { useFetchData } from "@/composables/useFetchData";
-import TheLoader from "@/components/TheLoader.vue";
+import { useScrollToElement } from "@/composables/useScrollToElement";
+import gameApi from "@/api/requests/gameApi";
 import ThePaging from "@/components/ThePaging.vue";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
 import BlockTitle from "@/components/layout/BlockTitle.vue";
@@ -14,8 +15,8 @@ import { IconType } from "@/components/icons/iconType";
 import GamePost from "./GamePost.vue";
 
 const route = useRoute();
-const router = useRouter();
 const gameStore = useGameDetailsStore();
+const userStore = useUserStore();
 const {
   game,
   currentRoom,
@@ -28,16 +29,24 @@ const {
 const roomId = computed(() => route.params.roomId as string);
 const currentPage = computed(() => extractNumberParam(route.params.n));
 
-function handlePageChange(page: number) {
-  router.push({
-    name: "game-room",
-    params: {
-      id: game.value?.id,
-      roomId: roomId.value,
-      n: page > 1 ? page : undefined,
-    },
-  });
-}
+// Scroll to target element when posts are loaded
+const postsLoaded = computed(() => posts.value.length > 0 && !postsLoading.value);
+useScrollToElement(postsLoaded);
+
+// Mark room as read when posts are loaded (for authenticated users)
+watch(
+  postsLoaded,
+  async (loaded) => {
+    if (loaded && userStore.user && roomId.value) {
+      try {
+        await gameApi.markRoomAsRead(roomId.value);
+      } catch {
+        // Silently ignore - non-critical operation
+      }
+    }
+  },
+  { once: true },
+);
 
 useFetchData(
   () => gameStore.loadPosts(roomId.value, currentPage.value),
@@ -70,11 +79,8 @@ useFetchData(
       {{ currentRoom.title }}
     </block-title>
 
-    <!-- Loading -->
-    <the-loader v-if="postsLoading" />
-
     <!-- Error -->
-    <div v-else-if="postsError" class="posts-error">
+    <div v-if="postsError" class="posts-error">
       {{ postsError }}
     </div>
 
@@ -85,15 +91,19 @@ useFetchData(
 
     <!-- Posts list -->
     <div v-else class="posts-list">
-      <game-post v-for="post in posts" :key="post.id" :post="post" />
+      <game-post
+        v-for="post in posts"
+        :key="post.id"
+        :post="post"
+        :data-id="post.id"
+      />
     </div>
 
     <!-- Paging -->
     <the-paging
-      v-if="postsPaging && postsPaging.pagesCount > 1"
-      :current="postsPaging.currentPage"
-      :total="postsPaging.pagesCount"
-      @change="handlePageChange"
+      v-if="postsPaging && postsPaging.pages > 1"
+      :paging="postsPaging"
+      :to="{ name: 'game-room', params: { id: game?.id, roomId: roomId } }"
     />
   </div>
 </template>

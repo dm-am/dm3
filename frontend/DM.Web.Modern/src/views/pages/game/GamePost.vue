@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { Post } from "@/api/models/gaming";
-import ContentMessage from "@/components/content/ContentMessage.vue";
+import type { Post } from "@/api/models/game";
+import ContentText from "@/components/content/ContentText.vue";
 import UserLink from "@/components/community/UserLink.vue";
 import HumanDate from "@/components/dates/HumanDate.vue";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
@@ -48,19 +48,19 @@ const hasMasterMessage = computed(() => !!props.post.masterMessage?.html);
 
     <!-- Main text -->
     <div class="post-content">
-      <content-message :text="post.text.html" />
+      <content-text :html="post.text.html" />
     </div>
 
     <!-- Commentary (OOC text) -->
     <div v-if="hasCommentary" class="post-commentary">
       <secondary-text class="commentary-label">OOC:</secondary-text>
-      <content-message :text="post.commentary!.html" />
+      <content-text :html="post.commentary!.html" />
     </div>
 
     <!-- Master message (private to master) -->
     <div v-if="hasMasterMessage" class="post-master-message">
       <secondary-text class="master-label">Мастеру:</secondary-text>
-      <content-message :text="post.masterMessage!.html" />
+      <content-text :html="post.masterMessage!.html" />
     </div>
 
     <!-- Dice rolls -->
@@ -106,7 +106,7 @@ const hasMasterMessage = computed(() => !!props.post.masterMessage?.html);
 
 .character-name
   font-weight: bold
-  color: $accent-blue
+  color: $link
 
 .character-player
   font-size: $secondary-font-size
@@ -135,13 +135,13 @@ const hasMasterMessage = computed(() => !!props.post.masterMessage?.html);
   padding: $small
   background-color: $bg-element-accent
   border-radius: $border-radius
-  border-left: 3px solid $accent-orange
+  border-left: 3px solid $link
 
 .commentary-label
   display: block
   margin-bottom: $tiny
   font-weight: bold
-  color: $accent-orange
+  color: $link
 
 .post-master-message
   margin-top: $small

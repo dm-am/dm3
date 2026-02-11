@@ -1,22 +1,21 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { ref, computed, watch } from "vue";
+import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore, useUserStore } from "@/stores";
 import { extractNumberParam } from "@/router";
 import { useFetchData } from "@/composables/useFetchData";
-import TheLoader from "@/components/TheLoader.vue";
+import { useScrollToElement } from "@/composables/useScrollToElement";
 import ThePaging from "@/components/ThePaging.vue";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
 import TheComment from "@/components/comments/TheComment.vue";
 import BBCodeEditor from "@/components/inputs/BBCodeEditor.vue";
 import TheButton from "@/components/inputs/TheButton.vue";
-import gamingApi from "@/api/requests/gamingApi";
+import gameApi from "@/api/requests/gameApi";
 import { AccessPolicy, UserRole } from "@/api/models/community";
-import { CommentariesAccessMode, GameParticipation } from "@/api/models/gaming";
+import { CommentariesAccessMode, GameParticipation } from "@/api/models/game";
 
 const route = useRoute();
-const router = useRouter();
 const gameStore = useGameDetailsStore();
 const { user } = storeToRefs(useUserStore());
 const {
@@ -78,15 +77,24 @@ const canViewComments = computed(() => {
   return true;
 });
 
-function handlePageChange(page: number) {
-  router.push({
-    name: "game-comments",
-    params: {
-      id: game.value?.id,
-      n: page > 1 ? page : undefined,
-    },
-  });
-}
+// Scroll to target element when comments are loaded
+const commentsLoaded = computed(() => comments.value.length > 0 && !commentsLoading.value);
+useScrollToElement(commentsLoaded);
+
+// Mark comments as read when loaded (for authenticated users)
+watch(
+  commentsLoaded,
+  async (loaded) => {
+    if (loaded && user.value && gameId.value) {
+      try {
+        await gameApi.markCommentsAsRead(gameId.value);
+      } catch {
+        // Silently ignore - non-critical operation
+      }
+    }
+  },
+  { once: true },
+);
 
 async function handleSend() {
   if (!newComment.value.trim() || sending.value || !game.value) return;
@@ -97,7 +105,7 @@ async function handleSend() {
   sending.value = true;
 
   try {
-    await gamingApi.createGameComment(game.value.id, { text });
+    await gameApi.createGameComment(game.value.id, { text });
     // Reload comments
     await gameStore.loadComments(game.value.id, currentPage.value);
   } finally {
@@ -127,9 +135,6 @@ useFetchData(
       <secondary-text>Комментарии доступны только участникам игры</secondary-text>
     </div>
 
-    <!-- Loading -->
-    <the-loader v-else-if="commentsLoading" />
-
     <!-- Error -->
     <div v-else-if="commentsError" class="comments-error">
       {{ commentsError }}
@@ -146,15 +151,15 @@ useFetchData(
           v-for="comment in comments"
           :key="comment.id"
           :comment="comment"
+          :data-id="comment.id"
         />
       </div>
 
       <!-- Paging -->
       <the-paging
-        v-if="commentsPaging && commentsPaging.pagesCount > 1"
-        :current="commentsPaging.currentPage"
-        :total="commentsPaging.pagesCount"
-        @change="handlePageChange"
+        v-if="commentsPaging && commentsPaging.pages > 1"
+        :paging="commentsPaging"
+        :to="{ name: 'game-comments', params: { id: game?.id } }"
       />
 
       <!-- Comment input -->

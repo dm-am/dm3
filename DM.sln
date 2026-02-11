@@ -22,7 +22,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "common", "common", "{07B756
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "notifications", "notifications", "{78A85DB2-A835-4301-9D9A-476A5FDB146B}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "gaming", "gaming", "{152855A4-4364-48C3-AB0A-D6822D6A8F3D}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "game", "game", "{152855A4-4364-48C3-AB0A-D6822D6A8F3D}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "solution-items", "solution-items", "{60E4E464-934E-42F0-8137-3F2BA8E3063B}"
 	ProjectSection(SolutionItems) = preProject
@@ -57,9 +57,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DM.Services.Forum", "src\DM
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DM.Services.Forum.Tests", "test\DM.Services.Forum.Tests\DM.Services.Forum.Tests.csproj", "{BB9F3C58-D130-42B6-89FD-6EC4F894D031}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DM.Services.Gaming", "src\DM.Services.Gaming\DM.Services.Gaming.csproj", "{7F4924CC-2912-49E2-BB24-77736E083A62}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DM.Services.Game", "src\DM.Services.Game\DM.Services.Game.csproj", "{7F4924CC-2912-49E2-BB24-77736E083A62}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DM.Services.Gaming.Tests", "test\DM.Services.Gaming.Tests\DM.Services.Gaming.Tests.csproj", "{3CE806ED-3142-4D48-B26D-2673BC7304FB}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DM.Services.Game.Tests", "test\DM.Services.Game.Tests\DM.Services.Game.Tests.csproj", "{3CE806ED-3142-4D48-B26D-2673BC7304FB}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DM.Services.Notifications", "src\DM.Services.Notifications\DM.Services.Notifications.csproj", "{5521D994-76DD-4A35-A15A-0EAB1109F578}"
 EndProject

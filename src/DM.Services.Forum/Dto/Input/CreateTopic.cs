@@ -8,15 +8,15 @@ public class CreateTopic
     /// <summary>
     /// Parent board title
     /// </summary>
-    public string BoardTitle { get; set; }
+    public string BoardTitle { get; set; } = null!;
 
     /// <summary>
     /// New topic title
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// New topic description text
     /// </summary>
-    public string Text { get; set; }
+    public string Text { get; set; } = null!;
 }

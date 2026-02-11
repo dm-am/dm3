@@ -1,27 +1,44 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace DM.Web.Core.Authentication.Credentials;
 
 /// <summary>
-/// Login-password credentials
+/// Login credentials for authentication
 /// </summary>
 public class LoginCredentials : AuthCredentials
 {
     /// <summary>
-    /// Login
+    /// User email address
     /// </summary>
-    public string Login { get; set; }
+    /// <example>john@example.com</example>
+    [Required(ErrorMessage = "Email is required")]
+    [StringLength(100, MinimumLength = 1, ErrorMessage = "Email must be between 1 and 100 characters")]
+    [EmailAddress(ErrorMessage = "Invalid email format")]
+    public string Email { get; set; } = "";
 
     /// <summary>
-    /// Password
+    /// User password
     /// </summary>
-    public string Password { get; set; }
+    [Required(ErrorMessage = "Password is required")]
+    [StringLength(128, MinimumLength = 1, ErrorMessage = "Password must be between 1 and 128 characters")]
+    public string Password { get; set; } = "";
 
     /// <summary>
-    /// Flag to create persistent session
+    /// Honeypot field for bot protection - must be left empty
     /// </summary>
-    public bool RememberMe { get; set; }
+    /// <remarks>
+    /// This field is invisible to users but often filled by automated bots.
+    /// If this field contains any value, the login attempt will be rejected.
+    /// </remarks>
+    public string? Website { get; set; }
 
     /// <summary>
-    /// Honeypot field for bot protection (should be empty)
+    /// Remember session for 1 year (true) or 24 hours (false)
     /// </summary>
-    public string Website { get; set; }
+    /// <remarks>
+    /// When true, the session cookie will persist for 1 year.
+    /// When false, the session expires after 24 hours of inactivity.
+    /// Defaults to true for convenience.
+    /// </remarks>
+    public bool RememberMe { get; set; } = true;
 }

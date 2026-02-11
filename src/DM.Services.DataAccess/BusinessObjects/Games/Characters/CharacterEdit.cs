@@ -36,11 +36,11 @@ public class CharacterEdit
     /// Parent character
     /// </summary>
     [ForeignKey(nameof(CharacterId))]
-    public virtual Character Character { get; set; }
+    public virtual Character Character { get; set; } = null!;
 
     /// <summary>
     /// Editor user
     /// </summary>
     [ForeignKey(nameof(EditorUserId))]
-    public virtual User Editor { get; set; }
+    public virtual User Editor { get; set; } = null!;
 }

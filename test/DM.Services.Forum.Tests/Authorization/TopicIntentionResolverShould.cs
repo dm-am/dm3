@@ -49,7 +49,25 @@ public class TopicIntentionResolverShould
     }
 
     [Fact]
-    public void ForbidEditWhenUserNotAuthorAndNotLocalModeratorAndNotAdministrator()
+    public void ForbidEditWhenUserNotAuthorAndNotLocalModeratorAndNotModerator()
+    {
+        var actual = resolver.IsAllowed(
+            Create.User().WithRole(UserRole.Mentor).Please(),
+            TopicIntention.Edit,
+            new Topic
+            {
+                Author = Create.User().Please(),
+                IsClosed = false,
+                Board = new Dto.Output.Board
+                {
+                    ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
+                }
+            });
+        actual.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AllowEditWhenUserIsModerator()
     {
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.Moderator).Please(),
@@ -63,7 +81,7 @@ public class TopicIntentionResolverShould
                     ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
                 }
             });
-        actual.Should().BeFalse();
+        actual.Should().BeTrue();
     }
 
     [Fact]

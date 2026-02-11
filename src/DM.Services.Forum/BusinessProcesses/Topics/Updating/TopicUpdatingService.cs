@@ -3,13 +3,13 @@ using DM.Services.Common.Authorization;
 using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Services.Forum.Authorization;
 using DM.Services.Forum.BusinessProcesses.Boards;
 using DM.Services.Forum.BusinessProcesses.Topics.Reading;
 using DM.Services.Forum.Dto.Input;
-using DM.Services.Forum.Dto.Output;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
+using TopicDto = DM.Services.Forum.Dto.Output.Topic;
 using DM.Services.MessageQueuing.GeneralBus;
 using FluentValidation;
 
@@ -49,16 +49,16 @@ internal class TopicUpdatingService : ITopicUpdatingService
     }
 
     /// <inheritdoc />
-    public async Task<Topic> UpdateTopic(UpdateTopic updateTopic)
+    public async Task<TopicDto> UpdateTopic(UpdateTopic updateTopic)
     {
         await _validator.ValidateAndThrowAsync(updateTopic);
         var oldTopic = await _topicReadingService.GetTopic(updateTopic.TopicId);
 
         _intentionManager.ThrowIfForbidden(TopicIntention.Edit, oldTopic);
 
-        var changes = _updateBuilderFactory.Create<ForumTopic>(updateTopic.TopicId)
-            .MaybeField(t => t.Title, updateTopic.Title?.Trim())
-            .MaybeField(t => t.Text, updateTopic.Text?.Trim());
+        var changes = _updateBuilderFactory.Create<TopicDal>(updateTopic.TopicId)
+            .MaybeField(t => t.Title, updateTopic.Title is not null ? updateTopic.Title.Trim() : default(string?))
+            .MaybeField(t => t.Text, updateTopic.Text is not null ? updateTopic.Text.Trim() : default(string?));
 
         if (_intentionManager.IsAllowed(ForumIntention.AdministrateTopics, oldTopic.Board))
         {

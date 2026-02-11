@@ -25,7 +25,9 @@ public static class SwaggerExtensions
         .Where(t => t.IsSubclassOf(typeof(ControllerBase)))
         .Select(t => t.GetCustomAttribute<ApiExplorerSettingsAttribute>())
         .Where(t => t is {IgnoreApi: false})
-        .Select(t => t.GroupName)
+        .Select(t => t!.GroupName)
+        .Where(g => g != null)
+        .Select(g => g!)
         .Distinct();
         
     /// <summary>
@@ -38,6 +40,16 @@ public static class SwaggerExtensions
         {
             options.SwaggerDoc(apiGroup, new OpenApiInfo {Title = $"DM.API {apiGroup}", Version = "v1"});
         }
+
+        // BFF Pattern: Cookie-based authentication
+        options.AddSecurityDefinition("cookieAuth", new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.ApiKey,
+            In = ParameterLocation.Cookie,
+            Name = "dm_session",
+            Description = "Authentication via HttpOnly session cookie. " +
+                          "Login using POST /v1/account/login to set the cookie automatically."
+        });
 
         options.OperationFilter<AuthenticationSwaggerFilter>();
         options.OperationFilter<BbRenderModeSwaggerFilter>();
@@ -78,7 +90,7 @@ public static class SwaggerExtensions
     private static readonly Action<OpenApiDocument, HttpRequest> ReverseProxyPreSerializeFilter =
         (document, request) =>
         {
-            string prefix;
+            string? prefix = null;
             if (!request.Headers.TryGetValue(ForwardedPrefixHeader, out var prefixHeaderValues) ||
                 !prefixHeaderValues.Any() ||
                 string.IsNullOrEmpty(prefix = prefixHeaderValues.First()))

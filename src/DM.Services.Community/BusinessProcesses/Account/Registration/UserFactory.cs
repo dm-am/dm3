@@ -4,13 +4,14 @@ using DM.Services.DataAccess.BusinessObjects.Users;
 
 namespace DM.Services.Community.BusinessProcesses.Account.Registration;
 
-/// <inheritdoc />
+/// <summary>
+/// Creates new user DAL models for email-first registration flow
+/// </summary>
 internal class UserFactory : IUserFactory
 {
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public UserFactory(
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider)
@@ -20,40 +21,31 @@ internal class UserFactory : IUserFactory
     }
 
     /// <inheritdoc />
-    public User Create(UserRegistration registration, string salt, string hash, int hashVersion)
+    public User CreateFromPending(PendingRegistration pending, string login)
     {
         return new User
         {
             UserId = _guidFactory.Create(),
-            Login = registration.Login.Trim(),
-            Email = registration.Email.Trim(),
+            Login = login.Trim(),
+            Email = pending.Email, // Already lowercase
             CreatedUtc = _dateTimeProvider.Now,
-            LastActivityUtc = null,
+            LastActivityUtc = _dateTimeProvider.Now, // Set on activation so user appears in active list
             Role = UserRole.RegularUser,
             AccessPolicy = AccessPolicy.NotSpecified,
-            Salt = salt,
-            PasswordHash = hash,
-            PasswordHashVersion = hashVersion,
+            Salt = pending.Salt,
+            PasswordHash = pending.PasswordHash,
+            PasswordHashVersion = pending.PasswordHashVersion,
             RatingDisabled = false,
             QualityRating = 0,
             QuantityRating = 0,
-            Activated = false,
-            CanMerge = false,
-            MergeRequested = null,
             IsRemoved = false,
-            // Initialize NOT NULL string fields with defaults
+            // Initialize string fields
             Status = string.Empty,
             Name = string.Empty,
             Location = string.Empty,
             Icq = string.Empty,
             Skype = string.Empty,
-            Info = string.Empty,
-            ProfilePictureUrl = string.Empty,
-            SmallProfilePictureUrl = string.Empty,
-            MediumProfilePictureUrl = string.Empty,
-#pragma warning disable CS0618 // TimezoneId is obsolete
-            TimezoneId = "UTC"
-#pragma warning restore CS0618
+            Info = string.Empty
         };
     }
 }

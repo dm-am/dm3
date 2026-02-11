@@ -17,5 +17,6 @@ internal class CommentProfile : Profile
 
         CreateMap<Comment, CreateComment>();
         CreateMap<Comment, UpdateComment>();
+        CreateMap<CreateCommentRequest, CreateComment>();
     }
 }

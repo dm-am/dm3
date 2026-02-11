@@ -15,6 +15,7 @@ using UpdateConversation = DM.Web.API.Dto.Messaging.UpdateConversation;
 using Message = DM.Web.API.Dto.Messaging.Message;
 using ServiceCreateConversation = DM.Services.Community.BusinessProcesses.Messaging.Creating.CreateConversation;
 using ServiceUpdateConversation = DM.Services.Community.BusinessProcesses.Messaging.Updating.UpdateConversation;
+using ServiceMessage = DM.Services.Community.BusinessProcesses.Messaging.Reading.Message;
 
 namespace DM.Web.API.Services.Community;
 
@@ -69,16 +70,9 @@ internal class MessagingApiService : IMessagingApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Conversation>> GetConversation(string login)
+    public async Task<Envelope<Conversation>> GetDirectConversation(string login)
     {
-        var conversation = await conversationReadingService.GetOrCreate(login);
-        return new Envelope<Conversation>(mapper.Map<Conversation>(conversation));
-    }
-
-    /// <inheritdoc />
-    public async Task<Envelope<Conversation>> GetDirectConversation(Guid visaviUserId)
-    {
-        var conversation = await conversationReadingService.GetOrCreate(visaviUserId);
+        var conversation = await conversationReadingService.GetOrCreateDirect(login);
         return new Envelope<Conversation>(mapper.Map<Conversation>(conversation));
     }
 
@@ -87,6 +81,37 @@ internal class MessagingApiService : IMessagingApiService
     {
         var (messages, paging) = await messageReadingService.Get(conversationId, query);
         return new ListEnvelope<Message>(messages.Select(mapper.Map<Message>), new Paging(paging));
+    }
+
+    /// <inheritdoc />
+    public async Task<CursorEnvelope<Message>> GetMessagesWithCursor(
+        Guid conversationId,
+        string? cursor = null,
+        Guid? aroundMessageId = null,
+        DateTimeOffset? nearTimestampUtc = null,
+        int limit = 50)
+    {
+        var cursorQuery = new CursorQuery
+        {
+            Cursor = cursor,
+            AroundEntityId = aroundMessageId,
+            NearTimestampUtc = nearTimestampUtc,
+            Limit = limit
+        };
+
+        var result = await messageReadingService.GetWithCursor(conversationId, cursorQuery);
+
+        var cursorPaging = new CursorPaging
+        {
+            NextCursor = result.NextCursor,
+            PrevCursor = result.PrevCursor,
+            HasNext = result.HasNext,
+            HasPrev = result.HasPrev
+        };
+
+        return new CursorEnvelope<Message>(
+            result.Data.Select(mapper.Map<Message>),
+            cursorPaging);
     }
 
     /// <inheritdoc />

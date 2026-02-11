@@ -45,8 +45,7 @@ internal class MailSendingConsumer : BackgroundService
         var parameters = new RabbitConsumerParameters("dm.mail.sender", "dm.mail.sending", ProcessingOrder.Sequential)
         {
             ExchangeName = ConsumerExchangeName,
-            RoutingKeys = new[] { "#" },
-            DeadLetterExchange = DeadLetterExchangeName
+            RoutingKeys = new[] { "#" }
         };
         var consumer = _consumerBuilder.BuildRabbit<MailLetter, MailSendingProcessor>(parameters);
         _consumeRetryPolicy.Execute(consumer.Subscribe);

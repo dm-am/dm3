@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import MenuBlock from "@/views/layout/MenuBlock.vue";
-import { GameStatus } from "@/api/models/gaming";
+import { GameStatus } from "@/api/models/game";
 
 const props = defineProps<{
   token: string;
@@ -16,13 +16,9 @@ const routeName = computed(() => {
   switch (props.gameStatus) {
     case GameStatus.Active:
       return "games-active";
-    case GameStatus.Recruiting:
-    case GameStatus.Requirement:
-      return "games-recruiting";
-    case GameStatus.Finished:
+    case GameStatus.Closed:
       return "games-finished";
-    case GameStatus.Moderation:
-    case GameStatus.RequiresModeration:
+    case GameStatus.Draft:
       return "games-moderation";
     default:
       return "games-active";

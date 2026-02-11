@@ -1,3 +1,4 @@
+using System;
 using DM.Services.Authentication.Dto;
 using DM.Services.Authentication.Implementation.Security;
 using DM.Services.Core.Exceptions;
@@ -39,6 +40,15 @@ internal class UserEmailChangeValidator : AbstractValidator<UserEmailChange>
 
         RuleFor(u => u.Email)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .EmailAddress().WithMessage(ValidationError.Invalid);
+            .EmailAddress().WithMessage(ValidationError.Invalid)
+            .Must((model, email, context) =>
+            {
+                if (!context.RootContextData.TryGetValue(FoundUserKey, out var userWrapper) ||
+                    userWrapper is not AuthenticatedUser user) return true;
+                return !email.Equals(user.Email, StringComparison.OrdinalIgnoreCase);
+            })
+            .WithMessage(ValidationError.Unchanged)
+            .MustAsync(async (email, ct) => await repository.IsEmailFree(email, ct))
+            .WithMessage(ValidationError.Taken);
     }
 }

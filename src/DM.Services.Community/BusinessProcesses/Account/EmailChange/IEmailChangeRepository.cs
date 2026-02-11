@@ -1,3 +1,5 @@
+using System;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Services.Authentication.Dto;
 using DM.Services.DataAccess.BusinessObjects.Users;
@@ -15,13 +17,20 @@ internal interface IEmailChangeRepository
     /// </summary>
     /// <param name="login"></param>
     /// <returns></returns>
-    Task<AuthenticatedUser> FindUser(string login);
+    Task<AuthenticatedUser?> FindUser(string login);
+
+    /// <summary>
+    /// Check if email is not taken by another user
+    /// </summary>
+    Task<bool> IsEmailFree(string email, CancellationToken ct);
 
     /// <summary>
     /// Update user email
     /// </summary>
-    /// <param name="updateUser"></param>
-    /// <param name="token"></param>
-    /// <returns></returns>
     Task Update(IUpdateBuilder<User> updateUser, Token token);
+
+    /// <summary>
+    /// Invalidate old email change tokens for a user
+    /// </summary>
+    Task InvalidateOldEmailChangeTokens(Guid userId);
 }

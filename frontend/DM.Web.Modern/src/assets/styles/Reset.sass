@@ -73,3 +73,20 @@ field
 ::-moz-selection
   background-color: $selection-bg
   color: $selection-text
+
+// Menu decorations (separators and bullet prefixes)
+.separator,
+.muted
+  user-select: none
+
+// Highlight animation for unread content navigation
+.highlight-unread
+  animation: highlight-pulse 2s ease-out
+
+@keyframes highlight-pulse
+  0%
+    background-color: $bg-highlight-yellow
+    box-shadow: 0 0 0 4px $bg-highlight-yellow
+  100%
+    background-color: transparent
+    box-shadow: none

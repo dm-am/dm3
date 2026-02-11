@@ -6,7 +6,7 @@ using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Common.Dto;
 using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Boards;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Services.Forum.Authorization;
 using DM.Services.Forum.BusinessProcesses.Topics.Reading;
@@ -61,7 +61,7 @@ internal class CommentaryCreatingService : ICommentaryCreatingService
         _intentionManager.ThrowIfForbidden(TopicIntention.CreateComment, topic);
 
         var comment = _commentaryFactory.Create(createComment, _identityProvider.Current.User.UserId);
-        var topicUpdate = _updateBuilderFactory.Create<ForumTopic>(topic.Id)
+        var topicUpdate = _updateBuilderFactory.Create<TopicDal>(topic.Id)
             .Field(t => t.LastCommentId, comment.CommentId);
         var createdComment = await _repository.Create(comment, topicUpdate);
         await _countersRepository.Increment(topic.Id, UnreadEntryType.Message);

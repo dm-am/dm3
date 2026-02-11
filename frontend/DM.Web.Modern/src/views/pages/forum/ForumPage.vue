@@ -42,7 +42,7 @@ useFetchData(
   <div class="forum-info">
     <div class="forum-info_moderators">
       <block-title class="forum-info_moderators-title">Модераторы:</block-title>
-      <the-loader v-if="!moderators" class="forum-info_moderators-loader" />
+      <secondary-text v-if="moderators && !moderators.length">Нет модераторов</secondary-text>
       <user-link
         v-else
         v-for="user in moderators"

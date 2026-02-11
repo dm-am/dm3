@@ -51,7 +51,7 @@ public class NotificationCreatingServiceShould : UnitTestBase
         {
             NotificationId = Guid.NewGuid(),
             EventType = EventType.NewForumTopic,
-            CreateDate = now.UtcDateTime,
+            CreatedUtc = now.UtcDateTime,
             UsersInterested = createNotification.UsersInterested,
             UsersNotified = new List<Guid>(),
             Metadata = createNotification.Metadata

@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import type { Tag } from "@/api/models/gaming";
-import gamingApi from "@/api/requests/gamingApi";
+import type { Tag } from "@/api/models/game";
+import gameApi from "@/api/requests/gameApi";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
-import TheLoader from "@/components/TheLoader.vue";
 
 const model = defineModel<string[]>({ default: () => [] });
 
@@ -11,15 +10,15 @@ const tags = ref<Tag[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
-// Group tags by category
+// Group tags by groupTitle
 const groupedTags = computed(() => {
   const groups: Record<string, Tag[]> = {};
   for (const tag of tags.value) {
-    const category = tag.category || "Другое";
-    if (!groups[category]) {
-      groups[category] = [];
+    const group = tag.groupTitle || "Другое";
+    if (!groups[group]) {
+      groups[group] = [];
     }
-    groups[category].push(tag);
+    groups[group].push(tag);
   }
   return groups;
 });
@@ -40,7 +39,7 @@ async function loadTags() {
   loading.value = true;
   error.value = null;
 
-  const { data, error: apiError } = await gamingApi.getTags();
+  const { data, error: apiError } = await gameApi.getTags();
 
   if (apiError) {
     error.value = apiError.title || "Failed to load tags";
@@ -56,9 +55,7 @@ onMounted(loadTags);
 
 <template>
   <div class="tag-selector">
-    <the-loader v-if="loading" />
-
-    <div v-else-if="error" class="selector-error">
+    <div v-if="error" class="selector-error">
       {{ error }}
     </div>
 
@@ -136,8 +133,8 @@ onMounted(loadTags);
     border-color: $button-border-hover
 
   &.selected
-    background-color: $accent-blue
-    border-color: $accent-blue
+    background-color: $link
+    border-color: $link
     color: white
 
 .selected-count

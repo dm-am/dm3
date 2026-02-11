@@ -12,14 +12,14 @@ class DevApi {
    * Set role for current user
    */
   public async setRole(role: UserRole) {
-    return Api.post(`dev/role/${role}`);
+    return Api.post(`v1/moderation/users/me/role/${role}`);
   }
 
   /**
    * Get all users from database
    */
   public async getAllUsers() {
-    return Api.get<TestAccountInfo[]>("dev/accounts");
+    return Api.get<TestAccountInfo[]>("v1/moderation/users");
   }
 }
 

@@ -50,7 +50,7 @@ internal class CommentaryUpdatingService : ICommentaryUpdatingService
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
         var updateBuilder = _updateBuilderFactory.Create<Comment>(updateComment.CommentId)
-            .MaybeField(f => f.Text, updateComment.Text?.Trim());
+            .MaybeField(f => f.Text, updateComment.Text is not null ? updateComment.Text.Trim() : default(string?));
 
         if (updateBuilder.HasChanges())
         {

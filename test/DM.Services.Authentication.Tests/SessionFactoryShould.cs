@@ -1,9 +1,11 @@
 using System;
+using DM.Services.Authentication.Configuration;
 using DM.Services.Authentication.Factories;
 using DM.Services.Core.Implementation;
 using DM.Services.DataAccess.BusinessObjects.Users;
 using DM.Tests.Core;
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Moq.Language.Flow;
 using Xunit;
 
@@ -21,7 +23,13 @@ public class SessionFactoryShould : UnitTestBase
         createIdSetup = guidFactory.Setup(f => f.Create());
         var dateTimeProvider = Mock<IDateTimeProvider>();
         currentMoment = dateTimeProvider.Setup(p => p.Now);
-        sessionFactory = new SessionFactory(guidFactory.Object, dateTimeProvider.Object);
+        var authConfig = Mock<IOptions<AuthenticationConfiguration>>();
+        authConfig.Setup(c => c.Value).Returns(new AuthenticationConfiguration
+        {
+            SessionExpirationHours = 24,
+            PersistentSessionExpirationDays = 31
+        });
+        sessionFactory = new SessionFactory(guidFactory.Object, dateTimeProvider.Object, authConfig.Object);
     }
 
     [Fact]

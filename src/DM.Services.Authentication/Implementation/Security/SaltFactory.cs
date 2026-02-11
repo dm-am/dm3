@@ -9,11 +9,11 @@ internal class SaltFactory : ISaltFactory
     /// <inheritdoc />
     public string Create(int saltLength)
     {
-        var size = saltLength * 4 / 3;
-        var buffer = RandomNumberGenerator.GetBytes(size);
-        var base64String = Convert.ToBase64String(buffer);
-        return base64String.Length > saltLength
-            ? base64String[..saltLength]
-            : base64String;
+        // Generate exactly the right number of random bytes
+        // to produce a Base64 string of at least saltLength characters.
+        // Every 3 bytes produce 4 Base64 characters.
+        var byteCount = (int)Math.Ceiling(saltLength * 3.0 / 4.0);
+        var buffer = RandomNumberGenerator.GetBytes(byteCount);
+        return Convert.ToBase64String(buffer);
     }
 }

@@ -15,5 +15,5 @@ public class UpdateMessage
     /// <summary>
     /// Message content
     /// </summary>
-    public string Text { get; set; }
+    public string? Text { get; set; }
 }

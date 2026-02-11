@@ -8,7 +8,7 @@ namespace DM.Services.Authentication.Implementation.UserIdentity;
 /// </summary>
 internal class IdentityProvider : IIdentitySetter, IIdentityProvider
 {
-    private IIdentity _identity;
+    private IIdentity _identity = null!;
 
     /// <inheritdoc cref="IdentityProvider" />
     public IIdentity Current

@@ -1,5 +1,5 @@
 using System.Threading.Tasks;
-using DM.Services.DataAccess.BusinessObjects.Boards;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
 using DM.Services.DataAccess.RelationalStorage;
 using Comment = DM.Services.DataAccess.BusinessObjects.Common.Comment;
 
@@ -16,5 +16,5 @@ public interface ICommentaryCreatingRepository
     /// <param name="comment">DAL model for comment</param>
     /// <param name="topicUpdate">Updating for parent topic (denormalize)</param>
     /// <returns></returns>
-    Task<Services.Common.Dto.Comment> Create(Comment comment, IUpdateBuilder<ForumTopic> topicUpdate);
+    Task<Services.Common.Dto.Comment> Create(Comment comment, IUpdateBuilder<TopicDal> topicUpdate);
 }

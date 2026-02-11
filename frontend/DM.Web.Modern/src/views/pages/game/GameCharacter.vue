@@ -1,10 +1,10 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, ref } from "vue";
-import type { Character } from "@/api/models/gaming";
-import { CharacterStatus, Alignment } from "@/api/models/gaming";
+import type { Character } from "@/api/models/game";
+import { CharacterStatus, Alignment } from "@/api/models/game";
 import UserLink from "@/components/community/UserLink.vue";
 import SecondaryText from "@/components/layout/SecondaryText.vue";
-import ContentMessage from "@/components/content/ContentMessage.vue";
+import ContentText from "@/components/content/ContentText.vue";
 import TheIcon from "@/components/icons/TheIcon.vue";
 import { IconType } from "@/components/icons/iconType";
 import defaultPicture from "@/assets/images/userpic.png";
@@ -20,7 +20,7 @@ const statusLabels: Record<CharacterStatus, string> = {
   [CharacterStatus.Registration]: "На рассмотрении",
   [CharacterStatus.Dead]: "Погиб",
   [CharacterStatus.Left]: "Покинул игру",
-  [CharacterStatus.Declined]: "Отклонён",
+  [CharacterStatus.Declined]: "Отклонен",
 };
 
 const alignmentLabels: Record<Alignment, string> = {
@@ -66,7 +66,7 @@ function toggleExpand() {
         </secondary-text>
       </div>
       <the-icon
-        :font="isExpanded ? IconType.ChevronUp : IconType.ChevronDown"
+        :font="isExpanded ? IconType.ArrowUp : IconType.ArrowDown"
         class="expand-icon"
       />
     </header>
@@ -88,31 +88,31 @@ function toggleExpand() {
       <!-- Appearance -->
       <div v-if="character.appearance" class="detail-section">
         <span class="detail-label">Внешность:</span>
-        <content-message :text="character.appearance" class="detail-content" />
+        <content-text :html="character.appearance" class="detail-content" />
       </div>
 
       <!-- Temper -->
       <div v-if="character.temper" class="detail-section">
         <span class="detail-label">Характер:</span>
-        <content-message :text="character.temper" class="detail-content" />
+        <content-text :html="character.temper" class="detail-content" />
       </div>
 
       <!-- Story -->
       <div v-if="character.story" class="detail-section">
         <span class="detail-label">История:</span>
-        <content-message :text="character.story" class="detail-content" />
+        <content-text :html="character.story" class="detail-content" />
       </div>
 
       <!-- Skills -->
       <div v-if="character.skills" class="detail-section">
         <span class="detail-label">Навыки:</span>
-        <content-message :text="character.skills" class="detail-content" />
+        <content-text :html="character.skills" class="detail-content" />
       </div>
 
       <!-- Inventory -->
       <div v-if="character.inventory" class="detail-section">
         <span class="detail-label">Инвентарь:</span>
-        <content-message :text="character.inventory" class="detail-content" />
+        <content-text :html="character.inventory" class="detail-content" />
       </div>
 
       <!-- Attributes -->

@@ -23,6 +23,18 @@ export type ListEnvelope<T> = {
   paging: Paging | null;
 };
 
+export type CursorPaging = {
+  nextCursor: string | null;
+  prevCursor: string | null;
+  hasNext: boolean;
+  hasPrev: boolean;
+};
+
+export type CursorEnvelope<T> = {
+  resources: T[];
+  paging: CursorPaging;
+};
+
 export type GeneralError = {
   type: string;
   title: string;
@@ -39,8 +51,10 @@ export enum ValidationErrorCode {
   Invalid = "Invalid",
 }
 
+// API can return either invalidProperties (manual) or errors (FluentValidation)
 export type BadRequestError = GeneralError & {
-  errors: { [field: string]: ValidationErrorCode[] };
+  invalidProperties?: { [field: string]: string[] };
+  errors?: { [field: string]: string[] };
 };
 
 export type ApiResult<T> = {

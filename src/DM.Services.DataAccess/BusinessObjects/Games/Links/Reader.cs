@@ -32,17 +32,17 @@ public class Reader
     /// Game
     /// </summary>
     [ForeignKey(nameof(GameId))]
-    public virtual Game Game { get; set; }
+    public virtual Game Game { get; set; } = null!;
 
     /// <summary>
     /// Reader
     /// </summary>
     [ForeignKey(nameof(UserId))]
-    public virtual User User { get; set; }
+    public virtual User User { get; set; } = null!;
 
     /// <summary>
     /// Room links
     /// </summary>
-    [InverseProperty(nameof(RoomClaim.Reader))]
-    public virtual ICollection<RoomClaim> RoomLinks { get; set; }
+    [InverseProperty(nameof(RoomAccess.Reader))]
+    public virtual ICollection<RoomAccess> RoomLinks { get; set; } = [];
 }

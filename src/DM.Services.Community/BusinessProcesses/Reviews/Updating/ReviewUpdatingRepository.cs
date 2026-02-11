@@ -12,26 +12,26 @@ namespace DM.Services.Community.BusinessProcesses.Reviews.Updating;
 /// <inheritdoc />
 internal class ReviewUpdatingRepository : IReviewUpdatingRepository
 {
-    private readonly DmDbContext dbContext;
-    private readonly IMapper mapper;
+    private readonly DmDbContext _dbContext;
+    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public ReviewUpdatingRepository(
         DmDbContext dbContext,
         IMapper mapper)
     {
-        this.dbContext = dbContext;
-        this.mapper = mapper;
+        _dbContext = dbContext;
+        _mapper = mapper;
     }
         
     /// <inheritdoc />
     public async Task<Review> Update(IUpdateBuilder<DataAccess.BusinessObjects.Common.Review> updateReview)
     {
-        var reviewId = updateReview.AttachTo(dbContext);
-        await dbContext.SaveChangesAsync();
-        return await dbContext.Reviews
+        var reviewId = updateReview.AttachTo(_dbContext);
+        await _dbContext.SaveChangesAsync();
+        return await _dbContext.Reviews
             .Where(r => r.ReviewId == reviewId)
-            .ProjectTo<Review>(mapper.ConfigurationProvider)
+            .ProjectTo<Review>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }
 }

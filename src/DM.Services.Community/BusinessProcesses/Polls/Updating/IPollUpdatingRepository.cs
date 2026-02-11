@@ -16,5 +16,5 @@ internal interface IPollUpdatingRepository
     /// <param name="title">New title (null to keep current)</param>
     /// <param name="endDate">New end date (null to keep current)</param>
     /// <returns></returns>
-    Task<Poll> UpdatePoll(Guid pollId, string title, DateTimeOffset? endDate);
+    Task<Poll> UpdatePoll(Guid pollId, string? title, DateTimeOffset? endDate);
 }

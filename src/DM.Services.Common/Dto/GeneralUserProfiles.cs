@@ -17,14 +17,17 @@ internal class GeneralUserProfiles : Profile
     public GeneralUserProfiles()
     {
         CreateMap<User, GeneralUser>()
-            .ForMember(d => d.OriginalPictureUrl, s => s.MapFrom(u => u.ProfilePictureUrl))
-            .ForMember(d => d.MediumPictureUrl, s => s.MapFrom(u => u.MediumProfilePictureUrl))
-            .ForMember(d => d.SmallPictureUrl, s => s.MapFrom(u => u.SmallProfilePictureUrl))
-            .ForMember(d => d.LastActivityUtc, s => s.MapFrom(u => u.LastActivityUtc));
+            .ForMember(d => d.OriginalPictureUrl, s => s.MapFrom(u =>
+                u.AvatarUpload != null ? u.AvatarUpload.FilePath : null))
+            .ForMember(d => d.MediumPictureUrl, s => s.MapFrom(u =>
+                u.AvatarUpload != null ? (u.AvatarUpload.MediumFilePath ?? u.AvatarUpload.FilePath) : null))
+            .ForMember(d => d.SmallPictureUrl, s => s.MapFrom(u =>
+                u.AvatarUpload != null ? (u.AvatarUpload.SmallFilePath ?? u.AvatarUpload.FilePath) : null))
+            .ForMember(d => d.LastActivityUtc, s => s.MapFrom(u => u.LastActivityUtc))
+            .ForMember(d => d.PostReviewsGivenCount, s => s.Ignore()); // Set separately after mapping
         CreateMap<User, AuthenticatedUser>()
             .ForMember(d => d.AccessRestrictionPolicies, s => s.MapFrom(
                 u => u.BansReceived
-                    .Where(b => !b.IsRemoved)
                     .Select(b => b.AccessRestrictionPolicy)
                     .ToList()));
 

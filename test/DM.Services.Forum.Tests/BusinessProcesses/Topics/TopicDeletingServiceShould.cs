@@ -5,13 +5,13 @@ using DM.Services.Common.Authorization;
 using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Boards;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Services.Forum.Authorization;
 using DM.Services.Forum.BusinessProcesses.Topics.Deleting;
 using DM.Services.Forum.BusinessProcesses.Topics.Reading;
 using DM.Services.Forum.BusinessProcesses.Topics.Updating;
-using DM.Services.Forum.Dto.Output;
+using TopicDto = DM.Services.Forum.Dto.Output.Topic;
 using DM.Services.MessageQueuing.GeneralBus;
 using DM.Tests.Core;
 using Moq;
@@ -22,11 +22,11 @@ namespace DM.Services.Forum.Tests.BusinessProcesses.Topics;
 
 public class TopicDeletingServiceShould : UnitTestBase
 {
-    private readonly ISetup<ITopicReadingService, Task<Topic>> getTopicSetup;
+    private readonly ISetup<ITopicReadingService, Task<TopicDto>> getTopicSetup;
     private readonly Mock<IIntentionManager> intentionManager;
-    private readonly Mock<IUpdateBuilder<ForumTopic>> updateBuilder;
+    private readonly Mock<IUpdateBuilder<TopicDal>> updateBuilder;
     private readonly Mock<ITopicUpdatingRepository> updatingRepository;
-    private readonly ISetup<ITopicUpdatingRepository, Task<Topic>> updateSetup;
+    private readonly ISetup<ITopicUpdatingRepository, Task<TopicDto>> updateSetup;
     private readonly Mock<IInvokedEventProducer> publisher;
     private readonly Mock<IUnreadCountersRepository> unreadCountersRepository;
     private readonly TopicDeletingService service;
@@ -38,19 +38,19 @@ public class TopicDeletingServiceShould : UnitTestBase
 
         intentionManager = Mock<IIntentionManager>();
         intentionManager
-            .Setup(m => m.ThrowIfForbidden(It.IsAny<ForumIntention>(), It.IsAny<Topic>()));
+            .Setup(m => m.ThrowIfForbidden(It.IsAny<ForumIntention>(), It.IsAny<TopicDto>()));
 
-        updateBuilder = Mock<IUpdateBuilder<ForumTopic>>();
+        updateBuilder = Mock<IUpdateBuilder<TopicDal>>();
         updateBuilder
             .Setup(b => b.Field(t => t.IsRemoved, It.IsAny<bool>()))
             .Returns(updateBuilder.Object);
         var updateBuilderFactory = Mock<IUpdateBuilderFactory>();
         updateBuilderFactory
-            .Setup(f => f.Create<ForumTopic>(It.IsAny<Guid>()))
+            .Setup(f => f.Create<TopicDal>(It.IsAny<Guid>()))
             .Returns(updateBuilder.Object);
 
         updatingRepository = Mock<ITopicUpdatingRepository>();
-        updateSetup = updatingRepository.Setup(r => r.Update(It.IsAny<IUpdateBuilder<ForumTopic>>()));
+        updateSetup = updatingRepository.Setup(r => r.Update(It.IsAny<IUpdateBuilder<TopicDal>>()));
 
         publisher = Mock<IInvokedEventProducer>();
         publisher
@@ -73,9 +73,9 @@ public class TopicDeletingServiceShould : UnitTestBase
     {
         var topicId = Guid.NewGuid();
         var board = new Dto.Output.Board();
-        var topic = new Topic {Board = board};
+        var topic = new TopicDto {Board = board};
         getTopicSetup.ReturnsAsync(topic);
-        updateSetup.ReturnsAsync(new Topic());
+        updateSetup.ReturnsAsync(new TopicDto());
 
         await service.DeleteTopic(topicId);
 
@@ -86,9 +86,9 @@ public class TopicDeletingServiceShould : UnitTestBase
     public async Task OnlyUpdateRemovedField()
     {
         var topicId = Guid.NewGuid();
-        var topic = new Topic();
+        var topic = new TopicDto();
         getTopicSetup.ReturnsAsync(topic);
-        updateSetup.ReturnsAsync(new Topic());
+        updateSetup.ReturnsAsync(new TopicDto());
 
         await service.DeleteTopic(topicId);
 
@@ -102,9 +102,9 @@ public class TopicDeletingServiceShould : UnitTestBase
     public async Task DeleteUnreadCounters()
     {
         var topicId = Guid.NewGuid();
-        var topic = new Topic();
+        var topic = new TopicDto();
         getTopicSetup.ReturnsAsync(topic);
-        updateSetup.ReturnsAsync(new Topic());
+        updateSetup.ReturnsAsync(new TopicDto());
 
         await service.DeleteTopic(topicId);
 
@@ -116,9 +116,9 @@ public class TopicDeletingServiceShould : UnitTestBase
     public async Task PublishEvent()
     {
         var topicId = Guid.NewGuid();
-        var topic = new Topic();
+        var topic = new TopicDto();
         getTopicSetup.ReturnsAsync(topic);
-        updateSetup.ReturnsAsync(new Topic());
+        updateSetup.ReturnsAsync(new TopicDto());
 
         await service.DeleteTopic(topicId);
 

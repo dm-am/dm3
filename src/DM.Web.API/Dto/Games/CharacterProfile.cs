@@ -1,6 +1,6 @@
 using AutoMapper;
-using DM.Services.Gaming.Dto.Input;
-using DtoCharacter = DM.Services.Gaming.Dto.Output.Character;
+using DM.Services.Game.Dto.Input;
+using DtoCharacter = DM.Services.Game.Dto.Output.Character;
 using Policy = DM.Services.Core.Dto.Enums.CharacterAccessPolicy;
 
 namespace DM.Web.API.Dto.Games;
@@ -18,7 +18,7 @@ internal class CharacterProfile : Profile
         CreateMap<DtoCharacter, CharacterDetails>()
             .ForMember(c => c.Privacy, s => s.MapFrom<AccessPolicyConverter>());
 
-        CreateMap<DM.Services.Gaming.Dto.Output.CharacterAttribute, CharacterAttribute>()
+        CreateMap<DM.Services.Game.Dto.Output.CharacterAttribute, CharacterAttribute>()
             .ReverseMap();
 
         // For character creation, use CharacterDetails (has Privacy)

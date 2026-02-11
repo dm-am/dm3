@@ -30,12 +30,12 @@ public class DiceRoll
     /// <summary>
     /// Commentary
     /// </summary>
-    public string Comment { get; set; }
+    public string? Comment { get; set; }
 
     /// <summary>
     /// Results
     /// </summary>
-    public IEnumerable<DiceResult> Results { get; set; }
+    public IEnumerable<DiceResult> Results { get; set; } = [];
 }
 
 /// <summary>

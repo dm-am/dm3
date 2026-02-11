@@ -49,30 +49,30 @@ internal class PublicImageService : IPublicImageService
     /// <inheritdoc />
     public async Task<(Upload original, Upload medium, Upload small)> Upload(CreateUpload createUpload)
     {
-        await validator.ValidateAndThrowAsync(createUpload);
-        var (name, extension) = await nameGenerator.Generate(createUpload);
+        await validator.ValidateAndThrowAsync(createUpload).ConfigureAwait(false);
+        var (name, extension) = await nameGenerator.Generate(createUpload).ConfigureAwait(false);
 
-        using var image = await Image.LoadAsync(createUpload.StreamAccessor());
+        using var image = await Image.LoadAsync(createUpload.StreamAccessor()).ConfigureAwait(false);
         var cropRectangle = image.Height > image.Width
             ? new Rectangle(0, (image.Height - image.Width) / 2, image.Width, image.Width)
             : new Rectangle((image.Width - image.Height) / 2, 0, image.Height, image.Height);
 
         await using var mediumImageStream = new MemoryStream();
-        await image.Clone(c => c.Crop(cropRectangle).Resize(MediumSize)).SaveAsJpegAsync(mediumImageStream);
+        await image.Clone(c => c.Crop(cropRectangle).Resize(MediumSize)).SaveAsJpegAsync(mediumImageStream).ConfigureAwait(false);
 
         await using var smallImageStream = new MemoryStream();
-        await image.Clone(c => c.Crop(cropRectangle).Resize(SmallSize)).SaveAsJpegAsync(smallImageStream);
+        await image.Clone(c => c.Crop(cropRectangle).Resize(SmallSize)).SaveAsJpegAsync(smallImageStream).ConfigureAwait(false);
 
-        var originalImagePath = await uploader.Upload(createUpload.StreamAccessor, $"{name}{extension}");
-        var mediumImagePath = await uploader.Upload(() => mediumImageStream, $"{name}_m.jpg");
-        var smallImagePath = await uploader.Upload(() => smallImageStream, $"{name}_s.jpg");
+        var originalImagePath = await uploader.Upload(createUpload.StreamAccessor, $"{name}{extension}").ConfigureAwait(false);
+        var mediumImagePath = await uploader.Upload(() => mediumImageStream, $"{name}_m.jpg").ConfigureAwait(false);
+        var smallImagePath = await uploader.Upload(() => smallImageStream, $"{name}_s.jpg").ConfigureAwait(false);
 
         var userId = identityProvider.Current.User.UserId;
         var createdAt = dateTimeProvider.Now;
         var uploads = new[] {originalImagePath, mediumImagePath, smallImagePath}
             .Select(path => factory.Create(createUpload, path, userId, path == originalImagePath, createdAt));
 
-        var uploadsIndex = (await repository.Create(uploads)).ToDictionary(u => u.FilePath);
+        var uploadsIndex = (await repository.Create(uploads).ConfigureAwait(false)).ToDictionary(u => u.FilePath);
         return (uploadsIndex[originalImagePath], uploadsIndex[mediumImagePath], uploadsIndex[smallImagePath]);
     }
 

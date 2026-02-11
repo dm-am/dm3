@@ -1,26 +1,26 @@
 <script setup lang="ts">
-defineProps<{ loading?: boolean; disabled?: boolean }>();
+withDefaults(defineProps<{
+  type?: "submit" | "button";
+  loading?: boolean;
+  disabled?: boolean;
+  secondary?: boolean;
+}>(), {
+  type: "submit",
+});
 </script>
 
 <template>
-  <button :disabled="loading || disabled" :class="{ loading: loading }">
-    <span><slot /></span>
+  <button :type="type" :disabled="loading || disabled" :aria-busy="loading || undefined" :class="{ secondary }">
+    <slot />
   </button>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Inputs"
 
 button
-  +button
+  +primary-button
 
-button.loading
-  background-position: center center
-  background-image: url('@/assets/images/loader.gif')
-  background-size: $medium
-  background-repeat: no-repeat
-  & span
-    visibility: hidden
+  &.secondary
+    +secondary-button
 </style>

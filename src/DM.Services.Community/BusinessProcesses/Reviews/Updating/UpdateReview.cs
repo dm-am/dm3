@@ -15,7 +15,7 @@ public class UpdateReview
     /// <summary>
     /// Review text
     /// </summary>
-    public string Text { get; set; }
+    public string? Text { get; set; }
         
     /// <summary>
     /// Approval flag

@@ -19,15 +19,15 @@ watch(
 <template>
   <menu-block token="boards">
     <template #title>Форум</template>
-    <the-loader v-if="!boards" />
-    <div v-else v-for="forum in boards!" :key="forum.id">
+    <secondary-text v-if="!boards || !boards.length">Нет разделов форума</secondary-text>
+    <div v-else v-for="forum in boards" :key="forum.id">
       <span class="muted">- </span
       ><router-link :to="{ name: 'forum', params: { id: forum.id } }">{{
         forum.id
       }}</router-link> <span class="muted">(</span
       ><router-link
         :to="{ name: 'forum', params: { id: forum.id } }"
-        >{{ forum.unreadTopicsCount || 0 }}</router-link
+        >{{ forum.commentsCount || 0 }}</router-link
       ><span class="muted">)</span>
     </div>
   </menu-block>

@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DM.Services.Authentication.Configuration;
 using DM.Services.Authentication.Dto;
 using DM.Services.Authentication.Factories;
 using DM.Services.Authentication.Implementation;
@@ -7,20 +8,24 @@ using DM.Services.Authentication.Implementation.Security;
 using DM.Services.Authentication.Implementation.UserIdentity;
 using DM.Services.Authentication.Repositories;
 using DM.Services.Core.Implementation;
+using DM.Services.DataAccess.BusinessObjects.Users;
+using DM.Services.DataAccess.RelationalStorage;
 using DM.Tests.Core;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Language.Flow;
 using Xunit;
 using DbSession = DM.Services.DataAccess.BusinessObjects.Users.Session;
+using Session = DM.Services.Authentication.Dto.Session;
 
 namespace DM.Services.Authentication.Tests;
 
 public class AuthenticationServiceLogoutShould : UnitTestBase
 {
     private readonly ISetup<IIdentity, AuthenticatedUser> userSetup;
-    private readonly ISetup<IIdentity, Session> sessionSetup;
+    private readonly ISetup<IIdentity, Session?> sessionSetup;
     private readonly AuthenticationService service;
     private readonly Mock<IAuthenticationRepository> authenticationRepository;
     private readonly Mock<ISessionFactory> sessionFactory;
@@ -41,8 +46,15 @@ public class AuthenticationServiceLogoutShould : UnitTestBase
         sessionSetup = identity.Setup(i => i.Session);
         var loginAttemptTracker = Mock<ILoginAttemptTracker>();
         var logger = Mock<ILogger<AuthenticationService>>();
+        var authConfig = Options.Create(new AuthenticationConfiguration());
+        var dateTimeProvider = Mock<IDateTimeProvider>();
+        dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        var updateBuilderFactory = Mock<IUpdateBuilderFactory>();
+        var updateBuilder = Mock<IUpdateBuilder<User>>();
+        updateBuilder.Setup(b => b.Field(It.IsAny<System.Linq.Expressions.Expression<Func<User, DateTimeOffset?>>>(), It.IsAny<DateTimeOffset>())).Returns(updateBuilder.Object);
+        updateBuilderFactory.Setup(f => f.Create<User>(It.IsAny<Guid>())).Returns(updateBuilder.Object);
         service = new AuthenticationService(null!, cryptoService.Object,
-            authenticationRepository.Object, sessionFactory.Object, null!, identityProvider.Object, null!, loginAttemptTracker.Object, logger.Object);
+            authenticationRepository.Object, sessionFactory.Object, dateTimeProvider.Object, identityProvider.Object, updateBuilderFactory.Object, loginAttemptTracker.Object, logger.Object, authConfig);
     }
 
     [Fact]
@@ -52,14 +64,16 @@ public class AuthenticationServiceLogoutShould : UnitTestBase
         var sessionId = Guid.NewGuid();
         var session = new Session{Id = sessionId};
         userSetup.Returns(new AuthenticatedUser {UserId = userId});
-        sessionSetup.Returns(session);
+        sessionSetup.Returns((Session?)session);
         authenticationRepository
             .Setup(r => r.RemoveSession(It.IsAny<Guid>(), It.IsAny<Guid>()))
+            .Returns(Task.CompletedTask);
+        authenticationRepository
+            .Setup(r => r.UpdateActivity(It.IsAny<DM.Services.DataAccess.RelationalStorage.IUpdateBuilder<DM.Services.DataAccess.BusinessObjects.Users.User>>()))
             .Returns(Task.CompletedTask);
         await service.Logout();
 
         authenticationRepository.Verify(r => r.RemoveSession(userId, sessionId), Times.Once);
-        authenticationRepository.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -71,7 +85,7 @@ public class AuthenticationServiceLogoutShould : UnitTestBase
         var session = new Session{Id = sessionId};
         var userSettings = new UserSettings();
         userSetup.Returns(user);
-        sessionSetup.Returns(session);
+        sessionSetup.Returns((Session?)session);
         identity.Setup(i => i.Settings).Returns(userSettings);
         authenticationRepository
             .Setup(r => r.RemoveSessionsExcept(It.IsAny<Guid>(), It.IsAny<Guid>()))

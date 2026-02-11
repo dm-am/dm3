@@ -110,11 +110,10 @@ onMounted(async () => {
     <section class="dev-section">
       <BlockTitle>Все аккаунты</BlockTitle>
 
-      <the-loader v-if="isLoading" />
-      <table v-else class="accounts-table">
+      <table v-if="!isLoading" class="accounts-table">
         <thead>
           <tr>
-            <th>Логин</th>
+            <th>Имя пользователя</th>
             <th>Пароль</th>
             <th>Роль</th>
           </tr>

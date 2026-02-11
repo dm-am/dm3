@@ -23,10 +23,11 @@ public class AuthenticationModule : Module
             .AsImplementedInterfaces()
             .InstancePerLifetimeScope();
 
-        // Login attempt tracker should be singleton
+        // Login attempt tracker uses MongoDB for cluster-safe state
+        // No need for singleton - state is persisted in database
         builder.RegisterType<Implementation.LoginAttemptTracker>()
             .AsImplementedInterfaces()
-            .SingleInstance();
+            .InstancePerDependency();
 
         builder.RegisterModuleOnce<CoreModule>();
         builder.RegisterModuleOnce<DataAccessModule>();

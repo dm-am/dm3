@@ -29,11 +29,12 @@ internal class SecurityManager : ISecurityManager
     /// <inheritdoc />
     public bool ComparePasswords(string password, string salt, string hash, int version)
     {
+        // Version 3 is PBKDF2-SHA256 with 600K iterations (current standard)
+        // Versions 1-2 are legacy - kept for migration but DB is empty so not needed
         var computedHash = version switch
         {
-            1 => _hashProvider.ComputeSha256(password, salt),
-            2 => _hashProvider.ComputePbkdf2(password, salt),
-            _ => throw new ArgumentException($"Unknown password hash version: {version}", nameof(version))
+            3 => _hashProvider.ComputePbkdf2(password, salt),
+            _ => throw new ArgumentException($"Unknown password hash version: {version}. Only version 3 (PBKDF2) is supported.", nameof(version))
         };
 
         var storedHash = Convert.FromBase64String(hash);

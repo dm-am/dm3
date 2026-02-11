@@ -14,13 +14,13 @@ internal class PollIntentionResolver :
     IIntentionResolver<PollIntention, (Poll poll, Guid optionId)>,
     IIntentionResolver<PollIntention, Poll>
 {
-    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public PollIntentionResolver(
         IDateTimeProvider dateTimeProvider)
     {
-        this.dateTimeProvider = dateTimeProvider;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -35,7 +35,7 @@ internal class PollIntentionResolver :
         intention switch
         {
             PollIntention.Vote when user.IsAuthenticated =>
-                target.poll.EndDate > dateTimeProvider.Now &&
+                target.poll.EndDate > _dateTimeProvider.Now &&
                 target.poll.Options.Any(o => o.Id == target.optionId),
             _ => false
         };
@@ -45,7 +45,7 @@ internal class PollIntentionResolver :
         intention switch
         {
             PollIntention.Unvote when user.IsAuthenticated =>
-                poll.EndDate > dateTimeProvider.Now,
+                poll.EndDate > _dateTimeProvider.Now,
             PollIntention.Edit => user.Role >= UserRole.SeniorModerator,
             PollIntention.Delete => user.Role >= UserRole.SeniorModerator,
             _ => false

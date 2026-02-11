@@ -8,5 +8,5 @@ public class TokenCredentials : AuthCredentials
     /// <summary>
     /// Token
     /// </summary>
-    public string Token { get; set; }
+    public required string Token { get; set; }
 }

@@ -12,7 +12,7 @@ namespace DM.Services.Community.BusinessProcesses.Messaging.Reading;
 public interface IMessageReadingService
 {
     /// <summary>
-    /// Get list of conversation messages
+    /// Get list of conversation messages with offset-based paging (legacy)
     /// </summary>
     /// <param name="conversationId">Conversation identifier</param>
     /// <param name="query">Paging query</param>
@@ -27,4 +27,13 @@ public interface IMessageReadingService
     /// <param name="ct">Cancellation token</param>
     /// <returns></returns>
     Task<Message> Get(Guid messageId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get list of conversation messages with cursor-based pagination
+    /// </summary>
+    /// <param name="conversationId">Conversation identifier</param>
+    /// <param name="query">Cursor query parameters</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Cursor result with messages and pagination info</returns>
+    Task<CursorResult<Message>> GetWithCursor(Guid conversationId, CursorQuery query, CancellationToken ct = default);
 }

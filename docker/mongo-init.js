@@ -3,7 +3,7 @@
 // Documentation: docs/backend/OPTIMIZATION_OWN_GAMES.md
 
 // Switch to the application database
-db = db.getSiblingDB('dm3-5');
+db = db.getSiblingDB('dm3');
 
 print('Creating indexes for DM3...');
 

@@ -18,12 +18,12 @@ public class AttributeSchema
     /// <summary>
     /// Schema title
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Schema author
     /// </summary>
-    public User Author { get; set; }
+    public User Author { get; set; } = null!;
 
     /// <summary>
     /// Schema type
@@ -33,5 +33,5 @@ public class AttributeSchema
     /// <summary>
     /// Schema specifications
     /// </summary>
-    public IEnumerable<AttributeSpecification> Specifications { get; set; }
+    public IEnumerable<AttributeSpecification> Specifications { get; set; } = [];
 }

@@ -5,8 +5,7 @@
     :controls="false"
     :review="websiteReview"
   />
-  <secondary-text v-else-if="loaded">Пока тут ничего нет...</secondary-text>
-  <the-loader v-else />
+  <secondary-text v-else-if="loaded">Нет отзывов о проекте</secondary-text>
 </template>
 
 <script setup lang="ts">
@@ -18,20 +17,23 @@ const websiteReview = ref();
 const loaded = ref(false);
 onMounted(async () => {
   const { data } = await communityApi.getWebsiteReviews({ size: 0 }, true);
-  const { paging } = data!;
-
-  if (paging!.total === 0) {
+  if (!data?.paging) {
     loaded.value = true;
     return;
   }
 
-  const randomNumber = Math.floor(Math.random() * paging!.total);
+  const { paging } = data;
+  if (paging.total === 0) {
+    loaded.value = true;
+    return;
+  }
+
+  const randomNumber = Math.floor(Math.random() * paging.total);
   const { data: websiteReviews } = await communityApi.getWebsiteReviews(
     { size: 1, skip: randomNumber },
     true,
   );
-  const { resources } = websiteReviews!;
-  websiteReview.value = resources[0];
+  websiteReview.value = websiteReviews?.resources?.[0] ?? null;
   loaded.value = true;
 });
 </script>

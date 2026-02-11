@@ -1,7 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Services.DataAccess.BusinessObjects.Boards;
-using DM.Services.Forum.Dto.Output;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
+using TopicDto = DM.Services.Forum.Dto.Output.Topic;
 
 namespace DM.Services.Forum.BusinessProcesses.Topics.Creating;
 
@@ -16,5 +16,5 @@ internal interface ITopicCreatingRepository
     /// <param name="forumTopic">DAL model</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>DTO model of created topic</returns>
-    Task<Topic> Create(ForumTopic forumTopic, CancellationToken ct = default);
+    Task<TopicDto> Create(TopicDal forumTopic, CancellationToken ct = default);
 }

@@ -9,7 +9,7 @@ using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Common.Dto;
 using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Boards;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Services.Forum.Authorization;
 using DM.Services.Forum.BusinessProcesses.Commentaries.Creating;
@@ -38,7 +38,7 @@ public class CommentaryCreatingServiceShould : UnitTestBase
     private readonly CommentaryCreatingService service;
     private readonly Mock<IInvokedEventProducer> invokedEventPublisher;
     private readonly Mock<IIntentionManager> intentionManager;
-    private readonly Mock<IUpdateBuilder<ForumTopic>> updateBuilder;
+    private readonly Mock<IUpdateBuilder<TopicDal>> updateBuilder;
 
     public CommentaryCreatingServiceShould()
     {
@@ -66,7 +66,7 @@ public class CommentaryCreatingServiceShould : UnitTestBase
 
         commentRepository = Mock<ICommentaryCreatingRepository>();
         commentaryCreateSetup = commentRepository.Setup(r =>
-            r.Create(It.IsAny<Comment>(), It.IsAny<IUpdateBuilder<ForumTopic>>()));
+            r.Create(It.IsAny<Comment>(), It.IsAny<IUpdateBuilder<TopicDal>>()));
 
         invokedEventPublisher = Mock<IInvokedEventProducer>();
         invokedEventPublisher
@@ -79,12 +79,12 @@ public class CommentaryCreatingServiceShould : UnitTestBase
             .Returns(Task.CompletedTask);
 
         var updateBuilderFactory = Mock<IUpdateBuilderFactory>();
-        updateBuilder = Mock<IUpdateBuilder<ForumTopic>>();
+        updateBuilder = Mock<IUpdateBuilder<TopicDal>>();
         updateBuilder
             .Setup(b => b.Field(t => t.LastCommentId, It.IsAny<Guid?>()))
             .Returns(updateBuilder.Object);
         updateBuilderFactory
-            .Setup(f => f.Create<ForumTopic>(It.IsAny<Guid>()))
+            .Setup(f => f.Create<TopicDal>(It.IsAny<Guid>()))
             .Returns(updateBuilder.Object);
 
         service = new CommentaryCreatingService(validator.Object, topicReadingService.Object,

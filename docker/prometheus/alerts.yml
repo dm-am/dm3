@@ -1,0 +1,75 @@
+groups:
+  - name: dm-api
+    rules:
+      - alert: ApiDown
+        expr: up{job="dm-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DM API is down"
+          description: "dm-api has been unreachable for more than 1 minute."
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m]))
+          /
+          sum(rate(http_server_request_duration_seconds_count[5m]))
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 5xx error rate"
+          description: "More than 5% of requests are returning 5xx errors for 5 minutes."
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le))
+          > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High request latency"
+          description: "p95 latency is above 2 seconds for 5 minutes."
+
+  - name: dm-consumers
+    rules:
+      - alert: ConsumerDown
+        expr: up{job=~"dm-(notifications|search-engine|email-sender)-consumer"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Consumer {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been unreachable for more than 2 minutes."
+
+  - name: dm-infrastructure
+    rules:
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL exporter reports database is unreachable."
+
+      - alert: HighMemoryUsage
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Host memory usage is above 90% for 5 minutes."
+
+      - alert: DiskSpaceLow
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space"
+          description: "Root filesystem usage is above 85% for 10 minutes."

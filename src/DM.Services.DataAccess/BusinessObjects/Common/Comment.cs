@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using DM.Services.DataAccess.BusinessObjects.Administration;
+using DM.Services.DataAccess.BusinessObjects.Blogs;
 using DM.Services.DataAccess.BusinessObjects.DataContracts;
 using DM.Services.DataAccess.BusinessObjects.Boards;
 using DM.Services.DataAccess.BusinessObjects.Games;
@@ -50,7 +51,7 @@ public class Comment : ISoftDeletable, IEditable, IHasEditHistory<CommentEdit>
     /// <summary>
     /// Commentary content
     /// </summary>
-    public string Text { get; set; }
+    public string Text { get; set; } = null!;
 
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
@@ -62,50 +63,54 @@ public class Comment : ISoftDeletable, IEditable, IHasEditHistory<CommentEdit>
     public DateTimeOffset? DeletedAtUtc { get; set; }
 
     /// <summary>
-    /// Parent topic
+    /// Parent topic (for forum comments)
+    /// Note: Configured in DmDbContext, not via ForeignKey attribute
     /// </summary>
-    [ForeignKey(nameof(EntityId))]
-    public virtual ForumTopic Topic { get; set; }
+    public virtual Topic? Topic { get; set; }
 
     /// <summary>
-    /// Parent game
+    /// Parent game (for game comments)
+    /// Note: EntityId is a polymorphic reference - no DB FK exists
     /// </summary>
-    [ForeignKey(nameof(EntityId))]
-    public virtual Game Game { get; set; }
+    [NotMapped]
+    public virtual Game? Game { get; set; }
+
+    /// <summary>
+    /// Parent blog (for blog discussion comments)
+    /// Note: EntityId is a polymorphic reference - no DB FK exists
+    /// </summary>
+    [NotMapped]
+    public virtual Blog? Blog { get; set; }
+
+    /// <summary>
+    /// Parent publication (for publication comments)
+    /// Note: EntityId is a polymorphic reference - no DB FK exists
+    /// </summary>
+    [NotMapped]
+    public virtual Publication? Publication { get; set; }
 
     /// <summary>
     /// Author
     /// </summary>
     [ForeignKey(nameof(UserId))]
-    public virtual User Author { get; set; }
+    public virtual User Author { get; set; } = null!;
 
     /// <summary>
     /// Last editor
     /// </summary>
     [ForeignKey(nameof(ModifiedByUserId))]
-    public virtual User ModifiedBy { get; set; }
+    public virtual User? ModifiedBy { get; set; }
 
     /// <summary>
     /// User who deleted the comment
     /// </summary>
     [ForeignKey(nameof(DeletedByUserId))]
-    public virtual User DeletedBy { get; set; }
+    public virtual User? DeletedBy { get; set; }
 
     /// <summary>
     /// Edit history
     /// </summary>
     [InverseProperty(nameof(CommentEdit.Comment))]
-    public virtual ICollection<CommentEdit> Edits { get; set; }
+    public virtual ICollection<CommentEdit> Edits { get; set; } = [];
 
-    /// <summary>
-    /// Likes
-    /// </summary>
-    [InverseProperty(nameof(Like.Comment))]
-    public virtual ICollection<Like> Likes { get; set; }
-
-    /// <summary>
-    /// Administrative warnings
-    /// </summary>
-    [InverseProperty(nameof(Warning.Comment))]
-    public virtual ICollection<Warning> Warnings { get; set; }
 }

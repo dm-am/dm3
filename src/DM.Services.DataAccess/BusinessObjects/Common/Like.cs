@@ -1,8 +1,8 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using DM.Services.DataAccess.BusinessObjects.Boards;
-using DM.Services.DataAccess.BusinessObjects.Messaging;
+using DM.Services.Core.Dto.Enums;
+using DM.Services.DataAccess.BusinessObjects.DataContracts;
 using DM.Services.DataAccess.BusinessObjects.Users;
 
 namespace DM.Services.DataAccess.BusinessObjects.Common;
@@ -11,8 +11,13 @@ namespace DM.Services.DataAccess.BusinessObjects.Common;
 /// DAL model for like
 /// </summary>
 [Table("Likes")]
-public class Like
+public class Like : IRemovable
 {
+    /// <summary>
+    /// Removed flag
+    /// </summary>
+    public bool IsRemoved { get; set; }
+
     /// <summary>
     /// Like identifier
     /// </summary>
@@ -25,6 +30,11 @@ public class Like
     public Guid EntityId { get; set; }
 
     /// <summary>
+    /// Type of the parent entity
+    /// </summary>
+    public LikeEntityType EntityType { get; set; }
+
+    /// <summary>
     /// Author identifier
     /// </summary>
     public Guid UserId { get; set; }
@@ -33,29 +43,5 @@ public class Like
     /// Author
     /// </summary>
     [ForeignKey(nameof(UserId))]
-    public virtual User User { get; set; }
-
-    /// <summary>
-    /// Parent commentary
-    /// </summary>
-    [ForeignKey(nameof(EntityId))]
-    public virtual Comment Comment { get; set; }
-
-    /// <summary>
-    /// Parent topic
-    /// </summary>
-    [ForeignKey(nameof(EntityId))]
-    public virtual ForumTopic Topic { get; set; }
-
-    /// <summary>
-    /// Parent review
-    /// </summary>
-    [ForeignKey(nameof(EntityId))]
-    public virtual Review Review { get; set; }
-
-    /// <summary>
-    /// Parent message (both chat and private messages)
-    /// </summary>
-    [ForeignKey(nameof(EntityId))]
-    public virtual Message Message { get; set; }
+    public virtual User User { get; set; } = null!;
 }

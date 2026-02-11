@@ -72,17 +72,17 @@ public class Character : ISoftDeletable, IEditable, IHasEditHistory<CharacterEdi
     /// <summary>
     /// Name
     /// </summary>
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 
     /// <summary>
     /// Race (e.g. elf, asari, human)
     /// </summary>
-    public string Race { get; set; }
+    public string? Race { get; set; }
 
     /// <summary>
     /// Class (e.g. wizard, sniper)
     /// </summary>
-    public string Class { get; set; }
+    public string? Class { get; set; }
 
     /// <summary>
     /// Old-school-D&amp;D stuff
@@ -92,27 +92,27 @@ public class Character : ISoftDeletable, IEditable, IHasEditHistory<CharacterEdi
     /// <summary>
     /// Appearance
     /// </summary>
-    public string Appearance { get; set; }
+    public string? Appearance { get; set; }
 
     /// <summary>
     /// Temper
     /// </summary>
-    public string Temper { get; set; }
+    public string? Temper { get; set; }
 
     /// <summary>
     /// Life story
     /// </summary>
-    public string Story { get; set; }
+    public string? Story { get; set; }
 
     /// <summary>
     /// Skills
     /// </summary>
-    public string Skills { get; set; }
+    public string? Skills { get; set; }
 
     /// <summary>
     /// Inventory
     /// </summary>
-    public string Inventory { get; set; }
+    public string? Inventory { get; set; }
 
     /// <summary>
     /// NPC flag
@@ -137,53 +137,53 @@ public class Character : ISoftDeletable, IEditable, IHasEditHistory<CharacterEdi
     /// Game
     /// </summary>
     [ForeignKey(nameof(GameId))]
-    public virtual Game Game { get; set; }
+    public virtual Game Game { get; set; } = null!;
 
     /// <summary>
     /// Author
     /// </summary>
     [ForeignKey(nameof(UserId))]
-    public virtual User Author { get; set; }
+    public virtual User Author { get; set; } = null!;
 
     /// <summary>
     /// Last editor
     /// </summary>
     [ForeignKey(nameof(ModifiedByUserId))]
-    public virtual User ModifiedBy { get; set; }
+    public virtual User? ModifiedBy { get; set; }
 
     /// <summary>
     /// User who deleted the character
     /// </summary>
     [ForeignKey(nameof(DeletedByUserId))]
-    public virtual User DeletedBy { get; set; }
+    public virtual User? DeletedBy { get; set; }
 
     /// <summary>
     /// Edit history
     /// </summary>
     [InverseProperty(nameof(CharacterEdit.Character))]
-    public virtual ICollection<CharacterEdit> Edits { get; set; }
+    public virtual ICollection<CharacterEdit> Edits { get; set; } = [];
 
     /// <summary>
     /// Portrait
     /// </summary>
     [InverseProperty(nameof(Upload.Character))]
-    public virtual ICollection<Upload> Pictures { get; set; }
+    public virtual ICollection<Upload> Pictures { get; set; } = [];
 
     /// <summary>
     /// Attribute values
     /// </summary>
     [InverseProperty(nameof(CharacterAttribute.Character))]
-    public virtual ICollection<CharacterAttribute> Attributes { get; set; }
+    public virtual ICollection<CharacterAttribute> Attributes { get; set; } = [];
 
     /// <summary>
     /// Room access
     /// </summary>
-    [InverseProperty(nameof(RoomClaim.Character))]
-    public virtual ICollection<RoomClaim> RoomLinks { get; set; }
+    [InverseProperty(nameof(RoomAccess.Character))]
+    public virtual ICollection<RoomAccess> RoomLinks { get; set; } = [];
 
     /// <summary>
     /// Posts
     /// </summary>
     [InverseProperty(nameof(Post.Character))]
-    public virtual ICollection<Post> Posts { get; set; }
+    public virtual ICollection<Post> Posts { get; set; } = [];
 }

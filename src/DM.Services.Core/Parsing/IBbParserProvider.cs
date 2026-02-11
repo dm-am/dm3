@@ -33,7 +33,7 @@ public interface IBbParserProvider
     IBbParser CurrentSafePost { get; }
 
     /// <summary>
-    /// Parser for rating votes (NSFW)
+    /// Parser for post reviews (NSFW)
     /// </summary>
     IBbParser CurrentSafeRating { get; }
 

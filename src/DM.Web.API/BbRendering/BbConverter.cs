@@ -32,7 +32,7 @@ internal class BbConverterFactory : JsonConverterFactory
         var converter = (JsonConverter) Activator.CreateInstance(
             typeof(BbConverter<>).MakeGenericType(typeToConvert),
             BindingFlags.Instance | BindingFlags.Public,
-            null, new object[] {_httpContextAccessor, _bbParserProvider}, null);
+            null, new object[] {_httpContextAccessor, _bbParserProvider}, null)!;
         return converter;
     }
 
@@ -43,11 +43,11 @@ internal class BbConverterFactory : JsonConverterFactory
         where TBbText : BbText, new()
     {
         public override TBbText Read(ref Utf8JsonReader reader, Type typeToConvert,
-            JsonSerializerOptions options) => new() {Value = reader.GetString()};
+            JsonSerializerOptions options) => new() {Value = reader.GetString() ?? string.Empty};
 
         public override void Write(Utf8JsonWriter writer, TBbText bbText, JsonSerializerOptions options)
         {
-            var httpContext = httpContextAccessor.HttpContext;
+            var httpContext = httpContextAccessor.HttpContext!;
             var renderMode = httpContext.Request.Headers.TryGetValue("X-Dm-Bb-Render-Mode", out var headerValues) &&
                              headerValues.Any() && Enum.TryParse<BbRenderMode>(headerValues.First(), out var requiredRenderMode)
                 ? requiredRenderMode
@@ -69,7 +69,6 @@ internal class BbConverterFactory : JsonConverterFactory
                 BbParseMode.Common => bbParserProvider.CurrentCommon.Parse(value),
                 BbParseMode.Info => bbParserProvider.CurrentInfo.Parse(value),
                 BbParseMode.Post => bbParserProvider.CurrentPost.Parse(value),
-                BbParseMode.Chat => bbParserProvider.CurrentGeneralChat.Parse(value),
                 _ => throw new ArgumentOutOfRangeException(nameof(bbText.ParseMode))
             };
                 

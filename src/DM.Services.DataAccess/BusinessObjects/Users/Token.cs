@@ -44,11 +44,11 @@ public class Token : IRemovable
     /// Authorised user
     /// </summary>
     [ForeignKey(nameof(UserId))]
-    public virtual User User { get; set; }
+    public virtual User User { get; set; } = null!;
 
     /// <summary>
     /// Related game
     /// </summary>
     [ForeignKey(nameof(EntityId))]
-    public virtual Game Game { get; set; }
+    public virtual Game? Game { get; set; }
 }

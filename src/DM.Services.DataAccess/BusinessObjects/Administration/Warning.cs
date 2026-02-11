@@ -1,9 +1,8 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using DM.Services.DataAccess.BusinessObjects.Common;
+using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.DataContracts;
-using DM.Services.DataAccess.BusinessObjects.Messaging;
 using DM.Services.DataAccess.BusinessObjects.Users;
 
 namespace DM.Services.DataAccess.BusinessObjects.Administration;
@@ -32,6 +31,11 @@ public class Warning : IAdministrated
     public Guid EntityId { get; set; }
 
     /// <summary>
+    /// Type of the entity that caused the warning
+    /// </summary>
+    public WarningEntityType EntityType { get; set; }
+
+    /// <summary>
     /// Creation moment (UTC)
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
@@ -39,7 +43,7 @@ public class Warning : IAdministrated
     /// <summary>
     /// Moderation message
     /// </summary>
-    public string Text { get; set; }
+    public string Text { get; set; } = null!;
 
     /// <summary>
     /// Warning points based on the violation
@@ -51,21 +55,9 @@ public class Warning : IAdministrated
 
     /// <inheritdoc />
     [ForeignKey(nameof(UserId))]
-    public virtual User User { get; set; }
+    public virtual User User { get; set; } = null!;
 
     /// <inheritdoc />
     [ForeignKey(nameof(ModeratorId))]
-    public virtual User Moderator { get; set; }
-
-    /// <summary>
-    /// Warning causation forum commentary
-    /// </summary>
-    [ForeignKey(nameof(EntityId))]
-    public virtual Comment Comment { get; set; }
-
-    /// <summary>
-    /// Warning causation message (chat or private)
-    /// </summary>
-    [ForeignKey(nameof(EntityId))]
-    public virtual Message Message { get; set; }
+    public virtual User Moderator { get; set; } = null!;
 }

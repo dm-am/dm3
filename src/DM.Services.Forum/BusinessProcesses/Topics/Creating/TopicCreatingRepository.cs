@@ -4,8 +4,8 @@ using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Services.DataAccess;
-using DM.Services.DataAccess.BusinessObjects.Boards;
-using DM.Services.Forum.Dto.Output;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
+using TopicDto = DM.Services.Forum.Dto.Output.Topic;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Services.Forum.BusinessProcesses.Topics.Creating;
@@ -26,14 +26,14 @@ internal class TopicCreatingRepository : ITopicCreatingRepository
     }
 
     /// <inheritdoc />
-    public async Task<Topic> Create(ForumTopic forumTopic, CancellationToken ct = default)
+    public async Task<TopicDto> Create(TopicDal forumTopic, CancellationToken ct = default)
     {
-        _dbContext.ForumTopics.Add(forumTopic);
+        _dbContext.Topics.Add(forumTopic);
         await _dbContext.SaveChangesAsync(ct);
-        return await _dbContext.ForumTopics
+        return await _dbContext.Topics
             .TagWith("DM.Forum.CreatedTopic")
-            .Where(t => t.ForumTopicId == forumTopic.ForumTopicId)
-            .ProjectTo<Topic>(_mapper.ConfigurationProvider)
+            .Where(t => t.TopicId == forumTopic.TopicId)
+            .ProjectTo<TopicDto>(_mapper.ConfigurationProvider)
             .FirstAsync(ct);
     }
 }

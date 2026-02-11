@@ -28,7 +28,7 @@ public class CommentaryReadingServiceShould : UnitTestBase
 {
     private readonly ISetup<ITopicReadingService, Task<Topic>> readingTopicSetup;
     private readonly ISetup<ICommentaryReadingRepository, Task<IEnumerable<Comment>>> getCommentsListSetup;
-    private readonly ISetup<ICommentaryReadingRepository, Task<Comment>> getCommentSetup;
+    private readonly ISetup<ICommentaryReadingRepository, Task<Comment?>> getCommentSetup;
     private readonly ISetup<ICommentaryReadingRepository, Task<int>> countCommentsSetup;
     private readonly ISetup<IIdentity, AuthenticatedUser> currentUserSetup;
     private readonly Mock<IUnreadCountersRepository> unreadCountersRepository;
@@ -72,7 +72,7 @@ public class CommentaryReadingServiceShould : UnitTestBase
     public async Task ThrowException_WhenNothingFound()
     {
         var commentId = Guid.NewGuid();
-        getCommentSetup.ReturnsAsync((Comment) null);
+        getCommentSetup.ReturnsAsync((Comment?)null!);
         var err = await readingService.Awaiting(s => s.Get(commentId))
             .Should().ThrowAsync<HttpException>();
         err.And

@@ -4,7 +4,7 @@ using DM.Services.Common.Authorization;
 using DM.Services.Common.BusinessProcesses.UnreadCounters;
 using DM.Services.Core.Dto.Enums;
 using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.BusinessObjects.Boards;
+using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
 using DM.Services.DataAccess.RelationalStorage;
 using DM.Services.Forum.Authorization;
 using DM.Services.Forum.BusinessProcesses.Commentaries.Deleting;
@@ -21,12 +21,12 @@ namespace DM.Services.Forum.Tests.BusinessProcesses.Commentaries;
 public class CommentaryDeletingServiceShould : UnitTestBase
 {
     private readonly Mock<IIntentionManager> intentionManager;
-    private readonly Mock<IUpdateBuilder<ForumTopic>> topicUpdateBuilder;
+    private readonly Mock<IUpdateBuilder<TopicDal>> topicUpdateBuilder;
     private readonly Mock<ICommentaryDeletingRepository> commentaryRepository;
     private readonly Mock<IUnreadCountersRepository> unreadCountersRepository;
     private readonly Mock<IInvokedEventProducer> eventPublisher;
     private readonly CommentaryDeletingService service;
-    private readonly ISetup<ICommentaryDeletingRepository, Task<CommentToDelete>> getCommentSetup;
+    private readonly ISetup<ICommentaryDeletingRepository, Task<CommentToDelete?>> getCommentSetup;
     private readonly Mock<IUpdateBuilder<Comment>> commentUpdateBuilder;
 
     public CommentaryDeletingServiceShould()
@@ -36,7 +36,7 @@ public class CommentaryDeletingServiceShould : UnitTestBase
             .Setup(m => m.ThrowIfForbidden(It.IsAny<CommentIntention>(), It.IsAny<Common.Dto.Comment>()));
 
         var updateBuilderFactory = Mock<IUpdateBuilderFactory>();
-        topicUpdateBuilder = Mock<IUpdateBuilder<ForumTopic>>();
+        topicUpdateBuilder = Mock<IUpdateBuilder<TopicDal>>();
         topicUpdateBuilder
             .Setup(b => b.Field(t => t.LastCommentId, It.IsAny<Guid?>()))
             .Returns(topicUpdateBuilder.Object);
@@ -45,7 +45,7 @@ public class CommentaryDeletingServiceShould : UnitTestBase
             .Setup(b => b.Field(c => c.IsRemoved, It.IsAny<bool>()))
             .Returns(commentUpdateBuilder.Object);
         updateBuilderFactory
-            .Setup(f => f.Create<ForumTopic>(It.IsAny<Guid>()))
+            .Setup(f => f.Create<TopicDal>(It.IsAny<Guid>()))
             .Returns(topicUpdateBuilder.Object);
         updateBuilderFactory
             .Setup(f => f.Create<Comment>(It.IsAny<Guid>()))

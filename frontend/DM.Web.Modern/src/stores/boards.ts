@@ -24,7 +24,7 @@ export const useBoardsStore = defineStore("boards", () => {
   const news = ref<Topic[] | null>(null);
   async function fetchNews() {
     const { data } = await forumApi.getNews();
-    news.value = data!.resources;
+    news.value = data?.resources ?? [];
   }
 
   const selectedBoard = ref<Board | null>(null);
@@ -35,7 +35,7 @@ export const useBoardsStore = defineStore("boards", () => {
     const { error, data } = await forumApi.getBoard(id);
     if (error) return false;
 
-    selectedBoard.value = data!.resource;
+    selectedBoard.value = data?.resource ?? null;
     return true;
   }
 
@@ -59,8 +59,8 @@ export const useBoardsStore = defineStore("boards", () => {
       forumApi.getTopics(selectedBoard.value!.id, query, false),
     ]);
 
-    attachedTopics.value = fetchedAttachedTopics.data!.resources;
-    topics.value = fetchedTopics.data!;
+    attachedTopics.value = fetchedAttachedTopics.data?.resources ?? null;
+    topics.value = fetchedTopics.data ?? null;
   }
 
   const selectedTopic = ref<Topic | null>(null);

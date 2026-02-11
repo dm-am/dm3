@@ -4,14 +4,28 @@ using System.Threading.Tasks;
 namespace DM.Services.Community.BusinessProcesses.Account.Activation;
 
 /// <summary>
-/// Service for user activation
+/// Service for email-first user activation (login selection after email verification)
 /// </summary>
 public interface IActivationService
 {
     /// <summary>
-    /// Activate user by token identifier
+    /// Complete activation by selecting login
     /// </summary>
-    /// <param name="tokenId">Activation token identifier</param>
+    /// <param name="request">Activation request with token and chosen login</param>
     /// <returns>Activated user identifier</returns>
-    Task<Guid> Activate(Guid tokenId);
+    Task<Guid> Activate(ActivationRequest request);
+
+    /// <summary>
+    /// Get pending registration info by token (for UI pre-fill)
+    /// </summary>
+    /// <param name="tokenId">Token from activation link</param>
+    /// <returns>Pending info (status, email) or null if not found</returns>
+    Task<PendingInfoResult?> GetPendingInfo(Guid tokenId);
+
+    /// <summary>
+    /// Resend activation email for pending registration
+    /// </summary>
+    /// <param name="email">Email address</param>
+    /// <returns>True if request was processed (always true to prevent enumeration)</returns>
+    Task<bool> ResendActivation(string email);
 }

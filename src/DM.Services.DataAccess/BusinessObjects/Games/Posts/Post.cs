@@ -5,7 +5,6 @@ using System.ComponentModel.DataAnnotations.Schema;
 using DM.Services.DataAccess.BusinessObjects.Common;
 using DM.Services.DataAccess.BusinessObjects.DataContracts;
 using DM.Services.DataAccess.BusinessObjects.Games.Characters;
-using DM.Services.DataAccess.BusinessObjects.Games.Rating;
 using DM.Services.DataAccess.BusinessObjects.Users;
 
 namespace DM.Services.DataAccess.BusinessObjects.Games.Posts;
@@ -55,17 +54,17 @@ public class Post : ISoftDeletable, IEditable, IHasEditHistory<PostEdit>
     /// <summary>
     /// Post text
     /// </summary>
-    public string Text { get; set; }
+    public string Text { get; set; } = null!;
 
     /// <summary>
     /// Additional text
     /// </summary>
-    public string Commentary { get; set; }
+    public string? Commentary { get; set; }
 
     /// <summary>
     /// Private message to master
     /// </summary>
-    public string MasterMessage { get; set; }
+    public string? MasterMessage { get; set; }
 
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
@@ -80,47 +79,41 @@ public class Post : ISoftDeletable, IEditable, IHasEditHistory<PostEdit>
     /// Room
     /// </summary>
     [ForeignKey(nameof(RoomId))]
-    public virtual Room Room { get; set; }
+    public virtual Room Room { get; set; } = null!;
 
     /// <summary>
     /// Character
     /// </summary>
     [ForeignKey(nameof(CharacterId))]
-    public virtual Character Character { get; set; }
+    public virtual Character? Character { get; set; }
 
     /// <summary>
     /// Author
     /// </summary>
     [ForeignKey(nameof(UserId))]
-    public virtual User Author { get; set; }
+    public virtual User Author { get; set; } = null!;
 
     /// <summary>
     /// Last update author
     /// </summary>
     [ForeignKey(nameof(ModifiedByUserId))]
-    public virtual User ModifiedBy { get; set; }
+    public virtual User? ModifiedBy { get; set; }
 
     /// <summary>
     /// User who deleted the post
     /// </summary>
     [ForeignKey(nameof(DeletedByUserId))]
-    public virtual User DeletedBy { get; set; }
+    public virtual User? DeletedBy { get; set; }
 
     /// <summary>
     /// Edit history
     /// </summary>
     [InverseProperty(nameof(PostEdit.Post))]
-    public virtual ICollection<PostEdit> Edits { get; set; }
-
-    /// <summary>
-    /// Votes for the post
-    /// </summary>
-    [InverseProperty(nameof(Vote.Post))]
-    public virtual ICollection<Vote> Votes { get; set; }
+    public virtual ICollection<PostEdit> Edits { get; set; } = [];
 
     /// <summary>
     /// Files attached to post
     /// </summary>
     [InverseProperty(nameof(Upload.Post))]
-    public virtual ICollection<Upload> Attachments { get; set; }
+    public virtual ICollection<Upload> Attachments { get; set; } = [];
 }

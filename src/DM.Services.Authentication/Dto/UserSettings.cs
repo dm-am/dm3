@@ -16,7 +16,7 @@ public class UserSettings
     /// <summary>
     /// If the user is mentor, each newbie linked to them will receive the custom private message upon registration
     /// </summary>
-    public string MentorGreetingsMessage { get; set; }
+    public string? MentorGreetingsMessage { get; set; }
 
     /// <summary>
     /// Color scheme for the website view
@@ -26,7 +26,7 @@ public class UserSettings
     /// <summary>
     /// Paging settings
     /// </summary>
-    public PagingSettings Paging { get; set; }
+    public PagingSettings Paging { get; set; } = null!;
 
     /// <summary>
     /// Default user settings for a guest or a newbie

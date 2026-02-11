@@ -11,10 +11,10 @@ namespace DM.Services.Community.BusinessProcesses.Messaging.Deleting;
 /// <inheritdoc />
 internal class MessageDeletingService : IMessageDeletingService
 {
-    private readonly IIdentityProvider identityProvider;
-    private readonly IMessageReadingRepository readingRepository;
-    private readonly IMessageDeletingRepository deletingRepository;
-    private readonly IIntentionManager intentionManager;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IMessageReadingRepository _readingRepository;
+    private readonly IMessageDeletingRepository _deletingRepository;
+    private readonly IIntentionManager _intentionManager;
 
     /// <inheritdoc />
     public MessageDeletingService(
@@ -23,24 +23,24 @@ internal class MessageDeletingService : IMessageDeletingService
         IMessageDeletingRepository deletingRepository,
         IIntentionManager intentionManager)
     {
-        this.identityProvider = identityProvider;
-        this.readingRepository = readingRepository;
-        this.deletingRepository = deletingRepository;
-        this.intentionManager = intentionManager;
+        _identityProvider = identityProvider;
+        _readingRepository = readingRepository;
+        _deletingRepository = deletingRepository;
+        _intentionManager = intentionManager;
     }
 
     /// <inheritdoc />
     public async Task Delete(Guid messageId)
     {
-        var currentUserId = identityProvider.Current.User.UserId;
-        var message = await readingRepository.Get(messageId, currentUserId);
+        var currentUserId = _identityProvider.Current.User.UserId;
+        var message = await _readingRepository.Get(messageId, currentUserId);
         if (message == null)
         {
             throw new HttpException(HttpStatusCode.Gone, "Message not found");
         }
 
-        intentionManager.ThrowIfForbidden(MessageIntention.Delete, message);
+        _intentionManager.ThrowIfForbidden(MessageIntention.Delete, message);
 
-        await deletingRepository.Delete(messageId, currentUserId);
+        await _deletingRepository.Delete(messageId, currentUserId);
     }
 }

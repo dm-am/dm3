@@ -15,8 +15,7 @@ onMounted(() => store.fetchActivePolls());
 <template>
   <menu-block token="OpenPolls">
     <template #title>Опросы</template>
-    <the-loader v-if="!activePolls" />
-    <secondary-text v-else-if="!activePolls.length"
+    <secondary-text v-if="!activePolls || !activePolls.length"
       >Нет активных опросов</secondary-text
     >
     <the-poll v-else v-for="poll in activePolls" :key="poll.id" :poll="poll" />

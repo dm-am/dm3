@@ -1,36 +1,37 @@
-using System.Collections.Generic;
 using System.Reflection;
-using DM.Web.API.Controllers.v1.Account;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace DM.Web.API.Authentication;
 
-/// <inheritdoc />
+/// <summary>
+/// Swagger filter that documents authentication requirements for API endpoints.
+/// BFF Pattern uses HttpOnly cookies for authentication - no header required.
+/// </summary>
 public class AuthenticationSwaggerFilter : IOperationFilter
 {
     /// <inheritdoc />
     public void Apply(OpenApiOperation operation, OperationFilterContext context)
     {
-        if (context.MethodInfo.DeclaringType == typeof(LoginController) &&
-            context.MethodInfo.Name == nameof(LoginController.Login))
-        {
-            return;
-        }
+        var requiresAuth = context.MethodInfo.GetCustomAttribute<AuthenticationRequiredAttribute>() != null;
 
-        (operation.Parameters ?? (operation.Parameters = new List<OpenApiParameter>()))
-            .Add(new OpenApiParameter
+        if (requiresAuth)
+        {
+            operation.Security ??= [];
+            operation.Security.Add(new OpenApiSecurityRequirement
             {
-                Name = ApiCredentialsStorage.HttpAuthTokenHeader,
-                In = ParameterLocation.Header,
-                Required = context.MethodInfo.GetCustomAttribute<AuthenticationRequiredAttribute>() != null,
-                Schema = new OpenApiSchema
                 {
-                    Type = "string",
-                },
-                Description = $"Authenticated requests require {ApiCredentialsStorage.HttpAuthTokenHeader} header. " +
-                              "You can get the data from POST /account/ method, " +
-                              "sending login and password in \"token\" response field"
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference
+                        {
+                            Type = ReferenceType.SecurityScheme,
+                            Id = "cookieAuth"
+                        }
+                    },
+                    []
+                }
             });
+        }
     }
 }

@@ -170,13 +170,12 @@ async function submitPoll() {
     :to="{ name: 'polls', params: route.params }"
   />
 
-  <the-loader v-if="polls === null" />
-  <template v-else-if="polls.resources.length === 0">
+  <template v-if="polls && polls.resources.length === 0">
     <secondary-text>Опросов пока нет</secondary-text>
   </template>
-  <the-poll
-    v-else
-    v-for="poll in polls.resources"
+  <template v-else-if="polls">
+    <the-poll
+      v-for="poll in polls.resources"
     :key="poll.id"
     :poll="poll"
     :detailed="true"
@@ -187,6 +186,7 @@ async function submitPoll() {
     :paging="polls.paging!"
     :to="{ name: 'polls', params: route.params }"
   />
+</template>
 </template>
 
 <style scoped lang="sass">

@@ -15,10 +15,15 @@ public class Tag
     /// <summary>
     /// Tag display name
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Tag category name
     /// </summary>
-    public string Category { get; set; }
+    public string GroupTitle { get; set; } = null!;
+
+    /// <summary>
+    /// Number of active games with this tag
+    /// </summary>
+    public int GamesCount { get; set; }
 }
