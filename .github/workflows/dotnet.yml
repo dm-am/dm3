@@ -60,6 +60,7 @@ jobs:
       with:
         name: frontend-coverage
         path: frontend/DM.Web.Modern/coverage/
+        if-no-files-found: warn
 
   dependency-scan:
     runs-on: ubuntu-latest

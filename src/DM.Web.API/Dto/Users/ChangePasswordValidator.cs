@@ -5,6 +5,11 @@ namespace DM.Web.API.Dto.Users;
 /// <summary>
 /// Validator for password change requests
 /// </summary>
+/// <remarks>
+/// Note: The "either Token or OldPassword must be provided" check is done in the service layer,
+/// AFTER authentication check. This allows returning 401 for unauthenticated requests
+/// instead of 400 validation error.
+/// </remarks>
 public class ChangePasswordValidator : AbstractValidator<ChangePassword>
 {
     /// <summary>
@@ -16,11 +21,6 @@ public class ChangePasswordValidator : AbstractValidator<ChangePassword>
             .NotEmpty().WithMessage("New password is required")
             .MinimumLength(8).WithMessage("Password must be at least 8 characters")
             .MaximumLength(128).WithMessage("Password must not exceed 128 characters");
-
-        // At least one of Token or OldPassword must be provided
-        RuleFor(x => x)
-            .Must(x => x.Token.HasValue || !string.IsNullOrEmpty(x.OldPassword))
-            .WithMessage("Either a password reset token or the current password must be provided");
 
         // When OldPassword is provided, validate its length
         When(x => !string.IsNullOrEmpty(x.OldPassword), () =>

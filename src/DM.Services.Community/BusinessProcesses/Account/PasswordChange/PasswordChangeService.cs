@@ -57,6 +57,15 @@ internal class PasswordChangeService : IPasswordChangeService
             throw new HttpException(System.Net.HttpStatusCode.Unauthorized, "Authentication required");
         }
 
+        // Check that either token or oldPassword is provided (after auth check)
+        if (!passwordChange.Token.HasValue && string.IsNullOrEmpty(passwordChange.OldPassword))
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                [nameof(passwordChange.OldPassword)] = "Either a password reset token or the current password must be provided"
+            });
+        }
+
         await _validator.ValidateAndThrowAsync(passwordChange);
         var user = passwordChange.Token.HasValue
             ? await _repository.FindUser(passwordChange.Token.Value)

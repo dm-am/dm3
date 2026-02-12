@@ -106,10 +106,8 @@ internal class LoginApiService : ILoginApiService
                 throw new HttpException(HttpStatusCode.Forbidden,
                     "Ошибка авторизации.");
             case AuthenticationError.AccountLocked:
-                throw new HttpBadRequestException(new Dictionary<string, string>
-                {
-                    ["email"] = "Слишком много неудачных попыток. Попробуйте позже."
-                });
+                throw new HttpException(HttpStatusCode.Forbidden,
+                    "Слишком много неудачных попыток. Попробуйте позже.");
             default:
                 throw new ArgumentOutOfRangeException();
         }
