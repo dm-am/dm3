@@ -166,4 +166,12 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
         return _dbContext.PendingRegistrations
             .AnyAsync(p => p.Email.ToLower() == email.ToLower());
     }
+
+    /// <inheritdoc />
+    public Task RemoveAllSessions(Guid userId)
+    {
+        return Collection<UserSessions>().FindOneAndUpdateAsync(
+            Filter<UserSessions>().Eq(u => u.Id, userId),
+            Update<UserSessions>().Set(u => u.Sessions, new List<DbSession>()));
+    }
 }

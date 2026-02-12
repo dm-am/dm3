@@ -89,7 +89,16 @@ internal class PasswordChangeService : IPasswordChangeService
         // Cleanup old password history entries (keep max 10)
         await _repository.CleanupOldEntries(user.UserId, 10, CancellationToken.None);
 
-        await _authenticationService.LogoutElsewhere();
+        // When changing via token, user is not authenticated - logout all sessions
+        // When changing via old password, user is authenticated - keep current session
+        if (passwordChange.Token.HasValue)
+        {
+            await _authenticationService.LogoutAll(user.UserId);
+        }
+        else
+        {
+            await _authenticationService.LogoutElsewhere();
+        }
 
         // Audit logging: record password change event
         await _eventProducer.Send(EventType.PasswordChanged, user.UserId);

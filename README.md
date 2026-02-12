@@ -53,6 +53,7 @@ cd frontend/DM.Web.Modern && npm install && npm run dev
 | [DATABASE.md](./docs/architecture/DATABASE.md) | Схема БД |
 | [AUTHENTICATION.md](./docs/architecture/AUTHENTICATION.md) | Аутентификация и безопасность |
 | [RBAC.md](./docs/architecture/RBAC.md) | Роли и права доступа |
+| [USERNAME_POLICY.md](./docs/architecture/USERNAME_POLICY.md) | Валидация имён пользователей |
 
 ### Reference
 
@@ -68,6 +69,7 @@ cd frontend/DM.Web.Modern && npm install && npm run dev
 |----------|----------|
 | [ROADMAP.md](./docs/tasks/ROADMAP.md) | План развития |
 | [BACKLOG.md](./docs/tasks/BACKLOG.md) | Бэклог задач |
+| [MIGRATION.md](./docs/tasks/MIGRATION.md) | Миграция со старого сайта |
 | [AUDIT.md](./docs/tasks/AUDIT.md) | План аудита |
 
 ---

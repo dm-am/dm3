@@ -208,7 +208,7 @@ const handleRecovery = () => {
         <p><strong>Создание дополнительных аккаунтов запрещено.</strong></p>
         <p>
           Если вы утратили доступ к аккаунту, воспользуйтесь
-          <a href="#" @click.prevent="emit('openRecovery')">восстановлением доступа</a>
+          <a href="#" @click.prevent="emit('openRecovery', emailField.value.value.trim() || undefined)">восстановлением доступа</a>
           или обратитесь в <a href="#" @click.prevent="goToSupport">поддержку</a>.
         </p>
       </div>

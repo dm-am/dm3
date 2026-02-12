@@ -58,4 +58,11 @@ public interface IAuthenticationService
     /// <param name="sessionId">Session ID to terminate</param>
     /// <returns></returns>
     Task TerminateSession(Guid userId, Guid sessionId);
+
+    /// <summary>
+    /// Logout from all devices for a specific user (used for password reset)
+    /// </summary>
+    /// <param name="userId">User identifier</param>
+    /// <returns></returns>
+    Task LogoutAll(Guid userId);
 }

@@ -61,20 +61,20 @@ public class SecurityController : ControllerBase
     /// Change registered user password
     /// </summary>
     /// <remarks>
-    /// Changes the password for the authenticated user.
-    /// Requires either the old password or a valid password reset token.
+    /// Changes the password for a user. Two modes are supported:
+    /// 1. Authenticated user changing password: requires OldPassword
+    /// 2. Password reset via email token: requires Token (no authentication needed)
     /// </remarks>
     /// <param name="changePassword">Password change request</param>
     /// <response code="200">Password has been changed successfully</response>
     /// <response code="400">Invalid request (wrong old password, invalid token, or weak new password)</response>
-    /// <response code="401">User not authenticated</response>
+    /// <response code="410">Token is invalid or expired</response>
     /// <response code="429">Too many requests. Try again later.</response>
     [HttpPatch("password", Name = nameof(ChangePassword))]
-    [AuthenticationRequired]
     [EnableRateLimiting("auth")]
     [ProducesResponseType(typeof(Envelope<User>), 200)]
     [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
+    [ProducesResponseType(typeof(GeneralError), 410)]
     [ProducesResponseType(typeof(GeneralError), 429)]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePassword changePassword) =>
         Ok(await _passwordResetApiService.Change(changePassword));

@@ -11,17 +11,13 @@
         autocomplete="off"
         spellcheck="false"
       />
-      <span v-if="showStatus" class="status-icon" :class="statusClass">
-        <span v-if="checking" class="spinner" />
-        <span v-else-if="isAvailable === true">&#10003;</span>
+      <span v-if="showStatus && !checking" class="status-icon" :class="statusClass">
+        <span v-if="isAvailable === true">&#10003;</span>
         <span v-else-if="isAvailable === false">&#10007;</span>
       </span>
     </div>
     <div class="login-status">
-      <template v-if="checking">
-        <span class="checking">Проверяем...</span>
-      </template>
-      <template v-else-if="validationError">
+      <template v-if="validationError">
         <span class="error">{{ validationError }}</span>
       </template>
       <template v-else-if="isAvailable === true">
@@ -31,7 +27,7 @@
         <span class="unavailable">{{ unavailableReason }}</span>
       </template>
       <template v-else>
-        <span class="hint">2–20 символов. Нельзя: &lt; &gt; " ' ` \</span>
+        <span class="hint">2–20 символов</span>
       </template>
     </div>
   </div>
@@ -65,8 +61,9 @@ const validationError = ref<string | null>(null);
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-// Forbidden: control chars, HTML unsafe, quotes, backslash, zero-width
-const forbiddenPattern = /[\x00-\x1F\x7F<>"'`\\\u200B-\u200F\u2028-\u202F\uFEFF]/;
+// Forbidden: control chars, HTML/URL unsafe, quotes, brackets, special chars, zero-width
+// See: docs/architecture/USERNAME_POLICY.md
+const forbiddenPattern = /[\x00-\x1F\x7F<>"'`\\/@?#%&\[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]/;
 
 const showStatus = computed(() => {
   return (
@@ -77,7 +74,6 @@ const showStatus = computed(() => {
 
 
 const statusClass = computed(() => {
-  if (checking.value) return "checking";
   if (isAvailable.value === true) return "available";
   if (isAvailable.value === false) return "unavailable";
   return "";
@@ -100,7 +96,7 @@ function validateFormat(login: string): string | null {
   if (login.length === 0) return null;
   if (login.length < 2) return "Минимум 2 символа";
   if (login.length > 20) return "Максимум 20 символов";
-  if (forbiddenPattern.test(login)) return "Недопустимые символы: < > \" ' ` \\";
+  if (forbiddenPattern.test(login)) return "Недопустимый символ";
   if (/^\s/.test(login)) return "Не может начинаться с пробела";
   if (/\s$/.test(login)) return "Не может заканчиваться пробелом";
   if (/\s{2}/.test(login)) return "Пробелы не могут идти подряд";
@@ -203,27 +199,11 @@ watch(
   align-items: center
   justify-content: center
 
-  &.checking
-    color: $text-muted
-
   &.available
     color: $accent-green
 
   &.unavailable
     color: $accent-red
-
-.spinner
-  display: inline-block
-  width: 1rem
-  height: 1rem
-  border: 2px solid $text-muted
-  border-top-color: transparent
-  border-radius: 50%
-  animation: spin 0.8s linear infinite
-
-@keyframes spin
-  to
-    transform: rotate(360deg)
 
 .login-status
   margin-top: $small
@@ -231,9 +211,6 @@ watch(
   min-height: 1.4em
 
   .hint
-    color: $text-muted
-
-  .checking
     color: $text-muted
 
   .available

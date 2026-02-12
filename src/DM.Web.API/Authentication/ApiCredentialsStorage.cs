@@ -50,9 +50,6 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     public Task Load(HttpContext httpContext, IIdentity identity)
     {
         var isPersistent = identity.Session?.Persistent ?? false;
-        var expiration = isPersistent
-            ? TimeSpan.FromDays(_config.PersistentSessionExpirationDays)
-            : TimeSpan.FromHours(_config.SessionExpirationHours);
 
         var cookieOptions = new CookieOptions
         {
@@ -60,9 +57,15 @@ internal class ApiCredentialsStorage : ICredentialsStorage
             Secure = !httpContext.Request.Host.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase),
             SameSite = SameSiteMode.Lax, // Lax allows cookies on cross-site navigation (required for mirror transfer)
             Path = "/",
-            MaxAge = expiration,
             IsEssential = true
         };
+
+        // Persistent sessions ("Remember Me"): cookie survives browser restart
+        // Non-persistent sessions: session cookie, deleted when browser closes
+        if (isPersistent)
+        {
+            cookieOptions.MaxAge = TimeSpan.FromDays(_config.PersistentSessionExpirationDays);
+        }
 
         httpContext.Response.Cookies.Append(AuthCookieName, identity.AuthenticationToken ?? string.Empty, cookieOptions);
         return Task.CompletedTask;

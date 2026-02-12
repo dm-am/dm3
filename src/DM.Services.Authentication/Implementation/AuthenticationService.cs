@@ -187,17 +187,16 @@ internal class AuthenticationService : IAuthenticationService
             return Identity.Fail(AuthenticationError.SessionExpired);
         }
 
-        if (!session.Persistent &&
-            session.ExpirationDate < _dateTimeProvider.Now)
+        if (session.ExpirationDate < _dateTimeProvider.Now)
         {
             await _repository.RemoveSession(userId, sessionId);
             _logger.LogDebug("Token authentication failed: session expired. UserId={UserId}, SessionId={SessionId}", userId, sessionId);
             return Identity.Fail(AuthenticationError.SessionExpired);
         }
 
+        // Sliding window: refresh session when approaching expiration
         var sessionRefreshDelta = TimeSpan.FromMinutes(_config.SessionRefreshMinutes);
-        if (!session.Persistent &&
-            session.ExpirationDate < _dateTimeProvider.Now + sessionRefreshDelta)
+        if (session.ExpirationDate < _dateTimeProvider.Now + sessionRefreshDelta)
         {
             await _repository.RefreshSession(userId, sessionId, session.ExpirationDate + sessionRefreshDelta);
         }
@@ -278,6 +277,13 @@ internal class AuthenticationService : IAuthenticationService
 
         await _repository.RemoveSession(userId, sessionId);
         _logger.LogInformation("Session terminated. UserId={UserId}, SessionId={SessionId}", userId, sessionId);
+    }
+
+    /// <inheritdoc />
+    public async Task LogoutAll(Guid userId)
+    {
+        await _repository.RemoveAllSessions(userId);
+        _logger.LogInformation("All sessions terminated for user. UserId={UserId}", userId);
     }
 
     private async Task RehashPassword(Guid userId, string password)

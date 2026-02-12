@@ -25,9 +25,9 @@ sudo netfilter-persistent save
 
 echo "=== Настройка preview-пароля ==="
 if [ -z "${DM_PREVIEW_PASSWORD:-}" ]; then
-    echo "ВНИМАНИЕ: DM_PREVIEW_PASSWORD не задан. Используется пароль по умолчанию." >&2
+    echo "ОШИБКА: DM_PREVIEW_PASSWORD не задан." >&2
     echo "Для установки: export DM_PREVIEW_PASSWORD=ваш_пароль" >&2
-    DM_PREVIEW_PASSWORD="dm2026preview"
+    exit 1
 fi
 
 docker run --rm httpd htpasswd -nb preview "$DM_PREVIEW_PASSWORD" > "$INSTALL_DIR/docker/nginx/.htpasswd"

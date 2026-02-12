@@ -1501,11 +1501,6 @@ defineExpose({
         class="status-item draft-status"
         :class="{ saving: draftStatus === 'saving' }"
       >
-        <span
-          v-if="draftStatus === 'saving'"
-          class="draft-spinner"
-          aria-hidden="true"
-        ></span>
         {{ draftStatusText }}
       </span>
     </div>
@@ -1764,19 +1759,6 @@ defineExpose({
 
   &.saving
     color: $text-muted
-
-.draft-spinner
-  display: inline-block
-  width: 10px
-  height: 10px
-  border: 2px solid currentColor
-  border-top-color: transparent
-  border-radius: 50%
-  animation: spin 0.8s linear infinite
-
-@keyframes spin
-  to
-    transform: rotate(360deg)
 
 .validation-errors
   padding: $small $medium

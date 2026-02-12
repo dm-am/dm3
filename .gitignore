@@ -17,6 +17,13 @@ docker/nginx/.htpasswd
 docker/.env
 docker/.env.mirror
 
-# Claude Code
+# Claude Code plans
 .claude/
-.gitignore
+
+# Test artifacts
+test_*.json
+cookies*.txt
+*_response.json
+
+# Windows null device artifact
+nul

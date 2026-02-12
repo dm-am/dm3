@@ -70,7 +70,7 @@ onMounted(async () => {
     channel = new BroadcastChannel("dm_activation");
     channel.onmessage = (event) => {
       if (event.data.type === "activated") {
-        toast.info(`Аккаунт ${event.data.login} активирован в другой вкладке`);
+        toast.info("Аккаунт был активирован в другой вкладке");
         router.push("/");
       }
     };
@@ -177,8 +177,6 @@ async function submitActivation() {
     // Clean up sessionStorage
     sessionStorage.removeItem("dm_pending_email");
     sessionStorage.removeItem("dm_activation_token");
-
-    toast.success(`Добро пожаловать, ${data.resource.login}!`);
   }
 }
 
@@ -190,7 +188,6 @@ async function resend() {
   try {
     await accountApi.resendActivation(resendEmail.value);
     resendSuccess.value = true;
-    toast.success("Письмо отправлено. Проверьте почту.");
   } catch {
     toast.error("Не удалось отправить письмо");
   } finally {
@@ -382,12 +379,6 @@ function goToRegister() {
     width: 100%
     height: 100%
 
-.status-icon--loading
-  color: $text-muted
-
-  svg
-    animation: spin 1.2s linear infinite
-
 .status-icon--success
   color: $accent-green
   animation: success-entrance 0.4s ease-out
@@ -407,12 +398,6 @@ function goToRegister() {
   color: $accent-red
 
 // Animations
-@keyframes spin
-  from
-    transform: rotate(0deg)
-  to
-    transform: rotate(360deg)
-
 @keyframes success-entrance
   0%
     opacity: 0

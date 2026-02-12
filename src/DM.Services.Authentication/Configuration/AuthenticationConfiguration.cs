@@ -6,17 +6,18 @@ namespace DM.Services.Authentication.Configuration;
 public class AuthenticationConfiguration
 {
     /// <summary>
-    /// Session expiration in hours.
-    /// Default: 8760 hours (1 year) - users are never logged out
+    /// Session expiration in hours for non-persistent sessions ("Remember Me" unchecked).
+    /// User will be logged out after this period of inactivity.
+    /// Default: 24 hours
     /// </summary>
-    public int SessionExpirationHours { get; set; } = 8760;
+    public int SessionExpirationHours { get; set; } = 24;
 
     /// <summary>
-    /// Session expiration for persistent sessions in days.
-    /// Note: All sessions are created as persistent (no "Remember me" checkbox).
-    /// Default: 365 days (1 year)
+    /// Session expiration for persistent sessions ("Remember Me" checked) in days.
+    /// User will be logged out after this period of inactivity.
+    /// Default: 30 days
     /// </summary>
-    public int PersistentSessionExpirationDays { get; set; } = 365;
+    public int PersistentSessionExpirationDays { get; set; } = 30;
 
     /// <summary>
     /// Session refresh window in minutes.

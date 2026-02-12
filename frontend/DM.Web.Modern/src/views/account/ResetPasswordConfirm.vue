@@ -2,7 +2,6 @@
 import { ref, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAsyncAction } from "@/composables/useAsyncAction";
-import { useToast } from "@/composables/useToast";
 import { useHibpCheck } from "@/composables/useHibpCheck";
 import accountApi from "@/api/requests/accountApi";
 import FormField from "@/components/inputs/form/FormField.vue";
@@ -11,7 +10,6 @@ import PasswordStrengthIndicator from "@/components/inputs/PasswordStrengthIndic
 
 const route = useRoute();
 const router = useRouter();
-const toast = useToast();
 const { loading, error, execute } = useAsyncAction();
 
 const password = ref("");
@@ -88,7 +86,6 @@ const submit = async () => {
 
     if (data) {
       completed.value = true;
-      toast.success("Пароль успешно изменен!");
     }
   });
 };

@@ -13,7 +13,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "success"): void;
   (e: "cancel"): void;
-  (e: "cantSignIn"): void;
+  (e: "cantSignIn", email?: string): void;
   (e: "resendActivation", email: string): void;
 }>();
 
@@ -104,16 +104,23 @@ const handleResendActivation = () => {
 
 const onEmailInput = () => {
   emailField.onInput();
+  // Clear password error too - credentials are validated as a pair
+  if (passwordField.error.value) {
+    passwordField.error.value = "";
+  }
   if (pendingActivation.value) {
     pendingActivation.value = false;
-    passwordField.error.value = "";
   }
 };
 
 const onPasswordInput = () => {
-  // Don't clear pending activation state - that's an email issue, not password
-  if (!pendingActivation.value) {
-    passwordField.onInput();
+  passwordField.onInput();
+  // Clear email error too - credentials are validated as a pair
+  if (emailField.error.value) {
+    emailField.error.value = "";
+  }
+  if (pendingActivation.value) {
+    pendingActivation.value = false;
   }
 };
 </script>
@@ -146,7 +153,7 @@ const onPasswordInput = () => {
           <div class="password-label-row">
             <label for="password">Пароль</label>
             <a v-if="pendingActivation" class="help-link" @click="handleResendActivation">Отправить повторное письмо?</a>
-            <a v-else class="help-link" @click="emit('cantSignIn')">Не могу войти</a>
+            <a v-else class="help-link" @click="emit('cantSignIn', emailField.value.value.trim())">Не могу войти</a>
           </div>
         </template>
         <div class="password-wrapper">
@@ -174,11 +181,9 @@ const onPasswordInput = () => {
         </div>
       </form-field>
 
-      <div class="remember-me-row">
-        <label class="checkbox-label">
-          <input type="checkbox" v-model="rememberMe" />
-          <span>Запомнить меня</span>
-        </label>
+      <div class="remember-me">
+        <input type="checkbox" v-model="rememberMe" id="rememberMe" />
+        <label for="rememberMe">Запомнить меня</label>
       </div>
 
       <!-- Honeypot field for bot protection -->
@@ -247,22 +252,9 @@ const onPasswordInput = () => {
   &:hover
     color: $text
 
-.remember-me-row
+.remember-me
   margin-top: $medium
-
-.checkbox-label
   display: flex
   align-items: center
   gap: $small
-  cursor: pointer
-  font-size: $secondary-font-size
-  color: $text-muted
-
-  input[type="checkbox"]
-    width: 16px
-    height: 16px
-    cursor: pointer
-
-  &:hover span
-    color: $text
 </style>

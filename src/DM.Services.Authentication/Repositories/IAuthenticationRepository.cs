@@ -102,4 +102,11 @@ internal interface IAuthenticationRepository
     /// <param name="email">User email</param>
     /// <returns>True if pending registration exists</returns>
     Task<bool> IsPendingRegistration(string email);
+
+    /// <summary>
+    /// Remove all sessions for a user
+    /// </summary>
+    /// <param name="userId">User identifier</param>
+    /// <returns></returns>
+    Task RemoveAllSessions(Guid userId);
 }

@@ -2,13 +2,11 @@
 import { ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAsyncAction } from "@/composables/useAsyncAction";
-import { useToast } from "@/composables/useToast";
 import accountApi from "@/api/requests/accountApi";
 import TheButton from "@/components/inputs/TheButton.vue";
 
 const route = useRoute();
 const router = useRouter();
-const toast = useToast();
 
 const { loading, error, execute } = useAsyncAction();
 const confirmed = ref(false);
@@ -34,7 +32,6 @@ onMounted(async () => {
     }
 
     confirmed.value = true;
-    toast.success("Почта успешно изменена!");
   });
 });
 </script>

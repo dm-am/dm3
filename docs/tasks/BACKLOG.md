@@ -71,12 +71,15 @@
 | `/notifications` | Не готово |
 | `/blogs` | Не готово |
 | `/moderation` | Не готово |
+| `/support` | Не готово (ссылки в RegistrationForm, RecoveryForm, ActivationPage, FeedbackLinks) |
+| `/complaint` | Не готово (ссылка в FeedbackLinks) |
 
 ---
 
 ## Ссылки
 
 - [Дорожная карта](./ROADMAP.md)
+- [Миграция со старого сайта](./MIGRATION.md)
 - [Стандарты кода](../standards/CODE.md)
 
 ---

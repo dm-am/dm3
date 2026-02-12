@@ -20,7 +20,8 @@ const { open: openLogin, close: closeLogin } = useModal({
     get prefillEmail() { return prefillEmail.value; },
     onSuccess: () => closeLogin(),
     onCancel: () => closeLogin(),
-    onCantSignIn: () => {
+    onCantSignIn: (email?: string) => {
+      prefillEmail.value = email || "";
       closeLogin();
       openRecovery();
     },
