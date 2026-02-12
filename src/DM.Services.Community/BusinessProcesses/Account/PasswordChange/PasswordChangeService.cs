@@ -51,6 +51,12 @@ internal class PasswordChangeService : IPasswordChangeService
     /// <inheritdoc />
     public async Task<GeneralUser> Change(UserPasswordChange passwordChange)
     {
+        // For OldPassword flow (no token), require authentication
+        if (!passwordChange.Token.HasValue && !_identityProvider.Current.User.IsAuthenticated)
+        {
+            throw new HttpException(System.Net.HttpStatusCode.Unauthorized, "Authentication required");
+        }
+
         await _validator.ValidateAndThrowAsync(passwordChange);
         var user = passwordChange.Token.HasValue
             ? await _repository.FindUser(passwordChange.Token.Value)
