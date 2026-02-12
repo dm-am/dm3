@@ -22,5 +22,5 @@ internal interface ISchemaReadingRepository
     /// </summary>
     /// <param name="schemaId">Schema identifier</param>
     /// <returns></returns>
-    Task<AttributeSchema> GetSchema(Guid schemaId);
+    Task<AttributeSchema?> GetSchema(Guid schemaId);
 }

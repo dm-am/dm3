@@ -66,7 +66,7 @@ internal class SchemaReadingRepository :
     }
 
     /// <inheritdoc />
-    public async Task<AttributeSchema> GetSchema(Guid schemaId)
+    public async Task<AttributeSchema?> GetSchema(Guid schemaId)
     {
         var schema = await Collection
             .Find(Filter.Eq(s => s.Id, schemaId))
