@@ -51,7 +51,7 @@ public class UserFactoryShould : UnitTestBase
             Login = "TestLogin",
             Salt = "salt",
             PasswordHash = "hash",
-            LastActivityUtc = null,
+            LastActivityUtc = rightNow, // Set on activation so user appears in active list
             Role = UserRole.RegularUser,
             AccessPolicy = AccessPolicy.NotSpecified,
             QualityRating = 0,

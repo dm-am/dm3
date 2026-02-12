@@ -261,7 +261,8 @@ public class AuthenticationServiceTokenShould : UnitTestBase
         var session = new Session
         {
             Id = sessionId,
-            Persistent = true
+            Persistent = true,
+            ExpirationDate = new DateTimeOffset(2099, 1, 1, 0, 0, 0, TimeSpan.Zero) // Far future, no sliding window
         };
         authenticationRepository
             .Setup(r => r.FindUser(It.IsAny<Guid>()))
@@ -272,6 +273,9 @@ public class AuthenticationServiceTokenShould : UnitTestBase
         authenticationRepository
             .Setup(r => r.FindUserSession(It.IsAny<Guid>()))
             .ReturnsAsync(session);
+        dateTimeProvider
+            .Setup(p => p.Now)
+            .Returns(new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero));
         updateBuilder
             .Setup(b => b.Field(u => u.LastActivityUtc, It.IsAny<DateTimeOffset>()))
             .Returns(updateBuilder.Object);
