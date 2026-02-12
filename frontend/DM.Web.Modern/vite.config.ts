@@ -22,7 +22,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "json-summary"],
-      reportsDirectory: "./coverage",
+      reportsDirectory: "../coverage",
       include: ["**/*.{ts,vue}"],
       exclude: [
         "**/*.spec.ts",
