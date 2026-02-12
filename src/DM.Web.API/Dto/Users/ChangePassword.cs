@@ -16,12 +16,15 @@ namespace DM.Web.API.Dto.Users;
 public class ChangePassword
 {
     /// <summary>
-    /// User login
+    /// User login (optional - taken from session if authenticated)
     /// </summary>
     /// <example>JohnDoe</example>
-    [Required(ErrorMessage = "Login is required")]
+    /// <remarks>
+    /// Optional when user is authenticated (login will be taken from session).
+    /// Required when using Token-based password reset.
+    /// </remarks>
     [StringLength(20, MinimumLength = 2, ErrorMessage = "Login must be between 2 and 20 characters")]
-    public string Login { get; set; } = "";
+    public string? Login { get; set; }
 
     /// <summary>
     /// Password reset token (received via email)

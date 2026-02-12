@@ -12,10 +12,21 @@ public class ChangePasswordValidator : AbstractValidator<ChangePassword>
     /// </summary>
     public ChangePasswordValidator()
     {
-        RuleFor(x => x.Login)
-            .NotEmpty().WithMessage("Login is required")
-            .MinimumLength(2).WithMessage("Login must be at least 2 characters")
-            .MaximumLength(20).WithMessage("Login must not exceed 20 characters");
+        // Login is optional when using OldPassword (authenticated flow)
+        // Login is taken from session in that case
+        When(x => !string.IsNullOrEmpty(x.Login), () =>
+        {
+            RuleFor(x => x.Login)
+                .MinimumLength(2).WithMessage("Login must be at least 2 characters")
+                .MaximumLength(20).WithMessage("Login must not exceed 20 characters");
+        });
+
+        // When using Token (password reset), Login is required
+        When(x => x.Token.HasValue, () =>
+        {
+            RuleFor(x => x.Login)
+                .NotEmpty().WithMessage("Login is required when using token");
+        });
 
         RuleFor(x => x.NewPassword)
             .NotEmpty().WithMessage("New password is required")
