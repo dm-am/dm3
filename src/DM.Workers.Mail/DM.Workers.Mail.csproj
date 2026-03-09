@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <OutputType>Exe</OutputType>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Autofac" />
+        <PackageReference Include="Autofac.Extensions.DependencyInjection" />
+        <PackageReference Include="Jamq.Client.Rabbit.DependencyInjection" />
+        <PackageReference Include="MailKit" />
+        <PackageReference Include="Polly" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
+        <ProjectReference Include="..\DM.Infrastructure.Mail\DM.Infrastructure.Mail.csproj" />
+        <ProjectReference Include="..\DM.Infrastructure.Messaging\DM.Infrastructure.Messaging.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Content Update="appsettings.json">
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+
+</Project>

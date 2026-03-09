@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
-using DM.Services.DataAccess;
-using DM.Services.DataAccess.BusinessObjects.Users;
+using DM.Infrastructure.Persistence;
+using DM.Infrastructure.Persistence.Entities.Account;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Web.API.IntegrationTests.Helpers;
@@ -35,7 +35,7 @@ public static class UserTestHelper
 
         // 1. Register (email-first flow - no login at this stage)
         var registration = new { email, password, acceptedRules = true };
-        var registerResponse = await client.PostAsJsonAsync("/v1/account", registration);
+        var registerResponse = await client.PostAsJsonAsync("/v1/account/register", registration);
         if (registerResponse.StatusCode != HttpStatusCode.Created)
         {
             var body = await registerResponse.Content.ReadAsStringAsync();
@@ -55,9 +55,9 @@ public static class UserTestHelper
                 $"PendingRegistration not found for email '{email}'");
         }
 
-        // 3. Activate with chosen login
-        var activateRequest = new { token = pending.TokenId, login };
-        var activateResponse = await client.PostAsJsonAsync("/v1/account/activate", activateRequest);
+        // 3. Activate with chosen login (token in URL, username in body)
+        var activateRequest = new { username = login };
+        var activateResponse = await client.PostAsJsonAsync($"/v1/account/activation/{pending.TokenId}", activateRequest);
         if (activateResponse.StatusCode != HttpStatusCode.OK)
         {
             var body = await activateResponse.Content.ReadAsStringAsync();

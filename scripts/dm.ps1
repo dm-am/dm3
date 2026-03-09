@@ -96,7 +96,7 @@ function Start-Services {
         Write-Host "MailHog: http://localhost:8025"
         Write-Host "MinIO: http://localhost:9001"
         Write-Host "RabbitMQ: http://localhost:15672"
-        Write-Host "`nNote: Frontend runs separately - cd frontend/DM.Web.Modern && npm run dev"
+        Write-Host "`nNote: Frontend runs separately - cd src/DM.Web.Client && npm run dev"
     } finally {
         Pop-Location
     }
@@ -137,23 +137,42 @@ function Reset-Services {
 }
 
 function Invoke-Seed {
-    Write-Host "Running seed scripts..." -ForegroundColor Cyan
+    Write-Host "Seeding test data..." -ForegroundColor Cyan
 
     # Check if API is running
     $curlResult = curl.exe -s -o NUL -w "%{http_code}" "http://localhost:5000/v1/boards" 2>$null
-    if ($curlResult -eq "200") {
-        Write-Host "API is available." -ForegroundColor Green
-    } else {
+    if ($curlResult -ne "200") {
         Write-Host "Error: API is not available at http://localhost:5000 (status: $curlResult)" -ForegroundColor Red
         Write-Host "Start services first: .\scripts\dm.ps1 start"
         exit 1
     }
 
-    # Run seed script
-    $seedScript = Join-Path $ProjectRoot "scripts\seed.js"
-    node $seedScript
+    # Call seed endpoint directly
+    $response = curl.exe -s -X POST "http://localhost:5000/v1/moderation/seed" -H "Content-Type: application/json"
 
-    Write-Host "`nSeeding complete!" -ForegroundColor Green
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error: Failed to call seed endpoint" -ForegroundColor Red
+        exit 1
+    }
+
+    # Parse JSON response
+    $result = $response | ConvertFrom-Json
+
+    Write-Host ""
+    Write-Host "Created: $($result.created)" -ForegroundColor Green
+    Write-Host "Skipped: $($result.skipped) (already exist)" -ForegroundColor Yellow
+
+    if ($result.createdLogins -and $result.createdLogins.Count -gt 0) {
+        Write-Host ""
+        Write-Host "Created users:" -ForegroundColor Green
+        foreach ($login in $result.createdLogins) {
+            Write-Host "  + $login"
+        }
+    }
+
+    Write-Host ""
+    Write-Host "Password: Test123!" -ForegroundColor Cyan
+    Write-Host "All users are newbies (0 posts)"
 }
 
 function Show-Status {

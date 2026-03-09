@@ -23,7 +23,7 @@
 
 | Задача | Файл/Область |
 |--------|--------------|
-| Рефакторинг BbParserWrapper | `src/DM.Services.Core/Parsing/BbParserWrapper.cs` |
+| Рефакторинг BbParserWrapper | `src/DM.Infrastructure.Core/Parsing/BbParserWrapper.cs` |
 | Удалить NotImplementedException | `SchemaFactory.cs` в Game модуле |
 | Удалить console.log | Frontend (найти в src/) |
 | ConfigureAwait(false) | Добавить во все async методы |
@@ -39,8 +39,8 @@
 | Расширить E2E тесты | Playwright тесты для всех страниц |
 
 **Недостающие тест-проекты:**
-- `DM.Services.Mail.Sender.Tests`
-- `DM.Services.Search.Tests`
+- `DM.Workers.Mail.Tests`
+- `DM.Workers.SearchIndexer.Tests`
 
 ---
 

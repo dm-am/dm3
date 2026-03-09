@@ -1,4 +1,8 @@
-# Архитектура DM3
+﻿# Архитектура DM3 — Системный обзор
+
+> **Паттерны и структура:** См. [ARCHITECTURE.md](./ARCHITECTURE.md) — паттерны, Feature Folders, Unified Services, блюпринт.
+>
+> Этот документ описывает компоненты системы, порты и потоки данных.
 
 ## Общая картина
 
@@ -22,7 +26,7 @@
          ▼              ▼              ▼             ▼
 ┌──────────────┐ ┌────────────┐ ┌───────────┐ ┌───────────┐
 │ PostgreSQL   │ │  MongoDB   │ │ RabbitMQ  │ │  MinIO    │
-│ (основные    │ │ (счётчики, │ │ (очередь  │ │ (файлы)   │
+│ (основные    │ │ (счетчики, │ │ (очередь  │ │ (файлы)   │
 │  данные)     │ │  сессии)   │ │  событий) │ │           │
 └──────────────┘ └────────────┘ └─────┬─────┘ └───────────┘
                                      │
@@ -30,7 +34,7 @@
          │                           │                           │
          ▼                           ▼                           ▼
 ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│ Search Consumer  │    │ Notif. Consumer  │    │ Mail Consumer    │
+│ SearchIndexer  │    │ NotificationDisp  │    │ Mail Worker    │
 └────────┬─────────┘    └──────────────────┘    └────────┬─────────┘
          │                                               │
          ▼                                               ▼
@@ -41,44 +45,44 @@
 
 ---
 
-## Backend проекты
+## Backend проекты (17)
 
-### Главные проекты
-
-| Проект | Назначение |
-|--------|-----------|
-| **DM.Web.API** | REST API + WebSocket хаб |
-| **DM.Web.Core** | Middleware, аутентификация, SignalR |
-| **DM.Services.DataAccess** | EF Core + MongoDB |
-
-### Бизнес-логика (по доменам)
+### Infrastructure (4)
 
 | Проект | Назначение |
 |--------|-----------|
-| **DM.Services.Authentication** | Логин, сессии, токены |
-| **DM.Services.Community** | Пользователи, опросы, отзывы, сообщения |
-| **DM.Services.Forum** | Форумы, топики, комментарии |
-| **DM.Services.Game** | Игры, комнаты, персонажи, посты |
-| **DM.Services.Common** | Авторизация, счётчики непрочитанного |
+| **DM.Infrastructure.Core** | Authorization, logging, parsing, S3 storage, search |
+| **DM.Infrastructure.Mail** | Email templates и отправка |
+| **DM.Infrastructure.Messaging** | RabbitMQ события |
+| **DM.Infrastructure.Persistence** | EF Core + MongoDB, репозитории |
 
-### Инфраструктура
-
-| Проект | Назначение |
-|--------|-----------|
-| **DM.Services.Core** | Логирование, correlation tokens |
-| **DM.Services.MessageQueuing** | RabbitMQ события |
-| **DM.Services.Uploading** | Загрузка файлов в MinIO |
-| **DM.Services.Notifications** | Push-уведомления |
-| **DM.Services.Mail.*** | Email отправка и шаблоны |
-| **DM.Services.Search** | gRPC клиент для поиска |
-
-### Background consumers
+### Domain (9)
 
 | Проект | Назначение |
 |--------|-----------|
-| **Notifications.Consumer** | События → уведомления |
-| **Search.Consumer** | События → индексация OpenSearch |
-| **Mail.Sender.Consumer** | Очередь → email |
+| **DM.Domain.Core** | Shared kernel: интерфейсы, DTOs, enums |
+| **DM.Domain.Account** | Регистрация, логин, сессии, токены |
+| **DM.Domain.Blog** | Блоги, публикации, комментарии |
+| **DM.Domain.Community** | Пользователи, опросы, отзывы |
+| **DM.Domain.Forum** | Форумы, топики, комментарии |
+| **DM.Domain.Game** | Игры, комнаты, персонажи, посты |
+| **DM.Domain.Messaging** | Личные сообщения, глобальный чат |
+| **DM.Domain.Moderation** | Модерация, баны, предупреждения |
+| **DM.Domain.Personal** | Профили, уведомления, подписки |
+
+### Workers (3)
+
+| Проект | Назначение |
+|--------|-----------|
+| **DM.Workers.Mail** | Email отправка и шаблоны |
+| **DM.Workers.NotificationDispatcher** | События → уведомления |
+| **DM.Workers.SearchIndexer** | События → индексация OpenSearch |
+
+### Web (1)
+
+| Проект | Назначение |
+|--------|-----------|
+| **DM.Web.API** | REST API + WebSocket хаб + Middleware + SignalR |
 
 ---
 
@@ -100,21 +104,27 @@ HTTP Request → Middleware Pipeline → Controller → Service → Repository �
 9. Authorization
 10. Routing → Controllers + SignalR Hub (/whatsup)
 
-**Пример:** `src/DM.Web.API/Controllers/v1/Forum/TopicController.cs`
+**Пример:** `src/DM.Web.API/Features/Forum/Topics/TopicController.cs`
 
 ---
 
 ## Dependency Injection (Autofac)
 
 ```
-CoreModule
+CoreModule (DM.Infrastructure.Core)
 ├── DataAccessModule
-├── AuthenticationModule
-├── CommonModule
+├── AuthorizationModule
+├── ServicesModule
+├── MessageQueuingModule
+├── AccountModule
 ├── CommunityModule
+├── BlogModule
+├── MessagingModule
+├── ModerationModule
 ├── ForumModule
 ├── GameModule
-├── NotificationsModule
+├── GeneralModule
+├── PersonalModule
 └── WebCoreModule
 ```
 
@@ -133,13 +143,14 @@ CoreModule
 | Коллекция | Назначение |
 |-----------|-----------|
 | **Polls** | Опросы |
-| **UnreadCounters** | Счётчики непрочитанного |
+| **UnreadCounters** | Счетчики непрочитанного |
 | **UserSettings** | Настройки пользователей |
 | **UserSessions** | Сессии |
 | **AttributeSchemata** | Схемы атрибутов персонажей |
 | **Dice** | Броски кубиков |
 | **RealtimeNotifications** | Push-уведомления |
-| **LoginAttempts** | Счётчики неудачных входов |
+| **LoginAttempts** | Счетчики неудачных входов |
+| **SecurityAuditLog** | Журнал событий безопасности |
 
 ---
 
@@ -151,7 +162,7 @@ CoreModule
 
 ## Авторизация (Intention Pattern)
 
-**Пример:** `src/DM.Services.Forum/Authorization/TopicIntentionResolver.cs`
+**Пример:** `src/DM.Domain.Forum/Authorization/TopicIntentionResolver.cs`
 
 ```csharp
 intentionManager.ThrowIfForbidden(TopicIntention.Delete, topic);
@@ -170,7 +181,7 @@ Business Service → producer.Send(EventType, entityId) → Exchange (dm.events)
                                      └──────────────┴──────────────┴──────────────┘
 ```
 
-**EventTypes:** `src/DM.Services.Core/Extensions/EventRoutingKeyAttribute.cs`
+**EventTypes:** `src/DM.Infrastructure.Core/Extensions/EventRoutingKeyAttribute.cs`
 
 ---
 
@@ -182,7 +193,9 @@ Business Service → producer.Send(EventType, entityId) → Exchange (dm.events)
 | PlayerInvitation (3) | Приглашение игроком |
 | ReaderInvitation (4) | Приглашение читателем |
 
-**API:** `GET/POST /v1/games/{id}/invitations/*`, `POST /v1/users/me/invitations/{id}/accept`
+**API:**
+- Game masters: `GET/POST/DELETE /v1/games/{id}/invitations/*`
+- Users: `GET/POST /v1/account/invitations/*`
 
 ---
 
@@ -192,19 +205,19 @@ Business Service → producer.Send(EventType, entityId) → Exchange (dm.events)
 Event → NotificationConsumer → NotificationGenerator → MongoDB → SignalR → Frontend
 ```
 
-**Generators:** `src/DM.Services.Notifications.Consumer/Implementation/Generators/`
+**Generators:** `src/DM.Workers.NotificationDispatcher/Implementation/Generators/`
 
 ---
 
 ## Frontend (Vue 3 + TypeScript + Pinia)
 
-**Stores:** `frontend/DM.Web.Modern/src/stores/`
+**Stores:** `src/DM.Web.Client/src/stores/`
 
 **API типизация:**
 ```typescript
 type User = {
-  login: Served<UserLogin>  // read-only
-  status: string            // editable
+  username: Served<Username>  // read-only
+  status: string              // editable
 }
 ```
 
@@ -253,12 +266,13 @@ Enrichers: Application, Environment, LogContext, ActivityEnricher (TraceId, Span
 
 ## Ссылки
 
-- [README](../README.md)
-- [Глоссарий](../reference/GLOSSARY.md)
-- [База данных](./DATABASE.md)
-- [Аутентификация](./AUTHENTICATION.md)
-- [API Reference](../api/REFERENCE.md)
-- [Установка](../guides/SETUP.md)
+- [Архитектура и паттерны](./ARCHITECTURE.md) — Паттерны, структура проектов, блюпринт
+- [База данных](./DATABASE.md) — Схема БД
+- [Аутентификация](./AUTHENTICATION.md) — Сессии, токены, безопасность
+- [RBAC](./RBAC.md) — Роли и права
+- [Глоссарий](../reference/GLOSSARY.md) — Термины
+- [API Reference](../api/REFERENCE.md) — REST API
+- [Установка](../guides/SETUP.md) — Локальная разработка
 
 ---
 

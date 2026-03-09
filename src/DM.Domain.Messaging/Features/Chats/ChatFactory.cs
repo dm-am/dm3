@@ -1,0 +1,69 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Enums;
+
+namespace DM.Domain.Messaging.Features.Chats;
+
+/// <inheritdoc />
+internal class ChatFactory : IChatFactory
+{
+    private readonly IGuidFactory _guidFactory;
+
+    /// <inheritdoc />
+    public ChatFactory(
+        IGuidFactory guidFactory)
+    {
+        _guidFactory = guidFactory;
+    }
+
+    /// <inheritdoc />
+    public (CreateChatEntity chat, IEnumerable<CreateChatLinkEntity> links) CreateDirect(Guid userId, Guid otherUserId)
+    {
+        if (userId == otherUserId)
+        {
+            throw new ArgumentException("Cannot create a direct chat with yourself", nameof(otherUserId));
+        }
+
+        var chatId = _guidFactory.Create();
+        var chat = new CreateChatEntity
+        {
+            ChatId = chatId,
+            Type = ChatType.Direct
+        };
+        var links = new[] { userId, otherUserId }
+            .Select(id => new CreateChatLinkEntity
+            {
+                UserChatLinkId = _guidFactory.Create(),
+                ChatId = chatId,
+                UserId = id,
+                IsRemoved = false
+            });
+
+        return (chat, links);
+    }
+
+    /// <inheritdoc />
+    public (CreateChatEntity chat, IEnumerable<CreateChatLinkEntity> links) CreateGroup(string title, IEnumerable<Guid> participantIds)
+    {
+        var chatId = _guidFactory.Create();
+        var chat = new CreateChatEntity
+        {
+            ChatId = chatId,
+            Type = ChatType.Group,
+            Title = title
+        };
+        var links = participantIds
+            .Distinct()
+            .Select(id => new CreateChatLinkEntity
+            {
+                UserChatLinkId = _guidFactory.Create(),
+                ChatId = chatId,
+                UserId = id,
+                IsRemoved = false
+            });
+
+        return (chat, links);
+    }
+}

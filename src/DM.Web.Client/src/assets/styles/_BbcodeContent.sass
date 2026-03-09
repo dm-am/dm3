@@ -1,0 +1,337 @@
+// ============================================================================
+// BBCode Content Styles
+// ============================================================================
+// Unified styles for rendering BBCode content.
+// Used in: ChatPage, ChatView, BBCodeEditor, ContentMessage, etc.
+//
+// CRITICAL: Must support BOTH backend and frontend class names:
+//
+// Backend (BbParserProvider.cs) classes:
+//   .spoiler, .spoiler-head       - spoiler blocks
+//   .nsfw-spoiler, .nsfw-head     - NSFW content
+//   .quote, .quote-author         - quotes (uses <div>)
+//   .code                         - code blocks (uses <pre>)
+//   .noparse                      - unparsed content
+//   .image                        - images
+//   .cut-marker                   - cut/truncation marker
+//   .mod-block                    - moderator blocks
+//   .private-message, .private-message-header - private text
+//
+// Frontend (bbcode.ts / Tiptap) classes:
+//   .bb-spoiler                   - spoiler blocks
+//   .bb-nsfw                      - NSFW content
+//   .bb-quote, .quote-author, .quote-content - quotes (uses <blockquote>)
+//   .bb-code                      - code (uses <code>)
+//   .bb-noparse                   - unparsed content
+//   .bb-image                     - images
+//   .bb-cut-marker                - cut marker
+//   .bb-mod                       - moderator blocks
+//   .bb-warning                   - warning blocks (red)
+//   .bb-private                   - private text
+//   .bb-tab                       - tab/indent
+// ============================================================================
+
+// ──────────────────────────────────────────────────────────────────────────
+// Overlay Background Mixin
+// ──────────────────────────────────────────────────────────────────────────
+// Creates a colored overlay effect using ::before pseudo-element.
+// Used for quote, mod-block, warning-block, and private-message.
+//
+// Parameters:
+//   $color - The overlay color (e.g., $highlight-overlay-blue)
+//   $border-radius - Optional border-radius for the overlay (default: 0)
+
+=overlay-bg($color, $border-radius: 0)
+  position: relative
+  isolation: isolate
+  &::before
+    content: ''
+    position: absolute
+    inset: 0
+    background-color: $color
+    pointer-events: none
+    z-index: -1
+    @if $border-radius != 0
+      border-radius: $border-radius
+
+=bbcode-content
+  // ──────────────────────────────────────────────────────────────────────────
+  // Typography
+  // ──────────────────────────────────────────────────────────────────────────
+
+  p
+    margin: 0
+    &:not(:last-child)
+      margin-bottom: $tiny
+
+  strong, b
+    font-weight: 600
+
+  em, i
+    font-style: italic
+
+  u
+    text-decoration: underline
+
+  s, strike, del
+    text-decoration: line-through
+
+  // Code - inline <code> and block <pre class="code"> from backend
+  code, pre, pre.code, .code, .bb-code
+    font-family: $code-font
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Links
+  // ──────────────────────────────────────────────────────────────────────────
+
+  a:not(.spoiler-head):not(.nsfw-head)
+    color: $link
+    text-decoration: none
+    &:hover
+      color: $link-hover
+      text-decoration: underline
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Images
+  // Backend: .image | Frontend: .bb-image | Plain: img
+  // ──────────────────────────────────────────────────────────────────────────
+
+  img, .image, .bb-image
+    max-width: 100%
+    height: auto
+    display: inline-block
+    vertical-align: middle
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Lists
+  // ──────────────────────────────────────────────────────────────────────────
+
+  ul, ol
+    margin: $small 0
+    padding-left: $big
+
+  li
+    margin: 2px 0
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Quote
+  // Backend: div.quote with div.quote-author inside
+  // Frontend: blockquote.bb-quote with cite or .quote-author inside
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // Base quote styling - works for both div.quote and blockquote.bb-quote
+  // Uses overlay approach: bg-element + semi-transparent blue tint
+  blockquote, .quote, .bb-quote
+    margin: $tiny 0
+    padding: 2px 6px
+    border-left: 10px solid $border-accent-blue
+    background-color: $bg-element
+    color: $text
+    +overlay-bg($highlight-overlay-blue)
+
+  // Quote author - works for cite, div.quote-author, .quote-author
+  blockquote cite,
+  blockquote .quote-author,
+  .quote .quote-author,
+  .bb-quote cite,
+  .bb-quote .quote-author
+    display: block
+    font-weight: 600
+    font-style: italic
+    margin-bottom: $tiny
+    color: $text
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Spoiler
+  // Backend: a.spoiler-head (toggle) + div.spoiler (content)
+  // Frontend: NodeView with same structure
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // Toggle - block element so it creates its own line break
+  .spoiler-head
+    display: block
+    color: $link
+    cursor: pointer
+    text-decoration: none
+    &:hover
+      color: $link-hover
+      text-decoration: underline
+
+  // Spoiler content - yellow background, dashed border, no rounded corners
+  // No margin - block elements handle spacing, padding for inner spacing only
+  .spoiler, .bb-spoiler
+    padding: $tiny $small
+    background-color: $bg-highlight-yellow
+    border: 1px dashed $border
+    &.hidden
+      display: none
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // NSFW
+  // Backend: a.nsfw-head (toggle) + div.nsfw-spoiler (content)
+  // Frontend: NodeView with same structure + 18+ overlay
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // Toggle - block element so it creates its own line break
+  .nsfw-head
+    display: block
+    color: $accent-red
+    cursor: pointer
+    text-decoration: none
+    &:hover
+      color: $accent-red-hover
+      text-decoration: underline
+
+  // NSFW content - same as spoiler (yellow, dashed border)
+  // No margin - block elements handle spacing, padding for inner spacing only
+  .nsfw-spoiler, .bb-nsfw
+    position: relative
+    padding: $tiny $small
+    background-color: $bg-highlight-yellow
+    border: 1px dashed $border
+    &.hidden
+      display: none
+
+  // 18+ overlay - height by content, vertically centered
+  .nsfw-overlay
+    position: absolute
+    top: 50%
+    left: calc(#{$minor} + 1px)
+    right: calc(#{$minor} + 1px)
+    transform: translateY(-50%)
+    z-index: 1
+    background-color: $nsfw-overlay
+    backdrop-filter: blur(8px)
+    cursor: pointer
+    display: flex
+    align-items: center
+    justify-content: center
+
+  .nsfw-warning
+    color: $accent-red
+    text-align: center
+    font-size: $font-size
+    line-height: 1.2
+    font-weight: bold
+    padding: 0 $small
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Private
+  // Backend: div.private-message + div.private-message-header
+  // Frontend: span.bb-private (inline)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // Inline private text (frontend) - uses overlay approach with linear-gradient
+  .private-text, .bb-private
+    color: $text-on-green
+    background: linear-gradient($highlight-overlay-green, $highlight-overlay-green), $bg-element
+    padding: 0 2px
+    border-radius: 2px
+
+  // Block private message (backend) - uses overlay approach
+  .private-message
+    color: $text-on-green
+    background-color: $bg-element
+    padding: $small $medium
+    border-radius: $border-radius
+    margin: $small 0
+    +overlay-bg($highlight-overlay-green, $border-radius)
+
+  .private-message-header
+    font-size: $secondary-font-size
+    color: $text-on-green
+    font-style: italic
+    margin-top: $tiny
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Mod Block
+  // Backend: div.mod-block | Frontend: div.bb-mod
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // Mod block - uses overlay approach: bg-element + semi-transparent green tint
+  .mod-block, .bb-mod
+    margin: $tiny 0
+    padding: 2px 6px
+    border-left: 10px solid $border-accent-green
+    background-color: $bg-element
+    color: $text-on-green
+    +overlay-bg($highlight-overlay-green)
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Warning Block
+  // Backend: div.warning-block | Frontend: div.bb-warning
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // Warning block - uses overlay approach: bg-element + semi-transparent red tint
+  .warning-block, .bb-warning
+    margin: $tiny 0
+    padding: 2px 6px
+    border-left: 10px solid $border-accent-red
+    background-color: $bg-element
+    color: $text-on-red
+    +overlay-bg($highlight-overlay-red)
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Tab
+  // Backend: &nbsp; entities | Frontend: span.bb-tab
+  // ──────────────────────────────────────────────────────────────────────────
+
+  .bb-tab
+    display: inline-block
+    width: 2em
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Cut Marker
+  // Backend: hr.cut-marker | Frontend: hr.bb-cut-marker
+  // ──────────────────────────────────────────────────────────────────────────
+
+  .cut-marker, .bb-cut-marker
+    border: none
+    border-top: 1px dashed $border
+    margin: $small 0
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Noparse
+  // Backend: span.noparse | Frontend: span.bb-noparse
+  // No special styling - just displays raw BBCode as plain text
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Mention
+  // Backend: a.bb-mention | Frontend: a.bb-mention
+  // User @mention link - styled as inline link with @ prefix
+  // ──────────────────────────────────────────────────────────────────────────
+
+  .bb-mention
+    color: $link
+    font-weight: 500
+    text-decoration: none
+    &:hover
+      color: $link-hover
+      text-decoration: underline
+
+  .bb-mention--invalid
+    color: $text-muted
+    font-weight: 500
+
+
+// ============================================================================
+// Editor-specific additions (optional)
+// ============================================================================
+// The editor uses the same +bbcode-content mixin as display.
+// This just adds minor enhancements for the Tiptap quote structure.
+
+=bbcode-content-editor
+  +bbcode-content
+
+  // Quote with structured content (Tiptap generates .quote-author + .quote-content)
+  .bb-quote
+    .quote-author
+      padding: $small $medium
+      background-color: $bg-element
+      border-bottom: 1px solid $border
+      margin-bottom: 0
+      +overlay-bg($highlight-overlay-blue)
+
+    .quote-content
+      padding: $small $medium

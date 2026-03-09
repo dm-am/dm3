@@ -384,13 +384,13 @@ services:
 
   # --- Application: Consumers ---
 
-  dmemailsenderconsumer:
-    container_name: 'dm-email-sender-consumer'
-    image: 'dm-consumer-mail:local'
+  dm-mail-worker:
+    container_name: 'dm-mail-worker'
+    image: 'dm-worker-mail:local'
     build:
       <<: *docker-context
       args:
-        PROJECT_NAME: DM.Services.Mail.Sender.Consumer
+        PROJECT_NAME: DM.Workers.Mail
     ports:
       - '5003:5000'
     environment: *workload-env
@@ -412,13 +412,13 @@ services:
           memory: 256M
           cpus: '0.5'
 
-  dmsearchengineconsumer:
-    container_name: 'dm-search-engine-consumer'
-    image: 'dm-consumer-search:local'
+  dm-search-worker:
+    container_name: 'dm-search-worker'
+    image: 'dm-worker-search:local'
     build:
       <<: *docker-context
       args:
-        PROJECT_NAME: DM.Services.Search.Consumer
+        PROJECT_NAME: DM.Workers.SearchIndexer
     ports:
       - '5001:5000'
     environment: *workload-env
@@ -440,13 +440,13 @@ services:
           memory: 256M
           cpus: '0.5'
 
-  dmnotificationsconsumer:
-    container_name: 'dm-notifications-consumer'
-    image: 'dm-consumer-notification:local'
+  dm-notification-worker:
+    container_name: 'dm-notification-worker'
+    image: 'dm-worker-notification:local'
     build:
       <<: *docker-context
       args:
-        PROJECT_NAME: DM.Services.Notifications.Consumer
+        PROJECT_NAME: DM.Workers.NotificationDispatcher
     ports:
       - '5002:5000'
     environment: *workload-env

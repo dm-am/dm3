@@ -20,7 +20,7 @@
 dotnet test
 
 # Конкретный проект
-dotnet test test/DM.Services.Forum.Tests
+dotnet test test/DM.Domain.Forum.Tests
 
 # С фильтром
 dotnet test --filter "TopicCreatingService"
@@ -32,7 +32,7 @@ dotnet test --logger "trx;LogFileName=results.trx"
 ### Frontend
 
 ```bash
-cd frontend/DM.Web.Modern
+cd src/DM.Web.Client
 
 npm run test:unit              # Все тесты
 npm run test:unit -- --watch      # Watch mode
@@ -47,15 +47,17 @@ npm run test:unit -- --coverage   # С покрытием
 
 | Проект | Описание |
 |--------|----------|
-| `DM.Services.Authentication.Tests` | Аутентификация, шифрование, сессии |
-| `DM.Services.Forum.Tests` | Форум |
-| `DM.Services.Community.Tests` | Сообщество, чат-события |
-| `DM.Services.Game.Tests` | Игры |
-| `DM.Services.Common.Tests` | Общие сервисы |
-| `DM.Services.Core.Tests` | Ядро (parsing, utilities) |
-| `DM.Services.Notifications.Tests` | Уведомления |
-| `DM.Services.MessageQueuing.Tests` | Очередь сообщений |
-| `DM.Services.Uploading.Tests` | Загрузка файлов |
+| `DM.Domain.Account.Tests` | Аутентификация, регистрация, сессии |
+| `DM.Domain.Blog.Tests` | Блоги, публикации |
+| `DM.Domain.Community.Tests` | Сообщество, опросы, отзывы |
+| `DM.Domain.Forum.Tests` | Форум, топики |
+| `DM.Domain.Game.Tests` | Игры, комнаты, персонажи |
+| `DM.Domain.Messaging.Tests` | Сообщения, чаты |
+| `DM.Domain.Moderation.Tests` | Модерация, баны |
+| `DM.Domain.Personal.Tests` | Профили, уведомления |
+| `DM.Infrastructure.Core.Tests` | Ядро (parsing, utilities) |
+| `DM.Infrastructure.Messaging.Tests` | Очередь сообщений |
+| `DM.Infrastructure.Persistence.Tests` | Репозитории |
 | `DM.Web.API.IntegrationTests` | API интеграционные тесты |
 
 ### Паттерн именования

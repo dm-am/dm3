@@ -1,8 +1,8 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Services.DataAccess.BusinessObjects.Users.Settings;
-using DM.Services.DataAccess.MongoIntegration;
+using DM.Infrastructure.Persistence.Entities.Account.Settings;
+using DM.Infrastructure.Persistence.MongoIntegration;
 using MongoDB.Driver;
 
 namespace DM.Web.API.Notifications;

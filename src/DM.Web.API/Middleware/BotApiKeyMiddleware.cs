@@ -1,5 +1,5 @@
 using System.Threading.Tasks;
-using DM.Services.Core.Configuration;
+using DM.Infrastructure.Core.Configuration;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 

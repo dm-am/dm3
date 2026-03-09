@@ -1,0 +1,107 @@
+using System.Threading.Tasks;
+using DM.Domain.Core.Enums;
+using DM.Web.API.Shared.Authentication;
+using DM.Web.API.Shared.Dto;
+using DM.Web.API.Features.Community.Users;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+
+namespace DM.Web.API.Features.Moderation.Profiles;
+
+/// <summary>
+/// User profile moderation endpoints
+/// </summary>
+/// <remarks>
+/// Provides endpoints for viewing and moderating user profiles.
+/// Fields are filtered server-side based on the caller's role:
+///
+/// - **Admin**: all fields (email, IP addresses, login history, linked profiles, notes, violations)
+/// - **SeniorModerator**: linked profiles, notes, violations (can issue bans, edit profiles)
+/// - **Moderator**: linked profiles, notes, violations (can issue warnings)
+///
+/// The response includes a `permissions` object that tells the frontend which UI elements to show.
+/// </remarks>
+[ApiController]
+[Route("v1/moderation/users")]
+[ApiExplorerSettings(GroupName = "Moderation")]
+[Tags("Profiles")]
+public class ProfileController : ControllerBase
+{
+    private readonly IModeratedProfileApiService _profileApiService;
+
+    /// <inheritdoc />
+    public ProfileController(IModeratedProfileApiService profileApiService)
+    {
+        _profileApiService = profileApiService;
+    }
+
+    /// <summary>
+    /// Get moderated profile for a user
+    /// </summary>
+    /// <remarks>
+    /// Returns aggregated moderation data including linked profiles, moderator notes,
+    /// violation summary, and (for admins) IP addresses and login history.
+    ///
+    /// Use the `permissions` field in the response to determine which actions
+    /// the current user can perform and which UI sections to display.
+    /// </remarks>
+    /// <param name="username">Target user's display name</param>
+    /// <response code="200">Moderated profile (fields filtered by caller role)</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">Moderator role or higher required</response>
+    /// <response code="404">User not found</response>
+    [HttpGet("{username}/profile", Name = nameof(GetModeratedProfile))]
+    [RequireRole(UserRole.Moderator)]
+    [ProducesResponseType(typeof(ModeratedProfile), 200)]
+    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
+    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
+    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    public async Task<IActionResult> GetModeratedProfile(string username) =>
+        Ok(await _profileApiService.GetModeratedProfile(username));
+
+    /// <summary>
+    /// Moderate user profile
+    /// </summary>
+    /// <remarks>
+    /// Allows SeniorModerator or higher to edit user profile Info field.
+    /// Used to remove inappropriate content from user profiles.
+    /// </remarks>
+    /// <param name="username">User's display name</param>
+    /// <param name="profile">Profile moderation data</param>
+    /// <response code="200">Profile moderated successfully</response>
+    /// <response code="401">User not authenticated</response>
+    /// <response code="403">SeniorModerator or higher role required</response>
+    /// <response code="404">User not found</response>
+    [HttpPatch("{username}/profile", Name = nameof(ModerateUserProfile))]
+    [RequireRole(UserRole.SeniorModerator)]
+    [ProducesResponseType(typeof(UserProfile), 200)]
+    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
+    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
+    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    public async Task<IActionResult> ModerateUserProfile(string username, [FromBody] ModerateProfile profile) =>
+        Ok(await _profileApiService.ModerateUserProfile(username, profile));
+
+    /// <summary>
+    /// Set user role
+    /// </summary>
+    /// <remarks>
+    /// Allows Admin to change user's role.
+    /// Cannot set Guest role.
+    /// </remarks>
+    /// <param name="username">User's display name</param>
+    /// <param name="role">New role</param>
+    /// <response code="200">Role updated successfully</response>
+    /// <response code="400">Invalid role (e.g., Guest)</response>
+    /// <response code="401">User not authenticated</response>
+    /// <response code="403">Admin role required</response>
+    /// <response code="404">User not found</response>
+    [HttpPatch("{username}/role/{role}", Name = nameof(SetUserRole))]
+    [RequireRole(UserRole.Admin)]
+    [ProducesResponseType(typeof(UserProfile), 200)]
+    [ProducesResponseType(typeof(ErrorEnvelope), 400)]
+    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
+    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
+    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    public async Task<IActionResult> SetUserRole(string username, UserRole role) =>
+        Ok(await _profileApiService.SetUserRole(username, role));
+}

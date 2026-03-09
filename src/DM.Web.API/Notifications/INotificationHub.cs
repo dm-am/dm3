@@ -1,5 +1,5 @@
 ﻿using System.Threading.Tasks;
-using DM.Web.API.Dto.Notifications;
+using DM.Web.API.Features.Personal.Notifications;
 
 namespace DM.Web.API.Notifications;
 

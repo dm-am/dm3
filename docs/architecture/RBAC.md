@@ -1,4 +1,4 @@
-# Role-Based Access Control (RBAC)
+﻿# Role-Based Access Control (RBAC)
 
 ## Overview
 
@@ -20,13 +20,13 @@ RegularUser (1)        Базовый доступ
 Guest (0)              Только чтение публичного контента
 ```
 
-**Файл:** `src/DM.Services.Core/Dto/Enums/UserRole.cs`
+**Файл:** `src/DM.Infrastructure.Core/Dto/Enums/UserRole.cs`
 
 ---
 
 ## Специальные статусы
 
-### Honorary (Почётный гоблин)
+### Honorary (Почетный гоблин)
 
 | Аспект | Статус |
 |--------|--------|
@@ -35,7 +35,7 @@ Guest (0)              Только чтение публичного конте
 | **Привилегии** | Отсутствуют (только косметика) |
 | **Назначение** | Не реализовано |
 
-**TODO:** Реализовать логику назначения и привилегии для почётных пользователей.
+**TODO:** Реализовать логику назначения и привилегии для почетных пользователей.
 
 ### Newbie (Новичок)
 
@@ -47,9 +47,9 @@ Guest (0)              Только чтение публичного конте
 
 ## Ограничения по статусам
 
-### 1. Незавершённые регистрации (PendingRegistrations)
+### 1. Незавершенные регистрации (PendingRegistrations)
 
-Email не подтверждён — пользователь ещё не существует в таблице `Users`:
+Email не подтвержден — пользователь еще не существует в таблице `Users`:
 
 | Действие | Файл |
 |----------|------|
@@ -65,16 +65,16 @@ Email не подтверждён — пользователь ещё не су�
 | Ограничение | Описание | Файл |
 |-------------|----------|------|
 | Премодерация игр | Новые игры требуют одобрения ментора | `GameCreationValidator.cs` |
-| Отзывы на пользователей | Нельзя создавать | `ReviewCreatingService.cs` |
-| Отзывы на игры | Нельзя создавать | `ReviewCreatingService.cs` |
-| Отзывы на посты | Только нейтральные (без рейтинга) | `IReviewEligibilityService.cs` |
+| Отзывы на пользователей | Нельзя создавать | `ReviewService.cs` |
+| Отзывы на игры | Нельзя создавать | `ReviewService.cs` |
+| Отзывы на посты | Только нейтральные (без рейтинга) | `ReviewService.cs` |
 
 ### 3. Общие ограничения
 
 | Ограничение | Условие | Файл |
 |-------------|---------|------|
-| Редактирование ревью | 24 часа с момента создания | `ReviewEligibilityService.cs` |
-| Кулдаун ревью постов | 3 дня на игру | `ReviewEligibilityService.cs` |
+| Редактирование ревью | 24 часа с момента создания | `ReviewService.cs` |
+| Кулдаун ревью постов | 3 дня на игру | `ReviewService.cs` |
 
 ---
 
@@ -122,29 +122,35 @@ Email не подтверждён — пользователь ещё не су�
 
 ## Игровые права
 
-### GameParticipation (флаги)
+### GameRole (simple enum)
 
 ```csharp
 None = 0           // Нет участия
-Reader = 1         // Подписчик
-Player = 2         // Игрок с активным персонажем
-Moderator = 4      // Ментор игры
-PendingAssistant = 8
-Authority = 16     // Мастер или активный ассистент
-Owner = 32         // Создатель игры (мастер)
+Reader = 1         // Подписчик (из Subscriptions)
+Applicant = 2      // Заявка на рассмотрении (Character pending)
+Player = 3         // Игрок с активным персонажем
+Mentor = 4         // Ментор игры (Game.MentorId)
+Assistant = 5      // Ассистент (GameAssistants table)
+Master = 6         // Мастер (Game.AuthorId)
 ```
 
-### Права мастера/ассистента (Authority)
+> **Примечание:** PendingAssistant/PendingInvitation хранятся в Tokens table
+
+**Helper:** `HasEditAccess()` = Master || Assistant
+
+### Права мастера и ассистента
 
 | Действие | Условие |
 |----------|---------|
-| Редактирование игры | Authority |
-| Удаление игры | Owner или SeniorMod+ |
-| Создание/удаление комнат | Authority |
-| Принятие/отклонение персонажей | Authority |
-| Управление NPC | Authority |
-| Приглашение игроков/читателей | Authority |
-| Редактирование чужих постов | Authority + (NPC или CharacterAccessPolicy.PostEditAllowed) |
+| Редактирование игры | Master или Assistant |
+| Удаление игры | Master или SeniorMod+ |
+| Создание/удаление комнат | Master или Assistant |
+| Принятие/отклонение персонажей | Master или Assistant |
+| Управление NPC | Master или Assistant |
+| Приглашение игроков/читателей | Master или Assistant |
+| Приглашение ассистента | Master only |
+| Удаление ассистента | Master only |
+| Редактирование чужих постов | (Master или Assistant) + (NPC или CharacterAccessPolicy.PostEditAllowed) |
 
 ### Права игрока
 
@@ -187,21 +193,21 @@ Guest           = 1 << 6  // 64
 
 | Резолвер | Файл | Модуль |
 |----------|------|--------|
-| UserIntentionResolver | `Community/BusinessProcesses/Users/` | Профили |
-| ReviewIntentionResolver | `Community/BusinessProcesses/Reviews/` | Отзывы |
-| PollIntentionResolver | `Community/BusinessProcesses/Polls/` | Опросы |
-| ConversationIntentionResolver | `Community/BusinessProcesses/Messaging/` | Диалоги |
-| MessageIntentionResolver | `Community/BusinessProcesses/Messaging/` | Сообщения |
-| GlobalChatEventIntentionResolver | `Community/BusinessProcesses/Messaging/GlobalChatEvents/` | Чат-события |
-| GameIntentionResolver | `Game/Authorization/` | Игры |
-| CharacterIntentionResolver | `Game/Authorization/` | Персонажи |
-| RoomIntentionResolver | `Game/Authorization/` | Комнаты |
-| PostIntentionResolver | `Game/Authorization/` | Посты |
-| CommentIntentionResolver | `Game/Authorization/` | Комментарии (игры) |
-| AttributeSchemaIntentionResolver | `Game/Authorization/` | Схемы атрибутов |
-| ForumIntentionResolver | `Forum/Authorization/` | Форум/доски |
-| TopicIntentionResolver | `Forum/Authorization/` | Темы |
-| CommentIntentionResolver | `Forum/Authorization/` | Комментарии (форум) |
+| UserIntentionResolver | `DM.Domain.Personal/Authorization/` | Профили |
+| ReviewIntentionResolver | `DM.Domain.Community/Authorization/` | Отзывы |
+| PollIntentionResolver | `DM.Domain.Community/Authorization/` | Опросы |
+| ChatIntentionResolver | `DM.Domain.Messaging/Authorization/` | Диалоги |
+| MessageIntentionResolver | `DM.Domain.Messaging/Authorization/` | Сообщения |
+| GlobalChatEventIntentionResolver | `DM.Domain.Messaging/Authorization/` | Чат-события |
+| GameIntentionResolver | `DM.Domain.Game/Authorization/` | Игры |
+| CharacterIntentionResolver | `DM.Domain.Game/Authorization/` | Персонажи |
+| RoomIntentionResolver | `DM.Domain.Game/Authorization/` | Комнаты |
+| PostIntentionResolver | `DM.Domain.Game/Authorization/` | Посты |
+| CommentIntentionResolver | `DM.Domain.Game/Authorization/` | Комментарии (игры) |
+| AttributeSchemaIntentionResolver | `DM.Domain.Game/Authorization/` | Схемы атрибутов |
+| ForumIntentionResolver | `DM.Domain.Forum/Authorization/` | Форум/доски |
+| TopicIntentionResolver | `DM.Domain.Forum/Authorization/` | Темы |
+| CommentIntentionResolver | `DM.Domain.Forum/Authorization/` | Комментарии (форум) |
 
 ---
 
@@ -209,14 +215,14 @@ Guest           = 1 << 6  // 64
 
 ### Выявленные проблемы
 
-1. **Honorary (Почётный гоблин)**
+1. **Honorary (Почетный гоблин)**
    - Статус существует в БД, но не имеет привилегий
    - Нет UI/API для назначения статуса
    - **Рекомендация:** Определить привилегии или удалить поле
 
-2. **Отсутствует система банов**
-   - В БД есть таблицы `Ban`, `Warning`, но сервисы не реализованы
-   - **Рекомендация:** Реализовать систему предупреждений и банов
+2. **Система банов**
+   - Реализованы: `BanService`, `WarningService` в `DM.Domain.Moderation/Features/Warnings/`
+   - Таблицы БД: `Bans`, `Warnings`
 
 3. **Нет админ-панели**
    - Управление ролями только через БД
@@ -304,8 +310,8 @@ if (user.Role >= UserRole.Mentor)
 
 ## Ссылки
 
-- [README](../README.md) — Обзор документации
-- [Архитектура](./OVERVIEW.md) — Общая архитектура
+- [Архитектура и паттерны](./ARCHITECTURE.md) — Паттерны, структура проектов
+- [Системный обзор](./OVERVIEW.md) — Компоненты, порты
 - [Аутентификация](./AUTHENTICATION.md) — BFF и сессии
 - [Глоссарий](../reference/GLOSSARY.md) — Термины и определения
 

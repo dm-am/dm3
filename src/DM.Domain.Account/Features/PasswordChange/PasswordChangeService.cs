@@ -1,0 +1,142 @@
+using System;
+using DM.Domain.Core.Abstractions;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using DM.Domain.Account.Features.Authentication;
+using DM.Domain.Account.Features.Security;
+using DM.Domain.Core.Identity;
+using DM.Domain.Account.Configuration;
+using DM.Domain.Core.Enums;
+using DM.Domain.Core.Dto;
+using DM.Domain.Core.Exceptions;
+using DM.Domain.Core.Events;
+using FluentValidation;
+using Microsoft.Extensions.Options;
+
+namespace DM.Domain.Account.Features.PasswordChange;
+
+/// <inheritdoc />
+internal class PasswordChangeService : IPasswordChangeService
+{
+    private readonly IValidator<UserPasswordChange> _validator;
+    private readonly IPasswordChangeRepository _repository;
+    private readonly IAuthenticationService _authenticationService;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly ISecurityManager _securityManager;
+    private readonly ICompromisedPasswordChecker _compromisedPasswordChecker;
+    private readonly IEventProducer _eventProducer;
+    private readonly IPasswordChangeMailSender _notificationSender;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly TokenConfiguration _tokenConfig;
+
+    /// <inheritdoc />
+    public PasswordChangeService(
+        IValidator<UserPasswordChange> validator,
+        ISecurityManager securityManager,
+        ICompromisedPasswordChecker compromisedPasswordChecker,
+        IPasswordChangeRepository repository,
+        IAuthenticationService authenticationService,
+        IIdentityProvider identityProvider,
+        IEventProducer eventProducer,
+        IPasswordChangeMailSender notificationSender,
+        IDateTimeProvider dateTimeProvider,
+        IOptions<TokenConfiguration> tokenOptions)
+    {
+        _validator = validator;
+        _repository = repository;
+        _authenticationService = authenticationService;
+        _identityProvider = identityProvider;
+        _securityManager = securityManager;
+        _compromisedPasswordChecker = compromisedPasswordChecker;
+        _eventProducer = eventProducer;
+        _notificationSender = notificationSender;
+        _dateTimeProvider = dateTimeProvider;
+        _tokenConfig = tokenOptions.Value;
+    }
+
+    /// <inheritdoc />
+    public async Task<PasswordResetTokenInfo?> GetTokenInfo(Guid tokenId)
+    {
+        var tokenMinCreatedUtc = _dateTimeProvider.Now - TimeSpan.FromHours(_tokenConfig.PasswordResetTokenLifetimeHours);
+        var isValid = await _repository.TokenValid(tokenId, tokenMinCreatedUtc);
+
+        if (!isValid)
+        {
+            // Token doesn't exist, is removed, or is too old
+            // Check if it exists at all (might be expired vs not found)
+            var user = await _repository.FindUser(tokenId);
+            return user == null ? null : PasswordResetTokenInfo.Expired();
+        }
+
+        return PasswordResetTokenInfo.Ready();
+    }
+
+    /// <inheritdoc />
+    public async Task<GeneralUser> Change(UserPasswordChange passwordChange)
+    {
+        // For OldPassword flow (no token), require authentication
+        if (!passwordChange.Token.HasValue && !_identityProvider.Current.User.IsAuthenticated)
+        {
+            throw new HttpException(System.Net.HttpStatusCode.Unauthorized, "Authentication required");
+        }
+
+        // Check that either token or oldPassword is provided (after auth check)
+        if (!passwordChange.Token.HasValue && string.IsNullOrEmpty(passwordChange.OldPassword))
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                [nameof(passwordChange.OldPassword)] = "Either a password reset token or the current password must be provided"
+            });
+        }
+
+        await _validator.ValidateAndThrowAsync(passwordChange);
+        var user = passwordChange.Token.HasValue
+            ? await _repository.FindUser(passwordChange.Token.Value)
+            : _identityProvider.Current.User;
+
+        if (user == null)
+        {
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, "User not found");
+        }
+
+        // Check if new password matches current password
+        if (_securityManager.ComparePasswords(passwordChange.NewPassword, user.Salt, user.PasswordHash))
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                [nameof(passwordChange.NewPassword)] = "Новый пароль совпадает с текущим"
+            });
+        }
+
+        // NIST SP 800-63B: Check if password has been compromised in data breaches
+        if (await _compromisedPasswordChecker.IsCompromisedAsync(passwordChange.NewPassword))
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                [nameof(passwordChange.NewPassword)] = "Этот пароль был скомпрометирован в результате утечки данных. Пожалуйста, выберите другой пароль."
+            });
+        }
+
+        var (hash, salt) = _securityManager.GeneratePassword(passwordChange.NewPassword);
+        await _repository.UpdatePassword(user.UserId, hash, salt, passwordChange.Token);
+
+        // When changing via token, user is not authenticated - logout all sessions
+        // When changing via old password, user is authenticated - keep current session
+        if (passwordChange.Token.HasValue)
+        {
+            await _authenticationService.LogoutAll(user.UserId);
+        }
+        else
+        {
+            await _authenticationService.LogoutElsewhere();
+        }
+
+        // Audit logging: record password change event
+        await _eventProducer.Send(EventType.PasswordChanged, user.UserId);
+
+        // Send notification email
+        await _notificationSender.Send(user.Email ?? string.Empty, user.Username);
+
+        return user;
+    }
+}

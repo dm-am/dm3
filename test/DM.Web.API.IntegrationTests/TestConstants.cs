@@ -31,9 +31,18 @@ public static class TestConstants
     public static readonly Guid TestConversationId = Guid.Parse("00000000-0000-0000-0000-000000000050");
     public static readonly Guid TestMessageId = Guid.Parse("00000000-0000-0000-0000-000000000060");
 
-    // User logins
+    // User logins (usernames)
     public const string TestUserLogin = "testuser";
     public const string AdminUserLogin = "admin";
     public const string SecondUserLogin = "seconduser";
     public const string ModeratorUserLogin = "moderator";
+
+    // Aliases for usernames (same as logins)
+    public const string TestUserUsername = TestUserLogin;
+    public const string AdminUserUsername = AdminUserLogin;
+    public const string SecondUserUsername = SecondUserLogin;
+    public const string ModeratorUserUsername = ModeratorUserLogin;
+
+    // Chats
+    public static readonly Guid TestChatId = Guid.Parse("00000000-0000-0000-0000-000000000070");
 }

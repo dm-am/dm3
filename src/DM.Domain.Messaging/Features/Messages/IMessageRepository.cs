@@ -1,0 +1,89 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using DM.Domain.Core.Dto;
+
+namespace DM.Domain.Messaging.Features.Messages;
+
+/// <summary>
+/// Unified repository for message operations
+/// </summary>
+public interface IMessageRepository
+{
+    // ═══ READ ═══
+
+    /// <summary>
+    /// Get single message
+    /// </summary>
+    /// <param name="messageId">Message identifier</param>
+    /// <param name="userId">User identifier</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns></returns>
+    Task<Message?> Get(Guid messageId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get messages with cursor-based pagination
+    /// </summary>
+    /// <param name="chatId">Chat identifier</param>
+    /// <param name="query">Cursor query parameters</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Cursor result with messages and pagination info</returns>
+    Task<CursorResult<Message>> GetWithCursor(Guid chatId, CursorQuery query, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get messages around a specific message
+    /// </summary>
+    /// <param name="chatId">Chat identifier</param>
+    /// <param name="messageId">Reference message identifier</param>
+    /// <param name="limit">Total number of messages to fetch</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Cursor result with messages centered around the reference</returns>
+    Task<CursorResult<Message>> GetAround(Guid chatId, Guid messageId, int limit, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get messages near a specific timestamp
+    /// </summary>
+    /// <param name="chatId">Chat identifier</param>
+    /// <param name="timestampUtc">Reference timestamp (UTC)</param>
+    /// <param name="limit">Total number of messages to fetch</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Cursor result with messages near the timestamp</returns>
+    Task<CursorResult<Message>> GetNearTimestamp(Guid chatId, DateTimeOffset timestampUtc, int limit, CancellationToken ct = default);
+
+    /// <summary>
+    /// Check if there are messages before the given message
+    /// </summary>
+    Task<bool> HasMessagesBefore(Guid chatId, Guid messageId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Check if there are messages after the given message
+    /// </summary>
+    Task<bool> HasMessagesAfter(Guid chatId, Guid messageId, CancellationToken ct = default);
+
+    // ═══ WRITE ═══
+
+    /// <summary>
+    /// Save message
+    /// </summary>
+    /// <param name="message">Message data</param>
+    /// <param name="updateChat">Chat update data for last message</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns></returns>
+    Task<Message> Create(CreateMessageEntity message, UpdateChatLastMessageEntity updateChat, CancellationToken ct = default);
+
+    /// <summary>
+    /// Update single message
+    /// </summary>
+    /// <param name="update">Update data</param>
+    /// <returns></returns>
+    Task<Message> Update(UpdateMessageEntity update);
+
+    /// <summary>
+    /// Delete message (soft delete)
+    /// </summary>
+    /// <param name="messageId">Message identifier</param>
+    /// <param name="deletedByUserId">User who deleted the message</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns></returns>
+    Task Delete(Guid messageId, Guid deletedByUserId, CancellationToken ct = default);
+}

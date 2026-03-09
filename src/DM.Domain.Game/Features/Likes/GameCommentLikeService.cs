@@ -1,0 +1,72 @@
+using System;
+using System.Linq;
+using System.Net;
+using System.Threading.Tasks;
+using DM.Domain.Core.Identity;
+using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
+using DM.Domain.Core.Likes;
+using DM.Domain.Game.Features.Comments;
+using DM.Domain.Game.Features.Games;
+
+namespace DM.Domain.Game.Features.Likes;
+
+/// <summary>
+/// Game comment like service
+/// </summary>
+internal class GameCommentLikeService : IGameCommentLikeService
+{
+    private readonly IGameCommentService _commentService;
+    private readonly IGameService _gameService;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly ILikeOperations _likeOperations;
+
+    public GameCommentLikeService(
+        IGameCommentService commentService,
+        IGameService gameService,
+        IIntentionManager intentionManager,
+        IIdentityProvider identityProvider,
+        ILikeOperations likeOperations)
+    {
+        _commentService = commentService;
+        _gameService = gameService;
+        _intentionManager = intentionManager;
+        _identityProvider = identityProvider;
+        _likeOperations = likeOperations;
+    }
+
+    /// <inheritdoc />
+    public async Task<GeneralUser> LikeComment(Guid commentId)
+    {
+        var comment = await _commentService.Get(commentId);
+        _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
+
+        // Check blacklist
+        var game = await _gameService.GetAsync(comment.EntityId);
+        if (game.BlacklistedUsers.Any(b => b.UserId == _identityProvider.Current.User.UserId))
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this game");
+        }
+
+        return await _likeOperations.Like(comment, EventType.LikedGameComment);
+    }
+
+    /// <inheritdoc />
+    public async Task UnlikeComment(Guid commentId)
+    {
+        var comment = await _commentService.Get(commentId);
+        _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
+
+        // Check blacklist
+        var game = await _gameService.GetAsync(comment.EntityId);
+        if (game.BlacklistedUsers.Any(b => b.UserId == _identityProvider.Current.User.UserId))
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this game");
+        }
+
+        await _likeOperations.Unlike(comment);
+    }
+}

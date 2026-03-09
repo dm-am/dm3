@@ -1,5 +1,5 @@
-using DM.Services.Core.Dto;
-using DM.Services.Core.Dto.Enums;
+using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
@@ -41,7 +41,7 @@ public abstract class IntegrationTestBase : IDisposable
     {
         var request = new HttpRequestMessage(method, url);
         request.Headers.Add(TestAuthenticationMiddleware.TestUserIdHeader, user.UserId.ToString());
-        request.Headers.Add(TestAuthenticationMiddleware.TestUserLoginHeader, user.Login);
+        request.Headers.Add(TestAuthenticationMiddleware.TestUserUsernameHeader, user.Username);
         request.Headers.Add(TestAuthenticationMiddleware.TestUserRoleHeader, user.Role.ToString());
         return request;
     }

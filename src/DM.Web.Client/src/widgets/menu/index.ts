@@ -1,0 +1,7 @@
+export { default as GeneralMenu } from './GeneralMenu.vue'
+export { default as MenuBlock } from './MenuBlock.vue'
+export { default as ForumsList } from './ForumsList.vue'
+export { default as GameMenuLink } from './GameMenuLink.vue'
+export { default as GamesList } from './GamesList.vue'
+export { default as ModerationGames } from './ModerationGames.vue'
+export { default as OwnGames } from './OwnGames.vue'

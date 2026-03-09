@@ -1,6 +1,6 @@
 # Аутентификация DM3
 
-> **Код:** `src/DM.Services.Authentication/`
+> **Код:** `src/DM.Domain.Account/Features/Authentication/`
 
 ---
 
@@ -39,8 +39,8 @@ PostgreSQL          MongoDB
 ```
 
 **Файлы:**
-- `src/DM.Web.API/Authentication/ApiCredentialsStorage.cs`
-- `src/DM.Services.Authentication/Implementation/AuthenticationService.cs`
+- `src/DM.Web.API/Shared/Authentication/ApiCredentialsStorage.cs`
+- `src/DM.Domain.Account/Features/Authentication/AuthenticationService.cs`
 
 ---
 
@@ -73,9 +73,9 @@ PostgreSQL          MongoDB
 | PasswordHash, Salt | Хеш пароля (PBKDF2) |
 
 **Файлы:**
-- `src/DM.Services.DataAccess/BusinessObjects/Users/PendingRegistration.cs`
-- `src/DM.Services.Community/BusinessProcesses/Account/Registration/RegistrationService.cs`
-- `src/DM.Services.Community/BusinessProcesses/Account/Activation/ActivationService.cs`
+- `src/DM.Infrastructure.Persistence/Entities/Account/PendingRegistration.cs`
+- `src/DM.Domain.Account/Features/Registration/RegistrationService.cs`
+- `src/DM.Domain.Account/Features/Registration/ActivationService.cs`
 
 ---
 
@@ -90,7 +90,7 @@ PostgreSQL          MongoDB
 | Salt | 32 bytes |
 | Hash | 32 bytes |
 
-**Файл:** `src/DM.Services.Authentication/Implementation/Security/SecurityManager.cs`
+**Файл:** `src/DM.Domain.Account/Features/Security/SecurityManager.cs`
 
 ### Токены
 
@@ -101,7 +101,7 @@ PostgreSQL          MongoDB
 | Nonce | 12 bytes |
 | Tag | 16 bytes |
 
-**Файл:** `src/DM.Services.Authentication/Implementation/Security/AesGcmSymmetricCryptoService.cs`
+**Файл:** `src/DM.Domain.Account/Features/Security/AesGcmSymmetricCryptoService.cs`
 
 ### Сессии
 
@@ -116,7 +116,7 @@ PostgreSQL          MongoDB
 
 **Файлы:**
 - Конфиг: `src/DM.Web.API/appsettings.json` → `AuthenticationConfiguration`
-- Дефолты: `src/DM.Services.Authentication/Configuration/AuthenticationConfiguration.cs`
+- Дефолты: `src/DM.Domain.Account/Configuration/AuthenticationConfiguration.cs`
 
 ### Политика паролей
 
@@ -131,7 +131,7 @@ PostgreSQL          MongoDB
 
 NIST SP 800-63B-4 (2024): composition rules не требуются при сильном хешировании.
 
-**Файл:** `src/DM.Services.Community/Configuration/PasswordPolicyConfiguration.cs`
+**Файл:** `src/DM.Domain.Account/Configuration/PasswordPolicyConfiguration.cs`
 
 ---
 
@@ -172,7 +172,7 @@ Middleware добавляет защитные заголовки:
 
 **Intention Pattern** — декларативная проверка прав.
 
-**Пример:** `src/DM.Services.Community/BusinessProcesses/Messaging/ConversationIntentionResolver.cs`
+**Пример:** `src/DM.Domain.Messaging/Authorization/ChatIntentionResolver.cs`
 
 ```csharp
 _intentionManager.ThrowIfForbidden(ConversationIntention.CreateMessage, conversation);
@@ -198,8 +198,8 @@ _intentionManager.ThrowIfForbidden(ConversationIntention.CreateMessage, conversa
 
 ## Ссылки
 
-- [README](../README.md) — Обзор документации
-- [Архитектура](./OVERVIEW.md) — Общая архитектура
+- [Архитектура и паттерны](./ARCHITECTURE.md) — Паттерны, структура проектов
+- [Системный обзор](./OVERVIEW.md) — Компоненты, порты
 - [RBAC](./RBAC.md) — Роли и права
 - [API Reference](../api/REFERENCE.md) — Справочник API
 

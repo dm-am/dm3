@@ -1,23 +1,8 @@
-# DM3 Code Standards
+﻿# DM3 Code Standards
 
 > **Принцип:** Код > документация. Паттерны смотреть в коде, здесь только правила.
-
----
-
-## Архитектура
-
-**Hexagonal Architecture (Ports & Adapters)**
-
-```
-Controller → ApiService → DomainService → Repository → Database
-                ↓
-            AutoMapper (DTO mapping)
-```
-
-**Примеры в коде:**
-- Service: `DM.Services.Forum/BusinessProcesses/Topics/Creating/TopicCreatingService.cs`
-- Repository: `DM.Services.Forum/BusinessProcesses/Topics/Creating/TopicCreatingRepository.cs`
-- Factory: `DM.Services.Forum/BusinessProcesses/Topics/Creating/TopicFactory.cs`
+>
+> **Архитектура:** См. [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) — паттерны, структура проектов, блюпринт.
 
 ---
 
@@ -26,11 +11,22 @@ Controller → ApiService → DomainService → Repository → Database
 | Element | Convention | Example |
 |---------|------------|---------|
 | Private fields | `_camelCase` | `_repository` |
-| Async methods | No `Async` suffix | `Create()` not `CreateAsync()` |
+| Async methods | `Async` suffix | `CreateAsync()` not `Create()` |
 | Test class | `{Class}Should.cs` | `TopicCreatingServiceShould.cs` |
 | Migration | `YYYYMMDDHHMMSS_{Name}.cs` | `20260115000000_AddSessions.cs` |
+| Repository (unified) | `I{Feature}Repository.cs` | `ITopicRepository.cs` |
+| AutoMapper profile | `{Feature}MappingProfile.cs` | `TopicMappingProfile.cs` |
 
-**File structure:** `BusinessProcesses/{Feature}/{Creating,Reading,Updating,Deleting}/`
+### Forbidden Terms (Game/Blog context)
+
+| Term | Replacement |
+|------|-------------|
+| `participant` | `user` (Game/Blog), `participant` OK in Messaging |
+| `staff` | `master`, `assistant`, `moderator` |
+| `follow`/`follower` | `subscribe`/`subscriber`/`reader` |
+| `authority` | `canEdit`, `hasEditAccess`, `master/assistant` |
+| `private blog/game` | `draft with private visibility` |
+| `HasManagementAccess` | `HasEditAccess` |
 
 ---
 
@@ -45,24 +41,18 @@ Controller → ApiService → DomainService → Repository → Database
 
 ## API Rules
 
-**HTTP Methods:**
-- POST = create / action
-- PATCH = partial update
-- DELETE = returns 204 NoContent
+> Подробнее: [API_STANDARDS.md](API_STANDARDS.md)
 
-**HTTP Status Codes:**
-- 404 Not Found = resource doesn't exist (never use 410 Gone)
-- 409 Conflict = duplicate resource, already liked, etc.
-- 400 Bad Request = validation errors (field-level)
-- 403 Forbidden = authorization denied
-
-**Required attributes:**
+**Response format:**
 ```csharp
-[ProducesResponseType(typeof(Envelope<T>), 200)]
-[ProducesResponseType(typeof(GeneralError), 404)]
+// Одиночный ресурс — напрямую
+return Ok(user);
+
+// Коллекция — ListEnvelope
+return Ok(new ListEnvelope<User>(users, paging));
 ```
 
-**Example:** `DM.Web.API/Controllers/v1/Forum/TopicController.cs`
+**Example:** `DM.Web.API/Features/Forum/Topics/TopicController.cs`
 
 ---
 
@@ -70,7 +60,7 @@ Controller → ApiService → DomainService → Repository → Database
 
 FluentValidation для бизнес-правил, DataAnnotations для простых ограничений.
 
-**Example:** `DM.Services.Forum/Dto/Input/CreateTopicValidator.cs`
+**Example:** `DM.Domain.Forum/Features/Topics/CreateTopicValidator.cs`
 
 ---
 
@@ -101,7 +91,7 @@ _logger.LogWarning("Login failed. UserId={UserId}", user.UserId);  // structured
 repository.Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
 ```
 
-**Example:** `test/DM.Services.Forum.Tests/TopicCreatingServiceShould.cs`
+**Example:** `test/DM.Domain.Forum.Tests/TopicCreatingServiceShould.cs`
 
 ---
 
@@ -115,7 +105,7 @@ export type Message = {
 };
 ```
 
-**Example:** `frontend/DM.Web.Modern/src/api/models/messaging/index.ts`
+**Example:** `src/DM.Web.Client/src/api/models/messaging/index.ts`
 
 ---
 
@@ -123,7 +113,7 @@ export type Message = {
 
 | Aspect | Reference |
 |--------|-----------|
-| Password hash | PBKDF2-SHA256, 600K iterations — [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
+| Password hash | Argon2id (19 MiB, 2 iter) — [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | Token encryption | AES-256-GCM — [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | Rate limiting | [REFERENCE.md](../api/REFERENCE.md#rate-limiting) |
 | BFF Pattern | HttpOnly cookies, SameSite=Strict — [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
@@ -132,12 +122,14 @@ export type Message = {
 
 ## Checklists
 
-### New Service
-- [ ] CRUD folder structure
-- [ ] Intention enum + resolver
-- [ ] FluentValidation validator
-- [ ] AutoMapper profile
-- [ ] Autofac registration
+### New Feature
+- [ ] Feature folder (flat, no CRUD subfolders) — см. [ARCHITECTURE.md](../architecture/ARCHITECTURE.md#целевые-структуры-блюпринт)
+- [ ] Unified Service (`I{Feature}Service` + `{Feature}Service`) — все CRUD в одном сервисе
+- [ ] Repository (`I{Feature}Repository` + `{Feature}Repository`)
+- [ ] Intention enum + resolver (in `Authorization/`)
+- [ ] FluentValidation validators
+- [ ] AutoMapper profile (`{Feature}MappingProfile`)
+- [ ] DI registration in `Web.API/Startup.cs` (RegisterDomainServices)
 
 ### New Endpoint
 - [ ] XML documentation
@@ -200,121 +192,40 @@ dotnet run --project src/DM.Web.API --urls "http://localhost:5000"
 3. ✅ Missing validation on Create/Update DTOs
 4. ✅ Admin endpoints without `[RequireRole]`
 5. ✅ DELETE returning Ok() instead of NoContent()
-6. ✅ Duplicate endpoints (`{id:guid}` AND `{login}` for same resource)
+6. ✅ Duplicate endpoints (`{id:guid}` AND `{username}` for same resource)
 
 ### API Design
 
-**One canonical access pattern:**
-```csharp
-// ✅ CORRECT
-[HttpGet("{login}")]  // login is unique
-
-// ❌ WRONG — duplicates
-[HttpGet("{id:guid}")]
-[HttpGet("{login}")]
-```
-
-**Don't duplicate:**
-- `GET /v1/account` = current user
-- `GET /v1/users/{login}` = any user
-- ❌ `GET /v1/users/me` — duplicates account
-- ❌ `GET /v1/users/{id:guid}` — login sufficient
+**One canonical access pattern** — users by `{username}`, not GUID.
 
 ---
 
-## Swagger Structure
+## URL Structure
 
-### Groups
+> Подробнее: [API_STANDARDS.md](API_STANDARDS.md#url-structure)
 
-Swagger разбит на 8 логических групп: Account, Blog, Community, Forum, Game, Messaging, Common, Moderation.
-
-Конкретные теги и эндпоинты смотреть в Swagger: `http://localhost:5000/swagger`
-
-### URL Structure — Entities vs Relationships
-
-**Entity** (Character, Game, Post, Room) — имеет собственную идентичность:
-```
-GET    /parents/{id}/entities       ← list
-POST   /parents/{id}/entities       ← create
-GET    /entities/{id}               ← get by own ID
-PATCH  /entities/{id}               ← update
-DELETE /entities/{id}               ← delete
-```
-
-**Relationship** (blacklist, participant, reader) — связь между сущностями:
-```
-GET    /parents/{id}/links          ← list
-PUT    /parents/{id}/links/{key}    ← add (idempotent)
-DELETE /parents/{id}/links/{key}    ← remove
-```
-Где `{key}` — natural key (login, slug), не GUID.
-
-### Single ID Rule (уточнённое)
-
-**Никогда два opaque ID (GUID) в URL.**
-
-Natural key + parent ID — допустимо для relationships.
+**Key rules:**
+- Users по `{username}`, не по GUID
+- Никогда два GUID в URL
+- Max 2 уровня вложенности
 
 ```csharp
-// ✅ Entity — flat route с own ID
+// ✅ Entity — flat route
 [HttpDelete("characters/{id}")]
-[HttpDelete("invitations/{id}")]
 
-// ✅ Relationship — nested route с natural key
-[HttpDelete("games/{id}/blacklist/{login}")]
-[HttpDelete("events/{id}/participants/{login}")]
+// ✅ Relationship — nested с natural key
+[HttpDelete("games/{id}/blacklist/{username}")]
 
-// ❌ Два GUID — никогда
+// ❌ Два GUID
 [HttpDelete("games/{gameId}/characters/{characterId}")]
-[HttpDelete("events/{eventId}/participants/{userId}")]
 ```
-
-### Избыточная вложенность (Anti-pattern)
-
-**Принцип минимальной идентификации:** если ID глобально уникален — родительские ID избыточны.
-
-```csharp
-// ❌ НЕПРАВИЛЬНО — characterId уже уникален, gameId избыточен
-[HttpGet("games/{gameId}/characters/{characterId}/notepad")]
-
-// ✅ ПРАВИЛЬНО — characterId достаточен
-[HttpGet("characters/{id}/notepad")]
-```
-
-**Когда вложенность оправдана:**
-
-| Оправдано | НЕ оправдано |
-|-----------|--------------|
-| `/games/{id}/characters` — список в контексте | `/games/{id}/characters/{characterId}` — characterId уникален |
-| `/games/{id}/blacklist/{login}` — login НЕ уникален | `/games/{id}/notepad/{entryId}` — entryId уникален |
-
-**Максимум 2 уровня:** `/collection/{id}/subcollection` — норма, больше — антипаттерн.
-
-### Parameter Naming
-
-| Тип | Правило | Пример |
-|-----|---------|--------|
-| GUID (entity ID) | Всегда `{id}` | `games/{id}`, `characters/{id}` |
-| String (natural key) | Семантическое имя | `{login}`, `{slug}`, `{role}` |
-
-### Tag Naming
-
-- **Единственное число** для главного ресурса группы (Forum, не Forums)
-- **Множественное число** для остальных (Users, Games, Topics)
-- **Без префиксов контекста** — группа даёт контекст (Comments, не GameComments)
-
-### Key Principles
-
-- Users идентифицируются по login (уникальный, читаемый), не по id
-- Reviews всех типов в Community group (не в Games!)
-- Account группа разбита на теги: Login, Registration, Profile, Security
 
 ---
 
 ## Ссылки
 
-- [README](../README.md) — Обзор документации
-- [Архитектура](../architecture/OVERVIEW.md) — Как устроено
+- [Архитектура и паттерны](../architecture/ARCHITECTURE.md) — Паттерны, структура проектов, блюпринт
+- [Системный обзор](../architecture/OVERVIEW.md) — Компоненты, порты, потоки
 - [Глоссарий](../reference/GLOSSARY.md) — Термины и определения
 - [API Reference](../api/REFERENCE.md) — Справочник API
 - [Тестирование](../guides/TESTING.md) — Запуск тестов

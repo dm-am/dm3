@@ -2,15 +2,16 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
-using DM.Services.Authentication.Dto;
-using DM.Services.Authentication.Implementation.UserIdentity;
-using DM.Services.Core.Dto;
-using DM.Services.Core.Dto.Enums;
-using DM.Services.DataAccess;
-using DM.Services.DataAccess.MongoIntegration;
-using DM.Web.API.Cleanup;
-using DM.Web.API.Notifications;
-using DM.Web.API.Warmup;
+using DM.Domain.Account.Features.Authentication;
+using DM.Domain.Account.Features.Identity;
+using DM.Domain.Core.Identity;
+using DM.Domain.Account.Features.Security;
+using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
+using DM.Infrastructure.Persistence;
+using DM.Infrastructure.Persistence.MongoIntegration;
+using DM.Web.API.HostedServices;
+using DM.Web.API.Realtime;
 using Microsoft.AspNetCore.Authentication;
 using MongoDB.Driver;
 using MongoDB.Driver.Core.Extensions.DiagnosticSources;
@@ -28,6 +29,15 @@ using Microsoft.Extensions.Options;
 using IStartupFilter = Microsoft.AspNetCore.Hosting.IStartupFilter;
 
 namespace DM.Web.API.IntegrationTests;
+
+/// <summary>
+/// Test stub for ICompromisedPasswordChecker that always returns false (password is safe).
+/// This prevents integration tests from failing due to HIBP API responses.
+/// </summary>
+internal class TestCompromisedPasswordChecker : ICompromisedPasswordChecker
+{
+    public Task<bool> IsCompromisedAsync(string password) => Task.FromResult(false);
+}
 
 /// <summary>
 /// Test identity provider that returns a pre-configured identity
@@ -85,7 +95,7 @@ internal class TestAuthHandler : AuthenticationHandler<TestAuthOptions>
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, testUser.UserId.ToString()),
-            new Claim(ClaimTypes.Name, testUser.Login),
+            new Claim(ClaimTypes.Name, testUser.Username),
             new Claim(ClaimTypes.Role, testUser.Role.ToString())
         };
 
@@ -160,7 +170,9 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 typeof(RealtimeNotificationConsumer), // RabbitMQ connection attempts
                 typeof(WarmupService), // MongoDB warmup connection
                 typeof(TokenCleanupService), // Token cleanup uses DB — avoid race conditions
-                typeof(SessionCleanupService) // Session cleanup uses MongoDB
+                typeof(SessionCleanupService), // Session cleanup uses MongoDB
+                typeof(PendingRegistrationCleanupService), // DB cleanup — avoid race conditions
+                typeof(UsernameChangeCleanupService) // DB cleanup — avoid race conditions
             };
 
             foreach (var serviceType in backgroundServicesToRemove)
@@ -184,6 +196,16 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             {
                 services.Remove(descriptor);
             }
+
+            // Override HIBP password checker with a test stub
+            // Remove the real HttpClient-based implementation
+            var hibpDescriptor = services.FirstOrDefault(d =>
+                d.ServiceType == typeof(ICompromisedPasswordChecker));
+            if (hibpDescriptor != null)
+            {
+                services.Remove(hibpDescriptor);
+            }
+            services.AddSingleton<ICompromisedPasswordChecker, TestCompromisedPasswordChecker>();
 
             // Register DbContext with PostgreSQL connection string from Testcontainers
             services.AddDbContext<DmDbContext>(options =>
@@ -255,7 +277,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 var authenticatedUser = new AuthenticatedUser
                 {
                     UserId = TestUser.UserId,
-                    Login = TestUser.Login,
+                    Username = TestUser.Username,
                     Role = TestUser.Role,
                     AccessPolicy = TestUser.AccessPolicy,
                     Salt = "fakesalt",
@@ -284,13 +306,13 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
     /// Create a test user for authenticated requests
     /// </summary>
     public static GeneralUser CreateTestUser(
-        string login = TestConstants.TestUserLogin,
+        string username = TestConstants.TestUserUsername,
         UserRole role = UserRole.RegularUser)
     {
         return new GeneralUser
         {
             UserId = TestConstants.TestUserId,
-            Login = login,
+            Username = username,
             Role = role,
             AccessPolicy = AccessPolicy.NotSpecified
         };
@@ -304,7 +326,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         return new GeneralUser
         {
             UserId = TestConstants.AdminUserId,
-            Login = TestConstants.AdminUserLogin,
+            Username = TestConstants.AdminUserUsername,
             Role = UserRole.Admin,
             AccessPolicy = AccessPolicy.NotSpecified
         };
@@ -318,7 +340,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         return new GeneralUser
         {
             UserId = TestConstants.SecondUserId,
-            Login = TestConstants.SecondUserLogin,
+            Username = TestConstants.SecondUserUsername,
             Role = UserRole.RegularUser,
             AccessPolicy = AccessPolicy.NotSpecified
         };
@@ -332,7 +354,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         return new GeneralUser
         {
             UserId = TestConstants.ModeratorUserId,
-            Login = TestConstants.ModeratorUserLogin,
+            Username = TestConstants.ModeratorUserUsername,
             Role = UserRole.Moderator,
             AccessPolicy = AccessPolicy.NotSpecified
         };

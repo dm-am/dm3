@@ -1,0 +1,259 @@
+using System;
+using System.Collections.Generic;
+using System.Net;
+using System.Threading.Tasks;
+using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
+using DM.Domain.Game.Features.Games;
+using DM.Domain.Core.Identity;
+using DM.Domain.Core.Reviews;
+using DM.Domain.Game.Authorization;
+using FluentValidation;
+using Npgsql;
+
+namespace DM.Domain.Game.Features.Reviews;
+
+/// <inheritdoc />
+internal class PostReviewService : IPostReviewService
+{
+    private static readonly TimeSpan EditWindow = TimeSpan.FromDays(1);
+    private static readonly TimeSpan CooldownPerGame = TimeSpan.FromDays(3);
+
+    private readonly IValidator<CreatePostReview> _createValidator;
+    private readonly IValidator<UpdatePostReview> _updateValidator;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IPostReviewRepository _repository;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IProbationConfiguration _probationConfig;
+
+    public PostReviewService(
+        IValidator<CreatePostReview> createValidator,
+        IValidator<UpdatePostReview> updateValidator,
+        IIntentionManager intentionManager,
+        IPostReviewRepository repository,
+        IIdentityProvider identityProvider,
+        IGuidFactory guidFactory,
+        IDateTimeProvider dateTimeProvider,
+        IProbationConfiguration probationConfig)
+    {
+        _createValidator = createValidator;
+        _updateValidator = updateValidator;
+        _intentionManager = intentionManager;
+        _repository = repository;
+        _identityProvider = identityProvider;
+        _guidFactory = guidFactory;
+        _dateTimeProvider = dateTimeProvider;
+        _probationConfig = probationConfig;
+    }
+
+    /// <inheritdoc />
+    public async Task<Review> CreateAsync(CreatePostReview createReview)
+    {
+        await _createValidator.ValidateAndThrowAsync(createReview);
+        _intentionManager.ThrowIfForbidden(PostReviewIntention.Create);
+
+        var authorId = _identityProvider.Current.User.UserId;
+        var postId = createReview.PostId;
+
+        // Get post information for authorization and denormalization
+        var postInfo = await _repository.GetPostInfoAsync(postId);
+        if (postInfo == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, "Post not found");
+        }
+
+        // Can't review own post
+        if (authorId == postInfo.AuthorId)
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, "You cannot review your own post");
+        }
+
+        // Newbies can only create neutral post reviews
+        if (createReview.Sign != ReviewSign.Neutral && await IsNewbieAsync(authorId))
+        {
+            throw new HttpException(HttpStatusCode.Forbidden,
+                "You need at least 100 game posts to create positive or negative reviews");
+        }
+
+        // Check if already reviewed this post
+        if (await ExistsAsync(authorId, postId))
+        {
+            throw new HttpException(HttpStatusCode.Conflict, "You have already reviewed this post");
+        }
+
+        // Check cooldown: can't review posts in the same game within 3 days
+        if (await HasRecentReviewInGameAsync(authorId, postInfo.GameId))
+        {
+            throw new HttpException(HttpStatusCode.TooManyRequests,
+                "You can only submit one post review per game every 3 days");
+        }
+
+        var entity = new CreatePostReviewEntity
+        {
+            ReviewId = _guidFactory.Create(),
+            UserId = authorId,
+            PostId = postId,
+            PostAuthorId = postInfo.AuthorId,
+            GameId = postInfo.GameId,
+            CreatedUtc = _dateTimeProvider.Now,
+            Sign = createReview.Sign,
+            ReasonType = createReview.ReasonType
+        };
+
+        try
+        {
+            var result = await _repository.CreateAsync(entity);
+
+            // Update post author's QualityRating based on review sign
+            if (createReview.Sign != ReviewSign.Neutral)
+            {
+                var signValue = (int)createReview.Sign;
+                await _repository.UpdateUserQualityRatingAsync(postInfo.AuthorId, signValue);
+            }
+
+            return result;
+        }
+        catch (Exception ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        {
+            throw new HttpException(HttpStatusCode.Conflict, "You have already reviewed this post");
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<Review> GetAsync(Guid id)
+    {
+        var review = await _repository.GetAsync(id);
+        if (review == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, "Review not found");
+        }
+
+        return review;
+    }
+
+    /// <inheritdoc />
+    public async Task<(IEnumerable<Review> Reviews, PagingResult Paging)> GetListAsync(
+        Guid postId, PagingQuery query)
+    {
+        var totalCount = await _repository.CountAsync(postId);
+        var pagingData = new PagingData(
+            query,
+            _identityProvider.Current.Settings.Paging.EntitiesPerPage,
+            totalCount);
+
+        var reviews = await _repository.GetAsync(postId, pagingData);
+        return (reviews, pagingData.Result);
+    }
+
+    /// <inheritdoc />
+    public async Task<(IEnumerable<Review> Reviews, PagingResult Paging)> GetAllAsync(
+        PagingQuery query, PostReviewFilter? filter = null)
+    {
+        var totalCount = await _repository.CountAllAsync(filter);
+        var pagingData = new PagingData(
+            query,
+            _identityProvider.Current.Settings.Paging.EntitiesPerPage,
+            totalCount);
+
+        var reviews = await _repository.GetAllAsync(pagingData, filter);
+        return (reviews, pagingData.Result);
+    }
+
+    /// <inheritdoc />
+    public Task<Review?> GetByAuthorAsync(Guid postId, Guid authorId) =>
+        _repository.GetByAuthorAsync(postId, authorId);
+
+    /// <inheritdoc />
+    public async Task<Review> UpdateAsync(UpdatePostReview updateReview)
+    {
+        await _updateValidator.ValidateAndThrowAsync(updateReview);
+        var review = await GetAsync(updateReview.ReviewId);
+
+        _intentionManager.ThrowIfForbidden(PostReviewIntention.Edit, review);
+
+        // Check 24-hour edit window (admins can edit anytime)
+        var currentUser = _identityProvider.Current.User;
+        if (currentUser.Role != UserRole.Admin && !CanEdit(review))
+        {
+            throw new HttpException(HttpStatusCode.Forbidden,
+                "Reviews can only be edited within 24 hours of creation");
+        }
+
+        // Handle sign change impact on QualityRating
+        var oldSign = review.Sign;
+        var newSign = updateReview.Sign ?? oldSign;
+
+        if (newSign != oldSign && review.PostAuthorId.HasValue)
+        {
+            // Revert old sign effect
+            if (oldSign.HasValue && oldSign.Value != ReviewSign.Neutral)
+            {
+                await _repository.UpdateUserQualityRatingAsync(review.PostAuthorId.Value, -(int)oldSign.Value);
+            }
+            // Apply new sign effect
+            if (newSign.HasValue && newSign.Value != ReviewSign.Neutral)
+            {
+                await _repository.UpdateUserQualityRatingAsync(review.PostAuthorId.Value, (int)newSign.Value);
+            }
+        }
+
+        var entity = new UpdatePostReviewEntity(
+            review.Id,
+            Sign: updateReview.Sign,
+            ReasonType: updateReview.ReasonType,
+            ModifiedUtc: _dateTimeProvider.Now,
+            ModifiedByUserId: currentUser.UserId);
+
+        return await _repository.UpdateAsync(entity);
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteAsync(Guid id)
+    {
+        var review = await GetAsync(id);
+        _intentionManager.ThrowIfForbidden(PostReviewIntention.Delete, review);
+
+        // Revert post author's QualityRating when post review is deleted
+        if (review.Sign.HasValue &&
+            review.Sign.Value != ReviewSign.Neutral &&
+            review.PostAuthorId.HasValue)
+        {
+            var signValue = (int)review.Sign.Value;
+            await _repository.UpdateUserQualityRatingAsync(review.PostAuthorId.Value, -signValue);
+        }
+
+        var entity = new UpdatePostReviewEntity(id, IsRemoved: true);
+        await _repository.UpdateAsync(entity);
+    }
+
+    /// <inheritdoc />
+    public Task<bool> ExistsAsync(Guid authorId, Guid postId) =>
+        _repository.ExistsAsync(authorId, postId);
+
+    /// <inheritdoc />
+    public Task<bool> HasRecentReviewInGameAsync(Guid authorId, Guid gameId)
+    {
+        var cutoffDate = _dateTimeProvider.Now - CooldownPerGame;
+        return _repository.HasRecentReviewInGameAsync(authorId, gameId, cutoffDate);
+    }
+
+    /// <inheritdoc />
+    public bool CanEdit(Review review)
+    {
+        var now = _dateTimeProvider.Now;
+        var editDeadline = review.CreatedUtc + EditWindow;
+        return now <= editDeadline;
+    }
+
+    private async Task<bool> IsNewbieAsync(Guid userId)
+    {
+        var postCount = await _repository.GetUserPostCountAsync(userId);
+        return postCount < _probationConfig.NewbiePostThreshold;
+    }
+}

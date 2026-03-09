@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="DM.Domain.Account.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="DM.Infrastructure.Persistence" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\DM.Domain.Core\DM.Domain.Core.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="FluentValidation" />
+        <PackageReference Include="Konscious.Security.Cryptography.Argon2" />
+        <PackageReference Include="Microsoft.Extensions.Options" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+        <PackageReference Include="Serilog.AspNetCore" />
+    </ItemGroup>
+
+</Project>

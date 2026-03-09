@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Services.Notifications.Dto;
+using DM.Domain.Personal.Features.Notifications;
 using Jamq.Client.Abstractions.Consuming;
 using Jamq.Client.Rabbit.Consuming;
 using Microsoft.Extensions.Hosting;
@@ -30,7 +30,7 @@ internal class RealtimeNotificationConsumer : BackgroundService
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogDebug("[🚴] Starting realtime notifications consumer");
+        _logger.LogDebug("[??] Starting realtime notifications consumer");
 
         var parameters = new RabbitConsumerParameters("dm.api", "dm.notifications.api", ProcessingOrder.Sequential)
         {
@@ -41,7 +41,7 @@ internal class RealtimeNotificationConsumer : BackgroundService
         var consumer = _consumerBuilder.BuildRabbit<RealtimeNotification, RealtimeNotificationProcessor>(parameters);
         _consumeRetryPolicy.Execute(consumer.Subscribe);
 
-        _logger.LogDebug("[👂] Realtime notifications consumer is listening to {QueueName} queue",
+        _logger.LogDebug("[??] Realtime notifications consumer is listening to {QueueName} queue",
             parameters.QueueName);
         return Task.CompletedTask;
     }

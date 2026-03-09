@@ -1,5 +1,5 @@
-﻿using System;
-using DM.Services.Core.Exceptions;
+using System;
+using DM.Domain.Core.Exceptions;
 using FluentValidation;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;

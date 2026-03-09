@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <IsPackable>false</IsPackable>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Moq" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
+        <ProjectReference Include="..\..\src\DM.Infrastructure.Persistence\DM.Infrastructure.Persistence.csproj" />
+    </ItemGroup>
+
+</Project>

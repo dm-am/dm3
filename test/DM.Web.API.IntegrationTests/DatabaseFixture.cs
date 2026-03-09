@@ -1,11 +1,10 @@
-using DM.Services.DataAccess;
-using TopicDal = DM.Services.DataAccess.BusinessObjects.Boards.Topic;
-using DM.Services.DataAccess.BusinessObjects.Boards;
-using DM.Services.DataAccess.BusinessObjects.Games;
-using DM.Services.DataAccess.BusinessObjects.Games.Posts;
-using DM.Services.DataAccess.BusinessObjects.Messaging;
-using DM.Services.DataAccess.BusinessObjects.Users;
-using DM.Services.Core.Dto.Enums;
+using DM.Infrastructure.Persistence;
+using DM.Infrastructure.Persistence.Entities.Forum;
+using DM.Infrastructure.Persistence.Entities.Game;
+using DM.Infrastructure.Persistence.Entities.Game.Posts;
+using DM.Infrastructure.Persistence.Entities.Messaging;
+using DM.Domain.Core.Enums;
+using DM.Infrastructure.Persistence.Entities.Account;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.MongoDb;
 using Testcontainers.PostgreSql;
@@ -159,19 +158,19 @@ public class DatabaseFixture : IAsyncLifetime
         SeedRooms(db);
         await db.SaveChangesAsync();
 
-        SeedConversations(db);
+        SeedChats(db);
         await db.SaveChangesAsync();
     }
 
     private static void SeedUsers(DmDbContext db)
     {
         // Test user
-        if (!db.Users.Any(u => u.Login == TestConstants.TestUserLogin))
+        if (!db.Users.Any(u => u.Username == TestConstants.TestUserUsername))
         {
             db.Users.Add(new User
             {
                 UserId = TestConstants.TestUserId,
-                Login = TestConstants.TestUserLogin,
+                Username = TestConstants.TestUserUsername,
                 Email = "test@example.com",
                 PasswordHash = "fakehash",
                 Salt = "fakesalt",
@@ -183,19 +182,17 @@ public class DatabaseFixture : IAsyncLifetime
                 Status = string.Empty,
                 Name = string.Empty,
                 Location = string.Empty,
-                Info = string.Empty,
-                Icq = string.Empty,
-                Skype = string.Empty
+                Info = string.Empty
             });
         }
 
         // Admin user
-        if (!db.Users.Any(u => u.Login == TestConstants.AdminUserLogin))
+        if (!db.Users.Any(u => u.Username == TestConstants.AdminUserUsername))
         {
             db.Users.Add(new User
             {
                 UserId = TestConstants.AdminUserId,
-                Login = TestConstants.AdminUserLogin,
+                Username = TestConstants.AdminUserUsername,
                 Email = "admin@example.com",
                 PasswordHash = "fakehash",
                 Salt = "fakesalt",
@@ -207,19 +204,17 @@ public class DatabaseFixture : IAsyncLifetime
                 Status = string.Empty,
                 Name = string.Empty,
                 Location = string.Empty,
-                Info = string.Empty,
-                Icq = string.Empty,
-                Skype = string.Empty
+                Info = string.Empty
             });
         }
 
         // Second user (for multi-user scenarios)
-        if (!db.Users.Any(u => u.Login == TestConstants.SecondUserLogin))
+        if (!db.Users.Any(u => u.Username == TestConstants.SecondUserUsername))
         {
             db.Users.Add(new User
             {
                 UserId = TestConstants.SecondUserId,
-                Login = TestConstants.SecondUserLogin,
+                Username = TestConstants.SecondUserUsername,
                 Email = "second@example.com",
                 PasswordHash = "fakehash",
                 Salt = "fakesalt",
@@ -231,19 +226,17 @@ public class DatabaseFixture : IAsyncLifetime
                 Status = string.Empty,
                 Name = string.Empty,
                 Location = string.Empty,
-                Info = string.Empty,
-                Icq = string.Empty,
-                Skype = string.Empty
+                Info = string.Empty
             });
         }
 
         // Moderator user
-        if (!db.Users.Any(u => u.Login == TestConstants.ModeratorUserLogin))
+        if (!db.Users.Any(u => u.Username == TestConstants.ModeratorUserUsername))
         {
             db.Users.Add(new User
             {
                 UserId = TestConstants.ModeratorUserId,
-                Login = TestConstants.ModeratorUserLogin,
+                Username = TestConstants.ModeratorUserUsername,
                 Email = "moderator@example.com",
                 PasswordHash = "fakehash",
                 Salt = "fakesalt",
@@ -255,9 +248,7 @@ public class DatabaseFixture : IAsyncLifetime
                 Status = string.Empty,
                 Name = string.Empty,
                 Location = string.Empty,
-                Info = string.Empty,
-                Icq = string.Empty,
-                Skype = string.Empty
+                Info = string.Empty
             });
         }
     }
@@ -281,13 +272,13 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedTopics(DmDbContext db)
     {
-        if (!db.Set<TopicDal>().Any())
+        if (!db.Set<Topic>().Any())
         {
-            db.Set<TopicDal>().Add(new TopicDal
+            db.Set<Topic>().Add(new Topic
             {
                 TopicId = TestConstants.TestTopicId,
                 BoardId = TestConstants.TestBoardId,
-                UserId = TestConstants.TestUserId,
+                AuthorId = TestConstants.TestUserId,
                 Title = "Test Topic",
                 Text = "This is a test topic content for integration tests.",
                 CreatedUtc = DateTimeOffset.UtcNow.AddDays(-1),
@@ -296,11 +287,11 @@ public class DatabaseFixture : IAsyncLifetime
                 IsClosed = false
             });
 
-            db.Set<TopicDal>().Add(new TopicDal
+            db.Set<Topic>().Add(new Topic
             {
                 TopicId = TestConstants.SecondTopicId,
                 BoardId = TestConstants.TestBoardId,
-                UserId = TestConstants.SecondUserId,
+                AuthorId = TestConstants.SecondUserId,
                 Title = "Second Test Topic",
                 Text = "This is a second test topic owned by another user.",
                 CreatedUtc = DateTimeOffset.UtcNow.AddHours(-12),
@@ -313,15 +304,15 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedComments(DmDbContext db)
     {
-        if (!db.Set<DM.Services.DataAccess.BusinessObjects.Common.Comment>().Any())
+        if (!db.Set<DM.Infrastructure.Persistence.Entities.CrossDomain.Comment>().Any())
         {
             // Comment for game (FK_Comments_Games_EntityId requires this)
-            db.Set<DM.Services.DataAccess.BusinessObjects.Common.Comment>().Add(
-                new DM.Services.DataAccess.BusinessObjects.Common.Comment
+            db.Set<DM.Infrastructure.Persistence.Entities.CrossDomain.Comment>().Add(
+                new DM.Infrastructure.Persistence.Entities.CrossDomain.Comment
                 {
                     CommentId = TestConstants.TestCommentId,
                     EntityId = TestConstants.TestGameId,
-                    UserId = TestConstants.TestUserId,
+                    AuthorId = TestConstants.TestUserId,
                     Text = "This is a test comment.",
                     CreatedUtc = DateTimeOffset.UtcNow.AddHours(-6),
                     IsRemoved = false
@@ -336,34 +327,32 @@ public class DatabaseFixture : IAsyncLifetime
             db.Set<Game>().Add(new Game
             {
                 GameId = TestConstants.TestGameId,
-                MasterId = TestConstants.TestUserId,
+                AuthorId = TestConstants.TestUserId,
                 Title = "Test Game",
                 SystemName = "D&D 5e",
                 NarrativeSetting = "Forgotten Realms",
                 Info = "This is a test game for integration tests.",
-                Notepad = string.Empty,
                 CreatedUtc = DateTimeOffset.UtcNow.AddDays(-10),
                 Status = ModuleStatus.Active,
                 PremoderationStatus = PremoderationStatus.Approved,
                 IsRecruitmentOpen = true,
-                CommentariesAccessMode = CommentariesAccessMode.Public,
+                CommentsAccessMode = CommentsAccessMode.Public,
                 IsRemoved = false
             });
 
             db.Set<Game>().Add(new Game
             {
                 GameId = TestConstants.SecondGameId,
-                MasterId = TestConstants.SecondUserId,
+                AuthorId = TestConstants.SecondUserId,
                 Title = "Second Test Game",
                 SystemName = "Pathfinder",
                 NarrativeSetting = "Golarion",
                 Info = "This is another test game owned by a different user.",
-                Notepad = string.Empty,
                 CreatedUtc = DateTimeOffset.UtcNow.AddDays(-5),
                 Status = ModuleStatus.Active,
                 PremoderationStatus = PremoderationStatus.Approved,
                 IsRecruitmentOpen = false,
-                CommentariesAccessMode = CommentariesAccessMode.Readonly,
+                CommentsAccessMode = CommentsAccessMode.Readonly,
                 IsRemoved = false
             });
         }
@@ -389,38 +378,38 @@ public class DatabaseFixture : IAsyncLifetime
         }
     }
 
-    private static void SeedConversations(DmDbContext db)
+    private static void SeedChats(DmDbContext db)
     {
-        if (!db.Set<Conversation>().Any())
+        if (!db.Chats.Any())
         {
-            var conversation = new Conversation
+            var chat = new Chat
             {
-                ConversationId = TestConstants.TestConversationId,
-                Type = DM.Services.Core.Dto.Enums.ConversationType.Direct,
+                ChatId = TestConstants.TestChatId,
+                Type = DM.Domain.Core.Enums.ChatType.Direct,
                 Title = string.Empty
             };
-            db.Set<Conversation>().Add(conversation);
+            db.Chats.Add(chat);
 
-            db.Set<UserConversationLink>().Add(new UserConversationLink
+            db.UserChatLinks.Add(new UserChatLink
             {
-                UserConversationLinkId = Guid.NewGuid(),
-                ConversationId = TestConstants.TestConversationId,
+                UserChatLinkId = Guid.NewGuid(),
+                ChatId = TestConstants.TestChatId,
                 UserId = TestConstants.TestUserId,
                 IsRemoved = false
             });
 
-            db.Set<UserConversationLink>().Add(new UserConversationLink
+            db.UserChatLinks.Add(new UserChatLink
             {
-                UserConversationLinkId = Guid.NewGuid(),
-                ConversationId = TestConstants.TestConversationId,
+                UserChatLinkId = Guid.NewGuid(),
+                ChatId = TestConstants.TestChatId,
                 UserId = TestConstants.SecondUserId,
                 IsRemoved = false
             });
 
-            db.Set<Message>().Add(new Message
+            db.Messages.Add(new Message
             {
                 MessageId = TestConstants.TestMessageId,
-                ConversationId = TestConstants.TestConversationId,
+                ChatId = TestConstants.TestChatId,
                 UserId = TestConstants.TestUserId,
                 Text = "This is a test message.",
                 CreatedUtc = DateTimeOffset.UtcNow.AddHours(-2),

@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using DM.Web.API.Authentication;
-using DM.Web.API.BbRendering;
+using DM.Web.API.Shared.Authentication;
+using DM.Web.API.Shared.BbRendering;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -58,6 +58,9 @@ public static class SwaggerExtensions
         options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, $"{apiAssemblyName}.xml"));
 
         options.DescribeAllParametersInCamelCase();
+
+        // Use fully qualified type names to avoid schema conflicts between types with same name
+        options.CustomSchemaIds(type => type.FullName?.Replace("+", "."));
     }
 
     /// <summary>

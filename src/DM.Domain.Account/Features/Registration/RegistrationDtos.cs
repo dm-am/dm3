@@ -1,0 +1,106 @@
+using System;
+using DM.Domain.Core.Enums;
+
+namespace DM.Domain.Account.Features.Registration;
+
+/// <summary>
+/// DTO for pending registration (email confirmation pending)
+/// </summary>
+public class PendingRegistration
+{
+    /// <summary>
+    /// Primary key
+    /// </summary>
+    public Guid PendingRegistrationId { get; set; }
+
+    /// <summary>
+    /// Token for email activation link
+    /// </summary>
+    public Guid TokenId { get; set; }
+
+    /// <summary>
+    /// Email address (lowercase)
+    /// </summary>
+    public string Email { get; set; } = null!;
+
+    /// <summary>
+    /// Password hash (Argon2id)
+    /// </summary>
+    public string PasswordHash { get; set; } = null!;
+
+    /// <summary>
+    /// Password salt
+    /// </summary>
+    public string Salt { get; set; } = null!;
+
+    /// <summary>
+    /// Password hash algorithm version
+    /// </summary>
+    public int PasswordHashVersion { get; set; } = 4;
+
+    /// <summary>
+    /// Original registration time
+    /// </summary>
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    /// <summary>
+    /// Current token creation time
+    /// </summary>
+    public DateTimeOffset TokenCreatedUtc { get; set; }
+
+    /// <summary>
+    /// Whether user accepted the site rules
+    /// </summary>
+    public bool AcceptedRules { get; set; }
+}
+
+/// <summary>
+/// DTO for creating a new user (during activation)
+/// </summary>
+public class CreateUser
+{
+    /// <summary>
+    /// User identifier
+    /// </summary>
+    public Guid UserId { get; set; }
+
+    /// <summary>
+    /// Username
+    /// </summary>
+    public string Username { get; set; } = null!;
+
+    /// <summary>
+    /// Email address
+    /// </summary>
+    public string Email { get; set; } = null!;
+
+    /// <summary>
+    /// Password hash
+    /// </summary>
+    public string PasswordHash { get; set; } = null!;
+
+    /// <summary>
+    /// Password salt
+    /// </summary>
+    public string Salt { get; set; } = null!;
+
+    /// <summary>
+    /// Password hash algorithm version
+    /// </summary>
+    public int PasswordHashVersion { get; set; } = 4;
+
+    /// <summary>
+    /// Registration moment (UTC)
+    /// </summary>
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    /// <summary>
+    /// User role
+    /// </summary>
+    public UserRole Role { get; set; } = UserRole.RegularUser;
+
+    /// <summary>
+    /// Access policy
+    /// </summary>
+    public AccessPolicy AccessPolicy { get; set; } = AccessPolicy.NotSpecified;
+}

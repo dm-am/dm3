@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Autofac" />
+        <PackageReference Include="FluentValidation" />
+        <PackageReference Include="Jamq.Client.Rabbit.DependencyInjection" />
+        <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
+        <ProjectReference Include="..\DM.Infrastructure.Messaging\DM.Infrastructure.Messaging.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="Assets\logo.png" LogicalName="logo.png" />
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,106 @@
+@import 'Variables'
+
+// =============================================================================
+// SASS THEME VARIABLES
+// =============================================================================
+// These SASS variables wrap CSS Custom Properties from ThemeVariables.css.
+// Use them directly in your styles:
+//
+//   .my-element
+//     color: $text
+//     background-color: $bg-element
+//     border: 1px solid $border
+//
+// Runtime theme switching is handled by CSS Custom Properties.
+// See THEME_SYSTEM.md for full documentation.
+// =============================================================================
+
+// Text
+$text: var(--text)
+$text-muted: var(--text-muted)
+$text-meta: var(--text-meta)
+$text-on-green: var(--text-on-green)
+$text-on-red: var(--text-on-red)
+$text-on-yellow: var(--text-on-yellow)
+
+// Headings
+$heading: var(--heading)
+$heading-alt: var(--heading-alt)
+
+// Links
+$link: var(--link)
+$link-hover: var(--link-hover)
+$link-nav: var(--link-nav)
+$link-nav-hover: var(--link-nav-hover)
+
+// Accents (green/red/yellow for success/error/warning)
+$accent-green: var(--accent-green)
+$accent-green-hover: var(--accent-green-hover)
+$accent-green-muted: var(--accent-green-muted)
+$accent-red: var(--accent-red)
+$accent-red-hover: var(--accent-red-hover)
+$accent-red-muted: var(--accent-red-muted)
+$accent-yellow: var(--accent-yellow)
+
+// Backgrounds
+$bg-page: var(--bg-page)
+$bg-element: var(--bg-element)
+$bg-element-overlay: var(--bg-element-overlay)
+$bg-element-hover: var(--bg-element-hover)
+$bg-element-accent: var(--bg-element-accent)
+$bg-highlight-yellow: var(--bg-highlight-yellow)
+$bg-highlight-green: var(--bg-highlight-green)
+$bg-highlight-red: var(--bg-highlight-red)
+$bg-highlight-blue: var(--bg-highlight-blue)
+$selection-bg: var(--selection-bg)
+$selection-text: var(--selection-text)
+
+// Buttons
+$button-bg: var(--button-bg)
+$button-bg-hover: var(--button-bg-hover)
+$button-bg-disabled: var(--button-bg-disabled)
+$button-text: var(--button-text)
+$button-text-hover: var(--button-text-hover)
+$button-text-disabled: var(--button-text-disabled)
+$button-border: var(--button-border)
+$button-border-hover: var(--button-border-hover)
+$button-border-disabled: var(--button-border-disabled)
+
+// Borders
+$border: var(--border)
+$border-accent-blue: var(--border-accent-blue)
+$border-accent-green: var(--border-accent-green)
+$border-accent-red: var(--border-accent-red)
+
+// Inputs
+$input-bg: var(--input-bg)
+$input-bg-overlay: var(--input-bg-overlay)
+$input-bg-disabled: var(--input-bg-disabled)
+
+// Progress
+$progress-bg: var(--progress-bg)
+$progress-fill: var(--progress-fill)
+$progress-bg-overlay: var(--progress-bg-overlay)
+$progress-fill-overlay: var(--progress-fill-overlay)
+
+// Overlays
+$shade-bg: var(--shade-bg)
+$shade-text: var(--shade-text)
+$overlay-bg: var(--overlay-bg)
+$overlay-subtle: var(--overlay-subtle)
+$overlay-emphasis: var(--overlay-emphasis)
+$hover-overlay: var(--hover-overlay)
+$active-overlay: var(--active-overlay)
+$shadow-color: var(--shadow-color)
+$nsfw-overlay: var(--nsfw-overlay)
+$highlight-overlay-green: var(--highlight-overlay-green)
+$highlight-overlay-red: var(--highlight-overlay-red)
+$highlight-overlay-blue: var(--highlight-overlay-blue)
+
+// Utility
+$filter-invert: var(--filter-invert)
+$hover-brightness: var(--hover-brightness)
+$active-brightness: var(--active-brightness)
+
+// Legacy aliases for backward compatibility
+$bg: $bg-element

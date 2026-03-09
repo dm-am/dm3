@@ -1,0 +1,57 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using DM.Domain.Core.Enums;
+using DM.Infrastructure.Persistence;
+using DM.Domain.Personal.Features.Notifications;
+using Microsoft.EntityFrameworkCore;
+
+namespace DM.Workers.NotificationDispatcher.Implementation.Notifiers.Security;
+
+/// <summary>
+/// Generates security notification when user email is changed.
+/// Notifies the user about the email change for security awareness.
+/// </summary>
+internal class EmailChangedNotificationGenerator : BaseNotificationGenerator
+{
+    private readonly DmDbContext _dbContext;
+
+    /// <inheritdoc />
+    public EmailChangedNotificationGenerator(DmDbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
+
+    /// <inheritdoc />
+    protected override EventType EventType => EventType.EmailChanged;
+
+    /// <inheritdoc />
+    public override async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
+    {
+        var userData = await _dbContext.Users
+            .Where(u => u.UserId == entityId)
+            .Select(u => new
+            {
+                u.UserId,
+                u.Username,
+                u.Email
+            })
+            .FirstOrDefaultAsync();
+
+        if (userData == null)
+        {
+            yield break;
+        }
+
+        yield return new CreateNotification
+        {
+            UsersInterested = new[] { userData.UserId },
+            Metadata = new
+            {
+                Username = userData.Username,
+                NewEmail = userData.Email,
+                EventTime = DateTime.UtcNow
+            }
+        };
+    }
+}

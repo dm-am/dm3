@@ -33,18 +33,21 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\DM.Services.Common\DM.Services.Common.csproj" />
-        <ProjectReference Include="..\DM.Services.Community\DM.Services.Community.csproj" />
-        <ProjectReference Include="..\DM.Services.DataAccess\DM.Services.DataAccess.csproj" />
-        <ProjectReference Include="..\DM.Services.Forum\DM.Services.Forum.csproj" />
-        <ProjectReference Include="..\DM.Services.Game\DM.Services.Game.csproj" />
-        <ProjectReference Include="..\DM.Services.Notifications\DM.Services.Notifications.csproj" />
-        <ProjectReference Include="..\DM.Web.Core\DM.Web.Core.csproj" />
+        <ProjectReference Include="..\DM.Domain.Account\DM.Domain.Account.csproj" />
+        <ProjectReference Include="..\DM.Domain.Blog\DM.Domain.Blog.csproj" />
+        <ProjectReference Include="..\DM.Domain.Community\DM.Domain.Community.csproj" />
+        <ProjectReference Include="..\DM.Domain.Core\DM.Domain.Core.csproj" />
+        <ProjectReference Include="..\DM.Domain.Forum\DM.Domain.Forum.csproj" />
+        <ProjectReference Include="..\DM.Domain.Game\DM.Domain.Game.csproj" />
+        <ProjectReference Include="..\DM.Domain.Messaging\DM.Domain.Messaging.csproj" />
+        <ProjectReference Include="..\DM.Domain.Moderation\DM.Domain.Moderation.csproj" />
+        <ProjectReference Include="..\DM.Domain.Personal\DM.Domain.Personal.csproj" />
+        <ProjectReference Include="..\DM.Infrastructure.Mail\DM.Infrastructure.Mail.csproj" />
+        <ProjectReference Include="..\DM.Infrastructure.Persistence\DM.Infrastructure.Persistence.csproj" />
+        <ProjectReference Include="..\DM.Workers.SearchIndexer\DM.Workers.SearchIndexer.csproj" />
     </ItemGroup>
     
-    <ItemGroup>
-        <Protobuf Include="../DM.Services.Search.Consumer/Protos/search.proto" />
-    </ItemGroup>
+    <!-- Proto types are provided by DM.Workers.SearchIndexer reference -->
 
     <ItemGroup>
         <Content Update="appsettings.json">

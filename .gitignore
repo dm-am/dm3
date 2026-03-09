@@ -4,6 +4,7 @@ obj
 bundles
 .vs
 *.user
+*.tmp
 launchSettings.json
 
 # Configuration files with secrets - NEVER commit these
@@ -27,3 +28,4 @@ cookies*.txt
 
 # Windows null device artifact
 nul
+

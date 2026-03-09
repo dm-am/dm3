@@ -43,13 +43,13 @@ public class UserControllerTests : IntegrationTestBase
     }
 
     /// <summary>
-    /// Get user details by login should return 410 for non-existent user
+    /// Get user profile by login should return 410 for non-existent user
     /// </summary>
     [Fact]
-    public async Task GetUserDetails_WithNonExistentUser_ReturnsGone()
+    public async Task GetUserProfile_WithNonExistentUser_ReturnsGone()
     {
         // Act
-        var response = await Client.GetAsync("/v1/users/nonexistentuser123/details");
+        var response = await Client.GetAsync("/v1/users/nonexistentuser123/profile");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Gone);

@@ -1,6 +1,6 @@
 # Database Architecture
 
-**PostgreSQL 16** (54 tables) + **MongoDB** (8 collections)
+**PostgreSQL 16** (54 tables) + **MongoDB** (9 collections)
 
 ---
 
@@ -9,7 +9,7 @@
 | Storage | Purpose | Tables/Collections |
 |---------|---------|-------------------|
 | PostgreSQL | Relational data, ACID, transactions | 54 |
-| MongoDB | Schemaless, high-frequency writes, polymorphic data | 8 |
+| MongoDB | Schemaless, high-frequency writes, polymorphic data | 9 |
 
 **Key Patterns:**
 - **Soft Delete** (`IsRemoved` flag) on all main entities
@@ -26,27 +26,26 @@
 
 | Table | Description | Key Columns |
 |-------|-------------|-------------|
-| **Users** | User accounts | UserId, Login, Email, Role, PasswordHash, QuantityRating, QualityRating, IsRemoved |
+| **Users** | User accounts | UserId, Username, Email, Role, PasswordHash, QuantityRating, QualityRating, IsRemoved |
 | **PendingRegistrations** | Unactivated registrations | PendingRegistrationId, Email, TokenId, PasswordHash, CreatedUtc |
 | **Tokens** | Auth/activation/invite tokens | TokenId, UserId, Type, EntityId, PayloadHash, CreatedUtc |
 | **ProfileNotes** | User's personal profile notes (visible to user) | ProfileNoteId, UserId, Text, CreatedUtc |
 | **ProfileModNotes** | Moderator notes about users (private) | ProfileModNoteId, UserId, AuthorId, Text, CreatedUtc |
 | **UserBlacklists** | User-to-user blocking | UserBlacklistId, UserId, BlockedUserId, CreatedUtc |
 | **UserContacts** | User contact information | UserContactId, UserId, ContactType, Value |
-| **LoginChangeRequests** | Pending login change requests | LoginChangeRequestId, UserId, NewLogin, CreatedUtc |
-| **LoginHistories** | History of login changes | LoginHistoryId, UserId, OldLogin, NewLogin, ChangedAtUtc |
-| **PasswordHistories** | History of password changes | PasswordHistoryId, UserId, ChangedAtUtc |
+| **UsernameChangeRequests** | Pending username change requests | UsernameChangeRequestId, UserId, NewUsername, CreatedUtc |
+| **UsernameHistories** | History of username changes | UsernameHistoryId, UserId, OldUsername, NewUsername, ChangedAtUtc |
 | **UserLoginRecords** | Login activity records | UserLoginRecordId, UserId, LoginAtUtc, IpAddress |
 
 ### Domain: Blogs (6 tables)
 
 | Table | Description | Key Columns |
 |-------|-------------|-------------|
-| **Blogs** | User blogs | BlogId, OwnerId, Title, Status, AccessPolicy, MentorId |
-| **BlogParticipants** | Blog access control | BlogParticipantId, BlogId, UserId, Participation |
+| **Blogs** | User blogs | BlogId, AuthorId, Title, Status, DraftVisibility, MentorId |
+| **BlogAssistants** | Blog assistants | BlogAssistantId, BlogId, UserId, JoinedUtc |
 | **BlogBlacklists** | Blog-level blocking | BlogBlacklistId, BlogId, UserId |
 | **Rubrics** | Blog categories | RubricId, BlogId, Title, OrderNumber |
-| **RubricAccesses** | Per-rubric access for participants | RubricAccessId, RubricId, BlogParticipantId, Policy |
+| **RubricAccesses** | Per-rubric access control | RubricAccessId, RubricId, UserId |
 | **Publications** | Blog articles | PublicationId, BlogId, RubricId, AuthorId, Title, Text, Status |
 
 ### Domain: Forum (4 tables)
@@ -62,26 +61,26 @@
 
 | Table | Description | Key Columns |
 |-------|-------------|-------------|
-| **Games** | RPG games | GameId, MasterId, AssistantId, MentorId, Title, Status, CommentariesAccessMode |
-| **Characters** | Game characters | CharacterId, GameId, UserId, Name, Status, AccessPolicy, IsNpc |
+| **Games** | RPG games | GameId, AuthorId (Master), MentorId, Title, Status, CommentariesAccessMode |
+| **Characters** | Game characters | CharacterId, GameId, AuthorId (nullable for NPC), Name, Status, AccessPolicy, IsNpc |
 | **CharacterEdits** | Character edit history | CharacterEditId, CharacterId, EditorUserId, EditedAtUtc |
 | **CharacterAttributes** | Character stats | CharacterAttributeId, CharacterId, SpecificationId, Value |
-| **Rooms** | Game locations | RoomId, GameId, Title, AccessType, Type, OrderNumber, DiceEnabled |
+| **Rooms** | Game locations | RoomId, GameId, Title, AccessType, IsArchived, Type, OrderNumber, DiceEnabled |
 | **RoomAccesses** | Character room access | RoomAccessId, RoomId, CharacterId |
 | **Posts** | Game posts | PostId, RoomId, CharacterId, UserId, Text, Commentary, MasterMessage |
 | **PostEdits** | Post edit history | PostEditId, PostId, EditorUserId, EditedAtUtc |
 | **PostPendencies** | "Waiting for post" tracking | PostPendencyId, RoomId, AwaitingUserId, PendingUserId |
 | **GameTags** | Game-tag links | GameTagId, GameId, TagId |
-| **Readers** | Game observers | ReaderId, GameId, UserId |
+| ~~**Readers**~~ | ~~Game observers~~ | *Removed - use Subscriptions table* |
 | **GameBlacklists** | Game-level bans | GameBlacklistId, GameId, UserId |
 
 ### Domain: Messaging (6 tables)
 
 | Table | Description | Key Columns |
 |-------|-------------|-------------|
-| **Conversations** | Private/group chats | ConversationId, Visavi, Title, LastMessageId* |
-| **UserConversationLinks** | Conversation participants | UserConversationLinkId, UserId, ConversationId |
-| **Messages** | Chat messages | MessageId, ConversationId, UserId, ChatEventId, Text |
+| **Chats** | Private/group chats | ChatId, Visavi, Title, LastMessageId* |
+| **UserChatLinks** | Chat participants | UserChatLinkId, UserId, ChatId |
+| **Messages** | Chat messages | MessageId, ChatId, UserId, ChatEventId, Text |
 | **MessageEdits** | Message edit history | MessageEditId, MessageId, EditorUserId, EditedAtUtc |
 | **GlobalChatEvents** | Scheduled chat events | ChatEventId, Title, StartsAtUtc, Duration, Status, IsOpen |
 | **GlobalChatEventParticipants** | Event participants | ChatEventParticipantId, ChatEventId, UserId, IsOrganizer |
@@ -114,8 +113,8 @@
 |-------|-------------|-------------|
 | **Tickets** | User reports/complaints | TicketId, AuthorId, TargetId, Reason, Status |
 | **TicketResponses** | Ticket conversation history | TicketResponseId, TicketId, AuthorId, Text, IsFromModerator |
-| **Warnings** | User warnings | WarningId, UserId, ModeratorId, Text, CommentId?, MessageId? |
-| **Bans** | User bans | BanId, UserId, ModeratorId, Reason, StartUtc, EndUtc |
+| **Warnings** | User warnings | WarningId, TargetUserId, AuthorId, Text, ContentType?, ContentId? |
+| **Bans** | User bans | BanId, TargetUserId, AuthorId, Reason, StartUtc, EndUtc |
 
 ### Domain: Notifications (1 table)
 
@@ -125,7 +124,7 @@
 
 ---
 
-## MongoDB Collections (8)
+## MongoDB Collections (9)
 
 ### Why MongoDB?
 
@@ -142,14 +141,15 @@
 
 | Collection | Document Schema | Justification |
 |------------|-----------------|---------------|
-| **UserSettings** | `{ UserId, Paging, ColorSchema, BlacklistSettings }` | Schemaless preferences, nested objects |
+| **UserSettings** | `{ UserId, Paging, Theme, BlacklistSettings }` | Schemaless preferences, nested objects |
 | **UserSessions** | `{ UserId, Sessions: [{ SessionId, Token, CreatedAt, ... }] }` | Atomic array ops, single-document sessions per user |
 | **RealtimeNotifications** | `{ UserId, Events: [{ Type, Metadata, CreatedAt }] }` | High throughput, variable metadata schema |
 | **Dice** | `{ RollId, PostId, CharacterId, Results: [...], CreatedAt }` | Immutable logs, variable array sizes |
 | **AttributeSchemata** | `{ SchemaId, Title, Specifications: [{ Type, Constraints }] }` | Polymorphic constraints (Number/String/List) |
 | **UnreadCounters** | `{ UserId, EntityType, EntityId, Count, LastReadAt }` | Extreme write frequency, aggregation pipelines |
 | **Polls** | `{ PollId, TopicId, Question, Options: [{ Text, Votes: [] }] }` | Dynamic options, embedded vote arrays |
-| **LoginAttempts** | `{ Id (login), FailedAttempts, LastAttemptUtc, LockoutStartUtc? }` | Cluster-safe login throttling and lockout |
+| **LoginAttempts** | `{ Id (email), FailedAttempts, LastAttemptUtc, LockoutStartUtc? }` | Cluster-safe login throttling and lockout |
+| **SecurityAuditLog** | `{ UserId, EventType, Timestamp, IpAddress, DeviceInfo, Details }` | Security events logging (logins, password changes, etc.) |
 
 ### Access Patterns
 
@@ -157,7 +157,7 @@
 // UserSettings - MongoCollectionRepository<UserSettings>
 await Collection.FindOneAndUpdateAsync(
     u => u.UserId == userId,
-    Builders<UserSettings>.Update.Set(u => u.ColorSchema, newSchema));
+    Builders<UserSettings>.Update.Set(u => u.Theme, newTheme));
 
 // UserSessions - atomic session operations
 await Collection.UpdateOneAsync(
@@ -225,8 +225,8 @@ public interface IEditable
 Key composite indexes (see migration for full list):
 
 ```sql
--- User lookup (login page, @mentions)
-CREATE INDEX IX_Users_IsRemoved_Login ON Users (IsRemoved, Login);
+-- User lookup (@mentions, profile pages)
+CREATE INDEX IX_Users_IsRemoved_Username ON Users (IsRemoved, Username);
 
 -- Game filtering (game lists)
 CREATE INDEX IX_Games_IsRemoved_Status ON Games (IsRemoved, Status);
@@ -255,12 +255,12 @@ CREATE INDEX IX_Comments_EntityId_IsRemoved ON Comments (EntityId, IsRemoved);
 - **Subscriptions.EntityId** -> any subscribable entity
 
 ### Many-to-Many
-- Users <-> Conversations (via UserConversationLinks)
+- Users <-> Chats (via UserChatLinks)
 - Users <-> Boards (via BoardModerators)
 - Games <-> Tags (via GameTags)
 - Characters <-> Rooms (via RoomAccesses)
-- Users <-> Blogs (via BlogParticipants)
-- BlogParticipants <-> Rubrics (via RubricAccesses)
+- Users <-> Blogs (via BlogAssistants and Subscriptions)
+- Users <-> Rubrics (via RubricAccesses)
 
 ### Self-Reference
 - Rooms.PreviousRoomId -> Rooms.RoomId (doubly-linked list)
@@ -271,12 +271,12 @@ CREATE INDEX IX_Comments_EntityId_IsRemoved ON Comments (EntityId, IsRemoved);
 ## Global Chat Architecture
 
 ```
-Conversations
-    ├── ConversationId = 00000000-0000-0000-0000-000000000001 (Global Chat)
+Chats
+    ├── ChatId = 00000000-0000-0000-0000-000000000001 (Global Chat)
     │   └── Messages (all global chat messages)
     │       └── ChatEventId? -> GlobalChatEvents (optional event context)
     │
-    └── Other ConversationIds (private/group chats)
+    └── Other ChatIds (private/group chats)
         └── Messages
 ```
 
@@ -290,10 +290,10 @@ Single migration file: `20260208210947_InitialCreate.cs`
 
 ```bash
 # Apply migrations
-dotnet ef database update -p src/DM.Services.DataAccess -s src/DM.Web.API
+dotnet ef database update -p src/DM.Infrastructure.Persistence -s src/DM.Web.API
 
 # Generate new migration
-dotnet ef migrations add MigrationName -p src/DM.Services.DataAccess -s src/DM.Web.API
+dotnet ef migrations add MigrationName -p src/DM.Infrastructure.Persistence -s src/DM.Web.API
 ```
 
 ---
@@ -321,10 +321,11 @@ ConnectTimeout = 10s;
 
 ## Links
 
-- [Architecture Overview](./OVERVIEW.md)
-- [Authentication](./AUTHENTICATION.md)
-- [Code Standards](../standards/CODE.md)
-- [Glossary](../reference/GLOSSARY.md)
+- [Architecture & Patterns](./ARCHITECTURE.md) — Паттерны, структура проектов
+- [System Overview](./OVERVIEW.md) — Компоненты, порты
+- [Authentication](./AUTHENTICATION.md) — Сессии, токены
+- [Code Standards](../standards/CODE.md) — Naming, testing
+- [Glossary](../reference/GLOSSARY.md) — Термины
 
 ---
 

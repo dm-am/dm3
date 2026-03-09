@@ -1,7 +1,7 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using Autofac.Extensions.DependencyInjection;
-using DM.Services.Core.Configuration;
-using DM.Services.Core.Extensions;
+using DM.Infrastructure.Core.Configuration;
+using DM.Infrastructure.Core.Extensions;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 

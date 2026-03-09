@@ -120,7 +120,7 @@ public class GameControllerTests : IntegrationTestBase
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var content = await response.Content.ReadAsStringAsync();
-        content.Should().Contain("resource");
+        content.Should().Contain("\"id\""); // Resource returned directly without wrapper
     }
 
     /// <summary>
@@ -183,7 +183,7 @@ public class GameControllerTests : IntegrationTestBase
     public async Task GetGameNotes_WhenNotAuthenticated_ReturnsUnauthorized()
     {
         // Act
-        var response = await Client.GetAsync($"/v1/games/{TestConstants.TestGameId}/notes");
+        var response = await Client.GetAsync($"/v1/games/{TestConstants.TestGameId}/notepad");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -199,7 +199,7 @@ public class GameControllerTests : IntegrationTestBase
         var nonExistentId = Guid.NewGuid();
 
         // Act
-        var response = await Client.GetAsync($"/v1/games/{nonExistentId}/notes");
+        var response = await Client.GetAsync($"/v1/games/{nonExistentId}/notepad");
 
         // Assert - auth check happens first
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -273,59 +273,6 @@ public class GameControllerTests : IntegrationTestBase
         };
         var content = JsonContent.Create(gameUpdate);
         var request = new HttpRequestMessage(HttpMethod.Patch, $"/v1/games/{nonExistentId}/details")
-        {
-            Content = content
-        };
-
-        // Act
-        var response = await Client.SendAsync(request);
-
-        // Assert - auth check happens first
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    #endregion
-
-    #region PatchGameNotes Tests
-
-    /// <summary>
-    /// Update game notes without authentication should return Unauthorized
-    /// </summary>
-    [Fact]
-    public async Task PatchGameNotes_WhenNotAuthenticated_ReturnsUnauthorized()
-    {
-        // Arrange
-        var notes = new
-        {
-            notepad = "Updated notes"
-        };
-        var content = JsonContent.Create(notes);
-        var request = new HttpRequestMessage(HttpMethod.Patch, $"/v1/games/{TestConstants.TestGameId}/notes")
-        {
-            Content = content
-        };
-
-        // Act
-        var response = await Client.SendAsync(request);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    /// <summary>
-    /// Update notes for non-existent game should return Unauthorized (auth check first)
-    /// </summary>
-    [Fact]
-    public async Task PatchGameNotes_WithNonExistentId_ReturnsUnauthorized()
-    {
-        // Arrange
-        var nonExistentId = Guid.NewGuid();
-        var notes = new
-        {
-            notepad = "Updated notes"
-        };
-        var content = JsonContent.Create(notes);
-        var request = new HttpRequestMessage(HttpMethod.Patch, $"/v1/games/{nonExistentId}/notes")
         {
             Content = content
         };
@@ -515,7 +462,7 @@ public class GameControllerTests : IntegrationTestBase
         // Arrange
         var user = new
         {
-            login = "testuser"
+            username = "testuser"
         };
 
         // Act
@@ -535,7 +482,7 @@ public class GameControllerTests : IntegrationTestBase
         var nonExistentId = Guid.NewGuid();
         var user = new
         {
-            login = "testuser"
+            username = "testuser"
         };
 
         // Act

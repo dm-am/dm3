@@ -58,7 +58,7 @@ start_services() {
     echo "MinIO: http://localhost:9001"
     echo "RabbitMQ: http://localhost:15672"
     echo ""
-    echo "Note: Frontend runs separately - cd frontend/DM.Web.Modern && npm run dev"
+    echo "Note: Frontend runs separately - cd src/DM.Web.Client && npm run dev"
 }
 
 stop_services() {
@@ -89,7 +89,7 @@ reset_services() {
 }
 
 run_seed() {
-    echo -e "\033[36mRunning seed scripts...\033[0m"
+    echo -e "\033[36mSeeding test data...\033[0m"
 
     # Check if API is running
     if ! curl -s --max-time 5 "http://localhost:5000/v1/boards" > /dev/null; then
@@ -98,12 +98,37 @@ run_seed() {
         exit 1
     fi
 
-    echo -e "\033[32mAPI is available.\033[0m"
+    # Call seed endpoint directly
+    response=$(curl -s -X POST "http://localhost:5000/v1/moderation/seed" -H "Content-Type: application/json")
 
-    # Run seed script
-    node "$PROJECT_ROOT/scripts/seed.js"
+    if [ $? -ne 0 ]; then
+        echo -e "\033[31mError: Failed to call seed endpoint\033[0m"
+        exit 1
+    fi
 
-    echo -e "\n\033[32mSeeding complete!\033[0m"
+    # Parse and display results (requires jq)
+    if command -v jq &> /dev/null; then
+        created=$(echo "$response" | jq -r '.created')
+        skipped=$(echo "$response" | jq -r '.skipped')
+        echo ""
+        echo -e "\033[32mCreated: $created\033[0m"
+        echo -e "\033[33mSkipped: $skipped (already exist)\033[0m"
+
+        createdLogins=$(echo "$response" | jq -r '.createdLogins[]?' 2>/dev/null)
+        if [ -n "$createdLogins" ]; then
+            echo ""
+            echo -e "\033[32mCreated users:\033[0m"
+            echo "$createdLogins" | while read -r login; do
+                echo "  + $login"
+            done
+        fi
+    else
+        echo "$response"
+    fi
+
+    echo ""
+    echo -e "\033[36mPassword: Test123!\033[0m"
+    echo "All users are newbies (0 posts)"
 }
 
 show_status() {

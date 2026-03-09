@@ -1,7 +1,7 @@
-using DM.Services.Authentication.Dto;
-using DM.Services.Authentication.Implementation.UserIdentity;
-using DM.Services.Core.Dto;
-using DM.Services.Core.Dto.Enums;
+using DM.Domain.Account.Features.Authentication;
+using DM.Domain.Account.Features.Identity;
+using DM.Domain.Core.Identity;
+using DM.Domain.Core.Enums;
 using Microsoft.AspNetCore.Http;
 
 namespace DM.Web.API.IntegrationTests;
@@ -14,7 +14,7 @@ namespace DM.Web.API.IntegrationTests;
 /// <remarks>
 /// Headers:
 /// - X-Test-User-Id: User ID (GUID) to authenticate as
-/// - X-Test-User-Login: User login name
+/// - X-Test-User-Username: Username
 /// - X-Test-User-Role: User role (RegularUser, Admin, Moderator, etc.)
 /// </remarks>
 public class TestAuthenticationMiddleware
@@ -22,7 +22,7 @@ public class TestAuthenticationMiddleware
     private readonly RequestDelegate _next;
 
     public const string TestUserIdHeader = "X-Test-User-Id";
-    public const string TestUserLoginHeader = "X-Test-User-Login";
+    public const string TestUserUsernameHeader = "X-Test-User-Username";
     public const string TestUserRoleHeader = "X-Test-User-Role";
 
     public TestAuthenticationMiddleware(RequestDelegate next)
@@ -36,8 +36,8 @@ public class TestAuthenticationMiddleware
         if (httpContext.Request.Headers.TryGetValue(TestUserIdHeader, out var userIdHeader) &&
             Guid.TryParse(userIdHeader.FirstOrDefault(), out var userId))
         {
-            var login = httpContext.Request.Headers.TryGetValue(TestUserLoginHeader, out var loginHeader)
-                ? loginHeader.FirstOrDefault() ?? "testuser"
+            var username = httpContext.Request.Headers.TryGetValue(TestUserUsernameHeader, out var usernameHeader)
+                ? usernameHeader.FirstOrDefault() ?? "testuser"
                 : "testuser";
 
             var role = UserRole.RegularUser;
@@ -51,7 +51,7 @@ public class TestAuthenticationMiddleware
             var authenticatedUser = new AuthenticatedUser
             {
                 UserId = userId,
-                Login = login,
+                Username = username,
                 Role = role,
                 AccessPolicy = AccessPolicy.NotSpecified,
                 Salt = "testsalt",

@@ -49,9 +49,9 @@ public class LoginControllerTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task LogoutAll_WhenNotAuthenticated_ReturnsUnauthorized()
+    public async Task LogoutOthers_WhenNotAuthenticated_ReturnsUnauthorized()
     {
-        var response = await Client.DeleteAsync("/v1/account/login/all");
+        var response = await Client.DeleteAsync("/v1/account/sessions/others");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -113,7 +113,7 @@ public class LoginControllerTests : IntegrationTestBase
         var sessionCookie = await UserTestHelper.Login(Client, email, password);
 
         // Act — use session cookie to call authenticated endpoint
-        var request = UserTestHelper.CreateCookieAuthRequest(HttpMethod.Get, "/v1/account", sessionCookie);
+        var request = UserTestHelper.CreateCookieAuthRequest(HttpMethod.Get, "/v1/users/me/profile", sessionCookie);
         var response = await Client.SendAsync(request);
 
         // Assert
@@ -139,13 +139,13 @@ public class LoginControllerTests : IntegrationTestBase
         logoutResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Assert — session is no longer valid
-        var checkRequest = UserTestHelper.CreateCookieAuthRequest(HttpMethod.Get, "/v1/account", sessionCookie);
+        var checkRequest = UserTestHelper.CreateCookieAuthRequest(HttpMethod.Get, "/v1/users/me/profile", sessionCookie);
         var checkResponse = await Client.SendAsync(checkRequest);
         checkResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
-    public async Task LogoutAll_InvalidatesOtherSessions()
+    public async Task LogoutOthers_InvalidatesOtherSessions()
     {
         // Arrange — create user and login twice
         var uid = Guid.NewGuid().ToString("N")[..8];
@@ -157,16 +157,16 @@ public class LoginControllerTests : IntegrationTestBase
         var session2 = await UserTestHelper.Login(Client, email, password);
 
         // Act — logout elsewhere from session 1 (invalidates all except current)
-        var logoutRequest = UserTestHelper.CreateCookieAuthRequest(HttpMethod.Delete, "/v1/account/login/all", session1);
+        var logoutRequest = UserTestHelper.CreateCookieAuthRequest(HttpMethod.Delete, "/v1/account/sessions/others", session1);
         var logoutResponse = await Client.SendAsync(logoutRequest);
         logoutResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Assert — session 1 (current) is still valid
-        var check1 = UserTestHelper.CreateCookieAuthRequest(HttpMethod.Get, "/v1/account", session1);
+        var check1 = UserTestHelper.CreateCookieAuthRequest(HttpMethod.Get, "/v1/users/me/profile", session1);
         (await Client.SendAsync(check1)).StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Assert — session 2 (other) is invalid
-        var check2 = UserTestHelper.CreateCookieAuthRequest(HttpMethod.Get, "/v1/account", session2);
+        var check2 = UserTestHelper.CreateCookieAuthRequest(HttpMethod.Get, "/v1/users/me/profile", session2);
         (await Client.SendAsync(check2)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 

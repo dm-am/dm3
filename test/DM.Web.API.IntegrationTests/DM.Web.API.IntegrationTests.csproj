@@ -25,7 +25,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\DM.Tests.Core\DM.Tests.Core.csproj" />
+        <ProjectReference Include="..\DM.Testing\DM.Testing.csproj" />
         <ProjectReference Include="..\..\src\DM.Web.API\DM.Web.API.csproj" />
     </ItemGroup>
 

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="DM.Domain.Forum.Tests" />
+        <InternalsVisibleTo Include="DM.Infrastructure.Persistence" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\DM.Domain.Core\DM.Domain.Core.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="FluentValidation" />
+    </ItemGroup>
+
+</Project>

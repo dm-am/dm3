@@ -1,9 +1,9 @@
-﻿using System.Linq;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Services.Notifications.Dto;
-using DM.Web.API.Dto.Notifications;
-using DM.Web.Core.Hubs;
+using DM.Domain.Personal.Features.Notifications;
+using DM.Web.API.Features.Personal.Notifications;
+using DM.Web.API.Realtime;
 using Jamq.Client.Abstractions.Consuming;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;

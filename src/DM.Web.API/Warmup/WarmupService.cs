@@ -1,16 +1,17 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
-using DM.Services.Core.Configuration;
-using DM.Services.Core.Dto.Enums;
-using DM.Services.DataAccess;
-using DM.Services.DataAccess.BusinessObjects.Common;
-using DM.Services.DataAccess.MongoIntegration;
-using DM.Services.Game.BusinessProcesses.Shared;
-using DM.Services.Game.Dto.Output;
+using DM.Domain.Moderation.Configuration;
+using DM.Domain.Core.Enums;
+using DM.Infrastructure.Persistence;
+using DM.Infrastructure.Persistence.Entities.CrossDomain;
+using DM.Infrastructure.Persistence.MongoIntegration;
+using DM.Infrastructure.Persistence.RelationalStorage;
+using DomainGame = DM.Domain.Game.Features.Games.GameModel;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -106,12 +107,15 @@ internal class WarmupService : IHostedService
         // This pre-compiles the EF Core query and AutoMapper projection
         var dummyUserId = Guid.Empty;
         await db.Games
-            .Where(AccessibilityFilters.GameAvailable(dummyUserId))
+            .Where(GameAccessibilityFilters.GameAvailable(dummyUserId))
             .Where(g => g.Characters.Any(c =>
-                            !c.IsRemoved && c.Status == CharacterStatus.Active && c.UserId == dummyUserId) ||
-                        g.Readers.Any(r => r.UserId == dummyUserId) ||
-                        g.MasterId == dummyUserId || g.AssistantId == dummyUserId || g.MentorId == dummyUserId)
-            .ProjectTo<Game>(mapper.ConfigurationProvider)
+                            !c.IsRemoved && c.Status == CharacterStatus.Active && c.AuthorId == dummyUserId) ||
+                        db.Subscriptions.Any(s =>
+                            s.TargetType == SubscriptionTargetType.Game &&
+                            s.TargetId == g.GameId &&
+                            s.SubscriberId == dummyUserId) ||
+                        g.AuthorId == dummyUserId || g.Assistants.Any(a => a.UserId == dummyUserId) || g.MentorId == dummyUserId)
+            .ProjectTo<DomainGame>(mapper.ConfigurationProvider)
             .Take(1)
             .ToListAsync(ct);
 

@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Services.DataAccess.BusinessObjects.Users.Settings;
+using DM.Infrastructure.Persistence.Entities.Account.Settings;
 
 namespace DM.Web.API.Notifications;
 

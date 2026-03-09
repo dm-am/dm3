@@ -1,0 +1,12 @@
+export { default as GamePage } from "./GamePage.vue";
+export { default as GameDetails } from "./GameDetails.vue";
+export { default as GameCharacters } from "./GameCharacters.vue";
+export { default as GameCharacter } from "./GameCharacter.vue";
+export { default as GameComments } from "./GameComments.vue";
+export { default as GameRooms } from "./GameRooms.vue";
+export { default as GameRoom } from "./GameRoom.vue";
+export { default as GamePost } from "./GamePost.vue";
+export { default as GameFirstUnreadPost } from "./GameFirstUnreadPost.vue";
+export { default as GameFirstUnreadComment } from "./GameFirstUnreadComment.vue";
+export { default as GamesPage } from "./GamesPage.vue";
+export { default as GamesList } from "./GamesList.vue";

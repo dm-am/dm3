@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <IsPackable>false</IsPackable>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="FluentAssertions" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" />
+        <PackageReference Include="Moq" />
+        <PackageReference Include="xunit" />
+        <PackageReference Include="xunit.runner.visualstudio">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\DM.Testing\DM.Testing.csproj" />
+      <ProjectReference Include="..\..\src\DM.Domain.Account\DM.Domain.Account.csproj" />
+      <ProjectReference Include="..\..\src\DM.Domain.Community\DM.Domain.Community.csproj" />
+      <ProjectReference Include="..\..\src\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
+      <ProjectReference Include="..\..\src\DM.Infrastructure.Messaging\DM.Infrastructure.Messaging.csproj" />
+      <ProjectReference Include="..\..\src\DM.Infrastructure.Persistence\DM.Infrastructure.Persistence.csproj" />
+    </ItemGroup>
+
+</Project>

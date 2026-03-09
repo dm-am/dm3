@@ -1,4 +1,4 @@
-# API Reference - DM3
+﻿# API Reference - DM3
 
 > Детальная документация API доступна в Swagger: http://localhost:5000/
 
@@ -17,7 +17,9 @@
 | Эндпоинты | Лимит | Описание |
 |-----------|-------|----------|
 | Глобальный | 100 req/min на IP | Все эндпоинты |
-| Аутентификация | 5 req/min на IP | `/v1/account/login`, `/v1/account` |
+| Аутентификация | 5 req/min на IP | `/v1/account/login`, `/v1/account/password`, `/v1/account/recovery` |
+| Username check | 20 req/min на IP | `/v1/account/check-username` |
+| Login check | 10 req/min на IP | `/v1/account/check-email` |
 
 **HTTP Status:** `429 Too Many Requests` при превышении лимита.
 
@@ -27,52 +29,24 @@
 
 ## Форматы ответов
 
-### Envelope<T>
+> Подробнее: [API_STANDARDS.md](../standards/API_STANDARDS.md#response-format)
+
+| Тип ответа | Формат |
+|------------|--------|
+| Одиночный ресурс | JSON напрямую |
+| Коллекция | `ListEnvelope<T>` с `paging` |
+| Курсорная пагинация | `CursorEnvelope<T>` с `cursor` |
+| Ошибка | `ErrorEnvelope` |
 
 ```json
-{
-  "resource": { /* объект */ },
-  "metadata": { /* опционально */ }
-}
-```
+// Одиночный ресурс — напрямую
+{ "id": "...", "username": "john" }
 
-### ListEnvelope<T>
+// Коллекция — ListEnvelope
+{ "resources": [...], "paging": { "skip": 0, "take": 20, "total": 150 } }
 
-```json
-{
-  "resources": [ /* массив */ ],
-  "paging": {
-    "number": 1,
-    "size": 10,
-    "totalPages": 5,
-    "totalEntities": 50
-  }
-}
-```
-
-### CursorEnvelope<T>
-
-```json
-{
-  "resources": [ /* массив */ ],
-  "cursor": {
-    "hasPrev": false,
-    "hasNext": true,
-    "prevCursor": null,
-    "nextCursor": "base64..."
-  }
-}
-```
-
-### Формат ошибки
-
-```json
-{
-  "message": "Описание ошибки",
-  "errors": {
-    "fieldName": ["Ошибка валидации"]
-  }
-}
+// Ошибка — ErrorEnvelope
+{ "errors": [{ "code": "not_found", "message": "User not found" }] }
 ```
 
 ---
@@ -113,33 +87,131 @@
 
 ## Структура API
 
-### Swagger Groups (8 групп)
+### Swagger Groups (9 групп)
 
 | Группа | Теги | Описание |
 |--------|------|----------|
-| Account | Login, Registration, Profile, Security, Mirror | Аутентификация и управление аккаунтом |
-| Blog | Blogs, Publications, Blog Invitations, Blog Notepads | Блоги и публикации |
-| Community | Users, UserReviews, GameReviews, PostReviews, PlatformReviews, Polls, Statistics | Сообщество: профили, отзывы, опросы, статистика |
-| Forum | Forum, Boards, Topics, Comments | Форумы и обсуждения |
-| Game | Games, Rooms, Characters, Posts, Comments, Invitations, AttributeSchemas, Game Notepads | Игры и всё связанное |
-| Messaging | Conversations, Messages, GlobalChat | Личные сообщения и чат |
-| Common | Search, Uploads, Notepad Entries, Subscriptions, Notifications | Общие утилиты |
-| Moderation | Moderation | Инструменты модерации |
+| Account | Availability, Registration, Authentication, Credentials, Recovery, Deactivation, Security | Регистрация, вход, восстановление доступа |
+| Personal | Profile, Preferences, Blacklist, Notifications (Bots), Invitations, Subscriptions, Notepads, Notes | Профиль и настройки текущего пользователя |
+| Messaging | Global Chat, Chats, Messages | Личные сообщения и чат |
+| Community | Users, Subscribers, User Reviews, Platform Reviews, Polls, Statistics | Сообщество: профили, отзывы, опросы |
+| Game | Games, Game Reviews, Blacklist, Invitations, Notepads, Comments, Attribute Schemas, Characters, Rooms, Posts, Post Reviews | Игры и все связанное |
+| Blog | Blogs, Blacklist, Invitations, Notepads, Rubrics, Publications, Comments | Блоги и публикации |
+| Forum | Boards, Comments, Forum, Topics | Форумы и обсуждения |
+| Moderation | Moderation, Users, Notes, Warnings, Bans, Tickets, Ticket Responses, Credentials | Инструменты модерации |
+| General | Mirrors, Search, Uploads | Общие утилиты |
+
+### Account endpoints
+
+| Тег | Эндпоинты |
+|-----|-----------|
+| Availability | `GET /check-email`, `GET /check-username` |
+| Registration | `POST /register`, `GET /activation/{token}`, `POST /activation/{token}` |
+| Authentication | `POST /login`, `DELETE /login`, `GET /sessions`, `DELETE /sessions/{id}`, `DELETE /sessions/others` |
+| Credentials | `POST /password`, `POST /email-change`, `POST /email-change/{token}` |
+| Recovery | `POST /recovery`, `GET /password-reset/{token}`, `POST /password-reset/{token}` |
+| Deactivation | `POST /deactivate` |
+| Security | `GET /logs?type=...&limit=...` |
+
+### Personal endpoints (`/v1/users/me`)
+
+| Тег | Эндпоинты |
+|-----|-----------|
+| Profile | `GET /profile`, `PATCH /profile` |
+| Preferences | `GET /preferences`, `PATCH /preferences` |
+| Blacklist | `GET /blacklist`, `POST /blacklist`, `DELETE /blacklist/{username}`, `GET /blacklist/settings`, `PATCH /blacklist/settings` |
+| Notifications | `POST /bots/telegram`, `POST /bots/discord`, `DELETE /bots/telegram`, `DELETE /bots/discord` |
+
+### Messaging endpoints (`/v1/chats`)
+
+| Тег | Эндпоинты |
+|-----|-----------|
+| Chats | `GET /chats`, `GET /chats/{id}`, `POST /chats`, `PATCH /chats/{id}`, `POST /chats/direct/{username}`, `GET /chats/can-start/{username}` |
+| Messages | `GET /chats/{id}/messages`, `POST /chats/{id}/messages`, `GET /messages/{id}`, `PATCH /messages/{id}`, `DELETE /messages/{id}` |
+
+### Community endpoints (`/v1/users`)
+
+| Тег | Эндпоинты |
+|-----|-----------|
+| Users | `GET /users`, `GET /users/{username}` |
+| Subscribers | `GET /users/{username}/subscribers`, `POST /users/{username}/subscribers`, `DELETE /users/{username}/subscribers`, `GET /users/{username}/subscribers/me` |
+
+### Moderation endpoints (`/v1/moderation`)
+
+> Доступ: Moderator, SeniorModerator, Admin
+
+| Тег | Эндпоинты |
+|-----|-----------|
+| Users | `GET /users/{username}/profile`, `PATCH /users/{username}/profile`, `PATCH /users/{username}/role/{role}` |
+| Notes | `GET /users/{username}/notes`, `GET /notes/{id}`, `POST /users/{username}/notes`, `PUT /notes/{id}`, `DELETE /notes/{id}` |
+| Warnings | `GET /users/{username}/warnings`, `GET /warnings`, `POST /warnings`, `DELETE /warnings/{id}` |
+| Bans | `GET /users/{username}/bans`, `GET /users/{username}/bans/active`, `GET /bans`, `POST /bans`, `DELETE /bans/{id}` |
+| Tickets | `GET /tickets`, `GET /tickets/stats`, `GET /tickets/assigned`, `GET /tickets/mine`, `GET /tickets/{id}` |
+| Ticket Actions | `POST /tickets`, `POST /tickets/{id}/assign`, `POST /tickets/{id}/resolve` |
+| Ticket Responses | `GET /tickets/{id}/responses`, `POST /tickets/{id}/responses` |
+| Credentials | `GET /username-change-requests`, `GET /username-change-requests/{id}`, `POST /username-change-requests/{id}/approve`, `POST /username-change-requests/{id}/reject`, `POST /username-change-requests/{id}/rollback` |
+
+**Права по ролям:**
+- **Moderator**: Просмотр профилей, предупреждения, временные баны (до 30 дней), тикеты
+- **SeniorModerator**: + длительные баны, изменение ролей (до Moderator)
+- **Admin**: + перманентные баны, все роли, полный доступ
+
+### Blog Users endpoints (`/v1/blogs/{id}/users`)
+
+| Тег | Эндпоинты | Описание |
+|-----|-----------|----------|
+| Users | `GET /?role=...` | Все пользователи блога (owner, assistants, readers). Фильтр по роли. |
+| Users | `DELETE /{userId}` | Удалить пользователя (только assistants) |
+| Assistants | `GET /assistants` | Список ассистентов |
+| Assistants | `DELETE /assistants/{username}` | Удалить ассистента |
+| Readers | `GET /readers` | Список читателей (подписчиков) |
+| Readers | `POST /readers` | Подписаться на блог |
+| Readers | `DELETE /readers` | Отписаться от блога |
+
+**Примечания:**
+- Readers хранятся в таблице Subscriptions (SubscriptionTargetType.Blog)
+- Assistants хранятся в таблице BlogAssistants
+- Readers не могут быть удалены владельцем — только заблокированы через blacklist
+- Для черновых блогов с приватной видимостью (DraftVisibility.Private) требуется приглашение
+
+### General endpoints
+
+| Тег | Эндпоинты |
+|-----|-----------|
+| Mirrors | `GET /mirrors`, `GET /mirrors/transfer`, `POST /mirrors/transfer/accept` |
+| Search | `GET /search` |
+| Uploads | `POST /uploads/presign` |
 
 ### Принципы тегирования
 
-- **Тег = первичный ресурс в URL** (`/v1/users/*` → Users)
-- **Связанные действия = один тег** (stats, leaderboards, reports → Statistics)
-- **Вложенные ресурсы = отдельный тег** (`/v1/users/{login}/reviews` → UserReviews)
+- **Группа = домен** — Account для аутентификации, Profile для данных пользователя
+- **Тег = функциональная область** (Availability, Registration, Authentication, etc.)
+- **Связанные действия = один тег** (password, email-change, username-change → Credentials)
 
 ---
 
 ## Бизнес-правила
 
-### Регистрация
+### Регистрация (Email-first flow)
 
-- Поле `website` в форме регистрации - honeypot для защиты от ботов (должно быть пустым)
-- После регистрации требуется активация по email
+1. `GET /check-email` — проверка доступности email
+2. `POST /register` — создание pending регистрации (email + password)
+3. Email с ссылкой на активацию
+4. `GET /activation/{token}` — проверка статуса токена
+5. `GET /check-username` — проверка доступности имени
+6. `POST /activation/{token}` — завершение с выбором имени
+
+**Примечания:**
+- Поле `website` в форме — honeypot для защиты от ботов (должно быть пустым)
+- Токен активации действителен 48 часов
+- При истечении токена: `POST /recovery` отправит новую ссылку
+
+### Восстановление доступа (Unified Recovery)
+
+`POST /recovery` автоматически определяет нужное действие:
+- **Активный аккаунт** → отправка ссылки на сброс пароля
+- **Pending регистрация** → повторная отправка ссылки активации
+- **Email не найден** → возврат `{ status: "NotFound" }` (без раскрытия информации)
 
 ### Роли и права
 
@@ -154,7 +226,7 @@
 
 ## Ссылки
 
-- [README](../README.md) — Обзор документации
+- [API Standards](../standards/API_STANDARDS.md) — Эталон и правила проектирования API
 - [Архитектура](../architecture/OVERVIEW.md) — Как устроено
 - [Аутентификация](../architecture/AUTHENTICATION.md) — BFF и сессии
 - [Глоссарий](../reference/GLOSSARY.md) — Термины и определения

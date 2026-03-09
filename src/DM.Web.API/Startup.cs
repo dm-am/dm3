@@ -1,29 +1,36 @@
-﻿using Autofac;
-using DM.Services.Common;
-using DM.Services.Authentication.Configuration;
-using DM.Services.Community;
-using DM.Services.Community.Configuration;
-using DM.Services.Core.Configuration;
-using DM.Services.Core.Extensions;
-using DM.Services.Core.Logging;
-using DM.Services.Core.Parsing;
-using DM.Services.DataAccess;
-using DM.Services.Forum;
-using DM.Services.Game;
-using DM.Services.MessageQueuing;
-using DM.Services.MessageQueuing.Outbox;
-using DM.Services.Notifications;
-using DM.Services.Uploading;
-using DM.Services.Uploading.Configuration;
-using DM.Web.API.Binding;
-using DM.Web.API.Configuration;
+using Autofac;
+using DM.Domain.Account;
+using DM.Domain.Account.Configuration;
+using DM.Domain.Account.Features.Security;
+using DM.Domain.Blog.Authorization;
+using DM.Domain.Community.Authorization;
+using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Search;
+using DM.Domain.Forum.Authorization;
+using DM.Domain.Game.Authorization;
+using DM.Domain.Messaging.Authorization;
+using DM.Domain.Messaging.Configuration;
+using DM.Domain.Moderation.Authorization;
+using DM.Domain.Moderation.Configuration;
+using DM.Domain.Personal.Authorization;
+using DM.Infrastructure.Core;
+using DM.Infrastructure.Core.Configuration;
+using DM.Infrastructure.Core.Extensions;
+using DM.Infrastructure.Core.Logging;
+using DM.Infrastructure.Core.Parsing;
+using DM.Infrastructure.Mail;
+using DM.Infrastructure.Mail.Configuration;
+using DM.Infrastructure.Messaging;
+using DM.Infrastructure.Messaging.Outbox;
+using DM.Infrastructure.Persistence;
+using DM.Web.API.Shared.Binding;
+using DM.Web.API.Shared.Configuration;
 using DM.Web.API.Middleware;
-using DM.Web.API.Notifications;
+using DM.Web.API.Realtime;
 using DM.Web.API.Swagger;
-using DM.Web.API.Warmup;
-using DM.Web.Core;
-using DM.Web.Core.Middleware;
-using DM.Services.Search.Grpc;
+using DM.Web.API.HostedServices;
+using DM.Workers.SearchIndexer.Grpc;
 using Jamq.Client.DependencyInjection;
 using Jamq.Client.Rabbit.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
@@ -78,7 +85,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .Configure<MirrorConfiguration>(configuration.GetSection(nameof(MirrorConfiguration)).Bind)
             .AddDmLogging("DM.API", configuration);
 
-        // Validate critical configuration on startup — fail fast if misconfigured
+        // Validate critical configuration on startup � fail fast if misconfigured
         services.AddOptions<ConnectionStrings>()
             .Bind(configuration.GetSection(nameof(ConnectionStrings)))
             .Validate(cs => !string.IsNullOrEmpty(cs.Rdb) && !string.IsNullOrEmpty(cs.Mongo),
@@ -92,6 +99,10 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .Bind(configuration.GetSection(nameof(RabbitMqConfiguration)))
             .Validate(r => !string.IsNullOrEmpty(r.Endpoint), "RabbitMqConfiguration:Endpoint is required")
             .ValidateOnStart();
+
+        // Register IProbationConfiguration interface for Domain modules
+        services.AddSingleton<IProbationConfiguration>(sp =>
+            sp.GetRequiredService<IOptions<ProbationConfiguration>>().Value);
 
         services
             .AddAutoMapper(config => config.AllowNullCollections = true)
@@ -113,12 +124,28 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         // No Bearer tokens - sessions managed server-side
         services.AddAuthentication();
 
+        // HIBP (HaveIBeenPwned) password checker - NIST SP 800-63B compliance
+        services.AddHttpClient<ICompromisedPasswordChecker, HibpPasswordChecker>(client =>
+        {
+            client.DefaultRequestHeaders.Add("User-Agent", "DM3-PasswordChecker/1.0");
+            client.DefaultRequestHeaders.Add("Add-Padding", "true"); // Enhanced privacy
+            client.Timeout = TimeSpan.FromSeconds(5); // Don't block registration on slow API
+        });
+
         services.AddJamqClient(config => config.UseRabbit());
-        services.AddHostedService<RealtimeNotificationConsumer>();
-        services.AddHostedService<WarmupService>();
-        services.AddHostedService<Cleanup.TokenCleanupService>();
-        services.AddHostedService<Cleanup.SessionCleanupService>();
-        services.AddHostedService<Cleanup.PendingRegistrationCleanupService>();
+
+        // Only register hosted services when NOT in migration mode
+        // Migration mode runs migrations and exits - no need for cleanup services
+        if (!migrateOnStart)
+        {
+            services.AddHostedService<RealtimeNotificationConsumer>();
+            services.AddHostedService<WarmupService>();
+            services.AddHostedService<HostedServices.TokenCleanupService>();
+            services.AddHostedService<HostedServices.SessionCleanupService>();
+            services.AddHostedService<HostedServices.PendingRegistrationCleanupService>();
+            services.AddHostedService<HostedServices.UsernameChangeCleanupService>();
+            services.AddHostedService<HostedServices.PendencyReminderService>();
+        }
 
         var connectionStrings = new ConnectionStrings();
         configuration.GetSection(nameof(ConnectionStrings)).Bind(connectionStrings);
@@ -178,13 +205,24 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                             QueueLimit = 0
                         }));
 
-                // Rate limit for login availability check: 20 requests per minute
-                options.AddPolicy("login-check", context =>
+                // Rate limit for username availability check: 20 requests per minute
+                options.AddPolicy("username-check", context =>
                     RateLimitPartition.GetFixedWindowLimiter(
                         partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                         factory: _ => new FixedWindowRateLimiterOptions
                         {
                             PermitLimit = 20,
+                            Window = TimeSpan.FromMinutes(1),
+                            QueueLimit = 0
+                        }));
+
+                // Rate limit for email availability check: 10 requests per minute
+                options.AddPolicy("email-check", context =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 10,
                             Window = TimeSpan.FromMinutes(1),
                             QueueLimit = 0
                         }));
@@ -196,7 +234,9 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                     RateLimitPartition.GetNoLimiter<string>("unlimited"));
                 options.AddPolicy("auth", _ =>
                     RateLimitPartition.GetNoLimiter<string>("unlimited"));
-                options.AddPolicy("login-check", _ =>
+                options.AddPolicy("username-check", _ =>
+                    RateLimitPartition.GetNoLimiter<string>("unlimited"));
+                options.AddPolicy("email-check", _ =>
                     RateLimitPartition.GetNoLimiter<string>("unlimited"));
             }
 
@@ -267,19 +307,26 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .AsSelf()
             .AsImplementedInterfaces();
 
-        // Register MessageQueuingModule with OutboxProcessor enabled (requires DbContext)
-        builder.RegisterModuleOnce(new MessageQueuingModule(enableOutboxProcessor: true));
+        // Register MessageQueuingModule with OutboxProcessor enabled only when NOT migrating
+        // During migration, we don't want background services accessing the database
+        builder.RegisterModuleOnce(new MessageQueuingModule(enableOutboxProcessor: !migrateOnStart));
 
-        builder.RegisterModuleOnce<CommonModule>();
-        builder.RegisterModuleOnce<UploadingModule>();
-        builder.RegisterModuleOnce<DataAccessModule>();
+        builder.RegisterModuleOnce<PersistenceModule>();
+        builder.RegisterModuleOnce<MailModule>();
+        builder.RegisterModuleOnce<CoreModule>();
 
-        builder.RegisterModuleOnce<CommunityModule>();
-        builder.RegisterModuleOnce<ForumModule>();
-        builder.RegisterModuleOnce<GameModule>();
-        builder.RegisterModuleOnce<NotificationsModule>();
+        // Register all Domain services centrally (replaces individual Module.cs files)
+        RegisterDomainServices(builder);
 
-        builder.RegisterModuleOnce<WebCoreModule>();
+        // Singleton for SignalR user connection tracking
+        builder.RegisterType<UserConnectionService>()
+            .AsImplementedInterfaces()
+            .SingleInstance();
+
+        // Unified comment service (routes to domain-specific implementations)
+        builder.RegisterType<Shared.Comments.CommentService>()
+            .As<DM.Domain.Core.Comments.ICommentService>()
+            .InstancePerLifetimeScope();
     }
 
     /// <summary>
@@ -319,7 +366,6 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                 .AllowCredentials()
                 .SetPreflightMaxAge(TimeSpan.FromHours(1)))
             .UseMiddleware<CsrfProtectionMiddleware>()
-            .UseMiddleware<BotApiKeyMiddleware>()
             .UseRateLimiter()
             .UseRouting()
             .UseAuthentication()
@@ -328,28 +374,84 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .UseEndpoints(c =>
             {
                 c.MapControllers();
-                c.MapHub<NotificationHub>("/whatsup");
+                c.MapHub<Notifications.NotificationHub>("/whatsup");
                 c.MapPrometheusScrapingEndpoint("/metrics");
 
-                // Liveness — Docker health check (no dependency checks)
+                // Liveness � Docker health check (no dependency checks)
                 c.MapHealthChecks("/_health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
                 {
                     Predicate = _ => false,
                     ResponseWriter = HealthChecks.UI.Client.UIResponseWriter.WriteHealthCheckUIResponse
                 });
 
-                // Readiness — all "ready" dependencies (for load balancer)
+                // Readiness � all "ready" dependencies (for load balancer)
                 c.MapHealthChecks("/_ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
                 {
                     Predicate = check => check.Tags.Contains("ready"),
                     ResponseWriter = HealthChecks.UI.Client.UIResponseWriter.WriteHealthCheckUIResponse
                 });
 
-                // Detail — all checks (for monitoring dashboard)
+                // Detail � all checks (for monitoring dashboard)
                 c.MapHealthChecks("/_health/detail", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
                 {
                     ResponseWriter = HealthChecks.UI.Client.UIResponseWriter.WriteHealthCheckUIResponse
                 });
             });
+    }
+
+    /// <summary>
+    /// Register all Domain layer services centrally.
+    /// This replaces individual Module.cs files in Domain.* projects.
+    /// </summary>
+    private static void RegisterDomainServices(ContainerBuilder builder)
+    {
+        // Domain assemblies to scan for services and AutoMapper profiles
+        // Using Module classes as assembly markers (they are public)
+        var accountAssembly = typeof(DM.Domain.Account.Authorization.AccountIntention).Assembly;
+        var personalAssembly = typeof(UserIntention).Assembly;
+        var communityAssembly = typeof(PollIntention).Assembly;
+        var moderationAssembly = typeof(ModerationIntention).Assembly;
+        var messagingAssembly = typeof(ChatIntention).Assembly;
+        var forumAssembly = typeof(ForumIntention).Assembly;
+        var blogAssembly = typeof(BlogIntention).Assembly;
+        var gameAssembly = typeof(GameIntention).Assembly;
+
+        var domainAssemblies = new[]
+        {
+            accountAssembly, personalAssembly, communityAssembly, moderationAssembly,
+            messagingAssembly, forumAssembly, blogAssembly, gameAssembly
+        };
+
+        // Register types and AutoMapper profiles from all Domain assemblies
+        foreach (var assembly in domainAssemblies)
+        {
+            builder.RegisterDefaultTypes(assembly);
+            builder.RegisterMapper(assembly);
+        }
+
+        // Account-specific registrations (from AccountModule)
+        // Classes are internal, so we use reflection to get types
+        var identityProviderType = accountAssembly.GetType("DM.Domain.Account.Features.Identity.IdentityProvider")!;
+        var loginAttemptTrackerType = accountAssembly.GetType("DM.Domain.Account.Features.Authentication.LoginAttemptTracker")!;
+        var tokenFactoryType = accountAssembly.GetType("DM.Domain.Account.Features.Tokens.TokenFactory")!;
+
+        builder.RegisterType(identityProviderType)
+            .AsSelf()
+            .AsImplementedInterfaces()
+            .InstancePerLifetimeScope();
+
+        builder.RegisterType(loginAttemptTrackerType)
+            .AsImplementedInterfaces()
+            .InstancePerDependency();
+
+        builder.RegisterType(tokenFactoryType)
+            .AsImplementedInterfaces()
+            .InstancePerLifetimeScope();
+
+        // Moderation-specific registrations (from ModerationModule)
+        var moderationIntentionResolverType = moderationAssembly.GetType("DM.Domain.Moderation.Authorization.ModerationIntentionResolver")!;
+        builder.RegisterType(moderationIntentionResolverType)
+            .As(typeof(IIntentionResolver<ModerationIntention>))
+            .InstancePerLifetimeScope();
     }
 }

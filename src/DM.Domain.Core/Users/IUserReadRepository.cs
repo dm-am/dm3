@@ -1,0 +1,67 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
+
+namespace DM.Domain.Core.Users;
+
+/// <summary>
+/// Read-only repository for user data. Used by Community and Moderation modules
+/// for accessing user profile information without importing Domain.Personal.
+/// </summary>
+/// <remarks>
+/// Full repository with write operations: Domain.Personal/Features/Profiles/IUserRepository
+/// Implementation: Infrastructure.Services/Shared/Users/UserReadRepository
+/// </remarks>
+public interface IUserReadRepository
+{
+    // ═══ SINGLE USER ═══
+
+    /// <summary>
+    /// Get user by username
+    /// </summary>
+    Task<GeneralUser?> GetUser(string username);
+
+    /// <summary>
+    /// Get user by ID
+    /// </summary>
+    Task<GeneralUser?> GetUser(Guid userId);
+
+    /// <summary>
+    /// Get user details by username
+    /// </summary>
+    Task<UserDetails?> GetUserDetails(string username);
+
+    /// <summary>
+    /// Get user details by ID
+    /// </summary>
+    Task<UserDetails?> GetUserDetails(Guid userId);
+
+    // ═══ LIST USERS ═══
+
+    /// <summary>
+    /// Count users matching filter criteria
+    /// </summary>
+    Task<int> CountUsers(UserActivityFilter filter, string? search = null, UserRole? role = null);
+
+    /// <summary>
+    /// Get users list with pagination
+    /// </summary>
+    Task<IEnumerable<GeneralUser>> GetUsers(
+        PagingData paging,
+        UserActivityFilter filter,
+        string? search = null,
+        UserRole? role = null,
+        UserSort sort = UserSort.Name);
+
+    /// <summary>
+    /// Get users by role
+    /// </summary>
+    Task<IEnumerable<GeneralUser>> GetUsersByRole(UserRole role);
+
+    /// <summary>
+    /// Get users by IDs
+    /// </summary>
+    Task<IEnumerable<GeneralUser>> GetUsers(IEnumerable<Guid> userIds);
+}

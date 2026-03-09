@@ -1,9 +1,9 @@
 using System;
 using System.Threading.Tasks;
-using DM.Services.Authentication.Implementation.UserIdentity;
-using DM.Services.Common.Authorization;
-using DM.Services.Core.Exceptions;
-using DM.Services.Core.Implementation.CorrelationToken;
+using DM.Domain.Core.Identity;
+using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Exceptions;
+using DM.Domain.Core.Abstractions;
 using FluentValidation;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;

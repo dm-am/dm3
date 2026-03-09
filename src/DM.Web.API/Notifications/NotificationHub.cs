@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using DM.Web.Core.Hubs;
+using DM.Web.API.Realtime;
 using Microsoft.AspNetCore.SignalR;
 
 namespace DM.Web.API.Notifications;

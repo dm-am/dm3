@@ -20,7 +20,7 @@
 ./scripts/dm.sh seed
 
 # Frontend (отдельно)
-cd frontend/DM.Web.Modern && npm install && npm run dev
+cd src/DM.Web.Client && npm install && npm run dev
 ```
 
 ### Альтернатива (ручной запуск)
@@ -30,7 +30,7 @@ cd docker
 cp .env.example .env                          # Создать файл с секретами
 docker compose up -d                          # Инфраструктура
 
-cd frontend/DM.Web.Modern && npm install && npm run dev  # Frontend
+cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 ```
 
 - **Frontend:** http://localhost:5173
@@ -84,9 +84,11 @@ cd frontend/DM.Web.Modern && npm install && npm run dev  # Frontend
 
 **Требования:** API запущен (порт 5000).
 
-Скрипт вызывает `POST /v1/moderation/seed` (доступен только в Development).
+Скрипт вызывает `POST /v1/moderation/seed` напрямую через curl (доступен только в Development).
 
 **Тестовые аккаунты (пароль: `Test123!`):**
+
+**Роли:**
 
 | Роль | Логин | Email |
 |------|-------|-------|
@@ -95,11 +97,26 @@ cd frontend/DM.Web.Modern && npm install && npm run dev  # Frontend
 | Moderator | `TestModerator` | mod@test.local |
 | Mentor | `TestMentor` | mentor@test.local |
 | RegularUser | `TestUser` | user@test.local |
-| RegularUser | `Ab` | ab@test.local |
-| RegularUser | `LongestLoginPossible` | longest@test.local |
-| RegularUser | `Player_One` | player1@test.local |
-| RegularUser | `Player-Two` | player2@test.local |
-| RegularUser (honorary) | `TestHonorary` | honorary@test.local |
+
+**Граничные случаи имён (см. [USERNAME_POLICY](../architecture/USERNAME_POLICY.md)):**
+
+| Логин | Особенность |
+|-------|-------------|
+| `Ян` | Min length (2), cyrillic |
+| `LongestLoginPossible` | Max length (20) |
+| `Player_One` | Underscore |
+| `Player-Two` | Hyphen |
+| `Player.Three` | Dot |
+| `Player Four` | Space |
+| `Игрок` | Cyrillic only |
+| `Игрок_Один` | Cyrillic + underscore |
+| `Тест Ёлки` | Cyrillic + space + Ё |
+
+**Специальные состояния:**
+
+| Логин | Особенность |
+|-------|-------------|
+| `TestHonorary` | Honorary goblin (почётный гоблин) |
 
 **Pending Registrations (для тестирования активации):**
 
@@ -151,7 +168,7 @@ docker exec -it dm-api /bin/sh        # Shell в контейнере
 ### Frontend
 
 ```bash
-cd frontend/DM.Web.Modern
+cd src/DM.Web.Client
 npm run dev           # Dev server
 npm run build         # Production
 npm run test:unit     # Тесты
@@ -167,8 +184,8 @@ dotnet run --project src/DM.Web.API --urls "http://localhost:5000"
 ### Миграции
 
 ```bash
-dotnet ef migrations add YYYYMMDD_Name -p src/DM.Services.DataAccess -s src/DM.Web.API
-dotnet ef database update -p src/DM.Services.DataAccess -s src/DM.Web.API
+dotnet ef migrations add YYYYMMDD_Name -p src/DM.Infrastructure.Persistence -s src/DM.Web.API
+dotnet ef database update -p src/DM.Infrastructure.Persistence -s src/DM.Web.API
 ```
 
 ---
@@ -181,15 +198,15 @@ dotnet ef database update -p src/DM.Services.DataAccess -s src/DM.Web.API
 |------|------------|
 | [`docker/.env`](../../docker/.env.example) | Секреты Docker (пароли БД, MinIO, RabbitMQ) |
 | [`src/DM.Web.API/appsettings.json`](../../src/DM.Web.API/appsettings.json) | Главный конфиг API (сессии, пароли, токены, CDN) |
-| [`frontend/DM.Web.Modern/.env.local`](../../frontend/DM.Web.Modern/) | Frontend (API URL) |
+| [`src/DM.Web.Client/.env.local`](../../src/DM.Web.Client/) | Frontend (API URL) |
 
-### Consumers (наследуют от API через docker-compose)
+### Workers (наследуют от API через docker-compose)
 
 | Файл | Назначение |
 |------|------------|
-| [`src/DM.Services.Mail.Sender.Consumer/appsettings.json`](../../src/DM.Services.Mail.Sender.Consumer/appsettings.json) | Email: SMTP настройки |
-| [`src/DM.Services.Search.Consumer/appsettings.json`](../../src/DM.Services.Search.Consumer/appsettings.json) | Search: OpenSearch подключение |
-| [`src/DM.Services.Notifications.Consumer/appsettings.json`](../../src/DM.Services.Notifications.Consumer/appsettings.json) | Notifications: MongoDB, RabbitMQ |
+| [`src/DM.Workers.Mail/appsettings.json`](../../src/DM.Workers.Mail/appsettings.json) | Email: SMTP настройки |
+| [`src/DM.Workers.SearchIndexer/appsettings.json`](../../src/DM.Workers.SearchIndexer/appsettings.json) | Search: OpenSearch подключение |
+| [`src/DM.Workers.NotificationDispatcher/appsettings.json`](../../src/DM.Workers.NotificationDispatcher/appsettings.json) | Notifications: MongoDB, RabbitMQ |
 
 ### Основные секции appsettings.json
 
@@ -204,7 +221,7 @@ dotnet ef database update -p src/DM.Services.DataAccess -s src/DM.Web.API
 ### Frontend
 
 ```bash
-# frontend/DM.Web.Modern/.env.local
+# src/DM.Web.Client/.env.local
 VITE_API_HOST=http://localhost:5000
 ```
 

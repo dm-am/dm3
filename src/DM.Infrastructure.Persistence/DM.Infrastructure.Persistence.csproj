@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="FluentValidation" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+        <PrivateAssets>all</PrivateAssets>
+        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      </PackageReference>
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+      <PackageReference Include="MongoDB.Driver" />
+      <PackageReference Include="MongoDB.Driver.Core.Extensions.DiagnosticSources" />
+      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\DM.Domain.Account\DM.Domain.Account.csproj" />
+      <ProjectReference Include="..\DM.Domain.Blog\DM.Domain.Blog.csproj" />
+      <ProjectReference Include="..\DM.Domain.Community\DM.Domain.Community.csproj" />
+      <ProjectReference Include="..\DM.Domain.Core\DM.Domain.Core.csproj" />
+      <ProjectReference Include="..\DM.Domain.Forum\DM.Domain.Forum.csproj" />
+      <ProjectReference Include="..\DM.Domain.Game\DM.Domain.Game.csproj" />
+      <ProjectReference Include="..\DM.Domain.Messaging\DM.Domain.Messaging.csproj" />
+      <ProjectReference Include="..\DM.Domain.Moderation\DM.Domain.Moderation.csproj" />
+      <ProjectReference Include="..\DM.Domain.Personal\DM.Domain.Personal.csproj" />
+      <ProjectReference Include="..\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
+    </ItemGroup>
+
+</Project>

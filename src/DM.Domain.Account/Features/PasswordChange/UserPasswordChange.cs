@@ -1,0 +1,24 @@
+using System;
+
+namespace DM.Domain.Account.Features.PasswordChange;
+
+/// <summary>
+/// DTO model for password update
+/// </summary>
+public class UserPasswordChange
+{
+    /// <summary>
+    /// Password reset token
+    /// </summary>
+    public Guid? Token { get; set; }
+
+    /// <summary>
+    /// Old password
+    /// </summary>
+    public string OldPassword { get; set; } = null!;
+
+    /// <summary>
+    /// New password
+    /// </summary>
+    public string NewPassword { get; set; } = null!;
+}
