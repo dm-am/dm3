@@ -1,6 +1,6 @@
 ﻿# Архитектура DM3 — Системный обзор
 
-> **Паттерны и структура:** См. [ARCHITECTURE.md](./ARCHITECTURE.md) — паттерны, Feature Folders, Unified Services, блюпринт.
+> **Паттерны и структура:** См. [patterns.md](./patterns.md) — паттерны, Feature Folders, Unified Services, блюпринт.
 >
 > Этот документ описывает компоненты системы, порты и потоки данных.
 
@@ -136,7 +136,7 @@ CoreModule (DM.Infrastructure.Core)
 
 ### PostgreSQL
 
-См. [DATABASE.md](./DATABASE.md) — 54 таблицы по доменам
+См. [database.md](./database.md) — 54 таблицы по доменам
 
 ### MongoDB
 
@@ -156,7 +156,7 @@ CoreModule (DM.Infrastructure.Core)
 
 ## Аутентификация
 
-См. [AUTHENTICATION.md](./AUTHENTICATION.md)
+См. [security.md](./security.md)
 
 ---
 
@@ -231,7 +231,7 @@ type User = {
 
 **Frontend:** `useRegion()` composable
 
-**API:** См. [API Reference](../api/REFERENCE.md)
+**API:** См. [API Reference](../reference/api.md)
 
 ---
 
@@ -266,19 +266,10 @@ Enrichers: Application, Environment, LogContext, ActivityEnricher (TraceId, Span
 
 ## Ссылки
 
-- [Архитектура и паттерны](./ARCHITECTURE.md) — Паттерны, структура проектов, блюпринт
-- [База данных](./DATABASE.md) — Схема БД
-- [Аутентификация](./AUTHENTICATION.md) — Сессии, токены, безопасность
-- [RBAC](./RBAC.md) — Роли и права
-- [Глоссарий](../reference/GLOSSARY.md) — Термины
-- [API Reference](../api/REFERENCE.md) — REST API
-- [Установка](../guides/SETUP.md) — Локальная разработка
+- [Паттерны](./patterns.md) — Паттерны, структура проектов, блюпринт
+- [База данных](./database.md) — Схема БД
+- [Безопасность](./security.md) — Аутентификация, авторизация, RBAC
+- [Глоссарий](../reference/glossary.md) — Термины
+- [API Reference](../reference/api.md) — REST API
+- [Установка](../guides/setup.md) — Локальная разработка
 
----
-
-## Принципы документации
-
-
-- **Минимум дублирования** — ссылки вместо копирования
-- **Код > документация** — паттерны смотреть в коде
-- **Только необходимое** — то, что нельзя узнать из кода

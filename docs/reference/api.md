@@ -29,7 +29,7 @@
 
 ## Форматы ответов
 
-> Подробнее: [API_STANDARDS.md](../standards/API_STANDARDS.md#response-format)
+> Подробнее: [standards.md](./standards.md#response-format)
 
 | Тип ответа | Формат |
 |------------|--------|
@@ -81,7 +81,7 @@
 
 ## Аутентификация
 
-См. [AUTHENTICATION.md](../architecture/AUTHENTICATION.md)
+См. [security.md](../architecture/security.md)
 
 ---
 
@@ -215,7 +215,7 @@
 
 ### Роли и права
 
-См. [RBAC.md](../architecture/RBAC.md)
+См. [security.md](../architecture/security.md)
 
 ### Привязка аватара
 
@@ -226,17 +226,9 @@
 
 ## Ссылки
 
-- [API Standards](../standards/API_STANDARDS.md) — Эталон и правила проектирования API
-- [Архитектура](../architecture/OVERVIEW.md) — Как устроено
-- [Аутентификация](../architecture/AUTHENTICATION.md) — BFF и сессии
-- [Глоссарий](../reference/GLOSSARY.md) — Термины и определения
-- [Установка](../guides/SETUP.md) — Запуск проекта
+- [Стандарты](./standards.md) — Эталон и правила проектирования API
+- [Архитектура](../architecture/overview.md) — Как устроено
+- [Безопасность](../architecture/security.md) — Аутентификация и авторизация
+- [Глоссарий](./glossary.md) — Термины и определения
+- [Установка](../guides/setup.md) — Запуск проекта
 
----
-
-## Принципы документации
-
-
-- **Минимум дублирования** — ссылки вместо копирования
-- **Код > документация** — паттерны смотреть в коде
-- **Только необходимое** — то, что нельзя узнать из кода

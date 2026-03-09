@@ -364,22 +364,13 @@
 
 ## Ссылки
 
-- [Архитектура и паттерны](../architecture/ARCHITECTURE.md) — Паттерны, структура проектов, блюпринт
-- [Системный обзор](../architecture/OVERVIEW.md) — Компоненты, порты
-- [База данных](../architecture/DATABASE.md) — Схема БД
-- [Аутентификация](../architecture/AUTHENTICATION.md) — Сессии, токены
-- [RBAC](../architecture/RBAC.md) — Роли и права
-- [API Reference](../api/REFERENCE.md) — REST API
-- [Стандарты кода](../standards/CODE.md) — Naming, testing
-- [Установка](../guides/SETUP.md) — Локальная разработка
-- [Тестирование](../guides/TESTING.md) — Запуск тестов
-- [Деплой](../guides/DEPLOYMENT.md) — Развёртывание
+- [Паттерны](../architecture/patterns.md) — Паттерны, структура проектов, блюпринт
+- [Системный обзор](../architecture/overview.md) — Компоненты, порты
+- [База данных](../architecture/database.md) — Схема БД
+- [Безопасность](../architecture/security.md) — Аутентификация, авторизация, RBAC
+- [API Reference](./api.md) — REST API
+- [Стандарты](./standards.md) — Код и API
+- [Установка](../guides/setup.md) — Локальная разработка
+- [Тестирование](../guides/testing.md) — Запуск тестов
+- [Деплой](../guides/deployment.md) — Развёртывание
 
----
-
-## Принципы документации
-
-
-- **Минимум дублирования** — ссылки вместо копирования
-- **Код > документация** — паттерны смотреть в коде
-- **Только необходимое** — то, что нельзя узнать из кода

@@ -20,7 +20,7 @@
 # Linux/Mac — те же команды через ./scripts/dm.sh
 
 # Frontend (отдельно)
-cd frontend/DM.Web.Modern && npm install && npm run dev
+cd src/DM.Web.Client && npm install && npm run dev
 ```
 
 | Сервис | URL |
@@ -30,47 +30,45 @@ cd frontend/DM.Web.Modern && npm install && npm run dev
 | MinIO | http://localhost:9001 |
 | MailHog | http://localhost:8025 |
 
-**Подробнее:** [docs/guides/SETUP.md](./docs/guides/SETUP.md)
+**Подробнее:** [docs/guides/setup.md](./docs/guides/setup.md)
 
 ---
 
 ## Документация
 
-### Guides (как делать)
+### Руководства (как делать)
 
 | Документ | Описание |
 |----------|----------|
-| [SETUP.md](./docs/guides/SETUP.md) | Установка, порты, тестовые аккаунты |
-| [TESTING.md](./docs/guides/TESTING.md) | Тестирование |
-| [DEPLOYMENT.md](./docs/guides/DEPLOYMENT.md) | Деплоймент и бэкапы |
-| [MIRRORING.md](./docs/guides/MIRRORING.md) | Настройка зеркал |
+| [setup.md](./docs/guides/setup.md) | Установка, порты, тестовые аккаунты |
+| [testing.md](./docs/guides/testing.md) | Тестирование |
+| [deployment.md](./docs/guides/deployment.md) | Деплоймент и бэкапы |
+| [mirroring.md](./docs/guides/mirroring.md) | Настройка зеркал |
 
-### Architecture (как устроено)
-
-| Документ | Описание |
-|----------|----------|
-| [OVERVIEW.md](./docs/architecture/OVERVIEW.md) | Общая архитектура |
-| [DATABASE.md](./docs/architecture/DATABASE.md) | Схема БД |
-| [AUTHENTICATION.md](./docs/architecture/AUTHENTICATION.md) | Аутентификация и безопасность |
-| [RBAC.md](./docs/architecture/RBAC.md) | Роли и права доступа |
-| [USERNAME_POLICY.md](./docs/architecture/USERNAME_POLICY.md) | Валидация имён пользователей |
-
-### Reference
+### Архитектура (как устроено)
 
 | Документ | Описание |
 |----------|----------|
-| [API REFERENCE.md](./docs/api/REFERENCE.md) | API эндпоинты |
-| [CODE.md](./docs/standards/CODE.md) | Стандарты кода |
-| [GLOSSARY.md](./docs/reference/GLOSSARY.md) | Термины |
+| [patterns.md](./docs/architecture/patterns.md) | **Паттерны, структура проектов, блюпринт (SSOT)** |
+| [overview.md](./docs/architecture/overview.md) | Компоненты, порты, потоки данных |
+| [database.md](./docs/architecture/database.md) | Схема БД |
+| [security.md](./docs/architecture/security.md) | Аутентификация, авторизация, RBAC |
 
-### Tasks
+### Справочники
 
 | Документ | Описание |
 |----------|----------|
-| [ROADMAP.md](./docs/tasks/ROADMAP.md) | План развития |
-| [BACKLOG.md](./docs/tasks/BACKLOG.md) | Бэклог задач |
-| [MIGRATION.md](./docs/tasks/MIGRATION.md) | Миграция со старого сайта |
-| [AUDIT.md](./docs/tasks/AUDIT.md) | План аудита |
+| [api.md](./docs/reference/api.md) | API эндпоинты |
+| [standards.md](./docs/reference/standards.md) | Стандарты кода и API |
+| [glossary.md](./docs/reference/glossary.md) | Термины |
+| [policies.md](./docs/reference/policies.md) | Политика имён пользователей |
+
+### Проект
+
+| Документ | Описание |
+|----------|----------|
+| [roadmap.md](./docs/project/roadmap.md) | Дорожная карта |
+| [migration.md](./docs/project/migration.md) | Миграция со старого сайта |
 
 ---
 
@@ -79,14 +77,19 @@ cd frontend/DM.Web.Modern && npm install && npm run dev
 ```
 dm3/
 ├── src/                    # Backend (.NET 8)
-│   ├── DM.Services.*/      # Доменные сервисы
-│   ├── DM.Web.API/         # REST API + appsettings.json
-│   └── DM.Web.Core/        # Web инфраструктура
+│   ├── DM.Domain.*/        # Доменные сервисы
+│   ├── DM.Infrastructure.*/# Инфраструктура
+│   ├── DM.Web.API/         # REST API
+│   ├── DM.Web.Client/      # Frontend (Vue 3)
+│   └── DM.Workers.*/       # Background workers
 ├── test/                   # Backend тесты
-├── frontend/DM.Web.Modern/ # Frontend (Vue 3 + TypeScript)
-├── docker/                 # Docker конфигурация + .env
-├── scripts/                # CLI скрипты (dm.ps1, dm.sh, seed.js)
+├── docker/                 # Docker конфигурация
+├── scripts/                # CLI скрипты
 └── docs/                   # Документация
+    ├── guides/             # Руководства
+    ├── architecture/       # Архитектура
+    ├── reference/          # Справочники
+    └── project/            # Проект
 ```
 
 ---

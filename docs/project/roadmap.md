@@ -1,4 +1,31 @@
-# Задачи DM3
+# Дорожная карта DM3
+
+## Стек
+
+- **Backend:** .NET 8, PostgreSQL, MongoDB, RabbitMQ
+- **Frontend:** Vue 3, TypeScript, Vite
+- **Инфраструктура:** Docker, Nginx, SignalR, Prometheus, Grafana, Jaeger
+
+---
+
+## Текущий релиз (MVP)
+
+**Готово:**
+- Аутентификация (BFF Pattern, HttpOnly cookies)
+- Форум (доски, топики, комментарии, лайки)
+- Игры (создание, персонажи, комнаты, посты)
+- Сообщения (личные переписки, глобальные чат-события)
+- Уведомления (SignalR)
+- Поиск (OpenSearch)
+- Блоги (создание, публикации, комментарии, лайки)
+- Infrastructure hardening (Docker health checks, resource limits, secrets, CI/CD matrix builds)
+- Мониторинг (Prometheus + Grafana dashboards + alerting rules)
+- Database resilience (EF Core retry, MongoDB retry)
+- Бэкап-скрипты (PostgreSQL, MongoDB, MinIO + verify)
+- E2E тесты (Playwright, cookie auth)
+- Remember me (опция "Запомнить меня")
+
+---
 
 ## В работе
 
@@ -24,7 +51,8 @@
 
 | Задача | Описание |
 |--------|----------|
-| Invite links | Многоразовые ссылки-приглашения для игр/блогов (как в Discord: код, опционально лимит/срок, статистика) |
+| Invite links | Многоразовые ссылки-приглашения для игр/блогов (как в Discord) |
+| Session transfer | Перенос сессий между зеркалами |
 
 ### Интеграции
 
@@ -33,7 +61,7 @@
 | Discord бот | Уведомления (реализовать senders) |
 | Telegram бот | Уведомления (реализовать senders) |
 
-### Frontend
+### Frontend страницы
 
 | Страница | Описание |
 |----------|----------|
@@ -51,6 +79,10 @@
 | Mail.Sender тесты | Unit тесты с моками SMTP |
 | Search тесты | Unit тесты + OpenSearch mock |
 | Расширить E2E | Playwright для всех страниц |
+
+**Недостающие тест-проекты:**
+- `DM.Workers.Mail.Tests`
+- `DM.Workers.SearchIndexer.Tests`
 
 ### Кэширование
 
@@ -91,6 +123,18 @@
 
 ---
 
+## Технический долг
+
+| Задача | Файл/Область |
+|--------|--------------|
+| Рефакторинг BbParserWrapper | `src/DM.Infrastructure.Core/Parsing/BbParserWrapper.cs` |
+| Удалить NotImplementedException | `SchemaFactory.cs` в Game модуле |
+| Удалить console.log | Frontend |
+| ConfigureAwait(false) | Все async методы |
+| Разобраться с dm.am | Почему не грузится в России? |
+
+---
+
 ## Рассматривается
 
 | Задача | Описание |
@@ -98,22 +142,11 @@
 | k3s + Helm + Terraform | Kubernetes (если масштаб вырастет) |
 | Bun | Замена Node.js |
 | Google OAuth | Вход через Google |
-| Система менторства | Автоприветствие новичкам от менторов (удалён MentorGreetingsMessage — реализовать заново при планировании модерации) |
-
----
-
-## Технический долг
-
-| Задача | Файл/Область |
-|--------|--------------|
-| Рефакторинг BbParserWrapper | `src/DM.Infrastructure.Core/Parsing/BbParserWrapper.cs` |
-| Удалить console.log | Frontend |
-| ConfigureAwait(false) | Все async методы |
-| Разобраться с dm.am | Почему не грузится в России? |
+| Система менторства | Автоприветствие новичкам от менторов |
 
 ---
 
 ## Ссылки
 
-- [Миграция со старого сайта](./MIGRATION.md)
-- [Стандарты кода](../standards/CODE.md)
+- [Миграция со старого сайта](./migration.md)
+- [Стандарты разработки](../reference/standards.md)

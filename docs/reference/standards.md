@@ -1,20 +1,189 @@
-# API Standards — DM3
+# Стандарты разработки DM3
+
+> **Принцип:** Код > документация. Паттерны смотреть в коде, здесь только правила.
+>
+> **Архитектура:** См. [patterns.md](../architecture/patterns.md) — паттерны, структура проектов, блюпринт.
+
+---
+
+## Часть 1: Code Standards
+
+### Naming Conventions
+
+| Element | Convention | Example |
+|---------|------------|---------|
+| Private fields | `_camelCase` | `_repository` |
+| Async methods | `Async` suffix | `CreateAsync()` not `Create()` |
+| Test class | `{Class}Should.cs` | `TopicCreatingServiceShould.cs` |
+| Migration | `YYYYMMDDHHMMSS_{Name}.cs` | `20260115000000_AddSessions.cs` |
+| Repository (unified) | `I{Feature}Repository.cs` | `ITopicRepository.cs` |
+| AutoMapper profile | `{Feature}MappingProfile.cs` | `TopicMappingProfile.cs` |
+
+### Forbidden Terms (Game/Blog context)
+
+| Term | Replacement |
+|------|-------------|
+| `participant` | `user` (Game/Blog), `participant` OK in Messaging |
+| `staff` | `master`, `assistant`, `moderator` |
+| `follow`/`follower` | `subscribe`/`subscriber`/`reader` |
+| `authority` | `canEdit`, `hasEditAccess`, `master/assistant` |
+| `private blog/game` | `draft with private visibility` |
+| `HasManagementAccess` | `HasEditAccess` |
+
+### DI Lifetimes
+
+| Lifetime | Use Case |
+|----------|----------|
+| `SingleInstance()` | Stateless: factories, providers |
+| `InstancePerLifetimeScope()` | Request-scoped: services, repositories |
+
+### Validation
+
+FluentValidation для бизнес-правил, DataAnnotations для простых ограничений.
+
+**Example:** `DM.Domain.Forum/Features/Topics/CreateTopicValidator.cs`
+
+### Logging
+
+**Добавлять ILogger:**
+- Authentication services
+- Business operations (create game, delete post)
+- External integrations
+
+**НЕ добавлять:**
+- Repositories (EF tracing есть)
+- Factories, Validators, IntentionResolvers
+
+```csharp
+_logger.LogWarning("Login failed. UserId={UserId}", user.UserId);  // structured
+```
+
+### Testing
+
+**Pattern:** `{Behavior}_When_{Condition}`
+
+**CancellationToken в моках:**
+```csharp
+// ✅ Correct
+repository.Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+```
+
+**Example:** `test/DM.Domain.Forum.Tests/TopicCreatingServiceShould.cs`
+
+### Frontend (Vue.js)
+
+**Branded types:**
+```typescript
+export type Message = {
+  id: Served<MessageId>;      // Server-provided (read-only)
+  text: string;                // User-editable
+};
+```
+
+**Example:** `src/DM.Web.Client/src/api/models/messaging/index.ts`
+
+### Security
+
+| Aspect | Reference |
+|--------|-----------|
+| Password hash | Argon2id (19 MiB, 2 iter) — [security.md](../architecture/security.md) |
+| Token encryption | AES-256-GCM — [security.md](../architecture/security.md) |
+| Rate limiting | [api.md](./api.md#rate-limiting) |
+| BFF Pattern | HttpOnly cookies, SameSite=Strict — [security.md](../architecture/security.md) |
+
+### Checklists
+
+#### New Feature
+- [ ] Feature folder (flat, no CRUD subfolders) — см. [patterns.md](../architecture/patterns.md#целевые-структуры-блюпринт)
+- [ ] Unified Service (`I{Feature}Service` + `{Feature}Service`) — все CRUD в одном сервисе
+- [ ] Repository (`I{Feature}Repository` + `{Feature}Repository`)
+- [ ] Intention enum + resolver (in `Authorization/`)
+- [ ] FluentValidation validators
+- [ ] AutoMapper profile (`{Feature}MappingProfile`)
+- [ ] DI registration in `Web.API/Startup.cs` (RegisterDomainServices)
+
+#### New Endpoint
+- [ ] XML documentation
+- [ ] `[ProducesResponseType]` for all codes
+- [ ] `[AuthenticationRequired]` if needed
+- [ ] Route name: `Name = nameof(...)`
+
+#### Before Commit
+- [ ] `dotnet build` — no errors
+- [ ] `npm run type-check` — passes
+
+### AI Agent Guidelines
+
+#### ASP.NET Core Routing
+
+**Literal routes have priority over templates (regardless of code order):**
+```csharp
+[HttpGet("{id}")]      // Template
+[HttpGet("active")]    // Literal — always wins for "active"
+```
+
+#### Error Types
+
+| Type | Use Case |
+|------|----------|
+| `BadRequestError` | Field validation (FluentValidation) |
+| `GeneralError` | Business errors, invalid tokens, not found |
+
+#### Git Rules
+
+**NEVER use:**
+- `git checkout` — destructive, loses uncommitted changes
+- `git reset --hard` — same reason
+- `git clean -fd` — deletes untracked files
+
+**To undo changes:** Ask user or use `git stash`
+
+#### Server Restart
+
+**After changing Swagger groups, controllers, or startup config — restart server:**
+```bash
+taskkill /F /IM dotnet.exe
+dotnet run --project src/DM.Web.API --urls "http://localhost:5000"
+```
+
+**Run in background** — use `run_in_background: true` parameter.
+
+#### What NOT to Flag
+
+1. ❌ "Route ordering bug" — ASP.NET Core handles it
+2. ❌ "Password MinimumLength=1 in login" — hash comparison handles rejection
+3. ❌ "GeneralError for invalid token" — correct, not field validation
+
+#### What TO Flag
+
+1. ✅ Missing `[ProducesResponseType]`
+2. ✅ Empty XML documentation tags
+3. ✅ Missing validation on Create/Update DTOs
+4. ✅ Admin endpoints without `[RequireRole]`
+5. ✅ DELETE returning Ok() instead of NoContent()
+6. ✅ Duplicate endpoints (`{id:guid}` AND `{username}` for same resource)
+
+#### API Design
+
+**One canonical access pattern** — users by `{username}`, not GUID.
+
+---
+
+## Часть 2: API Standards
 
 > **Подход:** Pragmatic REST
 > **Вдохновлено:** Stripe, GitHub, Twilio APIs
 
----
+### Философия
 
-## Философия
-
-### Принципы
+#### Принципы
 
 1. **Понятность > Догма** — API должен быть интуитивным, а не "правильным по REST"
 2. **Консистентность** — одинаковые паттерны везде
 3. **Предсказуемость** — разработчик должен угадывать URL без документации
 4. **Простота** — минимум сложности для решения задачи
 
-### Три типа endpoints
+#### Три типа endpoints
 
 | Тип | Назначение | HTTP | Глаголы в URL |
 |-----|------------|------|---------------|
@@ -22,11 +191,9 @@
 | **Query** | Проверки, поиск, фильтрация | GET | Допустимы |
 | **Action** | Операции, не вписывающиеся в CRUD | POST | Допустимы |
 
----
+### Типы endpoints
 
-## Типы endpoints
-
-### 1. Resource Endpoints
+#### 1. Resource Endpoints
 
 Для CRUD операций над сущностями. Строгий REST.
 
@@ -50,7 +217,7 @@ POST /v1/games/{id}/characters      # Создать персонажа
 GET  /v1/characters/{id}            # Конкретный персонаж (top-level)
 ```
 
-### 2. Query Endpoints
+#### 2. Query Endpoints
 
 Для проверок и поиска. Глаголы допустимы.
 
@@ -74,7 +241,7 @@ GET /v1/games/{id}/can-join
 | `search` | `search?q=...` | Полнотекстовый поиск |
 | `lookup` | `lookup?ids=1,2,3` | Batch получение по ID |
 
-### 3. Action Endpoints
+#### 3. Action Endpoints
 
 Для операций, не вписывающихся в CRUD. Глаголы допустимы.
 
@@ -93,18 +260,9 @@ POST /v1/posts/{id}/publish
 - Глагол описывает действие
 - Может быть на ресурсе (`/users/{id}/ban`) или standalone (`/account/register`)
 
-**Паттерны именования:**
-| Паттерн | Пример | Когда использовать |
-|---------|--------|-------------------|
-| `{action}` | `register`, `activate` | Standalone действие |
-| `{resource}/{id}/{action}` | `users/{id}/ban` | Действие над ресурсом |
-| `{action}-{what}` | `resend-activation` | Уточнение действия |
+### URL Structure
 
----
-
-## URL Structure
-
-### Базовые правила
+#### Базовые правила
 
 | Правило | Пример | Неправильно |
 |---------|--------|-------------|
@@ -115,7 +273,7 @@ POST /v1/posts/{id}/publish
 | Без trailing slash | `/users` | `/users/` |
 | Без /api prefix | `/v1/users` | `/api/v1/users` |
 
-### Структура
+#### Структура
 
 ```
 https://api.dm.am/v1/{domain}/{resource}/{id}/{sub-resource|action}
@@ -131,7 +289,7 @@ https://api.dm.am/v1/{domain}/{resource}/{id}/{sub-resource|action}
 /v1/games/{id}/join                     # resource + action
 ```
 
-### Максимум 3 сегмента после domain
+#### Максимум 3 сегмента после domain
 
 ```
 # Правильно
@@ -144,7 +302,7 @@ https://api.dm.am/v1/{domain}/{resource}/{id}/{sub-resource|action}
 /v1/posts/{id}/comments
 ```
 
-### Domains (группы)
+#### Domains (группы)
 
 | Domain | Назначение |
 |--------|------------|
@@ -158,11 +316,9 @@ https://api.dm.am/v1/{domain}/{resource}/{id}/{sub-resource|action}
 | `/v1/moderation/...` | Модерация |
 | `/v1/search` | Поиск |
 
-> **Примечание:** `/v1/users/me/...` — специальный паттерн где `me` означает текущего аутентифицированного пользователя. Возвращает приватные данные (email, preferences, privacy).
+> **Примечание:** `/v1/users/me/...` — специальный паттерн где `me` означает текущего аутентифицированного пользователя.
 
----
-
-## HTTP Methods
+### HTTP Methods
 
 | Метод | Использование | Идемпотентность | Body |
 |-------|---------------|-----------------|------|
@@ -172,21 +328,9 @@ https://api.dm.am/v1/{domain}/{resource}/{id}/{sub-resource|action}
 | PUT | Полная замена (редко) | Да | Да |
 | DELETE | Удалить | Да | Нет |
 
-### Когда POST vs PATCH vs PUT
+### Response Codes
 
-| Ситуация | Метод |
-|----------|-------|
-| Создание нового ресурса | POST |
-| Обновление части полей | PATCH |
-| Полная замена ресурса | PUT |
-| Любое действие (action) | POST |
-| Операции с side effects | POST |
-
----
-
-## Response Codes
-
-### Успех
+#### Успех
 
 | Код | Когда | Пример |
 |-----|-------|--------|
@@ -194,7 +338,7 @@ https://api.dm.am/v1/{domain}/{resource}/{id}/{sub-resource|action}
 | 201 | POST создал ресурс | `POST /users` |
 | 204 | DELETE успешный, Action без возвращаемых данных | `DELETE /users/{id}` |
 
-### Ошибки клиента
+#### Ошибки клиента
 
 | Код | Когда | Пример |
 |-----|-------|--------|
@@ -207,18 +351,9 @@ https://api.dm.am/v1/{domain}/{resource}/{id}/{sub-resource|action}
 | 422 | Бизнес-логика не позволяет | Нельзя забанить админа |
 | 429 | Rate limit | Слишком много запросов |
 
-### Ошибки сервера
+### Request/Response Format
 
-| Код | Когда |
-|-----|-------|
-| 500 | Неожиданная ошибка сервера |
-| 503 | Сервис временно недоступен |
-
----
-
-## Request/Response Format
-
-### JSON Conventions
+#### JSON Conventions
 
 | Правило | Пример |
 |---------|--------|
@@ -229,7 +364,7 @@ https://api.dm.am/v1/{domain}/{resource}/{id}/{sub-resource|action}
 | Null для отсутствующих значений | `"deletedAt": null` |
 | Arrays — plural | `"users": [...]` |
 
-### Response Format
+#### Response Format
 
 **Одиночный ресурс** — возвращается напрямую (без обёртки):
 ```json
@@ -257,48 +392,16 @@ https://api.dm.am/v1/{domain}/{resource}/{id}/{sub-resource|action}
 }
 ```
 
-**Query результат** — возвращается напрямую:
-```json
-{
-  "available": true,
-  "reason": "already_registered"
-}
-```
-
-**Action результат** — возвращается напрямую:
-```json
-{
-  "status": "sent",
-  "email": "user@example.com"
-}
-```
-
-### Почему так
-
-| Тип | Формат | Причина |
-|-----|--------|---------|
-| Одиночный ресурс | Напрямую | REST стандарт, меньше вложенности, как GitHub/Stripe |
-| Коллекция | `ListEnvelope` | Нужен `paging`, нельзя добавить метаданные к массиву |
-| Ошибка | `ErrorEnvelope` | Единый формат ошибок |
-
-### C# классы
-
+**C# примеры:**
 ```csharp
 // Одиночный ресурс - возвращать напрямую
 return Ok(user);
 
 // Коллекция с pagination
 return Ok(new ListEnvelope<User>(users, paging));
-
-// Коллекция без pagination
-return Ok(new ListEnvelope<User>(users));
 ```
 
----
-
-## Error Format
-
-### Структура ошибки
+### Error Format
 
 ```json
 {
@@ -312,7 +415,7 @@ return Ok(new ListEnvelope<User>(users));
 }
 ```
 
-### Коды ошибок
+#### Коды ошибок
 
 | Код | HTTP | Описание |
 |-----|------|----------|
@@ -327,41 +430,9 @@ return Ok(new ListEnvelope<User>(users));
 | `rate_limited` | 429 | Превышен лимит запросов |
 | `server_error` | 500 | Внутренняя ошибка |
 
-### Примеры ошибок
+### Pagination
 
-**Validation error (400):**
-```json
-{
-  "errors": [
-    { "code": "validation_error", "field": "email", "message": "Email is required" },
-    { "code": "validation_error", "field": "password", "message": "Must be at least 8 characters" }
-  ]
-}
-```
-
-**Not found (404):**
-```json
-{
-  "errors": [
-    { "code": "not_found", "message": "User not found" }
-  ]
-}
-```
-
-**Business error (422):**
-```json
-{
-  "errors": [
-    { "code": "business_error", "message": "Cannot ban an administrator" }
-  ]
-}
-```
-
----
-
-## Pagination
-
-### Offset-based (для списков с произвольным доступом)
+#### Offset-based (для списков с произвольным доступом)
 
 ```
 GET /v1/users?skip=20&take=10
@@ -372,19 +443,7 @@ GET /v1/users?skip=20&take=10
 | `skip` | Сколько пропустить | 0 | — |
 | `take` | Сколько взять | 20 | 100 |
 
-**Response:**
-```json
-{
-  "resources": [...],
-  "paging": {
-    "skip": 20,
-    "take": 10,
-    "total": 150
-  }
-}
-```
-
-### Cursor-based (для лент и real-time данных)
+#### Cursor-based (для лент и real-time данных)
 
 ```
 GET /v1/conversations/{id}/messages?cursor=abc123&limit=50
@@ -395,90 +454,9 @@ GET /v1/conversations/{id}/messages?cursor=abc123&limit=50
 | `cursor` | Позиция (opaque string) | null (начало) | — |
 | `limit` | Сколько взять | 20 | 100 |
 
-**Response:**
-```json
-{
-  "resources": [...],
-  "paging": {
-    "nextCursor": "xyz789",
-    "hasMore": true
-  }
-}
-```
+### Controller Organization
 
-### Когда что использовать
-
-| Случай | Тип |
-|--------|-----|
-| Таблица с номерами страниц | Offset |
-| Infinite scroll | Cursor |
-| Real-time лента | Cursor |
-| Админка со страницами | Offset |
-
----
-
-## Versioning
-
-### Стратегия: URL versioning
-
-```
-/v1/users
-/v2/users  (будущее)
-```
-
-### Правила изменений
-
-| Изменение | Требует новую версию? |
-|-----------|----------------------|
-| Добавление нового поля | Нет |
-| Добавление нового endpoint | Нет |
-| Удаление поля | Да |
-| Переименование поля | Да |
-| Изменение типа поля | Да |
-| Изменение семантики | Да |
-| Изменение URL | Да |
-
----
-
-## Authentication
-
-### Способ передачи
-
-Cookie-based (BFF pattern):
-```
-Cookie: session=xxx
-```
-
-Или Bearer token (для external clients):
-```
-Authorization: Bearer xxx
-```
-
-### Ответы при ошибках auth
-
-**Не аутентифицирован (401):**
-```json
-{
-  "errors": [
-    { "code": "unauthorized", "message": "Authentication required" }
-  ]
-}
-```
-
-**Нет прав (403):**
-```json
-{
-  "errors": [
-    { "code": "forbidden", "message": "You don't have permission to perform this action" }
-  ]
-}
-```
-
----
-
-## Controller Organization
-
-### Feature Folders (Package by Feature)
+#### Feature Folders (Package by Feature)
 
 **Почему Features/, а не Controllers/v1/:**
 - Высокая когезия — Controller, ApiService, DTOs в одном месте
@@ -486,16 +464,7 @@ Authorization: Bearer xxx
 - Масштабируется при 100+ endpoints
 - Рекомендован Steve Smith (Ardalis), Jimmy Bogard
 
-**Три отдельных концерна:**
-
-| Концерн | Определяется | Пример |
-|---------|-------------|--------|
-| Файловая структура | Папками | `Features/Account/Authentication/` |
-| URL версионирование | Атрибутом `[Route]` | `[Route("v1/account")]` |
-| Swagger группы | Атрибутом `[ApiExplorerSettings]` | `GroupName = "Account"` |
-
-### Структура Features/
-
+**Структура Features/:**
 ```
 Features/
 ├── Account/        → GroupName = "Account"    (/v1/account/...)
@@ -509,96 +478,27 @@ Features/
 └── Moderation/     → GroupName = "Moderation"
 ```
 
-### Версионирование API
+### Чеклист для новых endpoints
 
-Версия в URL (`v1`), но определяется атрибутами, **НЕ папками**:
-
-```csharp
-// Текущий v1
-[Route("v1/account")]
-public class AuthenticationController { }
-
-// При необходимости v2 (breaking changes):
-[Route("v2/account")]
-public class AuthenticationV2Controller { }
-```
-
-### Controller Template
-
-```csharp
-[ApiController]
-[Route("v1/users")]
-[ApiExplorerSettings(GroupName = "Community")]
-[Tags("Users")]
-public class UserController : ControllerBase
-{
-    /// <summary>
-    /// Get user by username
-    /// </summary>
-    /// <response code="200">User found</response>
-    /// <response code="404">User not found</response>
-    [HttpGet("{username}")]
-    [ProducesResponseType(typeof(User), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetUser(string username)
-    {
-        var user = await _userService.GetByUsername(username);
-        return Ok(user);  // Без обёртки
-    }
-
-    /// <summary>
-    /// Get all users
-    /// </summary>
-    [HttpGet]
-    [ProducesResponseType(typeof(ListEnvelope<User>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetUsers([FromQuery] PagingQuery query)
-    {
-        var (users, paging) = await _userService.GetList(query);
-        return Ok(new ListEnvelope<User>(users, paging));  // С обёрткой для pagination
-    }
-}
-```
-
-### Несколько routes в одном контроллере
-
-```csharp
-[Route("v1/account")]
-public class RegistrationController : ControllerBase
-{
-    [HttpPost("register")]           // POST /v1/account/register
-    public Task<IActionResult> Register(...)
-
-    [HttpGet("check-email")]         // GET /v1/account/check-email
-    public Task<IActionResult> CheckEmail(...)
-
-    [HttpPost("activate")]           // POST /v1/account/activate
-    public Task<IActionResult> Activate(...)
-}
-```
-
----
-
-## Чеклист для новых endpoints
-
-### URL
+#### URL
 - [ ] kebab-case
 - [ ] Правильный тип (Resource/Query/Action)
 - [ ] Глаголы только для Query и Action
 - [ ] Max 3 сегмента после domain
 - [ ] Plural для коллекций, singular для domains
 
-### HTTP
+#### HTTP
 - [ ] Правильный метод (GET/POST/PATCH/DELETE)
 - [ ] Правильные response codes
 - [ ] Идемпотентность соблюдена
 
-### Response
+#### Response
 - [ ] Одиночный ресурс — напрямую (без Envelope)
 - [ ] Коллекция — ListEnvelope с paging
 - [ ] camelCase поля
 - [ ] Правильный error format (ErrorEnvelope)
 
-### Documentation
+#### Documentation
 - [ ] Summary описан
 - [ ] Response types задокументированы
 - [ ] GroupName соответствует папке
@@ -606,46 +506,12 @@ public class RegistrationController : ControllerBase
 
 ---
 
-## Примеры: Registration Workflow
-
-```
-# Query: проверить email
-GET /v1/account/check-email?email=user@example.com
-→ 200 { "available": true }
-→ 200 { "available": false, "reason": "already_registered" }
-
-# Action: создать аккаунт
-POST /v1/account/register
-Body: { "email": "user@example.com", "password": "..." }
-→ 201 { "email": "user@example.com" }
-→ 409 { "errors": [{ "code": "conflict", "message": "Email already registered" }] }
-
-# Resource: получить статус активации
-GET /v1/account/activation/{token}
-→ 200 { "status": "ready", "email": "user@example.com" }
-→ 410 { "errors": [{ "code": "gone", "message": "Token expired" }] }
-
-# Query: проверить username
-GET /v1/account/check-username?username=john
-→ 200 { "available": true }
-
-# Action: завершить активацию
-POST /v1/account/activation/{token}
-Body: { "username": "john" }
-→ 200 { "user": {...}, "token": "...", "preferences": {...} }
-
-# Action: переслать активацию (через recovery)
-POST /v1/account/recovery
-Body: { "email": "user@example.com" }
-→ 200 { "status": "activationResent" }
-→ 404 { "errors": [{ "code": "not_found", "message": "Email not found" }] }
-```
-
----
-
 ## Ссылки
 
+- [Паттерны и структура](../architecture/patterns.md) — Архитектура, блюпринт
+- [Системный обзор](../architecture/overview.md) — Компоненты, порты
+- [Глоссарий](./glossary.md) — Термины
+- [API Reference](./api.md) — Справочник API
+- [Тестирование](../guides/testing.md) — Запуск тестов
 - [Stripe API Reference](https://stripe.com/docs/api) — эталон Pragmatic REST
 - [GitHub REST API](https://docs.github.com/en/rest) — хороший пример
-- [Microsoft REST API Guidelines](https://github.com/microsoft/api-guidelines)
-- [RFC 7231 - HTTP/1.1 Semantics](https://tools.ietf.org/html/rfc7231)

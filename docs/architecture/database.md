@@ -321,17 +321,9 @@ ConnectTimeout = 10s;
 
 ## Links
 
-- [Architecture & Patterns](./ARCHITECTURE.md) — Паттерны, структура проектов
-- [System Overview](./OVERVIEW.md) — Компоненты, порты
-- [Authentication](./AUTHENTICATION.md) — Сессии, токены
-- [Code Standards](../standards/CODE.md) — Naming, testing
-- [Glossary](../reference/GLOSSARY.md) — Термины
+- [Паттерны](./patterns.md) — Паттерны, структура проектов
+- [Системный обзор](./overview.md) — Компоненты, порты
+- [Безопасность](./security.md) — Аутентификация, авторизация
+- [Стандарты](../reference/standards.md) — Код и API
+- [Глоссарий](../reference/glossary.md) — Термины
 
----
-
-## Принципы документации
-
-
-- **Минимум дублирования** — ссылки вместо копирования
-- **Код > документация** — паттерны смотреть в коде
-- **Только необходимое** — то, что нельзя узнать из кода
