@@ -1,35 +1,44 @@
-﻿# API Reference - DM3
+# API Design — DM3
 
-> Детальная документация API доступна в Swagger: http://localhost:5000/
+> **User Story:** "Какие принципы API? Какие форматы ответов?"
 
-## Базовая информация
-
-- **Base URL:** `https://api.dm.am` (production), `http://localhost:5000` (development)
-- **API Version:** v1
-- **Формат данных:** JSON
-- **Кодировка:** UTF-8
-- **Аутентификация:** HttpOnly Cookie (BFF Pattern)
+> **SSOT:** Полный список endpoint'ов — в Swagger: http://localhost:5000/
 
 ---
 
-## Rate Limiting
+## Базовая информация
 
-| Эндпоинты | Лимит | Описание |
-|-----------|-------|----------|
-| Глобальный | 100 req/min на IP | Все эндпоинты |
-| Аутентификация | 5 req/min на IP | `/v1/account/login`, `/v1/account/password`, `/v1/account/recovery` |
-| Username check | 20 req/min на IP | `/v1/account/check-username` |
-| Login check | 10 req/min на IP | `/v1/account/check-email` |
+| Параметр | Значение |
+|----------|----------|
+| Base URL | `https://api.dm.am` (prod), `http://localhost:5000` (dev) |
+| API Version | v1 |
+| Формат | JSON, UTF-8 |
+| Аутентификация | HttpOnly Cookie (BFF Pattern) |
 
-**HTTP Status:** `429 Too Many Requests` при превышении лимита.
+---
 
-**Заголовки:** `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `Retry-After` (при 429).
+## Философия
+
+> **Подход:** Pragmatic REST (Stripe, GitHub)
+
+1. **Понятность > Догма** — читаемые URL важнее REST-пуризма
+2. **Консистентность** — одинаковые паттерны везде
+3. **Предсказуемость** — ожидаемое поведение
+4. **Простота** — минимум сложности
+
+---
+
+## Три типа endpoints
+
+| Тип | HTTP | Глаголы в URL | Пример |
+|-----|------|---------------|--------|
+| **Resource** | GET/POST/PATCH/DELETE | Нет | `/users/{id}` |
+| **Query** | GET | Допустимы | `/account/check-email` |
+| **Action** | POST | Допустимы | `/account/login`, `/games/{id}/join` |
 
 ---
 
 ## Форматы ответов
-
-> Подробнее: [CODE_STYLE.md](./CODE_STYLE.md)
 
 | Тип ответа | Формат |
 |------------|--------|
@@ -53,29 +62,49 @@
 
 ## Коды ответов
 
-| Код | Описание |
-|-----|----------|
+| Код | Когда использовать |
+|-----|-------------------|
 | 200 | Успешный запрос |
-| 201 | Ресурс создан |
-| 204 | Успешно, без содержимого (DELETE, действия) |
+| 201 | Ресурс создан (POST) |
+| 204 | Успешно, без тела (DELETE, actions) |
 | 400 | Невалидные параметры |
 | 401 | Требуется аутентификация |
 | 403 | Недостаточно прав |
 | 404 | Ресурс не найден |
 | 409 | Конфликт состояния |
-| 410 | Токен/приглашение истекло (только временные ресурсы) |
-| 429 | Превышен rate limit |
+| 410 | Токен/приглашение истекло |
+| 429 | Rate limit превышен |
+
+---
+
+## Pagination
+
+**Offset-based:** `?skip=20&take=10`
+**Cursor-based:** `?cursor=abc&limit=50`
+
+---
+
+## Rate Limiting
+
+| Эндпоинты | Лимит |
+|-----------|-------|
+| Глобальный | 100 req/min на IP |
+| Аутентификация | 5 req/min на IP |
+| Username check | 20 req/min на IP |
+| Email check | 10 req/min на IP |
+
+**При превышении:** `429 Too Many Requests` + заголовки `X-RateLimit-*`, `Retry-After`
 
 ---
 
 ## Health Endpoints
 
-| Endpoint | Назначение | Пример ответа |
-|----------|-----------|---------------|
-| `GET /_health` | Liveness (Docker) | `Healthy` |
-| `GET /_ready` | Readiness (PostgreSQL + MongoDB + RabbitMQ) | JSON с деталями |
-| `GET /_health/detail` | Все проверки | JSON с деталями |
-| `GET /metrics` | Prometheus metrics | text/plain |
+| Endpoint | Назначение |
+|----------|-----------|
+| `GET /_health` | Liveness (Docker) |
+| `GET /_ready` | Readiness (DB checks) |
+| `GET /_health/detail` | Детальная информация |
+| `GET /metrics` | Prometheus metrics |
 
 ---
 
@@ -83,25 +112,15 @@
 
 | Параметр | Значение |
 |----------|----------|
-| **Endpoint** | `/whatsup` |
-| **Протокол** | WebSocket |
-| **Аутентификация** | Query parameter `access_token` |
+| Endpoint | `/whatsup` |
+| Протокол | WebSocket |
+| Аутентификация | Query parameter `access_token` |
 
-**Методы (сервер → клиент):**
+**Особенности:**
+- Receive-only (клиент не вызывает методы)
+- Connection tracking — in-memory
+- Адресация по connection ID (без групп)
 
-| Метод | Payload | Описание |
-|-------|---------|----------|
-| `Send` | `Notification` | Push-уведомление |
-
-```typescript
-interface Notification {
-  id: string;        // GUID
-  eventType: number; // EventType enum
-  payload: object;   // Metadata (зависит от eventType)
-}
-```
-
-**Подключение:**
 ```javascript
 const connection = new signalR.HubConnectionBuilder()
   .withUrl("/whatsup?access_token=" + token)
@@ -112,164 +131,30 @@ connection.on("Send", (notification) => {
 });
 ```
 
-**Примечания:**
-- Клиент не может вызывать методы на сервере (receive-only)
-- Connection tracking — in-memory (не Redis)
-- Группы не используются — адресация по connection ID
-
 ---
 
-## Аутентификация
+## Swagger Groups
 
-См. [AUTHENTICATION.md](../architecture/AUTHENTICATION.md)
+API организован в 9 групп по доменам:
 
----
+| Группа | Описание |
+|--------|----------|
+| Account | Регистрация, вход, восстановление |
+| Personal | Профиль и настройки текущего пользователя |
+| Messaging | Личные сообщения и чат |
+| Community | Профили, отзывы, опросы |
+| Game | Игры и всё связанное |
+| Blog | Блоги и публикации |
+| Forum | Форумы и обсуждения |
+| Moderation | Инструменты модерации |
+| General | Зеркала, поиск, загрузки |
 
-## Структура API
-
-### Swagger Groups (9 групп)
-
-| Группа | Теги | Описание |
-|--------|------|----------|
-| Account | Availability, Registration, Authentication, Credentials, Recovery, Deactivation, Security | Регистрация, вход, восстановление доступа |
-| Personal | Profile, Preferences, Blacklist, Notifications (Bots), Invitations, Subscriptions, Notepads, Notes | Профиль и настройки текущего пользователя |
-| Messaging | Global Chat, Chats, Messages | Личные сообщения и чат |
-| Community | Users, Subscribers, User Reviews, Platform Reviews, Polls, Statistics | Сообщество: профили, отзывы, опросы |
-| Game | Games, Game Reviews, Blacklist, Invitations, Notepads, Comments, Attribute Schemas, Characters, Rooms, Posts, Post Reviews | Игры и все связанное |
-| Blog | Blogs, Blacklist, Invitations, Notepads, Rubrics, Publications, Comments | Блоги и публикации |
-| Forum | Boards, Comments, Forum, Topics | Форумы и обсуждения |
-| Moderation | Moderation, Users, Notes, Warnings, Bans, Tickets, Ticket Responses, Credentials | Инструменты модерации |
-| General | Mirrors, Search, Uploads | Общие утилиты |
-
-### Account endpoints
-
-| Тег | Эндпоинты |
-|-----|-----------|
-| Availability | `GET /check-email`, `GET /check-username` |
-| Registration | `POST /register`, `GET /activation/{token}`, `POST /activation/{token}` |
-| Authentication | `POST /login`, `DELETE /login`, `GET /sessions`, `DELETE /sessions/{id}`, `DELETE /sessions/others` |
-| Credentials | `POST /password`, `POST /email-change`, `POST /email-change/{token}` |
-| Recovery | `POST /recovery`, `GET /password-reset/{token}`, `POST /password-reset/{token}` |
-| Deactivation | `POST /deactivate` |
-| Security | `GET /logs?type=...&limit=...` |
-
-### Personal endpoints (`/v1/users/me`)
-
-| Тег | Эндпоинты |
-|-----|-----------|
-| Profile | `GET /profile`, `PATCH /profile` |
-| Preferences | `GET /preferences`, `PATCH /preferences` |
-| Blacklist | `GET /blacklist`, `POST /blacklist`, `DELETE /blacklist/{username}`, `GET /blacklist/settings`, `PATCH /blacklist/settings` |
-| Notifications | `POST /bots/telegram`, `POST /bots/discord`, `DELETE /bots/telegram`, `DELETE /bots/discord` |
-
-### Messaging endpoints (`/v1/chats`)
-
-| Тег | Эндпоинты |
-|-----|-----------|
-| Chats | `GET /chats`, `GET /chats/{id}`, `POST /chats`, `PATCH /chats/{id}`, `POST /chats/direct/{username}`, `GET /chats/can-start/{username}` |
-| Messages | `GET /chats/{id}/messages`, `POST /chats/{id}/messages`, `GET /messages/{id}`, `PATCH /messages/{id}`, `DELETE /messages/{id}` |
-
-### Community endpoints (`/v1/users`)
-
-| Тег | Эндпоинты |
-|-----|-----------|
-| Users | `GET /users`, `GET /users/{username}` |
-| Subscribers | `GET /users/{username}/subscribers`, `POST /users/{username}/subscribers`, `DELETE /users/{username}/subscribers`, `GET /users/{username}/subscribers/me` |
-
-### Moderation endpoints (`/v1/moderation`)
-
-> Доступ: Moderator, SeniorModerator, Admin
-
-| Тег | Эндпоинты |
-|-----|-----------|
-| Users | `GET /users/{username}/profile`, `PATCH /users/{username}/profile`, `PATCH /users/{username}/role/{role}` |
-| Notes | `GET /users/{username}/notes`, `GET /notes/{id}`, `POST /users/{username}/notes`, `PUT /notes/{id}`, `DELETE /notes/{id}` |
-| Warnings | `GET /users/{username}/warnings`, `GET /warnings`, `POST /warnings`, `DELETE /warnings/{id}` |
-| Bans | `GET /users/{username}/bans`, `GET /users/{username}/bans/active`, `GET /bans`, `POST /bans`, `DELETE /bans/{id}` |
-| Tickets | `GET /tickets`, `GET /tickets/stats`, `GET /tickets/assigned`, `GET /tickets/mine`, `GET /tickets/{id}` |
-| Ticket Actions | `POST /tickets`, `POST /tickets/{id}/assign`, `POST /tickets/{id}/resolve` |
-| Ticket Responses | `GET /tickets/{id}/responses`, `POST /tickets/{id}/responses` |
-| Credentials | `GET /username-change-requests`, `GET /username-change-requests/{id}`, `POST /username-change-requests/{id}/approve`, `POST /username-change-requests/{id}/reject`, `POST /username-change-requests/{id}/rollback` |
-
-**Права по ролям:**
-- **Moderator**: Просмотр профилей, предупреждения, временные баны (до 30 дней), тикеты
-- **SeniorModerator**: + длительные баны, изменение ролей (до Moderator)
-- **Admin**: + перманентные баны, все роли, полный доступ
-
-### Blog Users endpoints (`/v1/blogs/{id}/users`)
-
-| Тег | Эндпоинты | Описание |
-|-----|-----------|----------|
-| Users | `GET /?role=...` | Все пользователи блога (owner, assistants, readers). Фильтр по роли. |
-| Users | `DELETE /{userId}` | Удалить пользователя (только assistants) |
-| Assistants | `GET /assistants` | Список ассистентов |
-| Assistants | `DELETE /assistants/{username}` | Удалить ассистента |
-| Readers | `GET /readers` | Список читателей (подписчиков) |
-| Readers | `POST /readers` | Подписаться на блог |
-| Readers | `DELETE /readers` | Отписаться от блога |
-
-**Примечания:**
-- Readers хранятся в таблице Subscriptions (SubscriptionTargetType.Blog)
-- Assistants хранятся в таблице BlogAssistants
-- Readers не могут быть удалены владельцем — только заблокированы через blacklist
-- Для черновых блогов с приватной видимостью (DraftVisibility.Private) требуется приглашение
-
-### General endpoints
-
-| Тег | Эндпоинты |
-|-----|-----------|
-| Mirrors | `GET /mirrors`, `GET /mirrors/transfer`, `POST /mirrors/transfer/accept` |
-| Search | `GET /search` |
-| Uploads | `POST /uploads/presign` |
-
-### Принципы тегирования
-
-- **Группа = домен** — Account для аутентификации, Profile для данных пользователя
-- **Тег = функциональная область** (Availability, Registration, Authentication, etc.)
-- **Связанные действия = один тег** (password, email-change, username-change → Credentials)
-
----
-
-## Бизнес-правила
-
-### Регистрация (Email-first flow)
-
-1. `GET /check-email` — проверка доступности email
-2. `POST /register` — создание pending регистрации (email + password)
-3. Email с ссылкой на активацию
-4. `GET /activation/{token}` — проверка статуса токена
-5. `GET /check-username` — проверка доступности имени
-6. `POST /activation/{token}` — завершение с выбором имени
-
-**Примечания:**
-- Поле `website` в форме — honeypot для защиты от ботов (должно быть пустым)
-- Токен активации действителен 48 часов
-- При истечении токена: `POST /recovery` отправит новую ссылку
-
-### Восстановление доступа (Unified Recovery)
-
-`POST /recovery` автоматически определяет нужное действие:
-- **Активный аккаунт** → отправка ссылки на сброс пароля
-- **Pending регистрация** → повторная отправка ссылки активации
-- **Email не найден** → возврат `{ status: "NotFound" }` (без раскрытия информации)
-
-### Роли и права
-
-См. [AUTHORIZATION.md](../architecture/AUTHORIZATION.md)
-
-### Привязка аватара
-
-1. Загрузить изображение через `POST /v1/uploads/presign`
-2. Передать `avatarUploadId` в `PATCH /v1/account`
+**Детали:** см. Swagger UI
 
 ---
 
 ## Ссылки
 
-- [Стандарты](./CODE_STYLE.md) — Эталон и правила проектирования API
-- [Архитектура](../architecture/SYSTEM.md) — Как устроено
-- [Аутентификация](../architecture/AUTHENTICATION.md) — Как работает вход
-- [Авторизация](../architecture/AUTHORIZATION.md) — Роли и права
-- [Глоссарий](../references/GLOSSARY.md) — Термины и определения
-- [Установка](../guides/LOCAL_SETUP.md) — Запуск проекта
-
+- [CODE_STYLE.md](./CODE_STYLE.md) — стандарты кода
+- [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) — как работает вход
+- [AUTHORIZATION.md](../architecture/AUTHORIZATION.md) — роли и права

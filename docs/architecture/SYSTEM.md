@@ -58,8 +58,8 @@
 
 ### Dependency Rule
 
-| Проект | Может зависеть от | НЕ может зависеть от |
-|--------|-------------------|---------------------|
+| Слой | Может зависеть от | НЕ может зависеть от |
+|------|-------------------|---------------------|
 | Domain.Core | Только .NET BCL | Ничего из проекта |
 | Domain.* | Domain.Core | Других Domain.*, Infrastructure.* |
 | Infrastructure.* | Domain.Core, Domain.* | Web.API, Workers.* |
@@ -80,13 +80,11 @@ await _eventProducer.Send(EventType.GameCreated, game.Id);
 await _notificationService.CreateAsync(...); // ЗАПРЕЩЕНО
 ```
 
-**Обработчики:** `Workers.Mail`, `Workers.NotificationDispatcher`, `Workers.SearchIndexer`
+**Workers** обрабатывают события асинхронно: отправка email, уведомления, индексация поиска.
 
 ---
 
 ## Компоненты системы
-
-### Общая картина
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -116,7 +114,7 @@ await _notificationService.CreateAsync(...); // ЗАПРЕЩЕНО
          │                           │                           │
          ▼                           ▼                           ▼
 ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│ SearchIndexer  │    │ NotificationDisp  │    │ Mail Worker    │
+│ SearchIndexer    │    │ NotificationDisp  │    │ Mail Worker      │
 └────────┬─────────┘    └──────────────────┘    └────────┬─────────┘
          │                                               │
          ▼                                               ▼
@@ -125,44 +123,15 @@ await _notificationService.CreateAsync(...); // ЗАПРЕЩЕНО
 └──────────────────┘                          └──────────────────┘
 ```
 
-### Backend проекты (17)
+### Слои backend
 
-#### Infrastructure (4)
-
-| Проект | Назначение |
-|--------|-----------|
-| **DM.Infrastructure.Core** | Authorization, logging, parsing, S3 storage, search |
-| **DM.Infrastructure.Mail** | Email templates и отправка |
-| **DM.Infrastructure.Messaging** | RabbitMQ события |
-| **DM.Infrastructure.Persistence** | EF Core + MongoDB, репозитории |
-
-#### Domain (9)
-
-| Проект | Назначение |
-|--------|-----------|
-| **DM.Domain.Core** | Shared kernel: интерфейсы, DTOs, enums |
-| **DM.Domain.Account** | Регистрация, логин, сессии, токены |
-| **DM.Domain.Blog** | Блоги, публикации, комментарии |
-| **DM.Domain.Community** | Пользователи, опросы, отзывы |
-| **DM.Domain.Forum** | Форумы, топики, комментарии |
-| **DM.Domain.Game** | Игры, комнаты, персонажи, посты |
-| **DM.Domain.Messaging** | Личные сообщения, глобальный чат |
-| **DM.Domain.Moderation** | Модерация, баны, предупреждения |
-| **DM.Domain.Personal** | Профили, уведомления, подписки |
-
-#### Workers (3)
-
-| Проект | Назначение |
-|--------|-----------|
-| **DM.Workers.Mail** | Email отправка и шаблоны |
-| **DM.Workers.NotificationDispatcher** | События → уведомления |
-| **DM.Workers.SearchIndexer** | События → индексация OpenSearch |
-
-#### Web (1)
-
-| Проект | Назначение |
-|--------|-----------|
-| **DM.Web.API** | REST API + WebSocket хаб + Middleware + SignalR |
+| Слой | Назначение |
+|------|-----------|
+| **Domain.Core** | Shared kernel: интерфейсы, DTOs, enums, exceptions |
+| **Domain.*** | Бизнес-логика модулей (Account, Game, Blog, Forum...) |
+| **Infrastructure.*** | Технические реализации (Persistence, Mail, Messaging) |
+| **Web.API** | REST API + WebSocket + Middleware |
+| **Workers.*** | Фоновая обработка событий |
 
 ---
 
@@ -172,8 +141,8 @@ await _notificationService.CreateAsync(...); // ЗАПРЕЩЕНО
 HTTP Request → Middleware Pipeline → Controller → Service → Repository → DB
 ```
 
-**Middleware:**
-1. SecurityHeadersMiddleware (X-Frame-Options, CSP, HSTS, etc.)
+**Middleware pipeline:**
+1. SecurityHeadersMiddleware (X-Frame-Options, CSP, HSTS)
 2. CorrelationMiddleware (X-Dm-Correlation-Token)
 3. ErrorHandlingMiddleware (exceptions → ProblemDetails)
 4. CORS
@@ -182,59 +151,11 @@ HTTP Request → Middleware Pipeline → Controller → Service → Repository �
 7. RateLimiter (100 req/min global, 5 req/min auth)
 8. AuthenticationMiddleware (Cookie → Identity)
 9. Authorization
-10. Routing → Controllers + SignalR Hub (/whatsup)
-
-**Пример:** `src/DM.Web.API/Features/Forum/Topics/TopicController.cs`
+10. Routing → Controllers + SignalR Hub
 
 ---
 
-## Dependency Injection (Autofac)
-
-```
-CoreModule (DM.Infrastructure.Core)
-├── DataAccessModule
-├── AuthorizationModule
-├── ServicesModule
-├── MessageQueuingModule
-├── AccountModule
-├── CommunityModule
-├── BlogModule
-├── MessagingModule
-├── ModerationModule
-├── ForumModule
-├── GameModule
-├── GeneralModule
-├── PersonalModule
-└── WebCoreModule
-```
-
-**Паттерны:** `RegisterDefaultTypes()`, `RegisterModuleOnce<>()`, `RegisterMapper()`
-
----
-
-## Хранилища данных
-
-### PostgreSQL
-
-См. [DATABASE.md](./DATABASE.md) — 54 таблицы по доменам
-
-### MongoDB
-
-| Коллекция | Назначение |
-|-----------|-----------|
-| **Polls** | Опросы |
-| **UnreadCounters** | Счетчики непрочитанного |
-| **UserSettings** | Настройки пользователей |
-| **UserSessions** | Сессии |
-| **AttributeSchemata** | Схемы атрибутов персонажей |
-| **Dice** | Броски кубиков |
-| **RealtimeNotifications** | Push-уведомления |
-| **LoginAttempts** | Счетчики неудачных входов |
-| **SecurityAuditLog** | Журнал событий безопасности |
-
----
-
-## Система событий (RabbitMQ)
+## Система событий
 
 ```
 Business Service → producer.Send(EventType, entityId) → Exchange (dm.events)
@@ -244,21 +165,7 @@ Business Service → producer.Send(EventType, entityId) → Exchange (dm.events)
                                      └──────────────┴──────────────┴──────────────┘
 ```
 
-**EventTypes:** `src/DM.Infrastructure.Core/Extensions/EventRoutingKeyAttribute.cs`
-
----
-
-## Система приглашений
-
-| TokenType | Назначение |
-|-----------|-----------|
-| AssistantAssignment (2) | Приглашение ассистентом |
-| PlayerInvitation (3) | Приглашение игроком |
-| ReaderInvitation (4) | Приглашение читателем |
-
-**API:**
-- Game masters: `GET/POST/DELETE /v1/games/{id}/invitations/*`
-- Users: `GET/POST /v1/account/invitations/*`
+Workers подписываются на события и обрабатывают асинхронно.
 
 ---
 
@@ -268,37 +175,17 @@ Business Service → producer.Send(EventType, entityId) → Exchange (dm.events)
 Event → NotificationConsumer → NotificationGenerator → MongoDB → SignalR → Frontend
 ```
 
-**Generators:** `src/DM.Workers.NotificationDispatcher/Implementation/Generators/`
-
----
-
-## Frontend (Vue 3 + TypeScript + Pinia)
-
-**Stores:** `src/DM.Web.Client/src/stores/`
-
-**API типизация:**
-```typescript
-type User = {
-  username: Served<Username>  // read-only
-  status: string              // editable
-}
-```
-
 ---
 
 ## Зеркала
 
 Система поддерживает несколько зеркал (разные домены, общая БД).
 
-**Конфигурация:** `MirrorConfiguration` в `appsettings.json`
-
-**Frontend:** `useRegion()` composable
-
 ---
 
 ## Ссылки
 
-- [DATABASE.md](./DATABASE.md) — схема БД
 - [AUTHENTICATION.md](./AUTHENTICATION.md) — как работает вход
 - [AUTHORIZATION.md](./AUTHORIZATION.md) — как работают права
 - [PATTERNS.md](../conventions/PATTERNS.md) — правила структурирования кода
+- [DATA_STORAGE.md](../conventions/DATA_STORAGE.md) — организация хранилищ

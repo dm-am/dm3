@@ -62,14 +62,6 @@ URL:  /users/Adam%20Advena
 
 ---
 
-## Реализация
-
-- Frontend: `src/DM.Web.Client/src/pages/account/RegistrationForm.vue`
-- Backend: `src/DM.Domain.Account/Features/Availability/AvailabilityService.cs`
-- Backend: `src/DM.Domain.Account/Features/Registration/ActivationRequestValidator.cs`
-
----
-
 ## Ссылки
 
 - [Установка](../guides/LOCAL_SETUP.md) — Тестовые аккаунты с граничными случаями

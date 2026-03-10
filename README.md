@@ -38,47 +38,46 @@ cd src/DM.Web.Client && npm install && npm run dev
 
 ### architecture/ — Как устроена система
 
-| Документ | Зачем читать |
-|----------|--------------|
-| [SYSTEM](./docs/architecture/SYSTEM.md) | Понять архитектуру и компоненты |
-| [DATABASE](./docs/architecture/DATABASE.md) | Понять схему данных |
-| [AUTHENTICATION](./docs/architecture/AUTHENTICATION.md) | Понять как работает вход |
-| [AUTHORIZATION](./docs/architecture/AUTHORIZATION.md) | Понять права и роли |
+| Документ | User Story |
+|----------|------------|
+| [SYSTEM](./docs/architecture/SYSTEM.md) | "Из чего состоит система? Какая архитектура?" |
+| [AUTHENTICATION](./docs/architecture/AUTHENTICATION.md) | "Как работает вход? Какие параметры безопасности?" |
+| [AUTHORIZATION](./docs/architecture/AUTHORIZATION.md) | "Какие роли? Кто что может?" |
 
 ### conventions/ — Правила разработки
 
-| Документ | Зачем читать |
-|----------|--------------|
-| [PATTERNS](./docs/conventions/PATTERNS.md) | Структурировать новый код (SSOT) |
-| [CODE_STYLE](./docs/conventions/CODE_STYLE.md) | Писать код правильно |
-| [API_DESIGN](./docs/conventions/API_DESIGN.md) | Проектировать API |
-| [SECURITY](./docs/conventions/SECURITY.md) | Соблюдать требования безопасности |
-| [DATA_STORAGE](./docs/conventions/DATA_STORAGE.md) | Выбрать хранилище |
-| [USERNAME_POLICY](./docs/conventions/USERNAME_POLICY.md) | Валидировать имена |
+| Документ | User Story |
+|----------|------------|
+| [PATTERNS](./docs/conventions/PATTERNS.md) | "Как структурировать новую фичу? Какой блюпринт?" |
+| [CODE_STYLE](./docs/conventions/CODE_STYLE.md) | "Какие стандарты кода? Какой чеклист?" |
+| [API_DESIGN](./docs/conventions/API_DESIGN.md) | "Какие принципы API? Какие форматы ответов?" |
+| [SECURITY](./docs/conventions/SECURITY.md) | "Какие требования к безопасности?" |
+| [DATA_STORAGE](./docs/conventions/DATA_STORAGE.md) | "Когда PostgreSQL, когда MongoDB?" |
+| [USERNAME_POLICY](./docs/conventions/USERNAME_POLICY.md) | "Какие символы разрешены в именах?" |
 
 ### guides/ — Как делать
 
-| Документ | Зачем читать |
-|----------|--------------|
-| [LOCAL_SETUP](./docs/guides/LOCAL_SETUP.md) | Запустить локально |
-| [TESTING](./docs/guides/TESTING.md) | Тестировать |
-| [DEPLOYMENT](./docs/guides/DEPLOYMENT.md) | Развернуть |
-| [MIRRORING](./docs/guides/MIRRORING.md) | Настроить зеркало |
-| [MONITORING](./docs/guides/MONITORING.md) | Мониторить |
+| Документ | User Story |
+|----------|------------|
+| [LOCAL_SETUP](./docs/guides/LOCAL_SETUP.md) | "Как запустить проект локально?" |
+| [TESTING](./docs/guides/TESTING.md) | "Как запускать тесты? Какие паттерны?" |
+| [DEPLOYMENT](./docs/guides/DEPLOYMENT.md) | "Как развернуть на сервере?" |
+| [MIRRORING](./docs/guides/MIRRORING.md) | "Как настроить зеркало?" |
+| [MONITORING](./docs/guides/MONITORING.md) | "Где смотреть логи? Как настроить алерты?" |
 
 ### plans/ — Планы
 
-| Документ | Зачем читать |
-|----------|--------------|
-| [ROADMAP](./docs/plans/ROADMAP.md) | Узнать статус |
-| [DM2_MIGRATION](./docs/plans/DM2_MIGRATION.md) | Мигрировать данные |
+| Документ | User Story |
+|----------|------------|
+| [ROADMAP](./docs/plans/ROADMAP.md) | "Что готово? Что в работе? Что планируется?" |
+| [DM2_MIGRATION](./docs/plans/DM2_MIGRATION.md) | "Как мигрировать данные со старого сайта?" |
 
 ### references/ — Справка
 
-| Документ | Зачем читать |
-|----------|--------------|
-| [GLOSSARY](./docs/references/GLOSSARY.md) | Найти термин |
-| [CONFIGURATION](./docs/references/CONFIGURATION.md) | Найти настройку |
+| Документ | User Story |
+|----------|------------|
+| [GLOSSARY](./docs/references/GLOSSARY.md) | "Что означает этот термин?" |
+| [CONFIGURATION](./docs/references/CONFIGURATION.md) | "Где найти настройки? Какой файл редактировать?" |
 
 ---
 

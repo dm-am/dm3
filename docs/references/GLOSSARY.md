@@ -366,7 +366,7 @@
 
 - [Паттерны](../conventions/PATTERNS.md) — Паттерны, структура проектов, блюпринт
 - [Система](../architecture/SYSTEM.md) — Компоненты, потоки
-- [База данных](../architecture/DATABASE.md) — Схема БД
+- [Хранилища](../conventions/DATA_STORAGE.md) — PostgreSQL vs MongoDB
 - [Аутентификация](../architecture/AUTHENTICATION.md) — Вход, сессии
 - [Авторизация](../architecture/AUTHORIZATION.md) — Роли, права
 - [Установка](../guides/LOCAL_SETUP.md) — Локальная разработка

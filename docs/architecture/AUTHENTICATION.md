@@ -1,8 +1,8 @@
 # Аутентификация DM3
 
-> **User Story:** "Как работает вход? Какой flow регистрации? Какие параметры сессий?"
+> **User Story:** "Как работает вход? Какой flow регистрации? Какие параметры безопасности?"
 
-> **Код:** `src/DM.Domain.Account/Features/Authentication/`, `src/DM.Web.API/Shared/Authentication/`
+> **Код:** `src/DM.Domain.Account/Features/`, `src/DM.Web.API/Shared/Authentication/`
 
 ---
 
@@ -40,10 +40,6 @@ PostgreSQL          MongoDB
 (Users)             (Sessions)
 ```
 
-**Файлы:**
-- `src/DM.Web.API/Shared/Authentication/ApiCredentialsStorage.cs`
-- `src/DM.Domain.Account/Features/Authentication/AuthenticationService.cs`
-
 ---
 
 ## Регистрация
@@ -64,21 +60,6 @@ PostgreSQL          MongoDB
 - PendingRegistration хранит TokenId внутри (без FK на Tokens)
 - Cleanup: 7 дней для PendingRegistration
 
-### Таблица PendingRegistrations
-
-| Поле | Назначение |
-|------|-----------|
-| TokenId | Токен для email-ссылки |
-| TokenCreatedUtc | Для проверки 48h expiry |
-| CreatedUtc | Для cleanup (7 дней) |
-| Email | Адрес для верификации |
-| PasswordHash, Salt | Хеш пароля (PBKDF2) |
-
-**Файлы:**
-- `src/DM.Infrastructure.Persistence/Entities/Account/PendingRegistration.cs`
-- `src/DM.Domain.Account/Features/Registration/RegistrationService.cs`
-- `src/DM.Domain.Account/Features/Registration/ActivationService.cs`
-
 ---
 
 ## Параметры безопасности
@@ -92,8 +73,6 @@ PostgreSQL          MongoDB
 | Salt | 32 bytes |
 | Hash | 32 bytes |
 
-**Файл:** `src/DM.Domain.Account/Features/Security/SecurityManager.cs`
-
 ### Токены
 
 | Параметр | Значение |
@@ -102,8 +81,6 @@ PostgreSQL          MongoDB
 | Key | 32 bytes |
 | Nonce | 12 bytes |
 | Tag | 16 bytes |
-
-**Файл:** `src/DM.Domain.Account/Features/Security/AesGcmSymmetricCryptoService.cs`
 
 ### Сессии
 
@@ -115,10 +92,6 @@ PostgreSQL          MongoDB
 | Отслеживание активности | Каждую 1 минуту |
 
 По умолчанию checkbox "Запомнить меня" включён — сессия на 1 год.
-
-**Файлы:**
-- Конфиг: `src/DM.Web.API/appsettings.json` → `AuthenticationConfiguration`
-- Дефолты: `src/DM.Domain.Account/Configuration/AuthenticationConfiguration.cs`
 
 ### Политика паролей
 
@@ -132,8 +105,6 @@ PostgreSQL          MongoDB
 | Спецсимволы | Не обязательно |
 
 NIST SP 800-63B-4 (2024): composition rules не требуются при сильном хешировании.
-
-**Файл:** `src/DM.Domain.Account/Configuration/PasswordPolicyConfiguration.cs`
 
 ---
 
@@ -154,8 +125,6 @@ NIST SP 800-63B-4 (2024): composition rules не требуются при си�
 
 ## Security Headers
 
-Middleware добавляет защитные заголовки:
-
 | Header | Значение |
 |--------|----------|
 | X-Frame-Options | DENY |
@@ -165,8 +134,6 @@ Middleware добавляет защитные заголовки:
 | Permissions-Policy | Минимальные разрешения |
 | Content-Security-Policy | default-src 'self' |
 | Strict-Transport-Security | max-age=31536000 (production) |
-
-**Файл:** `src/DM.Web.API/Middleware/SecurityHeadersMiddleware.cs`
 
 ---
 
