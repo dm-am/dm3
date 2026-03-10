@@ -64,13 +64,14 @@ URL:  /users/Adam%20Advena
 
 ## Реализация
 
-- Frontend: `LoginInput.vue`
-- Backend: `LoginAvailabilityService.cs`, `ActivationRequestValidator.cs`
+- Frontend: `src/DM.Web.Client/src/pages/account/RegistrationForm.vue`
+- Backend: `src/DM.Domain.Account/Features/Availability/AvailabilityService.cs`
+- Backend: `src/DM.Domain.Account/Features/Registration/ActivationRequestValidator.cs`
 
 ---
 
 ## Ссылки
 
-- [Паттерны](../architecture/patterns.md) — Паттерны, структура проектов
-- [Миграция пользователей](../project/migration.md)
+- [Установка](../guides/LOCAL_SETUP.md) — Тестовые аккаунты с граничными случаями
+- [Миграция пользователей](../plans/DM2_MIGRATION.md)
 

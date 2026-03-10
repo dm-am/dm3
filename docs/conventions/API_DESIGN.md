@@ -29,7 +29,7 @@
 
 ## Форматы ответов
 
-> Подробнее: [standards.md](./standards.md#response-format)
+> Подробнее: [CODE_STYLE.md](./CODE_STYLE.md)
 
 | Тип ответа | Формат |
 |------------|--------|
@@ -79,9 +79,49 @@
 
 ---
 
+## Realtime (SignalR)
+
+| Параметр | Значение |
+|----------|----------|
+| **Endpoint** | `/whatsup` |
+| **Протокол** | WebSocket |
+| **Аутентификация** | Query parameter `access_token` |
+
+**Методы (сервер → клиент):**
+
+| Метод | Payload | Описание |
+|-------|---------|----------|
+| `Send` | `Notification` | Push-уведомление |
+
+```typescript
+interface Notification {
+  id: string;        // GUID
+  eventType: number; // EventType enum
+  payload: object;   // Metadata (зависит от eventType)
+}
+```
+
+**Подключение:**
+```javascript
+const connection = new signalR.HubConnectionBuilder()
+  .withUrl("/whatsup?access_token=" + token)
+  .build();
+
+connection.on("Send", (notification) => {
+  console.log(notification.eventType, notification.payload);
+});
+```
+
+**Примечания:**
+- Клиент не может вызывать методы на сервере (receive-only)
+- Connection tracking — in-memory (не Redis)
+- Группы не используются — адресация по connection ID
+
+---
+
 ## Аутентификация
 
-См. [security.md](../architecture/security.md)
+См. [AUTHENTICATION.md](../architecture/AUTHENTICATION.md)
 
 ---
 
@@ -215,7 +255,7 @@
 
 ### Роли и права
 
-См. [security.md](../architecture/security.md)
+См. [AUTHORIZATION.md](../architecture/AUTHORIZATION.md)
 
 ### Привязка аватара
 
@@ -226,9 +266,10 @@
 
 ## Ссылки
 
-- [Стандарты](./standards.md) — Эталон и правила проектирования API
-- [Архитектура](../architecture/overview.md) — Как устроено
-- [Безопасность](../architecture/security.md) — Аутентификация и авторизация
-- [Глоссарий](./glossary.md) — Термины и определения
-- [Установка](../guides/setup.md) — Запуск проекта
+- [Стандарты](./CODE_STYLE.md) — Эталон и правила проектирования API
+- [Архитектура](../architecture/SYSTEM.md) — Как устроено
+- [Аутентификация](../architecture/AUTHENTICATION.md) — Как работает вход
+- [Авторизация](../architecture/AUTHORIZATION.md) — Роли и права
+- [Глоссарий](../references/GLOSSARY.md) — Термины и определения
+- [Установка](../guides/LOCAL_SETUP.md) — Запуск проекта
 

@@ -2,7 +2,7 @@
 
 ## Имена пользователей
 
-Правила валидации: [policies.md](../reference/policies.md)
+Правила валидации: [USERNAME_POLICY.md](../conventions/USERNAME_POLICY.md)
 
 ### Статистика
 

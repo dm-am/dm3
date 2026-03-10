@@ -364,13 +364,12 @@
 
 ## Ссылки
 
-- [Паттерны](../architecture/patterns.md) — Паттерны, структура проектов, блюпринт
-- [Системный обзор](../architecture/overview.md) — Компоненты, порты
-- [База данных](../architecture/database.md) — Схема БД
-- [Безопасность](../architecture/security.md) — Аутентификация, авторизация, RBAC
-- [API Reference](./api.md) — REST API
-- [Стандарты](./standards.md) — Код и API
-- [Установка](../guides/setup.md) — Локальная разработка
-- [Тестирование](../guides/testing.md) — Запуск тестов
-- [Деплой](../guides/deployment.md) — Развёртывание
+- [Паттерны](../conventions/PATTERNS.md) — Паттерны, структура проектов, блюпринт
+- [Система](../architecture/SYSTEM.md) — Компоненты, потоки
+- [База данных](../architecture/DATABASE.md) — Схема БД
+- [Аутентификация](../architecture/AUTHENTICATION.md) — Вход, сессии
+- [Авторизация](../architecture/AUTHORIZATION.md) — Роли, права
+- [Установка](../guides/LOCAL_SETUP.md) — Локальная разработка
+- [Тестирование](../guides/TESTING.md) — Запуск тестов
+- [Деплой](../guides/DEPLOYMENT.md) — Развёртывание
 

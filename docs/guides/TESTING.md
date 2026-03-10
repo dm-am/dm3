@@ -141,7 +141,7 @@ describe('bbcodeToHtml', () => {
 
 ## Ссылки
 
-- [Установка](./setup.md) — Запуск проекта
-- [Стандарты](../reference/standards.md) — Правила разработки
-- [Архитектура](../architecture/overview.md) — Как устроено
+- [Установка](./LOCAL_SETUP.md) — Запуск проекта
+- [Паттерны](../conventions/PATTERNS.md) — Правила разработки
+- [Архитектура](../architecture/SYSTEM.md) — Как устроено
 

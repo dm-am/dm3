@@ -30,45 +30,55 @@ cd src/DM.Web.Client && npm install && npm run dev
 | MinIO | http://localhost:9001 |
 | MailHog | http://localhost:8025 |
 
-**Подробнее:** [docs/guides/setup.md](./docs/guides/setup.md)
+**Подробнее:** [docs/guides/LOCAL_SETUP.md](./docs/guides/LOCAL_SETUP.md)
 
 ---
 
 ## Документация
 
-### Руководства (как делать)
+### architecture/ — Как устроена система
 
-| Документ | Описание |
-|----------|----------|
-| [setup.md](./docs/guides/setup.md) | Установка, порты, тестовые аккаунты |
-| [testing.md](./docs/guides/testing.md) | Тестирование |
-| [deployment.md](./docs/guides/deployment.md) | Деплоймент и бэкапы |
-| [mirroring.md](./docs/guides/mirroring.md) | Настройка зеркал |
+| Документ | Зачем читать |
+|----------|--------------|
+| [SYSTEM](./docs/architecture/SYSTEM.md) | Понять архитектуру и компоненты |
+| [DATABASE](./docs/architecture/DATABASE.md) | Понять схему данных |
+| [AUTHENTICATION](./docs/architecture/AUTHENTICATION.md) | Понять как работает вход |
+| [AUTHORIZATION](./docs/architecture/AUTHORIZATION.md) | Понять права и роли |
 
-### Архитектура (как устроено)
+### conventions/ — Правила разработки
 
-| Документ | Описание |
-|----------|----------|
-| [patterns.md](./docs/architecture/patterns.md) | **Паттерны, структура проектов, блюпринт (SSOT)** |
-| [overview.md](./docs/architecture/overview.md) | Компоненты, порты, потоки данных |
-| [database.md](./docs/architecture/database.md) | Схема БД |
-| [security.md](./docs/architecture/security.md) | Аутентификация, авторизация, RBAC |
+| Документ | Зачем читать |
+|----------|--------------|
+| [PATTERNS](./docs/conventions/PATTERNS.md) | Структурировать новый код (SSOT) |
+| [CODE_STYLE](./docs/conventions/CODE_STYLE.md) | Писать код правильно |
+| [API_DESIGN](./docs/conventions/API_DESIGN.md) | Проектировать API |
+| [SECURITY](./docs/conventions/SECURITY.md) | Соблюдать требования безопасности |
+| [DATA_STORAGE](./docs/conventions/DATA_STORAGE.md) | Выбрать хранилище |
+| [USERNAME_POLICY](./docs/conventions/USERNAME_POLICY.md) | Валидировать имена |
 
-### Справочники
+### guides/ — Как делать
 
-| Документ | Описание |
-|----------|----------|
-| [api.md](./docs/reference/api.md) | API эндпоинты |
-| [standards.md](./docs/reference/standards.md) | Стандарты кода и API |
-| [glossary.md](./docs/reference/glossary.md) | Термины |
-| [policies.md](./docs/reference/policies.md) | Политика имён пользователей |
+| Документ | Зачем читать |
+|----------|--------------|
+| [LOCAL_SETUP](./docs/guides/LOCAL_SETUP.md) | Запустить локально |
+| [TESTING](./docs/guides/TESTING.md) | Тестировать |
+| [DEPLOYMENT](./docs/guides/DEPLOYMENT.md) | Развернуть |
+| [MIRRORING](./docs/guides/MIRRORING.md) | Настроить зеркало |
+| [MONITORING](./docs/guides/MONITORING.md) | Мониторить |
 
-### Проект
+### plans/ — Планы
 
-| Документ | Описание |
-|----------|----------|
-| [roadmap.md](./docs/project/roadmap.md) | Дорожная карта |
-| [migration.md](./docs/project/migration.md) | Миграция со старого сайта |
+| Документ | Зачем читать |
+|----------|--------------|
+| [ROADMAP](./docs/plans/ROADMAP.md) | Узнать статус |
+| [DM2_MIGRATION](./docs/plans/DM2_MIGRATION.md) | Мигрировать данные |
+
+### references/ — Справка
+
+| Документ | Зачем читать |
+|----------|--------------|
+| [GLOSSARY](./docs/references/GLOSSARY.md) | Найти термин |
+| [CONFIGURATION](./docs/references/CONFIGURATION.md) | Найти настройку |
 
 ---
 
@@ -86,10 +96,11 @@ dm3/
 ├── docker/                 # Docker конфигурация
 ├── scripts/                # CLI скрипты
 └── docs/                   # Документация
-    ├── guides/             # Руководства
-    ├── architecture/       # Архитектура
-    ├── reference/          # Справочники
-    └── project/            # Проект
+    ├── architecture/       # ФАКТЫ — как устроена система
+    ├── conventions/        # ПРАВИЛА — как писать код
+    ├── guides/             # ИНСТРУКЦИИ — как делать
+    ├── plans/              # ПЛАНЫ — что делать
+    └── references/         # СПРАВКА — где найти
 ```
 
 ---

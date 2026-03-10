@@ -98,7 +98,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 | Mentor | `TestMentor` | mentor@test.local |
 | RegularUser | `TestUser` | user@test.local |
 
-**Граничные случаи имён (см. [policies.md](../reference/policies.md)):**
+**Граничные случаи имён (см. [USERNAME_POLICY.md](../conventions/USERNAME_POLICY.md)):**
 
 | Логин | Особенность |
 |-------|-------------|
@@ -212,11 +212,11 @@ dotnet ef database update -p src/DM.Infrastructure.Persistence -s src/DM.Web.API
 
 | Секция | Что настраивает | См. документацию |
 |--------|-----------------|------------------|
-| `AuthenticationConfiguration` | Сессии (1 год), throttling, lockout | [security.md](../architecture/security.md) |
-| `PasswordPolicyConfiguration` | Требования к паролям (8+ символов) | [security.md](../architecture/security.md) |
-| `TokenConfiguration` | Срок жизни токенов (активация, сброс пароля) | [security.md](../architecture/security.md) |
+| `AuthenticationConfiguration` | Сессии (1 год), throttling, lockout | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
+| `PasswordPolicyConfiguration` | Требования к паролям (8+ символов) | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
+| `TokenConfiguration` | Срок жизни токенов (активация, сброс пароля) | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | `CdnConfiguration` | MinIO/S3 для загрузки файлов | — |
-| `MirrorConfiguration` | Зеркала (dm.am, ru.l.dm.am) | [mirroring.md](./mirroring.md) |
+| `MirrorConfiguration` | Зеркала (dm.am, ru.l.dm.am) | [MIRRORING.md](./MIRRORING.md) |
 
 ### Frontend
 
@@ -263,8 +263,8 @@ URL: http://localhost:80 (Basic Auth: `preview` / `dm2026preview`)
 
 ## Ссылки
 
-- [Архитектура](../architecture/overview.md)
-- [Тестирование](./testing.md)
-- [Деплоймент](./deployment.md)
-- [API Reference](../reference/api.md)
+- [Архитектура](../architecture/SYSTEM.md)
+- [Тестирование](./TESTING.md)
+- [Деплоймент](./DEPLOYMENT.md)
+- [Конфигурация](../references/CONFIGURATION.md)
 

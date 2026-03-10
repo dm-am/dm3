@@ -148,5 +148,5 @@
 
 ## Ссылки
 
-- [Миграция со старого сайта](./migration.md)
-- [Стандарты разработки](../reference/standards.md)
+- [Миграция со старого сайта](./DM2_MIGRATION.md)
+- [Стандарты разработки](../conventions/CODE_STYLE.md)

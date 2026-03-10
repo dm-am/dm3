@@ -1,10 +1,92 @@
-﻿# Архитектура DM3 — Системный обзор
+# Система DM3
 
-> **Паттерны и структура:** См. [patterns.md](./patterns.md) — паттерны, Feature Folders, Unified Services, блюпринт.
->
-> Этот документ описывает компоненты системы, порты и потоки данных.
+> **User Story:** "Из чего состоит система? Какая архитектура? Как связаны компоненты?"
 
-## Общая картина
+---
+
+## Архитектурные решения
+
+### Modular Monolith
+
+**Зачем:** Изоляция модулей — изменения в Game не ломают Blog. Простота — один деплой, одна БД. Возможность выделить модуль в микросервис при необходимости.
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         MODULAR MONOLITH                                │
+│                                                                         │
+│  Account  Personal  Community  Moderation  Messaging  Game  Blog  Forum │
+│     │        │          │          │           │        │    │      │   │
+│     └────────┴──────────┴──────────┴───────────┴────────┴────┴──────┘   │
+│                                 │                                       │
+│                    ┌────────────▼────────────┐                          │
+│                    │     Domain Events       │                          │
+│                    │      (RabbitMQ)         │                          │
+│                    └─────────────────────────┘                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Clean Architecture
+
+**Зачем:** Testability — Domain тестируется без БД/HTTP. Flexibility — можно заменить PostgreSQL без изменения бизнес-логики. Чёткие границы ответственности.
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Entry Points                                     │
+│  DM.Web.API          DM.Workers.*           DM.Web.Client               │
+│  (ASP.NET Core)      (MassTransit)          (Vue 3)                     │
+└───────────────────────────┬─────────────────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────────────────┐
+│                        Infrastructure                                   │
+│  Persistence, Mail, Messaging, Core                                     │
+│  Реализации интерфейсов из Domain. Никаких публичных интерфейсов.       │
+└───────────────────────────┬─────────────────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────────────────┐
+│                        Domain (Business Logic)                          │
+│  Account, Personal, Community, Moderation, Messaging, Game, Blog, Forum │
+│  Unified Services + Repository Interfaces                               │
+└───────────────────────────┬─────────────────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────────────────┐
+│                        Domain.Core (Shared Kernel)                      │
+│  Интерфейсы, DTO, Enums, Exceptions. Никакой бизнес-логики.             │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Ключевое правило:** Все публичные интерфейсы — в Domain. Infrastructure НЕ определяет публичных интерфейсов.
+
+### Dependency Rule
+
+| Проект | Может зависеть от | НЕ может зависеть от |
+|--------|-------------------|---------------------|
+| Domain.Core | Только .NET BCL | Ничего из проекта |
+| Domain.* | Domain.Core | Других Domain.*, Infrastructure.* |
+| Infrastructure.* | Domain.Core, Domain.* | Web.API, Workers.* |
+| Web.API, Workers.* | Всё | — |
+| Web.Client | Только HTTP API | Backend напрямую |
+
+**Важно:** Domain.Game НЕ может зависеть от Domain.Blog. Модули общаются только через Domain Events.
+
+### Domain Events
+
+**Зачем:** Decoupling — модули не знают друг о друге. Async — отправка email не блокирует HTTP-ответ. Reliability — RabbitMQ гарантирует доставку.
+
+```csharp
+// Правильно: публикуем событие
+await _eventProducer.Send(EventType.GameCreated, game.Id);
+
+// Неправильно: прямой вызов другого модуля
+await _notificationService.CreateAsync(...); // ЗАПРЕЩЕНО
+```
+
+**Обработчики:** `Workers.Mail`, `Workers.NotificationDispatcher`, `Workers.SearchIndexer`
+
+---
+
+## Компоненты системы
+
+### Общая картина
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -43,11 +125,9 @@
 └──────────────────┘                          └──────────────────┘
 ```
 
----
+### Backend проекты (17)
 
-## Backend проекты (17)
-
-### Infrastructure (4)
+#### Infrastructure (4)
 
 | Проект | Назначение |
 |--------|-----------|
@@ -56,7 +136,7 @@
 | **DM.Infrastructure.Messaging** | RabbitMQ события |
 | **DM.Infrastructure.Persistence** | EF Core + MongoDB, репозитории |
 
-### Domain (9)
+#### Domain (9)
 
 | Проект | Назначение |
 |--------|-----------|
@@ -70,7 +150,7 @@
 | **DM.Domain.Moderation** | Модерация, баны, предупреждения |
 | **DM.Domain.Personal** | Профили, уведомления, подписки |
 
-### Workers (3)
+#### Workers (3)
 
 | Проект | Назначение |
 |--------|-----------|
@@ -78,7 +158,7 @@
 | **DM.Workers.NotificationDispatcher** | События → уведомления |
 | **DM.Workers.SearchIndexer** | События → индексация OpenSearch |
 
-### Web (1)
+#### Web (1)
 
 | Проект | Назначение |
 |--------|-----------|
@@ -136,7 +216,7 @@ CoreModule (DM.Infrastructure.Core)
 
 ### PostgreSQL
 
-См. [database.md](./database.md) — 54 таблицы по доменам
+См. [DATABASE.md](./DATABASE.md) — 54 таблицы по доменам
 
 ### MongoDB
 
@@ -151,23 +231,6 @@ CoreModule (DM.Infrastructure.Core)
 | **RealtimeNotifications** | Push-уведомления |
 | **LoginAttempts** | Счетчики неудачных входов |
 | **SecurityAuditLog** | Журнал событий безопасности |
-
----
-
-## Аутентификация
-
-См. [security.md](./security.md)
-
----
-
-## Авторизация (Intention Pattern)
-
-**Пример:** `src/DM.Domain.Forum/Authorization/TopicIntentionResolver.cs`
-
-```csharp
-intentionManager.ThrowIfForbidden(TopicIntention.Delete, topic);
-// Нет прав → 403 Forbidden
-```
 
 ---
 
@@ -231,45 +294,11 @@ type User = {
 
 **Frontend:** `useRegion()` composable
 
-**API:** См. [API Reference](../reference/api.md)
-
----
-
-## Observability
-
-### Логирование (Serilog)
-
-```
-Sinks: OpenSearch (dm_logstash-{date}), Console
-Enrichers: Application, Environment, LogContext, ActivityEnricher (TraceId, SpanId)
-```
-
-### Tracing (OpenTelemetry → Jaeger)
-
-Инструментация: ASP.NET Core, gRPC, HTTP client, EF Core, MongoDB, RabbitMQ
-
-**Протокол:** OTLP gRPC (порт 4317)
-
-### Metrics (Prometheus)
-
-**Endpoint:** `/metrics` на всех .NET сервисах
-
-**Scrape targets:** dm-api, 3 consumers, postgres-exporter, node-exporter
-
-**Dashboards:** 3 Grafana dashboard'а (API Overview, Infrastructure, Consumers) — auto-provisioned
-
-### Alerting
-
-7 Prometheus правил: `docker/prometheus/alerts.yml`
-
 ---
 
 ## Ссылки
 
-- [Паттерны](./patterns.md) — Паттерны, структура проектов, блюпринт
-- [База данных](./database.md) — Схема БД
-- [Безопасность](./security.md) — Аутентификация, авторизация, RBAC
-- [Глоссарий](../reference/glossary.md) — Термины
-- [API Reference](../reference/api.md) — REST API
-- [Установка](../guides/setup.md) — Локальная разработка
-
+- [DATABASE.md](./DATABASE.md) — схема БД
+- [AUTHENTICATION.md](./AUTHENTICATION.md) — как работает вход
+- [AUTHORIZATION.md](./AUTHORIZATION.md) — как работают права
+- [PATTERNS.md](../conventions/PATTERNS.md) — правила структурирования кода

@@ -1,114 +1,14 @@
-# DM3 — Архитектура и паттерны
+# Паттерны и структура кода DM3
 
-> **SSOT:** Это единственный источник истины по архитектуре и паттернам DM3. Другие документы ссылаются сюда.
-
----
-
-## Архитектура
-
-DM3 построен на **Modular Monolith** с **Clean Architecture** внутри каждого модуля. Сервисы проектируются как **Unified Services**, модули общаются через **Domain Events**. Тестирование следует **Testing Pyramid** с акцентом на unit-тесты Domain-слоя.
-
-### Структура решения
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         MODULAR MONOLITH                                │
-│                                                                         │
-│  Account  Personal  Community  Moderation  Messaging  Game  Blog  Forum │
-│     │        │          │          │           │        │    │      │   │
-│     └────────┴──────────┴──────────┴───────────┴────────┴────┴──────┘   │
-│                                 │                                       │
-│                    ┌────────────▼────────────┐                          │
-│                    │     Domain Events       │                          │
-│                    │      (RabbitMQ)         │                          │
-│                    └─────────────────────────┘                          │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### Слои внутри каждого модуля (Clean Architecture)
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        Entry Points                                     │
-│  DM.Web.API          DM.Workers.*           DM.Web.Client               │
-│  (ASP.NET Core)      (MassTransit)          (Vue 3)                     │
-└───────────────────────────┬─────────────────────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────────────────────┐
-│                        Infrastructure                                   │
-│  Persistence, Mail, Messaging, Core                                     │
-│  Реализации интерфейсов из Domain. Никаких публичных интерфейсов.       │
-└───────────────────────────┬─────────────────────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────────────────────┐
-│                        Domain (Business Logic)                          │
-│  Account, Personal, Community, Moderation, Messaging, Game, Blog, Forum │
-│  Unified Services + Repository Interfaces                               │
-└───────────────────────────┬─────────────────────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────────────────────┐
-│                        Domain.Core (Shared Kernel)                      │
-│  Интерфейсы, DTO, Enums, Exceptions. Никакой бизнес-логики.             │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### Dependency Rule
-
-| Проект | Может зависеть от | НЕ может зависеть от |
-|--------|-------------------|---------------------|
-| Domain.Core | Только .NET BCL | Ничего из проекта |
-| Domain.* | Domain.Core | Других Domain.*, Infrastructure.* |
-| Infrastructure.* | Domain.Core, Domain.* | Web.API, Workers.* |
-| Web.API, Workers.* | Всё | — |
-| Web.Client | Только HTTP API | Backend напрямую |
-
-**Важно:** Domain.Game НЕ может зависеть от Domain.Blog. Модули общаются только через Domain Events.
+> **User Story:** "Как структурировать новую фичу? Какой блюпринт?"
+>
+> **SSOT:** Это единственный источник истины по структуре кода.
 
 ---
 
-## Принципы и паттерны
+## Паттерны по слоям
 
-### Архитектурные принципы (строго)
-
-Эти принципы определяют структуру решения и соблюдаются **без исключений**.
-
-#### Modular Monolith
-
-**Зачем:** Изоляция модулей — изменения в Game не ломают Blog. Простота — один деплой, одна БД. Возможность выделить модуль в микросервис при необходимости.
-
-Монолит, разделённый на изолированные модули. Каждый модуль — bounded context со своей бизнес-логикой. Модули показаны на диаграмме в разделе [Структура решения](#структура-решения).
-
-#### Clean Architecture
-
-**Зачем:** Testability — Domain тестируется без БД/HTTP. Flexibility — можно заменить PostgreSQL без изменения бизнес-логики. Чёткие границы ответственности.
-
-Правило направления зависимостей — внутренние слои не знают о внешних. Слои показаны на диаграмме, зависимости — в таблице [Dependency Rule](#dependency-rule).
-
-**Ключевое правило:** Все публичные интерфейсы — в Domain. Infrastructure НЕ определяет публичных интерфейсов.
-
-#### Domain Events
-
-**Зачем:** Decoupling — модули не знают друг о друге. Async — отправка email не блокирует HTTP-ответ. Reliability — RabbitMQ гарантирует доставку.
-
-Асинхронные события для межмодульной коммуникации. Модули НЕ вызывают сервисы друг друга напрямую.
-
-```csharp
-// ✅ Правильно: публикуем событие
-await _eventProducer.Send(EventType.GameCreated, game.Id);
-
-// ❌ Неправильно: прямой вызов другого модуля
-await _notificationService.CreateAsync(...); // ЗАПРЕЩЕНО
-```
-
-**Обработчики:** `Workers.Mail`, `Workers.NotificationDispatcher`, `Workers.SearchIndexer`
-
----
-
-### Организация кода по слоям
-
-Паттерны применяются в соответствующих слоях. Это **прагматичные решения**, не догмы.
-
-#### Domain.Core — Shared Kernel
+### Domain.Core — Shared Kernel
 
 **Зачем:** Общие контракты без дублирования. Модули общаются через абстракции, не зная друг о друге.
 
@@ -119,7 +19,7 @@ await _notificationService.CreateAsync(...); // ЗАПРЕЩЕНО
 
 **Правило:** Domain.* НЕ импортирует другие Domain.* — только через Domain.Core.
 
-#### Domain.* — Unified Services
+### Domain.* — Unified Services
 
 **Зачем:** Один интерфейс вместо трёх-четырёх. Все операции с Game в одном месте. Меньше файлов и DI-регистраций.
 
@@ -138,7 +38,7 @@ public interface IGameService
 
 **Где применяется:** Domain.* (`IGameService`), Web.API (`IGameApiService`).
 
-#### Infrastructure.* — Technical Concerns
+### Infrastructure.* — Technical Concerns
 
 **Зачем:** Чёткое разделение технических ответственностей. Легко найти где реализован кэш, где парсинг, где репозитории.
 
@@ -167,7 +67,7 @@ Infrastructure.Messaging/
 └── Outbox/           # Transactional outbox
 ```
 
-#### Repository Pattern
+### Repository Pattern
 
 **Зачем:** Абстракция над БД. Domain не знает про EF Core. Тестируемость без реальной БД.
 
@@ -181,7 +81,7 @@ public interface IGameRepository { ... }
 internal class GameRepository : IGameRepository { ... }
 ```
 
-#### Web.API — Feature Folders
+### Web.API — Feature Folders
 
 **Зачем:** Всё связанное с фичей в одном месте. Легко найти controller, service, DTOs для конкретного endpoint.
 
@@ -198,7 +98,7 @@ Features/{Module}/{Feature}/
 
 **Примечание:** Feature Folders — это организация Web.API, не путать с Vertical Slices. Бизнес-логика остаётся в Domain.
 
-#### Workers — Event Handlers
+### Workers — Event Handlers
 
 **Зачем:** Асинхронная обработка событий. Отправка email, уведомления, индексация — не блокируют HTTP-ответ.
 
@@ -213,7 +113,7 @@ Workers.{Name}/
 
 **Workers DM3:** `Mail`, `NotificationDispatcher`, `SearchIndexer`.
 
-#### Frontend — Feature-Sliced Design (FSD)
+### Frontend — Feature-Sliced Design (FSD)
 
 **Зачем:** Чёткие правила импортов предотвращают спагетти-код. Переиспользуемость компонентов. Масштабируемость frontend.
 
@@ -234,13 +134,13 @@ app → pages → widgets → features → entities → shared
 
 **Правила импортов:** Верхние слои → нижние. Слои одного уровня НЕ импортируют друг друга.
 
-#### Tests — Testing Pyramid
+### Tests — Testing Pyramid
 
 **Зачем:** Быстрая обратная связь. Unit tests дешёвые и быстрые, ловят большинство багов. E2E дорогие — только критичные сценарии.
 
 Стратегия распределения тестов: Unit tests (Domain) > Integration tests (API) > E2E tests.
 
-#### Tests — Mirrored Structure
+### Tests — Mirrored Structure
 
 **Зачем:** Легко найти тесты для любого класса. Нет вопросов "где тест для X?".
 
@@ -252,11 +152,9 @@ Domain.Forum/Features/Topics/TopicService.cs
 
 ---
 
-## Naming Conventions (Стандарт именования)
+## Naming Conventions
 
 > **Принципы:** Унифицированность, самодокументируемость, future-proof.
-
----
 
 ### 1. Паттерн именования классов
 
@@ -272,8 +170,6 @@ Domain.Forum/Features/Topics/TopicService.cs
 
 **Классы всегда в единственном числе:** `UserProfile`, `GameComment`, `ModeratedProfileNote`.
 
----
-
 ### 2. Контексты (префиксы)
 
 | Контекст | Значение | Модуль | Пример |
@@ -286,8 +182,6 @@ Domain.Forum/Features/Topics/TopicService.cs
 | `Blog` | Контент блога | Blog | `BlogComment`, `BlogBlacklist` |
 | `Publication` | Публикация в блоге | Blog | `PublicationComment` |
 | `Topic` | Контент топика форума | Forum | `TopicComment` |
-
----
 
 ### 3. Иерархия сущностей (примеры)
 
@@ -312,8 +206,6 @@ Blacklist
 ├── GameBlacklist (Game)
 └── BlogBlacklist (Blog)
 ```
-
----
 
 ### 4. Распределение по модулям
 
@@ -340,8 +232,6 @@ Blacklist
 | **Blog** | Blog, Publication, BlogComment, PublicationComment, BlogBlacklist, BlogInvitation | — |
 | **Forum** | Board, Topic, TopicComment | — |
 
----
-
 ### 5. Правила для папок Features
 
 **Ресурсы (CRUD над сущностью) — множественное число:**
@@ -367,8 +257,6 @@ Features/Search/          # поиск
 - ❌ `Blacklist` (ед.ч.) — использовать `Blacklists/`
 - ❌ `Notepad` (ед.ч.) — использовать `Notepads/`
 
----
-
 ### 6. Frontend (FSD) — стиль именования
 
 | Элемент | Стиль | Примеры |
@@ -382,9 +270,7 @@ Features/Search/          # поиск
 
 ## Целевые структуры (Блюпринт)
 
-> `{Placeholder}` — переменная часть. Паттерны и правила — в разделе [Принципы и паттерны](#принципы-и-паттерны).
-
----
+> `{Placeholder}` — переменная часть.
 
 ### DM.Domain.Core
 
@@ -415,8 +301,6 @@ DM.Domain.Core/
 └── Users/                # IUserLookupService (cross-module)
 ```
 
----
-
 ### DM.Domain.{Module}
 
 ```
@@ -435,8 +319,6 @@ DM.Domain.{Module}/
 └── Configuration/
 ```
 
----
-
 ### DM.Infrastructure.Core
 
 ```
@@ -453,8 +335,6 @@ DM.Infrastructure.Core/
 ├── Tracing/
 └── CoreModule.cs
 ```
-
----
 
 ### DM.Infrastructure.Persistence
 
@@ -478,8 +358,6 @@ DM.Infrastructure.Persistence/
 └── PersistenceModule.cs
 ```
 
----
-
 ### DM.Infrastructure.Mail
 
 ```
@@ -489,8 +367,6 @@ DM.Infrastructure.Mail/
 └── MailModule.cs
 ```
 
----
-
 ### DM.Infrastructure.Messaging
 
 ```
@@ -499,8 +375,6 @@ DM.Infrastructure.Messaging/
 ├── Outbox/
 └── MessagingModule.cs
 ```
-
----
 
 ### DM.Web.API
 
@@ -531,8 +405,6 @@ DM.Web.API/
 └── Startup.cs
 ```
 
----
-
 ### DM.Web.Client
 
 ```
@@ -562,8 +434,6 @@ DM.Web.Client/src/
 └── assets/
 ```
 
----
-
 ### DM.Workers.{Name}
 
 ```
@@ -572,8 +442,6 @@ DM.Workers.{Name}/
 ├── Program.cs
 └── Startup.cs
 ```
-
----
 
 ### test/
 
@@ -593,7 +461,7 @@ test/
 
 ---
 
-## Частые ошибки и недопонимания
+## Частые ошибки
 
 ### ❌ "Модули могут вызывать сервисы друг друга"
 
@@ -605,15 +473,15 @@ test/
 
 ### ❌ "Web.Client должен следовать Clean Architecture"
 
-Нет. Clean Architecture — для backend. Frontend использует **Feature-Sliced Design (FSD)** — специализированную методологию для frontend с чёткими правилами импортов между слоями.
+Нет. Clean Architecture — для backend. Frontend использует **Feature-Sliced Design (FSD)**.
 
 ### ❌ "Тесты можно организовать плоско или по-своему"
 
-Нет. Тесты зеркалят структуру production кода. `Domain.Forum/Features/Topics/TopicService.cs` → `Domain.Forum.Tests/Features/Topics/TopicServiceShould.cs`. Это упрощает навигацию и поддержку.
+Нет. Тесты зеркалят структуру production кода.
 
 ### ❌ "Domain.Core может содержать бизнес-логику"
 
-Нет. Domain.Core — это **Shared Kernel**: интерфейсы, DTO, enums, exceptions. Никаких реализаций, никакой бизнес-логики. Бизнес-логика — в Domain.*.
+Нет. Domain.Core — это **Shared Kernel**: интерфейсы, DTO, enums, exceptions. Никакой бизнес-логики.
 
 ### ❌ "Features везде означает одно и то же"
 
@@ -624,35 +492,35 @@ test/
 
 ### ❌ "Feature Folders = Vertical Slices"
 
-Нет. Feature Folders в Web.API — это только организация API-слоя. Бизнес-логика остаётся в Domain. Vertical Slices подразумевают всё в одной папке включая Domain — мы так не делаем.
+Нет. Feature Folders в Web.API — это только организация API-слоя. Бизнес-логика остаётся в Domain.
 
 ### ❌ "Workers содержат бизнес-логику"
 
-Нет. Workers — тонкий слой оркестрации. Вся бизнес-логика в Domain.*. Worker только получает событие и вызывает соответствующий сервис.
+Нет. Workers — тонкий слой оркестрации. Вся бизнес-логика в Domain.*.
 
 ### ❌ "Сервисы надо разбивать на CreateGameService, UpdateGameService"
 
-Нет. Мы используем **Unified Services** — один сервис на фичу со всеми CRUD-операциями. Split Services добавляют файлы и усложняют DI без пользы.
+Нет. Мы используем **Unified Services** — один сервис на фичу со всеми CRUD-операциями.
 
 ### ❌ "Infrastructure организуется по фичам"
 
-Нет. Infrastructure организуется по **Technical Concerns** — техническому назначению (Caching/, Parsing/, Repositories/). Не по бизнес-фичам.
+Нет. Infrastructure организуется по **Technical Concerns**.
 
 ### ❌ "FSD entities могут импортировать друг друга"
 
-Нет. В FSD слои одного уровня НЕ импортируют друг друга. `entities/game/` не импортирует `entities/user/`. Общий код — в `shared/`.
+Нет. В FSD слои одного уровня НЕ импортируют друг друга.
 
 ### ❌ "Domain.Game может импортировать Domain.Blog"
 
-Нет. Domain.* НЕ импортирует другие Domain.* напрямую. Только через Domain.Core (Shared Kernel) или Domain Events.
+Нет. Domain.* НЕ импортирует другие Domain.* напрямую. Только через Domain.Core или Domain Events.
 
 ### ❌ "Repository может содержать бизнес-логику"
 
-Нет. Repository — только доступ к данным (CRUD). Бизнес-логика — в Service. Repository не принимает решений, не валидирует бизнес-правила.
+Нет. Repository — только доступ к данным (CRUD). Бизнес-логика — в Service.
 
 ---
 
-## Что мы НЕ используем (и почему)
+## Что НЕ используем (и почему)
 
 | Паттерн | Почему не используем |
 |---------|---------------------|
@@ -660,15 +528,12 @@ test/
 | **CQRS** | Нет отдельной read-модели, домен не настолько сложен. |
 | **Event Sourcing** | Нет требований к аудиту всех изменений или time-travel. |
 | **Specification Pattern** | Текущие запросы не требуют. Добавим если запросы станут сложными. |
-| **BDD / SpecFlow** | Unit tests + integration tests достаточно. BDD добавляет overhead без пользы для текущего размера. |
+| **BDD / SpecFlow** | Unit tests + integration tests достаточно. |
 
 ---
 
 ## Ссылки
 
-- [Системный обзор](./overview.md) — Компоненты, порты, потоки данных
-- [База данных](./database.md) — Схема БД
-- [Безопасность](./security.md) — Аутентификация, авторизация, RBAC
-- [Стандарты](../reference/standards.md) — Код и API
-- [Глоссарий](../reference/glossary.md) — Термины
-
+- [SYSTEM.md](../architecture/SYSTEM.md) — архитектура системы
+- [CODE_STYLE.md](./CODE_STYLE.md) — стиль кода
+- [API_DESIGN.md](./API_DESIGN.md) — проектирование API
