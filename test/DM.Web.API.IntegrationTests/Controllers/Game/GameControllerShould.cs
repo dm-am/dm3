@@ -8,9 +8,9 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// <summary>
 /// Integration tests for GameController
 /// </summary>
-public class GameControllerTests : IntegrationTestBase
+public class GameControllerShould : IntegrationTestBase
 {
-    public GameControllerTests(DatabaseFixture databaseFixture) : base(databaseFixture)
+    public GameControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 

@@ -9,9 +9,9 @@ namespace DM.Web.API.IntegrationTests.Controllers.Account;
 /// <summary>
 /// Integration tests for AccountController
 /// </summary>
-public class AccountControllerTests : IntegrationTestBase
+public class AccountControllerShould : IntegrationTestBase
 {
-    public AccountControllerTests(DatabaseFixture databaseFixture) : base(databaseFixture)
+    public AccountControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 

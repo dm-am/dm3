@@ -62,7 +62,7 @@ public class TopicCommentController : ControllerBase
     /// <param name="id">Topic identifier (GUID)</param>
     /// <param name="q">Pagination parameters (skip, number)</param>
     /// <response code="200">Paginated list of comments</response>
-    /// <response code="410">Topic not found</response>
+    /// <response code="404">Topic not found</response>
     [HttpGet("~/v1/topics/{id}/comments", Name = nameof(GetTopicComments))]
     [ProducesResponseType(typeof(ListEnvelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -85,7 +85,7 @@ public class TopicCommentController : ControllerBase
     /// <response code="400">Invalid comment data (empty text, etc.)</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User cannot comment (topic closed or no permission)</response>
-    /// <response code="410">Topic not found</response>
+    /// <response code="404">Topic not found</response>
     [HttpPost("~/v1/topics/{id}/comments", Name = nameof(PostTopicComment))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Comment), StatusCodes.Status201Created)]
@@ -111,7 +111,7 @@ public class TopicCommentController : ControllerBase
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <response code="200">Comment details</response>
-    /// <response code="410">Comment not found</response>
+    /// <response code="404">Comment not found</response>
     [HttpGet("{id}", Name = nameof(GetTopicComment))]
     [ProducesResponseType(typeof(Comment), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -131,7 +131,7 @@ public class TopicCommentController : ControllerBase
     /// <response code="400">Invalid comment data</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User cannot edit this comment</response>
-    /// <response code="410">Comment not found</response>
+    /// <response code="404">Comment not found</response>
     [HttpPatch("{id}", Name = nameof(PatchTopicComment))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Comment), StatusCodes.Status200OK)]
@@ -154,7 +154,7 @@ public class TopicCommentController : ControllerBase
     /// <response code="204">Comment deleted successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User cannot delete this comment</response>
-    /// <response code="410">Comment not found</response>
+    /// <response code="404">Comment not found</response>
     [HttpDelete("{id}", Name = nameof(DeleteTopicComment))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -180,7 +180,7 @@ public class TopicCommentController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User cannot like this comment (e.g., own comment)</response>
     /// <response code="409">User already liked this comment</response>
-    /// <response code="410">Comment not found</response>
+    /// <response code="404">Comment not found</response>
     [HttpPost("{id}/likes", Name = nameof(PostTopicCommentLike))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(User), StatusCodes.Status201Created)]
@@ -206,7 +206,7 @@ public class TopicCommentController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User cannot remove like (not their like)</response>
     /// <response code="409">User has not liked this comment</response>
-    /// <response code="410">Comment not found</response>
+    /// <response code="404">Comment not found</response>
     [HttpDelete("{id}/likes", Name = nameof(DeleteTopicCommentLike))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

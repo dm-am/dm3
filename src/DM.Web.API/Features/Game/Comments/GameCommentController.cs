@@ -36,7 +36,7 @@ public class GameCommentController : ControllerBase
     /// <param name="id">Game identifier</param>
     /// <param name="q">Paging parameters</param>
     /// <response code="200">Returns the comment list</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpGet("{id}/comments", Name = nameof(GetGameComments))]
     [ProducesResponseType(typeof(ListEnvelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -55,7 +55,7 @@ public class GameCommentController : ControllerBase
     /// <response code="400">Some of comment properties were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to create a comment in this game</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpPost("{id}/comments", Name = nameof(PostGameComment))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Comment), StatusCodes.Status201Created)]
@@ -74,7 +74,7 @@ public class GameCommentController : ControllerBase
     /// </summary>
     /// <param name="id">Comment identifier</param>
     /// <response code="200">Returns the comment details</response>
-    /// <response code="410">Comment not found</response>
+    /// <response code="404">Comment not found</response>
     [HttpGet("comments/{id}", Name = nameof(GetGameComment))]
     [ProducesResponseType(typeof(Comment), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -89,7 +89,7 @@ public class GameCommentController : ControllerBase
     /// <response code="400">Some changed comment properties were invalid or passed id was not recognized</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to change this comment</response>
-    /// <response code="410">Comment not found</response>
+    /// <response code="404">Comment not found</response>
     [HttpPatch("comments/{id}", Name = nameof(PatchGameComment))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Comment), StatusCodes.Status200OK)]
@@ -107,7 +107,7 @@ public class GameCommentController : ControllerBase
     /// <response code="204">Operation completed successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to change this comment</response>
-    /// <response code="410">Comment not found</response>
+    /// <response code="404">Comment not found</response>
     [HttpDelete("comments/{id}", Name = nameof(DeleteGameComment))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -128,7 +128,7 @@ public class GameCommentController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to like the comment</response>
     /// <response code="409">User already liked this comment</response>
-    /// <response code="410">Comment not found</response>
+    /// <response code="404">Comment not found</response>
     [HttpPost("comments/{id}/likes", Name = nameof(PostGameCommentLike))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(User), StatusCodes.Status201Created)]
@@ -150,7 +150,7 @@ public class GameCommentController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to remove like from this comment</response>
     /// <response code="409">User has no like for this comment</response>
-    /// <response code="410">Comment not found</response>
+    /// <response code="404">Comment not found</response>
     [HttpDelete("comments/{id}/likes", Name = nameof(DeleteGameCommentLike))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -170,7 +170,7 @@ public class GameCommentController : ControllerBase
     /// <param name="id">Game identifier</param>
     /// <response code="204">Operation completed successfully</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpDelete("{id}/comments/unread", Name = nameof(MarkGameCommentsAsRead))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

@@ -56,7 +56,7 @@ public class AttributeSchemaController : ControllerBase
     /// </summary>
     /// <param name="id">Schema identifier</param>
     /// <response code="200">Returns the attribute schema details</response>
-    /// <response code="410">Schema not found</response>
+    /// <response code="404">Schema not found</response>
     [HttpGet("{id}", Name = nameof(GetSchema))]
     [ProducesResponseType(typeof(Envelope<AttributeSchema>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -71,7 +71,7 @@ public class AttributeSchemaController : ControllerBase
     /// <response code="400">Some of schema parameters were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to update this attribute schema</response>
-    /// <response code="410">Schema not found</response>
+    /// <response code="404">Schema not found</response>
     [HttpPatch("{id}", Name = nameof(PatchSchema))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<AttributeSchema>), StatusCodes.Status200OK)]
@@ -89,7 +89,7 @@ public class AttributeSchemaController : ControllerBase
     /// <response code="204">Operation completed successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to delete this attribute schema</response>
-    /// <response code="410">Schema not found</response>
+    /// <response code="404">Schema not found</response>
     [HttpDelete("{id}", Name = nameof(DeleteSchema))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

@@ -33,7 +33,7 @@ public class CharacterController : ControllerBase
     /// </summary>
     /// <param name="id">Game identifier</param>
     /// <response code="200">Returns the character list</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpGet("~/v1/games/{id}/characters", Name = nameof(GetCharacters))]
     [ProducesResponseType(typeof(ListEnvelope<Character>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -45,7 +45,7 @@ public class CharacterController : ControllerBase
     /// <param name="id">Game identifier</param>
     /// <response code="204">Operation completed successfully</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpDelete("~/v1/games/{id}/characters/unread", Name = nameof(MarkCharactersAsRead))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -66,7 +66,7 @@ public class CharacterController : ControllerBase
     /// <response code="400">Some of character properties were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to create a character in this game</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpPost("~/v1/games/{id}/characters", Name = nameof(PostCharacter))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<CharacterDetails>), StatusCodes.Status201Created)]
@@ -86,7 +86,7 @@ public class CharacterController : ControllerBase
     /// </summary>
     /// <param name="id">Character identifier</param>
     /// <response code="200">Returns character details</response>
-    /// <response code="410">Character not found</response>
+    /// <response code="404">Character not found</response>
     [HttpGet("{id}", Name = nameof(GetCharacter))]
     [ProducesResponseType(typeof(Envelope<CharacterDetails>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -101,7 +101,7 @@ public class CharacterController : ControllerBase
     /// <response code="400">Some of character changed properties were invalid or passed id was not recognized</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to change some properties of this character</response>
-    /// <response code="410">Character not found</response>
+    /// <response code="404">Character not found</response>
     [HttpPatch("{id}", Name = nameof(PutCharacter))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<CharacterDetails>), StatusCodes.Status200OK)]
@@ -119,7 +119,7 @@ public class CharacterController : ControllerBase
     /// <response code="204">Operation completed successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to remove the character</response>
-    /// <response code="410">Character not found</response>
+    /// <response code="404">Character not found</response>
     [HttpDelete("{id}", Name = nameof(DeleteCharacter))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

@@ -39,7 +39,7 @@ public class RoomController : ControllerBase
     /// </summary>
     /// <param name="id">Game identifier</param>
     /// <response code="200">Returns the list of rooms in the game</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpGet("~/v1/games/{id}/rooms", Name = nameof(GetRooms))]
     [ProducesResponseType(typeof(ListEnvelope<Room>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -54,7 +54,7 @@ public class RoomController : ControllerBase
     /// </remarks>
     /// <param name="id">Game identifier</param>
     /// <response code="200">List of chat rooms</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpGet("~/v1/games/{id}/chat-rooms", Name = nameof(GetChatRooms))]
     [ProducesResponseType(typeof(ListEnvelope<Room>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -70,7 +70,7 @@ public class RoomController : ControllerBase
     /// <response code="400">Some of room properties were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to create a room in this game</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpPost("~/v1/games/{id}/rooms", Name = nameof(PostRoom))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Room>), StatusCodes.Status201Created)]
@@ -90,7 +90,7 @@ public class RoomController : ControllerBase
     /// </summary>
     /// <param name="id">Room identifier</param>
     /// <response code="200">Returns the room details</response>
-    /// <response code="410">Room not found</response>
+    /// <response code="404">Room not found</response>
     [HttpGet("{id}", Name = nameof(GetRoom))]
     [ProducesResponseType(typeof(Envelope<Room>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetRoom(Guid id) => Ok(await _roomApiService.Get(id));
@@ -104,7 +104,7 @@ public class RoomController : ControllerBase
     /// <response code="400">Some of room changed properties were invalid or passed id was not recognized</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to change some properties of this room</response>
-    /// <response code="410">Room not found</response>
+    /// <response code="404">Room not found</response>
     [HttpPatch("{id}", Name = nameof(PatchRoom))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Room>), StatusCodes.Status200OK)]
@@ -122,7 +122,7 @@ public class RoomController : ControllerBase
     /// <response code="204">Operation completed successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to remove the room</response>
-    /// <response code="410">Room not found</response>
+    /// <response code="404">Room not found</response>
     [HttpDelete("{id}", Name = nameof(DeleteRoom))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -145,7 +145,7 @@ public class RoomController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to create accesses in this room</response>
     /// <response code="409">Access already exists</response>
-    /// <response code="410">Room not found</response>
+    /// <response code="404">Room not found</response>
     [HttpPost("{id}/accesses", Name = nameof(PostAccess))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<RoomAccess>), StatusCodes.Status201Created)]
@@ -170,7 +170,7 @@ public class RoomController : ControllerBase
     /// <response code="400">Some of access parameters were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to update this access</response>
-    /// <response code="410">Access not found</response>
+    /// <response code="404">Access not found</response>
     [HttpPatch("accesses/{id}", Name = nameof(PatchAccess))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<RoomAccess>), StatusCodes.Status200OK)]
@@ -188,7 +188,7 @@ public class RoomController : ControllerBase
     /// <response code="204">Operation completed successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to delete this access</response>
-    /// <response code="410">Access not found</response>
+    /// <response code="404">Access not found</response>
     [HttpDelete("accesses/{id}", Name = nameof(DeleteAccess))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -211,7 +211,7 @@ public class RoomController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to create post pendencies in this room</response>
     /// <response code="409">Post pendency already exists</response>
-    /// <response code="410">Room not found</response>
+    /// <response code="404">Room not found</response>
     [HttpPost("{id}/pendencies", Name = nameof(CreatePostPendency))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<PostPendency>), StatusCodes.Status201Created)]
@@ -228,7 +228,7 @@ public class RoomController : ControllerBase
     /// <response code="204">Operation completed successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to delete this post pendency</response>
-    /// <response code="410">Post pendency not found</response>
+    /// <response code="404">Post pendency not found</response>
     [HttpDelete("pendencies/{id}", Name = nameof(DeletePostPendency))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -247,7 +247,7 @@ public class RoomController : ControllerBase
     /// <param name="id">Room identifier</param>
     /// <response code="204">Operation completed successfully</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="410">Room not found</response>
+    /// <response code="404">Room not found</response>
     [HttpDelete("{id}/posts/unread", Name = nameof(MarkPostsAsRead))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

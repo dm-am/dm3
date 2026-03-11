@@ -8,9 +8,9 @@ namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 /// <summary>
 /// Integration tests for Forum CommentController
 /// </summary>
-public class CommentControllerTests : IntegrationTestBase
+public class CommentControllerShould : IntegrationTestBase
 {
-    public CommentControllerTests(DatabaseFixture databaseFixture) : base(databaseFixture)
+    public CommentControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 

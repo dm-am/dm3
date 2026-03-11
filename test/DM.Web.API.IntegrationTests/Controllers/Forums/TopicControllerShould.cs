@@ -8,9 +8,9 @@ namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 /// <summary>
 /// Integration tests for TopicController
 /// </summary>
-public class TopicControllerTests : IntegrationTestBase
+public class TopicControllerShould : IntegrationTestBase
 {
-    public TopicControllerTests(DatabaseFixture databaseFixture) : base(databaseFixture)
+    public TopicControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 

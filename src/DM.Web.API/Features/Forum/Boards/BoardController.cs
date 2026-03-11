@@ -80,7 +80,7 @@ public class BoardController : ControllerBase
     /// </remarks>
     /// <param name="id">Board identifier (GUID or URL slug)</param>
     /// <response code="200">Board details</response>
-    /// <response code="410">Board not found</response>
+    /// <response code="404">Board not found</response>
     [HttpGet("{id}", Name = nameof(GetBoard))]
     [ProducesResponseType(typeof(Envelope<Board>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -96,7 +96,7 @@ public class BoardController : ControllerBase
     /// <param name="id">Board identifier (GUID or URL slug)</param>
     /// <response code="204">All comments marked as read</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="410">Board not found</response>
+    /// <response code="404">Board not found</response>
     [HttpDelete("{id}/comments/unread", Name = nameof(ReadBoardComments))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -117,7 +117,7 @@ public class BoardController : ControllerBase
     /// </remarks>
     /// <param name="id">Board identifier (GUID or URL slug)</param>
     /// <response code="200">List of board moderators</response>
-    /// <response code="410">Board not found</response>
+    /// <response code="404">Board not found</response>
     [HttpGet("{id}/moderators", Name = nameof(GetBoardModerators))]
     [ProducesResponseType(typeof(ListEnvelope<User>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]

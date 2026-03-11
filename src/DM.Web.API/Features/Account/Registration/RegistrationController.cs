@@ -125,7 +125,7 @@ public class RegistrationController : ControllerBase
     /// <param name="request">Chosen Login</param>
     /// <response code="200">User created and authenticated</response>
     /// <response code="400">Login validation failed (invalid format, already taken, etc.)</response>
-    /// <response code="410">Token expired or not found</response>
+    /// <response code="404">Token expired or not found</response>
     [HttpPost("activation/{token:guid}", Name = nameof(Activate))]
     [ProducesResponseType(typeof(Envelope<DM.Web.API.Features.Community.Users.User>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]

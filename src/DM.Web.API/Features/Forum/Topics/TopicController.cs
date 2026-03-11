@@ -66,7 +66,7 @@ public class TopicController : ControllerBase
     /// <param name="q">Pagination and filtering parameters</param>
     /// <response code="200">Paginated list of topics</response>
     /// <response code="400">Invalid query parameters</response>
-    /// <response code="410">Board not found</response>
+    /// <response code="404">Board not found</response>
     [HttpGet("~/v1/boards/{id}/topics", Name = nameof(GetBoardTopics))]
     [ProducesResponseType(typeof(ListEnvelope<Topic>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
@@ -87,7 +87,7 @@ public class TopicController : ControllerBase
     /// <response code="400">Invalid topic data (title too short, empty content, etc.)</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to create topics in this board</response>
-    /// <response code="410">Board not found</response>
+    /// <response code="404">Board not found</response>
     [HttpPost("~/v1/boards/{id}/topics", Name = nameof(PostBoardTopic))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Topic>), StatusCodes.Status201Created)]
@@ -113,7 +113,7 @@ public class TopicController : ControllerBase
     /// </remarks>
     /// <param name="id">Topic identifier (GUID)</param>
     /// <response code="200">Topic details</response>
-    /// <response code="410">Topic not found</response>
+    /// <response code="404">Topic not found</response>
     [HttpGet("{id}", Name = nameof(GetTopic))]
     [ProducesResponseType(typeof(Envelope<Topic>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -132,7 +132,7 @@ public class TopicController : ControllerBase
     /// <param name="id">Topic identifier (GUID)</param>
     /// <param name="q">Paging parameters</param>
     /// <response code="200">Discussion with comments and metadata</response>
-    /// <response code="410">Topic not found</response>
+    /// <response code="404">Topic not found</response>
     [HttpGet("{id}/discussion", Name = nameof(GetTopicDiscussion))]
     [ProducesResponseType(typeof(DiscussionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -157,7 +157,7 @@ public class TopicController : ControllerBase
     /// <response code="400">Invalid update data</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User cannot modify this topic or specific fields</response>
-    /// <response code="410">Topic not found</response>
+    /// <response code="404">Topic not found</response>
     [HttpPatch("{id}", Name = nameof(PatchTopic))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Topic>), StatusCodes.Status200OK)]
@@ -180,7 +180,7 @@ public class TopicController : ControllerBase
     /// <response code="204">Topic deleted successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to delete this topic</response>
-    /// <response code="410">Topic not found</response>
+    /// <response code="404">Topic not found</response>
     [HttpDelete("{id}", Name = nameof(DeleteTopic))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -207,7 +207,7 @@ public class TopicController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User cannot like this topic (e.g., own topic)</response>
     /// <response code="409">User already liked this topic</response>
-    /// <response code="410">Topic not found</response>
+    /// <response code="404">Topic not found</response>
     [HttpPost("{id}/likes", Name = nameof(PostTopicLike))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status201Created)]
@@ -230,7 +230,7 @@ public class TopicController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User cannot remove like (not their like)</response>
     /// <response code="409">User has not liked this topic</response>
-    /// <response code="410">Topic not found</response>
+    /// <response code="404">Topic not found</response>
     [HttpDelete("{id}/likes", Name = nameof(DeleteTopicLike))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -254,7 +254,7 @@ public class TopicController : ControllerBase
     /// <param name="id">Topic identifier (GUID)</param>
     /// <response code="204">All comments marked as read</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="410">Topic not found</response>
+    /// <response code="404">Topic not found</response>
     [HttpDelete("{id}/comments/unread", Name = nameof(ReadTopicComments))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

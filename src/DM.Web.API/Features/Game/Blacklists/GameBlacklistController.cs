@@ -30,7 +30,7 @@ public class GameBlacklistController : ControllerBase
     /// <response code="200">Returns the list of blacklisted users for the game</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to read blacklist of this game</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpGet("{id}/blacklist", Name = nameof(GetBlacklist))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(ListEnvelope<User>), StatusCodes.Status200OK)]
@@ -49,7 +49,7 @@ public class GameBlacklistController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to blacklist users in this game</response>
     /// <response code="409">User is already blacklisted</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpPost("{id}/blacklist", Name = nameof(PostBlacklist))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status201Created)]
@@ -73,7 +73,7 @@ public class GameBlacklistController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to un-blacklist users in this game</response>
     /// <response code="409">User is not in the blacklist</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpDelete("{id}/blacklist/{login}", Name = nameof(DeleteBlacklist))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

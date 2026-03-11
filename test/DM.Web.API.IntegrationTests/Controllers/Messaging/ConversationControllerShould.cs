@@ -6,37 +6,37 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests.Controllers.Messaging;
 
 /// <summary>
-/// Integration tests for ChatController
+/// Integration tests for ConversationController
 /// </summary>
-public class ChatControllerTests : IntegrationTestBase
+public class ConversationControllerShould : IntegrationTestBase
 {
-    public ChatControllerTests(DatabaseFixture databaseFixture) : base(databaseFixture)
+    public ConversationControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    #region GetChats Tests
+    #region GetConversations Tests
 
     /// <summary>
-    /// Get chats without authentication should return Unauthorized
+    /// Get conversations without authentication should return Unauthorized
     /// </summary>
     [Fact]
-    public async Task GetChats_WhenNotAuthenticated_ReturnsUnauthorized()
+    public async Task GetConversations_WhenNotAuthenticated_ReturnsUnauthorized()
     {
         // Act
-        var response = await Client.GetAsync("/v1/chats");
+        var response = await Client.GetAsync("/v1/conversations");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     /// <summary>
-    /// Get chats with query parameters should require authentication
+    /// Get conversations with query parameters should require authentication
     /// </summary>
     [Fact]
-    public async Task GetChats_WithQueryParameters_ReturnsUnauthorized()
+    public async Task GetConversations_WithQueryParameters_ReturnsUnauthorized()
     {
         // Act
-        var response = await Client.GetAsync("/v1/chats?size=10&number=1");
+        var response = await Client.GetAsync("/v1/conversations?size=10&number=1");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -44,29 +44,29 @@ public class ChatControllerTests : IntegrationTestBase
 
     #endregion
 
-    #region GetOrCreateDirectChat Tests
+    #region GetOrCreateDirectConversation Tests
 
     /// <summary>
-    /// Get or create direct chat by username without authentication should return Unauthorized
+    /// Get or create direct conversation by login without authentication should return Unauthorized
     /// </summary>
     [Fact]
-    public async Task GetOrCreateDirectChat_WhenNotAuthenticated_ReturnsUnauthorized()
+    public async Task GetOrCreateDirectConversation_WhenNotAuthenticated_ReturnsUnauthorized()
     {
-        // Act - POST is used to get or create chat
-        var response = await Client.PostAsync($"/v1/chats/direct/{TestConstants.SecondUserUsername}", null);
+        // Act - POST is used to get or create conversation
+        var response = await Client.PostAsync($"/v1/conversations/direct/{TestConstants.SecondUserLogin}", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     /// <summary>
-    /// Get or create direct chat with non-existent username should return Unauthorized (auth check first)
+    /// Get or create direct conversation with non-existent login should return Unauthorized (auth check first)
     /// </summary>
     [Fact]
-    public async Task GetOrCreateDirectChat_WithNonExistentUsername_ReturnsUnauthorized()
+    public async Task GetOrCreateDirectConversation_WithNonExistentLogin_ReturnsUnauthorized()
     {
-        // Act - POST is used to get or create chat
-        var response = await Client.PostAsync("/v1/chats/direct/nonexistentuser", null);
+        // Act - POST is used to get or create conversation
+        var response = await Client.PostAsync("/v1/conversations/direct/nonexistentuser", null);
 
         // Assert - auth check happens first
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -74,45 +74,45 @@ public class ChatControllerTests : IntegrationTestBase
 
     #endregion
 
-    #region GetChat Tests
+    #region GetConversation Tests
 
     /// <summary>
-    /// Get chat without authentication should return Unauthorized
+    /// Get conversation without authentication should return Unauthorized
     /// </summary>
     [Fact]
-    public async Task GetChat_WhenNotAuthenticated_ReturnsUnauthorized()
+    public async Task GetConversation_WhenNotAuthenticated_ReturnsUnauthorized()
     {
         // Act
-        var response = await Client.GetAsync($"/v1/chats/{TestConstants.TestChatId}");
+        var response = await Client.GetAsync($"/v1/conversations/{TestConstants.TestConversationId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     /// <summary>
-    /// Get non-existent chat should return Unauthorized (auth check first)
+    /// Get non-existent conversation should return Unauthorized (auth check first)
     /// </summary>
     [Fact]
-    public async Task GetChat_WithNonExistentId_ReturnsUnauthorized()
+    public async Task GetConversation_WithNonExistentId_ReturnsUnauthorized()
     {
         // Arrange
         var nonExistentId = Guid.NewGuid();
 
         // Act
-        var response = await Client.GetAsync($"/v1/chats/{nonExistentId}");
+        var response = await Client.GetAsync($"/v1/conversations/{nonExistentId}");
 
         // Assert - auth check happens first
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     /// <summary>
-    /// Get chat with invalid GUID should return NotFound (route doesn't match)
+    /// Get conversation with invalid GUID should return NotFound (route doesn't match)
     /// </summary>
     [Fact]
-    public async Task GetChat_WithInvalidGuid_ReturnsNotFound()
+    public async Task GetConversation_WithInvalidGuid_ReturnsNotFound()
     {
         // Act
-        var response = await Client.GetAsync("/v1/chats/not-a-guid");
+        var response = await Client.GetAsync("/v1/conversations/not-a-guid");
 
         // Assert - invalid GUID format results in route not found
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -129,14 +129,14 @@ public class ChatControllerTests : IntegrationTestBase
     public async Task MarkAsRead_WhenNotAuthenticated_ReturnsUnauthorized()
     {
         // Act - DELETE is used to mark messages as read (unread pattern)
-        var response = await Client.DeleteAsync($"/v1/chats/{TestConstants.TestChatId}/messages/unread");
+        var response = await Client.DeleteAsync($"/v1/conversations/{TestConstants.TestConversationId}/messages/unread");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     /// <summary>
-    /// Mark messages as read for non-existent chat should return Unauthorized (auth check first)
+    /// Mark messages as read for non-existent conversation should return Unauthorized (auth check first)
     /// </summary>
     [Fact]
     public async Task MarkAsRead_WithNonExistentId_ReturnsUnauthorized()
@@ -145,7 +145,7 @@ public class ChatControllerTests : IntegrationTestBase
         var nonExistentId = Guid.NewGuid();
 
         // Act - DELETE is used to mark messages as read (unread pattern)
-        var response = await Client.DeleteAsync($"/v1/chats/{nonExistentId}/messages/unread");
+        var response = await Client.DeleteAsync($"/v1/conversations/{nonExistentId}/messages/unread");
 
         // Assert - auth check happens first
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -153,63 +153,63 @@ public class ChatControllerTests : IntegrationTestBase
 
     #endregion
 
-    #region CreateChat Tests
+    #region CreateConversation Tests
 
     /// <summary>
-    /// Create chat without authentication should return Unauthorized
+    /// Create conversation without authentication should return Unauthorized
     /// </summary>
     [Fact]
-    public async Task CreateChat_WhenNotAuthenticated_ReturnsUnauthorized()
+    public async Task CreateConversation_WhenNotAuthenticated_ReturnsUnauthorized()
     {
         // Arrange
-        var chat = new
+        var conversation = new
         {
             title = "Test Group Chat",
-            participants = new[] { TestConstants.SecondUserUsername }
+            participants = new[] { TestConstants.SecondUserLogin }
         };
 
         // Act
-        var response = await Client.PostAsJsonAsync("/v1/chats", chat);
+        var response = await Client.PostAsJsonAsync("/v1/conversations", conversation);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     /// <summary>
-    /// Create chat with empty title should return Unauthorized (auth check first)
+    /// Create conversation with empty title should return Unauthorized (auth check first)
     /// </summary>
     [Fact]
-    public async Task CreateChat_WithEmptyTitle_ReturnsUnauthorized()
+    public async Task CreateConversation_WithEmptyTitle_ReturnsUnauthorized()
     {
         // Arrange
-        var chat = new
+        var conversation = new
         {
             title = "",
-            participants = new[] { TestConstants.SecondUserUsername }
+            participants = new[] { TestConstants.SecondUserLogin }
         };
 
         // Act
-        var response = await Client.PostAsJsonAsync("/v1/chats", chat);
+        var response = await Client.PostAsJsonAsync("/v1/conversations", conversation);
 
         // Assert - auth check happens first
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     /// <summary>
-    /// Create chat with invalid participant should return Unauthorized (auth check first)
+    /// Create conversation with invalid participant should return Unauthorized (auth check first)
     /// </summary>
     [Fact]
-    public async Task CreateChat_WithInvalidParticipant_ReturnsUnauthorized()
+    public async Task CreateConversation_WithInvalidParticipant_ReturnsUnauthorized()
     {
         // Arrange
-        var chat = new
+        var conversation = new
         {
             title = "Test Group Chat",
             participants = new[] { "nonexistentuser12345" }
         };
 
         // Act
-        var response = await Client.PostAsJsonAsync("/v1/chats", chat);
+        var response = await Client.PostAsJsonAsync("/v1/conversations", conversation);
 
         // Assert - auth check happens first
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -217,13 +217,13 @@ public class ChatControllerTests : IntegrationTestBase
 
     #endregion
 
-    #region UpdateChat Tests
+    #region UpdateConversation Tests
 
     /// <summary>
-    /// Update chat without authentication should return Unauthorized
+    /// Update conversation without authentication should return Unauthorized
     /// </summary>
     [Fact]
-    public async Task UpdateChat_WhenNotAuthenticated_ReturnsUnauthorized()
+    public async Task UpdateConversation_WhenNotAuthenticated_ReturnsUnauthorized()
     {
         // Arrange
         var update = new
@@ -231,7 +231,7 @@ public class ChatControllerTests : IntegrationTestBase
             title = "Updated Title"
         };
         var content = JsonContent.Create(update);
-        var request = new HttpRequestMessage(HttpMethod.Patch, $"/v1/chats/{TestConstants.TestChatId}")
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"/v1/conversations/{TestConstants.TestConversationId}")
         {
             Content = content
         };
@@ -244,10 +244,10 @@ public class ChatControllerTests : IntegrationTestBase
     }
 
     /// <summary>
-    /// Update non-existent chat should return Unauthorized (auth check first)
+    /// Update non-existent conversation should return Unauthorized (auth check first)
     /// </summary>
     [Fact]
-    public async Task UpdateChat_WithNonExistentId_ReturnsUnauthorized()
+    public async Task UpdateConversation_WithNonExistentId_ReturnsUnauthorized()
     {
         // Arrange
         var nonExistentId = Guid.NewGuid();
@@ -256,7 +256,7 @@ public class ChatControllerTests : IntegrationTestBase
             title = "Updated Title"
         };
         var content = JsonContent.Create(update);
-        var request = new HttpRequestMessage(HttpMethod.Patch, $"/v1/chats/{nonExistentId}")
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"/v1/conversations/{nonExistentId}")
         {
             Content = content
         };
@@ -269,10 +269,10 @@ public class ChatControllerTests : IntegrationTestBase
     }
 
     /// <summary>
-    /// Update chat with invalid GUID should return NotFound (route doesn't match)
+    /// Update conversation with invalid GUID should return NotFound (route doesn't match)
     /// </summary>
     [Fact]
-    public async Task UpdateChat_WithInvalidGuid_ReturnsNotFound()
+    public async Task UpdateConversation_WithInvalidGuid_ReturnsNotFound()
     {
         // Arrange
         var update = new
@@ -280,7 +280,7 @@ public class ChatControllerTests : IntegrationTestBase
             title = "Updated Title"
         };
         var content = JsonContent.Create(update);
-        var request = new HttpRequestMessage(HttpMethod.Patch, "/v1/chats/not-a-guid")
+        var request = new HttpRequestMessage(HttpMethod.Patch, "/v1/conversations/not-a-guid")
         {
             Content = content
         };

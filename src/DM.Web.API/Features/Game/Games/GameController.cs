@@ -74,7 +74,7 @@ public class GameController : ControllerBase
     /// </summary>
     /// <param name="id">Game identifier</param>
     /// <response code="200">Returns the game details</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpGet("{id}", Name = nameof(GetGame))]
     [ProducesResponseType(typeof(Envelope<Game>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -88,7 +88,7 @@ public class GameController : ControllerBase
     /// <response code="400">Some of game properties were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to create a game</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpPost(Name = nameof(PostGame))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status201Created)]
@@ -108,7 +108,7 @@ public class GameController : ControllerBase
     /// <response code="204">Game deleted successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to remove the game</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpDelete("{id}", Name = nameof(DeleteGame))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -126,7 +126,7 @@ public class GameController : ControllerBase
     /// </summary>
     /// <param name="id">Game identifier</param>
     /// <response code="200">Returns the detailed game information</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpGet("{id}/details", Name = nameof(GetGameDetails))]
     [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -141,7 +141,7 @@ public class GameController : ControllerBase
     /// <response code="400">Some of game properties were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to change some properties of this game</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpPatch("{id}/details", Name = nameof(PatchGameDetails))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status200OK)]
@@ -159,7 +159,7 @@ public class GameController : ControllerBase
     /// <response code="200">Returns the game notes</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to read notes of this game</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpGet("{id}/notes", Name = nameof(GetGameNotes))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<GameNotes>), StatusCodes.Status200OK)]
@@ -177,7 +177,7 @@ public class GameController : ControllerBase
     /// <response code="400">Some of game properties were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to change notes of this game</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     [HttpPatch("{id}/notes", Name = nameof(PatchGameNotes))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<GameNotes>), StatusCodes.Status200OK)]

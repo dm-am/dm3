@@ -35,7 +35,7 @@ public class PostController : ControllerBase
     /// <param name="id">Room identifier</param>
     /// <param name="q">Paging parameters</param>
     /// <response code="200">Returns the list of posts in the room</response>
-    /// <response code="410">Room not found</response>
+    /// <response code="404">Room not found</response>
     [HttpGet("~/v1/rooms/{id}/posts", Name = nameof(GetPosts))]
     [ProducesResponseType(typeof(ListEnvelope<Post>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -51,7 +51,7 @@ public class PostController : ControllerBase
     /// <response code="400">Some of post parameters were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to create post in this room</response>
-    /// <response code="410">Room not found</response>
+    /// <response code="404">Room not found</response>
     [HttpPost("~/v1/rooms/{id}/posts", Name = nameof(PostPost))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Post>), StatusCodes.Status201Created)]
@@ -71,7 +71,7 @@ public class PostController : ControllerBase
     /// </summary>
     /// <param name="id">Post identifier</param>
     /// <response code="200">Returns the post details</response>
-    /// <response code="410">Post not found</response>
+    /// <response code="404">Post not found</response>
     [HttpGet("{id}", Name = nameof(GetPost))]
     [ProducesResponseType(typeof(Envelope<Post>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPost(Guid id) => Ok(await _postApiService.Get(id));
@@ -85,7 +85,7 @@ public class PostController : ControllerBase
     /// <response code="400">Some of post changed properties were invalid or passed id was not recognized</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to change some properties of this post</response>
-    /// <response code="410">Post not found</response>
+    /// <response code="404">Post not found</response>
     [HttpPatch("{id}", Name = nameof(PatchPost))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Post>), StatusCodes.Status200OK)]
@@ -103,7 +103,7 @@ public class PostController : ControllerBase
     /// <response code="204">Operation completed successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to remove the post</response>
-    /// <response code="410">Post not found</response>
+    /// <response code="404">Post not found</response>
     [HttpDelete("{id}", Name = nameof(DeletePost))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

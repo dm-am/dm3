@@ -28,7 +28,7 @@ public class UnreadController : ControllerBase
     /// </summary>
     /// <param name="id">Game identifier</param>
     /// <response code="200">Returns the first unread post location</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     /// <remarks>
     /// For anonymous users, returns the first post of the first room.
     /// For authenticated users with unread posts, returns the first unread post.
@@ -45,7 +45,7 @@ public class UnreadController : ControllerBase
     /// </summary>
     /// <param name="id">Game identifier</param>
     /// <response code="200">Returns the first unread comment location</response>
-    /// <response code="410">Game not found</response>
+    /// <response code="404">Game not found</response>
     /// <remarks>
     /// For anonymous users, returns the first comment.
     /// For authenticated users with unread comments, returns the first unread comment.
