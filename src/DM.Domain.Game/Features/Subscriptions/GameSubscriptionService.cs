@@ -36,12 +36,12 @@ internal class GameSubscriptionService : IGameSubscriptionService
     }
 
     /// <inheritdoc />
-    public async Task<Subscription> Subscribe(Guid gameId, CancellationToken ct = default)
+    public async Task<Subscription> SubscribeAsync(Guid gameId, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
 
         // Check if already subscribed
-        var existing = await _repository.Find(userId, SubscriptionTargetType.Game, gameId, ct);
+        var existing = await _repository.FindAsync(userId, SubscriptionTargetType.Game, gameId, ct);
         if (existing != null)
         {
             return existing;
@@ -57,20 +57,20 @@ internal class GameSubscriptionService : IGameSubscriptionService
             CreatedUtc = _dateTimeProvider.Now
         };
 
-        return await _repository.Create(subscription, ct);
+        return await _repository.CreateAsync(subscription, ct);
     }
 
     /// <inheritdoc />
-    public async Task Unsubscribe(Guid gameId, CancellationToken ct = default)
+    public async Task UnsubscribeAsync(Guid gameId, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
-        await _repository.Delete(userId, SubscriptionTargetType.Game, gameId, ct);
+        await _repository.DeleteAsync(userId, SubscriptionTargetType.Game, gameId, ct);
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetReaders(Guid gameId, CancellationToken ct = default)
+    public async Task<IEnumerable<GeneralUser>> GetReadersAsync(Guid gameId, CancellationToken ct = default)
     {
-        var subscriberIds = await _repository.GetTargetSubscriberIds(SubscriptionTargetType.Game, gameId, ct);
+        var subscriberIds = await _repository.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Game, gameId, ct);
         var subscriberIdList = subscriberIds.ToList();
 
         if (!subscriberIdList.Any())
@@ -81,7 +81,7 @@ internal class GameSubscriptionService : IGameSubscriptionService
         var users = new List<GeneralUser>();
         foreach (var subscriberId in subscriberIdList)
         {
-            var user = await _userLookupService.Get(subscriberId);
+            var user = await _userLookupService.GetAsync(subscriberId);
             if (user != null)
             {
                 users.Add(user);
@@ -92,9 +92,9 @@ internal class GameSubscriptionService : IGameSubscriptionService
     }
 
     /// <inheritdoc />
-    public async Task<bool> IsSubscribed(Guid userId, Guid gameId, CancellationToken ct = default)
+    public async Task<bool> IsSubscribedAsync(Guid userId, Guid gameId, CancellationToken ct = default)
     {
-        var subscription = await _repository.Find(userId, SubscriptionTargetType.Game, gameId, ct);
+        var subscription = await _repository.FindAsync(userId, SubscriptionTargetType.Game, gameId, ct);
         return subscription != null;
     }
 }

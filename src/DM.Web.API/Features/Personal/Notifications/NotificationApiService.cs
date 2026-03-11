@@ -133,7 +133,7 @@ internal class NotificationApiService : INotificationApiService
 
     private static BotConnection? MapBotConnection(
         string? externalId,
-        NotificationChannelPreferences? prefs)
+        NotificationChannelPreference? prefs)
     {
         var connected = !string.IsNullOrEmpty(externalId);
         if (!connected && prefs == null) return null;

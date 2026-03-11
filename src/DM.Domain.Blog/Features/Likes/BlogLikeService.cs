@@ -43,34 +43,34 @@ internal class BlogLikeService : IBlogLikeService
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser> LikeBlogComment(Guid commentId)
+    public async Task<GeneralUser> LikeBlogCommentAsync(Guid commentId)
     {
-        var comment = await _blogCommentService.Get(commentId);
+        var comment = await _blogCommentService.GetAsync(commentId);
         _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
 
         // EntityId is BlogId for blog comments
         var blog = await _blogService.GetBlog(comment.EntityId);
         ThrowIfBlacklisted(blog);
 
-        return await _likeOperations.Like(comment, EventType.LikedBlogComment);
+        return await _likeOperations.LikeAsync(comment, EventType.LikedBlogComment);
     }
 
     /// <inheritdoc />
-    public async Task UnlikeBlogComment(Guid commentId)
+    public async Task UnlikeBlogCommentAsync(Guid commentId)
     {
-        var comment = await _blogCommentService.Get(commentId);
+        var comment = await _blogCommentService.GetAsync(commentId);
         _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
 
         var blog = await _blogService.GetBlog(comment.EntityId);
         ThrowIfBlacklisted(blog);
 
-        await _likeOperations.Unlike(comment);
+        await _likeOperations.UnlikeAsync(comment);
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser> LikePublicationComment(Guid commentId)
+    public async Task<GeneralUser> LikePublicationCommentAsync(Guid commentId)
     {
-        var comment = await _publicationCommentService.Get(commentId);
+        var comment = await _publicationCommentService.GetAsync(commentId);
         _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
 
         // EntityId is PublicationId for publication comments
@@ -78,24 +78,24 @@ internal class BlogLikeService : IBlogLikeService
         var blog = await _blogService.GetBlog(publication.BlogId);
         ThrowIfBlacklisted(blog);
 
-        return await _likeOperations.Like(comment, EventType.LikedPublicationComment);
+        return await _likeOperations.LikeAsync(comment, EventType.LikedPublicationComment);
     }
 
     /// <inheritdoc />
-    public async Task UnlikePublicationComment(Guid commentId)
+    public async Task UnlikePublicationCommentAsync(Guid commentId)
     {
-        var comment = await _publicationCommentService.Get(commentId);
+        var comment = await _publicationCommentService.GetAsync(commentId);
         _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
 
         var publication = await _blogService.GetPublication(comment.EntityId);
         var blog = await _blogService.GetBlog(publication.BlogId);
         ThrowIfBlacklisted(blog);
 
-        await _likeOperations.Unlike(comment);
+        await _likeOperations.UnlikeAsync(comment);
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser> LikePublication(Guid publicationId)
+    public async Task<GeneralUser> LikePublicationAsync(Guid publicationId)
     {
         var publication = await _blogService.GetPublication(publicationId);
         _intentionManager.ThrowIfForbidden(PublicationIntention.Like, publication);
@@ -103,11 +103,11 @@ internal class BlogLikeService : IBlogLikeService
         var blog = await _blogService.GetBlog(publication.BlogId);
         ThrowIfBlacklisted(blog);
 
-        return await _likeOperations.Like(publication, EventType.LikedPublication);
+        return await _likeOperations.LikeAsync(publication, EventType.LikedPublication);
     }
 
     /// <inheritdoc />
-    public async Task UnlikePublication(Guid publicationId)
+    public async Task UnlikePublicationAsync(Guid publicationId)
     {
         var publication = await _blogService.GetPublication(publicationId);
         _intentionManager.ThrowIfForbidden(PublicationIntention.Like, publication);
@@ -115,7 +115,7 @@ internal class BlogLikeService : IBlogLikeService
         var blog = await _blogService.GetBlog(publication.BlogId);
         ThrowIfBlacklisted(blog);
 
-        await _likeOperations.Unlike(publication);
+        await _likeOperations.UnlikeAsync(publication);
     }
 
     private void ThrowIfBlacklisted(BlogModel blog)

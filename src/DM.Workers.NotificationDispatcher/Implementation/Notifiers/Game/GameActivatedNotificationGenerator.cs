@@ -54,7 +54,7 @@ internal class GameActivatedNotificationGenerator : BaseNotificationGenerator
         var usersInterested = new HashSet<Guid>();
 
         // Get subscribers of the Master
-        var masterSubscriptions = await _subscriptionRepository.GetByTargetWithSettings(
+        var masterSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.User,
             gameData.AuthorId,
             SubscriptionSettings.AuthorNewContent);
@@ -63,7 +63,7 @@ internal class GameActivatedNotificationGenerator : BaseNotificationGenerator
         // Get subscribers of Assistants
         foreach (var assistantId in gameData.AssistantIds)
         {
-            var assistantSubscriptions = await _subscriptionRepository.GetByTargetWithSettings(
+            var assistantSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
                 SubscriptionTargetType.User,
                 assistantId,
                 SubscriptionSettings.AuthorNewContent);
@@ -71,7 +71,7 @@ internal class GameActivatedNotificationGenerator : BaseNotificationGenerator
         }
 
         // Get game readers (subscribers to this specific game)
-        var readerSubscriptions = await _subscriptionRepository.GetByTargetWithSettings(
+        var readerSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.Game,
             gameData.GameId,
             SubscriptionSettings.StatusChanges);

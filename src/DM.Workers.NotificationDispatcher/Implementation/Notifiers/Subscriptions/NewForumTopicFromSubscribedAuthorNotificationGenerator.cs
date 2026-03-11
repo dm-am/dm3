@@ -52,7 +52,7 @@ internal class NewForumTopicFromSubscribedAuthorNotificationGenerator : BaseNoti
         }
 
         // Find all users subscribed to this author
-        var subscriptions = await _subscriptionRepository.GetByTargetWithSettings(
+        var subscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.User,
             topicData.AuthorId,
             SubscriptionSettings.AuthorNewContent);

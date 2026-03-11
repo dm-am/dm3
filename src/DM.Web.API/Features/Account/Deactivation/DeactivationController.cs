@@ -55,9 +55,9 @@ public class DeactivationController : ControllerBase
     /// <response code="429">Too many requests</response>
     [HttpPost("deactivate", Name = nameof(DeactivateAccount))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> DeactivateAccount([FromBody] DeactivationRequest request)
     {
         await _deactivationService.Deactivate(request);

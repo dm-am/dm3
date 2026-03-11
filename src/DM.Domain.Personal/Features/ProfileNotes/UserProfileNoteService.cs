@@ -40,7 +40,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
             throw new UnauthorizedAccessException("Authentication required");
         }
 
-        var subjectUser = await _userRepository.GetUser(subjectUsername);
+        var subjectUser = await _userRepository.GetUserAsync(subjectUsername);
         if (subjectUser == null)
         {
             return null;
@@ -58,7 +58,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
             throw new UnauthorizedAccessException("Authentication required");
         }
 
-        var subjectUser = await _userRepository.GetUser(createNote.SubjectUsername);
+        var subjectUser = await _userRepository.GetUserAsync(createNote.SubjectUsername);
         if (subjectUser == null)
         {
             throw new ArgumentException($"User {createNote.SubjectUsername} not found");
@@ -115,7 +115,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
             throw new UnauthorizedAccessException("Authentication required");
         }
 
-        var subjectUser = await _userRepository.GetUser(subjectUsername);
+        var subjectUser = await _userRepository.GetUserAsync(subjectUsername);
         if (subjectUser == null)
         {
             throw new ArgumentException($"User {subjectUsername} not found");

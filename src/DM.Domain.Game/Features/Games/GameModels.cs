@@ -875,9 +875,9 @@ public class AttributeSchema
     public SchemaType Type { get; set; }
 
     /// <summary>
-    /// Author
+    /// Author (null for system schemas)
     /// </summary>
-    public GeneralUser Author { get; set; } = null!;
+    public GeneralUser? Author { get; set; }
 
     /// <summary>
     /// Attribute specifications

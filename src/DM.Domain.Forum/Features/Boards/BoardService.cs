@@ -80,9 +80,9 @@ internal class BoardService : IBoardService
         var identity = _identityProvider.Current;
         if (identity.User.IsAuthenticated)
         {
-            var topicsTask = _unreadCountersRepository.SelectByParents(
+            var topicsTask = _unreadCountersRepository.SelectByParentsAsync(
                 identity.User.UserId, UnreadEntryType.Message, board.Id);
-            var commentsTask = _unreadCountersRepository.SelectTotalUnreadByParents(
+            var commentsTask = _unreadCountersRepository.SelectTotalUnreadByParentsAsync(
                 identity.User.UserId, UnreadEntryType.Message, board.Id);
             var topics = await topicsTask;
             var comments = await commentsTask;
@@ -110,7 +110,7 @@ internal class BoardService : IBoardService
     public async Task<IEnumerable<GeneralUser>> GetModerators(string boardTitle)
     {
         var board = await GetBoard(boardTitle);
-        return await _cache.GetOrCreate(
+        return await _cache.GetOrCreateAsync(
             $"board_moderators_{board.Id}",
             () => _moderatorRepository.Get(board.Id),
             CachePolicy.LongLived);

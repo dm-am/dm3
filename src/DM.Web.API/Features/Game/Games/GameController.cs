@@ -27,7 +27,7 @@ public class GameController : ControllerBase
     /// </summary>
     /// <response code="200">Returns the paginated list of games</response>
     [HttpGet(Name = nameof(GetGames))]
-    [ProducesResponseType(typeof(ListEnvelope<Game>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<Game>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetGames([FromQuery] GamesQuery q)
     {
         Response.Headers.CacheControl = "public, max-age=30";
@@ -41,8 +41,8 @@ public class GameController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     [HttpGet("owned", Name = nameof(GetOwnGames))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(ListEnvelope<Game>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
+    [ProducesResponseType(typeof(ListEnvelope<Game>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetOwnGames() => Ok(await _gameApiService.GetOwn());
 
     /// <summary>
@@ -50,7 +50,7 @@ public class GameController : ControllerBase
     /// </summary>
     /// <response code="200">Returns the list of 10 most popular games</response>
     [HttpGet("popular", Name = nameof(GetPopularGames))]
-    [ProducesResponseType(typeof(ListEnvelope<Game>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<Game>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPopularGames()
     {
         Response.Headers.CacheControl = "public, max-age=60";
@@ -62,7 +62,7 @@ public class GameController : ControllerBase
     /// </summary>
     /// <response code="200">Returns the list of all game tags</response>
     [HttpGet("tags", Name = nameof(GetTags))]
-    [ProducesResponseType(typeof(ListEnvelope<Tag>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<Tag>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetTags()
     {
         Response.Headers.CacheControl = "public, max-age=300";
@@ -76,8 +76,8 @@ public class GameController : ControllerBase
     /// <response code="200">Returns the game details</response>
     /// <response code="410">Game not found</response>
     [HttpGet("{id}", Name = nameof(GetGame))]
-    [ProducesResponseType(typeof(Envelope<Game>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Game>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGame(Guid id) => Ok(await _gameApiService.Get(id));
 
     /// <summary>
@@ -91,11 +91,11 @@ public class GameController : ControllerBase
     /// <response code="410">Game not found</response>
     [HttpPost(Name = nameof(PostGame))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<GameDetails>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostGame([FromBody] CreateGameRequest request)
     {
         var result = await _gameApiService.Create(request);
@@ -111,10 +111,10 @@ public class GameController : ControllerBase
     /// <response code="410">Game not found</response>
     [HttpDelete("{id}", Name = nameof(DeleteGame))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteGame(Guid id)
     {
         await _gameApiService.Delete(id);
@@ -128,8 +128,8 @@ public class GameController : ControllerBase
     /// <response code="200">Returns the detailed game information</response>
     /// <response code="410">Game not found</response>
     [HttpGet("{id}/details", Name = nameof(GetGameDetails))]
-    [ProducesResponseType(typeof(Envelope<GameDetails>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameDetails(Guid id) => Ok(await _gameApiService.GetDetails(id));
 
     /// <summary>
@@ -144,11 +144,11 @@ public class GameController : ControllerBase
     /// <response code="410">Game not found</response>
     [HttpPatch("{id}/details", Name = nameof(PatchGameDetails))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<GameDetails>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchGameDetails(Guid id, [FromBody] GameDetails game) =>
         Ok(await _gameApiService.Update(id, game));
 
@@ -162,10 +162,10 @@ public class GameController : ControllerBase
     /// <response code="410">Game not found</response>
     [HttpGet("{id}/notes", Name = nameof(GetGameNotes))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<GameNotes>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<GameNotes>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameNotes(Guid id) => Ok(await _gameApiService.GetNotes(id));
 
     /// <summary>
@@ -180,11 +180,11 @@ public class GameController : ControllerBase
     /// <response code="410">Game not found</response>
     [HttpPatch("{id}/notes", Name = nameof(PatchGameNotes))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<GameNotes>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<GameNotes>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchGameNotes(Guid id, [FromBody] GameNotes notes) =>
         Ok(await _gameApiService.UpdateNotes(id, notes));
 }

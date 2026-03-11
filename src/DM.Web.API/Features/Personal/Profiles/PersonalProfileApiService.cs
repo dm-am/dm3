@@ -29,7 +29,7 @@ internal class PersonalProfileApiService : IPersonalProfileApiService
     public async Task<PersonalProfile> GetMyProfile()
     {
         var currentUser = _identityProvider.Current.User;
-        var user = await _userService.GetDetails(currentUser.Username);
+        var user = await _userService.GetDetailsAsync(currentUser.Username);
         return _mapper.Map<PersonalProfile>(user);
     }
 
@@ -40,7 +40,7 @@ internal class PersonalProfileApiService : IPersonalProfileApiService
         var updateUser = _mapper.Map<UpdateUser>(profile);
         updateUser.Username = currentUser.Username;
 
-        var updatedUser = await _userService.Update(updateUser);
+        var updatedUser = await _userService.UpdateAsync(updateUser);
         return _mapper.Map<PersonalProfile>(updatedUser);
     }
 }

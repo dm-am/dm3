@@ -61,7 +61,7 @@ internal class BlogInvitationService : IBlogInvitationService
         var blog = await _blogService.GetBlog(blogId);
         _intentionManager.ThrowIfForbidden(BlogIntention.InviteAssistant, blog);
 
-        var user = await _userLookupService.Get(username);
+        var user = await _userLookupService.GetAsync(username);
         var userId = user.UserId;
 
         await ValidateInvitation(blog, userId);
@@ -75,7 +75,7 @@ internal class BlogInvitationService : IBlogInvitationService
         var blog = await _blogService.GetBlog(blogId);
         _intentionManager.ThrowIfForbidden(BlogIntention.InviteReader, blog);
 
-        var user = await _userLookupService.Get(username);
+        var user = await _userLookupService.GetAsync(username);
         var userId = user.UserId;
 
         await ValidateInvitation(blog, userId);
@@ -93,7 +93,7 @@ internal class BlogInvitationService : IBlogInvitationService
 
         // Check personal blacklist - cannot invite someone you've blocked
         var currentUserId = _identityProvider.Current.User.UserId;
-        if (await _userBlacklistChecker.IsBlocked(currentUserId, userId))
+        if (await _userBlacklistChecker.IsBlockedAsync(currentUserId, userId))
         {
             throw new HttpException(HttpStatusCode.UnprocessableEntity, "Cannot invite a user you have blocked");
         }
@@ -117,7 +117,7 @@ internal class BlogInvitationService : IBlogInvitationService
 
         await _repository.InvalidateAndCreate(existingInvites, createInvitation);
 
-        await _eventProducer.Send(EventType.BlogInvitationCreated, tokenId);
+        await _eventProducer.SendAsync(EventType.BlogInvitationCreated, tokenId);
 
         var currentUser = _identityProvider.Current.User;
         var blog = await _blogService.GetBlog(blogId);
@@ -180,11 +180,11 @@ internal class BlogInvitationService : IBlogInvitationService
                 // Add as subscriber (reader) via Subscribe
                 await _blogService.Subscribe(invitation.BlogId);
             }
-            await _eventProducer.Send(EventType.BlogInvitationAccepted, tokenId);
+            await _eventProducer.SendAsync(EventType.BlogInvitationAccepted, tokenId);
         }
         else
         {
-            await _eventProducer.Send(EventType.BlogInvitationRejected, tokenId);
+            await _eventProducer.SendAsync(EventType.BlogInvitationRejected, tokenId);
         }
     }
 
@@ -202,7 +202,7 @@ internal class BlogInvitationService : IBlogInvitationService
 
         await _repository.Invalidate(tokenId);
 
-        await _eventProducer.Send(EventType.BlogInvitationCancelled, tokenId);
+        await _eventProducer.SendAsync(EventType.BlogInvitationCancelled, tokenId);
     }
 
     /// <inheritdoc />

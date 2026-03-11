@@ -35,7 +35,7 @@ internal class PublicationCommentApiService : IPublicationCommentApiService
     /// <inheritdoc />
     public async Task<DiscussionResponse> GetDiscussion(Guid publicationId, PagingQuery query)
     {
-        var (comments, paging) = await _commentService.Get(publicationId, query);
+        var (comments, paging) = await _commentService.GetAsync(publicationId, query);
         var identity = _identityProvider.Current;
         var currentUserId = identity.User?.UserId ?? Guid.Empty;
         var isAuthenticated = identity.User?.IsAuthenticated ?? false;
@@ -64,7 +64,7 @@ internal class PublicationCommentApiService : IPublicationCommentApiService
     /// <inheritdoc />
     public async Task<ListEnvelope<Comment>> Get(Guid publicationId, PagingQuery query)
     {
-        var (comments, paging) = await _commentService.Get(publicationId, query);
+        var (comments, paging) = await _commentService.GetAsync(publicationId, query);
         return new ListEnvelope<Comment>(comments.Select(_mapper.Map<Comment>), new PagingInfo(paging));
     }
 
@@ -73,14 +73,14 @@ internal class PublicationCommentApiService : IPublicationCommentApiService
     {
         var createComment = _mapper.Map<CreateComment>(request);
         createComment.EntityId = publicationId;
-        var createdComment = await _commentService.Create(createComment);
+        var createdComment = await _commentService.CreateAsync(createComment);
         return new Envelope<Comment>(_mapper.Map<Comment>(createdComment));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Comment>> Get(Guid commentId)
     {
-        var comment = await _commentService.Get(commentId);
+        var comment = await _commentService.GetAsync(commentId);
         return new Envelope<Comment>(_mapper.Map<Comment>(comment));
     }
 
@@ -89,13 +89,13 @@ internal class PublicationCommentApiService : IPublicationCommentApiService
     {
         var updateComment = _mapper.Map<UpdateComment>(comment);
         updateComment.CommentId = commentId;
-        var updatedComment = await _commentService.Update(updateComment);
+        var updatedComment = await _commentService.UpdateAsync(updateComment);
         return new Envelope<Comment>(_mapper.Map<Comment>(updatedComment));
     }
 
     /// <inheritdoc />
-    public Task Delete(Guid commentId) => _commentService.Delete(commentId);
+    public Task Delete(Guid commentId) => _commentService.DeleteAsync(commentId);
 
     /// <inheritdoc />
-    public Task MarkAsRead(Guid publicationId) => _commentService.MarkAsRead(publicationId);
+    public Task MarkAsRead(Guid publicationId) => _commentService.MarkAsReadAsync(publicationId);
 }

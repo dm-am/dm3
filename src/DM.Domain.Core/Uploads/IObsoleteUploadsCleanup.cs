@@ -12,5 +12,5 @@ public interface IObsoleteUploadsCleanup
     /// Prepare obsolete images for deleting
     /// </summary>
     /// <param name="entityId">Entity identifier (user, character, etc.)</param>
-    Task PrepareObsoleteForDeleting(Guid entityId);
+    Task PrepareObsoleteForDeletingAsync(Guid entityId);
 }

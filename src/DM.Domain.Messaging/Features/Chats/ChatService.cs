@@ -63,7 +63,7 @@ internal class ChatService : IChatService
         var (chat, chatLinks) = _factory.CreateGroup(createChat.Title, allParticipants);
         var result = await _repository.Create(chat, chatLinks);
 
-        await _unreadCountersRepository.Create(result.Id, UnreadEntryType.Message, allParticipants);
+        await _unreadCountersRepository.CreateAsync(result.Id, UnreadEntryType.Message, allParticipants);
 
         return result;
     }
@@ -126,7 +126,7 @@ internal class ChatService : IChatService
         var (chat, chatLinks) = _factory.CreateDirect(currentUserId, otherUserId);
         var result = await _repository.Create(chat, chatLinks);
 
-        await _unreadCountersRepository.Create(result.Id, UnreadEntryType.Message,
+        await _unreadCountersRepository.CreateAsync(result.Id, UnreadEntryType.Message,
             new[] { currentUserId, otherUserId }.Distinct());
 
         return result;
@@ -136,12 +136,12 @@ internal class ChatService : IChatService
     public async Task<int> GetTotalUnreadCountAsync()
     {
         var userId = _identityProvider.Current.User.UserId;
-        return (await _unreadCountersRepository.SelectByParents(userId, UnreadEntryType.Message, userId))[userId];
+        return (await _unreadCountersRepository.SelectByParentsAsync(userId, UnreadEntryType.Message, userId))[userId];
     }
 
     /// <inheritdoc />
     public Task MarkAsReadAsync(Guid chatId) =>
-        _unreadCountersRepository.Flush(_identityProvider.Current.User.UserId,
+        _unreadCountersRepository.FlushAsync(_identityProvider.Current.User.UserId,
             UnreadEntryType.Message, chatId);
 
     // ═══ UPDATE ═══
@@ -188,7 +188,7 @@ internal class ChatService : IChatService
 
         if (addParticipants.Length > 0)
         {
-            await _unreadCountersRepository.Create(
+            await _unreadCountersRepository.CreateAsync(
                 updateChat.ChatId,
                 UnreadEntryType.Message,
                 addParticipants);

@@ -79,8 +79,8 @@ internal class RoomService : IRoomService
         };
 
         var room = await _repository.Create(entity);
-        await _unreadCountersRepository.Create(room.Id, game.Id, UnreadEntryType.Message);
-        await _producer.Send(EventType.NewRoom, room.Id);
+        await _unreadCountersRepository.CreateAsync(room.Id, game.Id, UnreadEntryType.Message);
+        await _producer.SendAsync(EventType.NewRoom, room.Id);
 
         return room;
     }
@@ -147,7 +147,7 @@ internal class RoomService : IRoomService
         };
 
         var result = await _repository.Update(entity);
-        await _producer.Send(EventType.ChangedRoom, result.Id);
+        await _producer.SendAsync(EventType.ChangedRoom, result.Id);
 
         return result;
     }
@@ -167,8 +167,8 @@ internal class RoomService : IRoomService
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
 
         await _repository.Delete(roomId);
-        await _unreadCountersRepository.Delete(roomId, UnreadEntryType.Message);
-        await _producer.Send(EventType.DeletedRoom, roomId);
+        await _unreadCountersRepository.DeleteAsync(roomId, UnreadEntryType.Message);
+        await _producer.SendAsync(EventType.DeletedRoom, roomId);
     }
 
     #endregion

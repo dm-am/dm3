@@ -9,7 +9,7 @@ using MongoDB.Driver;
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
 /// <inheritdoc cref="ILoginAttemptRepository"/>
-internal class LoginAttemptRepository : MongoCollectionRepository<LoginAttempts>, ILoginAttemptRepository
+internal class LoginAttemptRepository : MongoCollectionRepository<LoginAttempt>, ILoginAttemptRepository
 {
     private readonly IDateTimeProvider _dateTimeProvider;
 
@@ -52,7 +52,7 @@ internal class LoginAttemptRepository : MongoCollectionRepository<LoginAttempts>
             Update
                 .Inc(x => x.FailedAttempts, 1)
                 .Set(x => x.LastAttemptUtc, now),
-            new FindOneAndUpdateOptions<LoginAttempts>
+            new FindOneAndUpdateOptions<LoginAttempt>
             {
                 IsUpsert = true,
                 ReturnDocument = ReturnDocument.After

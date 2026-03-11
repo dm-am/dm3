@@ -20,7 +20,7 @@ internal class BoardRepository(
     /// <inheritdoc />
     public async Task<IEnumerable<Board>> SelectBoards(BoardAccessPolicy? accessPolicy)
     {
-        var boards = await cache.GetOrCreate<Board[]>("Boards", async () => await dmDbContext.Boards
+        var boards = await cache.GetOrCreateAsync<Board[]>("Boards", async () => await dmDbContext.Boards
             .TagWith("DM.Forum.BoardsList")
             .OrderBy(b => b.Order)
             .ProjectTo<Board>(mapperConfig)

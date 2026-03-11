@@ -45,8 +45,8 @@ public class BanController : ControllerBase
     /// <response code="200">User ban status and history</response>
     /// <response code="404">User not found</response>
     [HttpGet("~/v1/users/{login}/bans", Name = nameof(GetUserBans))]
-    [ProducesResponseType(typeof(UserBanStatus), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(UserBanStatus), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserBans(string login) =>
         Ok(await _banApiService.GetUserBanStatus(login));
 
@@ -60,8 +60,8 @@ public class BanController : ControllerBase
     /// <response code="200">Active ban details</response>
     /// <response code="404">User not found or not banned</response>
     [HttpGet("~/v1/users/{login}/bans/active", Name = nameof(GetActiveBan))]
-    [ProducesResponseType(typeof(Envelope<Ban>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Ban>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetActiveBan(string login)
     {
         var ban = await _banApiService.GetActiveBan(login);
@@ -84,9 +84,9 @@ public class BanController : ControllerBase
     /// <response code="403">Moderator role required</response>
     [HttpGet(Name = nameof(GetAllBans))]
     [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(typeof(ListEnvelope<Ban>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
+    [ProducesResponseType(typeof(ListEnvelope<Ban>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetAllBans([FromQuery] BanType? type = null) =>
         Ok(await _banApiService.GetAllActiveBans(type));
 
@@ -112,12 +112,12 @@ public class BanController : ControllerBase
     /// <response code="409">User is already banned</response>
     [HttpPost(Name = nameof(CreateBan))]
     [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(typeof(Envelope<Ban>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
-    [ProducesResponseType(typeof(GeneralError), 409)]
+    [ProducesResponseType(typeof(Envelope<Ban>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateBan([FromBody] CreateBanRequest request)
     {
         var result = await _banApiService.CreateBan(request);
@@ -139,10 +139,10 @@ public class BanController : ControllerBase
     /// <response code="404">Ban not found</response>
     [HttpDelete("{id}", Name = nameof(LiftBan))]
     [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> LiftBan(Guid id, [FromBody] LiftBanRequest? request = null)
     {
         await _banApiService.LiftBan(id, request);

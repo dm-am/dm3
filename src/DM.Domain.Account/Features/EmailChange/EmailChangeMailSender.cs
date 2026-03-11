@@ -35,7 +35,7 @@ internal class EmailChangeMailSender : IEmailChangeMailSender
         var emailBody = await _renderer.RenderAsync(new EmailChangeConfirmationViewModel(
             username,
             confirmationLinkUrl.ToString()));
-        await _mailSender.Send(new EmailLetter
+        await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
             Subject = $"Подтверждение смены адреса электронной почты на DM.AM для {username}",

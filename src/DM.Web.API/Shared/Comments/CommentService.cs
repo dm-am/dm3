@@ -34,7 +34,7 @@ internal class CommentService : ICommentService
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<Comment> Comments, PagingData Paging)> GetComments(
+    public async Task<(IEnumerable<Comment> Comments, PagingData Paging)> GetCommentsAsync(
         CommentEntityType entityType,
         Guid entityId,
         PagingQuery paging,
@@ -51,18 +51,18 @@ internal class CommentService : ICommentService
     }
 
     /// <inheritdoc />
-    public async Task<Comment?> GetComment(Guid commentId, CancellationToken ct = default)
+    public async Task<Comment?> GetCommentAsync(Guid commentId, CancellationToken ct = default)
     {
         // Try each domain until we find the comment
-        try { return await _topicCommentService.Get(commentId); } catch { }
-        try { return await _blogCommentService.Get(commentId); } catch { }
-        try { return await _publicationCommentService.Get(commentId); } catch { }
-        try { return await _gameCommentService.Get(commentId); } catch { }
+        try { return await _topicCommentService.GetAsync(commentId); } catch { }
+        try { return await _blogCommentService.GetAsync(commentId); } catch { }
+        try { return await _publicationCommentService.GetAsync(commentId); } catch { }
+        try { return await _gameCommentService.GetAsync(commentId); } catch { }
         return null;
     }
 
     /// <inheritdoc />
-    public async Task<Comment> CreateComment(
+    public async Task<Comment> CreateCommentAsync(
         CommentEntityType entityType,
         Guid entityId,
         CreateComment createComment,
@@ -72,57 +72,57 @@ internal class CommentService : ICommentService
 
         return entityType switch
         {
-            CommentEntityType.Game => await _gameCommentService.Create(createComment),
-            CommentEntityType.Blog => await _blogCommentService.Create(createComment),
-            CommentEntityType.Publication => await _publicationCommentService.Create(createComment),
-            CommentEntityType.Topic => await _topicCommentService.Create(createComment),
+            CommentEntityType.Game => await _gameCommentService.CreateAsync(createComment),
+            CommentEntityType.Blog => await _blogCommentService.CreateAsync(createComment),
+            CommentEntityType.Publication => await _publicationCommentService.CreateAsync(createComment),
+            CommentEntityType.Topic => await _topicCommentService.CreateAsync(createComment),
             _ => throw new ArgumentOutOfRangeException(nameof(entityType), entityType, "Unknown comment entity type")
         };
     }
 
     /// <inheritdoc />
-    public async Task<Comment> UpdateComment(Guid commentId, UpdateComment updateComment, CancellationToken ct = default)
+    public async Task<Comment> UpdateCommentAsync(Guid commentId, UpdateComment updateComment, CancellationToken ct = default)
     {
         updateComment.CommentId = commentId;
 
         // Try each domain - the authorization will fail if wrong domain
-        try { return await _topicCommentService.Update(updateComment); } catch { }
-        try { return await _blogCommentService.Update(updateComment); } catch { }
-        try { return await _publicationCommentService.Update(updateComment); } catch { }
-        return await _gameCommentService.Update(updateComment);
+        try { return await _topicCommentService.UpdateAsync(updateComment); } catch { }
+        try { return await _blogCommentService.UpdateAsync(updateComment); } catch { }
+        try { return await _publicationCommentService.UpdateAsync(updateComment); } catch { }
+        return await _gameCommentService.UpdateAsync(updateComment);
     }
 
     /// <inheritdoc />
-    public async Task DeleteComment(Guid commentId, CancellationToken ct = default)
+    public async Task DeleteCommentAsync(Guid commentId, CancellationToken ct = default)
     {
         // Try each domain - the authorization will fail if wrong domain
-        try { await _topicCommentService.Delete(commentId); return; } catch { }
-        try { await _blogCommentService.Delete(commentId); return; } catch { }
-        try { await _publicationCommentService.Delete(commentId); return; } catch { }
-        await _gameCommentService.Delete(commentId);
+        try { await _topicCommentService.DeleteAsync(commentId); return; } catch { }
+        try { await _blogCommentService.DeleteAsync(commentId); return; } catch { }
+        try { await _publicationCommentService.DeleteAsync(commentId); return; } catch { }
+        await _gameCommentService.DeleteAsync(commentId);
     }
 
     private async Task<(IEnumerable<Comment> Comments, PagingData Paging)> GetGameComments(Guid gameId, PagingQuery paging)
     {
-        var (comments, pagingResult) = await _gameCommentService.Get(gameId, paging);
+        var (comments, pagingResult) = await _gameCommentService.GetAsync(gameId, paging);
         return (comments, ToPagingData(paging, pagingResult));
     }
 
     private async Task<(IEnumerable<Comment> Comments, PagingData Paging)> GetBlogComments(Guid blogId, PagingQuery paging)
     {
-        var (comments, pagingResult) = await _blogCommentService.Get(blogId, paging);
+        var (comments, pagingResult) = await _blogCommentService.GetAsync(blogId, paging);
         return (comments, ToPagingData(paging, pagingResult));
     }
 
     private async Task<(IEnumerable<Comment> Comments, PagingData Paging)> GetPublicationComments(Guid publicationId, PagingQuery paging)
     {
-        var (comments, pagingResult) = await _publicationCommentService.Get(publicationId, paging);
+        var (comments, pagingResult) = await _publicationCommentService.GetAsync(publicationId, paging);
         return (comments, ToPagingData(paging, pagingResult));
     }
 
     private async Task<(IEnumerable<Comment> Comments, PagingData Paging)> GetTopicComments(Guid topicId, PagingQuery paging)
     {
-        var (comments, pagingResult) = await _topicCommentService.Get(topicId, paging);
+        var (comments, pagingResult) = await _topicCommentService.GetAsync(topicId, paging);
         return (comments, ToPagingData(paging, pagingResult));
     }
 

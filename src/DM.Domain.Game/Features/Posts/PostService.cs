@@ -96,8 +96,8 @@ internal class PostService : IPostService
         };
 
         var createdPost = await _repository.Create(entity);
-        await _unreadCountersRepository.Increment(createdPost.RoomId, UnreadEntryType.Message);
-        await _producer.Send(events, createdPost.Id);
+        await _unreadCountersRepository.IncrementAsync(createdPost.RoomId, UnreadEntryType.Message);
+        await _producer.SendAsync(events, createdPost.Id);
 
         return createdPost;
     }
@@ -132,7 +132,7 @@ internal class PostService : IPostService
     public async Task MarkAsReadAsync(Guid roomId)
     {
         await _roomService.GetAsync(roomId);
-        await _unreadCountersRepository.Flush(_identityProvider.Current.User.UserId,
+        await _unreadCountersRepository.FlushAsync(_identityProvider.Current.User.UserId,
             UnreadEntryType.Message, roomId);
     }
 
@@ -190,7 +190,7 @@ internal class PostService : IPostService
         }
 
         var updatedPost = await _repository.Update(entity);
-        await _producer.Send(EventType.ChangedPost, post.Id);
+        await _producer.SendAsync(EventType.ChangedPost, post.Id);
 
         return updatedPost!;
     }
@@ -207,8 +207,8 @@ internal class PostService : IPostService
         await _repository.Delete(postId);
         await _repository.DecrementAuthorQuantityRating(post.Author.UserId);
 
-        await _unreadCountersRepository.Decrement(post.RoomId, UnreadEntryType.Message, post.CreatedUtc);
-        await _producer.Send(EventType.DeletedPost, postId);
+        await _unreadCountersRepository.DecrementAsync(post.RoomId, UnreadEntryType.Message, post.CreatedUtc);
+        await _producer.SendAsync(EventType.DeletedPost, postId);
     }
 
     #endregion

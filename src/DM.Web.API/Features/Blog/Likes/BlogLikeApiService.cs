@@ -25,30 +25,30 @@ internal class BlogLikeApiService : IBlogLikeApiService
     /// <inheritdoc />
     public async Task<User> LikeBlogComment(Guid commentId)
     {
-        var likedByUser = await _likeService.LikeBlogComment(commentId);
+        var likedByUser = await _likeService.LikeBlogCommentAsync(commentId);
         return _mapper.Map<User>(likedByUser);
     }
 
     /// <inheritdoc />
-    public Task UnlikeBlogComment(Guid commentId) => _likeService.UnlikeBlogComment(commentId);
+    public Task UnlikeBlogComment(Guid commentId) => _likeService.UnlikeBlogCommentAsync(commentId);
 
     /// <inheritdoc />
     public async Task<Envelope<User>> LikePublicationComment(Guid commentId)
     {
-        var likedByUser = await _likeService.LikePublicationComment(commentId);
+        var likedByUser = await _likeService.LikePublicationCommentAsync(commentId);
         return new Envelope<User>(_mapper.Map<User>(likedByUser));
     }
 
     /// <inheritdoc />
-    public Task UnlikePublicationComment(Guid commentId) => _likeService.UnlikePublicationComment(commentId);
+    public Task UnlikePublicationComment(Guid commentId) => _likeService.UnlikePublicationCommentAsync(commentId);
 
     /// <inheritdoc />
     public async Task<Envelope<User>> LikePublication(Guid publicationId)
     {
-        var likedByUser = await _likeService.LikePublication(publicationId);
+        var likedByUser = await _likeService.LikePublicationAsync(publicationId);
         return new Envelope<User>(_mapper.Map<User>(likedByUser));
     }
 
     /// <inheritdoc />
-    public Task UnlikePublication(Guid publicationId) => _likeService.UnlikePublication(publicationId);
+    public Task UnlikePublication(Guid publicationId) => _likeService.UnlikePublicationAsync(publicationId);
 }

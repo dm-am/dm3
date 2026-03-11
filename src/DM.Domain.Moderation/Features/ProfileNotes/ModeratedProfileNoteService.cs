@@ -42,7 +42,7 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
     /// <inheritdoc />
     public async Task<IEnumerable<ModeratedProfileNote>> GetNotes(string username)
     {
-        var user = await _userLookupService.Get(username);
+        var user = await _userLookupService.GetAsync(username);
 
         _intentionManager.ThrowIfForbidden(ModerationIntention.ViewModNotes);
 
@@ -56,7 +56,7 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
         var note = await _noteRepository.GetNote(noteId)
             ?? throw new HttpException(HttpStatusCode.NotFound, $"Note {noteId} not found");
 
-        var user = await _userLookupService.Get(note.User.UserId);
+        var user = await _userLookupService.GetAsync(note.User.UserId);
 
         _intentionManager.ThrowIfForbidden(ModerationIntention.ViewModNotes);
 
@@ -66,7 +66,7 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
     /// <inheritdoc />
     public async Task<ModeratedProfileNote> Create(CreateModeratedProfileNote createNote)
     {
-        var user = await _userLookupService.Get(createNote.Username);
+        var user = await _userLookupService.GetAsync(createNote.Username);
 
         _intentionManager.ThrowIfForbidden(ModerationIntention.CreateModNote);
 
@@ -89,7 +89,7 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
         var note = await _noteRepository.GetNote(updateNote.NoteId)
             ?? throw new HttpException(HttpStatusCode.NotFound, $"Note {updateNote.NoteId} not found");
 
-        var user = await _userLookupService.Get(note.User.UserId);
+        var user = await _userLookupService.GetAsync(note.User.UserId);
 
         _intentionManager.ThrowIfForbidden(ModerationIntention.EditModNote);
 
@@ -118,7 +118,7 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
         var note = await _noteRepository.GetNote(noteId)
             ?? throw new HttpException(HttpStatusCode.NotFound, $"Note {noteId} not found");
 
-        var user = await _userLookupService.Get(note.User.UserId);
+        var user = await _userLookupService.GetAsync(note.User.UserId);
 
         _intentionManager.ThrowIfForbidden(ModerationIntention.DeleteModNote);
 

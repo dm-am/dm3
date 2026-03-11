@@ -15,20 +15,20 @@ public interface IGameSubscriptionService
     /// <summary>
     /// Subscribe current user to a game as reader
     /// </summary>
-    Task<Subscription> Subscribe(Guid gameId, CancellationToken ct = default);
+    Task<Subscription> SubscribeAsync(Guid gameId, CancellationToken ct = default);
 
     /// <summary>
     /// Unsubscribe current user from a game
     /// </summary>
-    Task Unsubscribe(Guid gameId, CancellationToken ct = default);
+    Task UnsubscribeAsync(Guid gameId, CancellationToken ct = default);
 
     /// <summary>
     /// Get readers (subscribers) of a game
     /// </summary>
-    Task<IEnumerable<GeneralUser>> GetReaders(Guid gameId, CancellationToken ct = default);
+    Task<IEnumerable<GeneralUser>> GetReadersAsync(Guid gameId, CancellationToken ct = default);
 
     /// <summary>
     /// Check if a user is subscribed to a game (is a reader)
     /// </summary>
-    Task<bool> IsSubscribed(Guid userId, Guid gameId, CancellationToken ct = default);
+    Task<bool> IsSubscribedAsync(Guid userId, Guid gameId, CancellationToken ct = default);
 }

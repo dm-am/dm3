@@ -44,13 +44,13 @@ internal class BlogNotepadService : IBlogNotepadService
     public async Task<IEnumerable<NotepadEntry>> GetEntries(Guid blogId, CancellationToken ct = default)
     {
         await ThrowIfNotBlogParticipant(blogId, ct);
-        return await _repository.GetEntries(NotepadType.Blog, blogId, null, ct);
+        return await _repository.GetEntriesAsync(NotepadType.Blog, blogId, null, ct);
     }
 
     /// <inheritdoc />
     public async Task<NotepadEntry> GetEntry(Guid entryId, CancellationToken ct = default)
     {
-        var entry = await _repository.GetEntry(entryId, ct);
+        var entry = await _repository.GetEntryAsync(entryId, ct);
         if (entry == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, "Entry not found");
@@ -84,13 +84,13 @@ internal class BlogNotepadService : IBlogNotepadService
             CreatedUtc = _dateTimeProvider.Now
         };
 
-        return await _repository.CreateEntry(internalDto, ct);
+        return await _repository.CreateEntryAsync(internalDto, ct);
     }
 
     /// <inheritdoc />
     public async Task<NotepadEntry> UpdateEntry(Guid entryId, UpdateNotepadEntry updateEntry, CancellationToken ct = default)
     {
-        var entry = await _repository.GetEntry(entryId, ct);
+        var entry = await _repository.GetEntryAsync(entryId, ct);
         if (entry == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, "Entry not found");
@@ -113,13 +113,13 @@ internal class BlogNotepadService : IBlogNotepadService
             UpdatedUtc = _dateTimeProvider.Now
         };
 
-        return await _repository.UpdateEntry(internalDto, ct);
+        return await _repository.UpdateEntryAsync(internalDto, ct);
     }
 
     /// <inheritdoc />
     public async Task DeleteEntry(Guid entryId, CancellationToken ct = default)
     {
-        var entry = await _repository.GetEntry(entryId, ct);
+        var entry = await _repository.GetEntryAsync(entryId, ct);
         if (entry == null)
         {
             return; // Already deleted
@@ -131,7 +131,7 @@ internal class BlogNotepadService : IBlogNotepadService
         }
 
         await ThrowIfNotBlogParticipant(entry.ContainerId, ct);
-        await _repository.DeleteEntry(entryId, UserId, ct);
+        await _repository.DeleteEntryAsync(entryId, UserId, ct);
     }
 
     #endregion
@@ -142,7 +142,7 @@ internal class BlogNotepadService : IBlogNotepadService
     public async Task<IEnumerable<NotepadCategory>> GetCategories(Guid blogId, CancellationToken ct = default)
     {
         await ThrowIfNotBlogParticipant(blogId, ct);
-        return await _repository.GetCategories(NotepadType.Blog, blogId, null, ct);
+        return await _repository.GetCategoriesAsync(NotepadType.Blog, blogId, null, ct);
     }
 
     /// <inheritdoc />
@@ -162,13 +162,13 @@ internal class BlogNotepadService : IBlogNotepadService
             CreatedUtc = _dateTimeProvider.Now
         };
 
-        return await _repository.CreateCategory(internalDto, ct);
+        return await _repository.CreateCategoryAsync(internalDto, ct);
     }
 
     /// <inheritdoc />
     public async Task<NotepadCategory> UpdateCategory(Guid categoryId, UpdateNotepadCategory updateCategory, CancellationToken ct = default)
     {
-        var category = await _repository.GetCategory(categoryId, ct);
+        var category = await _repository.GetCategoryAsync(categoryId, ct);
         if (category == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, "Category not found");
@@ -188,13 +188,13 @@ internal class BlogNotepadService : IBlogNotepadService
             SortOrder = updateCategory.SortOrder
         };
 
-        return await _repository.UpdateCategory(internalDto, ct);
+        return await _repository.UpdateCategoryAsync(internalDto, ct);
     }
 
     /// <inheritdoc />
     public async Task DeleteCategory(Guid categoryId, CancellationToken ct = default)
     {
-        var category = await _repository.GetCategory(categoryId, ct);
+        var category = await _repository.GetCategoryAsync(categoryId, ct);
         if (category == null)
         {
             return; // Already deleted
@@ -206,7 +206,7 @@ internal class BlogNotepadService : IBlogNotepadService
         }
 
         await ThrowIfNotBlogParticipant(category.ContainerId, ct);
-        await _repository.DeleteCategory(categoryId, UserId, ct);
+        await _repository.DeleteCategoryAsync(categoryId, UserId, ct);
     }
 
     #endregion

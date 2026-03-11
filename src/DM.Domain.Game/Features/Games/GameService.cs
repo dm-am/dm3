@@ -189,7 +189,7 @@ internal class GameService : IGameService
 
         if (createGame.CopyBlacklist)
         {
-            var personalBlacklist = await _userBlacklistChecker.GetBlockedUserIds(userId);
+            var personalBlacklist = await _userBlacklistChecker.GetBlockedUserIdsAsync(userId);
             foreach (var blockedUserId in personalBlacklist)
             {
                 await _gameBlacklistRepository.Add(createdGame.Id, blockedUserId, userId);
@@ -251,7 +251,7 @@ internal class GameService : IGameService
         var postPendenciesArray = postPendencies.ToArray();
         var allRoomIds = gameRooms.SelectMany(r => r.Value).ToArray();
         var unreadPostCounters = allRoomIds.Length > 0
-            ? await _unreadCountersRepository.SelectByEntities(currentUserId, UnreadEntryType.Message, allRoomIds)
+            ? await _unreadCountersRepository.SelectByEntitiesAsync(currentUserId, UnreadEntryType.Message, allRoomIds)
             : new Dictionary<Guid, int>();
 
         foreach (var game in games)
@@ -330,7 +330,7 @@ internal class GameService : IGameService
 
         if (allRoomIds.Length > 0)
         {
-            var unreadPostCounters = await _unreadCountersRepository.SelectByEntities(
+            var unreadPostCounters = await _unreadCountersRepository.SelectByEntitiesAsync(
                 currentUserId, UnreadEntryType.Message, allRoomIds);
             foreach (var game in games)
             {
@@ -380,7 +380,7 @@ internal class GameService : IGameService
             game.AttributeSchema = await _schemaService.GetAsync(game.AttributeSchemaId.Value);
         }
 
-        var readersTask = _subscriptionService.GetReaders(gameId);
+        var readersTask = _subscriptionService.GetReadersAsync(gameId);
         var fillCommentsTask = _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
             g => g.Id, g => g.UnreadCommentsCount);
         var fillCharactersTask = _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
@@ -544,7 +544,7 @@ internal class GameService : IGameService
         };
 
         var result = await _repository.Update(updateEntity);
-        await _producer.Send(invokedEvents, game.Id);
+        await _producer.SendAsync(invokedEvents, game.Id);
 
         return result;
     }
@@ -558,7 +558,7 @@ internal class GameService : IGameService
         var gameToRemove = await GetAsync(gameId);
         _intentionManager.ThrowIfForbidden(GameIntention.Delete, gameToRemove);
         await _repository.Delete(gameId);
-        await _producer.Send(EventType.DeletedGame, gameId);
+        await _producer.SendAsync(EventType.DeletedGame, gameId);
     }
 
     #endregion
@@ -582,11 +582,11 @@ internal class GameService : IGameService
         }
 
         var exiledCharacterIds = await _userRepository.ExilePlayer(gameId, username);
-        await _producer.Send(EventType.ChangedGame, gameId);
+        await _producer.SendAsync(EventType.ChangedGame, gameId);
 
         foreach (var characterId in exiledCharacterIds)
         {
-            await _producer.Send(EventType.StatusCharacterExiled, characterId);
+            await _producer.SendAsync(EventType.StatusCharacterExiled, characterId);
         }
     }
 
@@ -607,7 +607,7 @@ internal class GameService : IGameService
         }
 
         await _userRepository.RemoveAssistantByUsername(gameId, username);
-        await _producer.Send(EventType.ChangedGame, gameId);
+        await _producer.SendAsync(EventType.ChangedGame, gameId);
     }
 
     /// <inheritdoc />
@@ -647,7 +647,7 @@ internal class GameService : IGameService
         }
 
         // Send event
-        await _producer.Send(EventType.ChangedGame, gameId);
+        await _producer.SendAsync(EventType.ChangedGame, gameId);
     }
 
     #endregion
@@ -659,9 +659,9 @@ internal class GameService : IGameService
     /// </summary>
     private async Task InitializeCountersAsync(Guid gameId, Guid roomId)
     {
-        await _unreadCountersRepository.Create(roomId, UnreadEntryType.Message);
-        await _unreadCountersRepository.Create(gameId, UnreadEntryType.Message);
-        await _unreadCountersRepository.Create(gameId, UnreadEntryType.Character);
+        await _unreadCountersRepository.CreateAsync(roomId, UnreadEntryType.Message);
+        await _unreadCountersRepository.CreateAsync(gameId, UnreadEntryType.Message);
+        await _unreadCountersRepository.CreateAsync(gameId, UnreadEntryType.Character);
     }
 
     /// <summary>
@@ -669,7 +669,7 @@ internal class GameService : IGameService
     /// </summary>
     private Task PublishGameCreatedAsync(Guid gameId)
     {
-        return _producer.Send(EventType.NewGame, gameId);
+        return _producer.SendAsync(EventType.NewGame, gameId);
     }
 
     #endregion

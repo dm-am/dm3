@@ -15,7 +15,7 @@ public interface ICache
     /// <param name="create">Entry factory</param>
     /// <typeparam name="TEntry">Cache entry type</typeparam>
     /// <returns>Stored entry</returns>
-    Task<TEntry> GetOrCreate<TEntry>(object key, Func<Task<TEntry>> create);
+    Task<TEntry> GetOrCreateAsync<TEntry>(object key, Func<Task<TEntry>> create);
 
     /// <summary>
     /// Get cache entry or create new and return result with specified TTL
@@ -25,12 +25,12 @@ public interface ICache
     /// <param name="absoluteExpiration">Time to live</param>
     /// <typeparam name="TEntry">Cache entry type</typeparam>
     /// <returns>Stored entry</returns>
-    Task<TEntry> GetOrCreate<TEntry>(object key, Func<Task<TEntry>> create, TimeSpan absoluteExpiration);
+    Task<TEntry> GetOrCreateAsync<TEntry>(object key, Func<Task<TEntry>> create, TimeSpan absoluteExpiration);
 
     /// <summary>
     /// Invalidate cache entry
     /// </summary>
     /// <param name="key">Cache key</param>
     /// <returns></returns>
-    Task Invalidate(object key);
+    Task InvalidateAsync(object key);
 }

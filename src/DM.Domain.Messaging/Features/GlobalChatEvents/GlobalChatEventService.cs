@@ -137,7 +137,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
             endedAt: null,
             ct).ConfigureAwait(false);
 
-        await _eventProducer.Send(EventType.GlobalChatEventStarted, eventId).ConfigureAwait(false);
+        await _eventProducer.SendAsync(EventType.GlobalChatEventStarted, eventId).ConfigureAwait(false);
 
         return result;
     }
@@ -155,7 +155,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
             endedAt: _dateTimeProvider.Now,
             ct).ConfigureAwait(false);
 
-        await _eventProducer.Send(EventType.GlobalChatEventEnded, eventId).ConfigureAwait(false);
+        await _eventProducer.SendAsync(EventType.GlobalChatEventEnded, eventId).ConfigureAwait(false);
 
         return result;
     }
@@ -182,7 +182,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
         var participant = _factory.CreateParticipant(eventId, userId, isOrganizer: false);
         var result = await _repository.AddParticipant(participant, ct).ConfigureAwait(false);
 
-        await _eventProducer.Send(EventType.GlobalChatEventParticipantJoined, eventId).ConfigureAwait(false);
+        await _eventProducer.SendAsync(EventType.GlobalChatEventParticipantJoined, eventId).ConfigureAwait(false);
 
         return result;
     }
@@ -197,7 +197,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
 
         await _repository.RemoveParticipant(eventId, userId, ct).ConfigureAwait(false);
 
-        await _eventProducer.Send(EventType.GlobalChatEventParticipantLeft, eventId).ConfigureAwait(false);
+        await _eventProducer.SendAsync(EventType.GlobalChatEventParticipantLeft, eventId).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -214,7 +214,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
         var participant = _factory.CreateParticipant(eventId, userId, isOrganizer: false);
         var result = await _repository.AddParticipant(participant, ct).ConfigureAwait(false);
 
-        await _eventProducer.Send(EventType.GlobalChatEventParticipantJoined, eventId).ConfigureAwait(false);
+        await _eventProducer.SendAsync(EventType.GlobalChatEventParticipantJoined, eventId).ConfigureAwait(false);
 
         return result;
     }
@@ -227,6 +227,6 @@ internal class GlobalChatEventService : IGlobalChatEventService
 
         await _repository.RemoveParticipant(eventId, userId, ct).ConfigureAwait(false);
 
-        await _eventProducer.Send(EventType.GlobalChatEventParticipantLeft, eventId).ConfigureAwait(false);
+        await _eventProducer.SendAsync(EventType.GlobalChatEventParticipantLeft, eventId).ConfigureAwait(false);
     }
 }

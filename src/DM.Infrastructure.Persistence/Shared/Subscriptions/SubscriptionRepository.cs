@@ -25,7 +25,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Subscription>> GetUserSubscriptions(Guid userId, CancellationToken ct = default)
+    public async Task<IEnumerable<Subscription>> GetUserSubscriptionsAsync(Guid userId, CancellationToken ct = default)
     {
         return await _dbContext.Subscriptions
             .Where(s => s.SubscriberId == userId)
@@ -35,7 +35,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Subscription>> GetUserSubscriptions(Guid userId, SubscriptionTargetType targetType, CancellationToken ct = default)
+    public async Task<IEnumerable<Subscription>> GetUserSubscriptionsAsync(Guid userId, SubscriptionTargetType targetType, CancellationToken ct = default)
     {
         return await _dbContext.Subscriptions
             .Where(s => s.SubscriberId == userId && s.TargetType == targetType)
@@ -45,7 +45,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
     }
 
     /// <inheritdoc />
-    public async Task<Subscription?> Get(Guid subscriptionId, CancellationToken ct = default)
+    public async Task<Subscription?> GetAsync(Guid subscriptionId, CancellationToken ct = default)
     {
         return await _dbContext.Subscriptions
             .Where(s => s.SubscriptionId == subscriptionId)
@@ -54,7 +54,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Subscription>> GetByTarget(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
+    public async Task<IEnumerable<Subscription>> GetByTargetAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
     {
         return await _dbContext.Subscriptions
             .Where(s => s.TargetType == targetType && s.TargetId == targetId)
@@ -63,7 +63,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Subscription>> GetByTargetWithSettings(SubscriptionTargetType targetType, Guid targetId, SubscriptionSettings requiredSettings, CancellationToken ct = default)
+    public async Task<IEnumerable<Subscription>> GetByTargetWithSettingsAsync(SubscriptionTargetType targetType, Guid targetId, SubscriptionSettings requiredSettings, CancellationToken ct = default)
     {
         return await _dbContext.Subscriptions
             .Where(s => s.TargetType == targetType && s.TargetId == targetId)
@@ -73,7 +73,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
     }
 
     /// <inheritdoc />
-    public async Task<Subscription?> Find(Guid userId, SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
+    public async Task<Subscription?> FindAsync(Guid userId, SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
     {
         return await _dbContext.Subscriptions
             .Where(s => s.SubscriberId == userId && s.TargetType == targetType && s.TargetId == targetId)
@@ -82,7 +82,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
     }
 
     /// <inheritdoc />
-    public async Task<Subscription> Create(CreateSubscription subscription, CancellationToken ct = default)
+    public async Task<Subscription> CreateAsync(CreateSubscription subscription, CancellationToken ct = default)
     {
         var entity = new SubscriptionEntity
         {
@@ -97,11 +97,11 @@ internal class SubscriptionRepository : ISubscriptionRepository
         _dbContext.Subscriptions.Add(entity);
         await _dbContext.SaveChangesAsync(ct);
 
-        return (await Get(entity.SubscriptionId, ct))!;
+        return (await GetAsync(entity.SubscriptionId, ct))!;
     }
 
     /// <inheritdoc />
-    public async Task<Subscription> Update(UpdateSubscription subscription, CancellationToken ct = default)
+    public async Task<Subscription> UpdateAsync(UpdateSubscription subscription, CancellationToken ct = default)
     {
         var entity = await _dbContext.Subscriptions.FindAsync(new object[] { subscription.SubscriptionId }, ct);
         if (entity == null)
@@ -114,11 +114,11 @@ internal class SubscriptionRepository : ISubscriptionRepository
 
         await _dbContext.SaveChangesAsync(ct);
 
-        return (await Get(entity.SubscriptionId, ct))!;
+        return (await GetAsync(entity.SubscriptionId, ct))!;
     }
 
     /// <inheritdoc />
-    public async Task Delete(Guid subscriptionId, CancellationToken ct = default)
+    public async Task DeleteAsync(Guid subscriptionId, CancellationToken ct = default)
     {
         var subscription = await _dbContext.Subscriptions.FindAsync(new object[] { subscriptionId }, ct);
         if (subscription != null)
@@ -129,7 +129,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
     }
 
     /// <inheritdoc />
-    public async Task Delete(Guid userId, SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
+    public async Task DeleteAsync(Guid userId, SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
     {
         var subscription = await _dbContext.Subscriptions
             .FirstOrDefaultAsync(s => s.SubscriberId == userId && s.TargetType == targetType && s.TargetId == targetId, ct);
@@ -141,7 +141,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Guid>> GetTargetSubscriberIds(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
+    public async Task<IEnumerable<Guid>> GetTargetSubscriberIdsAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
     {
         return await _dbContext.Subscriptions
             .Where(s => s.TargetType == targetType && s.TargetId == targetId)

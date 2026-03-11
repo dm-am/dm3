@@ -40,7 +40,7 @@ public class GameReaderController : ControllerBase
     /// <response code="404">Game not found</response>
     [HttpGet(Name = nameof(GetGameReaders))]
     [ProducesResponseType(typeof(ListEnvelope<GameUser>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameReaders(Guid id)
     {
         var readers = await _userApiService.GetReaders(id);
@@ -59,10 +59,10 @@ public class GameReaderController : ControllerBase
     [HttpPost(Name = nameof(SubscribeToGame))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(GameUser), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> SubscribeToGame(Guid id)
     {
         var reader = await _userApiService.Subscribe(id);
@@ -79,8 +79,8 @@ public class GameReaderController : ControllerBase
     [HttpDelete(Name = nameof(UnsubscribeFromGame))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UnsubscribeFromGame(Guid id)
     {
         await _userApiService.Unsubscribe(id);

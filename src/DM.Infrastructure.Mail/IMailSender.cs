@@ -16,5 +16,5 @@ public interface IMailSender
     /// </summary>
     /// <param name="letter">DTO letter</param>
     /// <returns></returns>
-    Task Send(MailLetter letter);
+    Task SendAsync(MailLetter letter);
 }

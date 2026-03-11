@@ -315,7 +315,7 @@ internal class BlogRepository : IBlogRepository
             BlogId = entity.BlogId,
             AuthorId = entity.OwnerId,
             Title = entity.Title,
-            Description = entity.Description,
+            Description = entity.Description ?? "",
             DraftVisibility = entity.DraftVisibility,
             CommentsEnabled = entity.CommentsEnabled,
             CreatedUtc = entity.CreatedUtc,
@@ -360,7 +360,7 @@ internal class BlogRepository : IBlogRepository
         {
             blog.IsRemoved = true;
             blog.DeletedByUserId = deletedByUserId;
-            blog.DeletedAtUtc = DateTimeOffset.UtcNow;
+            blog.DeletedUtc = DateTimeOffset.UtcNow;
             await _dbContext.SaveChangesAsync(ct);
         }
     }
@@ -418,7 +418,7 @@ internal class BlogRepository : IBlogRepository
         {
             rubric.IsRemoved = true;
             rubric.DeletedByUserId = deletedByUserId;
-            rubric.DeletedAtUtc = DateTimeOffset.UtcNow;
+            rubric.DeletedUtc = DateTimeOffset.UtcNow;
             await _dbContext.SaveChangesAsync(ct);
         }
     }
@@ -434,7 +434,7 @@ internal class BlogRepository : IBlogRepository
             AuthorId = entity.AuthorId,
             Title = entity.Title,
             Content = entity.Content,
-            Preview = entity.Preview,
+            Preview = entity.Preview ?? "",
             CommentsEnabled = entity.CommentsEnabled,
             IsPublished = entity.PublishImmediately,
             PublishedUtc = entity.PublishImmediately ? entity.CreatedUtc : null,
@@ -503,7 +503,7 @@ internal class BlogRepository : IBlogRepository
         {
             publication.IsRemoved = true;
             publication.DeletedByUserId = deletedByUserId;
-            publication.DeletedAtUtc = DateTimeOffset.UtcNow;
+            publication.DeletedUtc = DateTimeOffset.UtcNow;
 
             // Update blog publication count
             publication.Blog.PublicationCount--;

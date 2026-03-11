@@ -46,7 +46,7 @@ public class PollServiceShould : UnitTestBase
         _savePollSetup = _repository.Setup(r => r.Create(It.IsAny<CreatePollEntity>()));
 
         _producer = Mock<IInvokedEventProducer>();
-        _producer.Setup(p => p.Send(It.IsAny<EventType>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
+        _producer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
 
         var dateTimeProvider = Mock<IDateTimeProvider>();
         dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
@@ -103,7 +103,7 @@ public class PollServiceShould : UnitTestBase
 
         await _service.CreateAsync(createPoll);
 
-        _producer.Verify(p => p.Send(EventType.NewPoll, pollId), Times.Once);
+        _producer.Verify(p => p.SendAsync(EventType.NewPoll, pollId), Times.Once);
     }
 
     [Fact]

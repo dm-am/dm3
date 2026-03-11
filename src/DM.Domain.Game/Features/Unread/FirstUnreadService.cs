@@ -58,7 +58,7 @@ internal class FirstUnreadService : IFirstUnreadService
 
         // Get last read times for all rooms
         var roomIdsArray = roomIds is Guid[] arr ? arr : roomIds.ToArray();
-        var lastReadTimes = await _unreadCountersRepository.GetLastReadTimes(
+        var lastReadTimes = await _unreadCountersRepository.GetLastReadTimesAsync(
             userId, UnreadEntryType.Message, roomIdsArray);
 
         // Find first unread post
@@ -89,7 +89,7 @@ internal class FirstUnreadService : IFirstUnreadService
         }
 
         // Get last read time for comments
-        var lastRead = await _unreadCountersRepository.GetLastReadTime(
+        var lastRead = await _unreadCountersRepository.GetLastReadTimeAsync(
             userId, gameId, UnreadEntryType.Message) ?? DateTime.MinValue;
 
         // Find first unread comment

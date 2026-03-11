@@ -41,9 +41,9 @@ public class BlogBlacklistController : ControllerBase
     [HttpGet("{id}/blacklist", Name = nameof(GetBlogBlacklist))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(ListEnvelope<User>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogBlacklist(Guid id) =>
         Ok(new ListEnvelope<User>(await _blacklistApiService.Get(id)));
 
@@ -61,11 +61,11 @@ public class BlogBlacklistController : ControllerBase
     [HttpPost("{id}/blacklist", Name = nameof(AddToBlogBlacklist))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(User), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AddToBlogBlacklist(Guid id, [FromBody] BlockUserRequest request)
     {
         var result = await _blacklistApiService.Create(id, request.Username);
@@ -85,10 +85,10 @@ public class BlogBlacklistController : ControllerBase
     [HttpDelete("{id}/blacklist/{username}", Name = nameof(RemoveFromBlogBlacklist))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> RemoveFromBlogBlacklist(Guid id, string username)
     {
         await _blacklistApiService.Delete(id, username);

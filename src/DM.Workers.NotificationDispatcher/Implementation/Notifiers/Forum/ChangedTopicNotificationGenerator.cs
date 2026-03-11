@@ -53,7 +53,7 @@ internal class ChangedTopicNotificationGenerator : BaseNotificationGenerator
         }
 
         // Find all users subscribed to this topic
-        var subscriptions = await _subscriptionRepository.GetByTargetWithSettings(
+        var subscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.Topic,
             topicData.TopicId,
             SubscriptionSettings.NewComments);

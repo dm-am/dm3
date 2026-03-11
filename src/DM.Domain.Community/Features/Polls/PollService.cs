@@ -51,7 +51,7 @@ internal class PollService : IPollService
 
         var poll = _factory.Create(createPoll);
         var result = await _repository.Create(poll);
-        await _producer.Send(EventType.NewPoll, result.Id);
+        await _producer.SendAsync(EventType.NewPoll, result.Id);
 
         return result;
     }

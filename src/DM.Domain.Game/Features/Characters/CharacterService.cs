@@ -118,8 +118,8 @@ internal class CharacterService : ICharacterService
         };
 
         var createdCharacter = await _repository.Create(entity);
-        await _unreadCountersRepository.Increment(createCharacter.GameId, UnreadEntryType.Character);
-        await _producer.Send(EventType.NewCharacter, createdCharacter.Id);
+        await _unreadCountersRepository.IncrementAsync(createCharacter.GameId, UnreadEntryType.Character);
+        await _producer.SendAsync(EventType.NewCharacter, createdCharacter.Id);
 
         return createdCharacter;
     }
@@ -152,7 +152,7 @@ internal class CharacterService : ICharacterService
     public async Task MarkAsReadAsync(Guid gameId)
     {
         await _gameService.GetAsync(gameId);
-        await _unreadCountersRepository.Flush(_identityProvider.Current.User.UserId,
+        await _unreadCountersRepository.FlushAsync(_identityProvider.Current.User.UserId,
             UnreadEntryType.Character, gameId);
     }
 
@@ -239,7 +239,7 @@ internal class CharacterService : ICharacterService
         };
 
         var character = await _repository.Update(entity);
-        await _producer.Send(invokedEvents, updateCharacter.CharacterId);
+        await _producer.SendAsync(invokedEvents, updateCharacter.CharacterId);
 
         // Auto-subscribe as Reader when player loses all active characters
         if (status.HasValue &&
@@ -254,7 +254,7 @@ internal class CharacterService : ICharacterService
 
             if (!hasOtherActive)
             {
-                await _subscriptionService.Subscribe(characterToUpdate.GameId);
+                await _subscriptionService.SubscribeAsync(characterToUpdate.GameId);
             }
         }
 
@@ -271,8 +271,8 @@ internal class CharacterService : ICharacterService
         _intentionManager.ThrowIfForbidden(CharacterIntention.Delete, character);
 
         await _repository.Delete(characterId);
-        await _unreadCountersRepository.Decrement(character.GameId, UnreadEntryType.Character, character.CreatedUtc);
-        await _producer.Send(EventType.DeletedCharacter, characterId);
+        await _unreadCountersRepository.DecrementAsync(character.GameId, UnreadEntryType.Character, character.CreatedUtc);
+        await _producer.SendAsync(EventType.DeletedCharacter, characterId);
     }
 
     #endregion

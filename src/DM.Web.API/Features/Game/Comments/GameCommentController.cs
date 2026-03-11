@@ -38,8 +38,8 @@ public class GameCommentController : ControllerBase
     /// <response code="200">Returns the comment list</response>
     /// <response code="410">Game not found</response>
     [HttpGet("{id}/comments", Name = nameof(GetGameComments))]
-    [ProducesResponseType(typeof(ListEnvelope<Comment>), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(ListEnvelope<Comment>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameComments(Guid id, [FromQuery] PagingQuery q)
     {
         var (comments, paging) = await _commentApiService.Get(id, q);
@@ -58,11 +58,11 @@ public class GameCommentController : ControllerBase
     /// <response code="410">Game not found</response>
     [HttpPost("{id}/comments", Name = nameof(PostGameComment))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Comment), 201)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 400)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(Comment), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostGameComment(Guid id, [FromBody] CreateCommentRequest request)
     {
         var result = await _commentApiService.Create(id, request);
@@ -76,8 +76,8 @@ public class GameCommentController : ControllerBase
     /// <response code="200">Returns the comment details</response>
     /// <response code="410">Comment not found</response>
     [HttpGet("comments/{id}", Name = nameof(GetGameComment))]
-    [ProducesResponseType(typeof(Comment), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(Comment), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameComment(Guid id) => Ok(await _commentApiService.Get(id));
 
     /// <summary>
@@ -92,11 +92,11 @@ public class GameCommentController : ControllerBase
     /// <response code="410">Comment not found</response>
     [HttpPatch("comments/{id}", Name = nameof(PatchGameComment))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Comment), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 400)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(Comment), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchGameComment(Guid id, [FromBody] Comment comment) =>
         Ok(await _commentApiService.Update(id, comment));
 
@@ -110,10 +110,10 @@ public class GameCommentController : ControllerBase
     /// <response code="410">Comment not found</response>
     [HttpDelete("comments/{id}", Name = nameof(DeleteGameComment))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteGameComment(Guid id)
     {
         await _commentApiService.Delete(id);
@@ -131,11 +131,11 @@ public class GameCommentController : ControllerBase
     /// <response code="410">Comment not found</response>
     [HttpPost("comments/{id}/likes", Name = nameof(PostGameCommentLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(User), 201)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 409)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(User), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostGameCommentLike(Guid id)
     {
         var result = await _likeApiService.LikeComment(id);
@@ -153,11 +153,11 @@ public class GameCommentController : ControllerBase
     /// <response code="410">Comment not found</response>
     [HttpDelete("comments/{id}/likes", Name = nameof(DeleteGameCommentLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 409)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteGameCommentLike(Guid id)
     {
         await _likeApiService.UnlikeComment(id);
@@ -173,9 +173,9 @@ public class GameCommentController : ControllerBase
     /// <response code="410">Game not found</response>
     [HttpDelete("{id}/comments/unread", Name = nameof(MarkGameCommentsAsRead))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkGameCommentsAsRead(Guid id)
     {
         await _commentApiService.MarkAsRead(id);

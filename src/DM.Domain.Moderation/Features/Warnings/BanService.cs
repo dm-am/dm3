@@ -38,7 +38,7 @@ internal class BanService : IBanService
     {
         try
         {
-            var user = await _userLookupService.Get(username);
+            var user = await _userLookupService.GetAsync(username);
             return await _banRepository.GetUserBans(user.UserId, ct);
         }
         catch
@@ -52,7 +52,7 @@ internal class BanService : IBanService
     {
         try
         {
-            var user = await _userLookupService.Get(username);
+            var user = await _userLookupService.GetAsync(username);
             return await _banRepository.GetActiveBan(user.UserId, ct);
         }
         catch
@@ -84,7 +84,7 @@ internal class BanService : IBanService
             throw new UnauthorizedAccessException("Only moderators can create bans");
         }
 
-        var targetUser = await _userLookupService.Get(createBan.Username);
+        var targetUser = await _userLookupService.GetAsync(createBan.Username);
 
         // Check if user is already banned
         var existingBan = await _banRepository.GetActiveBan(targetUser.UserId, ct);
@@ -142,7 +142,7 @@ internal class BanService : IBanService
     {
         try
         {
-            var user = await _userLookupService.Get(username);
+            var user = await _userLookupService.GetAsync(username);
             return await _banRepository.IsUserBanned(user.UserId, ct);
         }
         catch

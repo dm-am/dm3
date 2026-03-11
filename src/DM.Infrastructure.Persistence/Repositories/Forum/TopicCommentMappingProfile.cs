@@ -1,6 +1,6 @@
 using AutoMapper;
 using DM.Domain.Forum.Features.Comments;
-using DbComment = DM.Infrastructure.Persistence.Entities.CrossDomain.Comment;
+using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
 namespace DM.Infrastructure.Persistence.Repositories.Forum;
 

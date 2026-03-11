@@ -25,18 +25,18 @@ internal class BlogBlacklistApiService : IBlogBlacklistApiService
     /// <inheritdoc />
     public async Task<IEnumerable<User>> Get(Guid blogId)
     {
-        var users = await _blacklistService.GetBlacklist(blogId);
+        var users = await _blacklistService.Get(blogId);
         return users.Select(_mapper.Map<User>);
     }
 
     /// <inheritdoc />
     public async Task<User> Create(Guid blogId, string username)
     {
-        var user = await _blacklistService.AddToBlacklist(blogId, username);
+        var user = await _blacklistService.Add(blogId, username);
         return _mapper.Map<User>(user);
     }
 
     /// <inheritdoc />
     public Task Delete(Guid blogId, string username) =>
-        _blacklistService.RemoveFromBlacklist(blogId, username);
+        _blacklistService.Remove(blogId, username);
 }

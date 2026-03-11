@@ -15,20 +15,20 @@ public interface IBlogSubscriptionService
     /// <summary>
     /// Subscribe current user to a blog
     /// </summary>
-    Task<Subscription> Subscribe(Guid blogId, CancellationToken ct = default);
+    Task<Subscription> SubscribeAsync(Guid blogId, CancellationToken ct = default);
 
     /// <summary>
     /// Unsubscribe current user from a blog
     /// </summary>
-    Task Unsubscribe(Guid blogId, CancellationToken ct = default);
+    Task UnsubscribeAsync(Guid blogId, CancellationToken ct = default);
 
     /// <summary>
     /// Get readers (subscribers) of a blog
     /// </summary>
-    Task<IEnumerable<GeneralUser>> GetReaders(Guid blogId, CancellationToken ct = default);
+    Task<IEnumerable<GeneralUser>> GetReadersAsync(Guid blogId, CancellationToken ct = default);
 
     /// <summary>
     /// Check if a user is subscribed to a blog
     /// </summary>
-    Task<bool> IsSubscribed(Guid userId, Guid blogId, CancellationToken ct = default);
+    Task<bool> IsSubscribedAsync(Guid userId, Guid blogId, CancellationToken ct = default);
 }

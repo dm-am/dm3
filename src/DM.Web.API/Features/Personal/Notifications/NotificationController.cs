@@ -53,7 +53,7 @@ public class NotificationController : ControllerBase
     /// <response code="401">Authentication required</response>
     [HttpGet(Name = nameof(GetNotifications))]
     [ProducesResponseType(typeof(ListEnvelope<Notification>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetNotifications(
         [FromQuery] int skip = 0,
         [FromQuery] int take = 20)
@@ -73,7 +73,7 @@ public class NotificationController : ControllerBase
     /// <response code="401">Authentication required</response>
     [HttpGet("unread", Name = nameof(GetUnreadCount))]
     [ProducesResponseType(typeof(NotificationCount), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetUnreadCount()
     {
         return Ok(await _notificationApiService.GetUnreadCount());
@@ -91,8 +91,8 @@ public class NotificationController : ControllerBase
     /// <response code="404">Notification not found</response>
     [HttpDelete("{id:guid}/unread", Name = nameof(MarkNotificationAsRead))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkNotificationAsRead(Guid id)
     {
         await _notificationApiService.MarkAsRead(id);
@@ -109,7 +109,7 @@ public class NotificationController : ControllerBase
     /// <response code="401">Authentication required</response>
     [HttpDelete("unread", Name = nameof(MarkNotificationsAsRead))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> MarkNotificationsAsRead()
     {
         await _notificationApiService.MarkAsRead();
@@ -126,7 +126,7 @@ public class NotificationController : ControllerBase
     /// <response code="401">Not authenticated</response>
     [HttpGet("settings", Name = nameof(GetNotificationSettings))]
     [ProducesResponseType(typeof(NotificationSettings), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetNotificationSettings()
     {
         return Ok(await _notificationApiService.GetNotificationSettings());
@@ -143,7 +143,7 @@ public class NotificationController : ControllerBase
     /// <response code="401">Not authenticated</response>
     [HttpPatch("settings", Name = nameof(UpdateNotificationSettings))]
     [ProducesResponseType(typeof(NotificationSettings), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> UpdateNotificationSettings([FromBody] UpdateNotificationSettingsRequest request)
     {
         return Ok(await _notificationApiService.UpdateNotificationSettings(request));
@@ -168,8 +168,8 @@ public class NotificationController : ControllerBase
     /// <response code="400">Invalid bot type</response>
     [HttpPost("bots/{type}", Name = nameof(GenerateBotLinkCode))]
     [ProducesResponseType(typeof(BotLinkResult), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GenerateBotLinkCode(string type) =>
         Ok(await _notificationApiService.ConnectBot(type));
 
@@ -186,8 +186,8 @@ public class NotificationController : ControllerBase
     /// <response code="400">Invalid bot type</response>
     [HttpDelete("bots/{type}", Name = nameof(DisconnectBot))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> DisconnectBot(string type)
     {
         await _notificationApiService.DisconnectBot(type);

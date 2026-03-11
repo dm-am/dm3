@@ -42,9 +42,9 @@ internal class CommunityProfileService : ICommunityProfileService
     public async Task<UserDetails> GetProfile(string username)
     {
         var normalizedUsername = username.ToLowerInvariant();
-        var user = await _cache.GetOrCreate(
+        var user = await _cache.GetOrCreateAsync(
             $"user_details_{normalizedUsername}",
-            () => _userRepository.GetUserDetails(username),
+            () => _userRepository.GetUserDetailsAsync(username),
             CachePolicy.Medium);
 
         if (user == null)
@@ -58,9 +58,9 @@ internal class CommunityProfileService : ICommunityProfileService
     /// <inheritdoc />
     public async Task<UserDetails> GetProfile(Guid userId)
     {
-        var user = await _cache.GetOrCreate(
+        var user = await _cache.GetOrCreateAsync(
             $"user_details_{userId}",
-            () => _userRepository.GetUserDetails(userId),
+            () => _userRepository.GetUserDetailsAsync(userId),
             CachePolicy.Medium);
 
         if (user == null)
@@ -84,20 +84,20 @@ internal class CommunityProfileService : ICommunityProfileService
             _intentionManager.ThrowIfForbidden(CommunityIntention.ViewPendingUsers);
         }
 
-        var totalCount = await _userRepository.CountUsers(filter, search, role);
+        var totalCount = await _userRepository.CountUsersAsync(filter, search, role);
         var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
-        var users = await _userRepository.GetUsers(paging, filter, search, role, sort);
+        var users = await _userRepository.GetUsersAsync(paging, filter, search, role, sort);
         return (users, paging.Result);
     }
 
     /// <inheritdoc />
     public Task<IEnumerable<GeneralUser>> GetUsersByRole(UserRole role) =>
-        _cache.GetOrCreate(
+        _cache.GetOrCreateAsync(
             $"users_by_role_{role}",
-            () => _userRepository.GetUsersByRole(role),
+            () => _userRepository.GetUsersByRoleAsync(role),
             CachePolicy.LongLived);
 
     /// <inheritdoc />
     public Task<IReadOnlyCollection<UsernameHistoryEntry>> GetUsernameHistory(Guid userId) =>
-        _usernameHistoryReader.GetByUserId(userId);
+        _usernameHistoryReader.GetByUserIdAsync(userId);
 }

@@ -58,7 +58,7 @@ internal class PostPendencyService : IPostPendencyService
         var room = await _roomService.GetAsync(createPostPendency.RoomId);
         _intentionManager.ThrowIfForbidden(RoomIntention.CreatePostPendency, room);
 
-        var (_, waitingForUserId) = await _userLookupService.FindUserId(createPostPendency.WaitingForUsername);
+        var (_, waitingForUserId) = await _userLookupService.FindUserIdAsync(createPostPendency.WaitingForUsername);
         var currentUserId = _identityProvider.Current.User.UserId;
 
         if (room.Pendencies.Any(e =>
@@ -79,7 +79,7 @@ internal class PostPendencyService : IPostPendencyService
 
         var pendencyToCreate = _factory.Create(createPostPendency, currentUserId, waitingForUserId);
         var pendency = await _repository.Create(pendencyToCreate);
-        await _producer.Send(EventType.RoomPendencyCreated, pendency.Id);
+        await _producer.SendAsync(EventType.RoomPendencyCreated, pendency.Id);
 
         return pendency;
     }
@@ -98,7 +98,7 @@ internal class PostPendencyService : IPostPendencyService
 
         _intentionManager.ThrowIfForbidden(RoomIntention.DeletePostPendency, pendency);
         await _repository.Delete(pendencyId);
-        await _producer.Send(EventType.RoomPendencyDeleted, pendencyId);
+        await _producer.SendAsync(EventType.RoomPendencyDeleted, pendencyId);
     }
 
     #endregion

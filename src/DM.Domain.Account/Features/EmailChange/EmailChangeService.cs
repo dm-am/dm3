@@ -74,7 +74,7 @@ internal class EmailChangeService : IEmailChangeService
             await _warningMailSender.SendAsync(user.Email, emailChange.Username, emailChange.Email);
         }
 
-        await _eventProducer.Send(EventType.EmailChanged, user.UserId);
+        await _eventProducer.SendAsync(EventType.EmailChanged, user.UserId);
 
         return new GeneralUser
         {

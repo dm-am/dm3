@@ -8,7 +8,7 @@ using DM.Domain.Moderation.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.MongoIntegration;
-using DM.Infrastructure.Persistence.Entities.CrossDomain;
+using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using DomainGame = DM.Domain.Game.Features.Games.GameModel;
 

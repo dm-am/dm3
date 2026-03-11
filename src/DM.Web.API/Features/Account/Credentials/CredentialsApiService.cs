@@ -65,35 +65,35 @@ internal class CredentialsApiService : ICredentialsApiService
     public Task ConfirmEmailChange(Guid token) => _emailChangeService.Confirm(token);
 
     /// <inheritdoc />
-    public async Task<UsernameChangeResponse> RequestUsernameChange(UsernameChangeCreateRequest request)
+    public async Task<UsernameChangeResponse> RequestUsernameChangeAsync(UsernameChangeCreateRequest request)
     {
         var serviceRequest = _mapper.Map<ServiceCreateUsernameChangeRequest>(request);
-        var result = await _usernameChangeService.Create(serviceRequest);
+        var result = await _usernameChangeService.CreateAsync(serviceRequest);
         return _mapper.Map<UsernameChangeResponse>(result);
     }
 
     /// <inheritdoc />
-    public async Task<UsernameChangeResponse?> GetUsernameChangeStatus()
+    public async Task<UsernameChangeResponse?> GetUsernameChangeStatusAsync()
     {
-        var result = await _usernameChangeService.GetCurrentUserRequest();
+        var result = await _usernameChangeService.GetCurrentUserRequestAsync();
         return result != null
             ? _mapper.Map<UsernameChangeResponse>(result)
             : null;
     }
 
     /// <inheritdoc />
-    public async Task<UsernameChangeResponse?> GetUsernameChangeApproval(Guid token)
+    public async Task<UsernameChangeResponse?> GetUsernameChangeApprovalAsync(Guid token)
     {
-        var result = await _usernameChangeService.GetByApprovalToken(token);
+        var result = await _usernameChangeService.GetByApprovalTokenAsync(token);
         return result != null
             ? _mapper.Map<UsernameChangeResponse>(result)
             : null;
     }
 
     /// <inheritdoc />
-    public async Task<UsernameChangeResponse> CompleteUsernameChange(Guid token, UsernameChangeCompletionRequest request)
+    public async Task<UsernameChangeResponse> CompleteUsernameChangeAsync(Guid token, UsernameChangeCompletionRequest request)
     {
-        var result = await _usernameChangeService.CompleteWithToken(token, request.Username);
+        var result = await _usernameChangeService.CompleteWithTokenAsync(token, request.Username);
         return _mapper.Map<UsernameChangeResponse>(result);
     }
 }

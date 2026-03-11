@@ -1,4 +1,5 @@
 using System;
+using System.Text.RegularExpressions;
 using DM.Domain.Core.Abstractions;
 using System.Collections.Generic;
 using System.Net;
@@ -11,8 +12,14 @@ using FluentValidation;
 namespace DM.Domain.Account.Features.UsernameChange;
 
 /// <inheritdoc />
-internal class UsernameChangeService : IUsernameChangeService
+internal partial class UsernameChangeService : IUsernameChangeService
 {
+    // Forbidden: control chars, HTML/URL unsafe, quotes, brackets, special chars, zero-width
+    // Whitespace: not at start/end, not consecutive
+    // See: docs/architecture/USERNAME_POLICY.md
+    [GeneratedRegex(@"^(?!\s)(?!.*\s$)(?!.*\s{2})[^\p{Cc}<>""'`\\/@?#%&\[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]{2,20}$")]
+    private static partial Regex UsernameValidationRegex();
+
     private readonly IValidator<CreateUsernameChangeRequest> _validator;
     private readonly IUsernameChangeRepository _repository;
     private readonly IUsernameHistoryRepository _historyRepository;
@@ -37,7 +44,7 @@ internal class UsernameChangeService : IUsernameChangeService
     }
 
     /// <inheritdoc />
-    public async Task<UsernameChangeRequestEntry> Create(CreateUsernameChangeRequest request)
+    public async Task<UsernameChangeRequestEntry> CreateAsync(CreateUsernameChangeRequest request)
     {
         var currentUser = _identityProvider.Current.User;
         if (!currentUser.IsAuthenticated)
@@ -77,7 +84,7 @@ internal class UsernameChangeService : IUsernameChangeService
     }
 
     /// <inheritdoc />
-    public async Task<UsernameChangeRequestEntry?> GetCurrentUserRequest()
+    public async Task<UsernameChangeRequestEntry?> GetCurrentUserRequestAsync()
     {
         var currentUser = _identityProvider.Current.User;
         if (!currentUser.IsAuthenticated)
@@ -90,13 +97,13 @@ internal class UsernameChangeService : IUsernameChangeService
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyCollection<UsernameChangeRequestEntry>> GetPendingRequests()
+    public async Task<IReadOnlyCollection<UsernameChangeRequestEntry>> GetPendingRequestsAsync()
     {
         return await _repository.GetPendingRequests();
     }
 
     /// <inheritdoc />
-    public async Task<UsernameChangeRequestEntry> GetById(Guid requestId)
+    public async Task<UsernameChangeRequestEntry> GetByIdAsync(Guid requestId)
     {
         var entity = await _repository.GetById(requestId);
         if (entity == null)
@@ -106,7 +113,7 @@ internal class UsernameChangeService : IUsernameChangeService
     }
 
     /// <inheritdoc />
-    public async Task<UsernameChangeRequestEntry> Resolve(ResolveUsernameChangeRequest resolve)
+    public async Task<UsernameChangeRequestEntry> ResolveAsync(ResolveUsernameChangeRequest resolve)
     {
         var currentUser = _identityProvider.Current.User;
         var request = await _repository.GetById(resolve.RequestId);
@@ -156,7 +163,7 @@ internal class UsernameChangeService : IUsernameChangeService
     }
 
     /// <inheritdoc />
-    public async Task<UsernameChangeRequestEntry?> GetByApprovalToken(Guid token)
+    public async Task<UsernameChangeRequestEntry?> GetByApprovalTokenAsync(Guid token)
     {
         var entity = await _repository.GetByApprovalToken(token);
         if (entity == null) return null;
@@ -170,7 +177,7 @@ internal class UsernameChangeService : IUsernameChangeService
     }
 
     /// <inheritdoc />
-    public async Task<UsernameChangeRequestEntry> CompleteWithToken(Guid token, string newUsername)
+    public async Task<UsernameChangeRequestEntry> CompleteWithTokenAsync(Guid token, string newUsername)
     {
         var request = await _repository.GetByApprovalToken(token);
         if (request == null)
@@ -185,6 +192,12 @@ internal class UsernameChangeService : IUsernameChangeService
         // Check if request is in approved state (not yet completed)
         if (request.Status != UsernameChangeRequestStatus.Approved)
             throw new HttpException(HttpStatusCode.Conflict, "Request is not in approved state");
+
+        // Validate username format
+        if (string.IsNullOrWhiteSpace(newUsername) || !UsernameValidationRegex().IsMatch(newUsername.Trim()))
+            throw new HttpException(HttpStatusCode.BadRequest, "Invalid username format");
+
+        newUsername = newUsername.Trim();
 
         // Validate new username availability
         var usernameAvailable = await _repository.IsUsernameAvailable(newUsername);
@@ -222,7 +235,7 @@ internal class UsernameChangeService : IUsernameChangeService
     }
 
     /// <inheritdoc />
-    public async Task<UsernameChangeRequestEntry> Rollback(Guid requestId)
+    public async Task<UsernameChangeRequestEntry> RollbackAsync(Guid requestId)
     {
         var currentUser = _identityProvider.Current.User;
         var request = await _repository.GetById(requestId);

@@ -49,7 +49,7 @@ internal class EmailChangeWarningMailSender : IEmailChangeWarningMailSender
 </body>
 </html>";
 
-        await _mailSender.Send(new EmailLetter
+        await _mailSender.SendAsync(new EmailLetter
         {
             Address = oldEmail,
             Subject = "⚠️ Запрос на смену email — DM.AM",

@@ -57,7 +57,7 @@ internal class CommunityUserApiService : ICommunityUserApiService
     /// <inheritdoc />
     public async Task<Envelope<User>> GetUser(string username)
     {
-        var user = await _userLookupService.Get(username);
+        var user = await _userLookupService.GetAsync(username);
         var userDto = _mapper.Map<User>(user);
 
         // Populate username history
@@ -106,7 +106,7 @@ internal class CommunityUserApiService : ICommunityUserApiService
     /// <inheritdoc />
     public async Task<Envelope<FeaturedPost>> GetFeaturedPost(string username)
     {
-        var user = await _userLookupService.Get(username);
+        var user = await _userLookupService.GetAsync(username);
         var bestPost = await _postService.GetBestPostAsync(user.UserId);
         return new Envelope<FeaturedPost>(bestPost != null ? _mapper.Map<FeaturedPost>(bestPost) : null!);
     }
@@ -114,7 +114,7 @@ internal class CommunityUserApiService : ICommunityUserApiService
     /// <inheritdoc />
     public async Task<ListEnvelope<LoginHistoryDto>> GetLoginHistory(string username)
     {
-        var user = await _userLookupService.Get(username);
+        var user = await _userLookupService.GetAsync(username);
         var loginHistory = await _loginRecordRepository.GetLoginHistory(user.UserId);
         var dtos = loginHistory.Select(r => new LoginHistoryDto
         {

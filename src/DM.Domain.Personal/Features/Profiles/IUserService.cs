@@ -13,12 +13,12 @@ namespace DM.Domain.Personal.Features.Profiles;
 /// </summary>
 public interface IUserService : IUserLookupService
 {
-    // NOTE: Get(string username) and Get(Guid userId) are inherited from IUserLookupService
+    // NOTE: GetAsync(string username) and GetAsync(Guid userId) are inherited from IUserLookupService
 
     /// <summary>
     /// Get community users list (paginated)
     /// </summary>
-    Task<(IEnumerable<GeneralUser> users, PagingResult paging)> Get(
+    Task<(IEnumerable<GeneralUser> users, PagingResult paging)> GetAsync(
         PagingQuery query,
         UserActivityFilter filter,
         string? search = null,
@@ -28,30 +28,30 @@ public interface IUserService : IUserLookupService
     /// <summary>
     /// Get current authenticated user
     /// </summary>
-    Task<GeneralUser> GetCurrent();
+    Task<GeneralUser> GetCurrentAsync();
 
     /// <summary>
     /// Get user details by username
     /// </summary>
-    Task<Core.Users.UserDetails> GetDetails(string username);
+    Task<Core.Users.UserDetails> GetDetailsAsync(string username);
 
     /// <summary>
     /// Get user details by ID
     /// </summary>
-    Task<Core.Users.UserDetails> GetDetails(Guid userId);
+    Task<Core.Users.UserDetails> GetDetailsAsync(Guid userId);
 
     /// <summary>
     /// Get users by role
     /// </summary>
-    Task<IEnumerable<GeneralUser>> GetByRole(UserRole role);
+    Task<IEnumerable<GeneralUser>> GetByRoleAsync(UserRole role);
 
     /// <summary>
     /// Get username history for a user
     /// </summary>
-    Task<IReadOnlyCollection<UsernameHistoryEntry>> GetUsernameHistory(Guid userId);
+    Task<IReadOnlyCollection<UsernameHistoryEntry>> GetUsernameHistoryAsync(Guid userId);
 
     /// <summary>
     /// Update user details
     /// </summary>
-    Task<Core.Users.UserDetails> Update(UpdateUser updateUser);
+    Task<Core.Users.UserDetails> UpdateAsync(UpdateUser updateUser);
 }

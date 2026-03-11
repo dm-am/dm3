@@ -83,7 +83,7 @@ internal class ActivationService : IActivationService
         // Atomic: create user, delete pending
         await _repository.CompleteActivation(user, pending.PendingRegistrationId);
 
-        await _producer.Send(EventType.ActivatedUser, user.UserId);
+        await _producer.SendAsync(EventType.ActivatedUser, user.UserId);
         return user.UserId;
     }
 

@@ -14,7 +14,7 @@ public interface IGameCommentService
     /// <summary>
     /// Create new comment for game
     /// </summary>
-    Task<Comment> Create(CreateComment createComment);
+    Task<Comment> CreateAsync(CreateComment createComment);
 
     /// <summary>
     /// Get comments list for game with paging
@@ -22,26 +22,26 @@ public interface IGameCommentService
     /// <param name="gameId">Game identifier</param>
     /// <param name="query">Paging query</param>
     /// <param name="excludeUserIds">Optional user IDs to exclude from results</param>
-    Task<(IEnumerable<Comment> Comments, PagingResult Paging)> Get(Guid gameId, PagingQuery query,
+    Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid gameId, PagingQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null);
 
     /// <summary>
     /// Get single comment by identifier
     /// </summary>
-    Task<Comment> Get(Guid commentId);
+    Task<Comment> GetAsync(Guid commentId);
 
     /// <summary>
     /// Update comment
     /// </summary>
-    Task<Comment> Update(UpdateComment updateComment);
+    Task<Comment> UpdateAsync(UpdateComment updateComment);
 
     /// <summary>
     /// Delete comment (soft delete)
     /// </summary>
-    Task Delete(Guid commentId);
+    Task DeleteAsync(Guid commentId);
 
     /// <summary>
     /// Mark all comments as read for game
     /// </summary>
-    Task MarkAsRead(Guid gameId);
+    Task MarkAsReadAsync(Guid gameId);
 }

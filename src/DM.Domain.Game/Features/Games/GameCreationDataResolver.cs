@@ -38,9 +38,9 @@ internal class GameCreationDataResolver : IGameCreationDataResolver
     }
 
     /// <inheritdoc />
-    public Task<(bool exists, Guid userId)> FindAssistantId(string username)
+    public Task<(bool exists, Guid userId)> FindAssistantIdAsync(string username)
     {
-        return _userLookupService.FindUserId(username);
+        return _userLookupService.FindUserIdAsync(username);
     }
 
     /// <inheritdoc />

@@ -57,8 +57,8 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
     /// <inheritdoc />
     public async Task<Session?> FindUserSession(Guid sessionId)
     {
-        var userSessions = await Collection<UserSessions>()
-            .Find(Filter<UserSessions>()
+        var userSessions = await Collection<UserSession>()
+            .Find(Filter<UserSession>()
                 .ElemMatch(u => u.Sessions, s => s.Id == sessionId))
             .FirstOrDefaultAsync();
         var matchingSession = userSessions?.Sessions.FirstOrDefault(s => s.Id == sessionId);
@@ -96,18 +96,18 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
     /// <inheritdoc />
     public Task RemoveSession(Guid userId, Guid sessionId)
     {
-        return Collection<UserSessions>().FindOneAndUpdateAsync(
-            Filter<UserSessions>().Eq(u => u.Id, userId),
-            Update<UserSessions>().PullFilter(s => s.Sessions, s => s.Id == sessionId));
+        return Collection<UserSession>().FindOneAndUpdateAsync(
+            Filter<UserSession>().Eq(u => u.Id, userId),
+            Update<UserSession>().PullFilter(s => s.Sessions, s => s.Id == sessionId));
     }
 
     /// <inheritdoc />
     public Task RefreshSession(Guid userId, Guid sessionId, DateTimeOffset expirationDate)
     {
-        return Collection<UserSessions>().FindOneAndUpdateAsync(
-            Filter<UserSessions>().Eq(u => u.Id, userId) &
-            Filter<UserSessions>().ElemMatch(u => u.Sessions, s => s.Id == sessionId),
-            Update<UserSessions>().Set(u => u.Sessions[-1].ExpirationDate, expirationDate.UtcDateTime));
+        return Collection<UserSession>().FindOneAndUpdateAsync(
+            Filter<UserSession>().Eq(u => u.Id, userId) &
+            Filter<UserSession>().ElemMatch(u => u.Sessions, s => s.Id == sessionId),
+            Update<UserSession>().Set(u => u.Sessions[-1].ExpirationDate, expirationDate.UtcDateTime));
     }
 
     /// <inheritdoc />
@@ -124,20 +124,20 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
             UserAgent = session.UserAgent,
             DeviceInfo = session.DeviceInfo
         };
-        await Collection<UserSessions>().FindOneAndUpdateAsync(
-            Filter<UserSessions>().Eq(u => u.Id, userId),
-            Update<UserSessions>().Push(s => s.Sessions, dbSession),
-            new FindOneAndUpdateOptions<UserSessions> { IsUpsert = true });
+        await Collection<UserSession>().FindOneAndUpdateAsync(
+            Filter<UserSession>().Eq(u => u.Id, userId),
+            Update<UserSession>().Push(s => s.Sessions, dbSession),
+            new FindOneAndUpdateOptions<UserSession> { IsUpsert = true });
         return _mapper.Map<Session>(dbSession);
     }
 
     /// <inheritdoc />
     public Task RemoveSessionsExcept(Guid userId, Guid sessionId)
     {
-        return Collection<UserSessions>().FindOneAndUpdateAsync(
-            Filter<UserSessions>().Eq(u => u.Id, userId),
-            Update<UserSessions>().PullFilter(s => s.Sessions, s => s.Id != sessionId),
-            new FindOneAndUpdateOptions<UserSessions> { IsUpsert = true });
+        return Collection<UserSession>().FindOneAndUpdateAsync(
+            Filter<UserSession>().Eq(u => u.Id, userId),
+            Update<UserSession>().PullFilter(s => s.Sessions, s => s.Id != sessionId),
+            new FindOneAndUpdateOptions<UserSession> { IsUpsert = true });
     }
 
     /// <inheritdoc />
@@ -154,8 +154,8 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
     /// <inheritdoc />
     public async Task<IReadOnlyCollection<Session>> GetUserSessions(Guid userId, Guid? currentSessionId = null)
     {
-        var userSessions = await Collection<UserSessions>()
-            .Find(Filter<UserSessions>().Eq(u => u.Id, userId))
+        var userSessions = await Collection<UserSession>()
+            .Find(Filter<UserSession>().Eq(u => u.Id, userId))
             .FirstOrDefaultAsync();
 
         if (userSessions?.Sessions == null)
@@ -186,8 +186,8 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
     /// <inheritdoc />
     public Task RemoveAllSessions(Guid userId)
     {
-        return Collection<UserSessions>().FindOneAndUpdateAsync(
-            Filter<UserSessions>().Eq(u => u.Id, userId),
-            Update<UserSessions>().Set(u => u.Sessions, new List<DbSession>()));
+        return Collection<UserSession>().FindOneAndUpdateAsync(
+            Filter<UserSession>().Eq(u => u.Id, userId),
+            Update<UserSession>().Set(u => u.Sessions, new List<DbSession>()));
     }
 }

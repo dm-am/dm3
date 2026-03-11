@@ -42,9 +42,9 @@ public class TicketController : ControllerBase
     /// <response code="403">Moderator role required</response>
     [HttpGet(Name = nameof(GetTickets))]
     [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(typeof(ListEnvelope<Ticket>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
+    [ProducesResponseType(typeof(ListEnvelope<Ticket>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetTickets([FromQuery] TicketStatus? status = null) =>
         Ok(await _ticketApiService.GetTickets(status));
 
@@ -59,9 +59,9 @@ public class TicketController : ControllerBase
     /// <response code="403">Moderator role required</response>
     [HttpGet("stats", Name = nameof(GetTicketStats))]
     [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(typeof(TicketStats), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
+    [ProducesResponseType(typeof(TicketStats), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetTicketStats() =>
         Ok(await _ticketApiService.GetStats());
 
@@ -76,9 +76,9 @@ public class TicketController : ControllerBase
     /// <response code="403">Moderator role required</response>
     [HttpGet("assigned", Name = nameof(GetMyAssignedTickets))]
     [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(typeof(ListEnvelope<Ticket>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
+    [ProducesResponseType(typeof(ListEnvelope<Ticket>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetMyAssignedTickets() =>
         Ok(await _ticketApiService.GetMyAssignedTickets());
 
@@ -92,8 +92,8 @@ public class TicketController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     [HttpGet("mine", Name = nameof(GetMyFiledTickets))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(ListEnvelope<Ticket>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
+    [ProducesResponseType(typeof(ListEnvelope<Ticket>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetMyFiledTickets() =>
         Ok(await _ticketApiService.GetMyFiledTickets());
 
@@ -109,9 +109,9 @@ public class TicketController : ControllerBase
     /// <response code="404">Ticket not found</response>
     [HttpGet("{ticketId:guid}", Name = nameof(GetTicket))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Ticket>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Ticket>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTicket(Guid ticketId)
     {
         var ticket = await _ticketApiService.GetTicket(ticketId);
@@ -132,10 +132,10 @@ public class TicketController : ControllerBase
     /// <response code="404">Target user not found</response>
     [HttpPost(Name = nameof(CreateTicket))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Ticket>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Ticket>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> CreateTicket([FromBody] CreateTicketRequest request)
     {
         var ticket = await _ticketApiService.CreateTicket(request);
@@ -156,11 +156,11 @@ public class TicketController : ControllerBase
     /// <response code="404">Ticket not found</response>
     [HttpPost("{ticketId:guid}/assign", Name = nameof(AssignTicketToMe))]
     [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(typeof(Envelope<Ticket>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Ticket>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AssignTicketToMe(Guid ticketId) =>
         Ok(await _ticketApiService.AssignToMe(ticketId));
 
@@ -179,11 +179,11 @@ public class TicketController : ControllerBase
     /// <response code="404">Ticket not found</response>
     [HttpPost("{ticketId:guid}/resolve", Name = nameof(ResolveTicket))]
     [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(typeof(Envelope<Ticket>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Ticket>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ResolveTicket(Guid ticketId, [FromBody] ResolveTicketRequest request) =>
         Ok(await _ticketApiService.ResolveTicket(ticketId, request));
 }

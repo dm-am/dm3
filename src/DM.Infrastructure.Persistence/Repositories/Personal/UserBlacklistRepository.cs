@@ -63,7 +63,7 @@ internal class UserBlacklistRepository : MongoCollectionRepository<UserSettings>
     }
 
     /// <inheritdoc />
-    public async Task<bool> IsBlocked(Guid ownerId, Guid blockedUserId, CancellationToken ct = default)
+    public async Task<bool> IsBlockedAsync(Guid ownerId, Guid blockedUserId, CancellationToken ct = default)
     {
         return await _dbContext.UserBlacklists
             .AnyAsync(b => b.OwnerId == ownerId && b.BlockedUserId == blockedUserId, ct);
@@ -107,7 +107,7 @@ internal class UserBlacklistRepository : MongoCollectionRepository<UserSettings>
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Guid>> GetBlockedUserIds(Guid ownerId, CancellationToken ct = default)
+    public async Task<IEnumerable<Guid>> GetBlockedUserIdsAsync(Guid ownerId, CancellationToken ct = default)
     {
         return await _dbContext.UserBlacklists
             .Where(b => b.OwnerId == ownerId)
@@ -116,7 +116,7 @@ internal class UserBlacklistRepository : MongoCollectionRepository<UserSettings>
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlySet<Guid>> GetBlockedUserIdsIfFlagEnabled(Guid ownerId, UserBlacklistSettings flag, CancellationToken ct = default)
+    public async Task<IReadOnlySet<Guid>> GetBlockedUserIdsIfFlagEnabledAsync(Guid ownerId, UserBlacklistSettings flag, CancellationToken ct = default)
     {
         var settings = await GetSettings(ownerId, ct);
         if (!settings.HasFlag(flag))

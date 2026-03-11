@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using DM.Infrastructure.Persistence.Entities.DataContracts;
+using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Domain.Core.Enums;
 

@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using DM.Domain.Core.Enums;
-using DM.Infrastructure.Persistence.Entities.CrossDomain;
-using DM.Infrastructure.Persistence.Entities.DataContracts;
+using DM.Infrastructure.Persistence.Entities.Shared;
+using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
 using DM.Infrastructure.Persistence.Entities.Game.Posts;
@@ -131,7 +131,7 @@ public class Character : ISoftDeletable, IHasEditHistory<CharacterEdit>
     public Guid? DeletedByUserId { get; set; }
 
     /// <inheritdoc />
-    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public DateTimeOffset? DeletedUtc { get; set; }
 
     /// <summary>
     /// Game

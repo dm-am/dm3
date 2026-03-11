@@ -39,7 +39,7 @@ internal class WarningService : IWarningService
     {
         try
         {
-            var user = await _userLookupService.Get(username);
+            var user = await _userLookupService.GetAsync(username);
             return await _warningRepository.GetUserWarnings(user.UserId, ct);
         }
         catch
@@ -75,7 +75,7 @@ internal class WarningService : IWarningService
             throw new UnauthorizedAccessException("Only moderators can create warnings");
         }
 
-        var targetUser = await _userLookupService.Get(createWarning.Username);
+        var targetUser = await _userLookupService.GetAsync(createWarning.Username);
 
         var entity = new CreateWarningEntity
         {
@@ -109,7 +109,7 @@ internal class WarningService : IWarningService
     {
         try
         {
-            var user = await _userLookupService.Get(username);
+            var user = await _userLookupService.GetAsync(username);
             return await _warningRepository.GetUserWarningPoints(user.UserId, ct);
         }
         catch

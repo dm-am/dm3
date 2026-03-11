@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
-using DM.Infrastructure.Persistence.Entities.CrossDomain;
+using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.MongoIntegration;
 using MongoDB.Driver;
 
@@ -25,7 +25,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public Task Create(Guid entityId, UnreadEntryType entryType, IEnumerable<Guid> userIds)
+    public Task CreateAsync(Guid entityId, UnreadEntryType entryType, IEnumerable<Guid> userIds)
     {
         return Collection.InsertManyAsync(userIds.Select(id => new UnreadCounter
         {
@@ -39,7 +39,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public Task Create(Guid entityId, Guid parentId, UnreadEntryType entryType)
+    public Task CreateAsync(Guid entityId, Guid parentId, UnreadEntryType entryType)
     {
         return Collection.InsertOneAsync(new UnreadCounter
         {
@@ -53,10 +53,10 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public Task Create(Guid entityId, UnreadEntryType entryType) => Create(entityId, entityId, entryType);
+    public Task CreateAsync(Guid entityId, UnreadEntryType entryType) => CreateAsync(entityId, entityId, entryType);
 
     /// <inheritdoc />
-    public Task Increment(Guid entityId, UnreadEntryType entryType)
+    public Task IncrementAsync(Guid entityId, UnreadEntryType entryType)
     {
         return Collection.UpdateManyAsync(
             Filter.Eq(c => c.EntityId, entityId) &
@@ -65,7 +65,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public Task IncrementExcluding(Guid entityId, UnreadEntryType entryType, Guid excludeUserId)
+    public Task IncrementExcludingAsync(Guid entityId, UnreadEntryType entryType, Guid excludeUserId)
     {
         return Collection.UpdateManyAsync(
             Filter.Eq(c => c.EntityId, entityId) &
@@ -75,7 +75,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public Task Decrement(Guid entityId, UnreadEntryType entryType, DateTimeOffset createDate)
+    public Task DecrementAsync(Guid entityId, UnreadEntryType entryType, DateTimeOffset createDate)
     {
         return Collection.UpdateManyAsync(Filter.Eq(c => c.EntityId, entityId) &
                                           Filter.Eq(c => c.EntryType, entryType) &
@@ -84,7 +84,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public Task Delete(Guid entityId, UnreadEntryType entryType)
+    public Task DeleteAsync(Guid entityId, UnreadEntryType entryType)
     {
         return Collection.UpdateManyAsync(
             Filter.Eq(c => c.EntityId, entityId) &
@@ -93,7 +93,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public async Task<IDictionary<Guid, int>> SelectByParents(
+    public async Task<IDictionary<Guid, int>> SelectByParentsAsync(
         Guid userId, UnreadEntryType entryType, params Guid[] parentIds)
     {
         var userIds = new[] {userId, Guid.Empty}.Distinct();
@@ -122,7 +122,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public async Task<IDictionary<Guid, int>> SelectTotalUnreadByParents(
+    public async Task<IDictionary<Guid, int>> SelectTotalUnreadByParentsAsync(
         Guid userId, UnreadEntryType entryType, params Guid[] parentIds)
     {
         var userIds = new[] {userId, Guid.Empty}.Distinct();
@@ -151,7 +151,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public async Task<IDictionary<Guid, int>> SelectByEntities(
+    public async Task<IDictionary<Guid, int>> SelectByEntitiesAsync(
         Guid userId, UnreadEntryType entryType, params Guid[] entityIds)
     {
         var userIds = new[] {userId, Guid.Empty}.Distinct();
@@ -173,7 +173,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public async Task Flush(Guid userId, UnreadEntryType entryType, Guid entityId)
+    public async Task FlushAsync(Guid userId, UnreadEntryType entryType, Guid entityId)
     {
         var counter = await Collection.Find(
                 Filter.Eq(c => c.EntityId, entityId) &
@@ -198,7 +198,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public async Task FlushAll(Guid userId, UnreadEntryType entryType, Guid parentId)
+    public async Task FlushAllAsync(Guid userId, UnreadEntryType entryType, Guid parentId)
     {
         var entityIds = await Collection.Distinct(c => c.EntityId,
                 Filter.Eq(c => c.ParentId, parentId) &
@@ -224,7 +224,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public async Task ChangeParent(Guid parentId, UnreadEntryType entryType, Guid newParentId)
+    public async Task ChangeParentAsync(Guid parentId, UnreadEntryType entryType, Guid newParentId)
     {
         await Collection.UpdateManyAsync(
             Filter.Eq(c => c.ParentId, parentId) &
@@ -233,7 +233,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public async Task<DateTime?> GetLastReadTime(Guid userId, Guid entityId, UnreadEntryType entryType)
+    public async Task<DateTime?> GetLastReadTimeAsync(Guid userId, Guid entityId, UnreadEntryType entryType)
     {
         var counter = await Collection
             .Find(
@@ -247,7 +247,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public async Task<IDictionary<Guid, DateTime>> GetLastReadTimes(Guid userId, UnreadEntryType entryType, params Guid[] entityIds)
+    public async Task<IDictionary<Guid, DateTime>> GetLastReadTimesAsync(Guid userId, UnreadEntryType entryType, params Guid[] entityIds)
     {
         var counters = await Collection
             .Find(

@@ -10,7 +10,7 @@ using DM.Domain.Core.Extensions;
 using DM.Domain.Community.Features.UserReviews;
 using DM.Domain.Core.Reviews;
 using Microsoft.EntityFrameworkCore;
-using DbReview = DM.Infrastructure.Persistence.Entities.CrossDomain.Review;
+using DbReview = DM.Infrastructure.Persistence.Entities.Shared.Review;
 
 namespace DM.Infrastructure.Persistence.Repositories.Community;
 

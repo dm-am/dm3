@@ -21,7 +21,7 @@ internal class UsernameHistoryRepository : IUsernameHistoryRepository
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyCollection<UsernameHistoryEntry>> GetByUserId(Guid userId, CancellationToken ct = default)
+    public async Task<IReadOnlyCollection<UsernameHistoryEntry>> GetByUserIdAsync(Guid userId, CancellationToken ct = default)
     {
         return await _dbContext.UsernameHistories
             .Where(h => h.UserId == userId)

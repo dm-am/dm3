@@ -12,4 +12,8 @@
     <ItemGroup>
         <ProjectReference Include="..\DM.Domain.Core\DM.Domain.Core.csproj" />
     </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="FluentValidation" />
+    </ItemGroup>
 </Project>

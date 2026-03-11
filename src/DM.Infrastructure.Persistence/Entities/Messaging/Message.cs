@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using DM.Infrastructure.Persistence.Entities.Moderation;
-using DM.Infrastructure.Persistence.Entities.DataContracts;
+using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.Entities.Account;
 
 namespace DM.Infrastructure.Persistence.Entities.Messaging;
@@ -12,7 +12,7 @@ namespace DM.Infrastructure.Persistence.Entities.Messaging;
 /// DAL model for unified message (both global chat and private chats)
 /// </summary>
 [Table("Messages")]
-public class Message : IRemovable
+public class Message : ISoftDeletable
 {
     /// <summary>
     /// Well-known ID for global chat
@@ -66,7 +66,7 @@ public class Message : IRemovable
     /// <summary>
     /// When the message was deleted
     /// </summary>
-    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public DateTimeOffset? DeletedUtc { get; set; }
 
     /// <summary>
     /// Global chat event identifier (for messages sent during an event in global chat).

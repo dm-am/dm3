@@ -1,6 +1,6 @@
 using AutoMapper;
 using DM.Domain.Core.Reviews;
-using DbReview = DM.Infrastructure.Persistence.Entities.CrossDomain.Review;
+using DbReview = DM.Infrastructure.Persistence.Entities.Shared.Review;
 
 namespace DM.Infrastructure.Persistence.Repositories.Community;
 

@@ -77,7 +77,7 @@ internal class MessageService : IMessageService
             if (otherUser != null)
             {
                 // Check if recipient has BlockDirectMessages enabled AND has blocked sender
-                var blockedIds = await _userBlacklistChecker.GetBlockedUserIdsIfFlagEnabled(
+                var blockedIds = await _userBlacklistChecker.GetBlockedUserIdsIfFlagEnabledAsync(
                     otherUser.UserId, UserBlacklistSettings.BlockDirectMessages, ct);
                 if (blockedIds.Contains(userId))
                 {
@@ -119,9 +119,9 @@ internal class MessageService : IMessageService
         };
 
         var result = await _repository.Create(message, updateChat, ct);
-        await _unreadCountersRepository.IncrementExcluding(
+        await _unreadCountersRepository.IncrementExcludingAsync(
             chat.Id, UnreadEntryType.Message, userId);
-        await _producer.Send(EventType.NewMessage, message.MessageId);
+        await _producer.SendAsync(EventType.NewMessage, message.MessageId);
 
         return result;
     }
@@ -167,7 +167,7 @@ internal class MessageService : IMessageService
         };
 
         var updatedMessage = await _repository.Update(updateEntity);
-        await _producer.Send(EventType.ChangedMessage, updatedMessage.Id);
+        await _producer.SendAsync(EventType.ChangedMessage, updatedMessage.Id);
         return updatedMessage;
     }
 
@@ -186,6 +186,6 @@ internal class MessageService : IMessageService
         _intentionManager.ThrowIfForbidden(MessageIntention.Delete, message);
 
         await _repository.Delete(messageId, currentUserId);
-        await _producer.Send(EventType.DeletedMessage, messageId);
+        await _producer.SendAsync(EventType.DeletedMessage, messageId);
     }
 }

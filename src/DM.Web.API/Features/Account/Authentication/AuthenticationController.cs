@@ -42,7 +42,7 @@ public class AuthenticationController : ControllerBase
     /// Authenticates user with email and password.
     ///
     /// On successful authentication:
-    /// - Creates a session with 30 days expiration (if "Remember Me" is checked)
+    /// - Creates a session with 365 days expiration (if "Remember Me" is checked)
     /// - Sets HttpOnly session cookie
     /// - Returns user profile with current settings
     ///
@@ -57,9 +57,9 @@ public class AuthenticationController : ControllerBase
     /// <response code="429">Too many login attempts, try again later</response>
     [HttpPost("login", Name = nameof(Login))]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         // Honeypot validation - reject if the Website field is filled
@@ -87,8 +87,8 @@ public class AuthenticationController : ControllerBase
     [HttpDelete("login", Name = nameof(Logout))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Logout()
     {
         await _authenticationApiService.Logout(HttpContext);
@@ -107,7 +107,7 @@ public class AuthenticationController : ControllerBase
     [HttpGet("sessions", Name = nameof(GetSessions))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(ListEnvelope<Session>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetSessions()
     {
         var sessions = await _authenticationApiService.GetSessions();
@@ -128,8 +128,8 @@ public class AuthenticationController : ControllerBase
     [HttpDelete("sessions/{id:guid}", Name = nameof(TerminateSession))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> TerminateSession(Guid id)
     {
         await _authenticationApiService.TerminateSession(id);
@@ -150,8 +150,8 @@ public class AuthenticationController : ControllerBase
     [HttpDelete("sessions/others", Name = nameof(TerminateOtherSessions))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> TerminateOtherSessions()
     {
         await _authenticationApiService.LogoutAll(HttpContext);

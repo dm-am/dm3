@@ -32,8 +32,8 @@ public class ConversationController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     [HttpGet(Name = nameof(GetConversations))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(ListEnvelope<Conversation>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
+    [ProducesResponseType(typeof(ListEnvelope<Conversation>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetConversations([FromQuery] PagingQuery q) =>
         Ok(await _apiService.GetConversations(q));
 
@@ -50,9 +50,9 @@ public class ConversationController : ControllerBase
     /// <response code="404">User not found</response>
     [HttpPost("direct/{login}", Name = nameof(GetOrCreateDirectConversation))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Conversation>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Conversation>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetOrCreateDirectConversation(string login) =>
         Ok(await _apiService.GetDirectConversation(login));
 
@@ -65,9 +65,9 @@ public class ConversationController : ControllerBase
     /// <response code="404">Conversation not found</response>
     [HttpGet("{id:guid}", Name = nameof(GetConversation))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Conversation>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Conversation>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetConversation(Guid id) =>
         Ok(await _apiService.GetConversation(id));
 
@@ -79,9 +79,9 @@ public class ConversationController : ControllerBase
     /// <response code="404">Conversation not found</response>
     [HttpDelete("{id:guid}/messages/unread", Name = nameof(MarkAsRead))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkAsRead(Guid id)
     {
         await _apiService.MarkAsRead(id);
@@ -97,9 +97,9 @@ public class ConversationController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     [HttpPost(Name = nameof(CreateConversation))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Conversation>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
+    [ProducesResponseType(typeof(Envelope<Conversation>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CreateConversation([FromBody] CreateConversation createConversation)
     {
         var result = await _apiService.CreateConversation(createConversation);
@@ -118,11 +118,11 @@ public class ConversationController : ControllerBase
     /// <response code="404">Conversation not found</response>
     [HttpPatch("{id:guid}", Name = nameof(UpdateConversation))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Conversation>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Conversation>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateConversation(Guid id, [FromBody] UpdateConversation updateConversation) =>
         Ok(await _apiService.UpdateConversation(id, updateConversation));
 }

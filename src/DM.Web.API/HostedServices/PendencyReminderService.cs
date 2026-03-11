@@ -112,7 +112,7 @@ internal class PendencyReminderService : BackgroundService
             foreach (var pendency in stalePendencies)
             {
                 pendency.LastReminderUtc = now;
-                await producer.Send(EventType.RoomPendencyReminder, pendency.PendencyId);
+                await producer.SendAsync(EventType.RoomPendencyReminder, pendency.PendencyId);
             }
 
             await dbContext.SaveChangesAsync(cancellationToken);

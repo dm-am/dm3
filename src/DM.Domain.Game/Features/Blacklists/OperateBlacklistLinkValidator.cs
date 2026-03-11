@@ -16,6 +16,6 @@ internal class OperateBlacklistLinkValidator : AbstractValidator<OperateBlacklis
 
         RuleFor(r => r.Username)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MustAsync(userLookupService.UserExists).WithMessage(ValidationError.Invalid);
+            .MustAsync(userLookupService.UserExistsAsync).WithMessage(ValidationError.Invalid);
     }
 }

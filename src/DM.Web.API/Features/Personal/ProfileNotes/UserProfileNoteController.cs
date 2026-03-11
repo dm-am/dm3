@@ -48,8 +48,8 @@ public class UserProfileNoteController : ControllerBase
     /// <response code="404">User not found or no note exists</response>
     [HttpGet("{username}", Name = nameof(GetMyNoteAboutUser))]
     [ProducesResponseType(typeof(UserProfileNote), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMyNoteAboutUser(string username)
     {
         var note = await _userProfileNoteApiService.GetNote(username);
@@ -78,9 +78,9 @@ public class UserProfileNoteController : ControllerBase
     [HttpPut("{username}", Name = nameof(UpsertMyNoteAboutUser))]
     [ProducesResponseType(typeof(UserProfileNote), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpsertMyNoteAboutUser(string username, [FromBody] UserProfileNoteRequest request)
     {
         var note = await _userProfileNoteApiService.UpsertNote(username, request);
@@ -104,8 +104,8 @@ public class UserProfileNoteController : ControllerBase
     /// <response code="404">User not found</response>
     [HttpDelete("{username}", Name = nameof(DeleteMyNoteAboutUser))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteMyNoteAboutUser(string username)
     {
         await _userProfileNoteApiService.DeleteNote(username);

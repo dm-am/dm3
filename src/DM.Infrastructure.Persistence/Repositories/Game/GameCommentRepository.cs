@@ -10,7 +10,7 @@ using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Comments;
 using DM.Domain.Game.Features.Games;
 using Microsoft.EntityFrameworkCore;
-using CommentDal = DM.Infrastructure.Persistence.Entities.CrossDomain.Comment;
+using CommentDal = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 

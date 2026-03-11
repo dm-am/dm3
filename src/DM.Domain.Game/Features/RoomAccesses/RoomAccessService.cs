@@ -75,7 +75,7 @@ internal class RoomAccessService : IRoomAccessService
                 await _readerClaimApprove.GetReaderUserId(createRoomAccess.ReaderUsername.Trim(), room));
 
         var result = await _repository.Create(link);
-        await _producer.Send(EventType.ChangedRoom, link.RoomId);
+        await _producer.SendAsync(EventType.ChangedRoom, link.RoomId);
 
         return result;
     }
@@ -138,7 +138,7 @@ internal class RoomAccessService : IRoomAccessService
         };
 
         var result = await _repository.Update(updateEntity);
-        await _producer.Send(EventType.ChangedRoom, oldAccess.RoomId);
+        await _producer.SendAsync(EventType.ChangedRoom, oldAccess.RoomId);
 
         return result;
     }
@@ -165,7 +165,7 @@ internal class RoomAccessService : IRoomAccessService
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
 
         await _repository.Delete(accessId);
-        await _producer.Send(EventType.ChangedRoom, room.Id);
+        await _producer.SendAsync(EventType.ChangedRoom, room.Id);
     }
 
     #endregion

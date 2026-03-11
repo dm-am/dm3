@@ -43,11 +43,11 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     // ═══ READ ═══
 
     /// <inheritdoc />
-    public Task<int> CountUsers(UserActivityFilter filter, string? search = null, UserRole? role = null) =>
+    public Task<int> CountUsersAsync(UserActivityFilter filter, string? search = null, UserRole? role = null) =>
         GetQuery(filter, search, role).CountAsync();
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetUsers(
+    public async Task<IEnumerable<GeneralUser>> GetUsersAsync(
         PagingData paging,
         UserActivityFilter filter,
         string? search = null,
@@ -77,7 +77,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser?> GetUser(string username)
+    public async Task<GeneralUser?> GetUserAsync(string username)
     {
         var user = await _dmDbContext.Users
             .Include(u => u.AvatarUpload)
@@ -94,7 +94,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser?> GetUser(Guid userId)
+    public async Task<GeneralUser?> GetUserAsync(Guid userId)
     {
         var user = await _dmDbContext.Users
             .Include(u => u.AvatarUpload)
@@ -111,7 +111,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     }
 
     /// <inheritdoc />
-    public async Task<UserDetails?> GetUserDetails(string username)
+    public async Task<UserDetails?> GetUserDetailsAsync(string username)
     {
         var userDetails = await _dmDbContext.Users
             .Include(u => u.AvatarUpload)
@@ -136,7 +136,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     }
 
     /// <inheritdoc />
-    public async Task<UserDetails?> GetUserDetails(Guid userId)
+    public async Task<UserDetails?> GetUserDetailsAsync(Guid userId)
     {
         var userDetails = await _dmDbContext.Users
             .Include(u => u.AvatarUpload)
@@ -186,7 +186,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetUsersByRole(UserRole role)
+    public async Task<IEnumerable<GeneralUser>> GetUsersByRoleAsync(UserRole role)
     {
         var users = await _dmDbContext.Users
             .Include(u => u.AvatarUpload)
@@ -206,7 +206,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             .CountAsync();
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetUsers(IEnumerable<Guid> userIds)
+    public async Task<IEnumerable<GeneralUser>> GetUsersAsync(IEnumerable<Guid> userIds)
     {
         var idsList = userIds.ToList();
         if (!idsList.Any())

@@ -19,7 +19,7 @@ public static class UnreadCountersExtensions
     public static Task FillParentCounters<TEntity>(this IUnreadCountersRepository repository,
         ICollection<TEntity> entities, Guid userId,
         Func<TEntity, Guid> getId, Expression<Func<TEntity, int>> counterField) =>
-        FillCounters(entities, userId, getId, repository.SelectByParents, counterField);
+        FillCounters(entities, userId, getId, repository.SelectByParentsAsync, counterField);
 
     /// <summary>
     /// Fill total unread counters fields for passed parent entities (sum of all unread)
@@ -27,7 +27,7 @@ public static class UnreadCountersExtensions
     public static Task FillTotalUnreadCounters<TEntity>(this IUnreadCountersRepository repository,
         ICollection<TEntity> entities, Guid userId,
         Func<TEntity, Guid> getId, Expression<Func<TEntity, int>> counterField) =>
-        FillCounters(entities, userId, getId, repository.SelectTotalUnreadByParents, counterField);
+        FillCounters(entities, userId, getId, repository.SelectTotalUnreadByParentsAsync, counterField);
 
     /// <summary>
     /// Fill counters fields for passed entities
@@ -36,7 +36,7 @@ public static class UnreadCountersExtensions
         ICollection<TEntity> entities, Guid userId,
         Func<TEntity, Guid> getId, Expression<Func<TEntity, int>> counterField,
         UnreadEntryType entryType = UnreadEntryType.Message) =>
-        FillCounters(entities, userId, getId, repository.SelectByEntities, counterField, entryType);
+        FillCounters(entities, userId, getId, repository.SelectByEntitiesAsync, counterField, entryType);
 
     private static async Task FillCounters<TEntity>(ICollection<TEntity> entities, Guid userId,
         Func<TEntity, Guid> getId, Func<Guid, UnreadEntryType, Guid[], Task<IDictionary<Guid, int>>> getCounters,

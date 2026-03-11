@@ -24,10 +24,10 @@ internal class GameCommentLikeApiService : IGameCommentLikeApiService
     /// <inheritdoc />
     public async Task<User> LikeComment(Guid commentId)
     {
-        var user = await _likeService.LikeComment(commentId);
+        var user = await _likeService.LikeCommentAsync(commentId);
         return _mapper.Map<User>(user);
     }
 
     /// <inheritdoc />
-    public Task UnlikeComment(Guid commentId) => _likeService.UnlikeComment(commentId);
+    public Task UnlikeComment(Guid commentId) => _likeService.UnlikeCommentAsync(commentId);
 }

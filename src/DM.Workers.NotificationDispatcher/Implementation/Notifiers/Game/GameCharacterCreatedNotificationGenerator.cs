@@ -57,7 +57,7 @@ internal class GameCharacterCreatedNotificationGenerator : BaseNotificationGener
         usersInterested.UnionWith(data.AssistantIds);
 
         // Subscribers with CharacterUpdates enabled
-        var readerSubscriptions = await _subscriptionRepository.GetByTargetWithSettings(
+        var readerSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.Game,
             data.GameId,
             SubscriptionSettings.CharacterUpdates);

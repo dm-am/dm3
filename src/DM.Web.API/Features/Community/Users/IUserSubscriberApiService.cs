@@ -12,20 +12,20 @@ public interface IUserSubscriberApiService
     /// <summary>
     /// Get subscribers of a user
     /// </summary>
-    Task<IEnumerable<User>> GetSubscribers(string username);
+    Task<IEnumerable<User>> GetSubscribersAsync(string username);
 
     /// <summary>
     /// Subscribe to a user
     /// </summary>
-    Task<Subscription> Subscribe(string username);
+    Task<Subscription> SubscribeAsync(string username);
 
     /// <summary>
     /// Unsubscribe from a user
     /// </summary>
-    Task Unsubscribe(string username);
+    Task UnsubscribeAsync(string username);
 
     /// <summary>
     /// Check if current user is subscribed to specified user
     /// </summary>
-    Task<Subscription?> GetSubscriptionStatus(string username);
+    Task<Subscription?> GetSubscriptionStatusAsync(string username);
 }

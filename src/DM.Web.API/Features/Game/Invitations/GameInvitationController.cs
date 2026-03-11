@@ -38,10 +38,10 @@ public class GameInvitationController : ControllerBase
     /// <response code="404">Game not found</response>
     [HttpGet(Name = nameof(GetGameInvitations))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(ListEnvelope<GameInvitation>), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(ListEnvelope<GameInvitation>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameInvitations(Guid id)
     {
         var invitations = await _invitationApiService.GetGameInvitations(id);
@@ -59,10 +59,10 @@ public class GameInvitationController : ControllerBase
     /// <response code="404">User or game not found</response>
     [HttpPost("players", Name = nameof(InvitePlayer))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(GameInvitation), 201)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(GameInvitation), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> InvitePlayer(Guid id, [FromBody] CreateInvitationRequest request)
     {
         var invitation = await _invitationApiService.InvitePlayer(id, request.Username);
@@ -80,10 +80,10 @@ public class GameInvitationController : ControllerBase
     /// <response code="404">User or game not found</response>
     [HttpPost("readers", Name = nameof(InviteReader))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(GameInvitation), 201)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(GameInvitation), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> InviteReader(Guid id, [FromBody] CreateInvitationRequest request)
     {
         var invitation = await _invitationApiService.InviteReader(id, request.Username);
@@ -101,10 +101,10 @@ public class GameInvitationController : ControllerBase
     /// <response code="404">User or game not found</response>
     [HttpPost("assistants", Name = nameof(InviteAssistant))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(GameInvitation), 201)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(GameInvitation), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> InviteAssistant(Guid id, [FromBody] CreateInvitationRequest request)
     {
         var invitation = await _invitationApiService.InviteAssistant(id, request.Username);
@@ -125,10 +125,10 @@ public class GameInvitationController : ControllerBase
     /// <response code="404">Invitation not found or already processed</response>
     [HttpDelete("{invitationId}", Name = nameof(CancelInvitation))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> CancelInvitation(Guid id, Guid invitationId)
     {
         await _invitationApiService.CancelInvitation(invitationId);

@@ -20,18 +20,18 @@ internal class InvokedEventProducer(IProducerBuilder producerBuilder) : IEventPr
     private readonly IProducer<string, InvokedEvent> producer = producerBuilder.BuildRabbit<InvokedEvent>(
         new RabbitProducerParameters(InvokedEventsTransport.ExchangeName));
 
-    public Task Send(EventType eventType, Guid entityId) =>
+    public Task SendAsync(EventType eventType, Guid entityId) =>
         producer.Send(GetRoutingKey(eventType), new InvokedEvent
         {
             Type = eventType,
             EntityId = entityId
         }, CancellationToken.None);
 
-    public async Task Send(IEnumerable<EventType> eventTypes, Guid entityId)
+    public async Task SendAsync(IEnumerable<EventType> eventTypes, Guid entityId)
     {
         foreach (var eventType in eventTypes)
         {
-            await Send(eventType, entityId);
+            await SendAsync(eventType, entityId);
         }
     }
 

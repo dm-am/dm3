@@ -132,7 +132,7 @@ internal class PasswordChangeService : IPasswordChangeService
         }
 
         // Audit logging: record password change event
-        await _eventProducer.Send(EventType.PasswordChanged, user.UserId);
+        await _eventProducer.SendAsync(EventType.PasswordChanged, user.UserId);
 
         // Send notification email
         await _notificationSender.Send(user.Email ?? string.Empty, user.Username);

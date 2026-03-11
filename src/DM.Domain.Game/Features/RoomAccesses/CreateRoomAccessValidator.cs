@@ -24,7 +24,7 @@ internal class CreateRoomAccessValidator : AbstractValidator<CreateRoomAccess>
         {
             RuleFor(c => c.ReaderUsername)
                 .NotEmpty().WithMessage(ValidationError.Empty)
-                .MustAsync(userLookupService.UserExists).WithMessage(ValidationError.Invalid);
+                .MustAsync(userLookupService.UserExistsAsync).WithMessage(ValidationError.Invalid);
             RuleFor(c => c.Policy)
                 .Must(c => c == RoomAccessPolicy.ReadOnly).WithMessage(ValidationError.Invalid);
         });

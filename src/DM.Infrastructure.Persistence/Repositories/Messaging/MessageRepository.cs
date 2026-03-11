@@ -330,7 +330,7 @@ internal class MessageRepository : IMessageRepository
             .ExecuteUpdateAsync(s => s
                 .SetProperty(m => m.IsRemoved, true)
                 .SetProperty(m => m.DeletedByUserId, deletedByUserId)
-                .SetProperty(m => m.DeletedAtUtc, DateTimeOffset.UtcNow), ct);
+                .SetProperty(m => m.DeletedUtc, DateTimeOffset.UtcNow), ct);
 
         // If this was the last message in chat, update LastMessageId
         if (messageInfo?.LastMessageId == messageId)

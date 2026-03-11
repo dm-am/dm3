@@ -45,7 +45,7 @@ internal class PublicImageService : IPublicImageService
     private static readonly Size SmallSize = new(100, 100);
 
     /// <inheritdoc />
-    public async Task<(Upload original, Upload medium, Upload small)> Upload(CreateUpload createUpload)
+    public async Task<(Upload original, Upload medium, Upload small)> UploadAsync(CreateUpload createUpload)
     {
         await validator.ValidateAndThrowAsync(createUpload).ConfigureAwait(false);
         var (name, extension) = await nameGenerator.Generate(createUpload).ConfigureAwait(false);
@@ -70,10 +70,10 @@ internal class PublicImageService : IPublicImageService
         var uploads = new[] {originalImagePath, mediumImagePath, smallImagePath}
             .Select(path => factory.Create(createUpload, path, userId, path == originalImagePath, createdAt));
 
-        var uploadsIndex = (await repository.Create(uploads).ConfigureAwait(false)).ToDictionary(u => u.FilePath);
+        var uploadsIndex = (await repository.CreateAsync(uploads).ConfigureAwait(false)).ToDictionary(u => u.FilePath);
         return (uploadsIndex[originalImagePath], uploadsIndex[mediumImagePath], uploadsIndex[smallImagePath]);
     }
 
     /// <inheritdoc />
-    public Task PrepareObsoleteForDeleting(Guid entityId) => repository.RemoveObsoleteUploads(entityId);
+    public Task PrepareObsoleteForDeletingAsync(Guid entityId) => repository.RemoveObsoleteUploadsAsync(entityId);
 }

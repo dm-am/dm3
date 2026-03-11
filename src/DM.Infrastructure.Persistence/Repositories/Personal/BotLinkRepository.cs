@@ -120,7 +120,7 @@ internal class BotLinkRepository : MongoCollectionRepository<UserSettings>, IBot
             .Find(filter)
             .FirstOrDefaultAsync(ct);
 
-        var defaultPreferences = new NotificationChannelPreferences
+        var defaultPreferences = new NotificationChannelPreference
         {
             Enabled = true,
             EnabledCategories = new HashSet<NotificationCategory>

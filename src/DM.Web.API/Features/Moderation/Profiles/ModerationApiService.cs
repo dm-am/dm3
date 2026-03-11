@@ -87,7 +87,7 @@ internal class ModerationApiService : IModerationApiService
     /// <inheritdoc />
     public async Task<Envelope<UserProfile>> ModerateUserProfile(string login, ModerateProfile profile)
     {
-        var user = await _userService.Get(login);
+        var user = await _userService.GetAsync(login);
         _intentionManager.ThrowIfForbidden(UserIntention.Moderate, user);
 
         var updateUser = new UpdateUser
@@ -96,7 +96,7 @@ internal class ModerationApiService : IModerationApiService
             Info = profile.Info ?? string.Empty
         };
 
-        var updatedUser = await _userService.Update(updateUser);
+        var updatedUser = await _userService.UpdateAsync(updateUser);
         return new Envelope<UserProfile>(_mapper.Map<UserProfile>(updatedUser));
     }
 

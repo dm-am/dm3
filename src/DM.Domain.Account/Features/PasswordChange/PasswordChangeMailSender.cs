@@ -27,7 +27,7 @@ internal class PasswordChangeMailSender : IPasswordChangeMailSender
     {
         var emailBody = await _renderer.RenderAsync(new PasswordChangeNotificationViewModel(
             Username: username));
-        await _mailSender.Send(new EmailLetter
+        await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
             Subject = "Ваш пароль на DM.AM был изменен",

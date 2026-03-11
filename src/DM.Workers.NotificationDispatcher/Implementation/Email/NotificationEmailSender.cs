@@ -157,7 +157,7 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
 
                 var body = BuildEmailBody(eventType, notification.Metadata);
 
-                await _mailSender.Send(new MailLetter
+                await _mailSender.SendAsync(new MailLetter
                 {
                     Address = email,
                     Subject = subject,

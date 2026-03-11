@@ -7,7 +7,7 @@ using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
-using DbUpload = DM.Infrastructure.Persistence.Entities.CrossDomain.Upload;
+using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
 
 namespace DM.Infrastructure.Persistence.Repositories.General;
 
@@ -28,7 +28,7 @@ internal class PublicImageUploadRepository : IPublicImageUploadRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Upload>> Create(IEnumerable<UploadEntity> uploads)
+    public async Task<IEnumerable<Upload>> CreateAsync(IEnumerable<UploadEntity> uploads)
     {
         var uploadEntities = uploads.Select(u => new DbUpload
         {
@@ -54,7 +54,7 @@ internal class PublicImageUploadRepository : IPublicImageUploadRepository
     }
 
     /// <inheritdoc />
-    public async Task RemoveObsoleteUploads(Guid entityId)
+    public async Task RemoveObsoleteUploadsAsync(Guid entityId)
     {
         var uploadsInfo = await _dbContext.Uploads
             .Where(u => u.EntityId == entityId && !u.IsRemoved)

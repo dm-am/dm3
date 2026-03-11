@@ -58,7 +58,7 @@ public class Startup
         services.AddJamqClient(
             config => config.UseRabbit(),
             consumerBuilderDefaults: builder => builder.WithMiddleware<NotificationConsumerRetryMiddleware>());
-        services.AddHostedService<NotificationConsumer>();
+        services.AddHostedService<NotificationDispatcherConsumer>();
 
         services.AddHealthChecks();
 

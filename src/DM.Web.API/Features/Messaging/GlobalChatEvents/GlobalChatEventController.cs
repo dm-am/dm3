@@ -36,7 +36,7 @@ public class GlobalChatEventController : ControllerBase
     /// </summary>
     /// <response code="200">List of events</response>
     [HttpGet(Name = nameof(GetGlobalChatEvents))]
-    [ProducesResponseType(typeof(ListEnvelope<GlobalChatEventSummary>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<GlobalChatEventSummary>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetGlobalChatEvents(CancellationToken ct) =>
         Ok(await _apiService.GetList(ct));
 
@@ -48,8 +48,8 @@ public class GlobalChatEventController : ControllerBase
     /// <response code="200">Event details</response>
     /// <response code="404">Event not found</response>
     [HttpGet("{id}", Name = nameof(GetGlobalChatEvent))]
-    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGlobalChatEvent(Guid id, CancellationToken ct) =>
         Ok(await _apiService.Get(id, ct));
 
@@ -59,7 +59,7 @@ public class GlobalChatEventController : ControllerBase
     /// <param name="ct">Cancellation token</param>
     /// <response code="200">Active event or null</response>
     [HttpGet("active", Name = nameof(GetActiveGlobalChatEvent))]
-    [ProducesResponseType(typeof(Envelope<GlobalChatEventSummary>), 200)]
+    [ProducesResponseType(typeof(Envelope<GlobalChatEventSummary>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetActiveGlobalChatEvent(CancellationToken ct) =>
         Ok(await _apiService.GetActive(ct));
 
@@ -74,10 +74,10 @@ public class GlobalChatEventController : ControllerBase
     /// <response code="403">User is not authorized to create events (requires SeniorModerator+)</response>
     [HttpPost(Name = nameof(CreateGlobalChatEvent))]
     [RequireRole(UserRole.SeniorModerator)]
-    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
+    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> CreateGlobalChatEvent([FromBody] CreateGlobalChatEventInput input, CancellationToken ct)
     {
         var result = await _apiService.Create(input, ct);
@@ -97,11 +97,11 @@ public class GlobalChatEventController : ControllerBase
     /// <response code="404">Event not found</response>
     [HttpPatch("{id}", Name = nameof(UpdateGlobalChatEvent))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateGlobalChatEvent(Guid id, [FromBody] UpdateGlobalChatEventInput input, CancellationToken ct) =>
         Ok(await _apiService.Update(id, input, ct));
 
@@ -116,10 +116,10 @@ public class GlobalChatEventController : ControllerBase
     /// <response code="404">Event not found</response>
     [HttpDelete("{id}", Name = nameof(DeleteGlobalChatEvent))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteGlobalChatEvent(Guid id, CancellationToken ct)
     {
         await _apiService.Delete(id, ct);
@@ -138,11 +138,11 @@ public class GlobalChatEventController : ControllerBase
     /// <response code="404">Event not found</response>
     [HttpPost("{id}/start", Name = nameof(StartGlobalChatEvent))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 409)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> StartGlobalChatEvent(Guid id, CancellationToken ct) =>
         Ok(await _apiService.Start(id, ct));
 
@@ -158,11 +158,11 @@ public class GlobalChatEventController : ControllerBase
     /// <response code="404">Event not found</response>
     [HttpPost("{id}/end", Name = nameof(EndGlobalChatEvent))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 409)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> EndGlobalChatEvent(Guid id, CancellationToken ct) =>
         Ok(await _apiService.End(id, ct));
 
@@ -177,10 +177,10 @@ public class GlobalChatEventController : ControllerBase
     /// <response code="404">Event not found</response>
     [HttpPost("{id}/join", Name = nameof(JoinGlobalChatEvent))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> JoinGlobalChatEvent(Guid id, CancellationToken ct) =>
         Ok(await _apiService.Join(id, ct));
 
@@ -195,10 +195,10 @@ public class GlobalChatEventController : ControllerBase
     /// <response code="404">Event not found</response>
     [HttpPost("{id}/leave", Name = nameof(LeaveGlobalChatEvent))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> LeaveGlobalChatEvent(Guid id, CancellationToken ct) =>
         Ok(await _apiService.Leave(id, ct));
 
@@ -210,8 +210,8 @@ public class GlobalChatEventController : ControllerBase
     /// <response code="200">Event with participants</response>
     /// <response code="404">Event not found</response>
     [HttpGet("{id}/participants", Name = nameof(GetGlobalChatEventParticipants))]
-    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGlobalChatEventParticipants(Guid id, CancellationToken ct) =>
         Ok(await _apiService.Get(id, ct));
 
@@ -228,11 +228,11 @@ public class GlobalChatEventController : ControllerBase
     /// <response code="404">Event or user not found</response>
     [HttpPost("{id}/participants", Name = nameof(AddGlobalChatEventParticipant))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AddGlobalChatEventParticipant(Guid id, [FromBody] AddParticipantInput input, CancellationToken ct) =>
         Ok(await _apiService.AddParticipant(id, input, ct));
 
@@ -248,10 +248,10 @@ public class GlobalChatEventController : ControllerBase
     /// <response code="404">Event or user not found</response>
     [HttpDelete("{id}/participants/{login}", Name = nameof(RemoveGlobalChatEventParticipant))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveGlobalChatEventParticipant(Guid id, string login, CancellationToken ct)
     {
         await _apiService.RemoveParticipant(id, login, ct);

@@ -30,7 +30,7 @@ internal class MailSender : DM.Domain.Core.Mail.IMailSender, IMailSender
     /// Sends an email using EmailLetter DTO from Domain.Core.
     /// Maps to internal MailLetter for queue processing.
     /// </summary>
-    async Task DM.Domain.Core.Mail.IMailSender.Send(EmailLetter letter)
+    async Task DM.Domain.Core.Mail.IMailSender.SendAsync(EmailLetter letter)
     {
         var mailLetter = new MailLetter
         {
@@ -47,11 +47,11 @@ internal class MailSender : DM.Domain.Core.Mail.IMailSender, IMailSender
                 .ToList()
         };
 
-        await Send(mailLetter);
+        await SendAsync(mailLetter);
     }
 
     /// <inheritdoc />
-    public async Task Send(MailLetter letter)
+    public async Task SendAsync(MailLetter letter)
     {
         await validator.ValidateAndThrowAsync(letter);
         await producer.Send(string.Empty, letter, CancellationToken.None);

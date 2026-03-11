@@ -47,7 +47,7 @@ internal class BlogBlacklistService : IBlogBlacklistService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetBlacklist(Guid blogId, CancellationToken ct = default)
+    public async Task<IEnumerable<GeneralUser>> GetBlacklistAsync(Guid blogId, CancellationToken ct = default)
     {
         var blog = await _blogService.GetBlog(blogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
@@ -56,12 +56,12 @@ internal class BlogBlacklistService : IBlogBlacklistService
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser> AddToBlacklist(Guid blogId, string username, CancellationToken ct = default)
+    public async Task<GeneralUser> AddToBlacklistAsync(Guid blogId, string username, CancellationToken ct = default)
     {
         var blog = await _blogService.GetBlog(blogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
 
-        var user = await _userLookupService.Get(username);
+        var user = await _userLookupService.GetAsync(username);
         if (user == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, $"User '{username}' not found");
@@ -101,19 +101,19 @@ internal class BlogBlacklistService : IBlogBlacklistService
         var cancelledInvitations = await _repository.CancelInvitationsForUser(blogId, user.UserId, ct);
         foreach (var tokenId in cancelledInvitations)
         {
-            await _producer.Send(EventType.BlogInvitationCancelled, tokenId);
+            await _producer.SendAsync(EventType.BlogInvitationCancelled, tokenId);
         }
 
         return _mapper.Map<GeneralUser>(user);
     }
 
     /// <inheritdoc />
-    public async Task RemoveFromBlacklist(Guid blogId, string username, CancellationToken ct = default)
+    public async Task RemoveFromBlacklistAsync(Guid blogId, string username, CancellationToken ct = default)
     {
         var blog = await _blogService.GetBlog(blogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
 
-        var user = await _userLookupService.Get(username);
+        var user = await _userLookupService.GetAsync(username);
         if (user == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, $"User '{username}' not found");
@@ -128,7 +128,7 @@ internal class BlogBlacklistService : IBlogBlacklistService
     }
 
     /// <inheritdoc />
-    public async Task<bool> IsBlocked(Guid blogId, Guid userId, CancellationToken ct = default)
+    public async Task<bool> IsBlockedAsync(Guid blogId, Guid userId, CancellationToken ct = default)
     {
         return await _repository.IsBlocked(blogId, userId, ct);
     }
@@ -136,16 +136,20 @@ internal class BlogBlacklistService : IBlogBlacklistService
     #region IContentBlacklistService implementation
 
     /// <inheritdoc />
-    Task<IEnumerable<GeneralUser>> DM.Domain.Core.Blacklists.IContentBlacklistService.GetBlacklist(
-        Guid entityId, CancellationToken ct) => GetBlacklist(entityId, ct);
+    Task<IEnumerable<GeneralUser>> DM.Domain.Core.Blacklists.IContentBlacklistService.GetBlacklistAsync(
+        Guid entityId, CancellationToken ct) => GetBlacklistAsync(entityId, ct);
 
     /// <inheritdoc />
-    Task<GeneralUser> DM.Domain.Core.Blacklists.IContentBlacklistService.AddToBlacklist(
-        Guid entityId, string username, CancellationToken ct) => AddToBlacklist(entityId, username, ct);
+    Task<GeneralUser> DM.Domain.Core.Blacklists.IContentBlacklistService.AddToBlacklistAsync(
+        Guid entityId, string username, CancellationToken ct) => AddToBlacklistAsync(entityId, username, ct);
 
     /// <inheritdoc />
-    Task DM.Domain.Core.Blacklists.IContentBlacklistService.RemoveFromBlacklist(
-        Guid entityId, string username, CancellationToken ct) => RemoveFromBlacklist(entityId, username, ct);
+    Task DM.Domain.Core.Blacklists.IContentBlacklistService.RemoveFromBlacklistAsync(
+        Guid entityId, string username, CancellationToken ct) => RemoveFromBlacklistAsync(entityId, username, ct);
+
+    /// <inheritdoc />
+    Task<bool> DM.Domain.Core.Blacklists.IContentBlacklistService.IsBlockedAsync(
+        Guid entityId, Guid userId, CancellationToken ct) => IsBlockedAsync(entityId, userId, ct);
 
     #endregion
 
@@ -153,15 +157,15 @@ internal class BlogBlacklistService : IBlogBlacklistService
 
     /// <inheritdoc />
     public Task<IEnumerable<GeneralUser>> Get(Guid blogId, CancellationToken ct = default) =>
-        GetBlacklist(blogId, ct);
+        GetBlacklistAsync(blogId, ct);
 
     /// <inheritdoc />
     public Task<GeneralUser> Add(Guid blogId, string username, CancellationToken ct = default) =>
-        AddToBlacklist(blogId, username, ct);
+        AddToBlacklistAsync(blogId, username, ct);
 
     /// <inheritdoc />
     public Task Remove(Guid blogId, string username, CancellationToken ct = default) =>
-        RemoveFromBlacklist(blogId, username, ct);
+        RemoveFromBlacklistAsync(blogId, username, ct);
 
     #endregion
 }

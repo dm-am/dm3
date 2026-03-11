@@ -33,10 +33,10 @@ public class LoginRequest
     public string? Website { get; set; }
 
     /// <summary>
-    /// Remember session for 30 days (true) or 24 hours (false)
+    /// Remember session for 365 days (true) or 24 hours (false)
     /// </summary>
     /// <remarks>
-    /// When true, the session cookie will persist for 30 days.
+    /// When true, the session cookie will persist for 365 days.
     /// When false, the session expires after 24 hours of inactivity.
     /// Defaults to true for convenience.
     /// </remarks>

@@ -32,7 +32,7 @@ internal class LikeOperations : ILikeOperations
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser> Like(ILikable entity, EventType eventType)
+    public async Task<GeneralUser> LikeAsync(ILikable entity, EventType eventType)
     {
         var currentUser = _identityProvider.Current.User;
         if (entity.Likes.Any(l => l.UserId == currentUser.UserId))
@@ -43,12 +43,12 @@ internal class LikeOperations : ILikeOperations
 
         var like = _likeFactory.Create(entity.Id, entity.LikeEntityType, currentUser.UserId);
         await _likeRepository.Add(like);
-        await _producer.Send(eventType, like.LikeId);
+        await _producer.SendAsync(eventType, like.LikeId);
         return currentUser;
     }
 
     /// <inheritdoc />
-    public async Task Unlike(ILikable entity)
+    public async Task UnlikeAsync(ILikable entity)
     {
         var currentUser = _identityProvider.Current.User;
         if (entity.Likes.All(l => l.UserId != currentUser.UserId))

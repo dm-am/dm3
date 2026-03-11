@@ -59,7 +59,7 @@ public class PostReviewController : ControllerBase
     /// <param name="gameId">Filter by game</param>
     /// <response code="200">List of post reviews</response>
     [HttpGet("posts", Name = nameof(GetAllPostReviews))]
-    [ProducesResponseType(typeof(ListEnvelope<ApiReview>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<ApiReview>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllPostReviews(
         [FromQuery] PagingQuery q,
         [FromQuery] string? authorUsername = null,
@@ -73,13 +73,13 @@ public class PostReviewController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(authorUsername))
         {
-            var author = await _userLookupService.Get(authorUsername);
+            var author = await _userLookupService.GetAsync(authorUsername);
             filter.AuthorId = author.UserId;
         }
 
         if (!string.IsNullOrWhiteSpace(recipientUsername))
         {
-            var recipient = await _userLookupService.Get(recipientUsername);
+            var recipient = await _userLookupService.GetAsync(recipientUsername);
             filter.RecipientId = recipient.UserId;
         }
 
@@ -99,8 +99,8 @@ public class PostReviewController : ControllerBase
     /// <response code="200">List of post reviews</response>
     /// <response code="404">Post not found</response>
     [HttpGet("~/v1/posts/{postId:guid}/reviews", Name = nameof(GetPostReviews))]
-    [ProducesResponseType(typeof(ListEnvelope<ApiReview>), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(ListEnvelope<ApiReview>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPostReviews(Guid postId, [FromQuery] PagingQuery q)
     {
         var (reviews, paging) = await _postReviewService.GetListAsync(postId, q);
@@ -134,12 +134,12 @@ public class PostReviewController : ControllerBase
     /// <response code="409">Review already exists for this post</response>
     [HttpPost("~/v1/posts/{postId:guid}/reviews", Name = nameof(CreatePostReview))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(ApiReview), 201)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 400)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 409)]
+    [ProducesResponseType(typeof(ApiReview), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreatePostReview(Guid postId, [FromBody] CreateReviewRequest request)
     {
         if (!request.Sign.HasValue)

@@ -13,5 +13,5 @@ public interface IPublicImageService : IObsoleteUploadsCleanup
     /// </summary>
     /// <param name="createUpload"></param>
     /// <returns></returns>
-    Task<(Upload original, Upload medium, Upload small)> Upload(CreateUpload createUpload);
+    Task<(Upload original, Upload medium, Upload small)> UploadAsync(CreateUpload createUpload);
 }

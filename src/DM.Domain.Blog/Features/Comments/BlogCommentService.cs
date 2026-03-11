@@ -53,7 +53,7 @@ internal class BlogCommentService : IBlogCommentService
     }
 
     /// <inheritdoc />
-    public async Task<Comment> Create(CreateComment createComment)
+    public async Task<Comment> CreateAsync(CreateComment createComment)
     {
         await _createValidator.ValidateAndThrowAsync(createComment);
 
@@ -73,14 +73,14 @@ internal class BlogCommentService : IBlogCommentService
             blog.Id,
             blog.CommentCount + 1);
 
-        await _countersRepository.Increment(blog.Id, UnreadEntryType.Message);
-        await _invokedEventProducer.Send(EventType.NewBlogComment, commentId);
+        await _countersRepository.IncrementAsync(blog.Id, UnreadEntryType.Message);
+        await _invokedEventProducer.SendAsync(EventType.NewBlogComment, commentId);
 
         return createdComment;
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> Get(Guid blogId, PagingQuery query,
+    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid blogId, PagingQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
         await _blogService.GetBlog(blogId);
@@ -94,17 +94,17 @@ internal class BlogCommentService : IBlogCommentService
     }
 
     /// <inheritdoc />
-    public async Task<Comment> Get(Guid commentId)
+    public async Task<Comment> GetAsync(Guid commentId)
     {
         return await _repository.Get(commentId) ??
                throw new HttpException(HttpStatusCode.NotFound, $"Comment {commentId} not found");
     }
 
     /// <inheritdoc />
-    public async Task<Comment> Update(UpdateComment updateComment)
+    public async Task<Comment> UpdateAsync(UpdateComment updateComment)
     {
         await _updateValidator.ValidateAndThrowAsync(updateComment);
-        var comment = await Get(updateComment.CommentId);
+        var comment = await GetAsync(updateComment.CommentId);
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
 
@@ -123,12 +123,12 @@ internal class BlogCommentService : IBlogCommentService
         };
 
         var updatedComment = await _repository.Update(entity);
-        await _invokedEventProducer.Send(EventType.ChangedBlogComment, updateComment.CommentId);
+        await _invokedEventProducer.SendAsync(EventType.ChangedBlogComment, updateComment.CommentId);
         return updatedComment;
     }
 
     /// <inheritdoc />
-    public async Task Delete(Guid commentId)
+    public async Task DeleteAsync(Guid commentId)
     {
         var comment = await _repository.GetForDelete(commentId);
         if (comment == null)
@@ -149,22 +149,22 @@ internal class BlogCommentService : IBlogCommentService
             CommentId = commentId,
             BlogId = comment.BlogId,
             DeletedByUserId = _identityProvider.Current.User.UserId,
-            DeletedAtUtc = _dateTimeProvider.Now,
+            DeletedUtc = _dateTimeProvider.Now,
             NewCommentCount = Math.Max(0, comment.BlogCommentCount - 1),
             NewLastCommentId = newLastCommentId
         };
 
         await _repository.Delete(entity);
-        await _countersRepository.Decrement(comment.BlogId, UnreadEntryType.Message, comment.CreatedUtc);
+        await _countersRepository.DecrementAsync(comment.BlogId, UnreadEntryType.Message, comment.CreatedUtc);
 
-        await _invokedEventProducer.Send(EventType.DeletedBlogComment, commentId);
+        await _invokedEventProducer.SendAsync(EventType.DeletedBlogComment, commentId);
     }
 
     /// <inheritdoc />
-    public async Task MarkAsRead(Guid blogId)
+    public async Task MarkAsReadAsync(Guid blogId)
     {
         await _blogService.GetBlog(blogId);
-        await _countersRepository.Flush(_identityProvider.Current.User.UserId,
+        await _countersRepository.FlushAsync(_identityProvider.Current.User.UserId,
             UnreadEntryType.Message, blogId);
     }
 }

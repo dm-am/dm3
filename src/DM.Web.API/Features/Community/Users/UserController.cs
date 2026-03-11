@@ -34,7 +34,7 @@ public class UserController : ControllerBase
     /// <param name="query">Filtering and pagination parameters</param>
     /// <response code="200">Paginated list of users</response>
     [HttpGet("", Name = nameof(GetUsers))]
-    [ProducesResponseType(typeof(ListEnvelope<User>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<User>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUsers([FromQuery] UsersQuery query) =>
         Ok(await _userApiService.GetUsers(query));
 
@@ -44,7 +44,7 @@ public class UserController : ControllerBase
     /// <param name="role">User role to filter by (e.g., Admin, Moderator, Player)</param>
     /// <response code="200">List of users with the specified role</response>
     [HttpGet("by-role/{role}", Name = nameof(GetUsersByRole))]
-    [ProducesResponseType(typeof(ListEnvelope<User>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<User>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUsersByRole(UserRole role) =>
         Ok(await _userApiService.GetUsersByRole(role));
 
@@ -55,8 +55,8 @@ public class UserController : ControllerBase
     /// <response code="200">User profile retrieved successfully</response>
     /// <response code="404">User not found or was deleted</response>
     [HttpGet("{username}", Name = nameof(GetUserByUsername))]
-    [ProducesResponseType(typeof(Envelope<User>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserByUsername(string username) => Ok(await _userApiService.GetUser(username));
 
     /// <summary>
@@ -66,8 +66,8 @@ public class UserController : ControllerBase
     /// <response code="200">User profile retrieved successfully</response>
     /// <response code="404">User not found or was deleted</response>
     [HttpGet("{username}/profile", Name = nameof(GetUserProfile))]
-    [ProducesResponseType(typeof(Envelope<UserProfile>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<UserProfile>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserProfile(string username) => Ok(await _userApiService.GetUserProfile(username));
 
     /// <summary>
@@ -77,8 +77,8 @@ public class UserController : ControllerBase
     /// <response code="200">Login history retrieved successfully</response>
     /// <response code="404">User not found or was deleted</response>
     [HttpGet("{username}/login-history", Name = nameof(GetLoginHistory))]
-    [ProducesResponseType(typeof(ListEnvelope<LoginHistoryDto>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(ListEnvelope<LoginHistoryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetLoginHistory(string username) => Ok(await _userApiService.GetLoginHistory(username));
 
     /// <summary>
@@ -88,7 +88,7 @@ public class UserController : ControllerBase
     /// <response code="200">Featured post retrieved successfully</response>
     /// <response code="404">User not found or no featured post found</response>
     [HttpGet("{username}/featured-post", Name = nameof(GetFeaturedPost))]
-    [ProducesResponseType(typeof(Envelope<FeaturedPost>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<FeaturedPost>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetFeaturedPost(string username) => Ok(await _userApiService.GetFeaturedPost(username));
 }

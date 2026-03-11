@@ -12,15 +12,15 @@ public interface IUsernameChangeApiService
     /// <summary>
     /// Get all pending username change requests
     /// </summary>
-    Task<IEnumerable<UsernameChangeRequest>> GetPendingRequests();
+    Task<IEnumerable<UsernameChangeRequest>> GetPendingRequestsAsync();
 
     /// <summary>
     /// Get username change request by ID
     /// </summary>
-    Task<UsernameChangeRequest> GetById(Guid id);
+    Task<UsernameChangeRequest> GetByIdAsync(Guid id);
 
     /// <summary>
     /// Resolve (approve/reject) a username change request
     /// </summary>
-    Task<UsernameChangeRequest> Resolve(Guid id, ResolveUsernameChangeRequest resolve);
+    Task<UsernameChangeRequest> ResolveAsync(Guid id, ResolveUsernameChangeRequest resolve);
 }

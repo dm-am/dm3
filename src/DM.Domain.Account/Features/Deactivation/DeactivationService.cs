@@ -62,6 +62,6 @@ internal class DeactivationService : IDeactivationService
         await _authenticationService.LogoutAll(credentials.UserId);
 
         // Audit logging: record deactivation event
-        await _eventProducer.Send(EventType.AccountDeactivated, credentials.UserId);
+        await _eventProducer.SendAsync(EventType.AccountDeactivated, credentials.UserId);
     }
 }

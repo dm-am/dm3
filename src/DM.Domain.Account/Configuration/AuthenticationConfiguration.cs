@@ -17,7 +17,7 @@ public class AuthenticationConfiguration
     /// User will be logged out after this period of inactivity.
     /// Default: 30 days
     /// </summary>
-    public int PersistentSessionExpirationDays { get; set; } = 30;
+    public int PersistentSessionExpirationDays { get; set; } = 365;
 
     /// <summary>
     /// Session refresh window in minutes.

@@ -52,7 +52,7 @@ internal class UserService : IUserService
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<GeneralUser> users, PagingResult paging)> Get(
+    public async Task<(IEnumerable<GeneralUser> users, PagingResult paging)> GetAsync(
         PagingQuery query,
         UserActivityFilter filter,
         string? search = null,
@@ -64,16 +64,16 @@ internal class UserService : IUserService
             _intentionManager.ThrowIfForbidden(UserIntention.ViewPendingUsers);
         }
 
-        var totalCount = await _repository.CountUsers(filter, search, role);
+        var totalCount = await _repository.CountUsersAsync(filter, search, role);
         var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
-        var users = await _repository.GetUsers(paging, filter, search, role, sort);
+        var users = await _repository.GetUsersAsync(paging, filter, search, role, sort);
         return (users, paging.Result);
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser> Get(string username)
+    public async Task<GeneralUser> GetAsync(string username)
     {
-        var user = await _repository.GetUser(username);
+        var user = await _repository.GetUserAsync(username);
         if (user == null)
         {
             throw new HttpException(HttpStatusCode.Gone, $"Пользователь {username} не найден");
@@ -83,9 +83,9 @@ internal class UserService : IUserService
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser> Get(Guid userId)
+    public async Task<GeneralUser> GetAsync(Guid userId)
     {
-        var user = await _repository.GetUser(userId);
+        var user = await _repository.GetUserAsync(userId);
         if (user == null)
         {
             throw new HttpException(HttpStatusCode.Gone, $"Пользователь с ID {userId} не найден");
@@ -95,7 +95,7 @@ internal class UserService : IUserService
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser> GetCurrent()
+    public async Task<GeneralUser> GetCurrentAsync()
     {
         var identity = _identityProvider.Current;
         if (!identity.User.IsAuthenticated)
@@ -103,16 +103,16 @@ internal class UserService : IUserService
             throw new HttpException(HttpStatusCode.Unauthorized, "User is not authenticated");
         }
 
-        return await Get(identity.User.UserId);
+        return await GetAsync(identity.User.UserId);
     }
 
     /// <inheritdoc />
-    public async Task<UserDetails> GetDetails(string username)
+    public async Task<UserDetails> GetDetailsAsync(string username)
     {
         var normalizedUsername = username.ToLowerInvariant();
-        var user = await _cache.GetOrCreate(
+        var user = await _cache.GetOrCreateAsync(
             $"user_details_{normalizedUsername}",
-            () => _repository.GetUserDetails(username),
+            () => _repository.GetUserDetailsAsync(username),
             CachePolicy.Medium);
 
         if (user == null)
@@ -124,11 +124,11 @@ internal class UserService : IUserService
     }
 
     /// <inheritdoc />
-    public async Task<UserDetails> GetDetails(Guid userId)
+    public async Task<UserDetails> GetDetailsAsync(Guid userId)
     {
-        var user = await _cache.GetOrCreate(
+        var user = await _cache.GetOrCreateAsync(
             $"user_details_{userId}",
-            () => _repository.GetUserDetails(userId),
+            () => _repository.GetUserDetailsAsync(userId),
             CachePolicy.Medium);
 
         if (user == null)
@@ -140,21 +140,21 @@ internal class UserService : IUserService
     }
 
     /// <inheritdoc />
-    public Task<IEnumerable<GeneralUser>> GetByRole(UserRole role) =>
-        _cache.GetOrCreate(
+    public Task<IEnumerable<GeneralUser>> GetByRoleAsync(UserRole role) =>
+        _cache.GetOrCreateAsync(
             $"users_by_role_{role}",
-            () => _repository.GetUsersByRole(role),
+            () => _repository.GetUsersByRoleAsync(role),
             CachePolicy.LongLived);
 
     /// <inheritdoc />
-    public Task<IReadOnlyCollection<UsernameHistoryEntry>> GetUsernameHistory(Guid userId) =>
-        _usernameHistoryReader.GetByUserId(userId);
+    public Task<IReadOnlyCollection<UsernameHistoryEntry>> GetUsernameHistoryAsync(Guid userId) =>
+        _usernameHistoryReader.GetByUserIdAsync(userId);
 
     /// <inheritdoc />
-    public async Task<UserDetails> Update(UpdateUser updateUser)
+    public async Task<UserDetails> UpdateAsync(UpdateUser updateUser)
     {
         await _validator.ValidateAndThrowAsync(updateUser);
-        var user = await Get(updateUser.Username);
+        var user = await GetAsync(updateUser.Username);
         _intentionManager.ThrowIfForbidden(UserIntention.Edit, user);
 
         var userEntityUpdate = new UpdateUserEntity
@@ -195,7 +195,7 @@ internal class UserService : IUserService
 
             // Link upload to user entity and mark old uploads as obsolete
             await _repository.LinkAvatarUpload(user.UserId, confirmedUploadId.Value);
-            await _uploadsCleanup.PrepareObsoleteForDeleting(user.UserId);
+            await _uploadsCleanup.PrepareObsoleteForDeletingAsync(user.UserId);
         }
 
         // Handle contacts replacement (if provided, replace all contacts)
@@ -235,29 +235,29 @@ internal class UserService : IUserService
         await _repository.UpdateUser(userEntityUpdate, settingsEntityUpdate);
 
         // Invalidate cache for both username and userId lookups
-        await _cache.Invalidate($"user_details_{updateUser.Username.ToLowerInvariant()}");
-        await _cache.Invalidate($"user_details_{user.UserId}");
+        await _cache.InvalidateAsync($"user_details_{updateUser.Username.ToLowerInvariant()}");
+        await _cache.InvalidateAsync($"user_details_{user.UserId}");
 
-        return await GetDetails(updateUser.Username);
+        return await GetDetailsAsync(updateUser.Username);
     }
 
     // ═══ IUserLookupService ═══
 
     /// <inheritdoc />
-    public async Task<bool> UsernameExists(string username, CancellationToken ct = default)
+    public async Task<bool> UsernameExistsAsync(string username, CancellationToken ct = default)
     {
-        var user = await _repository.GetUser(username);
+        var user = await _repository.GetUserAsync(username);
         return user != null;
     }
 
     /// <inheritdoc />
-    public Task<bool> UserExists(string username, CancellationToken ct = default) =>
-        UsernameExists(username, ct);
+    public Task<bool> UserExistsAsync(string username, CancellationToken ct = default) =>
+        UsernameExistsAsync(username, ct);
 
     /// <inheritdoc />
-    public async Task<(bool Found, Guid UserId)> FindUserId(string username, CancellationToken ct = default)
+    public async Task<(bool Found, Guid UserId)> FindUserIdAsync(string username, CancellationToken ct = default)
     {
-        var user = await _repository.GetUser(username);
+        var user = await _repository.GetUserAsync(username);
         return user != null ? (true, user.UserId) : (false, Guid.Empty);
     }
 }

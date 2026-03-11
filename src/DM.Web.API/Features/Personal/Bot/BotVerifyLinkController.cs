@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Web.API.Features.Personal.Notifications;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DM.Web.API.Features.Personal.Bot;
@@ -28,8 +29,8 @@ public class BotVerifyLinkController : ControllerBase
     /// <response code="200">Link verified successfully</response>
     /// <response code="400">Invalid code or verification failed</response>
     [HttpPost("verify-link", Name = nameof(VerifyLink))]
-    [ProducesResponseType(typeof(object), 200)]
-    [ProducesResponseType(typeof(object), 400)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> VerifyLink([FromBody] VerifyBotLinkRequest request)
     {
         var result = await _botLinkService.VerifyAndLink(

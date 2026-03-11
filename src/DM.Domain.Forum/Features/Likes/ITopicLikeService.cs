@@ -14,26 +14,26 @@ public interface ITopicLikeService
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
     /// <returns>User who liked the topic</returns>
-    Task<GeneralUser> LikeTopic(Guid topicId);
+    Task<GeneralUser> LikeTopicAsync(Guid topicId);
 
     /// <summary>
     /// Remove existing like from current user to selected topic
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
     /// <returns></returns>
-    Task UnlikeTopic(Guid topicId);
+    Task UnlikeTopicAsync(Guid topicId);
 
     /// <summary>
     /// Create new like from current user to selected comment
     /// </summary>
     /// <param name="commentId">Comment identifier</param>
     /// <returns>User who liked the comment</returns>
-    Task<GeneralUser> LikeComment(Guid commentId);
+    Task<GeneralUser> LikeCommentAsync(Guid commentId);
 
     /// <summary>
     /// Remove existing like from current user to selected comment
     /// </summary>
     /// <param name="commentId">Comment identifier</param>
     /// <returns></returns>
-    Task UnlikeComment(Guid commentId);
+    Task UnlikeCommentAsync(Guid commentId);
 }

@@ -41,12 +41,12 @@ public class UsernameChangeRequestController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">Senior moderator role required</response>
     [HttpGet(Name = nameof(GetPendingUsernameChangeRequests))]
-    [ProducesResponseType(typeof(ListEnvelope<UsernameChangeRequest>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
+    [ProducesResponseType(typeof(ListEnvelope<UsernameChangeRequest>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetPendingUsernameChangeRequests()
     {
-        var requests = await _usernameChangeApiService.GetPendingRequests();
+        var requests = await _usernameChangeApiService.GetPendingRequestsAsync();
         return Ok(new ListEnvelope<UsernameChangeRequest>(requests));
     }
 
@@ -63,13 +63,13 @@ public class UsernameChangeRequestController : ControllerBase
     /// <response code="403">Senior moderator role required</response>
     /// <response code="404">Request not found</response>
     [HttpGet("{id:guid}", Name = nameof(GetUsernameChangeRequest))]
-    [ProducesResponseType(typeof(Envelope<UsernameChangeRequest>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<UsernameChangeRequest>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUsernameChangeRequest(Guid id)
     {
-        var request = await _usernameChangeApiService.GetById(id);
+        var request = await _usernameChangeApiService.GetByIdAsync(id);
         return Ok(new Envelope<UsernameChangeRequest>(request));
     }
 
@@ -90,14 +90,14 @@ public class UsernameChangeRequestController : ControllerBase
     /// <response code="403">Senior moderator role required</response>
     /// <response code="404">Request not found</response>
     [HttpPatch("{id:guid}", Name = nameof(ResolveUsernameChangeRequest))]
-    [ProducesResponseType(typeof(Envelope<UsernameChangeRequest>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<UsernameChangeRequest>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ResolveUsernameChangeRequest(Guid id, [FromBody] ResolveUsernameChangeRequest resolve)
     {
-        var request = await _usernameChangeApiService.Resolve(id, resolve);
+        var request = await _usernameChangeApiService.ResolveAsync(id, resolve);
         return Ok(new Envelope<UsernameChangeRequest>(request));
     }
 }

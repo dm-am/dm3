@@ -30,7 +30,7 @@ internal class MessagingMappingProfile : Profile
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(m => m.CreatedUtc))
             .ForMember(d => d.ModifiedUtc, s => s.MapFrom(m => m.ModifiedUtc))
             .ForMember(d => d.DeletedBy, s => s.MapFrom(m => m.DeletedBy))
-            .ForMember(d => d.DeletedAtUtc, s => s.MapFrom(m => m.DeletedAtUtc))
+            .ForMember(d => d.DeletedUtc, s => s.MapFrom(m => m.DeletedUtc))
             .ForMember(d => d.Edits, s => s.MapFrom(m => m.Edits));
         CreateMap<ApiMessage, CreateMessage>();
         CreateMap<ApiMessage, UpdateMessage>();

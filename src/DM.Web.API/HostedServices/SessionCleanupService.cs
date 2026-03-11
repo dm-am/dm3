@@ -66,13 +66,13 @@ internal class SessionCleanupService : BackgroundService
 
             using var scope = _serviceProvider.CreateScope();
             var mongoClient = scope.ServiceProvider.GetRequiredService<DmMongoClient>();
-            var collection = mongoClient.GetCollection<UserSessions>();
+            var collection = mongoClient.GetCollection<UserSession>();
 
             var now = DateTime.UtcNow;
 
             // Remove expired sessions from the Sessions array using $pull
-            var pullFilter = Builders<UserSessions>.Filter.Empty;
-            var pullUpdate = Builders<UserSessions>.Update.PullFilter(
+            var pullFilter = Builders<UserSession>.Filter.Empty;
+            var pullUpdate = Builders<UserSession>.Update.PullFilter(
                 s => s.Sessions,
                 session => session.ExpirationDate < now);
 
@@ -87,10 +87,10 @@ internal class SessionCleanupService : BackgroundService
                     pullResult.ModifiedCount);
             }
 
-            // Remove UserSessions documents with empty Sessions arrays
-            var emptyFilter = Builders<UserSessions>.Filter.Or(
-                Builders<UserSessions>.Filter.Eq(u => u.Sessions, null),
-                Builders<UserSessions>.Filter.Size(u => u.Sessions, 0));
+            // Remove UserSession documents with empty Sessions arrays
+            var emptyFilter = Builders<UserSession>.Filter.Or(
+                Builders<UserSession>.Filter.Eq(u => u.Sessions, null),
+                Builders<UserSession>.Filter.Size(u => u.Sessions, 0));
 
             var deleteResult = await collection.DeleteManyAsync(
                 emptyFilter,
@@ -98,7 +98,7 @@ internal class SessionCleanupService : BackgroundService
 
             if (deleteResult.DeletedCount > 0)
             {
-                _logger.LogInformation("[Session Cleanup] Deleted {Count} UserSessions document(s) with no active sessions",
+                _logger.LogInformation("[Session Cleanup] Deleted {Count} UserSession document(s) with no active sessions",
                     deleteResult.DeletedCount);
             }
 

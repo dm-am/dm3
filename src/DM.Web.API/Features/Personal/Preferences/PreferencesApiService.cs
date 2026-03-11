@@ -31,7 +31,7 @@ internal class PreferencesApiService : IPreferencesApiService
     public async Task<Preferences> GetMyPreferences()
     {
         var currentUser = _identityProvider.Current.User;
-        var user = await _userService.GetDetails(currentUser.Username);
+        var user = await _userService.GetDetailsAsync(currentUser.Username);
 
         var preferences = user.Settings != null
             ? _mapper.Map<Preferences>(user.Settings)
@@ -51,7 +51,7 @@ internal class PreferencesApiService : IPreferencesApiService
             Settings = _mapper.Map<ServiceUserSettings>(preferences)
         };
 
-        var updatedUser = await _userService.Update(updateUser);
+        var updatedUser = await _userService.UpdateAsync(updateUser);
         return _mapper.Map<Preferences>(updatedUser.Settings);
     }
 }

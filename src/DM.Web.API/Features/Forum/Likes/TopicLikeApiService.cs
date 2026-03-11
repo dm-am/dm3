@@ -25,20 +25,20 @@ internal class TopicLikeApiService : ITopicLikeApiService
     /// <inheritdoc />
     public async Task<Envelope<User>> LikeTopic(Guid topicId)
     {
-        var likedByUser = await _likeService.LikeTopic(topicId);
+        var likedByUser = await _likeService.LikeTopicAsync(topicId);
         return new Envelope<User>(_mapper.Map<User>(likedByUser));
     }
 
     /// <inheritdoc />
-    public Task UnlikeTopic(Guid topicId) => _likeService.UnlikeTopic(topicId);
+    public Task UnlikeTopic(Guid topicId) => _likeService.UnlikeTopicAsync(topicId);
 
     /// <inheritdoc />
     public async Task<Envelope<User>> LikeComment(Guid commentId)
     {
-        var likedByUser = await _likeService.LikeComment(commentId);
+        var likedByUser = await _likeService.LikeCommentAsync(commentId);
         return new Envelope<User>(_mapper.Map<User>(likedByUser));
     }
 
     /// <inheritdoc />
-    public Task UnlikeComment(Guid commentId) => _likeService.UnlikeComment(commentId);
+    public Task UnlikeComment(Guid commentId) => _likeService.UnlikeCommentAsync(commentId);
 }

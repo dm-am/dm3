@@ -47,7 +47,7 @@ public class GameUserController : ControllerBase
     /// <response code="404">Game not found</response>
     [HttpGet(Name = nameof(GetGameUsers))]
     [ProducesResponseType(typeof(ListEnvelope<GameUser>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameUsers(Guid id, [FromQuery] string? role = null)
     {
         var users = await _userApiService.GetUsers(id, role);
@@ -70,9 +70,9 @@ public class GameUserController : ControllerBase
     [HttpDelete("{userId:guid}", Name = nameof(RemoveGameUser))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveGameUser(Guid id, Guid userId)
     {
         await _userApiService.RemoveUser(id, userId);
@@ -91,7 +91,7 @@ public class GameUserController : ControllerBase
     /// <response code="404">Game not found</response>
     [HttpGet("assistants", Name = nameof(GetGameAssistants))]
     [ProducesResponseType(typeof(ListEnvelope<GameUser>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameAssistants(Guid id)
     {
         var assistants = await _userApiService.GetAssistants(id);
@@ -110,9 +110,9 @@ public class GameUserController : ControllerBase
     [HttpDelete("assistants/{username}", Name = nameof(RemoveGameAssistant))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveGameAssistant(Guid id, string username)
     {
         await _userApiService.RemoveAssistantByUsername(id, username);

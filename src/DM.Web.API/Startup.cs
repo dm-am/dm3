@@ -54,9 +54,9 @@ namespace DM.Web.API;
 internal class Startup(IConfiguration configuration, IWebHostEnvironment environment)
 {
     private readonly IWebHostEnvironment _environment = environment;
-    private IHttpContextAccessor httpContextAccessor = null!;
-    private IBbParserProvider bbParserProvider = null!;
-    private bool migrateOnStart;
+    private IHttpContextAccessor _httpContextAccessor = null!;
+    private IBbParserProvider _bbParserProvider = null!;
+    private bool _migrateOnStart;
 
     /// <summary>
     /// Configure application services
@@ -64,7 +64,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
     /// <param name="services">Service collection</param>
     public void ConfigureServices(IServiceCollection services)
     {
-        migrateOnStart = configuration.GetValue<bool>("MigrateOnStart");
+        _migrateOnStart = configuration.GetValue<bool>("MigrateOnStart");
 
         services
             .AddOptions()
@@ -136,7 +136,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
 
         // Only register hosted services when NOT in migration mode
         // Migration mode runs migrations and exits - no need for cleanup services
-        if (!migrateOnStart)
+        if (!_migrateOnStart)
         {
             services.AddHostedService<RealtimeNotificationConsumer>();
             services.AddHostedService<WarmupService>();
@@ -275,8 +275,8 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                 o.Address = new Uri(searchConfig.GrpcEndpoint));
         }
 
-        httpContextAccessor = new HttpContextAccessor();
-        bbParserProvider = new BbParserProvider();
+        _httpContextAccessor = new HttpContextAccessor();
+        _bbParserProvider = new BbParserProvider();
 
         services.AddSignalR();
 
@@ -288,7 +288,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         services
             .AddSwaggerGen(c => c.ConfigureGen())
             .AddMvc(config => config.ModelBinderProviders.Insert(0, new ReadableGuidBinderProvider()))
-            .AddJsonOptions(config => config.Setup(httpContextAccessor, bbParserProvider));
+            .AddJsonOptions(config => config.Setup(_httpContextAccessor, _bbParserProvider));
     }
 
     /// <summary>
@@ -300,16 +300,16 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         builder.RegisterDefaultTypes();
         builder.RegisterMapper();
 
-        builder.RegisterInstance(httpContextAccessor)
+        builder.RegisterInstance(_httpContextAccessor)
             .AsSelf()
             .AsImplementedInterfaces();
-        builder.RegisterInstance(bbParserProvider)
+        builder.RegisterInstance(_bbParserProvider)
             .AsSelf()
             .AsImplementedInterfaces();
 
         // Register MessageQueuingModule with OutboxProcessor enabled only when NOT migrating
         // During migration, we don't want background services accessing the database
-        builder.RegisterModuleOnce(new MessageQueuingModule(enableOutboxProcessor: !migrateOnStart));
+        builder.RegisterModuleOnce(new MessageQueuingModule(enableOutboxProcessor: !_migrateOnStart));
 
         builder.RegisterModuleOnce<PersistenceModule>();
         builder.RegisterModuleOnce<MailModule>();
@@ -341,7 +341,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         DmDbContext dbContext,
         ILogger<Startup> logger)
     {
-        if (migrateOnStart)
+        if (_migrateOnStart)
         {
             dbContext.Database.Migrate();
             Environment.Exit(0);

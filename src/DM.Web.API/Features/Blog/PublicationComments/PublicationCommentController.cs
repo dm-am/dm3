@@ -67,8 +67,8 @@ public class PublicationCommentController : ControllerBase
     /// <response code="200">Paginated list of comments</response>
     /// <response code="404">Publication not found</response>
     [HttpGet("{id}/comments", Name = nameof(GetPublicationComments))]
-    [ProducesResponseType(typeof(ListEnvelope<Comment>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(ListEnvelope<Comment>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublicationComments(Guid id, [FromQuery] PagingQuery q) =>
         Ok(await _commentApiService.Get(id, q));
 
@@ -94,11 +94,11 @@ public class PublicationCommentController : ControllerBase
     /// <response code="404">Publication not found</response>
     [HttpPost("{id}/comments", Name = nameof(PostPublicationComment))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Comment>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostPublicationComment(Guid id, [FromBody] CreateCommentRequest request)
     {
         var result = await _commentApiService.Create(id, request);
@@ -121,8 +121,8 @@ public class PublicationCommentController : ControllerBase
     /// <response code="200">Comment details</response>
     /// <response code="404">Comment not found</response>
     [HttpGet("~/v1/blogs/comments/{id}", Name = nameof(GetPublicationComment))]
-    [ProducesResponseType(typeof(Envelope<Comment>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublicationComment(Guid id) => Ok(await _commentApiService.Get(id));
 
     /// <summary>
@@ -148,11 +148,11 @@ public class PublicationCommentController : ControllerBase
     /// <response code="404">Comment not found</response>
     [HttpPatch("~/v1/blogs/comments/{id}", Name = nameof(PatchPublicationComment))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Comment>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchPublicationComment(Guid id, [FromBody] Comment comment) =>
         Ok(await _commentApiService.Update(id, comment));
 
@@ -174,10 +174,10 @@ public class PublicationCommentController : ControllerBase
     /// <response code="404">Comment not found</response>
     [HttpDelete("~/v1/blogs/comments/{id}", Name = nameof(DeletePublicationComment))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeletePublicationComment(Guid id)
     {
         await _commentApiService.Delete(id);
@@ -203,11 +203,11 @@ public class PublicationCommentController : ControllerBase
     /// <response code="409">User already liked this comment</response>
     [HttpPost("~/v1/blogs/comments/{id}/likes", Name = nameof(PostPublicationCommentLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<User>), 201)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
-    [ProducesResponseType(typeof(GeneralError), 409)]
+    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> PostPublicationCommentLike(Guid id)
     {
         var result = await _likeApiService.LikePublicationComment(id);
@@ -232,11 +232,11 @@ public class PublicationCommentController : ControllerBase
     /// <response code="409">User has not liked this comment</response>
     [HttpDelete("~/v1/blogs/comments/{id}/likes", Name = nameof(DeletePublicationCommentLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
-    [ProducesResponseType(typeof(GeneralError), 409)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> DeletePublicationCommentLike(Guid id)
     {
         await _likeApiService.UnlikePublicationComment(id);

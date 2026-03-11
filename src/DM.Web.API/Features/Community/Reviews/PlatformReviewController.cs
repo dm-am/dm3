@@ -50,7 +50,7 @@ public class PlatformReviewController : ControllerBase
     /// <param name="approved">Filter by approval status. null=approved only (default), false=all (admin only)</param>
     /// <response code="200">List of platform reviews</response>
     [HttpGet(Name = nameof(GetPlatformReviews))]
-    [ProducesResponseType(typeof(ListEnvelope<Review>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<Review>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPlatformReviews(
         [FromQuery] PagingQuery q,
         [FromQuery] bool? approved = null)
@@ -84,9 +84,9 @@ public class PlatformReviewController : ControllerBase
     /// <response code="401">User not authenticated</response>
     [HttpPost(Name = nameof(CreatePlatformReview))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Review>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
+    [ProducesResponseType(typeof(Envelope<Review>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CreatePlatformReview([FromBody] CreateReviewRequest request)
     {
         var createReview = new CreatePlatformReview

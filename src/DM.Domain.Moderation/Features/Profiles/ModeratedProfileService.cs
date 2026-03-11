@@ -35,9 +35,9 @@ internal class ModeratedProfileService : IModeratedProfileService
     public async Task<UserDetails> GetProfile(string username)
     {
         var normalizedUsername = username.ToLowerInvariant();
-        var user = await _cache.GetOrCreate(
+        var user = await _cache.GetOrCreateAsync(
             $"user_details_{normalizedUsername}",
-            () => _userRepository.GetUserDetails(username),
+            () => _userRepository.GetUserDetailsAsync(username),
             CachePolicy.Medium);
 
         if (user == null)
@@ -51,7 +51,7 @@ internal class ModeratedProfileService : IModeratedProfileService
     /// <inheritdoc />
     public async Task<UserDetails> ModerateProfile(string username, string info)
     {
-        var user = await _userRepository.GetUser(username);
+        var user = await _userRepository.GetUserAsync(username);
         if (user == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, $"User '{username}' not found");
@@ -62,7 +62,7 @@ internal class ModeratedProfileService : IModeratedProfileService
         await _moderatedProfileRepository.UpdateUserInfo(username, info);
 
         // Invalidate cache
-        await _cache.Invalidate($"user_details_{username.ToLowerInvariant()}");
+        await _cache.InvalidateAsync($"user_details_{username.ToLowerInvariant()}");
 
         return await GetProfile(username);
     }
@@ -84,6 +84,6 @@ internal class ModeratedProfileService : IModeratedProfileService
         await _moderatedProfileRepository.SetUserRole(username, role);
 
         // Invalidate cache
-        await _cache.Invalidate($"user_details_{username.ToLowerInvariant()}");
+        await _cache.InvalidateAsync($"user_details_{username.ToLowerInvariant()}");
     }
 }

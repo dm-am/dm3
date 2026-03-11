@@ -37,17 +37,17 @@ public class UserSettings
     /// <summary>
     /// Discord notification channel preferences. Null = channel not connected.
     /// </summary>
-    public NotificationChannelPreferences? DiscordPreferences { get; set; }
+    public NotificationChannelPreference? DiscordPreferences { get; set; }
 
     /// <summary>
     /// Telegram notification channel preferences. Null = channel not connected.
     /// </summary>
-    public NotificationChannelPreferences? TelegramPreferences { get; set; }
+    public NotificationChannelPreference? TelegramPreferences { get; set; }
 
     /// <summary>
     /// Email notification channel preferences.
     /// Unlike Discord/Telegram, email is always "connected" via user's registered email.
     /// Null = use defaults (disabled by default to avoid spam).
     /// </summary>
-    public NotificationChannelPreferences? EmailPreferences { get; set; }
+    public NotificationChannelPreference? EmailPreferences { get; set; }
 }

@@ -44,7 +44,7 @@ public class PreferencesController : ControllerBase
     /// <response code="401">Authentication required</response>
     [HttpGet(Name = nameof(GetMyPreferences))]
     [ProducesResponseType(typeof(Preferences), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetMyPreferences() =>
         Ok(await _preferencesApiService.GetMyPreferences());
 
@@ -60,8 +60,8 @@ public class PreferencesController : ControllerBase
     /// <response code="401">Authentication required</response>
     [HttpPatch(Name = nameof(UpdateMyPreferences))]
     [ProducesResponseType(typeof(Preferences), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> UpdateMyPreferences([FromBody] Preferences preferences) =>
         Ok(await _preferencesApiService.UpdateMyPreferences(preferences));
 }

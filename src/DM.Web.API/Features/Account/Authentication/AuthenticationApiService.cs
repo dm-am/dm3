@@ -77,7 +77,7 @@ internal class AuthenticationApiService : IAuthenticationApiService
         switch (identity.Error)
         {
             case AuthenticationError.NoError:
-                var userDetails = await _userService.GetDetails(_identityProvider.Current.User.Username);
+                var userDetails = await _userService.GetDetailsAsync(_identityProvider.Current.User.Username);
                 var response = new LoginResponse
                 {
                     User = _mapper.Map<User>(userDetails),

@@ -23,9 +23,9 @@ internal class BlogIntentionResolver : IIntentionResolver<BlogIntention, BlogMod
             BlogIntention.Edit =>
                 isOwner || user.Role >= UserRole.Admin,
 
-            // Owner or admin can delete
+            // Owner or senior moderator+ can delete
             BlogIntention.Delete =>
-                isOwner || user.Role >= UserRole.Admin,
+                isOwner || user.Role >= UserRole.SeniorModerator,
 
             // Owner can create rubrics
             BlogIntention.CreateRubric =>

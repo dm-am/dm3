@@ -41,8 +41,8 @@ public class PublicationController : ControllerBase
     /// <response code="200">List of publications</response>
     /// <response code="404">Blog not found</response>
     [HttpGet("blogs/{blogId:guid}/publications", Name = nameof(GetPublications))]
-    [ProducesResponseType(typeof(ListEnvelope<Publication>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(ListEnvelope<Publication>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublications(Guid blogId, [FromQuery] Guid? rubricId, [FromQuery] PagingQuery q) =>
         Ok(await _apiService.GetPublications(blogId, rubricId, q));
 
@@ -53,8 +53,8 @@ public class PublicationController : ControllerBase
     /// <response code="200">Publication details</response>
     /// <response code="404">Publication not found</response>
     [HttpGet("publications/{id:guid}", Name = nameof(GetPublication))]
-    [ProducesResponseType(typeof(Envelope<Publication>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Publication>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublication(Guid id) =>
         Ok(await _apiService.GetPublication(id));
 
@@ -70,11 +70,11 @@ public class PublicationController : ControllerBase
     /// <response code="404">Blog not found</response>
     [HttpPost("blogs/{blogId:guid}/publications", Name = nameof(PostPublication))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Publication>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Publication>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostPublication(Guid blogId, [FromBody] CreatePublicationRequest request)
     {
         var result = await _apiService.CreatePublication(blogId, request);
@@ -93,11 +93,11 @@ public class PublicationController : ControllerBase
     /// <response code="404">Publication not found</response>
     [HttpPatch("publications/{id:guid}", Name = nameof(PatchPublication))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Publication>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Publication>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchPublication(Guid id, [FromBody] UpdatePublicationRequest request) =>
         Ok(await _apiService.UpdatePublication(id, request));
 
@@ -111,10 +111,10 @@ public class PublicationController : ControllerBase
     /// <response code="404">Publication not found</response>
     [HttpDelete("publications/{id:guid}", Name = nameof(DeletePublication))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeletePublication(Guid id)
     {
         await _apiService.DeletePublication(id);
@@ -140,11 +140,11 @@ public class PublicationController : ControllerBase
     /// <response code="409">User already liked this publication</response>
     [HttpPost("publications/{id:guid}/likes", Name = nameof(PostPublicationLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<User>), 201)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
-    [ProducesResponseType(typeof(GeneralError), 409)]
+    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> PostPublicationLike(Guid id)
     {
         var result = await _likeApiService.LikePublication(id);
@@ -169,11 +169,11 @@ public class PublicationController : ControllerBase
     /// <response code="409">User has not liked this publication</response>
     [HttpDelete("publications/{id:guid}/likes", Name = nameof(DeletePublicationLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
-    [ProducesResponseType(typeof(GeneralError), 409)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> DeletePublicationLike(Guid id)
     {
         await _likeApiService.UnlikePublication(id);

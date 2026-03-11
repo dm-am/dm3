@@ -24,7 +24,7 @@ public interface IUserBlacklistChecker
     /// <param name="blockedUserId">The user to check</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>True if blockedUserId is in ownerId's blacklist</returns>
-    Task<bool> IsBlocked(Guid ownerId, Guid blockedUserId, CancellationToken ct = default);
+    Task<bool> IsBlockedAsync(Guid ownerId, Guid blockedUserId, CancellationToken ct = default);
 
     /// <summary>
     /// Get IDs of users blocked by a specific user
@@ -32,7 +32,7 @@ public interface IUserBlacklistChecker
     /// <param name="ownerId">The user who owns the blacklist</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>Collection of blocked user IDs</returns>
-    Task<IEnumerable<Guid>> GetBlockedUserIds(Guid ownerId, CancellationToken ct = default);
+    Task<IEnumerable<Guid>> GetBlockedUserIdsAsync(Guid ownerId, CancellationToken ct = default);
 
     /// <summary>
     /// Get IDs of users blocked by a specific user, only if the specified flag is enabled.
@@ -42,5 +42,5 @@ public interface IUserBlacklistChecker
     /// <param name="flag">The blacklist setting flag to check</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>Collection of blocked user IDs if flag is enabled, empty otherwise</returns>
-    Task<IReadOnlySet<Guid>> GetBlockedUserIdsIfFlagEnabled(Guid ownerId, UserBlacklistSettings flag, CancellationToken ct = default);
+    Task<IReadOnlySet<Guid>> GetBlockedUserIdsIfFlagEnabledAsync(Guid ownerId, UserBlacklistSettings flag, CancellationToken ct = default);
 }

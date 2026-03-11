@@ -85,7 +85,7 @@ internal class GameCharacterStatusChangedNotificationGenerator : INotificationGe
         // For public statuses (not Declined), also notify game subscribers with StatusChanges enabled
         if (!PrivateStatuses.Contains(data.Status))
         {
-            var readerSubscriptions = await _subscriptionRepository.GetByTargetWithSettings(
+            var readerSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
                 SubscriptionTargetType.Game,
                 data.GameId,
                 SubscriptionSettings.StatusChanges);

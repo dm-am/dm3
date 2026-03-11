@@ -1,6 +1,6 @@
 using System;
 using DM.Domain.Core.Enums;
-using DM.Infrastructure.Persistence.Entities.CrossDomain;
+using DM.Infrastructure.Persistence.Entities.Shared;
 
 namespace DM.Infrastructure.Persistence.Shared.Likes;
 

@@ -43,50 +43,50 @@ internal class TopicLikeService : ITopicLikeService
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser> LikeTopic(Guid topicId)
+    public async Task<GeneralUser> LikeTopicAsync(Guid topicId)
     {
         var topic = await _topicService.GetAsync(topicId);
         _intentionManager.ThrowIfForbidden(TopicIntention.Like, topic);
 
         // Check if topic author has blocked the current user
         var currentUserId = _identityProvider.Current.User.UserId;
-        if (topic.Author != null && await _userBlacklistChecker.IsBlocked(topic.Author.UserId, currentUserId))
+        if (topic.Author != null && await _userBlacklistChecker.IsBlockedAsync(topic.Author.UserId, currentUserId))
         {
             throw new HttpException(HttpStatusCode.Forbidden, "You cannot like this topic");
         }
 
-        return await _likeOperations.Like(topic, EventType.LikedTopic);
+        return await _likeOperations.LikeAsync(topic, EventType.LikedTopic);
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser> LikeComment(Guid commentId)
+    public async Task<GeneralUser> LikeCommentAsync(Guid commentId)
     {
-        var comment = await _commentService.Get(commentId);
+        var comment = await _commentService.GetAsync(commentId);
         _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
 
         // Check if comment author has blocked the current user
         var currentUserId = _identityProvider.Current.User.UserId;
-        if (comment.Author != null && await _userBlacklistChecker.IsBlocked(comment.Author.UserId, currentUserId))
+        if (comment.Author != null && await _userBlacklistChecker.IsBlockedAsync(comment.Author.UserId, currentUserId))
         {
             throw new HttpException(HttpStatusCode.Forbidden, "You cannot like this comment");
         }
 
-        return await _likeOperations.Like(comment, EventType.LikedTopicComment);
+        return await _likeOperations.LikeAsync(comment, EventType.LikedTopicComment);
     }
 
     /// <inheritdoc />
-    public async Task UnlikeTopic(Guid topicId)
+    public async Task UnlikeTopicAsync(Guid topicId)
     {
         var topic = await _topicService.GetAsync(topicId);
         _intentionManager.ThrowIfForbidden(TopicIntention.Like, topic);
-        await _likeOperations.Unlike(topic);
+        await _likeOperations.UnlikeAsync(topic);
     }
 
     /// <inheritdoc />
-    public async Task UnlikeComment(Guid commentId)
+    public async Task UnlikeCommentAsync(Guid commentId)
     {
-        var comment = await _commentService.Get(commentId);
+        var comment = await _commentService.GetAsync(commentId);
         _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
-        await _likeOperations.Unlike(comment);
+        await _likeOperations.UnlikeAsync(comment);
     }
 }

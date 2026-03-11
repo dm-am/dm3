@@ -18,7 +18,7 @@ internal class LikeRepository : ILikeRepository
     }
 
     /// <inheritdoc />
-    public Task Add(Entities.CrossDomain.Like like)
+    public Task Add(Entities.Shared.Like like)
     {
         _dbContext.Likes.Add(like);
         return _dbContext.SaveChangesAsync();

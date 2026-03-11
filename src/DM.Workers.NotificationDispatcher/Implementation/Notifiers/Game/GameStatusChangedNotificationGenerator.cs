@@ -67,7 +67,7 @@ internal class GameStatusChangedNotificationGenerator : INotificationGenerator
         }
 
         // Get subscribers (readers) who have StatusChanges enabled
-        var readerSubscriptions = await _subscriptionRepository.GetByTargetWithSettings(
+        var readerSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.Game,
             entityId,
             SubscriptionSettings.StatusChanges);

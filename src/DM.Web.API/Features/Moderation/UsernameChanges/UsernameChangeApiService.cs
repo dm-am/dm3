@@ -26,23 +26,23 @@ internal class UsernameChangeApiService : IUsernameChangeApiService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<UsernameChangeRequest>> GetPendingRequests()
+    public async Task<IEnumerable<UsernameChangeRequest>> GetPendingRequestsAsync()
     {
-        var requests = await _usernameChangeService.GetPendingRequests();
+        var requests = await _usernameChangeService.GetPendingRequestsAsync();
         return requests.Select(r => _mapper.Map<UsernameChangeRequest>(r));
     }
 
     /// <inheritdoc />
-    public async Task<UsernameChangeRequest> GetById(Guid id)
+    public async Task<UsernameChangeRequest> GetByIdAsync(Guid id)
     {
-        var request = await _usernameChangeService.GetById(id);
+        var request = await _usernameChangeService.GetByIdAsync(id);
         if (request == null)
             throw new HttpException(HttpStatusCode.NotFound, "Username change request not found");
         return _mapper.Map<UsernameChangeRequest>(request);
     }
 
     /// <inheritdoc />
-    public async Task<UsernameChangeRequest> Resolve(Guid id, ResolveUsernameChangeRequest resolve)
+    public async Task<UsernameChangeRequest> ResolveAsync(Guid id, ResolveUsernameChangeRequest resolve)
     {
         var domainResolve = new DM.Domain.Account.Features.UsernameChange.ResolveUsernameChangeRequest
         {
@@ -50,7 +50,7 @@ internal class UsernameChangeApiService : IUsernameChangeApiService
             Status = resolve.Status,
             Comment = resolve.Comment
         };
-        var result = await _usernameChangeService.Resolve(domainResolve);
+        var result = await _usernameChangeService.ResolveAsync(domainResolve);
         return _mapper.Map<UsernameChangeRequest>(result);
     }
 }

@@ -6,12 +6,17 @@
 
 ## Требования к хешированию паролей
 
-| Параметр | Минимум | Рекомендация |
-|----------|---------|--------------|
-| Алгоритм | PBKDF2-SHA256 | — |
-| Итерации | 600,000 | OWASP 2024 |
-| Salt | 32 bytes | — |
+| Параметр | Значение | Обоснование |
+|----------|----------|-------------|
+| Алгоритм | **Argon2id** | OWASP #1 рекомендация 2025, memory-hard |
+| Memory | 46 MiB (m=47104) | Защита от GPU-атак |
+| Iterations | t=1 | OWASP рекомендация |
+| Parallelism | p=1 | OWASP рекомендация |
+| Salt | 75 bytes | Избыточно, но безопасно (минимум 16 bytes) |
 | Hash | 32 bytes | — |
+
+> **Почему не PBKDF2?** PBKDF2 рекомендуется только для FIPS-140 compliance.
+> Argon2id устойчивее к GPU/ASIC атакам благодаря memory-hardness.
 
 **Файл:** `src/DM.Domain.Account/Features/Security/SecurityManager.cs`
 
@@ -35,7 +40,12 @@
 | Атака | Требуемая защита |
 |-------|------------------|
 | XSS | HttpOnly cookies, CSP header |
-| CSRF | SameSite=Strict |
+| CSRF | SameSite=Lax + CSRF middleware |
+
+> **Почему SameSite=Lax, а не Strict?** Lax — OWASP рекомендация для 90% приложений.
+> Strict блокирует cookies при переходах из email/внешних ссылок.
+> Lax необходим для mirror transfer. Defense-in-depth: CSRF middleware дополнительно защищает.
+
 | Brute-force | Rate limiting + lockout (15 попыток → 30 мин) |
 | Timing | Constant-time comparison (FixedTimeEquals) |
 | Token forgery | AES-GCM auth tag |
@@ -105,7 +115,7 @@
 | Предупреждение коротких паролей | ✓ 15+ символов на фронтенде |
 | Device info в сессиях | ✓ IP, User-Agent, время |
 | Таймауты сессий | ✓ 24ч / 30д |
-| Argon2id хеширование | ✗ PBKDF2-SHA256 (достаточно при 600K итераций) |
+| Argon2id хеширование | ✓ Реализовано (OWASP #1) |
 | Security audit log | ✓ MongoDB + API просмотра |
 
 ### Планируется (AAL2)

@@ -84,7 +84,7 @@ public class OutboxProcessor : BackgroundService
         {
             try
             {
-                await producer.Send((EventType)evt.EventType, evt.AggregateId);
+                await producer.SendAsync((EventType)evt.EventType, evt.AggregateId);
 
                 // Success: mark as processed
                 evt.IsProcessed = true;

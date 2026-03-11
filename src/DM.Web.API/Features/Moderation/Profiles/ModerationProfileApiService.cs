@@ -54,7 +54,7 @@ internal class ModerationProfileApiService : IModerationProfileApiService
         var isSeniorMod = callerRole >= UserRole.SeniorModerator;
 
         // Get target user
-        var user = await _userService.GetDetails(login);
+        var user = await _userService.GetDetailsAsync(login);
         if (user == null)
             throw new HttpException(HttpStatusCode.NotFound, $"User '{login}' not found");
 

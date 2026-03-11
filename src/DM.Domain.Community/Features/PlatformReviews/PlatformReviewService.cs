@@ -57,7 +57,7 @@ internal class PlatformReviewService : IPlatformReviewService
         var authorId = _identityProvider.Current.User.UserId;
         if (!string.IsNullOrEmpty(createReview.AuthorUsername))
         {
-            var author = await _userLookupService.Get(createReview.AuthorUsername);
+            var author = await _userLookupService.GetAsync(createReview.AuthorUsername);
             authorId = author.UserId;
         }
 

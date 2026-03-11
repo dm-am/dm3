@@ -38,21 +38,21 @@ internal class SubscriptionService : ISubscriptionService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Subscription>> GetMySubscriptions(CancellationToken ct = default)
+    public async Task<IEnumerable<Subscription>> GetMySubscriptionsAsync(CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
-        return await _repository.GetUserSubscriptions(userId, ct);
+        return await _repository.GetUserSubscriptionsAsync(userId, ct);
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Subscription>> GetMySubscriptions(SubscriptionTargetType targetType, CancellationToken ct = default)
+    public async Task<IEnumerable<Subscription>> GetMySubscriptionsAsync(SubscriptionTargetType targetType, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
-        return await _repository.GetUserSubscriptions(userId, targetType, ct);
+        return await _repository.GetUserSubscriptionsAsync(userId, targetType, ct);
     }
 
     /// <inheritdoc />
-    public async Task<Subscription> Subscribe(SubscriptionTargetType targetType, Guid targetId, SubscriptionSettings? settings = null, CancellationToken ct = default)
+    public async Task<Subscription> SubscribeAsync(SubscriptionTargetType targetType, Guid targetId, SubscriptionSettings? settings = null, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
 
@@ -63,7 +63,7 @@ internal class SubscriptionService : ISubscriptionService
         }
 
         // Check if already subscribed
-        var existing = await _repository.Find(userId, targetType, targetId, ct);
+        var existing = await _repository.FindAsync(userId, targetType, targetId, ct);
         if (existing != null)
         {
             return existing;
@@ -80,13 +80,13 @@ internal class SubscriptionService : ISubscriptionService
             CreatedUtc = _dateTimeProvider.Now
         };
 
-        return await _repository.Create(subscription, ct);
+        return await _repository.CreateAsync(subscription, ct);
     }
 
     /// <inheritdoc />
-    public async Task<Subscription> UpdateSettings(Guid subscriptionId, SubscriptionSettings settings, CancellationToken ct = default)
+    public async Task<Subscription> UpdateSettingsAsync(Guid subscriptionId, SubscriptionSettings settings, CancellationToken ct = default)
     {
-        var subscription = await _repository.Get(subscriptionId, ct);
+        var subscription = await _repository.GetAsync(subscriptionId, ct);
 
         if (subscription == null)
         {
@@ -107,13 +107,13 @@ internal class SubscriptionService : ISubscriptionService
             UpdatedUtc = _dateTimeProvider.Now
         };
 
-        return await _repository.Update(update, ct);
+        return await _repository.UpdateAsync(update, ct);
     }
 
     /// <inheritdoc />
-    public async Task Unsubscribe(Guid subscriptionId, CancellationToken ct = default)
+    public async Task UnsubscribeAsync(Guid subscriptionId, CancellationToken ct = default)
     {
-        var subscription = await _repository.Get(subscriptionId, ct);
+        var subscription = await _repository.GetAsync(subscriptionId, ct);
 
         if (subscription == null)
         {
@@ -127,27 +127,27 @@ internal class SubscriptionService : ISubscriptionService
             throw new HttpException(HttpStatusCode.Forbidden, "Cannot unsubscribe another user");
         }
 
-        await _repository.Delete(subscriptionId, ct);
+        await _repository.DeleteAsync(subscriptionId, ct);
     }
 
     /// <inheritdoc />
-    public async Task UnsubscribeByTarget(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
+    public async Task UnsubscribeByTargetAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
-        await _repository.Delete(userId, targetType, targetId, ct);
+        await _repository.DeleteAsync(userId, targetType, targetId, ct);
     }
 
     /// <inheritdoc />
-    public async Task<Subscription?> GetSubscription(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
+    public async Task<Subscription?> GetSubscriptionAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
-        return await _repository.Find(userId, targetType, targetId, ct);
+        return await _repository.FindAsync(userId, targetType, targetId, ct);
     }
 
     /// <inheritdoc />
-    public async Task<Subscription?> GetById(Guid subscriptionId, CancellationToken ct = default)
+    public async Task<Subscription?> GetByIdAsync(Guid subscriptionId, CancellationToken ct = default)
     {
-        var subscription = await _repository.Get(subscriptionId, ct);
+        var subscription = await _repository.GetAsync(subscriptionId, ct);
 
         // Verify ownership
         if (subscription != null)
@@ -163,9 +163,9 @@ internal class SubscriptionService : ISubscriptionService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetTargetSubscribers(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
+    public async Task<IEnumerable<GeneralUser>> GetTargetSubscribersAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
     {
-        var subscriberIds = await _repository.GetTargetSubscriberIds(targetType, targetId, ct);
+        var subscriberIds = await _repository.GetTargetSubscriberIdsAsync(targetType, targetId, ct);
         var subscriberIdList = subscriberIds.ToList();
 
         if (!subscriberIdList.Any())
@@ -176,7 +176,7 @@ internal class SubscriptionService : ISubscriptionService
         var users = new List<GeneralUser>();
         foreach (var subscriberId in subscriberIdList)
         {
-            var user = await _userLookupService.Get(subscriberId);
+            var user = await _userLookupService.GetAsync(subscriberId);
             if (user != null)
             {
                 users.Add(user);

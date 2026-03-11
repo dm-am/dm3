@@ -40,7 +40,7 @@ public class BlogReaderController : ControllerBase
     /// <response code="404">Blog not found</response>
     [HttpGet(Name = nameof(GetBlogReaders))]
     [ProducesResponseType(typeof(ListEnvelope<BlogUser>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogReaders(Guid id)
     {
         var readers = await _userApiService.GetReaders(id);
@@ -62,10 +62,10 @@ public class BlogReaderController : ControllerBase
     [HttpPost(Name = nameof(SubscribeToBlog))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(BlogUser), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> SubscribeToBlog(Guid id)
     {
         var reader = await _userApiService.Subscribe(id);
@@ -82,8 +82,8 @@ public class BlogReaderController : ControllerBase
     [HttpDelete(Name = nameof(UnsubscribeFromBlog))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UnsubscribeFromBlog(Guid id)
     {
         await _userApiService.Unsubscribe(id);

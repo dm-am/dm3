@@ -35,7 +35,7 @@ internal class PasswordResetMailSender : IPasswordResetMailSender
         var emailBody = await _renderer.RenderAsync(new PasswordResetConfirmationViewModel(
             Username: username,
             ConfirmationLinkUrl: confirmationLinkUrl.ToString()));
-        await _mailSender.Send(new EmailLetter
+        await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
             Subject = $"Подтверждение сброса пароля на DM.AM для {username}",

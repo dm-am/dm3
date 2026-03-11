@@ -38,7 +38,7 @@ public class StatisticsController : ControllerBase
     /// </remarks>
     /// <response code="200">Statistics retrieved successfully</response>
     [HttpGet("v1/stats", Name = nameof(GetStats))]
-    [ProducesResponseType(typeof(Envelope<LiveStats>), 200)]
+    [ProducesResponseType(typeof(Envelope<LiveStats>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetStats() =>
         Ok(await _statsService.GetLiveStats());
 
@@ -53,8 +53,8 @@ public class StatisticsController : ControllerBase
     /// <response code="200">Yearly leaderboards</response>
     /// <response code="404">Year not found or no data available</response>
     [HttpGet("v1/leaderboards/{year:int}", Name = nameof(GetYearlyLeaderboards))]
-    [ProducesResponseType(typeof(Envelope<Leaderboards>), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(Envelope<Leaderboards>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetYearlyLeaderboards(int year) =>
         Ok(await _statsService.GetLeaderboards(year, null));
 
@@ -66,8 +66,8 @@ public class StatisticsController : ControllerBase
     /// <response code="200">Monthly leaderboards</response>
     /// <response code="404">Period not found or no data available</response>
     [HttpGet("v1/leaderboards/{year:int}/{month:int}", Name = nameof(GetMonthlyLeaderboards))]
-    [ProducesResponseType(typeof(Envelope<Leaderboards>), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(Envelope<Leaderboards>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMonthlyLeaderboards(int year, int month) =>
         Ok(await _statsService.GetLeaderboards(year, month));
 
@@ -82,8 +82,8 @@ public class StatisticsController : ControllerBase
     /// <response code="200">Yearly report</response>
     /// <response code="404">Year not found or no data available</response>
     [HttpGet("v1/reports/{year:int}", Name = nameof(GetYearlyReport))]
-    [ProducesResponseType(typeof(Envelope<PeriodReport>), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(Envelope<PeriodReport>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetYearlyReport(int year) =>
         Ok(await _statsService.GetPeriodReport(year, null));
 
@@ -95,8 +95,8 @@ public class StatisticsController : ControllerBase
     /// <response code="200">Monthly report</response>
     /// <response code="404">Period not found or no data available</response>
     [HttpGet("v1/reports/{year:int}/{month:int}", Name = nameof(GetMonthlyReport))]
-    [ProducesResponseType(typeof(Envelope<PeriodReport>), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(Envelope<PeriodReport>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMonthlyReport(int year, int month) =>
         Ok(await _statsService.GetPeriodReport(year, month));
 
@@ -111,8 +111,8 @@ public class StatisticsController : ControllerBase
     /// <response code="200">Report comparison</response>
     /// <response code="400">Invalid period format</response>
     [HttpGet("v1/reports/compare", Name = nameof(CompareReports))]
-    [ProducesResponseType(typeof(Envelope<PeriodComparison>), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 400)]
+    [ProducesResponseType(typeof(Envelope<PeriodComparison>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CompareReports([FromQuery] string periods)
     {
         var parts = periods?.Split(',');

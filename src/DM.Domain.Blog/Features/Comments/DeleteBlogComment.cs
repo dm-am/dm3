@@ -25,7 +25,7 @@ public class DeleteBlogComment
     /// <summary>
     /// Deletion timestamp
     /// </summary>
-    public DateTimeOffset DeletedAtUtc { get; set; }
+    public DateTimeOffset DeletedUtc { get; set; }
 
     /// <summary>
     /// New comment count after deletion

@@ -2,7 +2,7 @@ using AutoMapper;
 using DM.Domain.Personal.Features.Blacklists;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Domain.Personal.Features.ProfileNotes;
-using DM.Infrastructure.Persistence.Entities.Notifications;
+using DM.Infrastructure.Persistence.Entities.Personal.Notifications;
 using DbUserBlacklist = DM.Infrastructure.Persistence.Entities.Account.UserBlacklist;
 using DbUserProfileNote = DM.Infrastructure.Persistence.Entities.Account.UserProfileNote;
 

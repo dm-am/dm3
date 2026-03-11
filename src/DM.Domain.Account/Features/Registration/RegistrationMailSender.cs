@@ -35,7 +35,7 @@ internal class RegistrationMailSender : IRegistrationMailSender
         var confirmationLinkUrl = new Uri(new Uri(_integrationSettings.WebUrl), $"activate/{token}");
         var emailBody = await _renderer.RenderAsync(new RegistrationConfirmationViewModel(
             ConfirmationLinkUrl: confirmationLinkUrl.ToString()));
-        await _mailSender.Send(new EmailLetter
+        await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
             Subject = "Подтвердите email на DM.AM",

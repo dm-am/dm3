@@ -51,10 +51,10 @@ public class ModerationProfileController : ControllerBase
     /// <response code="404">User not found</response>
     [HttpGet("{login}/profile", Name = nameof(GetModerationProfile))]
     [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(typeof(Envelope<ModerationProfileDto>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<ModerationProfileDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetModerationProfile(string login) =>
         Ok(await _service.GetModerationProfile(login));
 }

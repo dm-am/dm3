@@ -35,8 +35,8 @@ public class CharacterController : ControllerBase
     /// <response code="200">Returns the character list</response>
     /// <response code="410">Game not found</response>
     [HttpGet("~/v1/games/{id}/characters", Name = nameof(GetCharacters))]
-    [ProducesResponseType(typeof(ListEnvelope<Character>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(ListEnvelope<Character>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetCharacters(Guid id) => Ok(await _characterApiService.GetAll(id));
 
     /// <summary>
@@ -48,9 +48,9 @@ public class CharacterController : ControllerBase
     /// <response code="410">Game not found</response>
     [HttpDelete("~/v1/games/{id}/characters/unread", Name = nameof(MarkCharactersAsRead))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkCharactersAsRead(Guid id)
     {
         await _characterApiService.MarkAsRead(id);
@@ -69,11 +69,11 @@ public class CharacterController : ControllerBase
     /// <response code="410">Game not found</response>
     [HttpPost("~/v1/games/{id}/characters", Name = nameof(PostCharacter))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<CharacterDetails>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<CharacterDetails>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostCharacter(Guid id, [FromBody] CharacterDetails character)
     {
         var result = await _characterApiService.Create(id, character);
@@ -88,8 +88,8 @@ public class CharacterController : ControllerBase
     /// <response code="200">Returns character details</response>
     /// <response code="410">Character not found</response>
     [HttpGet("{id}", Name = nameof(GetCharacter))]
-    [ProducesResponseType(typeof(Envelope<CharacterDetails>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<CharacterDetails>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetCharacter(Guid id) => Ok(await _characterApiService.Get(id));
 
     /// <summary>
@@ -104,11 +104,11 @@ public class CharacterController : ControllerBase
     /// <response code="410">Character not found</response>
     [HttpPatch("{id}", Name = nameof(PutCharacter))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<CharacterDetails>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<CharacterDetails>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PutCharacter(Guid id, [FromBody] CharacterDetails character) =>
         Ok(await _characterApiService.Update(id, character));
 
@@ -122,10 +122,10 @@ public class CharacterController : ControllerBase
     /// <response code="410">Character not found</response>
     [HttpDelete("{id}", Name = nameof(DeleteCharacter))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteCharacter(Guid id)
     {
         await _characterApiService.Delete(id);

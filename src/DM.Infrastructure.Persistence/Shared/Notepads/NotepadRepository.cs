@@ -7,8 +7,8 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Notepads;
 using Microsoft.EntityFrameworkCore;
-using NotepadEntryEntity = DM.Infrastructure.Persistence.Entities.Notepads.NotepadEntry;
-using NotepadCategoryEntity = DM.Infrastructure.Persistence.Entities.Notepads.NotepadCategory;
+using NotepadEntryEntity = DM.Infrastructure.Persistence.Entities.Personal.Notepads.NotepadEntry;
+using NotepadCategoryEntity = DM.Infrastructure.Persistence.Entities.Personal.Notepads.NotepadCategory;
 
 namespace DM.Infrastructure.Persistence.Shared.Notepads;
 
@@ -30,7 +30,7 @@ internal class NotepadRepository : INotepadRepository
     #region Entries
 
     /// <inheritdoc />
-    public async Task<IEnumerable<NotepadEntry>> GetEntries(
+    public async Task<IEnumerable<NotepadEntry>> GetEntriesAsync(
         NotepadType notepadType,
         Guid containerId,
         Guid? ownerId = null,
@@ -57,7 +57,7 @@ internal class NotepadRepository : INotepadRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<NotepadEntry>> GetEntriesByCategory(
+    public async Task<IEnumerable<NotepadEntry>> GetEntriesByCategoryAsync(
         Guid categoryId,
         CancellationToken ct = default)
     {
@@ -71,7 +71,7 @@ internal class NotepadRepository : INotepadRepository
     }
 
     /// <inheritdoc />
-    public async Task<NotepadEntry?> GetEntry(Guid entryId, CancellationToken ct = default)
+    public async Task<NotepadEntry?> GetEntryAsync(Guid entryId, CancellationToken ct = default)
     {
         var entry = await _dbContext.NotepadEntries
             .FirstOrDefaultAsync(e => e.EntryId == entryId && !e.IsRemoved, ct);
@@ -80,7 +80,7 @@ internal class NotepadRepository : INotepadRepository
     }
 
     /// <inheritdoc />
-    public async Task<NotepadEntry> CreateEntry(CreateNotepadEntryInternal create, CancellationToken ct = default)
+    public async Task<NotepadEntry> CreateEntryAsync(CreateNotepadEntryInternal create, CancellationToken ct = default)
     {
         var entry = new NotepadEntryEntity
         {
@@ -103,7 +103,7 @@ internal class NotepadRepository : INotepadRepository
     }
 
     /// <inheritdoc />
-    public async Task<NotepadEntry> UpdateEntry(UpdateNotepadEntryInternal update, CancellationToken ct = default)
+    public async Task<NotepadEntry> UpdateEntryAsync(UpdateNotepadEntryInternal update, CancellationToken ct = default)
     {
         var entry = await _dbContext.NotepadEntries.FindAsync(new object[] { update.EntryId }, ct)
             ?? throw new InvalidOperationException($"Entry {update.EntryId} not found");
@@ -124,14 +124,14 @@ internal class NotepadRepository : INotepadRepository
     }
 
     /// <inheritdoc />
-    public async Task DeleteEntry(Guid entryId, Guid deletedByUserId, CancellationToken ct = default)
+    public async Task DeleteEntryAsync(Guid entryId, Guid deletedByUserId, CancellationToken ct = default)
     {
         var entry = await _dbContext.NotepadEntries.FindAsync(new object[] { entryId }, ct);
         if (entry != null)
         {
             entry.IsRemoved = true;
             entry.DeletedByUserId = deletedByUserId;
-            entry.DeletedAtUtc = _dateTimeProvider.Now;
+            entry.DeletedUtc = _dateTimeProvider.Now;
             await _dbContext.SaveChangesAsync(ct);
         }
     }
@@ -141,7 +141,7 @@ internal class NotepadRepository : INotepadRepository
     #region Categories
 
     /// <inheritdoc />
-    public async Task<IEnumerable<NotepadCategory>> GetCategories(
+    public async Task<IEnumerable<NotepadCategory>> GetCategoriesAsync(
         NotepadType notepadType,
         Guid containerId,
         Guid? ownerId = null,
@@ -168,7 +168,7 @@ internal class NotepadRepository : INotepadRepository
     }
 
     /// <inheritdoc />
-    public async Task<NotepadCategory?> GetCategory(Guid categoryId, CancellationToken ct = default)
+    public async Task<NotepadCategory?> GetCategoryAsync(Guid categoryId, CancellationToken ct = default)
     {
         var category = await _dbContext.NotepadCategories
             .FirstOrDefaultAsync(c => c.CategoryId == categoryId && !c.IsRemoved, ct);
@@ -177,7 +177,7 @@ internal class NotepadRepository : INotepadRepository
     }
 
     /// <inheritdoc />
-    public async Task<NotepadCategory> CreateCategory(CreateNotepadCategoryInternal create, CancellationToken ct = default)
+    public async Task<NotepadCategory> CreateCategoryAsync(CreateNotepadCategoryInternal create, CancellationToken ct = default)
     {
         var category = new NotepadCategoryEntity
         {
@@ -198,7 +198,7 @@ internal class NotepadRepository : INotepadRepository
     }
 
     /// <inheritdoc />
-    public async Task<NotepadCategory> UpdateCategory(UpdateNotepadCategoryInternal update, CancellationToken ct = default)
+    public async Task<NotepadCategory> UpdateCategoryAsync(UpdateNotepadCategoryInternal update, CancellationToken ct = default)
     {
         var category = await _dbContext.NotepadCategories.FindAsync(new object[] { update.CategoryId }, ct)
             ?? throw new InvalidOperationException($"Category {update.CategoryId} not found");
@@ -213,14 +213,14 @@ internal class NotepadRepository : INotepadRepository
     }
 
     /// <inheritdoc />
-    public async Task DeleteCategory(Guid categoryId, Guid deletedByUserId, CancellationToken ct = default)
+    public async Task DeleteCategoryAsync(Guid categoryId, Guid deletedByUserId, CancellationToken ct = default)
     {
         var category = await _dbContext.NotepadCategories.FindAsync(new object[] { categoryId }, ct);
         if (category != null)
         {
             category.IsRemoved = true;
             category.DeletedByUserId = deletedByUserId;
-            category.DeletedAtUtc = _dateTimeProvider.Now;
+            category.DeletedUtc = _dateTimeProvider.Now;
             await _dbContext.SaveChangesAsync(ct);
         }
     }

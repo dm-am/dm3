@@ -14,12 +14,12 @@ public interface IPublicImageUploadRepository
     /// </summary>
     /// <param name="uploads">Upload entity DTOs</param>
     /// <returns>Created uploads</returns>
-    Task<IEnumerable<Upload>> Create(IEnumerable<UploadEntity> uploads);
+    Task<IEnumerable<Upload>> CreateAsync(IEnumerable<UploadEntity> uploads);
 
     /// <summary>
     /// Mark obsolete (all but recently added) uploads for deleting
     /// </summary>
     /// <param name="entityId">Entity identifier</param>
     /// <returns></returns>
-    Task RemoveObsoleteUploads(Guid entityId);
+    Task RemoveObsoleteUploadsAsync(Guid entityId);
 }

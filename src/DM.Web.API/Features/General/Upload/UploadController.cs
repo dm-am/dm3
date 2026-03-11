@@ -47,9 +47,9 @@ public class UploadController : ControllerBase
     /// <response code="403">Admin access required for scope=all or username filter</response>
     [HttpGet(Name = nameof(GetUploads))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(ListEnvelope<Shared.Dto.Upload>), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
+    [ProducesResponseType(typeof(ListEnvelope<Shared.Dto.Upload>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetUploads(
         [FromQuery] UploadsQuery query,
         [FromQuery] string? scope = null,
@@ -70,10 +70,10 @@ public class UploadController : ControllerBase
     /// <response code="404">Upload not found</response>
     [HttpGet("{id:guid}", Name = nameof(GetUpload))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Shared.Dto.Upload), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(Shared.Dto.Upload), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUpload(Guid id)
     {
         var result = await _uploadApiService.GetUpload(id);
@@ -90,10 +90,10 @@ public class UploadController : ControllerBase
     /// <response code="404">Upload not found</response>
     [HttpDelete("{id:guid}", Name = nameof(DeleteUpload))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteUpload(Guid id)
     {
         await _uploadApiService.DeleteUpload(id);
@@ -114,9 +114,9 @@ public class UploadController : ControllerBase
     /// <response code="401">User not authenticated</response>
     [HttpPost("presign", Name = nameof(RequestPresignedUrl))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(PresignResponse), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 400)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
+    [ProducesResponseType(typeof(PresignResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> RequestPresignedUrl([FromBody] PresignRequest request)
     {
         var result = await _uploadApiService.RequestPresignedUrl(request);
@@ -145,9 +145,9 @@ public class UploadController : ControllerBase
     [HttpPost("direct", Name = nameof(DirectUpload))]
     [AuthenticationRequired]
     [RequestSizeLimit(10 * 1024 * 1024)]
-    [ProducesResponseType(typeof(Shared.Dto.Upload), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 400)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
+    [ProducesResponseType(typeof(Shared.Dto.Upload), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> DirectUpload(
         IFormFile file,
         [FromQuery] UploadType type,
@@ -173,12 +173,12 @@ public class UploadController : ControllerBase
     /// <response code="410">Upload session expired</response>
     [HttpPost("{id:guid}/confirm", Name = nameof(ConfirmUpload))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Shared.Dto.Upload), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 400)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 410)]
+    [ProducesResponseType(typeof(Shared.Dto.Upload), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status410Gone)]
     public async Task<IActionResult> ConfirmUpload(Guid id)
     {
         var result = await _uploadApiService.ConfirmUpload(id);

@@ -89,7 +89,7 @@ internal class BlogService : IBlogService
     /// <inheritdoc />
     public async Task<IEnumerable<BlogModel>> GetUserBlogs(string username, CancellationToken ct = default)
     {
-        var user = await _userLookupService.Get(username);
+        var user = await _userLookupService.GetAsync(username);
         if (user == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, $"User {username} not found");
@@ -276,7 +276,7 @@ internal class BlogService : IBlogService
             CreatedUtc = now
         };
         var createdPublication = await _repository.CreatePublication(entity, ct);
-        await _eventProducer.Send(EventType.NewPublication, createdPublication.Id);
+        await _eventProducer.SendAsync(EventType.NewPublication, createdPublication.Id);
         return createdPublication;
     }
 
@@ -307,7 +307,7 @@ internal class BlogService : IBlogService
             UpdatedUtc = _dateTimeProvider.Now
         };
         var updatedPublication = await _repository.UpdatePublication(entity, ct);
-        await _eventProducer.Send(EventType.ChangedPublication, updatedPublication.Id);
+        await _eventProducer.SendAsync(EventType.ChangedPublication, updatedPublication.Id);
         return updatedPublication;
     }
 
@@ -319,7 +319,7 @@ internal class BlogService : IBlogService
 
         var userId = _identityProvider.Current.User.UserId;
         await _repository.DeletePublication(publicationId, userId, ct);
-        await _eventProducer.Send(EventType.DeletedPublication, publicationId);
+        await _eventProducer.SendAsync(EventType.DeletedPublication, publicationId);
     }
 
     /// <inheritdoc />
@@ -383,7 +383,7 @@ internal class BlogService : IBlogService
         }
 
         // Use BlogSubscriptionService for readers
-        await _subscriptionService.Subscribe(blogId, ct);
+        await _subscriptionService.SubscribeAsync(blogId, ct);
         return _identityProvider.Current.User;
     }
 
@@ -400,7 +400,7 @@ internal class BlogService : IBlogService
         }
 
         // Use BlogSubscriptionService for readers
-        await _subscriptionService.Unsubscribe(blogId, ct);
+        await _subscriptionService.UnsubscribeAsync(blogId, ct);
     }
 
     /// <inheritdoc />
@@ -428,7 +428,7 @@ internal class BlogService : IBlogService
     {
         await Get(blogId, ct);
         // Get subscribers via BlogSubscriptionService
-        return await _subscriptionService.GetReaders(blogId, ct);
+        return await _subscriptionService.GetReadersAsync(blogId, ct);
     }
 
     /// <inheritdoc />

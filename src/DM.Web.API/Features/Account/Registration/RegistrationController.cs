@@ -114,7 +114,8 @@ public class RegistrationController : ControllerBase
     ///
     /// Login requirements:
     /// - 2-20 characters
-    /// - Letters (any language), numbers, underscores, hyphens only
+    /// - No control characters, HTML/URL unsafe chars, quotes, brackets, or special symbols
+    /// - No leading/trailing/consecutive whitespace
     /// - Must be unique (not used by active users or in login history)
     ///
     /// The activation is idempotent: if ExpectedEmail matches an existing user

@@ -53,9 +53,9 @@ public class SearchController : ControllerBase
     /// <response code="400">Invalid query (empty or too long)</response>
     /// <response code="503">Search service unavailable</response>
     [HttpGet(Name = nameof(Search))]
-    [ProducesResponseType(typeof(ListEnvelope<SearchEntity>), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 400)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 503)]
+    [ProducesResponseType(typeof(ListEnvelope<SearchEntity>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Search(
         [FromQuery][Required][StringLength(500, MinimumLength = 1)] string query,
         [FromQuery] PagingQuery q)

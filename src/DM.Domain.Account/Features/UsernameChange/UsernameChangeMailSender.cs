@@ -34,7 +34,7 @@ internal class UsernameChangeMailSender : IUsernameChangeMailSender
 </body>
 </html>";
 
-        await _mailSender.Send(new EmailLetter
+        await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
             Subject = "Запрос на смену имени одобрен — DM.AM",
@@ -63,7 +63,7 @@ internal class UsernameChangeMailSender : IUsernameChangeMailSender
 </body>
 </html>";
 
-        await _mailSender.Send(new EmailLetter
+        await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
             Subject = "Запрос на смену имени отклонён — DM.AM",

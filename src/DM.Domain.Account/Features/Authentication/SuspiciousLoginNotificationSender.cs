@@ -35,7 +35,7 @@ internal class SuspiciousLoginNotificationSender : ISuspiciousLoginNotificationS
             DeviceInfo: deviceInfo,
             Timestamp: timestamp));
 
-        await _mailSender.Send(new EmailLetter
+        await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
             Subject = "Вход в аккаунт с нового устройства — DM.AM",

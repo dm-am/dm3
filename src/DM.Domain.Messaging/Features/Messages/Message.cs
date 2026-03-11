@@ -52,7 +52,7 @@ public class Message : ILikable
     /// <summary>
     /// When the message was deleted (UTC)
     /// </summary>
-    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public DateTimeOffset? DeletedUtc { get; set; }
 
     /// <summary>
     /// Edit history

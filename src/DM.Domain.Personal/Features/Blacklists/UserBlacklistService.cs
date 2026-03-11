@@ -60,7 +60,7 @@ internal class UserBlacklistService : IUserBlacklistService
     public async Task<BlacklistEntry> BlockUser(string username, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
-        var userToBlock = await _userRepository.GetUser(username);
+        var userToBlock = await _userRepository.GetUserAsync(username);
 
         if (userToBlock == null)
         {
@@ -94,7 +94,7 @@ internal class UserBlacklistService : IUserBlacklistService
     public async Task UnblockUser(string username, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
-        var userToUnblock = await _userRepository.GetUser(username);
+        var userToUnblock = await _userRepository.GetUserAsync(username);
 
         if (userToUnblock == null)
         {
@@ -112,14 +112,14 @@ internal class UserBlacklistService : IUserBlacklistService
     public async Task<bool> IsBlocked(string username, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
-        var user = await _userRepository.GetUser(username);
+        var user = await _userRepository.GetUserAsync(username);
 
         if (user == null)
         {
             return false;
         }
 
-        return await _repository.IsBlocked(userId, user.UserId, ct);
+        return await _repository.IsBlockedAsync(userId, user.UserId, ct);
     }
 
     /// <inheritdoc />
@@ -134,8 +134,8 @@ internal class UserBlacklistService : IUserBlacklistService
     {
         var userId = _identityProvider.Current.User.UserId;
 
-        var youBlockedThem = await _repository.IsBlocked(userId, targetUserId, ct);
-        var theyBlockedYou = await _repository.IsBlocked(targetUserId, userId, ct);
+        var youBlockedThem = await _repository.IsBlockedAsync(userId, targetUserId, ct);
+        var theyBlockedYou = await _repository.IsBlockedAsync(targetUserId, userId, ct);
 
         // Don't reveal if they blocked you - privacy protection
         // Show generic message instead of "TheyBlockedYou"

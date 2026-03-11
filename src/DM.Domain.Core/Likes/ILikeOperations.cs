@@ -16,11 +16,11 @@ public interface ILikeOperations
     /// <param name="entity">Likable entity</param>
     /// <param name="eventType">Event type to generate after like</param>
     /// <returns>User who liked</returns>
-    Task<GeneralUser> Like(ILikable entity, EventType eventType);
+    Task<GeneralUser> LikeAsync(ILikable entity, EventType eventType);
 
     /// <summary>
     /// Unlike an entity
     /// </summary>
     /// <param name="entity">Likable entity</param>
-    Task Unlike(ILikable entity);
+    Task UnlikeAsync(ILikable entity);
 }

@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using DM.Infrastructure.Core.Configuration;
 using DM.Web.API.Features.Personal.Notifications;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -54,8 +55,8 @@ public class WebhookController : ControllerBase
     /// <response code="200">Webhook processed</response>
     /// <response code="403">Invalid secret</response>
     [HttpPost("{type}/{secret}")]
-    [ProducesResponseType(200)]
-    [ProducesResponseType(403)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> HandleWebhook(string type, string secret, [FromBody] JsonElement payload)
     {
         var normalizedType = type.ToLowerInvariant();

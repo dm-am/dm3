@@ -43,7 +43,7 @@ internal class ForumCommentApiService : IForumCommentApiService
         IReadOnlyCollection<Guid>? excludeUserIds = null;
         if (identity.User?.IsAuthenticated == true)
         {
-            var blockedIds = await _blacklistChecker.GetBlockedUserIdsIfFlagEnabled(
+            var blockedIds = await _blacklistChecker.GetBlockedUserIdsIfFlagEnabledAsync(
                 currentUserId, UserBlacklistSettings.HideComments);
             if (blockedIds.Count > 0)
             {
@@ -51,7 +51,7 @@ internal class ForumCommentApiService : IForumCommentApiService
             }
         }
 
-        var (comments, paging) = await _commentService.Get(topicId, query, excludeUserIds);
+        var (comments, paging) = await _commentService.GetAsync(topicId, query, excludeUserIds);
         var isAuthenticated = identity.User?.IsAuthenticated ?? false;
         var isModerator = (identity.User?.Role ?? UserRole.Guest) >= UserRole.Moderator;
 
@@ -76,11 +76,11 @@ internal class ForumCommentApiService : IForumCommentApiService
     }
 
     /// <inheritdoc />
-    public Task MarkAsRead(Guid topicId) => _commentService.MarkAsRead(topicId);
+    public Task MarkAsRead(Guid topicId) => _commentService.MarkAsReadAsync(topicId);
 
     /// <inheritdoc />
-    public Task MarkAsRead(string forumId) => _commentService.MarkBoardAsRead(forumId);
+    public Task MarkAsRead(string forumId) => _commentService.MarkBoardAsReadAsync(forumId);
 
     /// <inheritdoc />
-    public Task MarkAllAsRead() => _commentService.MarkAsRead();
+    public Task MarkAllAsRead() => _commentService.MarkAllAsReadAsync();
 }

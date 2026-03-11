@@ -34,20 +34,20 @@ public interface ICredentialsApiService
     /// </summary>
     /// <param name="request">Reason for change</param>
     /// <returns>Created request</returns>
-    Task<UsernameChangeResponse> RequestUsernameChange(UsernameChangeCreateRequest request);
+    Task<UsernameChangeResponse> RequestUsernameChangeAsync(UsernameChangeCreateRequest request);
 
     /// <summary>
     /// Get current user's username change request status
     /// </summary>
     /// <returns>Request status or null if none exists</returns>
-    Task<UsernameChangeResponse?> GetUsernameChangeStatus();
+    Task<UsernameChangeResponse?> GetUsernameChangeStatusAsync();
 
     /// <summary>
     /// Get username change request by approval token
     /// </summary>
     /// <param name="token">Approval token from notification</param>
     /// <returns>Request details or null if invalid</returns>
-    Task<UsernameChangeResponse?> GetUsernameChangeApproval(Guid token);
+    Task<UsernameChangeResponse?> GetUsernameChangeApprovalAsync(Guid token);
 
     /// <summary>
     /// Complete username change with chosen name
@@ -55,5 +55,5 @@ public interface ICredentialsApiService
     /// <param name="token">Approval token</param>
     /// <param name="request">Chosen username</param>
     /// <returns>Updated request</returns>
-    Task<UsernameChangeResponse> CompleteUsernameChange(Guid token, UsernameChangeCompletionRequest request);
+    Task<UsernameChangeResponse> CompleteUsernameChangeAsync(Guid token, UsernameChangeCompletionRequest request);
 }

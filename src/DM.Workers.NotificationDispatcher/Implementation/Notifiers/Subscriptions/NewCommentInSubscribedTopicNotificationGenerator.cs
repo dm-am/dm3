@@ -51,7 +51,7 @@ internal class NewCommentInSubscribedTopicNotificationGenerator : BaseNotificati
             yield break;
         }
 
-        var subscriptions = await _subscriptionRepository.GetByTargetWithSettings(
+        var subscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.Topic,
             commentData.TopicId,
             SubscriptionSettings.NewComments);

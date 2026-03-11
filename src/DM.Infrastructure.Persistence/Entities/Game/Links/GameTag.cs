@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using DM.Infrastructure.Persistence.Entities.CrossDomain;
+using DM.Infrastructure.Persistence.Entities.Shared;
 
 namespace DM.Infrastructure.Persistence.Entities.Game.Links;
 

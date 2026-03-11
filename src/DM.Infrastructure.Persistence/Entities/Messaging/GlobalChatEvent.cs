@@ -60,7 +60,7 @@ public class GlobalChatEvent
     /// <summary>
     /// Event creation timestamp
     /// </summary>
-    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// When the event was actually started (null if not started yet)

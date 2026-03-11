@@ -75,7 +75,7 @@ internal class UserBlacklistApiService : IUserBlacklistApiService
     /// <inheritdoc />
     public async Task<bool> CanMessage(string username)
     {
-        var targetUser = await _userService.Get(username);
+        var targetUser = await _userService.GetAsync(username);
         return await _blacklistService.CanSendMessage(targetUser.UserId);
     }
 }

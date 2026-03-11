@@ -39,9 +39,9 @@ internal class GameCommentLikeService : IGameCommentLikeService
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser> LikeComment(Guid commentId)
+    public async Task<GeneralUser> LikeCommentAsync(Guid commentId)
     {
-        var comment = await _commentService.Get(commentId);
+        var comment = await _commentService.GetAsync(commentId);
         _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
 
         // Check blacklist
@@ -51,13 +51,13 @@ internal class GameCommentLikeService : IGameCommentLikeService
             throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this game");
         }
 
-        return await _likeOperations.Like(comment, EventType.LikedGameComment);
+        return await _likeOperations.LikeAsync(comment, EventType.LikedGameComment);
     }
 
     /// <inheritdoc />
-    public async Task UnlikeComment(Guid commentId)
+    public async Task UnlikeCommentAsync(Guid commentId)
     {
-        var comment = await _commentService.Get(commentId);
+        var comment = await _commentService.GetAsync(commentId);
         _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
 
         // Check blacklist
@@ -67,6 +67,6 @@ internal class GameCommentLikeService : IGameCommentLikeService
             throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this game");
         }
 
-        await _likeOperations.Unlike(comment);
+        await _likeOperations.UnlikeAsync(comment);
     }
 }

@@ -13,7 +13,7 @@ public interface IEventProducer
     /// <param name="eventType">Event type</param>
     /// <param name="entityId">Entity identifier</param>
     /// <returns>Task</returns>
-    Task Send(EventType eventType, Guid entityId);
+    Task SendAsync(EventType eventType, Guid entityId);
 
     /// <summary>
     /// Sends multiple events to the message bus
@@ -21,5 +21,5 @@ public interface IEventProducer
     /// <param name="eventTypes">Event types</param>
     /// <param name="entityId">Entity identifier</param>
     /// <returns>Task</returns>
-    Task Send(IEnumerable<EventType> eventTypes, Guid entityId);
+    Task SendAsync(IEnumerable<EventType> eventTypes, Guid entityId);
 }

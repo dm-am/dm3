@@ -14,45 +14,45 @@ public interface ISubscriptionApiService
     /// <summary>
     /// Get subscribers for a target (readers list)
     /// </summary>
-    Task<IEnumerable<User>> GetSubscribers(SubscriptionTargetType targetType, Guid targetId);
+    Task<IEnumerable<User>> GetSubscribersAsync(SubscriptionTargetType targetType, Guid targetId);
 
     /// <summary>
     /// Get all subscriptions for the current user
     /// </summary>
-    Task<IEnumerable<Subscription>> GetMySubscriptions();
+    Task<IEnumerable<Subscription>> GetMySubscriptionsAsync();
 
     /// <summary>
     /// Get current user subscriptions filtered by target type
     /// </summary>
-    Task<IEnumerable<Subscription>> GetMySubscriptions(SubscriptionTargetType targetType);
+    Task<IEnumerable<Subscription>> GetMySubscriptionsAsync(SubscriptionTargetType targetType);
 
     /// <summary>
     /// Subscribe to a target
     /// </summary>
-    Task<Subscription> Subscribe(SubscriptionTargetType targetType, Guid targetId, SubscribeRequest? request);
+    Task<Subscription> SubscribeAsync(SubscriptionTargetType targetType, Guid targetId, SubscribeRequest? request);
 
     /// <summary>
     /// Update subscription settings
     /// </summary>
-    Task<Subscription> UpdateSettings(Guid subscriptionId, UpdateSubscriptionRequest request);
+    Task<Subscription> UpdateSettingsAsync(Guid subscriptionId, UpdateSubscriptionRequest request);
 
     /// <summary>
     /// Unsubscribe
     /// </summary>
-    Task Unsubscribe(Guid subscriptionId);
+    Task UnsubscribeAsync(Guid subscriptionId);
 
     /// <summary>
     /// Unsubscribe by target type and ID
     /// </summary>
-    Task UnsubscribeByTarget(SubscriptionTargetType targetType, Guid targetId);
+    Task UnsubscribeByTargetAsync(SubscriptionTargetType targetType, Guid targetId);
 
     /// <summary>
     /// Check if user is subscribed to a target
     /// </summary>
-    Task<Subscription?> GetSubscription(SubscriptionTargetType targetType, Guid targetId);
+    Task<Subscription?> GetSubscriptionAsync(SubscriptionTargetType targetType, Guid targetId);
 
     /// <summary>
     /// Get subscription by ID
     /// </summary>
-    Task<Subscription?> GetById(Guid subscriptionId);
+    Task<Subscription?> GetByIdAsync(Guid subscriptionId);
 }

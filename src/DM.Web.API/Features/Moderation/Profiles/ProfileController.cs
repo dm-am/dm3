@@ -52,10 +52,10 @@ public class ProfileController : ControllerBase
     /// <response code="404">User not found</response>
     [HttpGet("{username}/profile", Name = nameof(GetModeratedProfile))]
     [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(typeof(ModeratedProfile), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(ModeratedProfile), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetModeratedProfile(string username) =>
         Ok(await _profileApiService.GetModeratedProfile(username));
 
@@ -74,10 +74,10 @@ public class ProfileController : ControllerBase
     /// <response code="404">User not found</response>
     [HttpPatch("{username}/profile", Name = nameof(ModerateUserProfile))]
     [RequireRole(UserRole.SeniorModerator)]
-    [ProducesResponseType(typeof(UserProfile), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(UserProfile), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ModerateUserProfile(string username, [FromBody] ModerateProfile profile) =>
         Ok(await _profileApiService.ModerateUserProfile(username, profile));
 
@@ -97,11 +97,11 @@ public class ProfileController : ControllerBase
     /// <response code="404">User not found</response>
     [HttpPatch("{username}/role/{role}", Name = nameof(SetUserRole))]
     [RequireRole(UserRole.Admin)]
-    [ProducesResponseType(typeof(UserProfile), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 400)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(UserProfile), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SetUserRole(string username, UserRole role) =>
         Ok(await _profileApiService.SetUserRole(username, role));
 }

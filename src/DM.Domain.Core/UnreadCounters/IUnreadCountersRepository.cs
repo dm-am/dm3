@@ -17,7 +17,7 @@ public interface IUnreadCountersRepository
     /// <param name="entryType">Entry type</param>
     /// <param name="userIds">User Ids</param>
     /// <returns></returns>
-    Task Create(Guid entityId, UnreadEntryType entryType, IEnumerable<Guid> userIds);
+    Task CreateAsync(Guid entityId, UnreadEntryType entryType, IEnumerable<Guid> userIds);
 
     /// <summary>
     /// Create a counter for the entity
@@ -26,7 +26,7 @@ public interface IUnreadCountersRepository
     /// <param name="parentId">Parent entity Id</param>
     /// <param name="entryType">Entry type</param>
     /// <returns></returns>
-    Task Create(Guid entityId, Guid parentId, UnreadEntryType entryType);
+    Task CreateAsync(Guid entityId, Guid parentId, UnreadEntryType entryType);
 
     /// <summary>
     /// Create a counter for the entity without parent
@@ -34,7 +34,7 @@ public interface IUnreadCountersRepository
     /// <param name="entityId">Entity id</param>
     /// <param name="entryType">Entry type</param>
     /// <returns></returns>
-    Task Create(Guid entityId, UnreadEntryType entryType);
+    Task CreateAsync(Guid entityId, UnreadEntryType entryType);
 
     /// <summary>
     /// Increment counter of the entity for every user
@@ -42,7 +42,7 @@ public interface IUnreadCountersRepository
     /// <param name="entityId">Entity Id</param>
     /// <param name="entryType">Entry type</param>
     /// <returns></returns>
-    Task Increment(Guid entityId, UnreadEntryType entryType);
+    Task IncrementAsync(Guid entityId, UnreadEntryType entryType);
 
     /// <summary>
     /// Increment counter of the entity for every user except the specified one
@@ -51,7 +51,7 @@ public interface IUnreadCountersRepository
     /// <param name="entryType">Entry type</param>
     /// <param name="excludeUserId">User Id to exclude from increment</param>
     /// <returns></returns>
-    Task IncrementExcluding(Guid entityId, UnreadEntryType entryType, Guid excludeUserId);
+    Task IncrementExcludingAsync(Guid entityId, UnreadEntryType entryType, Guid excludeUserId);
 
     /// <summary>
     /// Decrement counter for users who hasn't read the entry since given time
@@ -60,7 +60,7 @@ public interface IUnreadCountersRepository
     /// <param name="entryType">Entry type</param>
     /// <param name="createDate">Given time</param>
     /// <returns></returns>
-    Task Decrement(Guid entityId, UnreadEntryType entryType, DateTimeOffset createDate);
+    Task DecrementAsync(Guid entityId, UnreadEntryType entryType, DateTimeOffset createDate);
 
     /// <summary>
     /// Remove counter for everyone
@@ -68,7 +68,7 @@ public interface IUnreadCountersRepository
     /// <param name="entityId">Entity Id</param>
     /// <param name="entryType">Entry type</param>
     /// <returns></returns>
-    Task Delete(Guid entityId, UnreadEntryType entryType);
+    Task DeleteAsync(Guid entityId, UnreadEntryType entryType);
 
     /// <summary>
     /// Get count of entities that have unread entries by parent entity ids
@@ -77,7 +77,7 @@ public interface IUnreadCountersRepository
     /// <param name="entryType">Entry type</param>
     /// <param name="parentIds">Parent entity Ids</param>
     /// <returns>List of pairs of parent entity Id and number of according entities that have unread entries</returns>
-    Task<IDictionary<Guid, int>> SelectByParents(
+    Task<IDictionary<Guid, int>> SelectByParentsAsync(
         Guid userId, UnreadEntryType entryType, params Guid[] parentIds);
 
     /// <summary>
@@ -87,7 +87,7 @@ public interface IUnreadCountersRepository
     /// <param name="entryType">Entry type</param>
     /// <param name="parentIds">Parent entity Ids</param>
     /// <returns>List of pairs of parent entity Id and total number of unread entries</returns>
-    Task<IDictionary<Guid, int>> SelectTotalUnreadByParents(
+    Task<IDictionary<Guid, int>> SelectTotalUnreadByParentsAsync(
         Guid userId, UnreadEntryType entryType, params Guid[] parentIds);
 
     /// <summary>
@@ -97,7 +97,7 @@ public interface IUnreadCountersRepository
     /// <param name="entryType">Entry type</param>
     /// <param name="entityIds">Entity Ids</param>
     /// <returns>List of pairs of entity Id and number of entries unread</returns>
-    Task<IDictionary<Guid, int>> SelectByEntities(
+    Task<IDictionary<Guid, int>> SelectByEntitiesAsync(
         Guid userId, UnreadEntryType entryType, params Guid[] entityIds);
 
     /// <summary>
@@ -107,7 +107,7 @@ public interface IUnreadCountersRepository
     /// <param name="entryType">Entry type</param>
     /// <param name="entityId">Entity Id</param>
     /// <returns></returns>
-    Task Flush(Guid userId, UnreadEntryType entryType, Guid entityId);
+    Task FlushAsync(Guid userId, UnreadEntryType entryType, Guid entityId);
 
     /// <summary>
     /// Mark all according entities as read
@@ -116,7 +116,7 @@ public interface IUnreadCountersRepository
     /// <param name="entryType">Entry type</param>
     /// <param name="parentId">Parent entity Id</param>
     /// <returns></returns>
-    Task FlushAll(Guid userId, UnreadEntryType entryType, Guid parentId);
+    Task FlushAllAsync(Guid userId, UnreadEntryType entryType, Guid parentId);
 
     /// <summary>
     /// Move unread counters to new parent
@@ -125,7 +125,7 @@ public interface IUnreadCountersRepository
     /// <param name="entryType">Entry type</param>
     /// <param name="newParentId">New parent Id</param>
     /// <returns></returns>
-    Task ChangeParent(Guid parentId, UnreadEntryType entryType, Guid newParentId);
+    Task ChangeParentAsync(Guid parentId, UnreadEntryType entryType, Guid newParentId);
 
     /// <summary>
     /// Get the last read time for a specific entity
@@ -134,7 +134,7 @@ public interface IUnreadCountersRepository
     /// <param name="entityId">Entity Id</param>
     /// <param name="entryType">Entry type</param>
     /// <returns>Last read time or null if never read</returns>
-    Task<DateTime?> GetLastReadTime(Guid userId, Guid entityId, UnreadEntryType entryType);
+    Task<DateTime?> GetLastReadTimeAsync(Guid userId, Guid entityId, UnreadEntryType entryType);
 
     /// <summary>
     /// Get the last read times for multiple entities
@@ -143,5 +143,5 @@ public interface IUnreadCountersRepository
     /// <param name="entryType">Entry type</param>
     /// <param name="entityIds">Entity Ids</param>
     /// <returns>Dictionary of entity Id to last read time</returns>
-    Task<IDictionary<Guid, DateTime>> GetLastReadTimes(Guid userId, UnreadEntryType entryType, params Guid[] entityIds);
+    Task<IDictionary<Guid, DateTime>> GetLastReadTimesAsync(Guid userId, UnreadEntryType entryType, params Guid[] entityIds);
 }

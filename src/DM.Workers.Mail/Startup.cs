@@ -50,7 +50,7 @@ public class Startup
             config => config.UseRabbit(),
             consumerBuilderDefaults: builder => builder.WithMiddleware<ConsumerRetryMiddleware>());
 
-        services.AddHostedService<MailSendingConsumer>();
+        services.AddHostedService<MailConsumer>();
 
         services.AddHealthChecks();
 

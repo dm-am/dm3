@@ -66,7 +66,7 @@ internal class GameInvitationService : IGameInvitationService
         var game = await GetGameOrThrow(gameId);
         _intentionManager.ThrowIfForbidden(GameIntention.InvitePlayer, game);
 
-        var user = await _userLookupService.Get(username);
+        var user = await _userLookupService.GetAsync(username);
         await ValidateInvitation(game, user.UserId, ct);
 
         var entity = new CreateGameInvitationEntity
@@ -80,7 +80,7 @@ internal class GameInvitationService : IGameInvitationService
         };
 
         var token = await _repository.InvalidateAndCreateInvitation(entity, ct);
-        await _producer.Send(EventType.PlayerInvitationCreated, token.TokenId);
+        await _producer.SendAsync(EventType.PlayerInvitationCreated, token.TokenId);
 
         return await GetInvitationInfo(token.TokenId, ct);
     }
@@ -90,7 +90,7 @@ internal class GameInvitationService : IGameInvitationService
         var game = await GetGameOrThrow(gameId);
         _intentionManager.ThrowIfForbidden(GameIntention.InviteReader, game);
 
-        var user = await _userLookupService.Get(username);
+        var user = await _userLookupService.GetAsync(username);
         await ValidateInvitation(game, user.UserId, ct);
 
         var entity = new CreateGameInvitationEntity
@@ -104,7 +104,7 @@ internal class GameInvitationService : IGameInvitationService
         };
 
         var token = await _repository.InvalidateAndCreateInvitation(entity, ct);
-        await _producer.Send(EventType.ReaderInvitationCreated, token.TokenId);
+        await _producer.SendAsync(EventType.ReaderInvitationCreated, token.TokenId);
 
         return await GetInvitationInfo(token.TokenId, ct);
     }
@@ -114,7 +114,7 @@ internal class GameInvitationService : IGameInvitationService
         var game = await GetGameOrThrow(gameId);
         _intentionManager.ThrowIfForbidden(GameIntention.InviteAssistant, game);
 
-        var user = await _userLookupService.Get(username);
+        var user = await _userLookupService.GetAsync(username);
         await ValidateInvitation(game, user.UserId, ct);
 
         var entity = new CreateGameInvitationEntity
@@ -128,7 +128,7 @@ internal class GameInvitationService : IGameInvitationService
         };
 
         var token = await _repository.InvalidateAndCreateInvitation(entity, ct);
-        await _producer.Send(EventType.AssignmentRequestCreated, token.TokenId);
+        await _producer.SendAsync(EventType.AssignmentRequestCreated, token.TokenId);
 
         return await GetInvitationInfo(token.TokenId, ct);
     }
@@ -162,14 +162,14 @@ internal class GameInvitationService : IGameInvitationService
                 // Player invitation acceptance - just mark token as used
                 // Character creation is a separate step
                 await _repository.RemoveInvitation(tokenId, ct);
-                await _producer.Send(EventType.PlayerInvitationAccepted, tokenId);
+                await _producer.SendAsync(EventType.PlayerInvitationAccepted, tokenId);
                 break;
 
             case TokenType.GameReaderInvitation:
                 // Auto-subscribe as reader
-                await _subscriptionService.Subscribe(gameId, ct);
+                await _subscriptionService.SubscribeAsync(gameId, ct);
                 await _repository.RemoveInvitation(tokenId, ct);
-                await _producer.Send(EventType.ReaderInvitationAccepted, tokenId);
+                await _producer.SendAsync(EventType.ReaderInvitationAccepted, tokenId);
                 break;
 
             case TokenType.GameAssistantInvitation:
@@ -183,7 +183,7 @@ internal class GameInvitationService : IGameInvitationService
                 };
                 await _repository.AddAssistant(addEntity, ct);
                 await _repository.RemoveInvitation(tokenId, ct);
-                await _producer.Send(EventType.AssignmentRequestAccepted, tokenId);
+                await _producer.SendAsync(EventType.AssignmentRequestAccepted, tokenId);
                 break;
 
             default:
@@ -217,7 +217,7 @@ internal class GameInvitationService : IGameInvitationService
 
         if (eventType != EventType.Unknown)
         {
-            await _producer.Send(eventType, tokenId);
+            await _producer.SendAsync(eventType, tokenId);
         }
     }
 
@@ -301,7 +301,7 @@ internal class GameInvitationService : IGameInvitationService
         }
 
         // Check personal blacklist - cannot invite someone you've blocked
-        if (await _userBlacklistChecker.IsBlocked(currentUserId, userId, ct))
+        if (await _userBlacklistChecker.IsBlockedAsync(currentUserId, userId, ct))
         {
             throw new HttpException(HttpStatusCode.UnprocessableEntity, "Cannot invite a user you have blocked");
         }

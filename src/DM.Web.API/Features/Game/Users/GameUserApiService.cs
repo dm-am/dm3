@@ -92,16 +92,16 @@ internal class GameUserApiService : IGameUserApiService
     public async Task<IEnumerable<GameUser>> GetReaders(Guid gameId)
     {
         await _gameService.GetAsync(gameId); // Validate game exists
-        var subscribers = await _subscriptionService.GetReaders(gameId);
+        var subscribers = await _subscriptionService.GetReadersAsync(gameId);
         return subscribers.Select(u => MapUserToGameUser(u, GameRole.Reader));
     }
 
     /// <inheritdoc />
     public async Task<GameUser> Subscribe(Guid gameId)
     {
-        await _subscriptionService.Subscribe(gameId);
+        await _subscriptionService.SubscribeAsync(gameId);
         var currentUserId = _identityProvider.Current.User.UserId;
-        var subscribers = await _subscriptionService.GetReaders(gameId);
+        var subscribers = await _subscriptionService.GetReadersAsync(gameId);
         var currentUser = subscribers.First(s => s.UserId == currentUserId);
         return MapUserToGameUser(currentUser, GameRole.Reader);
     }
@@ -109,7 +109,7 @@ internal class GameUserApiService : IGameUserApiService
     /// <inheritdoc />
     public Task Unsubscribe(Guid gameId)
     {
-        return _subscriptionService.Unsubscribe(gameId);
+        return _subscriptionService.UnsubscribeAsync(gameId);
     }
 
     // Note: RemoveReader is not provided - readers can only unsubscribe themselves

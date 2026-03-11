@@ -25,63 +25,63 @@ internal class SubscriptionApiService : ISubscriptionApiService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Subscription>> GetMySubscriptions()
+    public async Task<IEnumerable<Subscription>> GetMySubscriptionsAsync()
     {
-        var subscriptions = await _subscriptionService.GetMySubscriptions();
+        var subscriptions = await _subscriptionService.GetMySubscriptionsAsync();
         return subscriptions.Select(_mapper.Map<Subscription>);
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Subscription>> GetMySubscriptions(SubscriptionTargetType targetType)
+    public async Task<IEnumerable<Subscription>> GetMySubscriptionsAsync(SubscriptionTargetType targetType)
     {
-        var subscriptions = await _subscriptionService.GetMySubscriptions(targetType);
+        var subscriptions = await _subscriptionService.GetMySubscriptionsAsync(targetType);
         return subscriptions.Select(_mapper.Map<Subscription>);
     }
 
     /// <inheritdoc />
-    public async Task<Subscription> Subscribe(SubscriptionTargetType targetType, Guid targetId, SubscribeRequest? request)
+    public async Task<Subscription> SubscribeAsync(SubscriptionTargetType targetType, Guid targetId, SubscribeRequest? request)
     {
-        var subscription = await _subscriptionService.Subscribe(targetType, targetId, request?.Settings);
+        var subscription = await _subscriptionService.SubscribeAsync(targetType, targetId, request?.Settings);
         return _mapper.Map<Subscription>(subscription);
     }
 
     /// <inheritdoc />
-    public async Task<Subscription> UpdateSettings(Guid subscriptionId, UpdateSubscriptionRequest request)
+    public async Task<Subscription> UpdateSettingsAsync(Guid subscriptionId, UpdateSubscriptionRequest request)
     {
-        var subscription = await _subscriptionService.UpdateSettings(subscriptionId, request.Settings);
+        var subscription = await _subscriptionService.UpdateSettingsAsync(subscriptionId, request.Settings);
         return _mapper.Map<Subscription>(subscription);
     }
 
     /// <inheritdoc />
-    public async Task Unsubscribe(Guid subscriptionId)
+    public async Task UnsubscribeAsync(Guid subscriptionId)
     {
-        await _subscriptionService.Unsubscribe(subscriptionId);
+        await _subscriptionService.UnsubscribeAsync(subscriptionId);
     }
 
     /// <inheritdoc />
-    public async Task UnsubscribeByTarget(SubscriptionTargetType targetType, Guid targetId)
+    public async Task UnsubscribeByTargetAsync(SubscriptionTargetType targetType, Guid targetId)
     {
-        await _subscriptionService.UnsubscribeByTarget(targetType, targetId);
+        await _subscriptionService.UnsubscribeByTargetAsync(targetType, targetId);
     }
 
     /// <inheritdoc />
-    public async Task<Subscription?> GetSubscription(SubscriptionTargetType targetType, Guid targetId)
+    public async Task<Subscription?> GetSubscriptionAsync(SubscriptionTargetType targetType, Guid targetId)
     {
-        var subscription = await _subscriptionService.GetSubscription(targetType, targetId);
+        var subscription = await _subscriptionService.GetSubscriptionAsync(targetType, targetId);
         return subscription == null ? null : _mapper.Map<Subscription>(subscription);
     }
 
     /// <inheritdoc />
-    public async Task<Subscription?> GetById(Guid subscriptionId)
+    public async Task<Subscription?> GetByIdAsync(Guid subscriptionId)
     {
-        var subscription = await _subscriptionService.GetById(subscriptionId);
+        var subscription = await _subscriptionService.GetByIdAsync(subscriptionId);
         return subscription == null ? null : _mapper.Map<Subscription>(subscription);
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<User>> GetSubscribers(SubscriptionTargetType targetType, Guid targetId)
+    public async Task<IEnumerable<User>> GetSubscribersAsync(SubscriptionTargetType targetType, Guid targetId)
     {
-        var subscribers = await _subscriptionService.GetTargetSubscribers(targetType, targetId);
+        var subscribers = await _subscriptionService.GetTargetSubscribersAsync(targetType, targetId);
         return subscribers.Select(_mapper.Map<User>);
     }
 }

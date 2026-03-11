@@ -1,6 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using DM.Infrastructure.Persistence.Entities.CrossDomain;
+using DM.Infrastructure.Persistence.Entities.Shared;
 
 namespace DM.Infrastructure.Persistence.Shared.Likes;
 

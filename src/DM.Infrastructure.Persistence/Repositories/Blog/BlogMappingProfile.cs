@@ -7,7 +7,7 @@ using DM.Domain.Blog.Features.PublicationComments;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Enums;
 using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
-using DbComment = DM.Infrastructure.Persistence.Entities.CrossDomain.Comment;
+using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 using DbPublication = DM.Infrastructure.Persistence.Entities.Blog.Publication;
 using DbRubric = DM.Infrastructure.Persistence.Entities.Blog.Rubric;
 

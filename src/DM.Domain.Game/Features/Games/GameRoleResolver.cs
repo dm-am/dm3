@@ -47,7 +47,7 @@ internal class GameRoleResolver : IGameRoleResolver
             return GameRole.Player;
 
         // Check reader (subscription-based)
-        var subscription = await _subscriptionRepository.Find(
+        var subscription = await _subscriptionRepository.FindAsync(
             userId, SubscriptionTargetType.Game, gameId, ct);
         if (subscription != null)
             return GameRole.Reader;

@@ -48,7 +48,7 @@ public class MirrorController : ControllerBase
     /// </remarks>
     /// <response code="200">List of available mirrors</response>
     [HttpGet(Name = nameof(GetMirrors))]
-    [ProducesResponseType(typeof(MirrorsResponse), 200)]
+    [ProducesResponseType(typeof(MirrorsResponse), StatusCodes.Status200OK)]
     public ActionResult<MirrorsResponse> GetMirrors()
     {
         var mirrors = _config.Mirrors
@@ -81,8 +81,8 @@ public class MirrorController : ControllerBase
     /// <response code="200">Transfer URL with optional session token</response>
     /// <response code="400">Invalid or unavailable mirror</response>
     [HttpGet("transfer", Name = nameof(GetTransferToken))]
-    [ProducesResponseType(typeof(TransferResponse), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 400)]
+    [ProducesResponseType(typeof(TransferResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<TransferResponse>> GetTransferToken(
         [FromQuery] string targetMirror,
         [FromQuery] string? returnUrl = null)
@@ -122,8 +122,8 @@ public class MirrorController : ControllerBase
     /// <response code="200">Authentication result with token</response>
     /// <response code="400">Invalid or expired transfer token</response>
     [HttpPost("transfer/accept", Name = nameof(AcceptTransfer))]
-    [ProducesResponseType(typeof(TransferAcceptResponse), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 400)]
+    [ProducesResponseType(typeof(TransferAcceptResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<TransferAcceptResponse>> AcceptTransfer([FromQuery] string transferToken)
     {
         var identity = await _authService.AuthenticateWithTransferToken(transferToken);

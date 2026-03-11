@@ -57,7 +57,7 @@ internal class GameCommentService : IGameCommentService
     }
 
     /// <inheritdoc />
-    public async Task<Comment> Create(CreateComment createComment)
+    public async Task<Comment> CreateAsync(CreateComment createComment)
     {
         await _createValidator.ValidateAndThrowAsync(createComment);
 
@@ -83,14 +83,14 @@ internal class GameCommentService : IGameCommentService
 
         var createdComment = await _repository.Create(entity);
 
-        await _countersRepository.Increment(game.Id, UnreadEntryType.Message);
-        await _invokedEventProducer.Send(EventType.NewGameComment, entity.CommentId);
+        await _countersRepository.IncrementAsync(game.Id, UnreadEntryType.Message);
+        await _invokedEventProducer.SendAsync(EventType.NewGameComment, entity.CommentId);
 
         return createdComment;
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> Get(Guid gameId, PagingQuery query,
+    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid gameId, PagingQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
         var game = await _gameService.GetAsync(gameId);
@@ -105,17 +105,17 @@ internal class GameCommentService : IGameCommentService
     }
 
     /// <inheritdoc />
-    public async Task<Comment> Get(Guid commentId)
+    public async Task<Comment> GetAsync(Guid commentId)
     {
         return await _repository.Get(commentId) ??
                throw new HttpException(HttpStatusCode.Gone, $"Comment {commentId} not found");
     }
 
     /// <inheritdoc />
-    public async Task<Comment> Update(UpdateComment updateComment)
+    public async Task<Comment> UpdateAsync(UpdateComment updateComment)
     {
         await _updateValidator.ValidateAndThrowAsync(updateComment);
-        var comment = await Get(updateComment.CommentId);
+        var comment = await GetAsync(updateComment.CommentId);
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
 
@@ -133,12 +133,12 @@ internal class GameCommentService : IGameCommentService
         };
 
         var updatedComment = await _repository.Update(entity);
-        await _invokedEventProducer.Send(EventType.ChangedGameComment, updateComment.CommentId);
+        await _invokedEventProducer.SendAsync(EventType.ChangedGameComment, updateComment.CommentId);
         return updatedComment;
     }
 
     /// <inheritdoc />
-    public async Task Delete(Guid commentId)
+    public async Task DeleteAsync(Guid commentId)
     {
         var comment = await _repository.GetForDelete(commentId);
         if (comment == null)
@@ -163,17 +163,17 @@ internal class GameCommentService : IGameCommentService
         };
 
         await _repository.Delete(entity);
-        await _countersRepository.Decrement(comment.GameId, UnreadEntryType.Message, comment.CreatedUtc);
+        await _countersRepository.DecrementAsync(comment.GameId, UnreadEntryType.Message, comment.CreatedUtc);
 
-        await _invokedEventProducer.Send(EventType.DeletedGameComment, commentId);
+        await _invokedEventProducer.SendAsync(EventType.DeletedGameComment, commentId);
     }
 
     /// <inheritdoc />
-    public async Task MarkAsRead(Guid gameId)
+    public async Task MarkAsReadAsync(Guid gameId)
     {
         var game = await _gameService.GetAsync(gameId);
         _intentionManager.ThrowIfForbidden(GameIntention.ReadComments, game);
-        await _countersRepository.Flush(_identityProvider.Current.User.UserId,
+        await _countersRepository.FlushAsync(_identityProvider.Current.User.UserId,
             UnreadEntryType.Message, gameId);
     }
 }

@@ -18,11 +18,11 @@ internal class MemoryCache : ICache
     }
 
     /// <inheritdoc />
-    public Task<TEntry> GetOrCreate<TEntry>(object key, Func<Task<TEntry>> create) =>
-        GetOrCreate(key, create, CachePolicy.LongLived);
+    public Task<TEntry> GetOrCreateAsync<TEntry>(object key, Func<Task<TEntry>> create) =>
+        GetOrCreateAsync(key, create, CachePolicy.LongLived);
 
     /// <inheritdoc />
-    public async Task<TEntry> GetOrCreate<TEntry>(object key, Func<Task<TEntry>> create, TimeSpan absoluteExpiration) =>
+    public async Task<TEntry> GetOrCreateAsync<TEntry>(object key, Func<Task<TEntry>> create, TimeSpan absoluteExpiration) =>
         (await _memoryCache.GetOrCreateAsync(key, async e =>
         {
             e.AbsoluteExpirationRelativeToNow = absoluteExpiration;
@@ -30,7 +30,7 @@ internal class MemoryCache : ICache
         }))!;
 
     /// <inheritdoc />
-    public Task Invalidate(object key)
+    public Task InvalidateAsync(object key)
     {
         _memoryCache.Remove(key);
         return Task.CompletedTask;

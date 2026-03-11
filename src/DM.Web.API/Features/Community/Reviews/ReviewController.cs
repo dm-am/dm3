@@ -70,7 +70,7 @@ public class ReviewController : ControllerBase
     /// <param name="gameId">Filter by specific game ID</param>
     /// <response code="200">List of game reviews</response>
     [HttpGet("games", Name = nameof(GetAllGameReviews))]
-    [ProducesResponseType(typeof(ListEnvelope<Review>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<Review>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllGameReviews(
         [FromQuery] PagingQuery q,
         [FromQuery] string? authorLogin = null,
@@ -81,13 +81,13 @@ public class ReviewController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(authorLogin))
         {
-            var author = await _userLookupService.Get(authorLogin);
+            var author = await _userLookupService.GetAsync(authorLogin);
             filter.AuthorId = author.UserId;
         }
 
         if (!string.IsNullOrWhiteSpace(gmLogin))
         {
-            var gm = await _userLookupService.Get(gmLogin);
+            var gm = await _userLookupService.GetAsync(gmLogin);
             filter.GmId = gm.UserId;
         }
 
@@ -108,7 +108,7 @@ public class ReviewController : ControllerBase
     /// <param name="recipientLogin">Filter by reviewed user login</param>
     /// <response code="200">List of user reviews</response>
     [HttpGet("users", Name = nameof(GetAllUserReviews))]
-    [ProducesResponseType(typeof(ListEnvelope<Review>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<Review>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllUserReviews(
         [FromQuery] PagingQuery q,
         [FromQuery] string? authorLogin = null,
@@ -118,13 +118,13 @@ public class ReviewController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(authorLogin))
         {
-            var author = await _userLookupService.Get(authorLogin);
+            var author = await _userLookupService.GetAsync(authorLogin);
             filter.AuthorId = author.UserId;
         }
 
         if (!string.IsNullOrWhiteSpace(recipientLogin))
         {
-            var recipient = await _userLookupService.Get(recipientLogin);
+            var recipient = await _userLookupService.GetAsync(recipientLogin);
             filter.RecipientId = recipient.UserId;
         }
 
@@ -143,8 +143,8 @@ public class ReviewController : ControllerBase
     /// <response code="200">Review details</response>
     /// <response code="404">Review not found</response>
     [HttpGet("{id:guid}", Name = nameof(GetReview))]
-    [ProducesResponseType(typeof(Envelope<Review>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Review>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetReview(Guid id)
     {
         var review = await FindReviewAsync(id);
@@ -167,11 +167,11 @@ public class ReviewController : ControllerBase
     /// <response code="404">Review not found</response>
     [HttpPatch("{id:guid}", Name = nameof(UpdateReview))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Review>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Review>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateReview(Guid id, [FromBody] UpdateReviewRequest request)
     {
         var existingReview = await FindReviewAsync(id);
@@ -220,10 +220,10 @@ public class ReviewController : ControllerBase
     /// <response code="404">Review not found</response>
     [HttpDelete("{id:guid}", Name = nameof(DeleteReview))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteReview(Guid id)
     {
         var existingReview = await FindReviewAsync(id);

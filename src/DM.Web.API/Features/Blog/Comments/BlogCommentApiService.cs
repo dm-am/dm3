@@ -47,7 +47,7 @@ internal class BlogCommentApiService : IBlogCommentApiService
         IReadOnlyCollection<Guid>? excludeUserIds = null;
         if (identity.User?.IsAuthenticated == true)
         {
-            var blockedIds = await _blacklistChecker.GetBlockedUserIdsIfFlagEnabled(
+            var blockedIds = await _blacklistChecker.GetBlockedUserIdsIfFlagEnabledAsync(
                 currentUserId, UserBlacklistSettings.HideComments);
             if (blockedIds.Count > 0)
             {
@@ -55,7 +55,7 @@ internal class BlogCommentApiService : IBlogCommentApiService
             }
         }
 
-        var (comments, paging) = await _commentService.Get(blogId, query, excludeUserIds);
+        var (comments, paging) = await _commentService.GetAsync(blogId, query, excludeUserIds);
         var isAuthenticated = identity.User?.IsAuthenticated ?? false;
         var isModerator = (identity.User?.Role ?? UserRole.Guest) >= UserRole.Moderator;
 
@@ -86,7 +86,7 @@ internal class BlogCommentApiService : IBlogCommentApiService
         IReadOnlyCollection<Guid>? excludeUserIds = null;
         if (identity.User?.IsAuthenticated == true)
         {
-            var blockedIds = await _blacklistChecker.GetBlockedUserIdsIfFlagEnabled(
+            var blockedIds = await _blacklistChecker.GetBlockedUserIdsIfFlagEnabledAsync(
                 identity.User.UserId, UserBlacklistSettings.HideComments);
             if (blockedIds.Count > 0)
             {
@@ -94,7 +94,7 @@ internal class BlogCommentApiService : IBlogCommentApiService
             }
         }
 
-        var (comments, paging) = await _commentService.Get(blogId, query, excludeUserIds);
+        var (comments, paging) = await _commentService.GetAsync(blogId, query, excludeUserIds);
         return new ListEnvelope<Comment>(comments.Select(_mapper.Map<Comment>), new PagingInfo(paging));
     }
 
@@ -103,14 +103,14 @@ internal class BlogCommentApiService : IBlogCommentApiService
     {
         var createComment = _mapper.Map<CreateComment>(request);
         createComment.EntityId = blogId;
-        var createdComment = await _commentService.Create(createComment);
+        var createdComment = await _commentService.CreateAsync(createComment);
         return new Envelope<Comment>(_mapper.Map<Comment>(createdComment));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Comment>> Get(Guid commentId)
     {
-        var comment = await _commentService.Get(commentId);
+        var comment = await _commentService.GetAsync(commentId);
         return new Envelope<Comment>(_mapper.Map<Comment>(comment));
     }
 
@@ -119,13 +119,13 @@ internal class BlogCommentApiService : IBlogCommentApiService
     {
         var updateComment = _mapper.Map<UpdateComment>(comment);
         updateComment.CommentId = commentId;
-        var updatedComment = await _commentService.Update(updateComment);
+        var updatedComment = await _commentService.UpdateAsync(updateComment);
         return new Envelope<Comment>(_mapper.Map<Comment>(updatedComment));
     }
 
     /// <inheritdoc />
-    public Task Delete(Guid commentId) => _commentService.Delete(commentId);
+    public Task Delete(Guid commentId) => _commentService.DeleteAsync(commentId);
 
     /// <inheritdoc />
-    public Task MarkAsRead(Guid blogId) => _commentService.MarkAsRead(blogId);
+    public Task MarkAsRead(Guid blogId) => _commentService.MarkAsReadAsync(blogId);
 }

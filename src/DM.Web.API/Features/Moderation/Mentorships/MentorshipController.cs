@@ -45,11 +45,11 @@ public class MentorshipController : ControllerBase
     /// <response code="404">Game not found</response>
     /// <response code="409">Game already has a mentor</response>
     [HttpPost("games/{gameId:guid}/mentor", Name = nameof(AssignGameMentor))]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 409)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AssignGameMentor(Guid gameId)
     {
         await _mentorshipApiService.AssignGameMentor(gameId);
@@ -69,10 +69,10 @@ public class MentorshipController : ControllerBase
     /// <response code="403">You are not the mentor of this game</response>
     /// <response code="404">Game not found</response>
     [HttpDelete("games/{gameId:guid}/mentor", Name = nameof(RemoveGameMentor))]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveGameMentor(Guid gameId)
     {
         await _mentorshipApiService.RemoveGameMentor(gameId);
@@ -93,11 +93,11 @@ public class MentorshipController : ControllerBase
     /// <response code="404">Blog not found</response>
     /// <response code="409">Blog already has a mentor</response>
     [HttpPost("blogs/{blogId:guid}/mentor", Name = nameof(AssignBlogMentor))]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 409)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AssignBlogMentor(Guid blogId)
     {
         await _mentorshipApiService.AssignBlogMentor(blogId);
@@ -117,10 +117,10 @@ public class MentorshipController : ControllerBase
     /// <response code="403">You are not the mentor of this blog</response>
     /// <response code="404">Blog not found</response>
     [HttpDelete("blogs/{blogId:guid}/mentor", Name = nameof(RemoveBlogMentor))]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveBlogMentor(Guid blogId)
     {
         await _mentorshipApiService.RemoveBlogMentor(blogId);

@@ -85,7 +85,7 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
             IsOpen = chatEvent.IsOpen,
             Status = chatEvent.Status,
             CreatedByUserId = chatEvent.CreatedByUserId,
-            CreatedAtUtc = chatEvent.CreatedAtUtc
+            CreatedUtc = chatEvent.CreatedUtc
         };
 
         var dbParticipant = new DbGlobalChatEventParticipant

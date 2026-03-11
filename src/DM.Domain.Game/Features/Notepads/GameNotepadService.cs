@@ -52,7 +52,7 @@ internal class GameNotepadService : IGameNotepadService
     public async Task<IEnumerable<NotepadEntry>> GetMasterEntries(Guid gameId, CancellationToken ct = default)
     {
         await ThrowIfNotAuthorizedAsync(NotepadIntention.Read, NotepadType.Master, gameId, null, ct);
-        return await _repository.GetEntries(NotepadType.Master, gameId, null, ct);
+        return await _repository.GetEntriesAsync(NotepadType.Master, gameId, null, ct);
     }
 
     /// <inheritdoc />
@@ -74,7 +74,7 @@ internal class GameNotepadService : IGameNotepadService
             CreatedUtc = _dateTimeProvider.Now
         };
 
-        return await _repository.CreateEntry(internalDto, ct);
+        return await _repository.CreateEntryAsync(internalDto, ct);
     }
 
     #endregion
@@ -85,7 +85,7 @@ internal class GameNotepadService : IGameNotepadService
     public async Task<IEnumerable<NotepadEntry>> GetPlayerEntries(Guid gameId, Guid characterId, CancellationToken ct = default)
     {
         await ThrowIfNotAuthorizedAsync(NotepadIntention.Read, NotepadType.Player, gameId, characterId, ct);
-        return await _repository.GetEntries(NotepadType.Player, gameId, characterId, ct);
+        return await _repository.GetEntriesAsync(NotepadType.Player, gameId, characterId, ct);
     }
 
     /// <inheritdoc />
@@ -107,7 +107,7 @@ internal class GameNotepadService : IGameNotepadService
             CreatedUtc = _dateTimeProvider.Now
         };
 
-        return await _repository.CreateEntry(internalDto, ct);
+        return await _repository.CreateEntryAsync(internalDto, ct);
     }
 
     #endregion
@@ -117,7 +117,7 @@ internal class GameNotepadService : IGameNotepadService
     /// <inheritdoc />
     public async Task<NotepadEntry> GetEntry(Guid entryId, CancellationToken ct = default)
     {
-        var entry = await _repository.GetEntry(entryId, ct);
+        var entry = await _repository.GetEntryAsync(entryId, ct);
         if (entry == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, "Entry not found");
@@ -136,7 +136,7 @@ internal class GameNotepadService : IGameNotepadService
     /// <inheritdoc />
     public async Task<NotepadEntry> UpdateEntry(Guid entryId, UpdateNotepadEntry updateEntry, CancellationToken ct = default)
     {
-        var entry = await _repository.GetEntry(entryId, ct);
+        var entry = await _repository.GetEntryAsync(entryId, ct);
         if (entry == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, "Entry not found");
@@ -159,13 +159,13 @@ internal class GameNotepadService : IGameNotepadService
             UpdatedUtc = _dateTimeProvider.Now
         };
 
-        return await _repository.UpdateEntry(internalDto, ct);
+        return await _repository.UpdateEntryAsync(internalDto, ct);
     }
 
     /// <inheritdoc />
     public async Task DeleteEntry(Guid entryId, CancellationToken ct = default)
     {
-        var entry = await _repository.GetEntry(entryId, ct);
+        var entry = await _repository.GetEntryAsync(entryId, ct);
         if (entry == null)
         {
             return; // Already deleted
@@ -177,7 +177,7 @@ internal class GameNotepadService : IGameNotepadService
         }
 
         await ThrowIfNotAuthorizedAsync(NotepadIntention.Delete, entry.NotepadType, entry.ContainerId, entry.OwnerId, ct);
-        await _repository.DeleteEntry(entryId, UserId, ct);
+        await _repository.DeleteEntryAsync(entryId, UserId, ct);
     }
 
     #endregion
@@ -188,14 +188,14 @@ internal class GameNotepadService : IGameNotepadService
     public async Task<IEnumerable<NotepadCategory>> GetMasterCategories(Guid gameId, CancellationToken ct = default)
     {
         await ThrowIfNotAuthorizedAsync(NotepadIntention.Read, NotepadType.Master, gameId, null, ct);
-        return await _repository.GetCategories(NotepadType.Master, gameId, null, ct);
+        return await _repository.GetCategoriesAsync(NotepadType.Master, gameId, null, ct);
     }
 
     /// <inheritdoc />
     public async Task<IEnumerable<NotepadCategory>> GetPlayerCategories(Guid gameId, Guid characterId, CancellationToken ct = default)
     {
         await ThrowIfNotAuthorizedAsync(NotepadIntention.Read, NotepadType.Player, gameId, characterId, ct);
-        return await _repository.GetCategories(NotepadType.Player, gameId, characterId, ct);
+        return await _repository.GetCategoriesAsync(NotepadType.Player, gameId, characterId, ct);
     }
 
     /// <inheritdoc />
@@ -215,7 +215,7 @@ internal class GameNotepadService : IGameNotepadService
             CreatedUtc = _dateTimeProvider.Now
         };
 
-        return await _repository.CreateCategory(internalDto, ct);
+        return await _repository.CreateCategoryAsync(internalDto, ct);
     }
 
     /// <inheritdoc />
@@ -235,13 +235,13 @@ internal class GameNotepadService : IGameNotepadService
             CreatedUtc = _dateTimeProvider.Now
         };
 
-        return await _repository.CreateCategory(internalDto, ct);
+        return await _repository.CreateCategoryAsync(internalDto, ct);
     }
 
     /// <inheritdoc />
     public async Task<NotepadCategory> UpdateCategory(Guid categoryId, UpdateNotepadCategory updateCategory, CancellationToken ct = default)
     {
-        var category = await _repository.GetCategory(categoryId, ct);
+        var category = await _repository.GetCategoryAsync(categoryId, ct);
         if (category == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, "Category not found");
@@ -261,13 +261,13 @@ internal class GameNotepadService : IGameNotepadService
             SortOrder = updateCategory.SortOrder
         };
 
-        return await _repository.UpdateCategory(internalDto, ct);
+        return await _repository.UpdateCategoryAsync(internalDto, ct);
     }
 
     /// <inheritdoc />
     public async Task DeleteCategory(Guid categoryId, CancellationToken ct = default)
     {
-        var category = await _repository.GetCategory(categoryId, ct);
+        var category = await _repository.GetCategoryAsync(categoryId, ct);
         if (category == null)
         {
             return; // Already deleted
@@ -279,7 +279,7 @@ internal class GameNotepadService : IGameNotepadService
         }
 
         await ThrowIfNotAuthorizedAsync(NotepadIntention.Delete, category.NotepadType, category.ContainerId, category.OwnerId, ct);
-        await _repository.DeleteCategory(categoryId, UserId, ct);
+        await _repository.DeleteCategoryAsync(categoryId, UserId, ct);
     }
 
     #endregion

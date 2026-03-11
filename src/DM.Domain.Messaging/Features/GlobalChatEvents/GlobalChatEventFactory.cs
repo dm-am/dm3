@@ -30,7 +30,7 @@ internal class GlobalChatEventFactory : IGlobalChatEventFactory
         IsOpen = createGlobalChatEvent.IsOpen,
         Status = GlobalChatEventStatus.Scheduled,
         CreatedByUserId = userId,
-        CreatedAtUtc = _dateTimeProvider.Now
+        CreatedUtc = _dateTimeProvider.Now
     };
 
     /// <inheritdoc />

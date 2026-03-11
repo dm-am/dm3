@@ -47,11 +47,11 @@ public class UserReviewController : ControllerBase
     /// <response code="200">List of user reviews</response>
     /// <response code="404">User not found</response>
     [HttpGet(Name = nameof(GetUserReviews))]
-    [ProducesResponseType(typeof(ListEnvelope<Review>), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(ListEnvelope<Review>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserReviews(string username, [FromQuery] PagingQuery q)
     {
-        var user = await _userLookupService.Get(username);
+        var user = await _userLookupService.GetAsync(username);
         var (reviews, paging) = await _userReviewService.GetListAsync(user.UserId, q);
         var apiReviews = reviews.Select(_mapper.Map<Review>);
         return Ok(new ListEnvelope<Review>(apiReviews, new PagingInfo(paging)));
@@ -75,15 +75,15 @@ public class UserReviewController : ControllerBase
     /// <response code="409">Review already exists</response>
     [HttpPost(Name = nameof(CreateUserReview))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Review), 201)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 400)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 409)]
+    [ProducesResponseType(typeof(Review), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateUserReview(string username, [FromBody] CreateReviewRequest request)
     {
-        var user = await _userLookupService.Get(username);
+        var user = await _userLookupService.GetAsync(username);
         var createReview = new CreateUserReview
         {
             TargetUserId = user.UserId,

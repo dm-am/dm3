@@ -40,7 +40,7 @@ public class PollController : ControllerBase
     /// <param name="q">Query parameters for filtering and pagination</param>
     /// <response code="200">List of polls retrieved successfully</response>
     [HttpGet(Name = nameof(GetPolls))]
-    [ProducesResponseType(typeof(ListEnvelope<Poll>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<Poll>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPolls([FromQuery] PollsQuery q) => Ok(await _apiService.Get(q));
 
     /// <summary>
@@ -55,11 +55,11 @@ public class PollController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to create polls</response>
     [HttpPost("global", Name = nameof(PostPoll))]
-    [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(typeof(Envelope<Poll>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
+    [RequireRole(UserRole.SeniorModerator)]
+    [ProducesResponseType(typeof(Envelope<Poll>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> PostPoll([FromBody] CreatePollRequest request)
     {
         var result = await _apiService.Create(request);
@@ -73,8 +73,8 @@ public class PollController : ControllerBase
     /// <response code="200">Poll retrieved successfully</response>
     /// <response code="404">Poll not found or was deleted</response>
     [HttpGet("{id}", Name = nameof(GetPoll))]
-    [ProducesResponseType(typeof(Envelope<Poll>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Poll>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPoll(Guid id) => Ok(await _apiService.Get(id));
 
     /// <summary>
@@ -88,12 +88,12 @@ public class PollController : ControllerBase
     /// <response code="403">User is not authorized to update polls</response>
     /// <response code="404">Poll not found</response>
     [HttpPatch("{id}", Name = nameof(PatchPoll))]
-    [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(typeof(Envelope<Poll>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [RequireRole(UserRole.SeniorModerator)]
+    [ProducesResponseType(typeof(Envelope<Poll>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchPoll(Guid id, [FromBody] UpdatePollRequest request) =>
         Ok(await _apiService.Update(id, request));
 
@@ -106,11 +106,11 @@ public class PollController : ControllerBase
     /// <response code="403">User is not authorized to delete polls</response>
     /// <response code="404">Poll not found</response>
     [HttpDelete("{id}", Name = nameof(DeletePoll))]
-    [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [RequireRole(UserRole.SeniorModerator)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeletePoll(Guid id)
     {
         await _apiService.Delete(id);
@@ -128,10 +128,10 @@ public class PollController : ControllerBase
     /// <response code="404">Poll not found</response>
     [HttpPost("{id}/vote", Name = nameof(PostPollVote))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Poll>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Poll>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostPollVote(Guid id, [FromQuery] Guid optionId) =>
         Ok(await _apiService.Vote(id, optionId));
 
@@ -145,9 +145,9 @@ public class PollController : ControllerBase
     /// <response code="404">Poll not found</response>
     [HttpDelete("{id}/vote", Name = nameof(DeletePollVote))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Poll>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Poll>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeletePollVote(Guid id) => Ok(await _apiService.Unvote(id));
 }

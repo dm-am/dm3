@@ -467,9 +467,10 @@ test/
 
 Нет. `Domain.Game` не может вызывать `INotificationService` из `Domain.Personal`. Коммуникация — только через Domain Events.
 
-### ❌ "Infrastructure.* может определять интерфейсы"
+### ❌ "Infrastructure.* может определять бизнес-интерфейсы"
 
-Нет. Все публичные интерфейсы — в Domain.Core или Domain.*. Infrastructure только реализует.
+Нет. Бизнес-интерфейсы (`IGameService`, `ITopicRepository`) — в Domain.Core или Domain.*.
+Инфраструктурные интерфейсы (обёртки над внешними библиотеками типа `IBbParserProvider`) остаются в Infrastructure.*.
 
 ### ❌ "Web.Client должен следовать Clean Architecture"
 

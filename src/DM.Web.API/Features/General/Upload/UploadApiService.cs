@@ -18,7 +18,7 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using DbUpload = DM.Infrastructure.Persistence.Entities.CrossDomain.Upload;
+using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
 
 namespace DM.Web.API.Features.General.Upload;
 
@@ -74,7 +74,7 @@ internal class UploadApiService : IUploadApiService
         if (!string.IsNullOrWhiteSpace(username))
         {
             _intentionManager.ThrowIfForbidden(UploadIntention.ListUser);
-            var user = await _userService.Get(username);
+            var user = await _userService.GetAsync(username);
             return await GetUploadsInternal(query, user.UserId);
         }
 

@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Personal.Features.Notifications;
-using DM.Infrastructure.Persistence.Entities.Notifications;
+using DM.Infrastructure.Persistence.Entities.Personal.Notifications;
 using DM.Infrastructure.Persistence.MongoIntegration;
 using MongoDB.Driver;
 

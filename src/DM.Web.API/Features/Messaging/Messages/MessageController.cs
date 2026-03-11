@@ -47,9 +47,9 @@ public class MessageController : ControllerBase
     /// <response code="404">Conversation not found</response>
     [HttpGet("~/v1/conversations/{id:guid}/messages", Name = nameof(GetMessages))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(CursorEnvelope<Message>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(CursorEnvelope<Message>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMessages(
         Guid id,
         [FromQuery] string? cursor = null,
@@ -70,11 +70,11 @@ public class MessageController : ControllerBase
     /// <response code="404">Dialogue not found</response>
     [HttpPost("~/v1/conversations/{id:guid}/messages", Name = nameof(PostMessage))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Message>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Message>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostMessage(Guid id, [FromBody] CreateMessageInput input)
     {
         var message = new Message { Text = new CommonBbText { Value = input.Text } };
@@ -91,9 +91,9 @@ public class MessageController : ControllerBase
     /// <response code="404">Message not found</response>
     [HttpGet("{id:guid}", Name = nameof(GetMessage))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Message>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Message>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMessage(Guid id) => Ok(await _apiService.GetMessage(id));
 
     /// <summary>
@@ -108,11 +108,11 @@ public class MessageController : ControllerBase
     /// <response code="404">Message not found</response>
     [HttpPatch("{id:guid}", Name = nameof(PatchMessage))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Message>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Message>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchMessage(Guid id, [FromBody] UpdateMessageInput input)
     {
         var message = new Message { Text = new CommonBbText { Value = input.Text } };
@@ -128,10 +128,10 @@ public class MessageController : ControllerBase
     /// <response code="404">Message not found</response>
     [HttpDelete("{id:guid}", Name = nameof(DeleteMessage))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteMessage(Guid id)
     {
         await _apiService.DeleteMessage(id);
@@ -148,10 +148,10 @@ public class MessageController : ControllerBase
     /// <response code="404">Message not found</response>
     [HttpPost("{id:guid}/likes", Name = nameof(PostMessageLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Message>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 409)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Message>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostMessageLike(Guid id) =>
         Ok(await _apiService.LikeMessage(id));
 
@@ -165,10 +165,10 @@ public class MessageController : ControllerBase
     /// <response code="404">Message not found</response>
     [HttpDelete("{id:guid}/likes", Name = nameof(DeleteMessageLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 409)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteMessageLike(Guid id)
     {
         await _apiService.UnlikeMessage(id);

@@ -54,7 +54,7 @@ public class Startup
             config => config.UseRabbit(),
             consumerBuilderDefaults: builder => builder.WithMiddleware<SearchConsumerRetryMiddleware>());
 
-        services.AddHostedService<SearchEngineConsumer>();
+        services.AddHostedService<SearchIndexerConsumer>();
 
         services.AddDbContext<DmDbContext>(options => options
             .UseNpgsql(_configuration.GetConnectionString(nameof(ConnectionStrings.Rdb))));

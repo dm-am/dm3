@@ -61,7 +61,7 @@ public class BoardController : ControllerBase
     /// </remarks>
     /// <response code="200">List of all boards with statistics</response>
     [HttpGet(Name = nameof(GetBoards))]
-    [ProducesResponseType(typeof(ListEnvelope<Board>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<Board>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetBoards()
     {
         Response.Headers.CacheControl = "public, max-age=60";
@@ -82,8 +82,8 @@ public class BoardController : ControllerBase
     /// <response code="200">Board details</response>
     /// <response code="410">Board not found</response>
     [HttpGet("{id}", Name = nameof(GetBoard))]
-    [ProducesResponseType(typeof(Envelope<Board>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Board>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBoard(string id) => Ok(await _boardApiService.GetBoard(id));
 
     /// <summary>
@@ -99,9 +99,9 @@ public class BoardController : ControllerBase
     /// <response code="410">Board not found</response>
     [HttpDelete("{id}/comments/unread", Name = nameof(ReadBoardComments))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ReadBoardComments(string id)
     {
         await _commentApiService.MarkAsRead(id);
@@ -119,7 +119,7 @@ public class BoardController : ControllerBase
     /// <response code="200">List of board moderators</response>
     /// <response code="410">Board not found</response>
     [HttpGet("{id}/moderators", Name = nameof(GetBoardModerators))]
-    [ProducesResponseType(typeof(ListEnvelope<User>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(ListEnvelope<User>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBoardModerators(string id) => Ok(await _moderatorsApiService.GetModerators(id));
 }

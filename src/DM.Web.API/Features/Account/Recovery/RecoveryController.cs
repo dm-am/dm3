@@ -58,8 +58,8 @@ public class RecoveryController : ControllerBase
     /// <response code="429">Too many requests</response>
     [HttpPost("recovery", Name = nameof(RequestRecovery))]
     [ProducesResponseType(typeof(RecoveryResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> RequestRecovery([FromBody] RecoveryRequest request) =>
         Ok(await _recoveryService.Recover(request));
 
@@ -78,7 +78,7 @@ public class RecoveryController : ControllerBase
     /// <response code="404">Token not found</response>
     [HttpGet("password-reset/{token:guid}", Name = nameof(GetPasswordResetStatus))]
     [ProducesResponseType(typeof(PasswordResetTokenInfo), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPasswordResetStatus(Guid token)
     {
         var tokenInfo = await _recoveryService.GetTokenInfo(token);
@@ -106,9 +106,9 @@ public class RecoveryController : ControllerBase
     /// <response code="429">Too many requests</response>
     [HttpPost("password-reset/{token:guid}", Name = nameof(CompletePasswordReset))]
     [ProducesResponseType(typeof(User), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status410Gone)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status410Gone)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> CompletePasswordReset(Guid token, [FromBody] PasswordResetCompletion request) =>
         Ok(await _recoveryService.ResetPassword(token, request));
 }

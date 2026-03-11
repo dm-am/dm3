@@ -47,8 +47,8 @@ public class GameReviewController : ControllerBase
     /// <response code="200">List of game reviews</response>
     /// <response code="404">Game not found</response>
     [HttpGet(Name = nameof(GetGameReviews))]
-    [ProducesResponseType(typeof(ListEnvelope<ApiReview>), 200)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
+    [ProducesResponseType(typeof(ListEnvelope<ApiReview>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameReviews(Guid id, [FromQuery] PagingQuery q)
     {
         var (reviews, paging) = await _gameReviewService.GetListAsync(id, q);
@@ -74,12 +74,12 @@ public class GameReviewController : ControllerBase
     /// <response code="409">Review already exists</response>
     [HttpPost(Name = nameof(CreateGameReview))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(ApiReview), 201)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 400)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 401)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 403)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 404)]
-    [ProducesResponseType(typeof(ErrorEnvelope), 409)]
+    [ProducesResponseType(typeof(ApiReview), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateGameReview(Guid id, [FromBody] CreateReviewRequest request)
     {
         var createReview = new CreateGameReview

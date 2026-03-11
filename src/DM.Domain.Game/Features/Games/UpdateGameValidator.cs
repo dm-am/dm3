@@ -33,6 +33,6 @@ internal class UpdateGameValidator : AbstractValidator<UpdateGame>
 
         When(g => g.AssistantUsername != default, () =>
             RuleFor(g => g.AssistantUsername)
-                .MustAsync(userLookupService.UserExists).WithMessage(ValidationError.Invalid));
+                .MustAsync(userLookupService.UserExistsAsync).WithMessage(ValidationError.Invalid));
     }
 }

@@ -21,34 +21,34 @@ public interface IUserReadRepository
     /// <summary>
     /// Get user by username
     /// </summary>
-    Task<GeneralUser?> GetUser(string username);
+    Task<GeneralUser?> GetUserAsync(string username);
 
     /// <summary>
     /// Get user by ID
     /// </summary>
-    Task<GeneralUser?> GetUser(Guid userId);
+    Task<GeneralUser?> GetUserAsync(Guid userId);
 
     /// <summary>
     /// Get user details by username
     /// </summary>
-    Task<UserDetails?> GetUserDetails(string username);
+    Task<UserDetails?> GetUserDetailsAsync(string username);
 
     /// <summary>
     /// Get user details by ID
     /// </summary>
-    Task<UserDetails?> GetUserDetails(Guid userId);
+    Task<UserDetails?> GetUserDetailsAsync(Guid userId);
 
     // ═══ LIST USERS ═══
 
     /// <summary>
     /// Count users matching filter criteria
     /// </summary>
-    Task<int> CountUsers(UserActivityFilter filter, string? search = null, UserRole? role = null);
+    Task<int> CountUsersAsync(UserActivityFilter filter, string? search = null, UserRole? role = null);
 
     /// <summary>
     /// Get users list with pagination
     /// </summary>
-    Task<IEnumerable<GeneralUser>> GetUsers(
+    Task<IEnumerable<GeneralUser>> GetUsersAsync(
         PagingData paging,
         UserActivityFilter filter,
         string? search = null,
@@ -58,10 +58,10 @@ public interface IUserReadRepository
     /// <summary>
     /// Get users by role
     /// </summary>
-    Task<IEnumerable<GeneralUser>> GetUsersByRole(UserRole role);
+    Task<IEnumerable<GeneralUser>> GetUsersByRoleAsync(UserRole role);
 
     /// <summary>
     /// Get users by IDs
     /// </summary>
-    Task<IEnumerable<GeneralUser>> GetUsers(IEnumerable<Guid> userIds);
+    Task<IEnumerable<GeneralUser>> GetUsersAsync(IEnumerable<Guid> userIds);
 }

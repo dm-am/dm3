@@ -31,7 +31,7 @@ public class BlogController : ControllerBase
     /// <param name="q">Paging query parameters</param>
     /// <response code="200">List of public blogs</response>
     [HttpGet(Name = nameof(GetBlogs))]
-    [ProducesResponseType(typeof(ListEnvelope<Blog>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<Blog>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetBlogs([FromQuery] PagingQuery q) =>
         Ok(await _apiService.GetPublicBlogs(q));
 
@@ -40,7 +40,7 @@ public class BlogController : ControllerBase
     /// </summary>
     /// <response code="200">List of popular blogs</response>
     [HttpGet("popular", Name = nameof(GetPopularBlogs))]
-    [ProducesResponseType(typeof(ListEnvelope<Blog>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<Blog>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPopularBlogs() =>
         Ok(await _apiService.GetPopularBlogs());
 
@@ -51,8 +51,8 @@ public class BlogController : ControllerBase
     /// <response code="200">List of user blogs</response>
     /// <response code="404">User not found</response>
     [HttpGet("user/{login}", Name = nameof(GetUserBlogs))]
-    [ProducesResponseType(typeof(ListEnvelope<Blog>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(ListEnvelope<Blog>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserBlogs(string login) =>
         Ok(await _apiService.GetUserBlogs(login));
 
@@ -63,8 +63,8 @@ public class BlogController : ControllerBase
     /// <response code="200">Blog details</response>
     /// <response code="404">Blog not found</response>
     [HttpGet("{id:guid}", Name = nameof(GetBlog))]
-    [ProducesResponseType(typeof(Envelope<Blog>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlog(Guid id) =>
         Ok(await _apiService.Get(id));
 
@@ -75,8 +75,8 @@ public class BlogController : ControllerBase
     /// <response code="200">Blog details</response>
     /// <response code="404">Blog not found</response>
     [HttpGet("owner/{login}", Name = nameof(GetBlogByOwner))]
-    [ProducesResponseType(typeof(Envelope<Blog>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogByOwner(string login) =>
         Ok(await _apiService.GetByOwnerLogin(login));
 
@@ -89,9 +89,9 @@ public class BlogController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     [HttpPost(Name = nameof(PostBlog))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Blog>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
+    [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> PostBlog([FromBody] CreateBlogRequest request)
     {
         var result = await _apiService.Create(request);
@@ -110,11 +110,11 @@ public class BlogController : ControllerBase
     /// <response code="404">Blog not found</response>
     [HttpPatch("{id:guid}", Name = nameof(PatchBlog))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Blog>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchBlog(Guid id, [FromBody] UpdateBlogRequest request) =>
         Ok(await _apiService.Update(id, request));
 
@@ -128,10 +128,10 @@ public class BlogController : ControllerBase
     /// <response code="404">Blog not found</response>
     [HttpDelete("{id:guid}", Name = nameof(DeleteBlog))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteBlog(Guid id)
     {
         await _apiService.Delete(id);
@@ -150,11 +150,11 @@ public class BlogController : ControllerBase
     /// <response code="404">Blog not found</response>
     [HttpPost("{id:guid}/rubrics", Name = nameof(PostRubric))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Rubric>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Rubric>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostRubric(Guid id, [FromBody] CreateRubricRequest request)
     {
         var result = await _apiService.CreateRubric(id, request);
@@ -171,10 +171,10 @@ public class BlogController : ControllerBase
     /// <response code="404">Rubric not found</response>
     [HttpDelete("rubrics/{rubricId:guid}", Name = nameof(DeleteRubric))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteRubric(Guid rubricId)
     {
         await _apiService.DeleteRubric(rubricId);

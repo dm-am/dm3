@@ -46,7 +46,7 @@ public class AvailabilityController : ControllerBase
     [HttpGet("check-email", Name = nameof(CheckEmail))]
     [EnableRateLimiting("email-check")]
     [ProducesResponseType(typeof(EmailAvailabilityResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> CheckEmail([FromQuery] string email)
     {
         var result = await _availabilityApiService.CheckEmailAvailability(email);
@@ -70,7 +70,7 @@ public class AvailabilityController : ControllerBase
     [HttpGet("check-username", Name = nameof(CheckUsername))]
     [EnableRateLimiting("username-check")]
     [ProducesResponseType(typeof(UsernameAvailabilityResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorEnvelope), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> CheckUsername([FromQuery] string username)
     {
         var result = await _availabilityApiService.CheckUsernameAvailability(username);

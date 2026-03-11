@@ -20,7 +20,7 @@ public interface IUserLookupService
     /// <param name="username">Username to find</param>
     /// <returns>User info</returns>
     /// <exception cref="DM.Domain.Core.Exceptions.HttpException">User not found (410 Gone)</exception>
-    Task<GeneralUser> Get(string username);
+    Task<GeneralUser> GetAsync(string username);
 
     /// <summary>
     /// Get user by ID (throws HttpException if not found)
@@ -28,7 +28,7 @@ public interface IUserLookupService
     /// <param name="userId">User identifier</param>
     /// <returns>User info</returns>
     /// <exception cref="DM.Domain.Core.Exceptions.HttpException">User not found (410 Gone)</exception>
-    Task<GeneralUser> Get(Guid userId);
+    Task<GeneralUser> GetAsync(Guid userId);
 
     /// <summary>
     /// Check if username exists (for validators)
@@ -36,7 +36,7 @@ public interface IUserLookupService
     /// <param name="username">Username to check</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>True if user exists</returns>
-    Task<bool> UsernameExists(string username, CancellationToken ct = default);
+    Task<bool> UsernameExistsAsync(string username, CancellationToken ct = default);
 
     /// <summary>
     /// Check if user exists by username (alias for UsernameExists, for validator compatibility)
@@ -44,7 +44,7 @@ public interface IUserLookupService
     /// <param name="username">Username to check</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>True if user exists</returns>
-    Task<bool> UserExists(string username, CancellationToken ct = default);
+    Task<bool> UserExistsAsync(string username, CancellationToken ct = default);
 
     /// <summary>
     /// Find user ID by username (for game/blog resolvers)
@@ -52,5 +52,5 @@ public interface IUserLookupService
     /// <param name="username">Username to find</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>Tuple with Found flag and UserId (Empty if not found)</returns>
-    Task<(bool Found, Guid UserId)> FindUserId(string username, CancellationToken ct = default);
+    Task<(bool Found, Guid UserId)> FindUserIdAsync(string username, CancellationToken ct = default);
 }

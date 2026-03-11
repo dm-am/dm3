@@ -304,11 +304,11 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedComments(DmDbContext db)
     {
-        if (!db.Set<DM.Infrastructure.Persistence.Entities.CrossDomain.Comment>().Any())
+        if (!db.Set<DM.Infrastructure.Persistence.Entities.Shared.Comment>().Any())
         {
             // Comment for game (FK_Comments_Games_EntityId requires this)
-            db.Set<DM.Infrastructure.Persistence.Entities.CrossDomain.Comment>().Add(
-                new DM.Infrastructure.Persistence.Entities.CrossDomain.Comment
+            db.Set<DM.Infrastructure.Persistence.Entities.Shared.Comment>().Add(
+                new DM.Infrastructure.Persistence.Entities.Shared.Comment
                 {
                     CommentId = TestConstants.TestCommentId,
                     EntityId = TestConstants.TestGameId,

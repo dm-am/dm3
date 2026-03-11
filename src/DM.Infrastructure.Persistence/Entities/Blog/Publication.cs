@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using DM.Infrastructure.Persistence.Entities.CrossDomain;
-using DM.Infrastructure.Persistence.Entities.DataContracts;
+using DM.Infrastructure.Persistence.Entities.Shared;
+using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.Entities.Account;
 
 namespace DM.Infrastructure.Persistence.Entities.Blog;
@@ -104,7 +104,7 @@ public class Publication : ISoftDeletable, IEditable
     public Guid? DeletedByUserId { get; set; }
 
     /// <inheritdoc />
-    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public DateTimeOffset? DeletedUtc { get; set; }
 
     #region Navigation Properties
 

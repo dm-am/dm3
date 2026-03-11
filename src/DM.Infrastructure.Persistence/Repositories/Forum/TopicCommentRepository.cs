@@ -83,7 +83,7 @@ internal class TopicCommentRepository : ITopicCommentRepository
         var commentId = _guidFactory.Create();
         var now = _dateTimeProvider.Now;
 
-        var dbComment = new Entities.CrossDomain.Comment
+        var dbComment = new Entities.Shared.Comment
         {
             CommentId = commentId,
             EntityId = createComment.TopicId,

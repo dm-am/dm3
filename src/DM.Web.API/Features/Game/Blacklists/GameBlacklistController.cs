@@ -33,10 +33,10 @@ public class GameBlacklistController : ControllerBase
     /// <response code="410">Game not found</response>
     [HttpGet("{id}/blacklist", Name = nameof(GetBlacklist))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(ListEnvelope<User>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(ListEnvelope<User>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlacklist(Guid id) => Ok(await _blacklistApiService.Get(id));
 
     /// <summary>
@@ -52,12 +52,12 @@ public class GameBlacklistController : ControllerBase
     /// <response code="410">Game not found</response>
     [HttpPost("{id}/blacklist", Name = nameof(PostBlacklist))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<User>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 409)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostBlacklist(Guid id, [FromBody] User user)
     {
         var result = await _blacklistApiService.Create(id, user);
@@ -76,11 +76,11 @@ public class GameBlacklistController : ControllerBase
     /// <response code="410">Game not found</response>
     [HttpDelete("{id}/blacklist/{login}", Name = nameof(DeleteBlacklist))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 409)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteBlacklist(Guid id, string login)
     {
         await _blacklistApiService.Delete(id, login);

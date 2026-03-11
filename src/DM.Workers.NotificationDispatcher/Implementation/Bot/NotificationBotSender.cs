@@ -158,7 +158,7 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
         }
     }
 
-    private static bool ShouldSendToChannel(NotificationChannelPreferences? prefs, NotificationCategory category)
+    private static bool ShouldSendToChannel(NotificationChannelPreference? prefs, NotificationCategory category)
     {
         if (prefs == null || !prefs.Enabled)
         {

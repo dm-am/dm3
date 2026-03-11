@@ -30,18 +30,18 @@ internal class MessageLikeService : IMessageLikeService
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser> LikeMessage(Guid messageId)
+    public async Task<GeneralUser> LikeMessageAsync(Guid messageId)
     {
         var message = await _messageService.GetAsync(messageId);
         _intentionManager.ThrowIfForbidden(MessageIntention.Like, message);
-        return await _likeOperations.Like(message, EventType.LikedMessage);
+        return await _likeOperations.LikeAsync(message, EventType.LikedMessage);
     }
 
     /// <inheritdoc />
-    public async Task UnlikeMessage(Guid messageId)
+    public async Task UnlikeMessageAsync(Guid messageId)
     {
         var message = await _messageService.GetAsync(messageId);
         _intentionManager.ThrowIfForbidden(MessageIntention.Like, message);
-        await _likeOperations.Unlike(message);
+        await _likeOperations.UnlikeAsync(message);
     }
 }

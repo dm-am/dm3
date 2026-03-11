@@ -14,12 +14,12 @@ public interface IGameCommentLikeService
     /// </summary>
     /// <param name="commentId">Comment identifier</param>
     /// <returns>User who liked the comment</returns>
-    Task<GeneralUser> LikeComment(Guid commentId);
+    Task<GeneralUser> LikeCommentAsync(Guid commentId);
 
     /// <summary>
     /// Remove existing like from current user to selected comment
     /// </summary>
     /// <param name="commentId">Comment identifier</param>
     /// <returns></returns>
-    Task UnlikeComment(Guid commentId);
+    Task UnlikeCommentAsync(Guid commentId);
 }

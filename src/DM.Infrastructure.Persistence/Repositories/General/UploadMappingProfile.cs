@@ -1,6 +1,6 @@
 using AutoMapper;
 using DM.Domain.Core.Uploads;
-using DbUpload = DM.Infrastructure.Persistence.Entities.CrossDomain.Upload;
+using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
 
 namespace DM.Infrastructure.Persistence.Repositories.General;
 

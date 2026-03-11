@@ -16,7 +16,7 @@ public interface INotepadRepository
     /// <summary>
     /// Get all entries in a notepad
     /// </summary>
-    Task<IEnumerable<NotepadEntry>> GetEntries(
+    Task<IEnumerable<NotepadEntry>> GetEntriesAsync(
         NotepadType notepadType,
         Guid containerId,
         Guid? ownerId = null,
@@ -25,29 +25,29 @@ public interface INotepadRepository
     /// <summary>
     /// Get entries in a specific category
     /// </summary>
-    Task<IEnumerable<NotepadEntry>> GetEntriesByCategory(
+    Task<IEnumerable<NotepadEntry>> GetEntriesByCategoryAsync(
         Guid categoryId,
         CancellationToken ct = default);
 
     /// <summary>
     /// Get entry by ID
     /// </summary>
-    Task<NotepadEntry?> GetEntry(Guid entryId, CancellationToken ct = default);
+    Task<NotepadEntry?> GetEntryAsync(Guid entryId, CancellationToken ct = default);
 
     /// <summary>
     /// Create new entry
     /// </summary>
-    Task<NotepadEntry> CreateEntry(CreateNotepadEntryInternal entry, CancellationToken ct = default);
+    Task<NotepadEntry> CreateEntryAsync(CreateNotepadEntryInternal entry, CancellationToken ct = default);
 
     /// <summary>
     /// Update entry
     /// </summary>
-    Task<NotepadEntry> UpdateEntry(UpdateNotepadEntryInternal entry, CancellationToken ct = default);
+    Task<NotepadEntry> UpdateEntryAsync(UpdateNotepadEntryInternal entry, CancellationToken ct = default);
 
     /// <summary>
     /// Delete entry (soft delete)
     /// </summary>
-    Task DeleteEntry(Guid entryId, Guid deletedByUserId, CancellationToken ct = default);
+    Task DeleteEntryAsync(Guid entryId, Guid deletedByUserId, CancellationToken ct = default);
 
     #endregion
 
@@ -56,7 +56,7 @@ public interface INotepadRepository
     /// <summary>
     /// Get all categories in a notepad
     /// </summary>
-    Task<IEnumerable<NotepadCategory>> GetCategories(
+    Task<IEnumerable<NotepadCategory>> GetCategoriesAsync(
         NotepadType notepadType,
         Guid containerId,
         Guid? ownerId = null,
@@ -65,22 +65,22 @@ public interface INotepadRepository
     /// <summary>
     /// Get category by ID
     /// </summary>
-    Task<NotepadCategory?> GetCategory(Guid categoryId, CancellationToken ct = default);
+    Task<NotepadCategory?> GetCategoryAsync(Guid categoryId, CancellationToken ct = default);
 
     /// <summary>
     /// Create new category
     /// </summary>
-    Task<NotepadCategory> CreateCategory(CreateNotepadCategoryInternal category, CancellationToken ct = default);
+    Task<NotepadCategory> CreateCategoryAsync(CreateNotepadCategoryInternal category, CancellationToken ct = default);
 
     /// <summary>
     /// Update category
     /// </summary>
-    Task<NotepadCategory> UpdateCategory(UpdateNotepadCategoryInternal category, CancellationToken ct = default);
+    Task<NotepadCategory> UpdateCategoryAsync(UpdateNotepadCategoryInternal category, CancellationToken ct = default);
 
     /// <summary>
     /// Delete category (soft delete)
     /// </summary>
-    Task DeleteCategory(Guid categoryId, Guid deletedByUserId, CancellationToken ct = default);
+    Task DeleteCategoryAsync(Guid categoryId, Guid deletedByUserId, CancellationToken ct = default);
 
     #endregion
 }

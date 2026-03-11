@@ -62,9 +62,9 @@ public class ModerationController : ControllerBase
     /// <response code="404">Endpoint not available in production</response>
     [HttpPost("users/me/role/{role}", Name = nameof(SetMyRole))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SetMyRole(UserRole role)
     {
         // Security: This endpoint is only available in development
@@ -94,8 +94,8 @@ public class ModerationController : ControllerBase
     /// <response code="200">List of all users</response>
     /// <response code="404">Endpoint not available in production</response>
     [HttpGet("users", Name = nameof(GetAllUsers))]
-    [ProducesResponseType(typeof(IReadOnlyList<TestAccountInfo>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(IReadOnlyList<TestAccountInfo>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetAllUsers()
     {
         // Security: This endpoint is only available in development
@@ -123,10 +123,10 @@ public class ModerationController : ControllerBase
     /// <response code="404">User not found</response>
     [HttpPatch("users/{login}/profile", Name = nameof(ModerateUserProfileLegacy))]
     [RequireRole(UserRole.SeniorModerator)]
-    [ProducesResponseType(typeof(Envelope<UserProfile>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<UserProfile>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ModerateUserProfileLegacy(string login, [FromBody] ModerateProfile profile) =>
         Ok(await _moderationApiService.ModerateUserProfile(login, profile));
 
@@ -150,8 +150,8 @@ public class ModerationController : ControllerBase
     /// <response code="200">Seed completed with results</response>
     /// <response code="404">Endpoint not available in production</response>
     [HttpPost("seed", Name = nameof(SeedTestUsers))]
-    [ProducesResponseType(typeof(SeedResult), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(SeedResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SeedTestUsers()
     {
         // Security: This endpoint is only available in development

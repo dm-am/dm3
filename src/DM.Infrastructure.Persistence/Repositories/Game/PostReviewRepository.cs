@@ -11,7 +11,7 @@ using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Reviews;
 using DM.Domain.Core.Reviews;
 using Microsoft.EntityFrameworkCore;
-using DbReview = DM.Infrastructure.Persistence.Entities.CrossDomain.Review;
+using DbReview = DM.Infrastructure.Persistence.Entities.Shared.Review;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 

@@ -157,12 +157,12 @@ internal class MessagingApiService : IMessagingApiService
     /// <inheritdoc />
     public async Task<Envelope<ApiMessage>> LikeMessage(Guid messageId)
     {
-        await _messageLikeService.LikeMessage(messageId);
+        await _messageLikeService.LikeMessageAsync(messageId);
         return await GetMessage(messageId);
     }
 
     /// <inheritdoc />
-    public Task UnlikeMessage(Guid messageId) => _messageLikeService.UnlikeMessage(messageId);
+    public Task UnlikeMessage(Guid messageId) => _messageLikeService.UnlikeMessageAsync(messageId);
 
     /// <inheritdoc />
     public async Task<Envelope<ApiConversation>> CreateConversation(ApiCreateConversation createConversation)
@@ -223,7 +223,7 @@ internal class MessagingApiService : IMessagingApiService
     public async Task<ApiChatAvailability> CanStartChat(string username)
     {
         // Get target user to resolve username to ID
-        var targetUser = await _userService.Get(username);
+        var targetUser = await _userService.GetAsync(username);
 
         // Check block status between current user and target user
         var blockStatus = await _userBlacklistService.GetBlockStatus(targetUser.UserId);

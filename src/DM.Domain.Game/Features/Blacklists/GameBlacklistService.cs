@@ -68,7 +68,7 @@ internal class GameBlacklistService : IGameBlacklistService
         var game = await _gameService.GetAsync(operateBlacklistLink.GameId);
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, game);
 
-        var (_, userId) = await _userLookupService.FindUserId(operateBlacklistLink.Username);
+        var (_, userId) = await _userLookupService.FindUserIdAsync(operateBlacklistLink.Username);
         if (game.BlacklistedUsers.Any(b => b.UserId == userId))
         {
             throw new HttpException(HttpStatusCode.Conflict, "User already blacklisted");
@@ -107,14 +107,14 @@ internal class GameBlacklistService : IGameBlacklistService
             };
             if (eventType != EventType.Unknown)
             {
-                await _producer.Send(eventType, invitation.TokenId);
+                await _producer.SendAsync(eventType, invitation.TokenId);
             }
         }
 
         // Decline pending characters for this user
         await _characterRepository.DeclinePendingCharacters(game.Id, userId);
 
-        await _producer.Send(EventType.ChangedGame, game.Id);
+        await _producer.SendAsync(EventType.ChangedGame, game.Id);
         return blacklistedUser;
     }
 
@@ -124,7 +124,7 @@ internal class GameBlacklistService : IGameBlacklistService
         var game = await _gameService.GetAsync(operateBlacklistLink.GameId);
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, game);
 
-        var (_, userId) = await _userLookupService.FindUserId(operateBlacklistLink.Username);
+        var (_, userId) = await _userLookupService.FindUserIdAsync(operateBlacklistLink.Username);
         if (!game.BlacklistedUsers.Any(b => b.UserId == userId))
         {
             throw new HttpException(HttpStatusCode.Conflict, "User is not blacklisted");
@@ -135,22 +135,22 @@ internal class GameBlacklistService : IGameBlacklistService
 
     #region IContentBlacklistService implementation
 
-    Task<IEnumerable<GeneralUser>> DM.Domain.Core.Blacklists.IContentBlacklistService.GetBlacklist(
+    Task<IEnumerable<GeneralUser>> DM.Domain.Core.Blacklists.IContentBlacklistService.GetBlacklistAsync(
         Guid entityId, CancellationToken ct) => Get(entityId);
 
-    async Task<GeneralUser> DM.Domain.Core.Blacklists.IContentBlacklistService.AddToBlacklist(
+    async Task<GeneralUser> DM.Domain.Core.Blacklists.IContentBlacklistService.AddToBlacklistAsync(
         Guid entityId, string username, CancellationToken ct)
     {
         return await Add(new OperateBlacklistLink { GameId = entityId, Username = username });
     }
 
-    async Task DM.Domain.Core.Blacklists.IContentBlacklistService.RemoveFromBlacklist(
+    async Task DM.Domain.Core.Blacklists.IContentBlacklistService.RemoveFromBlacklistAsync(
         Guid entityId, string username, CancellationToken ct)
     {
         await Remove(new OperateBlacklistLink { GameId = entityId, Username = username });
     }
 
-    public async Task<bool> IsBlocked(Guid gameId, Guid userId, CancellationToken ct = default)
+    public async Task<bool> IsBlockedAsync(Guid gameId, Guid userId, CancellationToken ct = default)
     {
         return await _repository.IsBlocked(gameId, userId, ct);
     }

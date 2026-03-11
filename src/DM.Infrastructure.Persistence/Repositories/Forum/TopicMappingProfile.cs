@@ -1,7 +1,7 @@
 using System.Linq;
 using AutoMapper;
 using DM.Domain.Forum.Features.Topics;
-using DM.Infrastructure.Persistence.Entities.CrossDomain;
+using DM.Infrastructure.Persistence.Entities.Shared;
 using TopicEntity = DM.Infrastructure.Persistence.Entities.Forum.Topic;
 
 namespace DM.Infrastructure.Persistence.Repositories.Forum;

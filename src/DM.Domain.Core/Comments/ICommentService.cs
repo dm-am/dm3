@@ -14,7 +14,7 @@ public interface ICommentService
     /// <summary>
     /// Get comments for an entity
     /// </summary>
-    Task<(IEnumerable<Comment> Comments, PagingData Paging)> GetComments(
+    Task<(IEnumerable<Comment> Comments, PagingData Paging)> GetCommentsAsync(
         CommentEntityType entityType,
         Guid entityId,
         PagingQuery paging,
@@ -23,12 +23,12 @@ public interface ICommentService
     /// <summary>
     /// Get single comment by ID
     /// </summary>
-    Task<Comment?> GetComment(Guid commentId, CancellationToken ct = default);
+    Task<Comment?> GetCommentAsync(Guid commentId, CancellationToken ct = default);
 
     /// <summary>
     /// Create a comment
     /// </summary>
-    Task<Comment> CreateComment(
+    Task<Comment> CreateCommentAsync(
         CommentEntityType entityType,
         Guid entityId,
         CreateComment createComment,
@@ -37,10 +37,10 @@ public interface ICommentService
     /// <summary>
     /// Update a comment
     /// </summary>
-    Task<Comment> UpdateComment(Guid commentId, UpdateComment updateComment, CancellationToken ct = default);
+    Task<Comment> UpdateCommentAsync(Guid commentId, UpdateComment updateComment, CancellationToken ct = default);
 
     /// <summary>
     /// Delete a comment
     /// </summary>
-    Task DeleteComment(Guid commentId, CancellationToken ct = default);
+    Task DeleteCommentAsync(Guid commentId, CancellationToken ct = default);
 }

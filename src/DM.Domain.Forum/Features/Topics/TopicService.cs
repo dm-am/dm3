@@ -72,8 +72,8 @@ internal class TopicService : ITopicService
             ct);
 
         await Task.WhenAll(
-            _invokedEventProducer.Send(EventType.NewTopic, topic.Id),
-            _unreadCountersRepository.Create(topic.Id, board.Id, UnreadEntryType.Message));
+            _invokedEventProducer.SendAsync(EventType.NewTopic, topic.Id),
+            _unreadCountersRepository.CreateAsync(topic.Id, board.Id, UnreadEntryType.Message));
 
         return topic;
     }
@@ -91,7 +91,7 @@ internal class TopicService : ITopicService
 
         if (identity.User.IsAuthenticated)
         {
-            topic.UnreadCommentsCount = (await _unreadCountersRepository.SelectByEntities(
+            topic.UnreadCommentsCount = (await _unreadCountersRepository.SelectByEntitiesAsync(
                 identity.User.UserId, UnreadEntryType.Message, topicId))[topicId];
         }
 
@@ -151,7 +151,7 @@ internal class TopicService : ITopicService
                 var board = await _boardService.GetBoard(updateTopic.BoardTitle, false);
                 _intentionManager.ThrowIfForbidden(ForumIntention.CreateTopic, board);
                 newBoardId = board.Id;
-                await _unreadCountersRepository.ChangeParent(oldTopic.Board.Id, UnreadEntryType.Message, board.Id);
+                await _unreadCountersRepository.ChangeParentAsync(oldTopic.Board.Id, UnreadEntryType.Message, board.Id);
             }
         }
         else
@@ -170,7 +170,7 @@ internal class TopicService : ITopicService
             IsAttached = updateTopic.IsAttached
         };
         var topic = await _repository.Update(updateEntity, newBoardId);
-        await _invokedEventProducer.Send(EventType.ChangedTopic, topic.Id);
+        await _invokedEventProducer.SendAsync(EventType.ChangedTopic, topic.Id);
 
         return topic;
     }
@@ -182,7 +182,7 @@ internal class TopicService : ITopicService
         _intentionManager.ThrowIfForbidden(ForumIntention.AdministrateTopics, topic.Board);
 
         await _repository.Delete(topicId);
-        await _unreadCountersRepository.Delete(topicId, UnreadEntryType.Message);
-        await _invokedEventProducer.Send(EventType.DeletedTopic, topicId);
+        await _unreadCountersRepository.DeleteAsync(topicId, UnreadEntryType.Message);
+        await _invokedEventProducer.SendAsync(EventType.DeletedTopic, topicId);
     }
 }

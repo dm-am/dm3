@@ -51,7 +51,7 @@ public class CreateGlobalChatEventEntity
     /// <summary>
     /// Creation timestamp
     /// </summary>
-    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 }
 
 /// <summary>

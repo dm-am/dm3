@@ -37,8 +37,8 @@ public class PostController : ControllerBase
     /// <response code="200">Returns the list of posts in the room</response>
     /// <response code="410">Room not found</response>
     [HttpGet("~/v1/rooms/{id}/posts", Name = nameof(GetPosts))]
-    [ProducesResponseType(typeof(ListEnvelope<Post>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(ListEnvelope<Post>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPosts(Guid id, [FromQuery] PagingQuery q) =>
         Ok(await _postApiService.Get(id, q));
 
@@ -54,11 +54,11 @@ public class PostController : ControllerBase
     /// <response code="410">Room not found</response>
     [HttpPost("~/v1/rooms/{id}/posts", Name = nameof(PostPost))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Post>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Post>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostPost(Guid id, [FromBody] CreatePostRequest post)
     {
         var result = await _postApiService.Create(id, post);
@@ -73,7 +73,7 @@ public class PostController : ControllerBase
     /// <response code="200">Returns the post details</response>
     /// <response code="410">Post not found</response>
     [HttpGet("{id}", Name = nameof(GetPost))]
-    [ProducesResponseType(typeof(Envelope<Post>), 200)]
+    [ProducesResponseType(typeof(Envelope<Post>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPost(Guid id) => Ok(await _postApiService.Get(id));
 
     /// <summary>
@@ -88,11 +88,11 @@ public class PostController : ControllerBase
     /// <response code="410">Post not found</response>
     [HttpPatch("{id}", Name = nameof(PatchPost))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Post>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<Post>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchPost(Guid id, [FromBody] Post post) =>
         Ok(await _postApiService.Update(id, post));
 
@@ -106,10 +106,10 @@ public class PostController : ControllerBase
     /// <response code="410">Post not found</response>
     [HttpDelete("{id}", Name = nameof(DeletePost))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeletePost(Guid id)
     {
         await _postApiService.Delete(id);
@@ -121,7 +121,7 @@ public class PostController : ControllerBase
     /// </summary>
     /// <response code="200">Returns featured posts</response>
     [HttpGet("featured", Name = nameof(GetFeaturedPosts))]
-    [ProducesResponseType(typeof(FeaturedPostsEnvelope), 200)]
+    [ProducesResponseType(typeof(FeaturedPostsEnvelope), StatusCodes.Status200OK)]
     [ResponseCache(Duration = 300)] // 5 minutes cache
     public async Task<IActionResult> GetFeaturedPosts()
     {

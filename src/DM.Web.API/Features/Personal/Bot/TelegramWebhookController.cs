@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
@@ -32,7 +33,7 @@ public class TelegramWebhookController : ControllerBase
     /// <param name="update">Telegram update object</param>
     /// <response code="200">Update processed</response>
     [HttpPost("webhook", Name = nameof(HandleUpdate))]
-    [ProducesResponseType(200)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> HandleUpdate([FromBody] JsonElement update)
     {
         try

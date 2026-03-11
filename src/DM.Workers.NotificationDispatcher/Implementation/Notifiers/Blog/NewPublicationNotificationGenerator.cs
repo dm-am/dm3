@@ -54,7 +54,7 @@ internal class NewPublicationNotificationGenerator : BaseNotificationGenerator
         }
 
         // Find all users subscribed to this blog with NewPublications setting
-        var subscriptions = await _subscriptionRepository.GetByTargetWithSettings(
+        var subscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.Blog,
             publicationData.BlogId,
             SubscriptionSettings.NewPublications);

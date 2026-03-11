@@ -10,7 +10,7 @@ using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
 using Microsoft.EntityFrameworkCore;
-using DbComment = DM.Infrastructure.Persistence.Entities.CrossDomain.Comment;
+using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
 namespace DM.Infrastructure.Persistence.Repositories.Blog;
 

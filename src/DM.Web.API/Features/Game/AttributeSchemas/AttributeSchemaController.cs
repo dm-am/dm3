@@ -28,7 +28,7 @@ public class AttributeSchemaController : ControllerBase
     /// </summary>
     /// <response code="200">Returns the attribute schema list</response>
     [HttpGet(Name = nameof(GetSchemas))]
-    [ProducesResponseType(typeof(ListEnvelope<AttributeSchema>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<AttributeSchema>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSchemas() => Ok(await _schemaApiService.Get());
 
     /// <summary>
@@ -41,10 +41,10 @@ public class AttributeSchemaController : ControllerBase
     /// <response code="403">User is not allowed to create attribute schemas</response>
     [HttpPost(Name = nameof(PostSchema))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<AttributeSchema>), 201)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
+    [ProducesResponseType(typeof(Envelope<AttributeSchema>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> PostSchema([FromBody] AttributeSchema schema)
     {
         var result = await _schemaApiService.Create(schema);
@@ -58,8 +58,8 @@ public class AttributeSchemaController : ControllerBase
     /// <response code="200">Returns the attribute schema details</response>
     /// <response code="410">Schema not found</response>
     [HttpGet("{id}", Name = nameof(GetSchema))]
-    [ProducesResponseType(typeof(Envelope<AttributeSchema>), 200)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<AttributeSchema>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetSchema(Guid id) => Ok(await _schemaApiService.Get(id));
 
     /// <summary>
@@ -74,11 +74,11 @@ public class AttributeSchemaController : ControllerBase
     /// <response code="410">Schema not found</response>
     [HttpPatch("{id}", Name = nameof(PatchSchema))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<AttributeSchema>), 200)]
-    [ProducesResponseType(typeof(BadRequestError), 400)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(typeof(Envelope<AttributeSchema>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchSchema(Guid id, [FromBody] AttributeSchema schema) =>
         Ok(await _schemaApiService.Update(id, schema));
 
@@ -92,10 +92,10 @@ public class AttributeSchemaController : ControllerBase
     /// <response code="410">Schema not found</response>
     [HttpDelete("{id}", Name = nameof(DeleteSchema))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
-    [ProducesResponseType(typeof(GeneralError), 403)]
-    [ProducesResponseType(typeof(GeneralError), 404)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteSchema(Guid id)
     {
         await _schemaApiService.Delete(id);

@@ -54,7 +54,7 @@ public class ForumController : ControllerBase
     /// </remarks>
     /// <response code="200">List of all boards</response>
     [HttpGet(Name = nameof(GetForum))]
-    [ProducesResponseType(typeof(ListEnvelope<Board>), 200)]
+    [ProducesResponseType(typeof(ListEnvelope<Board>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetForum()
     {
         Response.Headers.CacheControl = "public, max-age=60";
@@ -72,8 +72,8 @@ public class ForumController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     [HttpDelete("comments/unread", Name = nameof(ReadAllForumComments))]
     [AuthenticationRequired]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(typeof(GeneralError), 401)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> ReadAllForumComments()
     {
         await _commentApiService.MarkAllAsRead();

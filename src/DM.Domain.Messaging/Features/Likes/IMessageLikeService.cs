@@ -14,12 +14,12 @@ public interface IMessageLikeService
     /// </summary>
     /// <param name="messageId">Message identifier</param>
     /// <returns>User who liked the message</returns>
-    Task<GeneralUser> LikeMessage(Guid messageId);
+    Task<GeneralUser> LikeMessageAsync(Guid messageId);
 
     /// <summary>
     /// Remove existing like from current user to selected message
     /// </summary>
     /// <param name="messageId">Message identifier</param>
     /// <returns></returns>
-    Task UnlikeMessage(Guid messageId);
+    Task UnlikeMessageAsync(Guid messageId);
 }

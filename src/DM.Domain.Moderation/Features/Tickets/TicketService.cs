@@ -71,7 +71,7 @@ internal class TicketService : ITicketService
     public async Task<Ticket> CreateTicket(CreateTicket createTicket, CancellationToken ct = default)
     {
         var currentUser = _identityProvider.Current.User;
-        var targetUser = await _userLookupService.Get(createTicket.TargetUsername);
+        var targetUser = await _userLookupService.GetAsync(createTicket.TargetUsername);
 
         if (targetUser.UserId == currentUser.UserId)
         {
@@ -139,7 +139,7 @@ internal class TicketService : ITicketService
         var now = _dateTimeProvider.Now;
 
         // Need to get target user ID
-        var targetUser = await _userLookupService.Get(ticket.TargetUsername);
+        var targetUser = await _userLookupService.GetAsync(ticket.TargetUsername);
 
         var updateEntity = new UpdateTicketEntity
         {
