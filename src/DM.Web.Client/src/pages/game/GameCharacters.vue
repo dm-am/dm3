@@ -9,7 +9,8 @@ import { CharacterStatus } from "@/entities/game";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
-const { game, characters, charactersLoading, charactersError } = storeToRefs(gameStore);
+const { game, characters, charactersLoading, charactersError } =
+  storeToRefs(gameStore);
 
 const gameId = computed(() => route.params.id as string);
 

@@ -184,8 +184,8 @@ internal class AuthenticationApiService : IAuthenticationApiService
             Id = s.Id,
             IsCurrent = s.IsCurrent,
             Persistent = s.Persistent,
-            ExpirationDate = s.ExpirationDate,
-            CreatedAtUtc = s.CreatedAt,
+            ExpirationUtc = s.ExpirationUtc,
+            CreatedUtc = s.CreatedUtc,
             DeviceInfo = s.DeviceInfo,
             IpAddress = s.IpAddress
         }).ToList();

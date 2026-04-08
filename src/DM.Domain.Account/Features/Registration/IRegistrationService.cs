@@ -11,6 +11,5 @@ public interface IRegistrationService
     /// Register new user
     /// </summary>
     /// <param name="registration">Registration info</param>
-    /// <returns></returns>
     Task Register(UserRegistration registration);
 }

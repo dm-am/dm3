@@ -14,13 +14,13 @@ internal interface INotificationGenerator
     /// Tells if resolver can process the certain event type
     /// </summary>
     /// <param name="eventType">Event type</param>
-    /// <returns></returns>
+    /// <returns>True if this generator can process the event type</returns>
     bool CanResolve(EventType eventType);
 
     /// <summary>
     /// Generate notifications off the event
     /// </summary>
     /// <param name="entityId">Entity identifier</param>
-    /// <returns></returns>
+    /// <returns>Async enumerable of notifications to create</returns>
     IAsyncEnumerable<CreateNotification> Generate(Guid entityId);
 }

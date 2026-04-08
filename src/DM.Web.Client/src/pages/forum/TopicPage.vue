@@ -1,23 +1,24 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { IconType } from "@/shared/ui/Icon/iconType";
 import { useRoute } from "vue-router";
 import { useBoardsStore } from "@/entities/forum";
 import { useUserStore } from "@/entities/user";
-import { extractNumberParam } from "@/app/providers/router";
 import { storeToRefs } from "pinia";
-import { TopicOpening } from "@/features/topic";
+import { Topic as TopicDisplay } from "@/features/topic";
 import { BBCodeEditor } from "@/features/editor";
-import type { TopicId } from "@/entities/forum";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { forumApi } from "@/entities/forum";
 import { AccessPolicy, UserRole } from "@/shared/api/models/community";
+import { CommentsFilter, useCommentsFilter } from "@/features/comment-filter";
 
 const route = useRoute();
 const boardsStore = useBoardsStore();
-const { trySelectTopic, fetchComments, createComment } = boardsStore;
+const { trySelectTopicByNumber, searchComments, createComment } = boardsStore;
 const { selectedTopic: topic } = storeToRefs(boardsStore);
 const { user } = storeToRefs(useUserStore());
+
+// Filter setup - get search params from URL
+const { searchParams } = useCommentsFilter();
 
 // Comment creation state
 const newComment = ref("");
@@ -36,12 +37,16 @@ const isModerator = computed(() => {
   if (!user.value) return false;
   return (
     user.value.roles?.some((r: UserRole) =>
-      [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(r),
+      [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(
+        r,
+      ),
     ) ?? false
   );
 });
 
-const canComment = computed(() => user.value && !isBanned.value && topic.value && !topic.value.isClosed);
+const canComment = computed(
+  () => user.value && !isBanned.value && topic.value && !topic.value.isClosed,
+);
 
 async function handleSend() {
   if (!newComment.value.trim() || sending.value) return;
@@ -53,11 +58,11 @@ async function handleSend() {
   sending.value = false;
 }
 
-async function markAsReadIfNeeded(topicId: TopicId) {
+async function markAsReadIfNeeded() {
   if (!user.value) return;
   if (!topic.value?.unreadCommentsCount) return;
 
-  await forumApi.markTopicAsRead(topicId);
+  await forumApi.markTopicAsRead(topic.value.id!);
   // Update local state
   if (topic.value) {
     (topic.value as any).unreadCommentsCount = 0;
@@ -65,25 +70,27 @@ async function markAsReadIfNeeded(topicId: TopicId) {
 }
 
 async function fetchData() {
-  const topicId = route.params.id as TopicId;
-  await trySelectTopic(topicId);
-  await fetchComments(extractNumberParam(route.params.n));
+  const alias = route.params.alias as string;
+  const num = parseInt(route.params.num as string);
+  await trySelectTopicByNumber(alias, num);
+  await searchComments(searchParams.value);
   // Mark as read after loading
-  markAsReadIfNeeded(topicId);
+  markAsReadIfNeeded();
 }
 
 useFetchData(
   () => fetchData(),
   [
     {
-      param: (p) => p.id,
+      param: (p) => p.alias,
       callback: () => fetchData(),
     },
     {
-      param: (p) => p.n,
-      callback: (n) => fetchComments(extractNumberParam(n)),
+      param: (p) => p.num,
+      callback: () => fetchData(),
     },
   ],
+  // Query changes are handled by CommentsList via useCommentsFilter
 );
 
 async function handleLike(id: string) {
@@ -102,18 +109,20 @@ function handleWarn(_id: string) {
 <template>
   <template v-if="topic">
     <div class="topic-header">
-      <page-title>{{ topic.title }}</page-title>
-      <router-link :to="{ name: 'forum', params: { id: topic.board.id } }">
-        <the-icon :font="IconType.ArrowLeft" />
-        Назад на форум "{{ topic.board.id }}"
+      <router-link :to="{ name: 'forum', params: { alias: topic.board.alias } }">
+        Назад к разделу "{{ topic.board.title }}"
       </router-link>
     </div>
-    <topic-opening
+
+    <TopicDisplay
       :topic="topic"
       @like="handleLike"
       @unlike="handleUnlike"
       @warn="handleWarn"
     />
+
+    <!-- Comments filter bar (below topic bubble, above pagination) -->
+    <CommentsFilter class="topic-filter" />
   </template>
   <router-view />
 
@@ -146,10 +155,11 @@ function handleWarn(_id: string) {
         Вы не можете отправлять комментарии из-за ограничений аккаунта
       </secondary-text>
       <secondary-text v-else-if="topic?.isClosed" class="comment-closed-hint">
-        Тема закрыта для комментариев
+        Топик закрыт для комментариев
       </secondary-text>
       <secondary-text v-else class="comment-login-hint">
-        <router-link to="/login">Войдите</router-link>, чтобы оставить комментарий
+        <router-link to="/?action=login">Войдите</router-link>, чтобы оставить
+        комментарий
       </secondary-text>
     </div>
   </div>
@@ -164,9 +174,13 @@ function handleWarn(_id: string) {
   display: flex
   justify-content: space-between
   align-items: baseline
+  margin-bottom: $small
+
+.topic-filter
+  margin-top: $medium
 
 .comment-input-wrapper
-  margin-top: $large
+  margin-top: $medium
 
 .comment-input-container
   display: flex

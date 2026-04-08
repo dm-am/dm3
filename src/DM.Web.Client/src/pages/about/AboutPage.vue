@@ -1,220 +1,156 @@
 <script setup lang="ts">
-import { useRoute } from "vue-router";
-import { useWebsiteReviewStore } from "@/shared/stores/websiteReviews";
-import { useUserStore } from "@/entities/user";
-import { extractNumberParam } from "@/app/providers/router";
-import { useFetchData } from "@/shared/lib/composables/useFetchData";
-import { storeToRefs } from "pinia";
-import { userIsSeniorModerator } from "@/entities/user";
-import { ref, computed } from "vue";
-import ThePaging from "@/shared/ui/Paging/ThePaging.vue";
-import WebsiteReviewItem from "./WebsiteReviewItem.vue";
-import TextArea from "@/shared/ui/TextArea/TextArea.vue";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
-import { UserAutocomplete } from "@/shared/ui/UserAutocomplete";
+import { SvgIcon } from "@/shared/ui";
 
-const route = useRoute();
-const userStore = useUserStore();
-const websiteReviewStore = useWebsiteReviewStore();
-const { websiteReviews } = storeToRefs(websiteReviewStore);
-
-useFetchData(
-  () => websiteReviewStore.fetchWebsiteReviews(extractNumberParam(route.params.n)),
-  [
-    {
-      param: (p) => p.n,
-      callback: (n) => websiteReviewStore.fetchWebsiteReviews(extractNumberParam(n)),
-    },
-  ],
-);
-
-const canAddReview = computed(() => userIsSeniorModerator(userStore.user));
-
-// Expandable form state
-const formExpanded = ref(false);
-const formHovered = ref(false);
-const formContent = ref<HTMLElement | null>(null);
-
-function toggleForm() {
-  formExpanded.value = !formExpanded.value;
-  if (formContent.value) {
-    if (formExpanded.value) {
-      formContent.value.style.height = "auto";
-      const expectedHeight = formContent.value.clientHeight;
-      formContent.value.style.height = "0";
-      setTimeout(() => {
-        if (formContent.value) formContent.value.style.height = `${expectedHeight}px`;
-      }, 0);
-      setTimeout(() => {
-        if (formContent.value) formContent.value.style.height = "auto";
-      }, 200);
-    } else {
-      formContent.value.style.height = `${formContent.value.clientHeight}px`;
-      setTimeout(() => {
-        if (formContent.value) formContent.value.style.height = "0";
-      }, 0);
-    }
-  }
+interface FaqItem {
+  question: string;
+  answer: string;
 }
-const authorUsername = ref("");
-const reviewText = ref("");
-const isSubmitting = ref(false);
-const errorMessage = ref("");
 
-async function submitReview() {
-  if (!authorUsername.value || !reviewText.value.trim()) {
-    errorMessage.value = "Заполните все поля";
-    return;
-  }
-
-  isSubmitting.value = true;
-  errorMessage.value = "";
-
-  const { error } = await websiteReviewStore.createWebsiteReview(
-    reviewText.value.trim(),
-    authorUsername.value,
-  );
-
-  isSubmitting.value = false;
-
-  if (error) {
-    if (error.status === 409) {
-      errorMessage.value = "У этого пользователя уже есть отзыв";
-    } else if (error.status === 400) {
-      errorMessage.value = "Некорректные данные";
-    } else if (error.status === 404) {
-      errorMessage.value = "Пользователь не найден";
-    } else if (error.status === 403) {
-      errorMessage.value = "Недостаточно прав";
-    } else if (error.status === 500) {
-      errorMessage.value = "Внутренняя ошибка сервера. Попробуйте позже";
-    } else {
-      errorMessage.value = "Не удалось создать отзыв. Попробуйте позже";
-    }
-  } else {
-    authorUsername.value = "";
-    reviewText.value = "";
-  }
-}
+const faqItems: FaqItem[] = [
+  {
+    question: "Нужен ли опыт в настольных играх?",
+    answer:
+      'У многих игр есть тег "Для новичков" — там мастера всегда рады помочь освоиться новым пользователям и игрокам. Сообщество в целом дружелюбное, вопросы приветствуются. Если не уверены насчет конкретной игры — всегда лучше спросить мастера в обсуждении, нужно ли знать систему заранее.',
+  },
+  {
+    question: "Какие игровые системы используются?",
+    answer:
+      'Разные: от классического D&D и других настольных систем до авторских правил и простых "словесок" без сложной механики. Каждый мастер выбирает сам и указывает систему в описании игры.',
+  },
+  {
+    question: "Как часто нужно писать посты?",
+    answer:
+      "Зависит от игры — лучше уточнить у мастера напрямую. Обычно чем чаще, тем лучше для динамики, но это неторопливое хобби: и мастера, и игроки иногда берут паузы.",
+  },
+  {
+    question: "Сколько длится одна игра?",
+    answer:
+      "От нескольких недель до нескольких лет — зависит от сюжета и активности игроков. Если решите покинуть игру — ничего страшного, просто дайте мастеру знать об этом заранее и обсудите, как лучше вывести персонажа.",
+  },
+];
 </script>
 
 <template>
-  <page-title>О проекте</page-title>
+  <page-title v-once>О проекте</page-title>
 
-  <div class="about-intro">
+  <!-- MOTTO (static) -->
+  <div class="motto" v-once>
+    <SvgIcon name="snake" class="motto-snake" />
+    <p class="motto-text">
+      <span class="quote-mark">«</span>Мы в ответе за тех, кого сгенерили!<span class="quote-mark">»</span>
+    </p>
+  </div>
+
+  <!-- MAIN CONTENT (static - faqItems is const) -->
+  <div class="about-content" v-once>
     <p>
-      DM.am — площадка для форумных ролевых игр, где сотни игроков
-      создают истории в жанрах фэнтези, sci-fi, horror и не только.
+      DM.AM — одна из крупнейших русскоязычных площадок для текстовых ролевых игр. С 2007 года тысячи игроков
+      создают здесь свои истории: фэнтези, sci-fi, horror, исторические драмы и многое другое.
     </p>
 
-    <p class="section-title">Почему форумные игры?</p>
+    <h3>Почему форумные игры?</h3>
     <p>
-      В отличие от настольных сессий, здесь не нужно собираться в одно время
-      и в одном месте. Пишите когда удобно — утром за кофе, в обеденный перерыв
-      или поздно ночью. Игра идет непрерывно, а продуманные посты делают историю
+      В отличие от настольных сессий, здесь не нужно собираться в одно время и в одном месте. Пишите когда удобно —
+      утром за кофе, в обеденный перерыв или поздно ночью. Игра идет непрерывно, а продуманные посты делают историю
       глубже и интереснее.
     </p>
 
-    <p class="section-title">Что вас ждет</p>
-    <ul class="features-list">
-      <li>Игры на любой вкус — от классического D&amp;D до авторских сеттингов</li>
-      <li>Гибкий темп — играйте в своем ритме, без привязки к расписанию</li>
-      <li>Акцент на отыгрыш — здесь ценят хорошие тексты, а не броски кубиков</li>
-      <li>Несколько персонажей — участвуйте в нескольких играх одновременно</li>
-      <li>Дружелюбное сообщество — помогаем новичкам освоиться</li>
+    <h3>С чего начать?</h3>
+    <ul class="cta-links">
+      <li>
+        Игры с открытым набором ждут игроков —
+        <router-link to="/games?statuses=Active&recruitmentFilter=open&sortBy=activated"><strong>найдите игру для себя</strong></router-link>
+      </li>
+      <li>
+        Станьте мастером —
+        <router-link to="/games/create"><strong>создайте собственную</strong></router-link>
+      </li>
     </ul>
 
-    <p>Не нужно знать правила наизусть — мастера объяснят механику по ходу игры.</p>
+    <block-title>Частые вопросы</block-title>
+    <div class="separator">
+      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      - - - - - - - - - - - - - -
+    </div>
+    <div class="faq-list">
+      <template v-for="(item, index) in faqItems" :key="item.question">
+        <div class="faq-item">
+          <div class="faq-question">{{ item.question }}</div>
+          <div class="faq-answer">{{ item.answer }}</div>
+        </div>
+        <div v-if="index < faqItems.length - 1" class="separator">
+          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+          - - - - - - - - - - - - - -
+        </div>
+      </template>
+    </div>
+    <div class="separator">
+      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      - - - - - - - - - - - - - -
+    </div>
 
     <p>
-      Готовы попробовать?
-      Загляните в <router-link to="/games"><strong>список игр</strong></router-link>
-      или <router-link to="/games/create"><strong>создайте свою</strong></router-link>.
+      Остались вопросы? Загляните в
+      <router-link to="/forum/newbies"><strong>раздел для новичков на форуме</strong></router-link> — там точно помогут
+      разобраться.
     </p>
   </div>
-
-  <!-- Reviews Section -->
-  <h4 class="reviews-title">
-    <span
-      v-if="canAddReview"
-      class="toggle"
-      @click="toggleForm"
-      @mouseenter="formHovered = true"
-      @mouseleave="formHovered = false"
-    >
-      Наши пользователи о нас<span
-        class="toggle-icon"
-        :style="{
-          transform: `rotate(${formExpanded ? 45 : 0}deg)`,
-          opacity: formHovered ? 1 : 0,
-        }"
-      ></span>
-    </span>
-    <span v-else>Наши пользователи о нас</span>
-  </h4>
-
-  <!-- Add Review (Senior Moderators and Admins only) -->
-  <div
-    v-if="canAddReview"
-    ref="formContent"
-    class="review-form-wrapper"
-    :class="{ collapsed: !formExpanded }"
-  >
-    <div class="review-form">
-      <div class="form-field">
-        <label class="form-label"><strong>Автор</strong></label>
-        <user-autocomplete
-          v-model="authorUsername"
-          placeholder=""
-        />
-      </div>
-      <div class="form-field">
-        <label class="form-label"><strong>Текст отзыва</strong></label>
-        <text-area v-model="reviewText" placeholder="Текст отзыва..." />
-      </div>
-      <div class="form-actions">
-        <the-button :disabled="isSubmitting" @click="submitReview">
-          {{ isSubmitting ? "Сохранение..." : "Добавить отзыв" }}
-        </the-button>
-        <span v-if="errorMessage" class="error-message">{{ errorMessage }}</span>
-      </div>
-    </div>
-  </div>
-
-  <the-paging
-    v-if="websiteReviews"
-    :paging="websiteReviews.paging!"
-    :to="{ name: 'about', params: route.params }"
-  />
-
-  <div v-if="websiteReviews" class="reviews-list">
-    <website-review-item
-      v-for="websiteReview in websiteReviews.resources"
-      :key="websiteReview.id"
-      :controls="true"
-      :review="websiteReview"
-    />
-  </div>
-
-  <the-paging
-    v-if="websiteReviews && websiteReviews.paging"
-    :paging="websiteReviews.paging"
-    :to="{ name: 'about', params: route.params }"
-  />
 </template>
 
 <style scoped lang="sass">
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
-@import "src/assets/styles/Inputs"
 
-.about-intro
-  margin-bottom: $medium
+.motto
+  display: flex
+  flex-direction: column
+  align-items: flex-start
+  gap: $small
+  margin-bottom: $big
+
+  .motto-snake
+    width: 330px
+    max-width: 100%
+    height: auto
+    color: $text
+
+  .motto-text
+    margin: 0
+    font-size: 1.2em
+    font-style: italic
+    color: $text
+
+    .quote-mark
+      color: $text-muted
+      font-size: 1.4em
+
+// ============================================
+// MAIN CONTENT
+// ============================================
+.about-content
+  display: flex
+  flex-direction: column
+  gap: $tiny
   color: $text
   line-height: 1.6
 
   p
     margin: 0 0 $small
+
+  h3
+    margin: $medium 0 $small
+    font-size: $font-size
+    font-weight: bold
+    color: $text
 
   a
     color: $link
@@ -222,94 +158,46 @@ async function submitReview() {
       color: $link-hover
       text-decoration: underline
 
-.section-title
-  font-weight: bold
-  margin-top: $medium
-
-.features-list
-  margin: 0 0 $small
+// ============================================
+// CTA SECTION
+// ============================================
+.cta-links
+  margin: $small 0 $medium
   padding-left: $big
 
   li
     margin: $tiny 0
     color: $text
 
-// Reviews title with toggle
-.reviews-title
-  margin: $medium 0 $small
-  font-size: $font-size
-  font-weight: bold
-  text-transform: uppercase
-  letter-spacing: 0.5px
-  color: $heading
+  a
+    color: $link
+    &:hover
+      color: $link-hover
 
-.toggle
-  cursor: pointer
-
-.toggle-icon
-  position: relative
-  display: inline-block
-  width: 10px
-  height: 10px
-  margin-left: 6px
-  opacity: 0
-  transition: opacity 0.15s ease, transform 0.3s ease
-  vertical-align: middle
-  margin-top: -2px
-
-  &::before,
-  &::after
-    content: ""
-    position: absolute
-    top: 50%
-    left: 50%
-    background-color: $heading
-
-  &::before
-    width: 10px
-    height: 2px
-    transform: translate(-50%, -50%)
-
-  &::after
-    width: 2px
-    height: 10px
-    transform: translate(-50%, -50%)
-
-// Collapsible form wrapper
-.review-form-wrapper
-  overflow: hidden
-  transition: height 0.2s ease
-
-  &.collapsed
-    height: 0
-
-// Review form styling
-.review-form
-  margin-bottom: $medium
-  padding: $medium
-  background-color: $bg-element-overlay
-  border: 1px dashed $border
-
-.form-field
-  margin-bottom: $medium
-
-.form-label
-  display: block
-  margin-bottom: $tiny
-  color: $text
-  font-size: $font-size
-
-.form-actions
-  display: flex
-  align-items: center
-  gap: $medium
-
-.error-message
-  color: $accent-red
-  font-size: $secondary-font-size
-
-.reviews-list
+// ============================================
+// FAQ LIST
+// ============================================
+.faq-list
   display: flex
   flex-direction: column
-  gap: $small
+  gap: $tiny
+  margin: 0 0 $small
+
+.faq-question
+  font-weight: bold
+  color: $text
+
+.faq-answer
+  margin: $tiny 0 0 0
+  color: $text
+
+.separator
+  margin: $tiny 0
+  color: $text-muted
+  white-space: nowrap
+  overflow: hidden
+  max-width: 100%
+  width: 0
+  min-width: 100%
+  user-select: none
 </style>

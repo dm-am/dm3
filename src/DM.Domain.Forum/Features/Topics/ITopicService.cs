@@ -28,22 +28,23 @@ public interface ITopicService
     Task<Topic> GetAsync(Guid topicId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get topics page of certain board by its title
+    /// Get topic by board alias and topic number
     /// </summary>
-    /// <param name="boardTitle">Board title</param>
-    /// <param name="query">Paging query</param>
+    /// <param name="boardAlias">Board URL alias</param>
+    /// <param name="topicNumber">Topic number within board</param>
     /// <param name="ct">Cancellation token</param>
-    /// <returns>Pair of topics list and paging data</returns>
-    Task<(IEnumerable<Topic> topics, PagingResult paging)> GetListAsync(
-        string boardTitle, PagingQuery query, CancellationToken ct = default);
+    /// <returns>Topic</returns>
+    Task<Topic> GetByBoardAndNumberAsync(string boardAlias, int topicNumber, CancellationToken ct = default);
 
     /// <summary>
-    /// Get attached topics of certain board by its title
+    /// Get topics page of certain board by its title with filtering and sorting
     /// </summary>
     /// <param name="boardTitle">Board title</param>
+    /// <param name="query">Filtering and paging query</param>
     /// <param name="ct">Cancellation token</param>
-    /// <returns>Attached topics</returns>
-    Task<IEnumerable<Topic>> GetAttachedAsync(string boardTitle, CancellationToken ct = default);
+    /// <returns>Topics list and paging data (paging is null for attached-only queries)</returns>
+    Task<(IEnumerable<Topic> topics, PagingResult? paging)> GetListAsync(
+        string boardTitle, TopicsQuery query, CancellationToken ct = default);
 
     /// <summary>
     /// Update existing topic
@@ -59,4 +60,12 @@ public interface ITopicService
     /// <param name="topicId">Topic identifier</param>
     /// <param name="ct">Cancellation token</param>
     Task DeleteAsync(Guid topicId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Reorder pinned topics in a board
+    /// </summary>
+    /// <param name="boardTitle">Board title or alias</param>
+    /// <param name="topicIds">Topic IDs in desired order (first = top)</param>
+    /// <param name="ct">Cancellation token</param>
+    Task ReorderPinnedAsync(string boardTitle, IReadOnlyList<Guid> topicIds, CancellationToken ct = default);
 }

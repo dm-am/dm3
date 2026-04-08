@@ -22,6 +22,17 @@ public class Chat
     public Guid ChatId { get; set; }
 
     /// <summary>
+    /// Auto-incrementing serial number for PublicId generation
+    /// </summary>
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int SerialNumber { get; set; }
+
+    /// <summary>
+    /// Short public identifier for URLs (5 lowercase letters)
+    /// </summary>
+    public string? PublicId { get; set; }
+
+    /// <summary>
     /// Chat type (Direct, Group, or Global)
     /// </summary>
     public ChatType Type { get; set; }
@@ -30,6 +41,11 @@ public class Chat
     /// Chat title (for group chats, null for direct)
     /// </summary>
     public string? Title { get; set; }
+
+    /// <summary>
+    /// Linked room identifier (for ChatType.GameRoom chats)
+    /// </summary>
+    public Guid? RoomId { get; set; }
 
     /// <summary>
     /// Last message identifier

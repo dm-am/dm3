@@ -9,7 +9,7 @@ namespace DM.Domain.Game.Authorization;
 /// <inheritdoc cref="IIntentionResolver" />
 internal class CharacterIntentionResolver :
     IIntentionResolver<CharacterIntention, CharacterToUpdate>,
-    IIntentionResolver<CharacterIntention, (Character, GameExtended)>
+    IIntentionResolver<CharacterIntention, (Character, GameDetails)>
 {
     /// <inheritdoc />
     public bool IsAllowed(IAuthorizationSubject user, CharacterIntention intention,
@@ -48,7 +48,7 @@ internal class CharacterIntentionResolver :
     };
 
     /// <inheritdoc />
-    public bool IsAllowed(IAuthorizationSubject user, CharacterIntention intention, (Character, GameExtended) target)
+    public bool IsAllowed(IAuthorizationSubject user, CharacterIntention intention, (Character, GameDetails) target)
     {
         var (character, game) = target;
 

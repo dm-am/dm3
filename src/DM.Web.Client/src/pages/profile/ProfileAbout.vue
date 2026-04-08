@@ -37,20 +37,26 @@ watch(
 
     <template v-if="isEditMode">
       <textarea
-        :value="user.info"
+        :value="user.info?.source ?? ''"
         class="about-textarea"
         placeholder="Расскажите о себе (поддерживается BBCode)..."
         rows="8"
-        @input="emit('updateField', 'info', ($event.target as HTMLTextAreaElement).value)"
+        @input="
+          emit(
+            'updateField',
+            'info',
+            ($event.target as HTMLTextAreaElement).value,
+          )
+        "
       />
     </template>
 
     <template v-else>
       <div
-        v-if="user.info"
+        v-if="user.info?.html"
         ref="contentRef"
-        class="about-content"
-        v-html="user.info"
+        class="about-content bbcode-content"
+        v-html="user.info.html"
       />
       <secondary-text v-else class="about-empty">
         Пользователь ничего о себе не написал...
@@ -75,8 +81,7 @@ watch(
   margin: 0 0 $medium
   font-size: 1rem
 
-.about-content
-  +bbcode-content
+// .about-content uses global .bbcode-content class
 
 .about-empty
   font-style: italic

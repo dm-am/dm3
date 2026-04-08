@@ -71,6 +71,59 @@ export function cleanupBbcodeInteractive(container: HTMLElement | null): void {
 // ============================================================================
 
 /**
+ * Remove trailing empty elements (br, empty p/div, whitespace-only text nodes)
+ * from the end of a container. This prevents empty space at the bottom of
+ * truncated content.
+ */
+export function trimTrailingWhitespace(container: HTMLElement | null): void {
+  if (!container) return;
+
+  while (container.lastChild) {
+    const last = container.lastChild;
+
+    // Text node with only whitespace - remove
+    if (last.nodeType === Node.TEXT_NODE) {
+      if ((last.textContent || "").trim() === "") {
+        last.remove();
+        continue;
+      }
+      // Non-empty text, trim trailing whitespace and stop
+      last.textContent = (last.textContent || "").trimEnd();
+      break;
+    }
+
+    // Element node
+    if (last.nodeType === Node.ELEMENT_NODE) {
+      const elem = last as Element;
+      const tagName = elem.tagName.toUpperCase();
+
+      // BR tag - always remove from end
+      if (tagName === "BR") {
+        elem.remove();
+        continue;
+      }
+
+      // Empty block elements (P, DIV) with no meaningful content - remove
+      if (
+        (tagName === "P" || tagName === "DIV") &&
+        elem.textContent?.trim() === "" &&
+        !elem.querySelector("img, iframe, video, audio, svg")
+      ) {
+        elem.remove();
+        continue;
+      }
+
+      // Non-empty element - recursively trim its contents, then stop
+      trimTrailingWhitespace(elem as HTMLElement);
+      break;
+    }
+
+    // Other node types - stop
+    break;
+  }
+}
+
+/**
  * Remove unnecessary <br> elements around BBCode block elements.
  *
  * The BBCode parser converts newlines to <br>, but block elements

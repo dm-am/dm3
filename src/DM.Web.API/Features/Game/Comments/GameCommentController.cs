@@ -1,9 +1,10 @@
 using DM.Web.API.Shared.Authentication;
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
+using DM.Domain.Game.Features.Comments;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Features.Game.Games;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Comment = DM.Web.API.Shared.Dto.Comment;
@@ -11,7 +12,13 @@ using CreateCommentRequest = DM.Web.API.Shared.Dto.CreateCommentRequest;
 
 namespace DM.Web.API.Features.Game.Comments;
 
-/// <inheritdoc />
+/// <summary>
+/// Game comment management endpoints
+/// </summary>
+/// <remarks>
+/// Provides CRUD operations for out-of-character comments on games.
+/// Comments support likes and are separate from in-character posts.
+/// </remarks>
 [ApiController]
 [Route("v1/games")]
 [ApiExplorerSettings(GroupName = "Game")]
@@ -20,36 +27,59 @@ public class GameCommentController : ControllerBase
 {
     private readonly IGameCommentApiService _commentApiService;
     private readonly IGameCommentLikeApiService _likeApiService;
+    private readonly IGameApiService _gameApiService;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Creates a new instance of GameCommentController
+    /// </summary>
     public GameCommentController(
         IGameCommentApiService commentApiService,
-        IGameCommentLikeApiService likeApiService)
+        IGameCommentLikeApiService likeApiService,
+        IGameApiService gameApiService)
     {
         _commentApiService = commentApiService;
         _likeApiService = likeApiService;
+        _gameApiService = gameApiService;
     }
+
+    private async Task<Guid> ResolveGameId(string id) =>
+        Guid.TryParse(id, out var guid) ? guid : (await _gameApiService.GetByPublicId(id)).Resource.Id;
 
     /// <summary>
     /// Get list of comments in game
     /// </summary>
-    /// <param name="id">Game identifier</param>
-    /// <param name="q">Paging parameters</param>
-    /// <response code="200">Returns the comment list</response>
+    /// <remarks>
+    /// Returns paginated list of out-of-character comments in the game.
+    /// Supports filtering by authors, text search, date range and sorting.
+    ///
+    /// ## Query Parameters
+    /// - **skip**: Number of items to skip (pagination)
+    /// - **take**: Number of items to return (max 100, default 20)
+    /// - **search**: Text search in comment content (case-insensitive)
+    /// - **authors**: Filter by author usernames (comma-separated, OR logic)
+    /// - **createdFromUtc**: Filter by creation date start (ISO 8601)
+    /// - **createdToUtc**: Filter by creation date end (ISO 8601)
+    /// - **sortBy**: Sort field - "created" (default) or "likes"
+    /// - **sortOrder**: Sort direction - "asc" (default for created) or "desc"
+    /// </remarks>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
+    /// <param name="q">Query parameters with filtering, sorting and pagination</param>
+    /// <response code="200">Paginated list of comments</response>
     /// <response code="404">Game not found</response>
     [HttpGet("{id}/comments", Name = nameof(GetGameComments))]
     [ProducesResponseType(typeof(ListEnvelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetGameComments(Guid id, [FromQuery] PagingQuery q)
+    public async Task<IActionResult> GetGameComments(string id, [FromQuery] GameCommentsQuery q)
     {
-        var (comments, paging) = await _commentApiService.Get(id, q);
+        var gameId = await ResolveGameId(id);
+        var (comments, paging) = await _commentApiService.Get(gameId, q);
         return Ok(new ListEnvelope<Comment>(comments, paging));
     }
 
     /// <summary>
     /// Create new comment in game
     /// </summary>
-    /// <param name="id">Game identifier</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <param name="request">Comment creation request</param>
     /// <response code="201">Resource created successfully</response>
     /// <response code="400">Some of comment properties were invalid</response>
@@ -63,9 +93,10 @@ public class GameCommentController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PostGameComment(Guid id, [FromBody] CreateCommentRequest request)
+    public async Task<IActionResult> PostGameComment(string id, [FromBody] CreateCommentRequest request)
     {
-        var result = await _commentApiService.Create(id, request);
+        var gameId = await ResolveGameId(id);
+        var result = await _commentApiService.Create(gameId, request);
         return CreatedAtRoute(nameof(GetGameComment), new {id = result.Resource.Id}, result);
     }
 
@@ -167,7 +198,7 @@ public class GameCommentController : ControllerBase
     /// <summary>
     /// Mark all game comments as read
     /// </summary>
-    /// <param name="id">Game identifier</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <response code="204">Operation completed successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="404">Game not found</response>
@@ -176,9 +207,10 @@ public class GameCommentController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> MarkGameCommentsAsRead(Guid id)
+    public async Task<IActionResult> MarkGameCommentsAsRead(string id)
     {
-        await _commentApiService.MarkAsRead(id);
+        var gameId = await ResolveGameId(id);
+        await _commentApiService.MarkAsRead(gameId);
         return NoContent();
     }
 }

@@ -156,10 +156,12 @@ public class SubscriptionController : ControllerBase
     /// <response code="204">Unsubscribed successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">Cannot delete another user's subscription</response>
+    /// <response code="404">Subscription not found</response>
     [HttpDelete("{id:guid}", Name = nameof(Unsubscribe))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Unsubscribe(Guid id)
     {
         await _apiService.UnsubscribeAsync(id);

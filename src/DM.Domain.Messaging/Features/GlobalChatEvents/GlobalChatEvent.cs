@@ -26,9 +26,9 @@ public class GlobalChatEvent
     public string Description { get; set; } = null!;
 
     /// <summary>
-    /// Scheduled start time
+    /// Scheduled start time (UTC)
     /// </summary>
-    public DateTimeOffset StartsAt { get; set; }
+    public DateTimeOffset StartsUtc { get; set; }
 
     /// <summary>
     /// Planned duration. Null means no time limit.
@@ -52,19 +52,19 @@ public class GlobalChatEvent
     public GeneralUser CreatedBy { get; set; } = null!;
 
     /// <summary>
-    /// Event creation timestamp
+    /// Event creation timestamp (UTC)
     /// </summary>
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// When the event was actually started (null if not started yet)
     /// </summary>
-    public DateTimeOffset? StartedAt { get; set; }
+    public DateTimeOffset? StartedUtc { get; set; }
 
     /// <summary>
     /// When the event was ended (null if not ended yet)
     /// </summary>
-    public DateTimeOffset? EndedAt { get; set; }
+    public DateTimeOffset? EndedUtc { get; set; }
 
     /// <summary>
     /// Event participants

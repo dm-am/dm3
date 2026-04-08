@@ -5,7 +5,7 @@ import { storeToRefs } from "pinia";
 import { useUserStore } from "@/entities/user";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { BBCodeEditor } from "@/features/editor";
 import SchemaSelector from "./SchemaSelector.vue";
@@ -29,7 +29,7 @@ const commentariesAccessMode = ref(CommentariesAccessMode.Public);
 const disableAlignment = ref(false);
 const attributeSchemaId = ref<string | null>(null);
 const assistantUsername = ref<string | null>(null);
-const selectedTags = ref<string[]>([]);
+const selectedTags = ref<number[]>([]);
 
 const isSubmitting = ref(false);
 const error = ref<string | null>(null);
@@ -80,7 +80,9 @@ async function handleSubmit() {
   <page-title>Создать игру</page-title>
 
   <div v-if="!user" class="login-required">
-    <p>Для создания игры необходимо <router-link to="/login">войти</router-link></p>
+    <p>
+      Для создания игры необходимо <router-link to="/?action=login">войти</router-link>
+    </p>
   </div>
 
   <form v-else class="create-game-form" @submit.prevent="handleSubmit">
@@ -192,13 +194,9 @@ async function handleSubmit() {
 
     <!-- Submit -->
     <div class="form-actions">
-      <the-button
-        type="submit"
-        :loading="isSubmitting"
-        :disabled="!canCreate"
-      >
+      <Button type="submit" :loading="isSubmitting" :disabled="!canCreate">
         Создать игру
-      </the-button>
+      </Button>
     </div>
   </form>
 </template>

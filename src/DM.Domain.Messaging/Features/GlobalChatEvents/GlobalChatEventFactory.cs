@@ -25,7 +25,7 @@ internal class GlobalChatEventFactory : IGlobalChatEventFactory
         GlobalChatEventId = _guidFactory.Create(),
         Title = createGlobalChatEvent.Title,
         Description = createGlobalChatEvent.Description ?? string.Empty,
-        StartsAtUtc = createGlobalChatEvent.StartsAt,
+        StartsUtc = createGlobalChatEvent.StartsUtc,
         Duration = createGlobalChatEvent.Duration ?? TimeSpan.FromHours(4), // Default to 4 hours if not specified
         IsOpen = createGlobalChatEvent.IsOpen,
         Status = GlobalChatEventStatus.Scheduled,
@@ -40,6 +40,6 @@ internal class GlobalChatEventFactory : IGlobalChatEventFactory
         GlobalChatEventId = eventId,
         UserId = userId,
         IsOrganizer = isOrganizer,
-        JoinedAtUtc = _dateTimeProvider.Now
+        JoinedUtc = _dateTimeProvider.Now
     };
 }

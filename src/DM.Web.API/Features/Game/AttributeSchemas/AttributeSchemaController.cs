@@ -7,7 +7,13 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DM.Web.API.Features.Game.AttributeSchemas;
 
-/// <inheritdoc />
+/// <summary>
+/// Attribute schema management endpoints
+/// </summary>
+/// <remarks>
+/// Provides CRUD operations for character attribute schemas.
+/// Schemas define the structure of character attributes (stats, skills) used in games.
+/// </remarks>
 [ApiController]
 [Route("v1/schemas")]
 [ApiExplorerSettings(GroupName = "Game")]
@@ -16,7 +22,9 @@ public class AttributeSchemaController : ControllerBase
 {
     private readonly IAttributeSchemaApiService _schemaApiService;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Creates a new instance of AttributeSchemaController
+    /// </summary>
     public AttributeSchemaController(
         IAttributeSchemaApiService schemaApiService)
     {
@@ -34,7 +42,7 @@ public class AttributeSchemaController : ControllerBase
     /// <summary>
     /// Create new attribute schema
     /// </summary>
-    /// <param name="schema"></param>
+    /// <param name="schema">Attribute schema to create</param>
     /// <response code="201">Resource created successfully</response>
     /// <response code="400">Some of schema parameters were invalid</response>
     /// <response code="401">User must be authenticated</response>

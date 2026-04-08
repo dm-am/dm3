@@ -95,7 +95,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
             GlobalChatEventId = updateGlobalChatEvent.Id,
             Title = updateGlobalChatEvent.Title,
             Description = updateGlobalChatEvent.Description,
-            StartsAtUtc = updateGlobalChatEvent.StartsAt,
+            StartsUtc = updateGlobalChatEvent.StartsUtc,
             Duration = updateGlobalChatEvent.Duration,
             IsOpen = updateGlobalChatEvent.IsOpen
         };

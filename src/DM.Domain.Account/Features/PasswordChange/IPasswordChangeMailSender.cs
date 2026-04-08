@@ -12,6 +12,5 @@ internal interface IPasswordChangeMailSender
     /// </summary>
     /// <param name="email">User email</param>
     /// <param name="username">Username</param>
-    /// <returns></returns>
     Task Send(string email, string username);
 }

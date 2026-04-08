@@ -91,15 +91,15 @@ internal class TopicCommentService : ITopicCommentService
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid topicId, PagingQuery query,
+    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid topicId, CommentsQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
         await _topicService.GetAsync(topicId);
 
-        var totalCount = await _repository.Count(topicId, excludeUserIds);
+        var totalCount = await _repository.Count(topicId, query, excludeUserIds);
         var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.CommentsPerPage, totalCount);
 
-        var comments = await _repository.Get(topicId, paging, excludeUserIds);
+        var comments = await _repository.Get(topicId, query, paging, excludeUserIds);
 
         return (comments, paging.Result);
     }

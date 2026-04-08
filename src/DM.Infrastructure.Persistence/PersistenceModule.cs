@@ -27,14 +27,16 @@ using DM.Domain.Game.Features.Comments;
 using DM.Domain.Game.Features.Invitations;
 using DM.Domain.Game.Features.RoomAccesses;
 using DM.Domain.Game.Features.PostPendencies;
-using DM.Domain.Game.Features.Reviews;
+using DM.Domain.Game.Features.GameReviews;
+using DM.Domain.Game.Features.PostReviews;
 using DM.Domain.Game.Features.AttributeSchemas;
+using DM.Domain.Game.Features.Inactivity;
 using DM.Domain.Game.Features.Unread;
 using DM.Domain.Core.Likes;
 using DM.Domain.Core.Notepads;
-using DM.Domain.Community.Features.PlatformReviews;
 using DM.Domain.Community.Features.Polls;
-using DM.Domain.Community.Features.UserReviews;
+using DM.Domain.Community.Features.UserEndorsements;
+using DM.Domain.Community.Features.WebsiteTestimonials;
 using DM.Domain.Messaging.Features.Chats;
 using DM.Domain.Messaging.Features.GlobalChatEvents;
 using DM.Domain.Messaging.Features.Messages;
@@ -124,12 +126,12 @@ public class PersistenceModule : Module
             .As<IPollRepository>()
             .InstancePerLifetimeScope();
 
-        builder.RegisterType<PlatformReviewRepository>()
-            .As<IPlatformReviewRepository>()
+        builder.RegisterType<UserEndorsementRepository>()
+            .As<IUserEndorsementRepository>()
             .InstancePerLifetimeScope();
 
-        builder.RegisterType<UserReviewRepository>()
-            .As<IUserReviewRepository>()
+        builder.RegisterType<WebsiteTestimonialRepository>()
+            .As<IWebsiteTestimonialRepository>()
             .InstancePerLifetimeScope();
 
         // Forum repositories
@@ -310,6 +312,10 @@ public class PersistenceModule : Module
             .As<IPostRepository>()
             .InstancePerLifetimeScope();
 
+        builder.RegisterType<DiceRollRepository>()
+            .As<IDiceRollRepository>()
+            .InstancePerLifetimeScope();
+
         builder.RegisterType<CharacterRepository>()
             .As<ICharacterRepository>()
             .InstancePerLifetimeScope();
@@ -338,16 +344,16 @@ public class PersistenceModule : Module
             .As<IPostReviewRepository>()
             .InstancePerLifetimeScope();
 
-        builder.RegisterType<FeaturedPostsRepository>()
-            .As<IFeaturedPostsRepository>()
-            .InstancePerLifetimeScope();
-
         builder.RegisterType<AttributeSchemaRepository>()
             .As<IAttributeSchemaRepository>()
             .InstancePerLifetimeScope();
 
         builder.RegisterType<FirstUnreadRepository>()
             .As<IFirstUnreadRepository>()
+            .InstancePerLifetimeScope();
+
+        builder.RegisterType<InactivityRepository>()
+            .As<IInactivityRepository>()
             .InstancePerLifetimeScope();
 
         builder.RegisterType<SecurityAuditRepository>()

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using AutoMapper;
@@ -10,6 +11,7 @@ using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 using DbPublication = DM.Infrastructure.Persistence.Entities.Blog.Publication;
 using DbRubric = DM.Infrastructure.Persistence.Entities.Blog.Rubric;
+using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 
 namespace DM.Infrastructure.Persistence.Repositories.Blog;
 
@@ -28,7 +30,10 @@ internal class BlogMappingProfile : Profile
             .ForMember(d => d.Author, s => s.MapFrom(c => c.Author))
             .ForMember(d => d.Text, s => s.MapFrom(c => c.Text))
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(c => c.CreatedUtc))
-            .ForMember(d => d.ModifiedUtc, s => s.MapFrom(c => c.ModifiedUtc))
+            .ForMember(d => d.ModifiedUtc, s => s.MapFrom(c => c.Edits
+                .OrderByDescending(e => e.EditedUtc)
+                .Select(e => (DateTimeOffset?)e.EditedUtc)
+                .FirstOrDefault()))
             .ForMember(d => d.Likes, s => s.Ignore());
 
         CreateMap<DbComment, BlogCommentToDelete>()
@@ -37,7 +42,10 @@ internal class BlogMappingProfile : Profile
             .ForMember(d => d.Author, s => s.MapFrom(c => c.Author))
             .ForMember(d => d.Text, s => s.MapFrom(c => c.Text))
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(c => c.CreatedUtc))
-            .ForMember(d => d.ModifiedUtc, s => s.MapFrom(c => c.ModifiedUtc))
+            .ForMember(d => d.ModifiedUtc, s => s.MapFrom(c => c.Edits
+                .OrderByDescending(e => e.EditedUtc)
+                .Select(e => (DateTimeOffset?)e.EditedUtc)
+                .FirstOrDefault()))
             .ForMember(d => d.Likes, s => s.Ignore())
             .ForMember(d => d.BlogCommentCount, s => s.Ignore())
             .ForMember(d => d.IsLastComment, s => s.Ignore());
@@ -48,22 +56,42 @@ internal class BlogMappingProfile : Profile
             .ForMember(d => d.Author, s => s.MapFrom(c => c.Author))
             .ForMember(d => d.Text, s => s.MapFrom(c => c.Text))
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(c => c.CreatedUtc))
-            .ForMember(d => d.ModifiedUtc, s => s.MapFrom(c => c.ModifiedUtc))
+            .ForMember(d => d.ModifiedUtc, s => s.MapFrom(c => c.Edits
+                .OrderByDescending(e => e.EditedUtc)
+                .Select(e => (DateTimeOffset?)e.EditedUtc)
+                .FirstOrDefault()))
             .ForMember(d => d.Likes, s => s.Ignore())
             .ForMember(d => d.PublicationCommentCount, s => s.Ignore())
             .ForMember(d => d.IsLastComment, s => s.Ignore());
 
         // Blog mappings
-        CreateMap<DbBlog, BlogModel>()
+        // BlogAssistant -> BlogAssistantInfo mapping (required for EF Core projection)
+        CreateMap<DM.Infrastructure.Persistence.Entities.Blog.BlogAssistant, BlogAssistantInfo>()
+            .ForMember(d => d.UserId, s => s.MapFrom(a => a.UserId))
+            .ForMember(d => d.Username, s => s.MapFrom(a => a.User.Username))
+            .ForMember(d => d.JoinedUtc, s => s.MapFrom(a => a.JoinedUtc))
+            .ForMember(d => d.LastActivityUtc, s => s.MapFrom(a => a.User.LastActivityUtc))
+            .ForMember(d => d.Role, s => s.MapFrom(a => a.User.Role))
+            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.User.QuantityRating < 100))
+            .ForMember(d => d.IsHonorary, s => s.MapFrom(a => a.User.IsHonorary));
+
+        CreateMap<DbBlog, BlogDto>()
             .ForMember(d => d.Id, s => s.MapFrom(b => b.BlogId))
-            .ForMember(d => d.CreatedAt, s => s.MapFrom(b => b.CreatedUtc))
-            .ForMember(d => d.UpdatedAt, s => s.MapFrom(b => b.UpdatedUtc))
+            .ForMember(d => d.Status, s => s.MapFrom(b => b.Status))
+            .ForMember(d => d.CreatedUtc, s => s.MapFrom(b => b.CreatedUtc))
+            .ForMember(d => d.ActivatedUtc, s => s.MapFrom(b => b.ActivatedUtc))
+            .ForMember(d => d.ClosedUtc, s => s.MapFrom(b => b.ClosedUtc))
             .ForMember(d => d.CommentsCount, s => s.MapFrom(b =>
-                b.CommentCount + (b.Publications != null ? b.Publications.Sum(p => p.CommentCount) : 0)))
-            .ForMember(d => d.Assistants, s => s.MapFrom(b => b.Assistants != null
-                ? b.Assistants.Select(a => new BlogAssistantInfo { UserId = a.UserId, JoinedUtc = a.JoinedUtc })
-                : new List<BlogAssistantInfo>()))
+                b.CommentCount + b.Publications
+                    .Where(p => !p.IsRemoved && p.IsPublished)
+                    .Sum(p => p.CommentCount)))
+            .ForMember(d => d.Assistants, s => s.MapFrom(b => b.Assistants))
             .ForMember(d => d.SubscriberIds, s => s.Ignore()) // Populated separately via SubscriptionService
+            .ForMember(d => d.SubscriberUsernames, s => s.Ignore()) // Populated in repository
+            .ForMember(d => d.ActiveSubscribersCount, s => s.Ignore()) // Populated in repository
+            .ForMember(d => d.BlacklistedUserIds, s => s.Ignore()) // Populated separately
+            .ForMember(d => d.UnreadPublicationsCount, s => s.Ignore()) // Populated in service layer
+            .ForMember(d => d.UnreadCommentsCount, s => s.Ignore()) // Populated in service layer
             .ForMember(d => d.PendingInvitedUserIds, s => s.MapFrom(b => b.Tokens
                 .Where(t => t.Type == TokenType.BlogAssistantInvitation || t.Type == TokenType.BlogReaderInvitation)
                 .Select(t => t.UserId)));
@@ -74,9 +102,10 @@ internal class BlogMappingProfile : Profile
         CreateMap<DbPublication, Publication>()
             .ForMember(d => d.Id, s => s.MapFrom(p => p.PublicationId))
             .ForMember(d => d.Author, s => s.MapFrom(p => p.Author))
-            .ForMember(d => d.CreatedAt, s => s.MapFrom(p => p.CreatedUtc))
-            .ForMember(d => d.ModifiedAt, s => s.MapFrom(p => p.ModifiedUtc))
-            .ForMember(d => d.PublishedAt, s => s.MapFrom(p => p.PublishedUtc))
-            .ForMember(d => d.Likes, s => s.Ignore()); // Likes fetched via EntityType+EntityId pattern
+            .ForMember(d => d.CreatedUtc, s => s.MapFrom(p => p.CreatedUtc))
+            .ForMember(d => d.ModifiedUtc, s => s.MapFrom(p => p.ModifiedUtc))
+            .ForMember(d => d.PublishedUtc, s => s.MapFrom(p => p.PublishedUtc))
+            .ForMember(d => d.Likes, s => s.Ignore()) // Likes fetched via EntityType+EntityId pattern
+            .ForMember(d => d.UnreadCommentsCount, s => s.Ignore()); // Populated in service layer
     }
 }

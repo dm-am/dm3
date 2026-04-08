@@ -9,7 +9,7 @@ namespace DM.Infrastructure.Persistence.Entities.Messaging;
 /// DAL model for chat participant
 /// </summary>
 [Table("UserChatLinks")]
-public class UserChatLink : IRemovable
+public class UserChatLink : ISoftDeletable
 {
     /// <summary>
     /// Link identifier
@@ -29,6 +29,12 @@ public class UserChatLink : IRemovable
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
 
+    /// <inheritdoc />
+    public Guid? DeletedByUserId { get; set; }
+
+    /// <inheritdoc />
+    public DateTimeOffset? DeletedUtc { get; set; }
+
     /// <summary>
     /// Participant
     /// </summary>
@@ -40,4 +46,10 @@ public class UserChatLink : IRemovable
     /// </summary>
     [ForeignKey(nameof(ChatId))]
     public virtual Chat Chat { get; set; } = null!;
+
+    /// <summary>
+    /// User who removed the link
+    /// </summary>
+    [ForeignKey(nameof(DeletedByUserId))]
+    public virtual User? DeletedBy { get; set; }
 }

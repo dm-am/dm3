@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
+using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Domain.Core.Enums;
 
 namespace DM.Infrastructure.Persistence.Entities.Game.Posts;
@@ -12,7 +13,7 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Posts;
 /// DAL model for game room
 /// </summary>
 [Table("Rooms")]
-public class Room : IRemovable
+public class Room : ISoftDeletable
 {
     /// <summary>
     /// Room identifier
@@ -24,6 +25,11 @@ public class Room : IRemovable
     /// Game identifier
     /// </summary>
     public Guid GameId { get; set; }
+
+    /// <summary>
+    /// Sequential room number within the game (for URL, stable)
+    /// </summary>
+    public int RoomNumber { get; set; }
 
     /// <summary>
     /// Title
@@ -73,11 +79,28 @@ public class Room : IRemovable
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
 
+    /// <inheritdoc />
+    public Guid? DeletedByUserId { get; set; }
+
+    /// <inheritdoc />
+    public DateTimeOffset? DeletedUtc { get; set; }
+
+    /// <summary>
+    /// Linked chat identifier (for RoomType.Chat rooms)
+    /// </summary>
+    public Guid? ChatId { get; set; }
+
     /// <summary>
     /// Game
     /// </summary>
     [ForeignKey(nameof(GameId))]
     public virtual Game Game { get; set; } = null!;
+
+    /// <summary>
+    /// User who deleted the room
+    /// </summary>
+    [ForeignKey(nameof(DeletedByUserId))]
+    public virtual User? DeletedBy { get; set; }
 
     /// <summary>
     /// Previous room (for 2-linked-list)

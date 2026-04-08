@@ -14,7 +14,7 @@ public interface IBlacklistApiService
     /// Get list of blacklisted users for the game
     /// </summary>
     /// <param name="gameId">Game identifier</param>
-    /// <returns></returns>
+    /// <returns>List envelope containing blacklisted users</returns>
     Task<ListEnvelope<User>> Get(Guid gameId);
 
     /// <summary>
@@ -22,7 +22,7 @@ public interface IBlacklistApiService
     /// </summary>
     /// <param name="gameId">Game identifier</param>
     /// <param name="user">User to blacklist</param>
-    /// <returns></returns>
+    /// <returns>Envelope containing the blacklisted user</returns>
     Task<Envelope<User>> Create(Guid gameId, User user);
 
     /// <summary>
@@ -30,6 +30,5 @@ public interface IBlacklistApiService
     /// </summary>
     /// <param name="gameId">Game identifier</param>
     /// <param name="login">User login</param>
-    /// <returns></returns>
     Task Delete(Guid gameId, string login);
 }

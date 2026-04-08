@@ -6,6 +6,9 @@
 // Re-export blacklist types
 export * from "./blacklist";
 
+// Re-export UserSettings from community (for backwards compatibility)
+export { type UserSettings } from "../community/user-settings";
+
 /**
  * Theme preference
  */

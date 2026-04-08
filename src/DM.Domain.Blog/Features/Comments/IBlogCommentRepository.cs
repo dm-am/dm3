@@ -16,18 +16,20 @@ public interface IBlogCommentRepository
     /// Count comments of the blog
     /// </summary>
     /// <param name="blogId">Blog identifier</param>
+    /// <param name="query">Query parameters for filtering</param>
     /// <param name="excludeUserIds">Optional user IDs to exclude from count</param>
     /// <param name="ct">Cancellation token</param>
-    Task<int> Count(Guid blogId, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default);
+    Task<int> Count(Guid blogId, BlogCommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default);
 
     /// <summary>
     /// Get comments list of the blog
     /// </summary>
     /// <param name="blogId">Blog identifier</param>
+    /// <param name="query">Query parameters for filtering and sorting</param>
     /// <param name="paging">Paging data</param>
     /// <param name="excludeUserIds">Optional user IDs to exclude from results</param>
     /// <param name="ct">Cancellation token</param>
-    Task<IEnumerable<Comment>> Get(Guid blogId, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default);
+    Task<IEnumerable<Comment>> Get(Guid blogId, BlogCommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default);
 
     /// <summary>
     /// Get single comment by its identifier

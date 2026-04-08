@@ -17,7 +17,7 @@ internal static class UpdateBuilderExtensions
     /// <param name="field"></param>
     /// <param name="value"></param>
     /// <typeparam name="TEntity"></typeparam>
-    /// <returns></returns>
+    /// <returns>Update builder for chaining</returns>
     [return: NotNullIfNotNull(nameof(updateBuilder))]
     public static IUpdateBuilder<TEntity> MaybeField<TEntity>(this IUpdateBuilder<TEntity> updateBuilder,
         Expression<Func<TEntity, string>> field, string? value) where TEntity : class, new() =>
@@ -31,7 +31,7 @@ internal static class UpdateBuilderExtensions
     /// <param name="value"></param>
     /// <typeparam name="TEntity"></typeparam>
     /// <typeparam name="TValue"></typeparam>
-    /// <returns></returns>
+    /// <returns>Update builder for chaining</returns>
     [return: NotNullIfNotNull(nameof(updateBuilder))]
     public static IUpdateBuilder<TEntity> MaybeField<TEntity, TValue>(this IUpdateBuilder<TEntity> updateBuilder,
         Expression<Func<TEntity, TValue>> field, TValue? value)
@@ -47,7 +47,7 @@ internal static class UpdateBuilderExtensions
     /// <param name="value"></param>
     /// <typeparam name="TEntity"></typeparam>
     /// <typeparam name="TValue"></typeparam>
-    /// <returns></returns>
+    /// <returns>Update builder for chaining</returns>
     [return: NotNullIfNotNull(nameof(updateBuilder))]
     public static IUpdateBuilder<TEntity> MaybeField<TEntity, TValue>(this IUpdateBuilder<TEntity> updateBuilder,
         Expression<Func<TEntity, TValue?>> field, Optional<TValue> value)

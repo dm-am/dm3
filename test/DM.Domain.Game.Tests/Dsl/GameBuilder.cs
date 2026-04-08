@@ -3,13 +3,12 @@ using System.Collections.Generic;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
-using GameDto = DM.Domain.Game.Features.Games.GameModel;
 
 namespace DM.Domain.Game.Tests.Dsl;
 
 public class GameBuilder
 {
-    private readonly GameDto game = new()
+    private readonly GameDetails game = new()
     {
         Id = Guid.NewGuid(),
         Title = "Test Game",
@@ -18,18 +17,18 @@ public class GameBuilder
         Status = ModuleStatus.Active,
         PremoderationStatus = PremoderationStatus.Approved,
         CommentsAccessMode = CommentsAccessMode.Public,
-        Author = new GeneralUser { UserId = Guid.NewGuid(), Username = "TestMaster", Role = UserRole.RegularUser },
+        Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "TestMaster", Role = UserRole.RegularUser },
         Assistants = [],
-        ActiveCharacterUserIds = [],
-        ReaderUserIds = [],
+        Players = [],
+        SubscriberIds = [],
         PendingInvitedUserIds = [],
         PendingPlayerInvitedUserIds = [],
         BlacklistedUsers = []
     };
 
-    public GameBuilder WithAuthor(Guid userId)
+    public GameBuilder WithMaster(Guid userId)
     {
-        game.Author = new GeneralUser { UserId = userId, Username = "Master", Role = UserRole.RegularUser };
+        game.Master = new GeneralUser { UserId = userId, Username = "Master", Role = UserRole.RegularUser };
         return this;
     }
 
@@ -47,10 +46,15 @@ public class GameBuilder
 
     public GameBuilder WithAssistants(params Guid[] userIds)
     {
-        var assistants = new List<GeneralUser>();
+        var assistants = new List<GameAssistantInfo>();
         foreach (var userId in userIds)
         {
-            assistants.Add(new GeneralUser { UserId = userId, Username = $"Assistant_{userId:N}", Role = UserRole.RegularUser });
+            assistants.Add(new GameAssistantInfo
+            {
+                UserId = userId,
+                Username = $"Assistant_{userId:N}",
+                JoinedUtc = DateTimeOffset.UtcNow
+            });
         }
         game.Assistants = assistants;
         return this;
@@ -58,13 +62,18 @@ public class GameBuilder
 
     public GameBuilder WithPlayers(params Guid[] userIds)
     {
-        game.ActiveCharacterUserIds = userIds;
+        var players = new List<GeneralUser>();
+        foreach (var userId in userIds)
+        {
+            players.Add(new GeneralUser { UserId = userId, Username = $"Player_{userId:N}", Role = UserRole.RegularUser });
+        }
+        game.Players = players;
         return this;
     }
 
-    public GameBuilder WithReaders(params Guid[] userIds)
+    public GameBuilder WithSubscribers(params Guid[] userIds)
     {
-        game.ReaderUserIds = userIds;
+        game.SubscriberIds = userIds;
         return this;
     }
 
@@ -74,5 +83,5 @@ public class GameBuilder
         return this;
     }
 
-    public GameDto Please() => game;
+    public GameDetails Please() => game;
 }

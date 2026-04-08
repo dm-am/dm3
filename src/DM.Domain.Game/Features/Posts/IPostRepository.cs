@@ -33,6 +33,11 @@ public interface IPostRepository
     /// </summary>
     Task<BestPostResult?> GetBestPost(Guid userId);
 
+    /// <summary>
+    /// Get posts with rating info (global search with filters)
+    /// </summary>
+    Task<(IEnumerable<Post> Posts, int TotalCount)> GetRated(PostsQuery query);
+
     #endregion
 
     #region Write

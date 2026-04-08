@@ -3,38 +3,180 @@
 
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { Game, Character, Room, Post } from "./types";
+import type { Game, GameRef, Character, Room, Post, Tag } from "./types";
 import type { ListEnvelope, Paging, Comment } from "@/shared/api/models/common";
-import gameApi from "../api/gameApi";
-import { useApiList, useApiResource } from "@/shared/lib/composables/useApiResource";
+import gameApi, { type GamesSearchParams } from "../api/gameApi";
+import {
+  useApiList,
+  useApiResource,
+} from "@/shared/lib/composables/useApiResource";
 
 /**
  * Store for game lists (menu/sidebar, pagination)
  */
 export const useGamesStore = defineStore("games", () => {
-  // Menu/sidebar lists - just need the resources array
-  const own = useApiList<Game>(() => gameApi.getOwnGames());
+  // Menu/sidebar lists - use lightweight GameRef for efficiency
+  // participating = games where user is master, mentor, assistant, player, or reader
+  const participating = useApiList<GameRef>(() =>
+    gameApi.getParticipatingGames(),
+  );
   const moderation = useApiList<Game>(() => gameApi.getModerationGames());
-  const popular = useApiList<Game>(() => gameApi.getPopularGames());
-  const subscribed = useApiList<Game>(() => gameApi.getSubscribedGames());
+  const popular = useApiList<GameRef>(() => gameApi.getPopularGames());
 
-  // Page lists - need full envelope with paging
-  const activePage = useApiResource<ListEnvelope<Game>>(
+  // Tags with long cache (5 minutes - tags change rarely)
+  const tags = useApiList<Tag>(() => gameApi.getTags(), { cacheMs: 300_000 });
+
+  // Sidebar lists - use lightweight GameRef
+  const activePage = useApiResource<ListEnvelope<GameRef>>(
     () => gameApi.getActiveGames(),
     { cacheMs: 30_000 },
   );
-  const recruitingPage = useApiResource<ListEnvelope<Game>>(
+  const recruitingPage = useApiResource<ListEnvelope<GameRef>>(
     () => gameApi.getRecruitingGames(),
     { cacheMs: 30_000 },
   );
-  const finishedPage = useApiResource<ListEnvelope<Game>>(
+  const finishedPage = useApiResource<ListEnvelope<GameRef>>(
     () => gameApi.getFinishedGames(),
     { cacheMs: 30_000 },
   );
+  // Moderation page needs full Game with all details
   const moderationPage = useApiResource<ListEnvelope<Game>>(
     () => gameApi.getModerationGames(),
     { cacheMs: 30_000 },
   );
+
+  // Search results with filters
+  const searchResult = ref<ListEnvelope<Game> | null>(null);
+  const searchLoading = ref(false);
+  const searchError = ref<string | null>(null);
+  const lastSearchParams = ref<GamesSearchParams | null>(null);
+
+  // Search cache: key → { data, timestamp }
+  const CACHE_TTL = 30_000; // 30 seconds
+  const searchCache = new Map<
+    string,
+    { data: ListEnvelope<Game>; timestamp: number }
+  >();
+
+  /**
+   * Create stable cache key from search params
+   */
+  function createCacheKey(params: GamesSearchParams): string {
+    // Sort keys for stable ordering
+    const sorted: Record<string, unknown> = {};
+    const keys = Object.keys(params).sort();
+    for (const key of keys) {
+      const value = params[key as keyof GamesSearchParams];
+      if (value !== undefined && value !== null && value !== "") {
+        // Sort arrays for stable keys
+        if (Array.isArray(value)) {
+          sorted[key] = [...value].sort().join(",");
+        } else {
+          sorted[key] = value;
+        }
+      }
+    }
+    return JSON.stringify(sorted);
+  }
+
+  /**
+   * Search games with filters (with caching)
+   */
+  async function searchGames(params: GamesSearchParams): Promise<void> {
+    const cacheKey = createCacheKey(params);
+    const cached = searchCache.get(cacheKey);
+    const now = Date.now();
+
+    // Return cached if fresh
+    if (cached && now - cached.timestamp < CACHE_TTL) {
+      searchResult.value = cached.data;
+      lastSearchParams.value = params;
+      return;
+    }
+
+    // Show stale while revalidating
+    if (cached) {
+      searchResult.value = cached.data;
+    }
+
+    searchLoading.value = true;
+    searchError.value = null;
+    lastSearchParams.value = params;
+
+    const { data, error } = await gameApi.searchGames(params);
+
+    if (error) {
+      searchError.value = error.title || "Failed to search games";
+      // Keep stale data on error if available
+      if (!cached) {
+        searchResult.value = null;
+      }
+    } else if (data) {
+      searchResult.value = data;
+      // Update cache
+      searchCache.set(cacheKey, { data, timestamp: now });
+      // Clean old entries (keep last 20)
+      if (searchCache.size > 20) {
+        const firstKey = searchCache.keys().next().value;
+        if (firstKey) searchCache.delete(firstKey);
+      }
+    }
+
+    searchLoading.value = false;
+  }
+
+  /**
+   * Load next page of search results
+   */
+  async function loadNextSearchPage(): Promise<void> {
+    if (!lastSearchParams.value || !searchResult.value?.paging) return;
+
+    const currentPage = searchResult.value.paging.current;
+    const totalPages = searchResult.value.paging.pages;
+
+    if (currentPage >= totalPages) return;
+
+    await searchGames({
+      ...lastSearchParams.value,
+      number: currentPage + 1,
+    });
+  }
+
+  /**
+   * Prefetch a page in background (for next page optimization)
+   * Does not update visible results, only warms the cache
+   */
+  async function prefetchPage(page: number): Promise<void> {
+    if (!lastSearchParams.value) return;
+
+    const params = { ...lastSearchParams.value, number: page };
+    const cacheKey = createCacheKey(params);
+
+    // Skip if already cached
+    if (searchCache.has(cacheKey)) return;
+
+    // Fetch in background without updating UI
+    const { data } = await gameApi.searchGames(params);
+    if (data) {
+      searchCache.set(cacheKey, { data, timestamp: Date.now() });
+      // Clean old entries (keep last 20)
+      if (searchCache.size > 20) {
+        const firstKey = searchCache.keys().next().value;
+        if (firstKey) searchCache.delete(firstKey);
+      }
+    }
+  }
+
+  /**
+   * Reset search state
+   */
+  function resetSearch(): void {
+    searchResult.value = null;
+    searchLoading.value = false;
+    searchError.value = null;
+    lastSearchParams.value = null;
+    searchCache.clear();
+  }
 
   // Computed simple arrays for menu (backwards compatibility)
   const activeGames = computed(() => activePage.data.value?.resources ?? null);
@@ -47,10 +189,10 @@ export const useGamesStore = defineStore("games", () => {
 
   return {
     // Menu/sidebar games data (simple arrays)
-    ownGames: own.data,
+    // participatingGames = games where user has any role (master, mentor, assistant, player, reader)
+    participatingGames: participating.data,
     moderationGames: moderation.data,
     popularGames: popular.data,
-    subscribedGames: subscribed.data,
     activeGames,
     recruitingGames,
     finishedGames,
@@ -62,44 +204,54 @@ export const useGamesStore = defineStore("games", () => {
     moderationGamesPage: moderationPage.data,
 
     // Error states
-    ownGamesError: own.error,
+    participatingGamesError: participating.error,
     moderationGamesError: moderation.error,
     activeGamesError: activePage.error,
 
     // Loading states
-    ownGamesLoading: own.loading,
+    participatingGamesLoading: participating.loading,
     moderationGamesLoading: moderation.loading,
     activeGamesLoading: activePage.loading,
     recruitingGamesLoading: recruitingPage.loading,
     finishedGamesLoading: finishedPage.loading,
     moderationGamesPageLoading: moderationPage.loading,
 
-    // Loading states for subscribed
-    subscribedGamesLoading: subscribed.loading,
+    // Tags
+    tags: tags.data,
+    tagsLoading: tags.loading,
+    tagsError: tags.error,
+    fetchTags: tags.fetch,
 
     // Fetch functions
-    fetchOwnGames: own.fetch,
+    fetchParticipatingGames: participating.fetch,
     fetchModerationGames: moderation.fetch,
     fetchModerationGamesPage: moderationPage.fetch,
     fetchPopularGames: popular.fetch,
-    fetchSubscribedGames: subscribed.fetch,
     fetchActiveGames: activePage.fetch,
     fetchRecruitingGames: recruitingPage.fetch,
     fetchFinishedGames: finishedPage.fetch,
 
     // Reset functions (for logout)
-    resetOwnGames: own.reset,
+    resetParticipatingGames: participating.reset,
     resetModerationGames: moderation.reset,
-    resetSubscribedGames: subscribed.reset,
     resetAllGames: () => {
-      own.reset();
+      participating.reset();
       moderation.reset();
       popular.reset();
-      subscribed.reset();
       activePage.reset();
       recruitingPage.reset();
       finishedPage.reset();
+      resetSearch();
     },
+
+    // Search with filters
+    searchResult,
+    searchLoading,
+    searchError,
+    searchGames,
+    loadNextSearchPage,
+    prefetchPage,
+    resetSearch,
   };
 });
 
@@ -186,11 +338,8 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     roomsLoading.value = false;
   }
 
-  // Load posts for a room
-  async function loadPosts(
-    roomId: string,
-    page: number = 1,
-  ): Promise<void> {
+  // Load posts for a room by room ID
+  async function loadPosts(roomId: string, page: number = 1): Promise<void> {
     postsLoading.value = true;
     postsError.value = null;
 
@@ -212,6 +361,21 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     }
 
     postsLoading.value = false;
+  }
+
+  // Load posts for a room by room number (URL-based)
+  async function loadPostsByRoomNumber(roomNumber: number, page: number = 1): Promise<void> {
+    // Find the room by number
+    const room = rooms.value.find((r) => r.roomNumber === roomNumber);
+    if (!room) {
+      postsError.value = `Room #${roomNumber} not found`;
+      posts.value = [];
+      postsPaging.value = null;
+      currentRoom.value = null;
+      return;
+    }
+
+    await loadPosts(room.id as string, page);
   }
 
   // Load characters
@@ -236,7 +400,9 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     commentsLoading.value = true;
     commentsError.value = null;
 
-    const { data, error } = await gameApi.getGameComments(gameId, { number: page });
+    const { data, error } = await gameApi.getGameComments(gameId, {
+      number: page,
+    });
 
     if (error) {
       commentsError.value = error.title || "Failed to load comments";
@@ -331,6 +497,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     loadGame,
     loadRooms,
     loadPosts,
+    loadPostsByRoomNumber,
     loadCharacters,
     loadComments,
     reset,

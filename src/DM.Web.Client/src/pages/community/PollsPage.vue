@@ -1,23 +1,24 @@
 <script setup lang="ts">
+import { watch } from "vue";
 import { useRoute } from "vue-router";
 import { usePollsStore } from "@/entities/poll";
-import { extractNumberParam } from "@/app/providers/router";
-import { useFetchData } from "@/shared/lib/composables/useFetchData";
+import { usePollsFilter } from "@/features/poll-filter";
+import PollsList from "./PollsList.vue";
 
 const route = useRoute();
 const { fetchPolls } = usePollsStore();
+const { searchParams } = usePollsFilter();
 
-useFetchData(
-  () => fetchPolls(extractNumberParam(route.params.n), false),
-  [
-    {
-      param: (p) => p.n,
-      callback: (n) => fetchPolls(extractNumberParam(n), false),
-    },
-  ],
+// Fetch on initial load and when filters/page change
+watch(
+  () => [searchParams.value, route.query.number],
+  () => {
+    fetchPolls(searchParams.value);
+  },
+  { immediate: true }
 );
 </script>
 
 <template>
-  <router-view />
+  <PollsList />
 </template>

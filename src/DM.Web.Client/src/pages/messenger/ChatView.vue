@@ -4,7 +4,9 @@ import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useMessagingStore } from "@/entities/message";
 import { useUserStore } from "@/entities/user";
+import { useUiStore } from "@/shared/stores/ui";
 import { UserRole, AccessPolicy } from "@/shared/api/models/community";
+import { Tooltip } from "@/shared/ui/Tooltip";
 import type { ChatId, Message } from "@/entities/message";
 import dayjs from "dayjs";
 import defaultAvatar from "@/assets/images/userpic.png";
@@ -16,6 +18,7 @@ const route = useRoute();
 const router = useRouter();
 const messagingStore = useMessagingStore();
 const { user: currentUser } = storeToRefs(useUserStore());
+const { isCompactMode } = storeToRefs(useUiStore());
 const {
   selectedChat,
   messagesList,
@@ -337,7 +340,10 @@ const latestActivityByUsername = computed(() => {
   for (const msg of messagesList.value) {
     if (!msg.author?.username || !msg.author?.lastActivityUtc) continue;
     const existing = map.get(msg.author.username);
-    if (!existing || dayjs(msg.author.lastActivityUtc).isAfter(dayjs(existing))) {
+    if (
+      !existing ||
+      dayjs(msg.author.lastActivityUtc).isAfter(dayjs(existing))
+    ) {
       map.set(msg.author.username, msg.author.lastActivityUtc);
     }
   }
@@ -348,7 +354,11 @@ function isOnline(author: any) {
   if (!author?.username) return false;
   const lastActivityUtc = latestActivityByUsername.value.get(author.username);
   if (!lastActivityUtc) return false;
-  const minutesSinceOnline = dayjs().diff(dayjs(lastActivityUtc), "minute", true);
+  const minutesSinceOnline = dayjs().diff(
+    dayjs(lastActivityUtc),
+    "minute",
+    true,
+  );
   return minutesSinceOnline <= ONLINE_THRESHOLD_MINUTES;
 }
 
@@ -377,7 +387,8 @@ function canLikeMessage(_msg: Message) {
 function isLikedByMe(msg: Message) {
   if (!currentUser.value) return false;
   return (
-    msg.likes?.some((u: any) => u.username === currentUser.value?.username) ?? false
+    msg.likes?.some((u: any) => u.username === currentUser.value?.username) ??
+    false
   );
 }
 
@@ -512,8 +523,7 @@ async function jumpToLatest() {
 }
 
 async function handleSend() {
-  if (!newMessage.value.trim() || sending.value || !selectedChat.value)
-    return;
+  if (!newMessage.value.trim() || sending.value || !selectedChat.value) return;
   const text = newMessage.value;
   newMessage.value = "";
   editorRef.value?.clear();
@@ -576,7 +586,9 @@ onUnmounted(() => {
 <template>
   <div class="chat-view">
     <template v-if="selectedChat">
-      <page-title v-if="interlocutor">Переписка с {{ interlocutor.username }}</page-title>
+      <page-title v-if="interlocutor"
+        >Переписка с {{ interlocutor.username }}</page-title
+      >
       <page-title v-else>Переписка</page-title>
 
       <div class="chat-header">
@@ -596,22 +608,21 @@ onUnmounted(() => {
         <span v-else class="username">Загрузка...</span>
       </div>
 
-      <div class="messages-wrapper">
+      <div class="messages-wrapper" :class="{ 'compact-mode': isCompactMode }">
         <div ref="messagesContainer" class="messages-container">
           <template v-if="!messagesList?.length">
-          <secondary-text class="empty-messages">
-            Начните переписку, отправив первое сообщение
-          </secondary-text>
-        </template>
+            <secondary-text class="empty-messages">
+              Начните переписку, отправив первое сообщение
+            </secondary-text>
+          </template>
 
-        <template v-else>
+          <template v-else>
             <!-- Top sentinel for loading older messages -->
             <div
               v-if="hasMoreBefore"
               ref="topSentinel"
               class="scroll-sentinel top-sentinel"
-            >
-            </div>
+            ></div>
 
             <template
               v-for="item in messagesWithSeparators"
@@ -696,63 +707,63 @@ onUnmounted(() => {
                           :class="{ online: isOnline(item.author) }"
                           >{{ item.author.username }}</router-link
                         >
-                        <span
-                          class="msg-time-group"
-                          :title="formatDeletedDate(item)"
-                        >
-                          <span class="msg-time">{{
-                            formatTime(item.createdUtc)
-                          }}</span>
-                          <svg
-                            class="msg-deleted-icon"
-                            viewBox="-2.27 -3.0 28.54 28.54"
-                            fill="none"
+                        <Tooltip :text="formatDeletedDate(item)">
+                          <span class="msg-time-group">
+                            <span class="msg-time">{{
+                              formatTime(item.createdUtc)
+                            }}</span>
+                            <svg
+                              class="msg-deleted-icon"
+                              viewBox="-2.27 -3.0 28.54 28.54"
+                              fill="none"
+                            >
+                              <path
+                                d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                              />
+                            </svg>
+                          </span>
+                        </Tooltip>
+                        <Tooltip text="Скрыть">
+                          <button
+                            class="msg-eye-btn"
+                            @click="toggleDeletedExpand(item.id)"
                           >
-                            <path
-                              d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                            <svg
+                              class="eye-open"
+                              viewBox="0.3 0.57 23.35 23.35"
+                              width="14"
+                              height="14"
+                              fill="none"
                               stroke="currentColor"
                               stroke-width="2"
                               stroke-linecap="round"
-                            />
-                          </svg>
-                        </span>
-                        <button
-                          class="msg-eye-btn"
-                          title="Скрыть"
-                          @click="toggleDeletedExpand(item.id)"
-                        >
-                          <svg
-                            class="eye-open"
-                            viewBox="0.3 0.57 23.35 23.35"
-                            width="14"
-                            height="14"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                          >
-                            <path
-                              d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
-                            />
-                            <circle cx="12" cy="12" r="3" />
-                          </svg>
-                          <svg
-                            class="eye-closed"
-                            viewBox="0.3 0.57 23.35 23.35"
-                            width="14"
-                            height="14"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                          >
-                            <path d="M3 12c0 0 4 5 9 5s9-5 9-5" />
-                          </svg>
-                        </button>
+                              stroke-linejoin="round"
+                            >
+                              <path
+                                d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
+                              />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                            <svg
+                              class="eye-closed"
+                              viewBox="0.3 0.57 23.35 23.35"
+                              width="14"
+                              height="14"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                            >
+                              <path d="M3 12c0 0 4 5 9 5s9-5 9-5" />
+                            </svg>
+                          </button>
+                        </Tooltip>
                       </div>
                       <div class="msg-content">
-                        <div class="msg-text" v-html="item.text" />
+                        <div class="msg-text bbcode-content" v-html="item.text" />
                       </div>
                     </div>
                   </div>
@@ -766,22 +777,24 @@ onUnmounted(() => {
                     class="msg-layout msg-continuation"
                   >
                     <div class="msg-time-gutter">
-                      <span class="msg-time-hover" :title="formatFullDate(item)"
-                        >{{ formatTime(item.createdUtc)
-                        }}<svg
-                          v-if="item.modifiedUtc"
-                          class="msg-edited-icon"
-                          viewBox="-0.7 -1.2 25.4 25.4"
-                          fill="none"
-                        >
-                          <path
-                            d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                          /></svg
-                      ></span>
+                      <Tooltip :text="formatFullDate(item)">
+                        <span class="msg-time-hover"
+                          >{{ formatTime(item.createdUtc)
+                          }}<svg
+                            v-if="item.modifiedUtc"
+                            class="msg-edited-icon"
+                            viewBox="-0.7 -1.2 25.4 25.4"
+                            fill="none"
+                          >
+                            <path
+                              d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            /></svg
+                        ></span>
+                      </Tooltip>
                     </div>
                     <div class="msg-body">
                       <template v-if="!isEditing(item.id)">
@@ -793,7 +806,7 @@ onUnmounted(() => {
                           class="msg-content"
                           :class="{ collapsed: isTruncated(item) }"
                         >
-                          <div class="msg-text" v-html="item.text" />
+                          <div class="msg-text bbcode-content" v-html="item.text" />
                         </div>
                         <div
                           v-if="needsTruncation(item)"
@@ -835,29 +848,30 @@ onUnmounted(() => {
                           v-if="item.likes?.length > 0"
                           class="msg-reactions"
                         >
-                          <button
-                            class="reaction-badge"
-                            :class="{ 'my-reaction': isLikedByMe(item) }"
-                            :title="getLikesTooltip(item)"
-                            @click="toggleLike(item)"
-                          >
-                            <svg
-                              viewBox="-1.2 -0.75 26.4 26.4"
-                              width="14"
-                              height="14"
-                              class="reaction-heart"
-                              fill="none"
+                          <Tooltip :text="getLikesTooltip(item)">
+                            <button
+                              class="reaction-badge"
+                              :class="{ 'my-reaction': isLikedByMe(item) }"
+                              @click="toggleLike(item)"
                             >
-                              <path
-                                d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                                stroke="currentColor"
-                                stroke-width="2"
-                              />
-                            </svg>
-                            <span class="reaction-count">{{
-                              item.likes.length
-                            }}</span>
-                          </button>
+                              <svg
+                                viewBox="-1.2 -0.75 26.4 26.4"
+                                width="14"
+                                height="14"
+                                class="reaction-heart"
+                                fill="none"
+                              >
+                                <path
+                                  d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                />
+                              </svg>
+                              <span class="reaction-count">{{
+                                item.likes.length
+                              }}</span>
+                            </button>
+                          </Tooltip>
                         </div>
                       </template>
                       <div v-else class="msg-edit">
@@ -917,52 +931,52 @@ onUnmounted(() => {
                           :class="{ online: isOnline(item.author) }"
                           >{{ item.author.username }}</router-link
                         >
-                        <span
-                          class="msg-time-group"
-                          :title="formatFullDate(item)"
-                        >
-                          <span class="msg-time">{{
-                            formatTime(item.createdUtc)
-                          }}</span
-                          ><svg
-                            v-if="item.modifiedUtc"
-                            class="msg-edited-icon"
-                            viewBox="-0.7 -1.2 25.4 25.4"
-                            fill="none"
+                        <Tooltip :text="formatFullDate(item)">
+                          <span class="msg-time-group">
+                            <span class="msg-time">{{
+                              formatTime(item.createdUtc)
+                            }}</span
+                            ><svg
+                              v-if="item.modifiedUtc"
+                              class="msg-edited-icon"
+                              viewBox="-0.7 -1.2 25.4 25.4"
+                              fill="none"
+                            >
+                              <path
+                                d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                          </span>
+                        </Tooltip>
+                        <Tooltip text="Ссылка на сообщение">
+                          <a
+                            class="msg-anchor-btn"
+                            :href="`#msg-${item.id}`"
+                            @click.prevent="copyAnchor(item.id)"
                           >
-                            <path
-                              d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
+                            <svg
+                              viewBox="-2 -2 28 28"
+                              width="12"
+                              height="12"
+                              fill="none"
                               stroke="currentColor"
                               stroke-width="2"
                               stroke-linecap="round"
                               stroke-linejoin="round"
-                            />
-                          </svg>
-                        </span>
-                        <a
-                          class="msg-anchor-btn"
-                          title="Ссылка на сообщение"
-                          :href="`#msg-${item.id}`"
-                          @click.prevent="copyAnchor(item.id)"
-                        >
-                          <svg
-                            viewBox="-2 -2 28 28"
-                            width="12"
-                            height="12"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                          >
-                            <path
-                              d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
-                            />
-                            <path
-                              d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
-                            />
-                          </svg>
-                        </a>
+                            >
+                              <path
+                                d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
+                              />
+                              <path
+                                d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+                              />
+                            </svg>
+                          </a>
+                        </Tooltip>
                       </div>
 
                       <template v-if="!isEditing(item.id)">
@@ -974,7 +988,7 @@ onUnmounted(() => {
                           class="msg-content"
                           :class="{ collapsed: isTruncated(item) }"
                         >
-                          <div class="msg-text" v-html="item.text" />
+                          <div class="msg-text bbcode-content" v-html="item.text" />
                         </div>
                         <div
                           v-if="needsTruncation(item)"
@@ -1016,29 +1030,30 @@ onUnmounted(() => {
                           v-if="item.likes?.length > 0"
                           class="msg-reactions"
                         >
-                          <button
-                            class="reaction-badge"
-                            :class="{ 'my-reaction': isLikedByMe(item) }"
-                            :title="getLikesTooltip(item)"
-                            @click="toggleLike(item)"
-                          >
-                            <svg
-                              viewBox="-1.2 -0.75 26.4 26.4"
-                              width="14"
-                              height="14"
-                              class="reaction-heart"
-                              fill="none"
+                          <Tooltip :text="getLikesTooltip(item)">
+                            <button
+                              class="reaction-badge"
+                              :class="{ 'my-reaction': isLikedByMe(item) }"
+                              @click="toggleLike(item)"
                             >
-                              <path
-                                d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                                stroke="currentColor"
-                                stroke-width="2"
-                              />
-                            </svg>
-                            <span class="reaction-count">{{
-                              item.likes.length
-                            }}</span>
-                          </button>
+                              <svg
+                                viewBox="-1.2 -0.75 26.4 26.4"
+                                width="14"
+                                height="14"
+                                class="reaction-heart"
+                                fill="none"
+                              >
+                                <path
+                                  d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                />
+                              </svg>
+                              <span class="reaction-count">{{
+                                item.likes.length
+                              }}</span>
+                            </button>
+                          </Tooltip>
                         </div>
                       </template>
 
@@ -1147,108 +1162,110 @@ onUnmounted(() => {
         >
           <!-- Delete confirmation mode -->
           <template v-if="confirmingDeleteId === hoveredMessage.id">
-            <button
-              class="toolbar-btn toolbar-btn-delete-confirm"
-              title="Подтвердить удаление"
-              @click="confirmDelete"
-            >
-              <svg
-                viewBox="-2.27 -3.0 28.54 28.54"
-                width="20"
-                height="20"
-                fill="none"
+            <Tooltip text="Подтвердить удаление">
+              <button
+                class="toolbar-btn toolbar-btn-delete-confirm"
+                @click="confirmDelete"
               >
-                <path
-                  d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                />
-              </svg>
-            </button>
-            <button
-              class="toolbar-btn toolbar-btn-cancel"
-              title="Отмена"
-              @click="cancelDelete"
-            >
-              <svg
-                viewBox="3.1 3.1 17.8 17.8"
-                width="20"
-                height="20"
-                fill="none"
+                <svg
+                  viewBox="-2.27 -3.0 28.54 28.54"
+                  width="20"
+                  height="20"
+                  fill="none"
+                >
+                  <path
+                    d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
+            </Tooltip>
+            <Tooltip text="Отмена">
+              <button
+                class="toolbar-btn toolbar-btn-cancel"
+                @click="cancelDelete"
               >
-                <path
-                  d="M18 6L6 18M6 6l12 12"
-                  stroke="currentColor"
-                  stroke-width="1.48"
-                  stroke-linecap="round"
-                />
-              </svg>
-            </button>
+                <svg
+                  viewBox="3.1 3.1 17.8 17.8"
+                  width="20"
+                  height="20"
+                  fill="none"
+                >
+                  <path
+                    d="M18 6L6 18M6 6l12 12"
+                    stroke="currentColor"
+                    stroke-width="1.48"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
+            </Tooltip>
           </template>
           <!-- Normal mode -->
           <template v-else>
-            <button
+            <Tooltip
               v-if="canLikeMessage(hoveredMessage)"
-              class="toolbar-btn"
-              :class="{ active: isLikedByMe(hoveredMessage) }"
-              :title="isLikedByMe(hoveredMessage) ? 'Убрать лайк' : 'Нравится'"
-              @click="toggleLike(hoveredMessage)"
+              :text="isLikedByMe(hoveredMessage) ? 'Убрать лайк' : 'Нравится'"
             >
-              <svg
-                viewBox="-1.2 -0.75 26.4 26.4"
-                width="20"
-                height="20"
-                fill="none"
+              <button
+                class="toolbar-btn"
+                :class="{ active: isLikedByMe(hoveredMessage) }"
+                @click="toggleLike(hoveredMessage)"
               >
-                <path
-                  d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                  stroke="currentColor"
-                  stroke-width="2"
-                />
-              </svg>
-            </button>
-            <button
-              v-if="canEditMessage(hoveredMessage)"
-              class="toolbar-btn"
-              title="Редактировать"
-              @click="startEdit(hoveredMessage)"
-            >
-              <svg
-                viewBox="-0.7 -1.2 25.4 25.4"
-                width="20"
-                height="20"
-                fill="none"
+                <svg
+                  viewBox="-1.2 -0.75 26.4 26.4"
+                  width="20"
+                  height="20"
+                  fill="none"
+                >
+                  <path
+                    d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  />
+                </svg>
+              </button>
+            </Tooltip>
+            <Tooltip v-if="canEditMessage(hoveredMessage)" text="Редактировать">
+              <button class="toolbar-btn" @click="startEdit(hoveredMessage)">
+                <svg
+                  viewBox="-0.7 -1.2 25.4 25.4"
+                  width="20"
+                  height="20"
+                  fill="none"
+                >
+                  <path
+                    d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            </Tooltip>
+            <Tooltip v-if="canDeleteMessage(hoveredMessage)" text="Удалить">
+              <button
+                class="toolbar-btn"
+                @click="requestDelete(hoveredMessage.id)"
               >
-                <path
-                  d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </button>
-            <button
-              v-if="canDeleteMessage(hoveredMessage)"
-              class="toolbar-btn"
-              title="Удалить"
-              @click="requestDelete(hoveredMessage.id)"
-            >
-              <svg
-                viewBox="-2.27 -3.0 28.54 28.54"
-                width="20"
-                height="20"
-                fill="none"
-              >
-                <path
-                  d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                />
-              </svg>
-            </button>
+                <svg
+                  viewBox="-2.27 -3.0 28.54 28.54"
+                  width="20"
+                  height="20"
+                  fill="none"
+                >
+                  <path
+                    d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
+            </Tooltip>
           </template>
         </div>
       </Teleport>
@@ -1265,6 +1282,7 @@ onUnmounted(() => {
 @import "src/assets/styles/Themes"
 @import "src/assets/styles/BbcodeContent"
 @import "src/assets/styles/Inputs"
+@import "src/assets/styles/ZIndex"
 
 .chat-view
   display: flex
@@ -1484,6 +1502,7 @@ onUnmounted(() => {
   align-items: baseline
   gap: 6px
   color: $text-muted
+  cursor: help
 
 .msg-edited-icon
   width: 14px
@@ -1551,10 +1570,7 @@ onUnmounted(() => {
 .pm-message.hovered .msg-content.collapsed::after
   background: linear-gradient(to bottom, transparent, var(--bg-element))
 
-.msg-text
-  :deep()
-    +bbcode-content
-    // NSFW styles now in _BbcodeContent.sass
+// .msg-text uses global .bbcode-content class - no scoped styles needed
 
 .msg-edit
   margin-top: 0
@@ -1606,7 +1622,7 @@ onUnmounted(() => {
   background-color: $bg-element
   box-shadow: 0 0 0 1px var(--hover-overlay), 0 2px 8px var(--shadow-color)
   border-radius: $border-radius
-  z-index: 10000
+  z-index: $z-toast
 
 :global(.toolbar-btn-delete-confirm)
   color: var(--accent-red) !important
@@ -1784,4 +1800,86 @@ onUnmounted(() => {
   text-align: center
   padding: $small
   color: $accent-red
+
+// Compact mode styles
+.messages-wrapper.compact-mode
+  .pm-message
+    padding: $tiny $small $tiny $small
+    margin-bottom: $small
+
+    &.continuation
+      margin-top: 0
+
+  // Hide avatars in compact mode
+  .msg-avatar-link,
+  .msg-avatar-placeholder
+    display: none
+
+  // Messages layout becomes inline
+  .msg-layout
+    display: block
+
+  .msg-body
+    display: block
+
+  .msg-header
+    display: inline-flex
+    align-items: center
+    gap: $small
+    margin-bottom: 0
+    line-height: 1
+
+  // Time group with fixed width for alignment
+  .msg-time-group
+    display: inline-flex
+    align-items: center
+    gap: 6px
+    margin-right: 0
+    min-width: 62px
+
+  .msg-author
+    display: inline-flex
+    align-items: center
+
+  // Content on new line, aligned with author name
+  .msg-content
+    display: block
+    margin-left: calc(62px + #{$small})
+    margin-top: 0
+
+  // Edit form also aligned with content
+  .msg-edit
+    margin-left: calc(62px + #{$small})
+
+  .msg-text
+    display: block
+
+  // Reactions on new line
+  .msg-reactions
+    display: block
+    margin-top: $tiny
+    margin-left: calc(62px + #{$small})
+
+  .msg-expand-row
+    display: flex
+    margin-top: $tiny
+    margin-left: 0
+    width: 100%
+
+  // Continuation messages in compact mode
+  .msg-continuation
+    display: block
+
+    .msg-time-gutter
+      display: inline-flex
+      width: 62px
+      justify-content: flex-start
+
+    .msg-body
+      display: block
+
+  // Deleted messages compact
+  .msg-deleted
+    display: inline-flex
+    min-height: auto
 </style>

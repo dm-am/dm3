@@ -33,7 +33,7 @@ internal class GameRoleResolver : IGameRoleResolver
             return GameRole.None;
 
         // Check master/assistant roles first (highest privilege)
-        if (game.Author.UserId == userId)
+        if (game.Master.UserId == userId)
             return GameRole.Master;
 
         if (game.Assistants.Any(a => a.UserId == userId))
@@ -43,7 +43,7 @@ internal class GameRoleResolver : IGameRoleResolver
             return GameRole.Mentor;
 
         // Check player role
-        if (game.ActiveCharacterUserIds.Contains(userId))
+        if (game.Players.Any(p => p.UserId == userId))
             return GameRole.Player;
 
         // Check reader (subscription-based)
@@ -60,13 +60,13 @@ internal class GameRoleResolver : IGameRoleResolver
     }
 
     /// <inheritdoc />
-    public GameRole GetRole(GameModel game, Guid userId)
+    public GameRole GetRole(Game game, Guid userId)
     {
         if (userId == Guid.Empty || game == null)
             return GameRole.None;
 
         // Check master/assistant roles first (highest privilege)
-        if (game.Author.UserId == userId)
+        if (game.Master.UserId == userId)
             return GameRole.Master;
 
         if (game.Assistants.Any(a => a.UserId == userId))
@@ -76,11 +76,11 @@ internal class GameRoleResolver : IGameRoleResolver
             return GameRole.Mentor;
 
         // Check player role
-        if (game.ActiveCharacterUserIds.Contains(userId))
+        if (game.Players.Any(p => p.UserId == userId))
             return GameRole.Player;
 
-        // Check reader (requires ReaderUserIds to be populated from Subscriptions)
-        if (game.ReaderUserIds.Contains(userId))
+        // Check subscriber (requires SubscriberIds to be populated from Subscriptions)
+        if (game.SubscriberIds.Contains(userId))
             return GameRole.Reader;
 
         // Note: Applicant role detection would require pending character data

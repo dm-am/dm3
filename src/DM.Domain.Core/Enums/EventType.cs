@@ -98,6 +98,18 @@ public enum EventType
     [EventRoutingKey("community.poll.created")]
     NewPoll = 31,
 
+    /// <summary>
+    /// New website testimonial has been created
+    /// </summary>
+    [EventRoutingKey("community.testimonial.website.created")]
+    NewWebsiteTestimonial = 32,
+
+    /// <summary>
+    /// Review has been liked
+    /// </summary>
+    [EventRoutingKey("community.review.liked")]
+    LikedReview = 35,
+
     // ========================================
     // Blog events (41-59)
     // ========================================
@@ -485,6 +497,12 @@ public enum EventType
     /// </summary>
     [EventRoutingKey("game.recruitment.opened")]
     GameRecruitmentOpened = 329,
+
+    /// <summary>
+    /// Game inactivity warning - game will be frozen due to no posts for 1 month
+    /// </summary>
+    [EventRoutingKey("game.inactivity.warning")]
+    GameInactivityWarning = 330,
 
     /// <summary>
     /// New game comment has been created

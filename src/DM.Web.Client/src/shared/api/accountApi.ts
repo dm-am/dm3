@@ -1,4 +1,4 @@
-import type { ListEnvelope } from "./models/common";
+import type { ListEnvelope, User } from "./models/common";
 import type {
   LoginCredentials,
   RegisterCredentials,
@@ -16,7 +16,6 @@ import type {
   UpdateNotificationPreferences,
   BotLinkResult,
   SecurityEvent,
-  User,
 } from "./models/account";
 import type { Invitation } from "@/entities/game";
 import Api from "./client";
@@ -43,7 +42,10 @@ export default new (class AccountApi {
    * Complete activation with username selection (Step 2)
    * Creates user account and logs in automatically
    */
-  public activate(token: string, request: { username: string; expectedEmail?: string }) {
+  public activate(
+    token: string,
+    request: { username: string; expectedEmail?: string },
+  ) {
     return Api.post<User>(`account/activation/${token}`, request);
   }
 
@@ -52,7 +54,9 @@ export default new (class AccountApi {
    * Rate limited: 20 requests per minute
    */
   public checkUsername(username: string) {
-    return Api.get<UsernameAvailability>(`account/check-username?username=${encodeURIComponent(username)}`);
+    return Api.get<UsernameAvailability>(
+      `account/check-username?username=${encodeURIComponent(username)}`,
+    );
   }
 
   /**
@@ -69,7 +73,9 @@ export default new (class AccountApi {
    * Rate limited: 20 requests per minute
    */
   public checkEmail(email: string) {
-    return Api.get<EmailAvailability>(`account/check-email?email=${encodeURIComponent(email)}`);
+    return Api.get<EmailAvailability>(
+      `account/check-email?email=${encodeURIComponent(email)}`,
+    );
   }
 
   /**
@@ -218,7 +224,10 @@ export default new (class AccountApi {
    * Update notification preferences
    */
   public updateNotificationPreferences(request: UpdateNotificationPreferences) {
-    return Api.patch<NotificationPreferences>("users/me/notifications/settings", request);
+    return Api.patch<NotificationPreferences>(
+      "users/me/notifications/settings",
+      request,
+    );
   }
 
   // ========== Bot Links ==========

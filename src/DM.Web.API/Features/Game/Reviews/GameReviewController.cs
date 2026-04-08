@@ -3,14 +3,11 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
-using DM.Domain.Game.Features.Reviews;
+using DM.Domain.Game.Features.GameReviews;
 using DM.Domain.Core.Dto;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using ApiReview = DM.Web.API.Features.Community.Reviews.Review;
-using CreateReviewRequest = DM.Web.API.Features.Community.Reviews.CreateReviewRequest;
-using ReviewController = DM.Web.API.Features.Community.Reviews.ReviewController;
 
 namespace DM.Web.API.Features.Game.Reviews;
 
@@ -47,13 +44,13 @@ public class GameReviewController : ControllerBase
     /// <response code="200">List of game reviews</response>
     /// <response code="404">Game not found</response>
     [HttpGet(Name = nameof(GetGameReviews))]
-    [ProducesResponseType(typeof(ListEnvelope<ApiReview>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ListEnvelope<GameReviewDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameReviews(Guid id, [FromQuery] PagingQuery q)
     {
         var (reviews, paging) = await _gameReviewService.GetListAsync(id, q);
-        var apiReviews = reviews.Select(_mapper.Map<ApiReview>);
-        return Ok(new ListEnvelope<ApiReview>(apiReviews, new PagingInfo(paging)));
+        var apiReviews = reviews.Select(_mapper.Map<GameReviewDto>);
+        return Ok(new ListEnvelope<GameReviewDto>(apiReviews, new PagingInfo(paging)));
     }
 
     /// <summary>
@@ -74,21 +71,37 @@ public class GameReviewController : ControllerBase
     /// <response code="409">Review already exists</response>
     [HttpPost(Name = nameof(CreateGameReview))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(ApiReview), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(Envelope<GameReviewDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> CreateGameReview(Guid id, [FromBody] CreateReviewRequest request)
+    public async Task<IActionResult> CreateGameReview(Guid id, [FromBody] CreateGameReviewRequest request)
     {
         var createReview = new CreateGameReview
         {
             GameId = id,
-            Text = request.Text ?? string.Empty
+            Text = request.Text
         };
         var review = await _gameReviewService.CreateAsync(createReview);
-        var apiReview = _mapper.Map<ApiReview>(review);
-        return CreatedAtRoute(nameof(ReviewController.GetReview), new { id = review.Id }, apiReview);
+        var apiReview = _mapper.Map<GameReviewDto>(review);
+        return CreatedAtRoute(nameof(GetGameReview), new { id = review.GameId, reviewId = review.Id }, new Envelope<GameReviewDto>(apiReview));
+    }
+
+    /// <summary>
+    /// Get single game review by ID
+    /// </summary>
+    /// <param name="id">Game ID</param>
+    /// <param name="reviewId">Review ID</param>
+    /// <response code="200">Game review</response>
+    /// <response code="404">Review not found</response>
+    [HttpGet("{reviewId:guid}", Name = nameof(GetGameReview))]
+    [ProducesResponseType(typeof(Envelope<GameReviewDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetGameReview(Guid id, Guid reviewId)
+    {
+        var review = await _gameReviewService.GetAsync(reviewId);
+        return Ok(new Envelope<GameReviewDto>(_mapper.Map<GameReviewDto>(review)));
     }
 }

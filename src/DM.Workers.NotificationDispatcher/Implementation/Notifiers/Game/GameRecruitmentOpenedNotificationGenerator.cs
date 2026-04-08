@@ -40,8 +40,8 @@ internal class GameRecruitmentOpenedNotificationGenerator : BaseNotificationGene
             {
                 g.GameId,
                 g.Title,
-                g.AuthorId,
-                MasterUsername = g.Author!.Username,
+                g.MasterId,
+                MasterUsername = g.Master!.Username,
                 AssistantIds = g.Assistants.Select(a => a.UserId).ToList()
             })
             .FirstOrDefaultAsync();
@@ -56,7 +56,7 @@ internal class GameRecruitmentOpenedNotificationGenerator : BaseNotificationGene
         // Get subscribers of the Master
         var masterSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.User,
-            gameData.AuthorId,
+            gameData.MasterId,
             SubscriptionSettings.AuthorNewContent);
         usersInterested.UnionWith(masterSubscriptions.Select(s => s.SubscriberId));
 
@@ -78,7 +78,7 @@ internal class GameRecruitmentOpenedNotificationGenerator : BaseNotificationGene
         usersInterested.UnionWith(readerSubscriptions.Select(s => s.SubscriberId));
 
         // Exclude game team members
-        usersInterested.Remove(gameData.AuthorId);
+        usersInterested.Remove(gameData.MasterId);
         foreach (var assistantId in gameData.AssistantIds)
         {
             usersInterested.Remove(assistantId);

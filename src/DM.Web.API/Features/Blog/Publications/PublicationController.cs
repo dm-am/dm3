@@ -32,19 +32,25 @@ public class PublicationController : ControllerBase
         _likeApiService = likeApiService;
     }
 
+    private async Task<Guid> ResolveBlogId(string id) =>
+        Guid.TryParse(id, out var guid) ? guid : (await _apiService.GetByPublicId(id)).Resource.Id;
+
     /// <summary>
     /// Get publications for a blog
     /// </summary>
-    /// <param name="blogId">Blog identifier</param>
+    /// <param name="blogId">Blog public ID (5 letters) or GUID</param>
     /// <param name="rubricId">Filter by rubric (optional)</param>
     /// <param name="q">Paging query parameters</param>
     /// <response code="200">List of publications</response>
     /// <response code="404">Blog not found</response>
-    [HttpGet("blogs/{blogId:guid}/publications", Name = nameof(GetPublications))]
+    [HttpGet("blogs/{blogId}/publications", Name = nameof(GetPublications))]
     [ProducesResponseType(typeof(ListEnvelope<Publication>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetPublications(Guid blogId, [FromQuery] Guid? rubricId, [FromQuery] PagingQuery q) =>
-        Ok(await _apiService.GetPublications(blogId, rubricId, q));
+    public async Task<IActionResult> GetPublications(string blogId, [FromQuery] Guid? rubricId, [FromQuery] PagingQuery q)
+    {
+        var id = await ResolveBlogId(blogId);
+        return Ok(await _apiService.GetPublications(id, rubricId, q));
+    }
 
     /// <summary>
     /// Get publication by ID
@@ -61,23 +67,24 @@ public class PublicationController : ControllerBase
     /// <summary>
     /// Create a new publication
     /// </summary>
-    /// <param name="blogId">Blog identifier</param>
+    /// <param name="blogId">Blog public ID (5 letters) or GUID</param>
     /// <param name="request">Publication creation request</param>
     /// <response code="201">Publication created successfully</response>
     /// <response code="400">Invalid request</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized</response>
     /// <response code="404">Blog not found</response>
-    [HttpPost("blogs/{blogId:guid}/publications", Name = nameof(PostPublication))]
+    [HttpPost("blogs/{blogId}/publications", Name = nameof(PostPublication))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Publication>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PostPublication(Guid blogId, [FromBody] CreatePublicationRequest request)
+    public async Task<IActionResult> PostPublication(string blogId, [FromBody] CreatePublicationRequest request)
     {
-        var result = await _apiService.CreatePublication(blogId, request);
+        var id = await ResolveBlogId(blogId);
+        var result = await _apiService.CreatePublication(id, request);
         return CreatedAtRoute(nameof(GetPublication), new { id = result.Resource.Id }, result);
     }
 

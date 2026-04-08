@@ -61,10 +61,10 @@ public class Warning
 public class CreateWarningRequest
 {
     /// <summary>
-    /// Target user login
+    /// Target user username
     /// </summary>
     /// <example>problemuser</example>
-    public string UserLogin { get; set; } = "";
+    public string Username { get; set; } = "";
 
     /// <summary>
     /// Entity ID that caused the warning
@@ -96,9 +96,9 @@ public class CreateWarningRequest
 public class UserWarningsInfo
 {
     /// <summary>
-    /// User login
+    /// User username
     /// </summary>
-    public string Login { get; set; } = "";
+    public string Username { get; set; } = "";
 
     /// <summary>
     /// Total active warning points

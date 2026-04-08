@@ -53,7 +53,7 @@ export function useHibpCheck(options: HibpCheckOptions = {}) {
           headers: {
             "Add-Padding": "true", // Enhanced privacy
           },
-        }
+        },
       );
 
       if (!response.ok) {

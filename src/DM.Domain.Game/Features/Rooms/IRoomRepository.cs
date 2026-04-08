@@ -23,6 +23,11 @@ public interface IRoomRepository
     Task<Room?> GetAvailable(Guid roomId, Guid userId);
 
     /// <summary>
+    /// Get single available room by game ID and room number
+    /// </summary>
+    Task<Room?> GetByGameAndNumber(Guid gameId, int roomNumber, Guid userId);
+
+    /// <summary>
     /// Get room for update
     /// </summary>
     Task<RoomToUpdate?> GetForUpdate(Guid roomId, Guid userId);

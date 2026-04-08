@@ -1,10 +1,15 @@
 import type { Id, Served } from "@/shared/api/models";
+import type { UserRef } from "@/shared/api/models/common";
 
 export type PollId = Id<string>;
 export type Poll = {
   id: Served<PollId>;
-  ends: string;
+  startsUtc: string;
+  endsUtc: string;
   title: string;
+  details: string | null;
+  status: Served<PollStatus>;
+  isAnonymous: boolean;
   options: PollOption[];
 };
 
@@ -14,4 +19,41 @@ export type PollOption = {
   text: string;
   votesCount: Served<number>;
   voted: Served<boolean | null>;
+  /** Users who voted for this option (null for anonymous polls, max 15) */
+  voters: UserRef[] | null;
+  /** Total voters count if exceeds 15 (null otherwise) */
+  totalVoters: number | null;
 };
+
+/**
+ * Poll status (computed by server from StartsUtc and EndsUtc)
+ * Must match C# PollStatus enum values (PascalCase)
+ */
+export enum PollStatus {
+  Pending = "Pending",
+  Active = "Active",
+  Closed = "Closed",
+}
+
+/**
+ * Sort field options for polls
+ */
+export type PollSortBy = "starts" | "ends" | "status";
+
+/**
+ * API search parameters for polls
+ */
+export interface PollsSearchParams {
+  status?: PollStatus;
+  search?: string;
+  startsFrom?: string;
+  startsTo?: string;
+  endsFrom?: string;
+  endsTo?: string;
+  sortBy?: PollSortBy;
+  sortOrder?: "asc" | "desc";
+  number?: number;
+  size?: number;
+  /** Filter by poll type: true for anonymous, false for public */
+  isAnonymous?: boolean;
+}

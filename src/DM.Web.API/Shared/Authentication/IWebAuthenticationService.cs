@@ -16,20 +16,19 @@ public interface IWebAuthenticationService
     /// </summary>
     /// <param name="credentials">Credentials</param>
     /// <param name="httpContext">HTTP context</param>
-    /// <returns></returns>
+    /// <returns>Authenticated user identity</returns>
     Task<IIdentity> Authenticate(AuthCredentials credentials, HttpContext httpContext);
 
     /// <summary>
     /// Logout as current user
     /// </summary>
     /// <param name="httpContext">HTTP context</param>
-    /// <returns></returns>
     Task Logout(HttpContext httpContext);
 
     /// <summary>
     /// Logout as current user from every device
     /// </summary>
     /// <param name="httpContext">HTTP context</param>
-    /// <returns></returns>
+    /// <returns>Updated user identity</returns>
     Task<IIdentity> LogoutElsewhere(HttpContext httpContext);
 }

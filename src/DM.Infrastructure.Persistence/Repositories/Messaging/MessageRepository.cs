@@ -304,8 +304,7 @@ internal class MessageRepository : IMessageRepository
             dbMessage.Text = update.Text;
         if (update.IsRemoved.HasValue)
             dbMessage.IsRemoved = update.IsRemoved.Value;
-        if (update.ModifiedUtc.HasValue)
-            dbMessage.ModifiedUtc = update.ModifiedUtc.Value;
+        // Modification tracking is handled via Edit history, not inline ModifiedUtc
 
         await _dbContext.SaveChangesAsync();
         return await _dbContext.Messages

@@ -20,6 +20,5 @@ public interface IGameCommentLikeService
     /// Remove existing like from current user to selected comment
     /// </summary>
     /// <param name="commentId">Comment identifier</param>
-    /// <returns></returns>
     Task UnlikeCommentAsync(Guid commentId);
 }

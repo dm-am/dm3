@@ -84,9 +84,9 @@ public class BotLinkResult
     public string Code { get; set; } = string.Empty;
 
     /// <summary>
-    /// When the code expires
+    /// When the code expires (UTC)
     /// </summary>
-    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset ExpiresUtc { get; set; }
 }
 
 /// <summary>

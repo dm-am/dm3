@@ -1,41 +1,50 @@
 <template>
-  <menu-block token="GameTags">
+  <SidebarBlock token="GameTags">
     <template #title>Теги игр</template>
-    <secondary-text v-if="!tags.length">Нет игр</secondary-text>
+    <SidebarSkeleton v-if="gamesStore.tagsLoading && !tags.length" :lines="4" />
+    <SecondaryText v-else-if="!tags.length">Нет тегов</SecondaryText>
     <div v-else class="tag-cloud">
-      <router-link
-        v-for="tag in sortedTags"
-        :key="tag.id"
-        :to="{ name: 'games-active', query: { tagId: tag.id } }"
-        class="tag"
-        :style="getTagStyle(tag)"
-      >
-        {{ tag.title }}
-      </router-link>
+      <Tooltip v-for="tag in sortedTags" :key="tag.id">
+        <template #content>
+          <RichText :text="tag.description || tag.title" />
+        </template>
+        <router-link
+          :to="{ name: 'games', query: { requiredTags: String(tag.id) } }"
+          class="tag"
+          :style="getTagStyle(tag)"
+        >
+          {{ tag.title }}
+        </router-link>
+      </Tooltip>
     </div>
-  </menu-block>
+  </SidebarBlock>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
-import MenuBlock from "@/widgets/menu/MenuBlock.vue";
+import { computed, onMounted } from "vue";
+import { Tooltip, RichText } from "@/shared/ui/Tooltip";
+import SidebarBlock from "./SidebarBlock.vue";
+import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { gameApi } from "@/entities/game";
+import { useGamesStore } from "@/entities/game/model/store";
 import type { Tag } from "@/entities/game";
 
-const tags = ref<Tag[]>([]);
+const gamesStore = useGamesStore();
+
+// Use tags from store (cached with 5-minute TTL)
+const tags = computed(() => gamesStore.tags ?? []);
 
 // Sort tags alphabetically for better UX
 const sortedTags = computed(() =>
-  [...tags.value].sort((a, b) => a.title.localeCompare(b.title, "ru"))
+  [...tags.value].sort((a, b) => a.title.localeCompare(b.title, "ru")),
 );
 
 // Calculate min/max for normalization
 const maxGamesCount = computed(() =>
-  Math.max(...tags.value.map((t) => t.gamesCount), 1)
+  Math.max(...tags.value.map((t) => t.gamesCount), 1),
 );
 const minGamesCount = computed(() =>
-  Math.min(...tags.value.map((t) => t.gamesCount), 0)
+  Math.min(...tags.value.map((t) => t.gamesCount), 0),
 );
 
 // Font size range: 12px to 18px (7 levels)
@@ -45,13 +54,12 @@ const BOLD_THRESHOLD = 15; // 15px and above are bold
 
 function getTagStyle(tag: Tag): { fontSize: string; fontWeight: string } {
   const range = maxGamesCount.value - minGamesCount.value;
-  const normalizedValue = range > 0
-    ? (tag.gamesCount - minGamesCount.value) / range
-    : 0;
+  const normalizedValue =
+    range > 0 ? (tag.gamesCount - minGamesCount.value) / range : 0;
 
   // Map to font size (12-18px)
   const fontSize = Math.round(
-    MIN_FONT_SIZE + normalizedValue * (MAX_FONT_SIZE - MIN_FONT_SIZE)
+    MIN_FONT_SIZE + normalizedValue * (MAX_FONT_SIZE - MIN_FONT_SIZE),
   );
 
   return {
@@ -60,10 +68,9 @@ function getTagStyle(tag: Tag): { fontSize: string; fontWeight: string } {
   };
 }
 
-onMounted(async () => {
-  const { data } = await gameApi.getTags();
-  // Only show tags with at least one active game
-  tags.value = (data?.resources ?? []).filter((t) => t.gamesCount > 0);
+onMounted(() => {
+  // Fetch tags via store (uses cache with stale-while-revalidate)
+  gamesStore.fetchTags();
 });
 </script>
 
@@ -74,11 +81,11 @@ onMounted(async () => {
 .tag-cloud
   display: flex
   flex-wrap: wrap
-  gap: $tiny
+  align-items: center
+  gap: $tiny $small
   line-height: 1.4
 
 .tag
-  display: inline-block
   transition: opacity 0.15s ease
 
   &:hover

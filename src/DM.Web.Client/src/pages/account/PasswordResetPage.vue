@@ -3,9 +3,12 @@ import { ref, computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useNewPasswordField } from "@/shared/lib/composables/useNewPasswordField";
 import { AccountApi } from "@/shared/api";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
-import { PasswordInput, PasswordStrengthIndicator } from "@/shared/ui/PasswordInput";
+import {
+  PasswordInput,
+  PasswordStrengthIndicator,
+} from "@/shared/ui/PasswordInput";
 import StatusIcon from "@/shared/ui/Icon/StatusIcon.vue";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 
@@ -23,7 +26,7 @@ const {
   hibpStatus,
   isValid,
   onInput: onPasswordInput,
-  onBlur: onPasswordBlur
+  onBlur: onPasswordBlur,
 } = useNewPasswordField();
 
 // Check token on mount
@@ -52,7 +55,10 @@ const submit = async () => {
   passwordError.value = "";
 
   const token = route.params.token as string;
-  const { data, error } = await AccountApi.completePasswordReset(token, newPassword.value);
+  const { data, error } = await AccountApi.completePasswordReset(
+    token,
+    newPassword.value,
+  );
 
   submitting.value = false;
 
@@ -93,15 +99,20 @@ function goToLogin() {
 </script>
 
 <template>
-  <div class="reset-page" :class="{ 'reset-page--wide': pageState === 'invalid' }">
+  <div
+    class="reset-page"
+    :class="{ 'reset-page--wide': pageState === 'invalid' }"
+  >
     <div class="reset-card">
       <!-- Success state -->
       <template v-if="pageState === 'completed'">
         <status-icon type="success" />
         <lightbox-title>Пароль изменен</lightbox-title>
-        <p class="status-description">Теперь вы можете войти с новым паролем.</p>
+        <p class="status-description">
+          Теперь вы можете войти с новым паролем.
+        </p>
         <div class="status-actions">
-          <the-button @click="goHome">На главную</the-button>
+          <Button @click="goHome">На главную</Button>
         </div>
       </template>
 
@@ -109,7 +120,10 @@ function goToLogin() {
       <template v-else-if="pageState === 'expired'">
         <status-icon type="warning" />
         <lightbox-title>Токен сброса пароля устарел</lightbox-title>
-        <p class="status-description">Срок действия токена истек. <a href="#" @click.prevent="goToRecovery">Запросите новый</a>.</p>
+        <p class="status-description">
+          Срок действия токена истек.
+          <a href="#" @click.prevent="goToRecovery">Запросите новый</a>.
+        </p>
       </template>
 
       <!-- Invalid token -->
@@ -120,7 +134,10 @@ function goToLogin() {
         <div class="error-info">
           <p><strong>Возможные причины:</strong></p>
           <ul>
-            <li>Пароль уже был изменен — попробуйте <a href="#" @click.prevent="goToLogin">войти</a></li>
+            <li>
+              Пароль уже был изменен — попробуйте
+              <a href="#" @click.prevent="goToLogin">войти</a>
+            </li>
             <li>Был запрошен новый токен — проверьте последнее письмо</li>
           </ul>
         </div>
@@ -132,6 +149,7 @@ function goToLogin() {
 
         <form @submit.prevent="submit" class="reset-form">
           <div class="form-field">
+            <span class="field-hint">Минимум 8 символов</span>
             <password-input
               v-model="newPassword"
               placeholder="Введите новый пароль"
@@ -144,22 +162,25 @@ function goToLogin() {
               :password="newPassword"
               :hibp-status="hibpStatus"
             />
-            <div v-if="passwordError" class="field-error">{{ passwordError }}</div>
+            <div v-if="passwordError" class="field-error">
+              {{ passwordError }}
+            </div>
           </div>
 
-          <the-button
+          <Button
             type="submit"
             :loading="submitting"
             :disabled="!isValid"
             class="submit-button"
           >
             Сохранить
-          </the-button>
+          </Button>
         </form>
       </template>
 
       <div class="help-section">
-        Нужна помощь? Обратитесь в <a href="/support?reason=access">поддержку</a>
+        Нужна помощь? Обратитесь в
+        <a href="/support?reason=access">поддержку</a>
       </div>
     </div>
   </div>
@@ -193,7 +214,7 @@ function goToLogin() {
 .status-actions
   margin-top: $big
 
-  :deep(.the-button)
+  :deep(.button)
     min-width: 200px
 
 // Form
@@ -204,6 +225,12 @@ function goToLogin() {
 
 .form-field
   text-align: left
+
+.field-hint
+  display: block
+  margin-bottom: $tiny
+  font-size: $secondary-font-size
+  color: $text-muted
 
 :deep(.password-input input)
   width: 100%
@@ -264,5 +291,4 @@ function goToLogin() {
 
   a
     font-weight: bold
-
 </style>

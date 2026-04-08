@@ -73,7 +73,7 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
         var identity = _identityProvider.Current;
         var entity = new CreateModeratedProfileNoteEntity
         {
-            NoteId = _guidFactory.Create(),
+            Id = _guidFactory.Create(),
             UserId = user.UserId,
             AuthorId = identity.User.UserId,
             Text = createNote.Text,
@@ -86,8 +86,8 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
     /// <inheritdoc />
     public async Task<ModeratedProfileNote> Update(UpdateModeratedProfileNote updateNote)
     {
-        var note = await _noteRepository.GetNote(updateNote.NoteId)
-            ?? throw new HttpException(HttpStatusCode.NotFound, $"Note {updateNote.NoteId} not found");
+        var note = await _noteRepository.GetNote(updateNote.Id)
+            ?? throw new HttpException(HttpStatusCode.NotFound, $"Note {updateNote.Id} not found");
 
         var user = await _userLookupService.GetAsync(note.User.UserId);
 
@@ -102,14 +102,14 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
 
         var entity = new UpdateModeratedProfileNoteEntity
         {
-            NoteId = updateNote.NoteId,
+            Id = updateNote.Id,
             Text = updateNote.Text,
             UpdatedUtc = _dateTimeProvider.Now
         };
 
         await _noteRepository.Update(entity);
 
-        return (await _noteRepository.GetNote(updateNote.NoteId))!;
+        return (await _noteRepository.GetNote(updateNote.Id))!;
     }
 
     /// <inheritdoc />

@@ -69,9 +69,10 @@
       <div class="blocked-group">
         <h3 class="settings-title">Заблокированные</h3>
         <div v-if="listLoading" class="loading-state">Загрузка...</div>
-        <div v-else-if="blockedUsers.length === 0" class="empty-state">
-          Нет заблокированных пользователей
-        </div>
+        <EmptyState
+          v-else-if="blockedUsers.length === 0"
+          title="Нет заблокированных пользователей"
+        />
         <div v-else class="blocked-list">
           <div
             v-for="entry in blockedUsers"
@@ -85,21 +86,23 @@
               >
                 {{ entry.username }}
               </RouterLink>
-              <span class="blocked-date">{{ formatDate(entry.createdUtc) }}</span>
+              <span class="blocked-date">{{
+                formatDate(entry.createdUtc)
+              }}</span>
             </div>
             <button
               class="unblock-btn"
               :disabled="unblockingUsername === entry.username"
               @click="unblock(entry.username)"
             >
-              {{ unblockingUsername === entry.username ? "..." : "Разблокировать" }}
+              {{
+                unblockingUsername === entry.username ? "..." : "Разблокировать"
+              }}
             </button>
           </div>
         </div>
 
-        <button class="add-btn" @click="openBlockModal">
-          + Заблокировать
-        </button>
+        <button class="add-btn" @click="openBlockModal">+ Заблокировать</button>
       </div>
     </div>
   </section>
@@ -107,12 +110,17 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from "vue";
+import dayjs from "dayjs";
 import { RouterLink } from "vue-router";
 import { useModal } from "vue-final-modal";
 import { BlacklistApi } from "@/shared/api";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { EmptyState } from "@/shared/ui";
 import BlockUserLightbox from "../BlockUserLightbox.vue";
-import type { BlacklistEntry, BlacklistSettings } from "@/shared/api/models/personal";
+import type {
+  BlacklistEntry,
+  BlacklistSettings,
+} from "@/shared/api/models/personal";
 
 const toast = useToast();
 
@@ -125,7 +133,7 @@ const settings = reactive<BlacklistSettings>({
   hideGames: false,
   hideBlogs: false,
   blockDirectMessages: false,
-  autoPopulateContentBlacklist: false
+  autoPopulateContentBlacklist: false,
 });
 
 // Blocked users state
@@ -142,8 +150,8 @@ const { open: openBlockModal, close: closeBlockModal } = useModal({
       closeBlockModal();
       toast.success(`${entry.username} заблокирован`);
     },
-    onCancel: () => closeBlockModal()
-  }
+    onCancel: () => closeBlockModal(),
+  },
 });
 
 onMounted(async () => {
@@ -193,18 +201,15 @@ async function unblock(username: string) {
   if (error) {
     toast.error("Не удалось разблокировать пользователя");
   } else {
-    blockedUsers.value = blockedUsers.value.filter(u => u.username !== username);
+    blockedUsers.value = blockedUsers.value.filter(
+      (u) => u.username !== username,
+    );
     toast.success(`${username} разблокирован`);
   }
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  });
+  return dayjs(dateStr).format("DD.MM.YYYY");
 }
 </script>
 
@@ -233,8 +238,7 @@ function formatDate(dateStr: string): string {
   font-weight: 600
   color: $text
 
-.loading-state,
-.empty-state
+.loading-state
   color: $text-muted
   padding: $small 0
 

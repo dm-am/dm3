@@ -49,7 +49,7 @@ internal class BlogBlacklistService : IBlogBlacklistService
     /// <inheritdoc />
     public async Task<IEnumerable<GeneralUser>> GetBlacklistAsync(Guid blogId, CancellationToken ct = default)
     {
-        var blog = await _blogService.GetBlog(blogId, ct);
+        var blog = await _blogService.GetBlogAsync(blogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
 
         return await _repository.GetBlacklist(blogId, ct);
@@ -58,7 +58,7 @@ internal class BlogBlacklistService : IBlogBlacklistService
     /// <inheritdoc />
     public async Task<GeneralUser> AddToBlacklistAsync(Guid blogId, string username, CancellationToken ct = default)
     {
-        var blog = await _blogService.GetBlog(blogId, ct);
+        var blog = await _blogService.GetBlogAsync(blogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
 
         var user = await _userLookupService.GetAsync(username);
@@ -110,7 +110,7 @@ internal class BlogBlacklistService : IBlogBlacklistService
     /// <inheritdoc />
     public async Task RemoveFromBlacklistAsync(Guid blogId, string username, CancellationToken ct = default)
     {
-        var blog = await _blogService.GetBlog(blogId, ct);
+        var blog = await _blogService.GetBlogAsync(blogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
 
         var user = await _userLookupService.GetAsync(username);
@@ -160,12 +160,12 @@ internal class BlogBlacklistService : IBlogBlacklistService
         GetBlacklistAsync(blogId, ct);
 
     /// <inheritdoc />
-    public Task<GeneralUser> Add(Guid blogId, string username, CancellationToken ct = default) =>
-        AddToBlacklistAsync(blogId, username, ct);
+    public Task<GeneralUser> Add(OperateBlogBlacklistLink dto, CancellationToken ct = default) =>
+        AddToBlacklistAsync(dto.BlogId, dto.Username, ct);
 
     /// <inheritdoc />
-    public Task Remove(Guid blogId, string username, CancellationToken ct = default) =>
-        RemoveFromBlacklistAsync(blogId, username, ct);
+    public Task Remove(OperateBlogBlacklistLink dto, CancellationToken ct = default) =>
+        RemoveFromBlacklistAsync(dto.BlogId, dto.Username, ct);
 
     #endregion
 }

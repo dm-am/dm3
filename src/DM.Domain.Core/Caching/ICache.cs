@@ -31,6 +31,5 @@ public interface ICache
     /// Invalidate cache entry
     /// </summary>
     /// <param name="key">Cache key</param>
-    /// <returns></returns>
     Task InvalidateAsync(object key);
 }

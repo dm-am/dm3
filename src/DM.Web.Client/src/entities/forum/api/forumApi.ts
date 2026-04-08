@@ -1,4 +1,8 @@
-import type { ListEnvelope, PagingQuery, User } from "@/shared/api/models/common";
+import type {
+  Envelope,
+  ListEnvelope,
+  User,
+} from "@/shared/api/models/common";
 import type {
   Comment,
   CommentId,
@@ -6,10 +10,15 @@ import type {
   BoardId,
   Topic,
   TopicId,
+  TopicsQuery,
+  CommentsQuery,
 } from "../model/types";
 import { Api } from "@/shared/api";
 import { BbRenderMode } from "@/shared/api";
 import type { Patch, Post } from "@/shared/api/models";
+
+// Well-known board aliases
+const NEWS_BOARD_ALIAS = "news";
 
 export default new (class ForumApi {
   public getBoards() {
@@ -17,12 +26,13 @@ export default new (class ForumApi {
   }
 
   public getBoard(id: BoardId) {
-    return Api.get<Board>(`boards/${id}`);
+    return Api.get<Envelope<Board>>(`boards/${id}`);
   }
 
   public getNews() {
-    return Api.get<ListEnvelope<Topic>>("boards/Новости проекта/topics", {
-      size: 3,
+    // Fetch recent news for homepage filtering by date
+    return Api.get<ListEnvelope<Topic>>(`boards/${NEWS_BOARD_ALIAS}/topics`, {
+      take: 5,
     });
   }
 
@@ -30,19 +40,64 @@ export default new (class ForumApi {
     return Api.get<ListEnvelope<User>>(`boards/${id}/moderators`);
   }
 
-  public getTopics(id: BoardId, q: PagingQuery, isAttached: boolean) {
-    return Api.get<ListEnvelope<Topic>>(`boards/${id}/topics`, {
-      ...q,
-      isAttached,
-    });
+  public getTopics(id: BoardId, q: TopicsQuery) {
+    // Convert page number to skip/take for backend
+    const pageSize = q.size ?? 20;
+    const queryParams: Record<string, string | number | boolean | string[] | undefined> = {
+      take: pageSize,
+    };
+
+    // Paging
+    if (q.number && q.number > 1) {
+      queryParams.skip = (q.number - 1) * pageSize;
+    }
+
+    // Filtering
+    if (q.isAttached !== undefined) {
+      queryParams.isAttached = q.isAttached;
+    }
+    if (q.search) {
+      queryParams.search = q.search;
+    }
+    if (q.authors && q.authors.length > 0) {
+      queryParams.authors = q.authors;
+    }
+    if (q.createdFromUtc) {
+      queryParams.createdFromUtc = q.createdFromUtc;
+    }
+    if (q.createdToUtc) {
+      queryParams.createdToUtc = q.createdToUtc;
+    }
+
+    // Sorting
+    if (q.sortBy) {
+      queryParams.sortBy = q.sortBy;
+    }
+    if (q.sortOrder) {
+      queryParams.sortOrder = q.sortOrder;
+    }
+
+    return Api.get<ListEnvelope<Topic>>(`boards/${id}/topics`, queryParams);
+  }
+
+  public reorderPinnedTopics(boardId: BoardId, topicIds: string[]) {
+    return Api.patch(`boards/${boardId}/topics/pinned/order`, { topicIds });
+  }
+
+  public updateTopic(id: TopicId, topic: Patch<Topic>) {
+    return Api.patch<Envelope<Topic>>(`topics/${id}`, topic);
   }
 
   public createTopic(id: BoardId, topic: Post<Topic>) {
-    return Api.post<Topic>(`boards/${id}/topics`, topic);
+    return Api.post<Envelope<Topic>>(`boards/${id}/topics`, topic);
   }
 
   public getTopic(id: TopicId) {
-    return Api.get<Topic>(`topics/${id}`);
+    return Api.get<Envelope<Topic>>(`topics/${id}`);
+  }
+
+  public getTopicByNumber(boardAlias: string, topicNumber: number) {
+    return Api.get<Envelope<Topic>>(`forum/${boardAlias}/${topicNumber}`);
   }
 
   public markBoardAsRead(id: BoardId) {
@@ -57,8 +112,41 @@ export default new (class ForumApi {
     return Api.delete(`topics/${id}/comments/unread`);
   }
 
-  public getComments(id: TopicId, q: PagingQuery) {
-    return Api.get<ListEnvelope<Comment>>(`topics/${id}/comments`, q);
+  public getComments(id: TopicId, q: CommentsQuery) {
+    // Convert page number to skip/take for backend
+    const pageSize = q.size ?? 20;
+    const queryParams: Record<string, string | number | string[] | undefined> = {
+      take: pageSize,
+    };
+
+    // Paging
+    if (q.number && q.number > 1) {
+      queryParams.skip = (q.number - 1) * pageSize;
+    }
+
+    // Filtering
+    if (q.search) {
+      queryParams.search = q.search;
+    }
+    if (q.authors && q.authors.length > 0) {
+      queryParams.authors = q.authors;
+    }
+    if (q.createdFromUtc) {
+      queryParams.createdFromUtc = q.createdFromUtc;
+    }
+    if (q.createdToUtc) {
+      queryParams.createdToUtc = q.createdToUtc;
+    }
+
+    // Sorting
+    if (q.sortBy) {
+      queryParams.sortBy = q.sortBy;
+    }
+    if (q.sortOrder) {
+      queryParams.sortOrder = q.sortOrder;
+    }
+
+    return Api.get<ListEnvelope<Comment>>(`topics/${id}/comments`, queryParams);
   }
 
   public createComment(id: TopicId, comment: Post<Comment>) {

@@ -10,6 +10,9 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
+  optimizeDeps: {
+    exclude: ["vue-final-modal"],
+  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
@@ -59,21 +62,21 @@ export default defineConfig({
       output: {
         manualChunks: {
           // Vue core - меняется редко, хорошо кэшируется
-          'vue-vendor': ['vue', 'vue-router', 'pinia'],
+          "vue-vendor": ["vue", "vue-router", "pinia"],
           // TipTap editor - загружается только на chat/messenger
           // @tiptap/pm исключен - имеет особую структуру пакета
-          'tiptap': [
-            '@tiptap/vue-3',
-            '@tiptap/starter-kit',
-            '@tiptap/extension-link',
-            '@tiptap/extension-image',
-            '@tiptap/extension-underline',
-            '@tiptap/extension-placeholder',
-            '@tiptap/extension-code-block',
-            '@tiptap/extension-bubble-menu',
+          tiptap: [
+            "@tiptap/vue-3",
+            "@tiptap/starter-kit",
+            "@tiptap/extension-link",
+            "@tiptap/extension-image",
+            "@tiptap/extension-underline",
+            "@tiptap/extension-placeholder",
+            "@tiptap/extension-code-block",
+            "@tiptap/extension-bubble-menu",
           ],
           // SignalR - загружается для realtime
-          'signalr': ['@microsoft/signalr'],
+          signalr: ["@microsoft/signalr"],
         },
       },
     },

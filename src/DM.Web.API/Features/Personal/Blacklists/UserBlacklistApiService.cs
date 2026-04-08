@@ -62,14 +62,16 @@ internal class UserBlacklistApiService : IUserBlacklistApiService
     /// <inheritdoc />
     public async Task<BlacklistEntry> BlockUser(BlockUserRequest request)
     {
-        var entry = await _blacklistService.BlockUser(request.Username);
+        var dto = new OperateUserBlacklistLink { Username = request.Username };
+        var entry = await _blacklistService.Block(dto);
         return _mapper.Map<BlacklistEntry>(entry);
     }
 
     /// <inheritdoc />
     public async Task UnblockUser(string username)
     {
-        await _blacklistService.UnblockUser(username);
+        var dto = new OperateUserBlacklistLink { Username = username };
+        await _blacklistService.Unblock(dto);
     }
 
     /// <inheritdoc />

@@ -7,10 +7,10 @@ import SidebarTitle from "@/shared/ui/Layout/SidebarTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import HumanTimespan from "@/shared/ui/Date/HumanTimespan.vue";
-import TheIcon from "@/shared/ui/Icon/TheIcon.vue";
-import TheLightbox from "@/shared/ui/Layout/TheLightbox.vue";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
-import TheForm from "@/shared/ui/Form/TheForm.vue";
+import Icon from "@/shared/ui/Icon/Icon.vue";
+import Lightbox from "@/shared/ui/Layout/Lightbox.vue";
+import Button from "@/shared/ui/Button/Button.vue";
+import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { UserLink } from "@/entities/user";
 
@@ -20,15 +20,15 @@ export function registerGlobalComponents(app: App) {
 
   // Register global components
   app
-    .component("TheIcon", TheIcon)
+    .component("Icon", Icon)
     .component("PageTitle", PageTitle)
     .component("BlockTitle", BlockTitle)
     .component("SidebarTitle", SidebarTitle)
     .component("SecondaryText", SecondaryText)
-    .component("TheForm", TheForm)
+    .component("Form", Form)
     .component("FormField", FormField)
-    .component("TheButton", TheButton)
-    .component("TheLightbox", TheLightbox)
+    .component("Button", Button)
+    .component("Lightbox", Lightbox)
     .component("HumanDate", HumanDate)
     .component("HumanTimespan", HumanTimespan)
     .component("UserLink", UserLink);

@@ -31,7 +31,7 @@ public class GlobalChatEvent
     /// <summary>
     /// Planned start time (UTC)
     /// </summary>
-    public DateTimeOffset StartsAt { get; set; }
+    public DateTimeOffset StartsUtc { get; set; }
 
     /// <summary>
     /// Event duration (null = no limit)
@@ -58,7 +58,7 @@ public class GlobalChatEvent
     /// <summary>
     /// When the event was created (UTC)
     /// </summary>
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Event participants
@@ -89,7 +89,7 @@ public class GlobalChatEventParticipant
     /// <summary>
     /// When the user joined the event (UTC)
     /// </summary>
-    public DateTimeOffset JoinedAt { get; set; }
+    public DateTimeOffset JoinedUtc { get; set; }
 }
 
 /// <summary>
@@ -110,7 +110,7 @@ public class GlobalChatEventSummary
     /// <summary>
     /// Planned start time (UTC)
     /// </summary>
-    public DateTimeOffset StartsAt { get; set; }
+    public DateTimeOffset StartsUtc { get; set; }
 
     /// <summary>
     /// Event status
@@ -150,7 +150,7 @@ public class CreateGlobalChatEventInput
     /// <summary>
     /// Planned start time (UTC)
     /// </summary>
-    public DateTimeOffset StartsAt { get; set; }
+    public DateTimeOffset StartsUtc { get; set; }
 
     /// <summary>
     /// Event duration (null = no limit)
@@ -183,7 +183,7 @@ public class UpdateGlobalChatEventInput
     /// <summary>
     /// Planned start time (UTC)
     /// </summary>
-    public DateTimeOffset? StartsAt { get; set; }
+    public DateTimeOffset? StartsUtc { get; set; }
 
     /// <summary>
     /// Event duration (null = no limit)
@@ -202,11 +202,11 @@ public class UpdateGlobalChatEventInput
 public class AddParticipantInput
 {
     /// <summary>
-    /// User login to add
+    /// User username to add
     /// </summary>
-    [Required(ErrorMessage = "Login is required")]
-    [StringLength(20, MinimumLength = 1, ErrorMessage = "Login must be between 1 and 20 characters")]
-    public string Login { get; set; } = null!;
+    [Required(ErrorMessage = "Username is required")]
+    [StringLength(20, MinimumLength = 1, ErrorMessage = "Username must be between 1 and 20 characters")]
+    public string Username { get; set; } = null!;
 
     /// <summary>
     /// Make this user an organizer

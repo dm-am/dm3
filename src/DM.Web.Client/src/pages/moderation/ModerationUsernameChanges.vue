@@ -7,7 +7,6 @@ import moderationApi, {
   type ResolveUsernameChangeRequest,
 } from "@/shared/api/moderationApi";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import LoadingSpinner from "@/shared/ui/Layout/LoadingSpinner.vue";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import UserLink from "@/entities/user/ui/UserLink.vue";
 
@@ -56,14 +55,16 @@ const getStatusClass = (status: UsernameChangeRequestStatus): string => {
 };
 
 const pendingRequests = computed(() =>
-  requests.value.filter((r) => r.status === UsernameChangeRequestStatus.Pending)
+  requests.value.filter(
+    (r) => r.status === UsernameChangeRequestStatus.Pending,
+  ),
 );
 
 const fetchRequests = async () => {
   loading.value = true;
   try {
-    const response = await moderationApi.getPendingUsernameChangeRequests();
-    requests.value = response.resources || [];
+    const { data } = await moderationApi.getPendingUsernameChangeRequests();
+    requests.value = data?.resources || [];
   } catch (error) {
     toast.error("Не удалось загрузить запросы");
   } finally {
@@ -72,7 +73,8 @@ const fetchRequests = async () => {
 };
 
 const approveRequest = async (request: UsernameChangeRequest) => {
-  if (!confirm(`Одобрить запрос на смену имени от ${request.currentUsername}?`)) return;
+  if (!confirm(`Одобрить запрос на смену имени от ${request.currentUsername}?`))
+    return;
 
   processing.value = request.id;
   try {
@@ -115,8 +117,13 @@ const confirmReject = async () => {
       status: UsernameChangeRequestStatus.Rejected,
       comment: rejectComment.value,
     };
-    await moderationApi.resolveUsernameChangeRequest(rejectingRequest.value.id, resolve);
-    toast.success(`Запрос от ${rejectingRequest.value.currentUsername} отклонён`);
+    await moderationApi.resolveUsernameChangeRequest(
+      rejectingRequest.value.id,
+      resolve,
+    );
+    toast.success(
+      `Запрос от ${rejectingRequest.value.currentUsername} отклонен`,
+    );
     closeRejectModal();
     await fetchRequests();
   } catch (error) {
@@ -133,7 +140,7 @@ onMounted(() => fetchRequests());
   <div class="username-changes">
     <h3>Запросы на смену имени пользователя</h3>
 
-    <loading-spinner v-if="loading" />
+    <secondary-text v-if="loading">Загрузка...</secondary-text>
 
     <template v-else-if="pendingRequests.length === 0">
       <secondary-text>Нет активных запросов</secondary-text>
@@ -147,13 +154,19 @@ onMounted(() => fetchRequests());
       >
         <div class="request-header">
           <div class="user-info">
-            <user-link :username="request.currentUsername" />
+            <router-link
+              :to="{
+                name: 'profile',
+                params: { username: request.currentUsername },
+              }"
+              >{{ request.currentUsername }}</router-link
+            >
             <span class="status-badge" :class="getStatusClass(request.status)">
               {{ getStatusLabel(request.status) }}
             </span>
           </div>
           <div class="request-date">
-            <human-date :date="request.createdAtUtc" />
+            <human-date :date="request.createdUtc" />
           </div>
         </div>
 
@@ -186,7 +199,11 @@ onMounted(() => fetchRequests());
     </div>
 
     <!-- Reject Modal -->
-    <div v-if="showRejectModal" class="modal-overlay" @click.self="closeRejectModal">
+    <div
+      v-if="showRejectModal"
+      class="modal-overlay"
+      @click.self="closeRejectModal"
+    >
       <div class="modal">
         <div class="modal-header">
           <h4>Отклонение запроса</h4>
@@ -195,7 +212,8 @@ onMounted(() => fetchRequests());
         <div class="modal-body">
           <p>
             Отклонить запрос на смену имени от
-            <strong>{{ rejectingRequest?.currentUsername }}</strong>?
+            <strong>{{ rejectingRequest?.currentUsername }}</strong
+            >?
           </p>
           <div class="form-field">
             <label for="reject-reason">Причина отклонения</label>
@@ -225,6 +243,7 @@ onMounted(() => fetchRequests());
 <style scoped lang="sass">
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
+@import "src/assets/styles/ZIndex"
 
 .username-changes
   h3
@@ -261,8 +280,8 @@ onMounted(() => fetchRequests());
   font-weight: 500
 
   &.pending
-    background: rgba($accent-gold, 0.2)
-    color: $accent-gold
+    background: rgba($accent-yellow, 0.2)
+    color: $accent-yellow
 
   &.approved
     background: rgba($accent-green, 0.2)
@@ -273,8 +292,8 @@ onMounted(() => fetchRequests());
     color: $accent-red
 
   &.completed
-    background: rgba($accent-blue, 0.2)
-    color: $accent-blue
+    background: rgba($link, 0.2)
+    color: $link
 
   &.expired
     background: rgba($text-muted, 0.2)
@@ -351,7 +370,7 @@ onMounted(() => fetchRequests());
   display: flex
   align-items: center
   justify-content: center
-  z-index: 1000
+  z-index: $z-modal
 
 .modal
   background: $bg-element
@@ -408,7 +427,7 @@ onMounted(() => fetchRequests());
     padding: $small
     border: 1px solid $border
     border-radius: $border-radius
-    background: $bg-input
+    background: $input-bg
     color: $text
     font-family: inherit
     font-size: 1rem

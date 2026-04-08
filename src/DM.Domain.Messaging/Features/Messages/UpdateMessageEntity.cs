@@ -21,9 +21,4 @@ public class UpdateMessageEntity
     /// Updated removed status (null to keep current)
     /// </summary>
     public bool? IsRemoved { get; set; }
-
-    /// <summary>
-    /// Modification timestamp
-    /// </summary>
-    public DateTimeOffset? ModifiedUtc { get; set; }
 }

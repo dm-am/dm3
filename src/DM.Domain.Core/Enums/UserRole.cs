@@ -1,7 +1,7 @@
 namespace DM.Domain.Core.Enums;
 
 /// <summary>
-/// User role on the platform (hierarchical, not flags)
+/// User role on the website (hierarchical, not flags)
 /// </summary>
 public enum UserRole
 {

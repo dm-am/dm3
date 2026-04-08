@@ -33,8 +33,10 @@ internal class PollIntentionResolver :
     public bool IsAllowed(IAuthorizationSubject user, PollIntention intention, (Poll poll, Guid optionId) target) =>
         intention switch
         {
+            // Can vote only during active period (StartsUtc <= now < EndsUtc)
             PollIntention.Vote when user.IsAuthenticated =>
-                target.poll.EndDate > _dateTimeProvider.Now &&
+                target.poll.StartsUtc <= _dateTimeProvider.Now &&
+                target.poll.EndsUtc > _dateTimeProvider.Now &&
                 target.poll.Options.Any(o => o.Id == target.optionId),
             _ => false
         };
@@ -43,8 +45,10 @@ internal class PollIntentionResolver :
     public bool IsAllowed(IAuthorizationSubject user, PollIntention intention, Poll poll) =>
         intention switch
         {
+            // Can unvote only during active period (StartsUtc <= now < EndsUtc)
             PollIntention.Unvote when user.IsAuthenticated =>
-                poll.EndDate > _dateTimeProvider.Now,
+                poll.StartsUtc <= _dateTimeProvider.Now &&
+                poll.EndsUtc > _dateTimeProvider.Now,
             PollIntention.Edit => user.Role >= UserRole.SeniorModerator,
             PollIntention.Delete => user.Role >= UserRole.SeniorModerator,
             _ => false

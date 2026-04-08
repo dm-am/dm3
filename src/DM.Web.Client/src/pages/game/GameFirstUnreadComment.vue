@@ -37,7 +37,7 @@ onMounted(async () => {
 
 <template>
   <div class="loading-state">
-    <p class="loading-text">Поиск непрочитанных комментариев...</p>
+    <p class="loading-text">Поиск непрочитанных комментариев</p>
   </div>
 </template>
 

@@ -2,16 +2,23 @@
 import { computed, ref, onMounted, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useModal } from "vue-final-modal";
-import { useUserStore, useCommunityStore, type User, type Username, type UsernameHistoryEntry, UserRole } from "@/entities/user";
+import {
+  useUserStore,
+  useCommunityStore,
+  type User,
+  type Username,
+  type UsernameHistoryEntry,
+  UserRole,
+} from "@/entities/user";
 import { useSubscriptionsStore } from "@/shared/stores/subscriptions";
-import type { BlacklistEntry } from "@/shared/api/models/account";
+import type { BlacklistEntry } from "@/shared/api/models/personal";
 import { SubscriptionTargetType } from "@/shared/api/models/subscriptions";
 import { communityApi } from "@/shared/api";
 import { blacklistApi } from "@/shared/api";
 import { ROLE_INFO, STAFF_ROLES } from "@/shared/config/roles";
 import defaultPicture from "@/assets/images/userpic.png";
 import ProfilePicture from "./ProfilePicture.vue";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 import { EditableField } from "@/shared/ui/EditableField";
 import BlockUserLightbox from "@/pages/account/BlockUserLightbox.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -44,7 +51,10 @@ const isBlockLoading = ref(false);
 const isSubscribeLoading = ref(false);
 const isSubscribed = computed(() => {
   if (!props.user.id) return false;
-  return subscriptionsStore.isSubscribed(SubscriptionTargetType.User, props.user.id);
+  return subscriptionsStore.isSubscribed(
+    SubscriptionTargetType.User,
+    props.user.id,
+  );
 });
 
 async function toggleSubscribe() {
@@ -52,14 +62,22 @@ async function toggleSubscribe() {
   isSubscribeLoading.value = true;
   try {
     if (isSubscribed.value) {
-      await subscriptionsStore.unsubscribeByTarget(SubscriptionTargetType.User, props.user.id);
+      await subscriptionsStore.unsubscribeByTarget(
+        SubscriptionTargetType.User,
+        props.user.id,
+      );
       toast.success(`Вы отписались от ${props.user.username}`);
     } else {
-      await subscriptionsStore.subscribe(SubscriptionTargetType.User, props.user.id);
+      await subscriptionsStore.subscribe(
+        SubscriptionTargetType.User,
+        props.user.id,
+      );
       toast.success(`Вы подписались на ${props.user.username}`);
     }
   } catch {
-    toast.error(isSubscribed.value ? "Не удалось отписаться" : "Не удалось подписаться");
+    toast.error(
+      isSubscribed.value ? "Не удалось отписаться" : "Не удалось подписаться",
+    );
   } finally {
     isSubscribeLoading.value = false;
   }
@@ -74,15 +92,17 @@ const { open: openBlockModal, close: closeBlockModal } = useModal({
       closeBlockModal();
       toast.success(`${entry.username} заблокирован`);
     },
-    onCancel: () => closeBlockModal()
-  }
+    onCancel: () => closeBlockModal(),
+  },
 });
 
 async function checkIfBlocked() {
   if (!currentUser.value || isOwnProfile.value) return;
   const { data } = await blacklistApi.getBlacklist();
   if (data?.resources) {
-    isBlocked.value = data.resources.some(e => e.username === props.user.username);
+    isBlocked.value = data.resources.some(
+      (e) => e.username === props.user.username,
+    );
   }
 }
 
@@ -102,15 +122,17 @@ async function unblockUser() {
 }
 
 const pictureUrl = computed(
-  () => props.user.mediumPictureUrl || props.user.originalPictureUrl || defaultPicture,
+  () =>
+    props.user.mediumPictureUrl ||
+    props.user.originalPictureUrl ||
+    defaultPicture,
 );
 
 const userRoles = computed(() => {
-  const roles =
-    props.user.roles
-      .filter((r) => STAFF_ROLES.includes(r as UserRole))
-      .map((r) => ROLE_INFO[r as UserRole].nickname)
-      .filter(Boolean) || [];
+  const roles = (props.user.roles ?? [])
+    .filter((r) => STAFF_ROLES.includes(r as UserRole))
+    .map((r) => ROLE_INFO[r as UserRole].nickname)
+    .filter(Boolean);
   if (props.user.isHonorary) {
     roles.push("Почетный гоблин");
   }
@@ -118,8 +140,8 @@ const userRoles = computed(() => {
 });
 
 const registrationDate = computed(() => {
-  if (!props.user.registrationDateUtc) return "";
-  return dayjs(props.user.registrationDateUtc).format("DD.MM.YYYY");
+  if (!props.user.registrationUtc) return "";
+  return dayjs(props.user.registrationUtc).format("DD.MM.YYYY");
 });
 
 const lastOnline = computed(() => {
@@ -136,7 +158,9 @@ const usernameHistory = ref<UsernameHistoryEntry[]>([]);
 const showUsernameHistory = ref(false);
 
 onMounted(async () => {
-  const { data } = await communityApi.getUsernameHistory(props.user.username as Username);
+  const { data } = await communityApi.getUsernameHistory(
+    props.user.username as Username,
+  );
   if (data?.resources) {
     usernameHistory.value = data.resources;
   }
@@ -156,14 +180,10 @@ const handleStatusChange = (value: string) => {
   <div class="profile-header">
     <div class="header-left">
       <div class="avatar-wrapper">
-        <img
-          :src="pictureUrl"
-          :alt="user.username"
-          class="avatar"
-        />
+        <img :src="pictureUrl" :alt="user.username" class="avatar" />
         <profile-picture
           v-if="isEditMode && canEdit"
-          :username="(user.username as Username)"
+          :username="user.username as Username"
         />
       </div>
     </div>
@@ -176,7 +196,10 @@ const handleStatusChange = (value: string) => {
           @mouseleave="showUsernameHistory = false"
         >
           {{ user.username }}
-          <div v-if="showUsernameHistory && usernameHistory.length" class="username-history-tooltip">
+          <div
+            v-if="showUsernameHistory && usernameHistory.length"
+            class="username-history-tooltip"
+          >
             <div class="tooltip-title">Прошлые имена</div>
             <div
               v-for="entry in usernameHistory"
@@ -184,11 +207,15 @@ const handleStatusChange = (value: string) => {
               class="history-entry"
             >
               <span class="old-username">{{ entry.oldUsername }}</span>
-              <span class="date">{{ dayjs(entry.changedUtc).format("DD.MM.YYYY") }}</span>
+              <span class="date">{{
+                dayjs(entry.changedUtc).format("DD.MM.YYYY")
+              }}</span>
             </div>
           </div>
         </h1>
-        <span v-if="userRoles.length" class="roles">{{ userRoles.join(", ") }}</span>
+        <span v-if="userRoles.length" class="roles">{{
+          userRoles.join(", ")
+        }}</span>
       </div>
 
       <div class="status-row">
@@ -223,46 +250,44 @@ const handleStatusChange = (value: string) => {
     <div class="header-actions">
       <template v-if="canEdit">
         <template v-if="isEditMode">
-          <the-button
-            v-if="hasChanges"
-            :disabled="isSaving"
-            @click="emit('save')"
-          >
+          <Button v-if="hasChanges" :disabled="isSaving" @click="emit('save')">
             {{ isSaving ? "Сохранение..." : "Сохранить" }}
-          </the-button>
-          <the-button secondary @click="emit('cancel')">Отмена</the-button>
+          </Button>
+          <Button secondary @click="emit('cancel')">Отмена</Button>
         </template>
-        <the-button v-else @click="emit('toggleEdit')">Редактировать</the-button>
+        <Button v-else @click="emit('toggleEdit')">Редактировать</Button>
       </template>
       <template v-else-if="currentUser && !isOwnProfile">
         <router-link
           :to="{ name: 'direct-message', params: { username: user.username } }"
           class="message-link"
         >
-          <the-button>Написать</the-button>
+          <Button>Написать</Button>
         </router-link>
-        <the-button
+        <Button
           :disabled="isSubscribeLoading"
-          :class="{ 'subscribed': isSubscribed }"
+          :class="{ subscribed: isSubscribed }"
           @click="toggleSubscribe"
         >
-          {{ isSubscribeLoading ? "..." : (isSubscribed ? "Отписаться" : "Подписаться") }}
-        </the-button>
-        <the-button
+          {{
+            isSubscribeLoading
+              ? "..."
+              : isSubscribed
+                ? "Отписаться"
+                : "Подписаться"
+          }}
+        </Button>
+        <Button
           v-if="isBlocked"
           secondary
           :disabled="isBlockLoading"
           @click="unblockUser"
         >
           {{ isBlockLoading ? "..." : "Разблокировать" }}
-        </the-button>
-        <the-button
-          v-else
-          secondary
-          @click="openBlockModal"
-        >
+        </Button>
+        <Button v-else secondary @click="openBlockModal">
           Заблокировать
-        </the-button>
+        </Button>
       </template>
     </div>
   </div>

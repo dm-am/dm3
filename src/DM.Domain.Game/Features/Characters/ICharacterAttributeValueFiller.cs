@@ -13,8 +13,7 @@ internal interface ICharacterAttributeValueFiller
     /// <summary>
     /// Fill character attribute values with needed metadata from game attribute schema
     /// </summary>
-    /// <param name="characters"></param>
-    /// <param name="schemaId"></param>
-    /// <returns></returns>
+    /// <param name="characters">Characters to fill</param>
+    /// <param name="schemaId">Attribute schema identifier</param>
     Task Fill(IEnumerable<Character> characters, Guid? schemaId);
 }

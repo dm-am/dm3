@@ -20,6 +20,5 @@ public interface IMessageLikeService
     /// Remove existing like from current user to selected message
     /// </summary>
     /// <param name="messageId">Message identifier</param>
-    /// <returns></returns>
     Task UnlikeMessageAsync(Guid messageId);
 }

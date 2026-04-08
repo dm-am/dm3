@@ -97,7 +97,7 @@ internal class LoginRecordRepository : ILoginRecordRepository
                 g.Key.Username,
                 g.Select(r => r.IpAddress).Distinct().Count(),
                 g.Max(r => r.LoginUtc)))
-            .OrderByDescending(lp => lp.SharedIpCount)
+            .OrderByDescending(lp => lp.SharedIpsCount)
             .ThenByDescending(lp => lp.LastSharedLoginUtc)
             .ToListAsync();
     }

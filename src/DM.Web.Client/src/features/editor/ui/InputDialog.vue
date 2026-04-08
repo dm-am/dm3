@@ -227,11 +227,13 @@ function handleBackdropClick(e: MouseEvent) {
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
 @import "src/assets/styles/Inputs"
+@import "src/assets/styles/ZIndex"
+@import "src/assets/styles/Animations"
 
 .dialog-backdrop
   position: fixed
   inset: 0
-  z-index: 1000
+  z-index: $z-modal
   display: flex
   align-items: center
   justify-content: center
@@ -336,6 +338,8 @@ function handleBackdropClick(e: MouseEvent) {
 .dialog-enter-active,
 .dialog-leave-active
   transition: opacity 0.2s ease
+  @media (prefers-reduced-motion: reduce)
+    transition: none
 
 .dialog-enter-from,
 .dialog-leave-to
@@ -347,4 +351,6 @@ function handleBackdropClick(e: MouseEvent) {
 .dialog-enter-active .dialog-container,
 .dialog-leave-active .dialog-container
   transition: transform 0.2s ease
+  @media (prefers-reduced-motion: reduce)
+    transition: none
 </style>

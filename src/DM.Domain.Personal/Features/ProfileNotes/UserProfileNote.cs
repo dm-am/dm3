@@ -10,7 +10,7 @@ public class UserProfileNote
     /// <summary>
     /// Note identifier
     /// </summary>
-    public Guid NoteId { get; set; }
+    public Guid Id { get; set; }
 
     /// <summary>
     /// Subject username (who the note is about)
@@ -46,7 +46,7 @@ public class CreateUserProfileNoteEntity
     /// <summary>
     /// Note identifier
     /// </summary>
-    public Guid NoteId { get; set; }
+    public Guid Id { get; set; }
 
     /// <summary>
     /// Owner identifier (who wrote the note)
@@ -77,7 +77,7 @@ public class UpdateUserProfileNoteEntity
     /// <summary>
     /// Note identifier
     /// </summary>
-    public Guid NoteId { get; set; }
+    public Guid Id { get; set; }
 
     /// <summary>
     /// Note text

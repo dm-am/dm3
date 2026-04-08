@@ -19,6 +19,14 @@ public interface IChatService
     /// <returns>Created chat</returns>
     Task<Chat> CreateGroupAsync(CreateChat createChat);
 
+    /// <summary>
+    /// Create a new game room chat
+    /// </summary>
+    /// <param name="roomId">Room identifier to link</param>
+    /// <param name="title">Chat title</param>
+    /// <returns>Created chat</returns>
+    Task<Chat> CreateGameRoomChatAsync(Guid roomId, string title);
+
     // ═══ READ ═══
 
     /// <summary>
@@ -34,6 +42,13 @@ public interface IChatService
     /// <param name="chatId">Chat identifier</param>
     /// <returns>Chat</returns>
     Task<Chat> GetAsync(Guid chatId);
+
+    /// <summary>
+    /// Get single chat by public ID
+    /// </summary>
+    /// <param name="publicId">Chat public ID (5 letters)</param>
+    /// <returns>Chat</returns>
+    Task<Chat> GetByPublicIdAsync(string publicId);
 
     /// <summary>
     /// Find or create direct chat by username
@@ -62,4 +77,12 @@ public interface IChatService
     /// <param name="updateChat">Update data</param>
     /// <returns>Updated chat</returns>
     Task<Chat> UpdateAsync(UpdateChat updateChat);
+
+    // ═══ DELETE ═══
+
+    /// <summary>
+    /// Delete a chat
+    /// </summary>
+    /// <param name="chatId">Chat identifier</param>
+    Task DeleteAsync(Guid chatId);
 }

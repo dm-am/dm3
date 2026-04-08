@@ -5,7 +5,7 @@ import { CharacterStatus, Alignment } from "@/entities/game";
 import { UserLink } from "@/entities/user";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ContentText } from "@/shared/ui";
-import TheIcon from "@/shared/ui/Icon/TheIcon.vue";
+import Icon from "@/shared/ui/Icon/Icon.vue";
 import { IconType } from "@/shared/ui/Icon/iconType";
 import defaultPicture from "@/assets/images/userpic.png";
 
@@ -36,12 +36,13 @@ const alignmentLabels: Record<Alignment, string> = {
 };
 
 const pictureUrl = computed(() => props.character.pictureUrl || defaultPicture);
-const hasDetails = computed(() =>
-  props.character.appearance ||
-  props.character.temper ||
-  props.character.story ||
-  props.character.skills ||
-  props.character.inventory
+const hasDetails = computed(
+  () =>
+    props.character.appearance ||
+    props.character.temper ||
+    props.character.story ||
+    props.character.skills ||
+    props.character.inventory,
 );
 
 function toggleExpand() {
@@ -65,7 +66,7 @@ function toggleExpand() {
           Игрок: <user-link :user="character.author" />
         </secondary-text>
       </div>
-      <the-icon
+      <Icon
         :font="isExpanded ? IconType.ArrowUp : IconType.ArrowDown"
         class="expand-icon"
       />
@@ -76,7 +77,9 @@ function toggleExpand() {
       <!-- Alignment -->
       <div v-if="character.alignment" class="detail-section">
         <span class="detail-label">Мировоззрение:</span>
-        <span class="detail-value">{{ alignmentLabels[character.alignment] }}</span>
+        <span class="detail-value">{{
+          alignmentLabels[character.alignment]
+        }}</span>
       </div>
 
       <!-- Posts count -->
@@ -119,10 +122,16 @@ function toggleExpand() {
       <div v-if="character.attributes?.length" class="detail-section">
         <span class="detail-label">Атрибуты:</span>
         <div class="attributes-list">
-          <div v-for="attr in character.attributes" :key="attr.id" class="attribute">
+          <div
+            v-for="attr in character.attributes"
+            :key="attr.id"
+            class="attribute"
+          >
             <span class="attr-title">{{ attr.title }}:</span>
             <span class="attr-value">{{ attr.value }}</span>
-            <span v-if="attr.modifier" class="attr-modifier">({{ attr.modifier }})</span>
+            <span v-if="attr.modifier" class="attr-modifier"
+              >({{ attr.modifier }})</span
+            >
           </div>
         </div>
       </div>

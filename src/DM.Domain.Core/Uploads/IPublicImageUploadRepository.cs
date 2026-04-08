@@ -20,6 +20,5 @@ public interface IPublicImageUploadRepository
     /// Mark obsolete (all but recently added) uploads for deleting
     /// </summary>
     /// <param name="entityId">Entity identifier</param>
-    /// <returns></returns>
     Task RemoveObsoleteUploadsAsync(Guid entityId);
 }

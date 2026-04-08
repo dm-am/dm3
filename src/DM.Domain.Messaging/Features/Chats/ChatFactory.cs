@@ -66,4 +66,16 @@ internal class ChatFactory : IChatFactory
 
         return (chat, links);
     }
+
+    /// <inheritdoc />
+    public CreateChatEntity CreateGameRoom(Guid roomId, string title)
+    {
+        return new CreateChatEntity
+        {
+            ChatId = _guidFactory.Create(),
+            Type = ChatType.GameRoom,
+            Title = title,
+            RoomId = roomId
+        };
+    }
 }

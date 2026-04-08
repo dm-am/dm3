@@ -1,4 +1,8 @@
+<script setup lang="ts">
+import { BlogsDataTable } from "@/widgets/blogs-table";
+</script>
+
 <template>
   <page-title>Блоги</page-title>
-  <secondary-text>Страница в разработке</secondary-text>
+  <BlogsDataTable />
 </template>

@@ -176,7 +176,7 @@ internal class UploadApiService : IUploadApiService
         {
             UploadId = upload.UploadId,
             PresignedUrl = presignedUrl,
-            ExpiresAt = now.AddMinutes(PresignedUrlExpirationMinutes)
+            ExpiresUtc = now.AddMinutes(PresignedUrlExpirationMinutes)
         };
     }
 

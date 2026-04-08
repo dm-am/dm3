@@ -20,6 +20,6 @@ public abstract class AttributeConstraints
     /// <summary>
     /// Get default attribute value
     /// </summary>
-    /// <returns></returns>
+    /// <returns>Default value as string</returns>
     public abstract string GetDefaultValue();
 }

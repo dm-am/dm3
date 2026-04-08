@@ -76,12 +76,12 @@ export enum EventType {
  * SignalR notification payload
  */
 export interface SignalRNotification {
-  id: string
-  eventType: EventType
-  payload: Record<string, unknown>
+  id: string;
+  eventType: EventType;
+  payload: Record<string, unknown>;
 }
 
 /**
  * Notification handler callback type
  */
-export type NotificationHandler = (notification: SignalRNotification) => void
+export type NotificationHandler = (notification: SignalRNotification) => void;

@@ -6,6 +6,7 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Comments;
 using DM.Domain.Game.Features.Games;
@@ -29,37 +30,96 @@ internal class GameCommentRepository : IGameCommentRepository
     }
 
     /// <inheritdoc />
-    public Task<int> Count(Guid gameId, IReadOnlyCollection<Guid>? excludeUserIds = null)
+    public Task<int> Count(Guid gameId, GameCommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
-        var query = _dbContext.Comments
+        var dbQuery = _dbContext.Comments
             .TagWith("DM.GameComments.Count")
             .Where(c => !c.IsRemoved && c.EntityId == gameId);
 
-        if (excludeUserIds is { Count: > 0 })
-        {
-            query = query.Where(c => !excludeUserIds.Contains(c.AuthorId));
-        }
+        dbQuery = ApplyFilters(dbQuery, query, excludeUserIds);
 
-        return query.CountAsync();
+        return dbQuery.CountAsync();
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Comment>> Get(Guid gameId, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null)
+    public async Task<IEnumerable<Comment>> Get(Guid gameId, GameCommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
-        var query = _dbContext.Comments
+        var dbQuery = _dbContext.Comments
             .TagWith("DM.GameComments.List")
             .Where(c => !c.IsRemoved && c.EntityId == gameId);
 
+        dbQuery = ApplyFilters(dbQuery, query, excludeUserIds);
+
+        var orderedQuery = ApplySorting(dbQuery, query, _dbContext);
+
+        return await orderedQuery
+            .Page(paging)
+            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
+            .ToArrayAsync();
+    }
+
+    private static IQueryable<CommentDal> ApplyFilters(
+        IQueryable<CommentDal> query,
+        GameCommentsQuery commentsQuery,
+        IReadOnlyCollection<Guid>? excludeUserIds)
+    {
+        // Exclude blocked users
         if (excludeUserIds is { Count: > 0 })
         {
             query = query.Where(c => !excludeUserIds.Contains(c.AuthorId));
         }
 
-        return await query
-            .OrderBy(c => c.CreatedUtc)
-            .Page(paging)
-            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
-            .ToArrayAsync();
+        // Filter by authors (OR logic)
+        if (commentsQuery.Authors is { Count: > 0 })
+        {
+            var authorNames = commentsQuery.Authors.Select(a => a.ToLowerInvariant()).ToArray();
+            query = query.Where(c => c.Author != null && authorNames.Contains(c.Author.Username.ToLower()));
+        }
+
+        // Filter by created date range
+        if (commentsQuery.CreatedFromUtc.HasValue)
+        {
+            query = query.Where(c => c.CreatedUtc >= commentsQuery.CreatedFromUtc.Value);
+        }
+
+        if (commentsQuery.CreatedToUtc.HasValue)
+        {
+            query = query.Where(c => c.CreatedUtc <= commentsQuery.CreatedToUtc.Value);
+        }
+
+        // Search by text content
+        if (!string.IsNullOrWhiteSpace(commentsQuery.Search))
+        {
+            var searchLower = commentsQuery.Search.ToLowerInvariant();
+            query = query.Where(c => c.Text.ToLower().Contains(searchLower));
+        }
+
+        return query;
+    }
+
+    private static IOrderedQueryable<CommentDal> ApplySorting(
+        IQueryable<CommentDal> query,
+        GameCommentsQuery commentsQuery,
+        DmDbContext dbContext)
+    {
+        var sortBy = commentsQuery.SortBy?.ToLowerInvariant() ?? "created";
+        var isDescending = string.Equals(commentsQuery.SortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+
+        return sortBy switch
+        {
+            "likes" => isDescending
+                ? query.OrderByDescending(c => dbContext.Likes.Count(l =>
+                    !l.IsRemoved &&
+                    l.EntityId == c.CommentId &&
+                    l.EntityType == LikeEntityType.Comment))
+                : query.OrderBy(c => dbContext.Likes.Count(l =>
+                    !l.IsRemoved &&
+                    l.EntityId == c.CommentId &&
+                    l.EntityType == LikeEntityType.Comment)),
+            _ => isDescending // "created" or default
+                ? query.OrderByDescending(c => c.CreatedUtc)
+                : query.OrderBy(c => c.CreatedUtc)
+        };
     }
 
     /// <inheritdoc />
@@ -111,7 +171,7 @@ internal class GameCommentRepository : IGameCommentRepository
         if (comment != null)
         {
             comment.Text = updateComment.Text;
-            comment.ModifiedUtc = updateComment.ModifiedUtc;
+            // Modification tracking is handled via Edit history, not inline ModifiedUtc
             await _dbContext.SaveChangesAsync();
         }
 

@@ -62,7 +62,7 @@ public class PollIntentionResolverShould
         var optionId = Guid.NewGuid();
         var poll = new Poll
         {
-            EndDate = _now.AddDays(1),
+            EndsUtc = _now.AddDays(1),
             Options = [new PollOption { Id = optionId }]
         };
 
@@ -75,7 +75,7 @@ public class PollIntentionResolverShould
         var optionId = Guid.NewGuid();
         var poll = new Poll
         {
-            EndDate = _now.AddDays(1),
+            EndsUtc = _now.AddDays(1),
             Options = [new PollOption { Id = optionId }]
         };
 
@@ -89,7 +89,7 @@ public class PollIntentionResolverShould
         var optionId = Guid.NewGuid();
         var poll = new Poll
         {
-            EndDate = _now.AddDays(-1),
+            EndsUtc = _now.AddDays(-1),
             Options = [new PollOption { Id = optionId }]
         };
 
@@ -102,7 +102,7 @@ public class PollIntentionResolverShould
         var user = Create.User().WithRole(UserRole.RegularUser).Please();
         var poll = new Poll
         {
-            EndDate = _now.AddDays(1),
+            EndsUtc = _now.AddDays(1),
             Options = [new PollOption { Id = Guid.NewGuid() }]
         };
 
@@ -113,7 +113,7 @@ public class PollIntentionResolverShould
     public void AllowUnvoteForAuthenticatedUserOnActivePoll()
     {
         var user = Create.User().WithRole(UserRole.RegularUser).Please();
-        var poll = new Poll { EndDate = _now.AddDays(1) };
+        var poll = new Poll { EndsUtc = _now.AddDays(1) };
 
         _resolver.IsAllowed(user, PollIntention.Unvote, poll).Should().BeTrue();
     }
@@ -122,7 +122,7 @@ public class PollIntentionResolverShould
     public void ForbidUnvoteOnExpiredPoll()
     {
         var user = Create.User().WithRole(UserRole.RegularUser).Please();
-        var poll = new Poll { EndDate = _now.AddDays(-1) };
+        var poll = new Poll { EndsUtc = _now.AddDays(-1) };
 
         _resolver.IsAllowed(user, PollIntention.Unvote, poll).Should().BeFalse();
     }

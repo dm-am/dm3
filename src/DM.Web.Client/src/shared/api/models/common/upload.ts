@@ -25,5 +25,5 @@ export interface PresignRequest {
 export interface PresignResponse {
   uploadId: string;
   presignedUrl: string;
-  expiresAt: string;
+  expiresUtc: string;
 }

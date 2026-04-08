@@ -33,7 +33,6 @@ internal class ErrorHandlingMiddleware
     /// <param name="identitySetter">Identity setter for Serilog issue fix</param>
     /// <param name="correlationTokenProvider">Correlation token for support assistance</param>
     /// <param name="problemDetailsFactory">Problem details factory</param>
-    /// <returns></returns>
     public async Task InvokeAsync(HttpContext httpContext,
         ILogger<ErrorHandlingMiddleware> logger,
         IIdentitySetter identitySetter,

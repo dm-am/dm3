@@ -1,4 +1,9 @@
-import type { ListEnvelope, PagingQuery, CursorEnvelope, Username } from "@/shared/api/models/common";
+import type {
+  ListEnvelope,
+  PagingQuery,
+  CursorEnvelope,
+  Username,
+} from "@/shared/api/models/common";
 import type {
   Chat,
   ChatAvailability,
@@ -25,7 +30,19 @@ export type CursorQuery = {
 export default new (class MessagingApi {
   // Chats
   public getChats(q: PagingQuery) {
-    return Api.get<ListEnvelope<Chat>>("chats", q);
+    // Convert page number to skip/take for backend
+    const pageSize = q.take ?? 20;
+    const queryParams: Record<string, number | undefined> = {
+      take: pageSize,
+    };
+
+    if (q.number && q.number > 1) {
+      queryParams.skip = (q.number - 1) * pageSize;
+    } else if (q.skip) {
+      queryParams.skip = q.skip;
+    }
+
+    return Api.get<ListEnvelope<Chat>>("chats", queryParams);
   }
 
   /**
@@ -70,42 +87,36 @@ export default new (class MessagingApi {
    * Get messages with cursor-based pagination
    */
   public getMessages(chatId: ChatId, query: CursorQuery = {}) {
-    return Api.get<CursorEnvelope<Message>>(
-      `chats/${chatId}/messages`,
-      {
-        cursor: query.cursor,
-        aroundMessageId: query.aroundMessageId,
-        nearTimestampUtc: query.nearTimestampUtc,
-        limit: query.limit ?? 50,
-      },
-    );
+    return Api.get<CursorEnvelope<Message>>(`chats/${chatId}/messages`, {
+      cursor: query.cursor,
+      aroundMessageId: query.aroundMessageId,
+      nearTimestampUtc: query.nearTimestampUtc,
+      limit: query.limit ?? 50,
+    });
   }
 
   /**
    * Get messages before the cursor (older)
    */
   public getMessagesBefore(chatId: ChatId, cursor: string, limit: number = 50) {
-    return Api.get<CursorEnvelope<Message>>(
-      `chats/${chatId}/messages`,
-      { cursor, limit },
-    );
+    return Api.get<CursorEnvelope<Message>>(`chats/${chatId}/messages`, {
+      cursor,
+      limit,
+    });
   }
 
   /**
    * Get messages after the cursor (newer)
    */
   public getMessagesAfter(chatId: ChatId, cursor: string, limit: number = 50) {
-    return Api.get<CursorEnvelope<Message>>(
-      `chats/${chatId}/messages`,
-      { cursor, limit },
-    );
+    return Api.get<CursorEnvelope<Message>>(`chats/${chatId}/messages`, {
+      cursor,
+      limit,
+    });
   }
 
   public sendMessage(chatId: ChatId, text: string) {
-    return Api.post<Message>(
-      `chats/${chatId}/messages`,
-      { text },
-    );
+    return Api.post<Message>(`chats/${chatId}/messages`, { text });
   }
 
   public getMessage(id: MessageId) {
@@ -116,11 +127,7 @@ export default new (class MessagingApi {
    * Get message with BBCode text for editing
    */
   public getMessageForEdit(id: MessageId) {
-    return Api.get<Message>(
-      `messages/${id}`,
-      undefined,
-      BbRenderMode.Bb,
-    );
+    return Api.get<Message>(`messages/${id}`, undefined, BbRenderMode.Bb);
   }
 
   public updateMessage(id: MessageId, message: Patch<Message>) {

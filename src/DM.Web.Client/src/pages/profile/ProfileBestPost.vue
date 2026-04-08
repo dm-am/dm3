@@ -3,6 +3,7 @@ import { ref, onMounted, watch } from "vue";
 import type { Username, BestPost } from "@/shared/api/models/community";
 import { communityApi } from "@/shared/api";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { PostRating } from "@/entities/game";
 import dayjs from "dayjs";
 
 const props = defineProps<{
@@ -44,16 +45,10 @@ watch(() => props.username, fetchBestPost);
           {{ bestPost.gameTitle }}
         </router-link>
         <secondary-text>{{ bestPost.roomTitle }}</secondary-text>
-        <span class="post-rating" :class="{ positive: bestPost.rating > 0 }">
-          +{{ bestPost.rating }}
-        </span>
+        <PostRating :rating="bestPost.rating" class="post-rating" />
       </div>
 
-      <div
-        v-show="isExpanded"
-        class="post-content"
-        v-html="bestPost.text"
-      />
+      <div v-show="isExpanded" class="post-content bbcode-content" v-html="bestPost.text" />
 
       <secondary-text v-show="isExpanded" class="post-date">
         {{ dayjs(bestPost.createdUtc).format("DD.MM.YYYY HH:mm") }}
@@ -116,18 +111,13 @@ watch(() => props.username, fetchBestPost);
 
 .post-rating
   margin-left: auto
-  font-weight: bold
-  color: $text-muted
 
-  &.positive
-    color: $accent-green
-
+// .post-content uses global .bbcode-content class
 .post-content
   margin-top: $medium
   max-height: $grid-step * 80
   overflow: hidden
   position: relative
-  +bbcode-content
 
   &::after
     content: ''

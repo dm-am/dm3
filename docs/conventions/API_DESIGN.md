@@ -77,10 +77,69 @@
 
 ---
 
-## Pagination
+## Pagination, Filtering & Sorting
 
-**Offset-based:** `?skip=20&take=10`
-**Cursor-based:** `?cursor=abc&limit=50`
+### Принцип: Один endpoint — много сценариев
+
+> **Правило:** Вместо специализированных endpoints (`/popular`, `/active`, `/owned`)
+> используй **один list endpoint** с параметрами фильтрации и сортировки.
+
+**Преимущества:**
+- Меньше endpoints = проще API
+- Гибкость для клиента
+- Единая логика авторизации
+- Кэширование по URL
+
+### Pagination
+
+| Тип | Параметры | Использование |
+|-----|-----------|---------------|
+| Offset | `?skip=20&take=10` | Списки с известным total |
+| Cursor | `?cursor=abc&limit=50` | Бесконечный скролл |
+
+### Filtering
+
+```
+GET /v1/games?statuses=Active,Draft&authorUsernames=ivan&requiredTags=42
+GET /v1/posts?roomId=abc&authorId=xyz
+GET /v1/users?role=moderator&isOnline=true
+```
+
+**Паттерны:**
+- Enum фильтры: `?statuses=Active,Draft` (массив через запятую или повтор параметра)
+- Boolean: `?isOpen=true`
+- ID reference: `?authorId=abc`
+- Числовые: `?minRating=5&maxPlayers=10`
+
+### Sorting
+
+```
+GET /v1/games?sort=subscribersCount:desc     # Popular = по подписчикам
+GET /v1/games?sort=lastPostUtc:desc          # Active = по последнему посту
+GET /v1/games?sort=createdUtc:desc           # Newest
+GET /v1/posts?sort=rating:desc&take=1        # Best post
+```
+
+**Формат:** `?sort=field:asc|desc` (default: `desc`)
+
+### Примеры замены специальных endpoints
+
+| Было (отдельный endpoint) | Стало (query parameters) |
+|---------------------------|-------------------------|
+| `GET /games/popular` | `GET /games?sortBy=popularity&take=10` |
+| `GET /games/owned` | `GET /games?participating=true` |
+| `GET /blogs/popular` | `GET /blogs?sortBy=popularity&take=10` |
+| `GET /blogs/owned` | `GET /blogs?participating=true` |
+| `GET /posts/best` | `GET /posts?sortBy=rating&take=1` |
+
+> **`me` keyword:** Для текущего пользователя можно использовать `authorId=me`
+> или отдельный флаг `?participating=true`.
+
+### Когда отдельный endpoint оправдан
+
+1. **Actions** (изменяют состояние): `/games/{id}/join`, `/posts/{id}/like`
+2. **Агрегации** (сложные вычисления): `/statistics/overview`
+3. **Специфичные форматы**: `/export/csv`
 
 ---
 
@@ -143,7 +202,7 @@ API организован в 9 групп по доменам:
 | Personal | Профиль и настройки текущего пользователя |
 | Messaging | Личные сообщения и чат |
 | Community | Профили, отзывы, опросы |
-| Game | Игры и всё связанное |
+| Game | Игры и все связанное |
 | Blog | Блоги и публикации |
 | Forum | Форумы и обсуждения |
 | Moderation | Инструменты модерации |

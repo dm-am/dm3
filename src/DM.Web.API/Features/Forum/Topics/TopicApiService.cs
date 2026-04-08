@@ -7,7 +7,7 @@ using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Forum.Boards;
 using DomainCreateTopic = DM.Domain.Forum.Features.Topics.CreateTopic;
 using DomainUpdateTopic = DM.Domain.Forum.Features.Topics.UpdateTopic;
-using DomainPagingQuery = DM.Domain.Core.Dto.PagingQuery;
+using DomainTopicsQuery = DM.Domain.Forum.Features.Topics.TopicsQuery;
 
 namespace DM.Web.API.Features.Forum.Topics;
 
@@ -29,9 +29,8 @@ internal class TopicApiService : ITopicApiService
     /// <inheritdoc />
     public async Task<ListEnvelope<Topic>> Get(string boardId, TopicsQuery query)
     {
-        var (topics, paging) = query.IsAttached
-            ? (await _topicService.GetAttachedAsync(boardId), null)
-            : await _topicService.GetListAsync(boardId, _mapper.Map<DomainPagingQuery>(query));
+        var domainQuery = _mapper.Map<DomainTopicsQuery>(query);
+        var (topics, paging) = await _topicService.GetListAsync(boardId, domainQuery);
         return new ListEnvelope<Topic>(topics.Select(_mapper.Map<Topic>), paging != null ? new PagingInfo(paging) : null);
     }
 
@@ -39,6 +38,13 @@ internal class TopicApiService : ITopicApiService
     public async Task<Envelope<Topic>> Get(Guid topicId)
     {
         var topic = await _topicService.GetAsync(topicId);
+        return new Envelope<Topic>(_mapper.Map<Topic>(topic));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<Topic>> GetByBoardAndNumber(string boardAlias, int topicNumber)
+    {
+        var topic = await _topicService.GetByBoardAndNumberAsync(boardAlias, topicNumber);
         return new Envelope<Topic>(_mapper.Map<Topic>(topic));
     }
 
@@ -62,4 +68,8 @@ internal class TopicApiService : ITopicApiService
 
     /// <inheritdoc />
     public Task Delete(Guid topicId) => _topicService.DeleteAsync(topicId);
+
+    /// <inheritdoc />
+    public Task ReorderPinned(string boardId, ReorderPinnedRequest request) =>
+        _topicService.ReorderPinnedAsync(boardId, request.TopicIds);
 }

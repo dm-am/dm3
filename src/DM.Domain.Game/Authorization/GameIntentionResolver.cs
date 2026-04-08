@@ -3,13 +3,14 @@ using System.Linq;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
+using GameDto = DM.Domain.Game.Features.Games.Game;
 
 namespace DM.Domain.Game.Authorization;
 
 /// <inheritdoc cref="IIntentionResolver" />
 internal class GameIntentionResolver :
     IIntentionResolver<GameIntention>,
-    IIntentionResolver<GameIntention, GameModel>
+    IIntentionResolver<GameIntention, GameDto>
 {
     /// <inheritdoc />
     public bool IsAllowed(IAuthorizationSubject user, GameIntention intention) => intention switch
@@ -25,7 +26,7 @@ internal class GameIntentionResolver :
         ModuleStatus.Draft
     };
 
-    public bool IsAllowed(IAuthorizationSubject user, GameIntention intention, GameModel target)
+    public bool IsAllowed(IAuthorizationSubject user, GameIntention intention, GameDto target)
     {
         if (intention != GameIntention.Read && intention != GameIntention.ReadComments && !user.IsAuthenticated)
         {
@@ -53,7 +54,7 @@ internal class GameIntentionResolver :
                                                             roles.HasEditAccess(),
             // only the master itself is allowed to remove the game
             GameIntention.Delete when user.IsAuthenticated => userIsSeniorModerator ||
-                                                              user.UserId == target.Author.UserId,
+                                                              user.UserId == target.Master.UserId,
 
             // Premoderation: mentor takes game for review (AwaitingApproval -> Approved sets MentorId)
             GameIntention.SetStatusModeration when target.PremoderationStatus == PremoderationStatus.AwaitingApproval =>

@@ -18,5 +18,10 @@ public enum UserActivityFilter
     /// <summary>
     /// Only users pending activation (requires SeniorModerator+)
     /// </summary>
-    Pending = 2
+    Pending = 2,
+
+    /// <summary>
+    /// Users inactive (no activity in last month)
+    /// </summary>
+    Inactive = 3
 }

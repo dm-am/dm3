@@ -2,6 +2,7 @@ using AutoMapper;
 using DM.Domain.Game.Features.Characters;
 using DtoCharacter = DM.Domain.Game.Features.Games.Character;
 using DtoCharacterAttribute = DM.Domain.Game.Features.Games.CharacterAttribute;
+using DtoCharacterShort = DM.Domain.Game.Features.Games.CharacterShort;
 using DtoCreateCharacter = DM.Domain.Game.Features.Characters.CreateCharacter;
 using DtoUpdateCharacter = DM.Domain.Game.Features.Characters.UpdateCharacter;
 using Policy = DM.Domain.Core.Enums.CharacterAccessPolicy;
@@ -17,6 +18,13 @@ internal class CharacterMappingProfile : Profile
         // Base Character mapping (lightweight, for lists)
         CreateMap<DtoCharacter, Character>();
 
+        // CharacterShort -> Character (for Post.Character)
+        // Note: PictureUrl IS mapped - it's enriched by PostRepository from Uploads table
+        CreateMap<DtoCharacterShort, Character>()
+            .ForMember(d => d.TotalPostsCount, opt => opt.Ignore())
+            .ForMember(d => d.Race, opt => opt.Ignore())
+            .ForMember(d => d.Class, opt => opt.Ignore());
+
         // CharacterDetails mapping (full)
         CreateMap<DtoCharacter, CharacterDetails>()
             .ForMember(c => c.Privacy, s => s.MapFrom<AccessPolicyConverter>());
@@ -27,12 +35,18 @@ internal class CharacterMappingProfile : Profile
         // For character creation, use CharacterDetails (has Privacy)
         CreateMap<CharacterDetails, DtoCreateCharacter>()
             .ForMember(c => c.IsNpc, s => s.MapFrom(c => c.Privacy != null && c.Privacy.IsNpc))
-            .ForMember(c => c.AccessPolicy, s => s.MapFrom<AccessPolicyConverter>());
+            .ForMember(c => c.AccessPolicy, s => s.MapFrom<AccessPolicyConverter>())
+            .ForMember(c => c.GameId, opt => opt.Ignore())
+            .ForMember(c => c.InitialStatus, opt => opt.Ignore());
 
         // For character update, use CharacterDetails (has Privacy)
         CreateMap<CharacterDetails, DtoUpdateCharacter>()
             .ForMember(c => c.IsNpc, s => s.MapFrom(c => c.Privacy != null && c.Privacy.IsNpc))
-            .ForMember(c => c.AccessPolicy, s => s.MapFrom<AccessPolicyConverter>());
+            .ForMember(c => c.AccessPolicy, s => s.MapFrom<AccessPolicyConverter>())
+            .ForMember(c => c.CharacterId, opt => opt.Ignore())
+            .ForMember(c => c.IsDead, opt => opt.Ignore())
+            .ForMember(c => c.IsPlayerLeft, opt => opt.Ignore())
+            .ForMember(c => c.IsPlayerExiled, opt => opt.Ignore());
     }
 
     private class AccessPolicyConverter :

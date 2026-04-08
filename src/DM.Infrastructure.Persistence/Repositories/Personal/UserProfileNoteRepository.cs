@@ -48,7 +48,7 @@ internal class UserProfileNoteRepository : IUserProfileNoteRepository
     {
         var entity = new DbUserProfileNote
         {
-            UserProfileNoteId = note.NoteId,
+            UserProfileNoteId = note.Id,
             OwnerId = note.OwnerId,
             SubjectUserId = note.SubjectUserId,
             Text = note.Text,
@@ -64,10 +64,10 @@ internal class UserProfileNoteRepository : IUserProfileNoteRepository
     /// <inheritdoc />
     public async Task<UserProfileNote> Update(UpdateUserProfileNoteEntity note, CancellationToken ct = default)
     {
-        var entity = await _dbContext.UserProfileNotes.FindAsync(new object[] { note.NoteId }, ct);
+        var entity = await _dbContext.UserProfileNotes.FindAsync(new object[] { note.Id }, ct);
         if (entity == null)
         {
-            throw new InvalidOperationException($"UserProfileNote {note.NoteId} not found");
+            throw new InvalidOperationException($"UserProfileNote {note.Id} not found");
         }
 
         if (note.Text != null)

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using DM.Web.API.Shared.BbRendering;
-using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Game.AttributeSchemas;
 
 namespace DM.Web.API.Features.Game.Games;
@@ -31,9 +31,14 @@ public class GameDetails : Game
     public AttributeSchema? Schema { get; set; }
 
     /// <summary>
-    /// Game readers
+    /// Game assistants (lightweight references for detail page)
     /// </summary>
-    public IEnumerable<User> Readers { get; set; } = [];
+    public IEnumerable<UserRef> FullAssistants { get; set; } = [];
+
+    /// <summary>
+    /// Game subscribers (lightweight references)
+    /// </summary>
+    public IEnumerable<UserRef> Subscribers { get; set; } = [];
 
     /// <summary>
     /// Game characters (short info)
@@ -57,9 +62,9 @@ public class CharacterShortInfo
     public string Name { get; set; } = null!;
 
     /// <summary>
-    /// Character owner
+    /// Character owner (lightweight reference)
     /// </summary>
-    public User Author { get; set; } = null!;
+    public UserRef Author { get; set; } = null!;
 
     /// <summary>
     /// Character status

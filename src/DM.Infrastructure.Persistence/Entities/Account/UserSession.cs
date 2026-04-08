@@ -33,10 +33,10 @@ public class Session
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Expiration moment
+    /// Expiration moment (UTC)
     /// </summary>
     [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
-    public DateTime ExpirationDate { get; set; }
+    public DateTime ExpirationUtc { get; set; }
 
     /// <summary>
     /// Persistence flag
@@ -52,7 +52,7 @@ public class Session
     /// Session creation time (UTC)
     /// </summary>
     [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
-    public DateTime CreatedAt { get; set; }
+    public DateTime CreatedUtc { get; set; }
 
     /// <summary>
     /// Client IP address at session creation

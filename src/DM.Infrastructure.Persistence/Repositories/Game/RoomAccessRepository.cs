@@ -66,11 +66,12 @@ internal class RoomAccessRepository : IRoomAccessRepository
     /// <inheritdoc />
     public async Task<Guid?> FindReaderUserId(Guid gameId, string readerUsername)
     {
+        var readerUsernameLower = readerUsername.ToLower();
         var userWrapper = await _dbContext.Subscriptions
             .TagWith("DM.RoomAccess.FindReaderUserId")
             .Where(s => s.TargetType == SubscriptionTargetType.Game &&
                        s.TargetId == gameId &&
-                       s.Subscriber.Username == readerUsername)
+                       s.Subscriber.Username.ToLower() == readerUsernameLower)
             .Select(s => new { s.SubscriberId })
             .FirstOrDefaultAsync();
 

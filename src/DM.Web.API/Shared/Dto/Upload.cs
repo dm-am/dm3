@@ -135,14 +135,14 @@ public class PresignResponse
     /// <remarks>
     /// Upload the file using HTTP PUT to this URL.
     /// Include Content-Type header matching the requested content type.
-    /// URL expires after the time specified in ExpiresAt.
+    /// URL expires after the time specified in ExpiresUtc.
     /// </remarks>
     public string PresignedUrl { get; set; } = string.Empty;
 
     /// <summary>
     /// URL expiration time (UTC)
     /// </summary>
-    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset ExpiresUtc { get; set; }
 }
 
 /// <summary>

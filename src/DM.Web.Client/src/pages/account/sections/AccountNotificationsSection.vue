@@ -17,10 +17,7 @@
             >
               Подключен
             </span>
-            <span
-              v-else
-              class="channel-status channel-status--disconnected"
-            >
+            <span v-else class="channel-status channel-status--disconnected">
               Не подключен
             </span>
           </div>
@@ -72,7 +69,7 @@
               :disabled="disconnecting === 'telegram'"
               @click="disconnectTelegram"
             >
-              {{ disconnecting === 'telegram' ? "..." : "Отключить" }}
+              {{ disconnecting === "telegram" ? "..." : "Отключить" }}
             </button>
           </div>
         </div>
@@ -88,10 +85,7 @@
             >
               Подключен
             </span>
-            <span
-              v-else
-              class="channel-status channel-status--disconnected"
-            >
+            <span v-else class="channel-status channel-status--disconnected">
               Не подключен
             </span>
           </div>
@@ -143,7 +137,7 @@
               :disabled="disconnecting === 'discord'"
               @click="disconnectDiscord"
             >
-              {{ disconnecting === 'discord' ? "..." : "Отключить" }}
+              {{ disconnecting === "discord" ? "..." : "Отключить" }}
             </button>
           </div>
         </div>
@@ -156,7 +150,10 @@
 import { ref, reactive, computed, onMounted } from "vue";
 import { AccountApi } from "@/shared/api";
 import { useToast } from "@/shared/lib/composables/useToast";
-import type { NotificationPreferences, NotificationCategory } from "@/shared/api/models/account";
+import type {
+  NotificationPreferences,
+  NotificationCategory,
+} from "@/shared/api/models/account";
 
 const emit = defineEmits<{
   (e: "connectTelegram"): void;
@@ -172,7 +169,7 @@ const disconnecting = ref<"telegram" | "discord" | null>(null);
 
 const preferences = reactive<NotificationPreferences>({
   telegram: undefined,
-  discord: undefined
+  discord: undefined,
 });
 
 const allCategories: { value: NotificationCategory; label: string }[] = [
@@ -181,7 +178,7 @@ const allCategories: { value: NotificationCategory; label: string }[] = [
   { value: "Games", label: "Игры" },
   { value: "Subscriptions", label: "Подписки" },
   { value: "Security", label: "Безопасность" },
-  { value: "Moderation", label: "Модерация" }
+  { value: "Moderation", label: "Модерация" },
 ];
 
 // Local state for toggles
@@ -214,7 +211,7 @@ async function loadPreferences() {
 async function updateTelegramEnabled() {
   saving.value = true;
   const { error } = await AccountApi.updateNotificationPreferences({
-    telegram: { enabled: telegramEnabled.value }
+    telegram: { enabled: telegramEnabled.value },
   });
   saving.value = false;
 
@@ -234,7 +231,7 @@ async function toggleTelegramCategory(category: NotificationCategory) {
 
   saving.value = true;
   const { error } = await AccountApi.updateNotificationPreferences({
-    telegram: { enabledCategories: [...telegramCategories.value] }
+    telegram: { enabledCategories: [...telegramCategories.value] },
   });
   saving.value = false;
 
@@ -244,7 +241,10 @@ async function toggleTelegramCategory(category: NotificationCategory) {
     if (idx >= 0) {
       telegramCategories.value.push(category);
     } else {
-      telegramCategories.value.splice(telegramCategories.value.indexOf(category), 1);
+      telegramCategories.value.splice(
+        telegramCategories.value.indexOf(category),
+        1,
+      );
     }
   }
 }
@@ -252,7 +252,7 @@ async function toggleTelegramCategory(category: NotificationCategory) {
 async function updateDiscordEnabled() {
   saving.value = true;
   const { error } = await AccountApi.updateNotificationPreferences({
-    discord: { enabled: discordEnabled.value }
+    discord: { enabled: discordEnabled.value },
   });
   saving.value = false;
 
@@ -272,7 +272,7 @@ async function toggleDiscordCategory(category: NotificationCategory) {
 
   saving.value = true;
   const { error } = await AccountApi.updateNotificationPreferences({
-    discord: { enabledCategories: [...discordCategories.value] }
+    discord: { enabledCategories: [...discordCategories.value] },
   });
   saving.value = false;
 
@@ -282,7 +282,10 @@ async function toggleDiscordCategory(category: NotificationCategory) {
     if (idx >= 0) {
       discordCategories.value.push(category);
     } else {
-      discordCategories.value.splice(discordCategories.value.indexOf(category), 1);
+      discordCategories.value.splice(
+        discordCategories.value.indexOf(category),
+        1,
+      );
     }
   }
 }

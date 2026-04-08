@@ -17,6 +17,11 @@ public class Topic
     public Guid Id { get; set; }
 
     /// <summary>
+    /// Topic number within board (for URL)
+    /// </summary>
+    public int TopicNumber { get; set; }
+
+    /// <summary>
     /// Author
     /// </summary>
     public User Author { get; set; } = null!;
@@ -27,9 +32,9 @@ public class Topic
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Last edit moment
+    /// Last modification moment
     /// </summary>
-    public DateTimeOffset? EditedUtc { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
     /// Title
@@ -47,9 +52,19 @@ public class Topic
     public bool? IsAttached { get; set; }
 
     /// <summary>
+    /// Sort order for attached topics (0 = first)
+    /// </summary>
+    public int? AttachOrder { get; set; }
+
+    /// <summary>
     /// Closed (read-only)
     /// </summary>
     public bool? IsClosed { get; set; }
+
+    /// <summary>
+    /// Last activity moment (last comment or topic creation)
+    /// </summary>
+    public DateTimeOffset LastActivityUtc { get; set; }
 
     /// <summary>
     /// Last comment
@@ -82,6 +97,11 @@ public class Topic
 /// </summary>
 public class LastTopicComment
 {
+    /// <summary>
+    /// Comment ID
+    /// </summary>
+    public Guid Id { get; set; }
+
     /// <summary>
     /// Creation moment
     /// </summary>

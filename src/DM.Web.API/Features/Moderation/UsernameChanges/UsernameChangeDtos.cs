@@ -40,19 +40,19 @@ public class UsernameChangeRequest
     public UsernameChangeRequestStatus Status { get; set; }
 
     /// <summary>
-    /// When the request was created
+    /// When the request was created (UTC)
     /// </summary>
-    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// When the approval token expires (if approved)
+    /// When the approval token expires (if approved, UTC)
     /// </summary>
-    public DateTimeOffset? ApprovalExpiresAtUtc { get; set; }
+    public DateTimeOffset? ApprovalExpiresUtc { get; set; }
 
     /// <summary>
-    /// When the request was resolved
+    /// When the request was resolved (UTC)
     /// </summary>
-    public DateTimeOffset? ResolvedAtUtc { get; set; }
+    public DateTimeOffset? ResolvedUtc { get; set; }
 
     /// <summary>
     /// Moderator who resolved the request

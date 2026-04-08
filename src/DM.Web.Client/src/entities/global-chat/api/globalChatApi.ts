@@ -1,8 +1,11 @@
 import type { CursorEnvelope, ListEnvelope } from "@/shared/api/models/common";
-import type { GlobalChatMessage, GlobalChatEvent, GlobalChatEventSummary } from "../model/types";
+import type {
+  GlobalChatMessage,
+  GlobalChatEvent,
+  GlobalChatEventSummary,
+} from "../model/types";
 import { Api } from "@/shared/api";
 import { BbRenderMode } from "@/shared/api";
-import { GLOBAL_CHAT_ID } from "@/shared/config/globalChat";
 
 /**
  * Query parameters for cursor-based pagination
@@ -17,77 +20,70 @@ export type CursorQuery = {
 /**
  * Global Chat API
  *
- * Uses the well-known global chat ID directly,
- * avoiding an extra HTTP request to fetch it.
+ * Uses dedicated /global-chat endpoint for messages.
  */
 export default new (class GlobalChatApi {
   // ─────────────────────────────────────────────────────────────
-  // Messages (via unified chats endpoint)
+  // Messages (dedicated global-chat endpoint)
   // ─────────────────────────────────────────────────────────────
 
   /**
    * Get messages with cursor-based pagination
    */
   public getMessages(query: CursorQuery = {}) {
-    return Api.get<CursorEnvelope<GlobalChatMessage>>(
-      `chats/${GLOBAL_CHAT_ID}/messages`,
-      {
-        cursor: query.cursor,
-        aroundMessageId: query.aroundMessageId,
-        nearTimestampUtc: query.nearTimestampUtc,
-        limit: query.limit ?? 50,
-      },
-    );
+    return Api.get<CursorEnvelope<GlobalChatMessage>>("global-chat/messages", {
+      cursor: query.cursor,
+      aroundMessageId: query.aroundMessageId,
+      nearTimestampUtc: query.nearTimestampUtc,
+      limit: query.limit ?? 50,
+    });
   }
 
   /**
    * Get messages before the cursor (older)
    */
   public getMessagesBefore(cursor: string, limit: number = 50) {
-    return Api.get<CursorEnvelope<GlobalChatMessage>>(
-      `chats/${GLOBAL_CHAT_ID}/messages`,
-      { cursor, limit },
-    );
+    return Api.get<CursorEnvelope<GlobalChatMessage>>("global-chat/messages", {
+      cursor,
+      limit,
+    });
   }
 
   /**
    * Get messages after the cursor (newer)
    */
   public getMessagesAfter(cursor: string, limit: number = 50) {
-    return Api.get<CursorEnvelope<GlobalChatMessage>>(
-      `chats/${GLOBAL_CHAT_ID}/messages`,
-      { cursor, limit },
-    );
+    return Api.get<CursorEnvelope<GlobalChatMessage>>("global-chat/messages", {
+      cursor,
+      limit,
+    });
   }
 
   /**
    * Get messages around a specific message
    */
   public getMessagesAround(messageId: string, limit: number = 50) {
-    return Api.get<CursorEnvelope<GlobalChatMessage>>(
-      `chats/${GLOBAL_CHAT_ID}/messages`,
-      { aroundMessageId: messageId, limit },
-    );
+    return Api.get<CursorEnvelope<GlobalChatMessage>>("global-chat/messages", {
+      aroundMessageId: messageId,
+      limit,
+    });
   }
 
   /**
    * Get messages near a specific timestamp (for date navigation)
    */
   public getMessagesNearDate(timestampUtc: string, limit: number = 50) {
-    return Api.get<CursorEnvelope<GlobalChatMessage>>(
-      `chats/${GLOBAL_CHAT_ID}/messages`,
-      { nearTimestampUtc: timestampUtc, limit },
-    );
+    return Api.get<CursorEnvelope<GlobalChatMessage>>("global-chat/messages", {
+      nearTimestampUtc: timestampUtc,
+      limit,
+    });
   }
 
   /**
    * Send a message to global chat
    */
   public sendMessage(text: string) {
-    return Api.post<GlobalChatMessage>(
-      `chats/${GLOBAL_CHAT_ID}/messages`,
-      { text },
-    );
+    return Api.post<GlobalChatMessage>("global-chat/messages", { text });
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -171,7 +167,7 @@ export default new (class GlobalChatApi {
   public createEvent(data: {
     title: string;
     description?: string;
-    startsAt: string;
+    startsUtc: string;
     duration?: string;
     isOpen: boolean;
   }) {
@@ -186,7 +182,7 @@ export default new (class GlobalChatApi {
     data: {
       title?: string;
       description?: string;
-      startsAt?: string;
+      startsUtc?: string;
       duration?: string;
       isOpen?: boolean;
     },

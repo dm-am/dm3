@@ -35,14 +35,14 @@
         <span v-if="changeEmailAction.error.value" class="error-text">
           {{ changeEmailAction.error.value }}
         </span>
-        <TheButton
+        <Button
           :loading="changeEmailAction.loading.value"
           :disabled="!emailForm.newEmail || !emailForm.password"
           @click="changeEmail"
           class="save-button"
         >
           Изменить почту
-        </TheButton>
+        </Button>
       </div>
 
       <!-- Password Change -->
@@ -61,6 +61,7 @@
 
         <div class="form-group">
           <label for="new-password" class="form-label">Новый пароль</label>
+          <span class="form-hint">Минимум 8 символов</span>
           <input
             id="new-password"
             v-model="newPassword"
@@ -86,16 +87,11 @@
             type="password"
             class="form-input"
             :class="{
-              'input-error':
-                confirmPassword &&
-                newPassword !== confirmPassword
+              'input-error': confirmPassword && newPassword !== confirmPassword,
             }"
           />
           <span
-            v-if="
-              confirmPassword &&
-              newPassword !== confirmPassword
-            "
+            v-if="confirmPassword && newPassword !== confirmPassword"
             class="error-text"
           >
             Пароли не совпадают
@@ -105,14 +101,14 @@
         <span v-if="changePasswordAction.error.value" class="error-text">
           {{ changePasswordAction.error.value }}
         </span>
-        <TheButton
+        <Button
           :loading="changePasswordAction.loading.value"
           :disabled="!isPasswordFormValid"
           @click="changePassword"
           class="save-button"
         >
           Изменить пароль
-        </TheButton>
+        </Button>
       </div>
     </div>
   </section>
@@ -122,7 +118,7 @@
 import { ref, computed } from "vue";
 import { useUserStore } from "@/entities/user";
 import { AccountApi } from "@/shared/api";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 import { PasswordStrengthIndicator } from "@/shared/ui/PasswordInput";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -139,7 +135,7 @@ const toast = useToast();
 // Email form
 const emailForm = ref({
   newEmail: "",
-  password: ""
+  password: "",
 });
 
 // Password form
@@ -153,18 +149,19 @@ const {
   isSameAsOld,
   isValid: isNewPasswordValid,
   onInput: onNewPasswordInput,
-  onBlur: onNewPasswordBlur
+  onBlur: onNewPasswordBlur,
 } = useNewPasswordField({ oldPassword });
 
-const passwordsMatch = computed(() =>
-  newPassword.value.length > 0 &&
-  newPassword.value === confirmPassword.value
+const passwordsMatch = computed(
+  () =>
+    newPassword.value.length > 0 && newPassword.value === confirmPassword.value,
 );
 
-const isPasswordFormValid = computed(() =>
-  oldPassword.value.length > 0 &&
-  isNewPasswordValid.value &&
-  passwordsMatch.value
+const isPasswordFormValid = computed(
+  () =>
+    oldPassword.value.length > 0 &&
+    isNewPasswordValid.value &&
+    passwordsMatch.value,
 );
 
 // Change email
@@ -176,7 +173,7 @@ const changeEmail = () => {
 
     const { error } = await AccountApi.changeEmail({
       password: emailForm.value.password,
-      email: emailForm.value.newEmail
+      email: emailForm.value.newEmail,
     });
     if (error) throw new Error("Не удалось изменить почту");
 
@@ -195,7 +192,7 @@ const changePassword = () => {
 
     const { error } = await AccountApi.changePassword({
       oldPassword: oldPassword.value,
-      newPassword: newPassword.value
+      newPassword: newPassword.value,
     });
     if (error) throw new Error("Не удалось изменить пароль");
 
@@ -232,4 +229,10 @@ const changePassword = () => {
 
 .input-error
   border-color: $accent-red !important
+
+.form-hint
+  display: block
+  margin-bottom: $tiny
+  font-size: $tertiary-font-size
+  color: $text-muted
 </style>

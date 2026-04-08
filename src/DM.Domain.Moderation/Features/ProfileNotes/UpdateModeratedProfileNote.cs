@@ -10,7 +10,7 @@ public class UpdateModeratedProfileNote
     /// <summary>
     /// Note identifier
     /// </summary>
-    public Guid NoteId { get; set; }
+    public Guid Id { get; set; }
 
     /// <summary>
     /// New note text

@@ -14,7 +14,7 @@ public interface IRoomAccessApiService
     /// </summary>
     /// <param name="roomId">Room identifier</param>
     /// <param name="access">Access</param>
-    /// <returns></returns>
+    /// <returns>Envelope containing the created room access</returns>
     Task<Envelope<RoomAccess>> Create(Guid roomId, RoomAccess access);
 
     /// <summary>
@@ -22,13 +22,12 @@ public interface IRoomAccessApiService
     /// </summary>
     /// <param name="accessId">Access identifier</param>
     /// <param name="access">Access</param>
-    /// <returns></returns>
+    /// <returns>Envelope containing the updated room access</returns>
     Task<Envelope<RoomAccess>> Update(Guid accessId, RoomAccess access);
 
     /// <summary>
     /// Delete existing room access
     /// </summary>
     /// <param name="accessId"></param>
-    /// <returns></returns>
     Task Delete(Guid accessId);
 }

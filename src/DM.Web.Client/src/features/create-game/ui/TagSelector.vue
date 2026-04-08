@@ -3,15 +3,27 @@ import { ref, computed, onMounted } from "vue";
 import type { Tag } from "@/entities/game";
 import { gameApi } from "@/entities/game";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { Tooltip, RichText } from "@/shared/ui/Tooltip";
 
-const model = defineModel<string[]>({ default: () => [] });
+const model = defineModel<number[]>({ default: () => [] });
 
 const tags = ref<Tag[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
-// Group tags by groupTitle
-const groupedTags = computed(() => {
+// Fixed group order
+const TAG_GROUP_ORDER = [
+  "Система",
+  "Жанр",
+  "Формат игры",
+  "Формат постов",
+  "Темп",
+  "Ограничения",
+  "Новичкам",
+];
+
+// Ordered groups with tags
+const orderedGroups = computed(() => {
   const groups: Record<string, Tag[]> = {};
   for (const tag of tags.value) {
     const group = tag.groupTitle || "Другое";
@@ -20,14 +32,22 @@ const groupedTags = computed(() => {
     }
     groups[group].push(tag);
   }
-  return groups;
+  // Return array of [groupName, tags] in fixed order
+  return TAG_GROUP_ORDER.filter((g) => groups[g] && groups[g].length > 0).map(
+    (g) => ({ name: g, tags: groups[g] }),
+  );
 });
 
-function isSelected(tagId: string): boolean {
+function isSelected(tagId: number): boolean {
   return model.value.includes(tagId);
 }
 
-function toggleTag(tagId: string) {
+function getGroupDescription(groupTitle: string): string | undefined {
+  const tag = tags.value.find((t) => t.groupTitle === groupTitle);
+  return tag?.groupDescription;
+}
+
+function toggleTag(tagId: number) {
   if (isSelected(tagId)) {
     model.value = model.value.filter((id) => id !== tagId);
   } else {
@@ -65,22 +85,29 @@ onMounted(loadTags);
 
     <div v-else class="tags-groups">
       <div
-        v-for="(categoryTags, category) in groupedTags"
-        :key="category"
+        v-for="group in orderedGroups"
+        :key="group.name"
         class="tag-category"
       >
-        <h4 class="category-title">{{ category }}</h4>
+        <Tooltip :text="getGroupDescription(group.name)">
+          <h4 class="category-title">
+            {{ group.name }}
+          </h4>
+        </Tooltip>
         <div class="category-tags">
-          <button
-            v-for="tag in categoryTags"
-            :key="tag.id"
-            type="button"
-            class="tag-button"
-            :class="{ selected: isSelected(tag.id) }"
-            @click="toggleTag(tag.id)"
-          >
-            {{ tag.title }}
-          </button>
+          <Tooltip v-for="tag in group.tags" :key="tag.id">
+            <template #content>
+              <RichText :text="tag.description || tag.title" />
+            </template>
+            <button
+              type="button"
+              class="tag-button"
+              :class="{ selected: isSelected(tag.id) }"
+              @click="toggleTag(tag.id)"
+            >
+              {{ tag.title }}
+            </button>
+          </Tooltip>
         </div>
       </div>
     </div>
@@ -112,6 +139,7 @@ onMounted(loadTags);
     font-size: $secondary-font-size
     color: $text-muted
     text-transform: uppercase
+    cursor: help
 
 .category-tags
   display: flex

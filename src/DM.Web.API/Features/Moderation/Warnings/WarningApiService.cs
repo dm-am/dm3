@@ -30,7 +30,7 @@ internal class WarningApiService : IWarningApiService
 
         return new UserWarningsInfo
         {
-            Login = login,
+            Username = login,
             TotalPoints = points,
             ActiveCount = warningList.Count,
             Warnings = warningList
@@ -49,7 +49,7 @@ internal class WarningApiService : IWarningApiService
     {
         var createWarning = new CreateWarning
         {
-            Username = request.UserLogin,
+            Username = request.Username,
             EntityId = request.EntityId,
             EntityType = request.EntityType,
             Points = request.Points,

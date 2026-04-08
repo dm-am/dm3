@@ -1,1 +1,1 @@
-export { default as TheToastContainer } from "./TheToastContainer.vue";
+export { default as ToastContainer } from "./ToastContainer.vue";

@@ -94,10 +94,12 @@ public class NotepadController : ControllerBase
     /// <response code="204">Entry deleted</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User doesn't have access to this entry</response>
+    /// <response code="404">Entry not found</response>
     [HttpDelete("{id:guid}", Name = nameof(DeleteMyNotepadEntry))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteMyNotepadEntry(Guid id)
     {
         await _notepadApiService.DeleteEntry(id);

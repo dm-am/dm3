@@ -34,8 +34,6 @@ internal class PostIntentionResolver :
             PostIntention.EditCharacter => post.Author.UserId == user.UserId ||
                                            room.Game.GetRoles(user.UserId).HasEditAccess() &&
                                            (post.Character == null || post.Character.IsNpc),
-            PostIntention.EditMasterMessage => room.Game.GetRoles(user.UserId).HasEditAccess() &&
-                                               (post.Character == null || post.Character.IsNpc),
             _ => false
         };
     }

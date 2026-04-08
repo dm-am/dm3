@@ -25,24 +25,24 @@ internal interface IUpdateBuilder<TEntity>
     /// <summary>
     /// Check if builder is empty
     /// </summary>
-    /// <returns></returns>
+    /// <returns>True if builder contains any changes</returns>
     bool HasChanges();
 
     /// <summary>
     /// Delete entity
     /// </summary>
-    /// <returns></returns>
+    /// <returns>Update builder for chaining</returns>
     IUpdateBuilder<TEntity> Delete();
 
     /// <summary>
     /// Attach update to db context
     /// </summary>
-    /// <returns>Identifier</returns>
+    /// <returns>Entity identifier</returns>
     Guid AttachTo(DbContext dbContext);
 
     /// <summary>
     /// Save changes in mongodb
     /// </summary>
-    /// <returns></returns>
+    /// <returns>Entity identifier</returns>
     Task<Guid> UpdateFor(DmMongoClient mongoClient, bool upsert);
 }

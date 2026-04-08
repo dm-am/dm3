@@ -13,21 +13,21 @@ public interface IPollApiService
     /// Get polls
     /// </summary>
     /// <param name="query"></param>
-    /// <returns></returns>
+    /// <returns>List envelope of polls</returns>
     Task<ListEnvelope<Poll>> Get(PollsQuery query);
 
     /// <summary>
     /// Get single poll
     /// </summary>
     /// <param name="id"></param>
-    /// <returns></returns>
+    /// <returns>Envelope of poll</returns>
     Task<Envelope<Poll>> Get(Guid id);
 
     /// <summary>
     /// Create new poll
     /// </summary>
     /// <param name="request">Poll creation request</param>
-    /// <returns></returns>
+    /// <returns>Envelope of created poll</returns>
     Task<Envelope<Poll>> Create(CreatePollRequest request);
 
     /// <summary>
@@ -35,14 +35,14 @@ public interface IPollApiService
     /// </summary>
     /// <param name="pollId">Poll identifier</param>
     /// <param name="optionId">Option identifier</param>
-    /// <returns></returns>
+    /// <returns>Envelope of updated poll</returns>
     Task<Envelope<Poll>> Vote(Guid pollId, Guid optionId);
 
     /// <summary>
     /// Remove vote from the poll
     /// </summary>
     /// <param name="pollId">Poll identifier</param>
-    /// <returns></returns>
+    /// <returns>Envelope of updated poll</returns>
     Task<Envelope<Poll>> Unvote(Guid pollId);
 
     /// <summary>
@@ -50,7 +50,7 @@ public interface IPollApiService
     /// </summary>
     /// <param name="id">Poll identifier</param>
     /// <param name="request">Poll update request</param>
-    /// <returns></returns>
+    /// <returns>Envelope of updated poll</returns>
     Task<Envelope<Poll>> Update(Guid id, UpdatePollRequest request);
 
     /// <summary>

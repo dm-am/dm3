@@ -14,7 +14,11 @@ const contacts = props.user.contacts || [];
     <h3 class="section-title">Контакты</h3>
 
     <div class="contacts-list">
-      <div v-for="contact in contacts" :key="contact.contactType" class="contact-item">
+      <div
+        v-for="contact in contacts"
+        :key="contact.contactType"
+        class="contact-item"
+      >
         <span class="contact-title">{{ contact.contactType }}</span>
         <span class="contact-value">{{ contact.value }}</span>
       </div>

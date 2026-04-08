@@ -13,17 +13,12 @@ public class CreatePostRequest
     public Guid? CharacterId { get; set; }
 
     /// <summary>
-    /// Post text content
+    /// Game text (in-character content)
     /// </summary>
-    public string Text { get; set; } = null!;
+    public string GameText { get; set; } = null!;
 
     /// <summary>
-    /// Additional commentary text
+    /// Metagame text (OOC commentary)
     /// </summary>
-    public string? Commentary { get; set; }
-
-    /// <summary>
-    /// Private message to master
-    /// </summary>
-    public string? MasterMessage { get; set; }
+    public string? MetagameText { get; set; }
 }

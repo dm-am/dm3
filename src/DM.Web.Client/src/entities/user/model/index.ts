@@ -6,3 +6,6 @@ export { useAuthStore, useUserStore } from "./store";
 
 // Community-specific store (stays in entities)
 export { useCommunityStore, UserActivityFilter } from "./communityStore";
+
+// Display composable for user formatting
+export { useUserDisplay } from "./useUserDisplay";

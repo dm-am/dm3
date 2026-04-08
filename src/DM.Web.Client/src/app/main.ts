@@ -17,6 +17,7 @@ import "./styles/ThemeVariables.css";
 import "./styles/Reset.sass";
 import "./styles/Fonts.sass";
 import "./styles/Inputs.sass";
+import "./styles/BbcodeGlobal.sass";
 
 // Create app
 const application = createApp(App);

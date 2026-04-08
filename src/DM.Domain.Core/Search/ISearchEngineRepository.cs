@@ -19,7 +19,7 @@ public interface ISearchEngineRepository
     /// <param name="pagingData">Paging data</param>
     /// <param name="roles">Authenticated user roles</param>
     /// <param name="userId">Authenticated user identifier</param>
-    /// <returns></returns>
+    /// <returns>Found entities with total count</returns>
     Task<(IEnumerable<FoundEntity> entities, int totalCount)> Search(string query,
         IEnumerable<SearchEntityType> searchEntityType,
         PagingData pagingData, IEnumerable<UserRole> roles, Guid userId);

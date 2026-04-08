@@ -19,28 +19,28 @@ public abstract class MongoRepository
     /// Create filter definition builder
     /// </summary>
     /// <typeparam name="TEntity"></typeparam>
-    /// <returns></returns>
+    /// <returns>Filter definition builder instance</returns>
     protected static FilterDefinitionBuilder<TEntity> Filter<TEntity>() => new();
 
     /// <summary>
     /// Create update definition builder
     /// </summary>
     /// <typeparam name="TEntity"></typeparam>
-    /// <returns></returns>
+    /// <returns>Update definition builder instance</returns>
     protected static UpdateDefinitionBuilder<TEntity> Update<TEntity>() => new();
 
     /// <summary>
     /// Create sort definition builder
     /// </summary>
     /// <typeparam name="TEntity"></typeparam>
-    /// <returns></returns>
+    /// <returns>Sort definition builder instance</returns>
     protected static SortDefinitionBuilder<TEntity> Sort<TEntity>() => new();
 
     /// <summary>
     /// Create projection definition builder
     /// </summary>
     /// <typeparam name="TEntity"></typeparam>
-    /// <returns></returns>
+    /// <returns>Projection definition builder instance</returns>
     protected static ProjectionDefinitionBuilder<TEntity> Project<TEntity>() =>
         new();
 
@@ -48,6 +48,6 @@ public abstract class MongoRepository
     /// Get collection
     /// </summary>
     /// <typeparam name="TEntity"></typeparam>
-    /// <returns></returns>
+    /// <returns>MongoDB collection for the entity type</returns>
     protected IMongoCollection<TEntity> Collection<TEntity>() => _client.GetCollection<TEntity>();
 }

@@ -1,0 +1,37 @@
+// =============================================================================
+// SKELETON LOADING STANDARDS
+// =============================================================================
+// Centralized skeleton shimmer animation for loading states.
+// Use for predictable layouts only (DataTable, ProfileHeader).
+// For variable content (comments, polls), use "Загрузка..." text.
+// See UI_STANDARDS.md for documentation.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Shimmer Mixin
+// -----------------------------------------------------------------------------
+// Provides shimmer animation for skeleton loading elements.
+// Respects prefers-reduced-motion.
+//
+// Usage:
+//   .skeleton-cell
+//     +skeleton-shimmer
+//
+// Duration: 1.5s (per UI_STANDARDS.md)
+// Easing: ease-in-out / infinite
+
+=skeleton-shimmer
+  background: linear-gradient(90deg, $bg-element-hover 25%, $bg-element 50%, $bg-element-hover 75%)
+  background-size: 200% 100%
+  animation: skeleton-shimmer 1.5s ease-in-out infinite
+  border-radius: $minor  // 4px
+
+  @media (prefers-reduced-motion: reduce)
+    animation: none
+    background: $bg-element-hover
+
+@keyframes skeleton-shimmer
+  0%
+    background-position: 200% 0
+  100%
+    background-position: -200% 0

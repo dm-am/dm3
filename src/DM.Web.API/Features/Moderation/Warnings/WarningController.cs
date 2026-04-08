@@ -54,7 +54,7 @@ public class WarningController : ControllerBase
     /// Get all warnings (moderators only)
     /// </summary>
     /// <remarks>
-    /// Returns all warnings across the platform.
+    /// Returns all warnings across the website.
     /// Can be filtered by user login.
     /// </remarks>
     /// <param name="user">Optional user login to filter by</param>
@@ -98,7 +98,7 @@ public class WarningController : ControllerBase
     public async Task<IActionResult> CreateWarning([FromBody] CreateWarningRequest request)
     {
         var result = await _warningApiService.CreateWarning(request);
-        return CreatedAtRoute(nameof(GetUserWarnings), new { login = request.UserLogin }, result);
+        return CreatedAtRoute(nameof(GetUserWarnings), new { login = request.Username }, result);
     }
 
     /// <summary>

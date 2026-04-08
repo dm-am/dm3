@@ -30,9 +30,9 @@ public class DiscussionComment
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Last update timestamp
+    /// Last modification timestamp
     /// </summary>
-    public DateTimeOffset? UpdatedUtc { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
     /// Number of likes on this comment

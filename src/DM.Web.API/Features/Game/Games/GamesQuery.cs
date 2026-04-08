@@ -11,32 +11,109 @@ namespace DM.Web.API.Features.Game.Games;
 public class GamesQuery : PagingQuery
 {
     /// <summary>
-    /// Game statuses to filter by (optional)
+    /// Text search (title, system, setting) - OR between fields
     /// </summary>
-    public IEnumerable<ModuleStatus>? Statuses { get; set; }
+    public string? Search { get; set; }
 
     /// <summary>
-    /// Game tags to filter by (optional)
+    /// Game statuses to show (OR between selected). Empty = all statuses.
     /// </summary>
-    public IEnumerable<Guid>? Tag { get; set; }
+    public IReadOnlyCollection<ModuleStatus>? Statuses { get; set; }
 
     /// <summary>
-    /// Filter by recruitment status (optional)
+    /// Recruitment filter for Active games. Ignored if Active not in Statuses.
     /// </summary>
-    public bool? IsRecruiting { get; set; }
+    public RecruitmentFilter? RecruitmentFilter { get; set; }
 
     /// <summary>
-    /// Filter by finished status (optional, for closed games)
+    /// Closed reason filter for Closed games. Ignored if Closed not in Statuses.
     /// </summary>
-    public bool? IsFinished { get; set; }
+    public ClosedReason? ClosedReasonFilter { get; set; }
 
     /// <summary>
-    /// Filter by master login (optional)
+    /// Required tag IDs - game must have ALL of them (AND logic)
     /// </summary>
-    public string? MasterLogin { get; set; }
+    public IReadOnlyCollection<int>? RequiredTags { get; set; }
 
     /// <summary>
-    /// Filter by player login (optional, user has active character in game)
+    /// Optional tag IDs - game must have at least ONE of them (OR logic)
     /// </summary>
-    public string? PlayerLogin { get; set; }
+    public IReadOnlyCollection<int>? OptionalTags { get; set; }
+
+    /// <summary>
+    /// Excluded tag IDs - game must NOT have any of them (NOR logic)
+    /// </summary>
+    public IReadOnlyCollection<int>? ExcludedTags { get; set; }
+
+    /// <summary>
+    /// Filter by author usernames - master OR assistant (case-insensitive, OR logic)
+    /// </summary>
+    public IReadOnlyCollection<string>? AuthorUsernames { get; set; }
+
+    /// <summary>
+    /// Filter by player username - user has active character (case-insensitive)
+    /// </summary>
+    public string? PlayerUsername { get; set; }
+
+    /// <summary>
+    /// Created date range start (inclusive)
+    /// </summary>
+    public DateTimeOffset? CreatedFrom { get; set; }
+
+    /// <summary>
+    /// Created date range end (inclusive)
+    /// </summary>
+    public DateTimeOffset? CreatedTo { get; set; }
+
+    /// <summary>
+    /// Activated date range start (inclusive). Games without ActivatedUtc are excluded.
+    /// </summary>
+    public DateTimeOffset? ActivatedFrom { get; set; }
+
+    /// <summary>
+    /// Activated date range end (inclusive). Games without ActivatedUtc are excluded.
+    /// </summary>
+    public DateTimeOffset? ActivatedTo { get; set; }
+
+    /// <summary>
+    /// Closed date range start (inclusive). Games without ClosedUtc are excluded.
+    /// </summary>
+    public DateTimeOffset? ClosedFrom { get; set; }
+
+    /// <summary>
+    /// Closed date range end (inclusive). Games without ClosedUtc are excluded.
+    /// </summary>
+    public DateTimeOffset? ClosedTo { get; set; }
+
+    /// <summary>
+    /// Recruitment started date range start (inclusive). Games without RecruitmentStartedUtc are excluded.
+    /// </summary>
+    public DateTimeOffset? RecruitmentStartedFrom { get; set; }
+
+    /// <summary>
+    /// Recruitment started date range end (inclusive). Games without RecruitmentStartedUtc are excluded.
+    /// </summary>
+    public DateTimeOffset? RecruitmentStartedTo { get; set; }
+
+    /// <summary>
+    /// Sort field: created, activated, recruitmentstarted, title, popularity, status, availableslots, closed
+    /// </summary>
+    public string? SortBy { get; set; }
+
+    /// <summary>
+    /// Sort order: asc or desc (default: desc)
+    /// </summary>
+    public string? SortOrder { get; set; }
+
+    /// <summary>
+    /// If true, returns only games where current user participates
+    /// (reader, player, assistant, mentor, or master). Requires authentication.
+    /// </summary>
+    public bool? Participating { get; set; }
+
+    /// <summary>
+    /// Response projection: "full" (default) includes players/readers arrays for tooltips,
+    /// "ref" returns lightweight GameRef with counts only (for sidebars/menus).
+    /// </summary>
+    public string? Projection { get; set; }
 }

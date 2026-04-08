@@ -38,12 +38,10 @@ export interface ValidatedField {
   validate: () => Promise<boolean>;
 }
 
-export function useValidatedField(options: UseValidatedFieldOptions = {}): ValidatedField {
-  const {
-    initialValue = "",
-    validate: syncValidate,
-    asyncValidate,
-  } = options;
+export function useValidatedField(
+  options: UseValidatedFieldOptions = {},
+): ValidatedField {
+  const { initialValue = "", validate: syncValidate, asyncValidate } = options;
 
   // State
   const value = ref(initialValue);
@@ -133,7 +131,10 @@ export function useValidatedField(options: UseValidatedFieldOptions = {}): Valid
   // Input handler
   const onInput = () => {
     // Reset async state when value changes
-    if (lastCheckedValue.value !== null && lastCheckedValue.value !== value.value.trim()) {
+    if (
+      lastCheckedValue.value !== null &&
+      lastCheckedValue.value !== value.value.trim()
+    ) {
       asyncPassed.value = false;
       lastCheckedValue.value = null;
     }
@@ -195,16 +196,25 @@ export function useValidatedField(options: UseValidatedFieldOptions = {}): Valid
 
 // Common validators
 export const validators = {
-  required: (message = ""): SyncValidator =>
-    (v) => v.trim() ? null : message,
+  required:
+    (message = ""): SyncValidator =>
+    (v) =>
+      v.trim() ? null : message,
 
-  email: (message = "Неверный формат почты"): SyncValidator =>
-    (v) => !v || /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}$/i.test(v) ? null : message,
+  email:
+    (message = "Неверный формат почты"): SyncValidator =>
+    (v) =>
+      !v || /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}$/i.test(v)
+        ? null
+        : message,
 
-  minLength: (min: number, message?: string): SyncValidator =>
-    (v) => !v || v.length >= min ? null : (message || `Минимум ${min} символов`),
+  minLength:
+    (min: number, message?: string): SyncValidator =>
+    (v) =>
+      !v || v.length >= min ? null : message || `Минимум ${min} символов`,
 
-  combine: (...validators: SyncValidator[]): SyncValidator =>
+  combine:
+    (...validators: SyncValidator[]): SyncValidator =>
     (v) => {
       for (const validator of validators) {
         const result = validator(v);

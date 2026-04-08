@@ -6,8 +6,8 @@ import {
   type UserNotification,
 } from "@/shared/api/models/notifications";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import LoadingSpinner from "@/shared/ui/Layout/LoadingSpinner.vue";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
+import { Tooltip } from "@/shared/ui/Tooltip";
 import { useToast } from "@/shared/lib/composables/useToast";
 
 const toast = useToast();
@@ -40,9 +40,9 @@ const getNotificationTypeLabel = (type: NotificationType): string => {
     case NotificationType.BlogInvitationRejected:
       return "Приглашение отклонено";
     case NotificationType.NewTopicInSubscribedBoard:
-      return "Новая тема в разделе";
+      return "Новый топик в разделе";
     case NotificationType.NewCommentInSubscribedTopic:
-      return "Комментарий в теме";
+      return "Комментарий в топике";
     case NotificationType.NewGameFromSubscribedAuthor:
       return "Новая игра автора";
     case NotificationType.NewPostInSubscribedGame:
@@ -52,11 +52,11 @@ const getNotificationTypeLabel = (type: NotificationType): string => {
     case NotificationType.NewPublicationFromSubscribedAuthor:
       return "Публикация автора";
     case NotificationType.NewTopicFromSubscribedAuthor:
-      return "Тема от автора";
+      return "Топик от автора";
     case NotificationType.NewForumTopic:
-      return "Новая тема форума";
+      return "Новый топик форума";
     case NotificationType.LikedTopic:
-      return "Лайк темы";
+      return "Лайк топика";
     case NotificationType.NewForumComment:
       return "Комментарий форума";
     case NotificationType.LikedForumComment:
@@ -177,8 +177,8 @@ const fetchNotifications = async (reset = false) => {
 
   loading.value = true;
   try {
-    const response = await notificationApi.getNotifications(skip.value, take);
-    const newItems = response.resources || [];
+    const { data } = await notificationApi.getNotifications(skip.value, take);
+    const newItems = data?.resources || [];
     notifications.value = [...notifications.value, ...newItems];
     hasMore.value = newItems.length === take;
     skip.value += newItems.length;
@@ -214,13 +214,17 @@ onMounted(() => fetchNotifications());
 <template>
   <div class="notifications-page">
     <div class="page-header">
-      <h1>Уведомления</h1>
-      <button v-if="notifications.length > 0" class="mark-all-btn" @click="markAllAsRead">
+      <page-title>Уведомления</page-title>
+      <button
+        v-if="notifications.length > 0"
+        class="mark-all-btn"
+        @click="markAllAsRead"
+      >
         Отметить все прочитанными
       </button>
     </div>
 
-    <loading-spinner v-if="loading && notifications.length === 0" />
+    <secondary-text v-if="loading && notifications.length === 0">Загрузка...</secondary-text>
 
     <template v-else-if="notifications.length === 0">
       <secondary-text>Нет уведомлений</secondary-text>
@@ -232,8 +236,11 @@ onMounted(() => fetchNotifications());
         :key="notification.id"
         class="notification-item"
       >
-        <div class="notification-icon" :class="getNotificationIcon(notification.eventType)">
-          <the-icon :icon="getNotificationIcon(notification.eventType)" />
+        <div
+          class="notification-icon"
+          :class="getNotificationIcon(notification.eventType)"
+        >
+          <Icon :icon="getNotificationIcon(notification.eventType)" />
         </div>
 
         <div class="notification-content">
@@ -253,17 +260,27 @@ onMounted(() => fetchNotifications());
           >
             Перейти
           </router-link>
-          <button class="dismiss-btn" @click="markAsRead(notification.id)" title="Отметить прочитанным">
-            &times;
-          </button>
+          <Tooltip text="Отметить прочитанным">
+            <button
+              class="dismiss-btn"
+              @click="markAsRead(notification.id)"
+              aria-label="Отметить прочитанным"
+            >
+              &times;
+            </button>
+          </Tooltip>
         </div>
       </li>
     </ul>
 
     <div v-if="hasMore && notifications.length > 0" class="load-more">
-      <button class="load-more-btn" :disabled="loading" @click="fetchNotifications()">
+      <button
+        class="load-more-btn"
+        :disabled="loading"
+        @click="fetchNotifications()"
+      >
         <template v-if="loading">Загрузка...</template>
-        <template v-else>Загрузить ещё</template>
+        <template v-else>Загрузить еще</template>
       </button>
     </div>
   </div>
@@ -330,12 +347,12 @@ onMounted(() => fetchNotifications());
     color: $link
 
   &.dice
-    background: rgba($accent-gold, 0.1)
-    color: $accent-gold
+    background: rgba($accent-yellow, 0.1)
+    color: $accent-yellow
 
   &.bell
-    background: rgba($accent-blue, 0.1)
-    color: $accent-blue
+    background: rgba($link, 0.1)
+    color: $link
 
 .notification-content
   flex: 1

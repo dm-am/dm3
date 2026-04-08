@@ -21,7 +21,7 @@
 
 ### Domain.* — Unified Services
 
-**Зачем:** Один интерфейс вместо трёх-четырёх. Все операции с Game в одном месте. Меньше файлов и DI-регистраций.
+**Зачем:** Один интерфейс вместо трех-четырех. Все операции с Game в одном месте. Меньше файлов и DI-регистраций.
 
 Один сервис на фичу со всеми CRUD-операциями:
 
@@ -40,7 +40,7 @@ public interface IGameService
 
 ### Infrastructure.* — Technical Concerns
 
-**Зачем:** Чёткое разделение технических ответственностей. Легко найти где реализован кэш, где парсинг, где репозитории.
+**Зачем:** Четкое разделение технических ответственностей. Легко найти где реализован кэш, где парсинг, где репозитории.
 
 Организация по **техническому назначению**, НЕ по бизнес-фичам:
 
@@ -83,7 +83,7 @@ internal class GameRepository : IGameRepository { ... }
 
 ### Web.API — Feature Folders
 
-**Зачем:** Всё связанное с фичей в одном месте. Легко найти controller, service, DTOs для конкретного endpoint.
+**Зачем:** Все связанное с фичей в одном месте. Легко найти controller, service, DTOs для конкретного endpoint.
 
 Controller + ApiService + DTOs группируются в папку фичи:
 
@@ -96,7 +96,7 @@ Features/{Module}/{Feature}/
 └── {Feature}Response.cs
 ```
 
-**Примечание:** Feature Folders — это организация Web.API, не путать с Vertical Slices. Бизнес-логика остаётся в Domain.
+**Примечание:** Feature Folders — это организация Web.API, не путать с Vertical Slices. Бизнес-логика остается в Domain.
 
 ### Workers — Event Handlers
 
@@ -115,7 +115,7 @@ Workers.{Name}/
 
 ### Frontend — Feature-Sliced Design (FSD)
 
-**Зачем:** Чёткие правила импортов предотвращают спагетти-код. Переиспользуемость компонентов. Масштабируемость frontend.
+**Зачем:** Четкие правила импортов предотвращают спагетти-код. Переиспользуемость компонентов. Масштабируемость frontend.
 
 Архитектурная методология для frontend. Слои:
 
@@ -136,7 +136,7 @@ app → pages → widgets → features → entities → shared
 
 ### Tests — Testing Pyramid
 
-**Зачем:** Быстрая обратная связь. Unit tests дешёвые и быстрые, ловят большинство багов. E2E дорогие — только критичные сценарии.
+**Зачем:** Быстрая обратная связь. Unit tests дешевые и быстрые, ловят большинство багов. E2E дорогие — только критичные сценарии.
 
 Стратегия распределения тестов: Unit tests (Domain) > Integration tests (API) > E2E tests.
 
@@ -225,7 +225,7 @@ Blacklist
 |--------|----------|------------|
 | **Account** | Session, Token, Credentials, LoginAttempt | Аутентификация |
 | **Personal** | PersonalProfile, UserProfileNote, UserSettings, Notification, Subscription, UserBlacklist | Данные текущего пользователя |
-| **Community** | User, UserProfile, Poll, Review | Публичные данные |
+| **Community** | User, UserProfile, Poll, UserEndorsement, WebsiteTestimonial | Публичные данные |
 | **Moderation** | ModeratedProfile, ModeratedProfileNote, Warning, Ban, Ticket, Mentorship | Данные для модераторов |
 | **Messaging** | Chat, Message, GlobalChatEvent | — |
 | **Game** | Game, Room, Post, Character, GameComment, GameBlacklist, GameNotepad, GameInvitation | — |
@@ -251,7 +251,7 @@ Features/Recovery/        # восстановление пароля
 Features/Search/          # поиск
 ```
 
-**Запрещённые названия:**
+**Запрещенные названия:**
 - ❌ `MyProfile` — использовать `Profiles/` в модуле Personal
 - ❌ `Self` — использовать `Profiles/` в модуле Personal
 - ❌ `Blacklist` (ед.ч.) — использовать `Blacklists/`
@@ -261,10 +261,110 @@ Features/Search/          # поиск
 
 | Элемент | Стиль | Примеры |
 |---------|-------|---------|
-| Папки слоёв (`entities/`, `features/`, `pages/`) | **kebab-case** | `global-chat/`, `create-game/`, `profile-note/` |
+| Папки слоев (`entities/`, `features/`, `pages/`) | **kebab-case** | `global-chat/`, `create-game/`, `profile-note/` |
 | Папки UI компонентов (`shared/ui/`) | **PascalCase** | `Button/`, `Modal/` |
 | Файлы Vue компонентов | **PascalCase** | `UserProfile.vue`, `GameCard.vue` |
 | Composables/utils | **camelCase** | `useAuth.ts`, `formatDate.ts` |
+
+---
+
+## DTO Projection Pattern (Expansion Hierarchy)
+
+### Принцип
+
+DTOs организованы в иерархию наследования с тремя уровнями:
+
+```
+{Entity}Ref → {Entity} → {Entity}Details
+```
+
+| Уровень | Назначение | Пример |
+|---------|-----------|--------|
+| `{Entity}Ref` | Минимум для сайдбаров/меню | `GameRef`, `BlogRef`, `UserRef` |
+| `{Entity}` | Средний уровень для таблиц/карточек | `Game`, `Blog`, `User` |
+| `{Entity}Details` | Полный для детальных страниц | `GameDetails`, `BlogDetails`, `UserProfile` |
+
+### Правила
+
+**1. Counts + Details:** Counts (`playersCount`) присутствуют на **ВСЕХ** уровнях. Arrays (`players[]`) **ДОБАВЛЯЮТСЯ**, не заменяют counts.
+
+```csharp
+// GameRef — сайдбар (counts only)
+{
+  "id": "...",
+  "title": "...",
+  "playersCount": 5,
+  "subscribersCount": 12
+}
+
+// Game — таблица (counts + arrays)
+{
+  "id": "...",
+  "title": "...",
+  "playersCount": 5,
+  "subscribersCount": 12,
+  "players": [{ "id": "...", "username": "..." }],  // ДОБАВЛЯЕТСЯ
+  "readers": [...]
+}
+```
+
+**2. Строгое наследование:** Каждый уровень `extends` предыдущий:
+
+```csharp
+// Backend (C#)
+public class Game : GameRef { ... }
+public class GameDetails : Game { ... }
+
+public class User : UserRef { ... }
+public class UserProfile : User { ... }
+```
+
+```typescript
+// Frontend (TypeScript)
+export interface Game extends GameRef { ... }
+export interface GameDetails extends Game { ... }
+
+export interface User extends UserRef { ... }
+```
+
+**3. Nullable для expansions:** Расширяемые массивы nullable — могут быть не запрошены:
+
+```csharp
+public class Game : GameRef
+{
+    // Inherited: PlayersCount, SubscribersCount (always present)
+
+    // Expanded (nullable - populated when requested)
+    public IEnumerable<UserRef>? Players { get; set; }
+    public IEnumerable<UserRef>? Readers { get; set; }
+}
+```
+
+**4. UserRef vs User:**
+- В Ref/основном типе — `UserRef` (lightweight: id, username, lastActivityUtc)
+- В Details — `User` где нужна полная информация
+
+### API
+
+```
+GET /games?projection=ref   → GameRef[]   (сайдбары)
+GET /games                  → Game[]      (таблицы)
+GET /games/{id}             → GameDetails (страница)
+
+GET /blogs?projection=ref   → BlogRef[]
+GET /blogs                  → Blog[]
+```
+
+### Иерархии
+
+```
+UserRef → User → UserProfile → PersonalProfile
+                            → ModeratedProfile
+
+GameRef → Game → GameDetails
+
+BlogRef → Blog → BlogDetails
+```
 
 ---
 
@@ -292,7 +392,7 @@ DM.Domain.Core/
 ├── Mail/                 # IMailSender, ITemplateRenderer
 ├── Notepads/             # INotepadRepository (cross-module)
 ├── Parsing/              # UserAgentParser
-├── Reviews/              # Review (shared DTO)
+├── Reviews/              # Shared review DTOs (GameReview, UserEndorsement, etc.)
 ├── Search/               # ISearchService (cross-module)
 ├── Subscriptions/        # ISubscriptionRepository (cross-module)
 ├── Tokens/               # Token, CreateToken (shared DTO)
@@ -470,7 +570,7 @@ test/
 ### ❌ "Infrastructure.* может определять бизнес-интерфейсы"
 
 Нет. Бизнес-интерфейсы (`IGameService`, `ITopicRepository`) — в Domain.Core или Domain.*.
-Инфраструктурные интерфейсы (обёртки над внешними библиотеками типа `IBbParserProvider`) остаются в Infrastructure.*.
+Инфраструктурные интерфейсы (обертки над внешними библиотеками типа `IBbParserProvider`) остаются в Infrastructure.*.
 
 ### ❌ "Web.Client должен следовать Clean Architecture"
 
@@ -493,7 +593,7 @@ test/
 
 ### ❌ "Feature Folders = Vertical Slices"
 
-Нет. Feature Folders в Web.API — это только организация API-слоя. Бизнес-логика остаётся в Domain.
+Нет. Feature Folders в Web.API — это только организация API-слоя. Бизнес-логика остается в Domain.
 
 ### ❌ "Workers содержат бизнес-логику"
 

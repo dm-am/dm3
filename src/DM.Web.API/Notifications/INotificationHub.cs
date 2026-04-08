@@ -12,6 +12,5 @@ public interface INotificationHub
     /// Send notification
     /// </summary>
     /// <param name="notification"></param>
-    /// <returns></returns>
     Task Send(Notification notification);
 }

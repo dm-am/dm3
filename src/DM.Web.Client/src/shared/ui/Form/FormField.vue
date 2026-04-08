@@ -1,5 +1,10 @@
 <template>
-  <div :class="['form-field', (label || $slots.label) ? 'form-field__labeled' : null]">
+  <div
+    :class="[
+      'form-field',
+      label || $slots.label ? 'form-field__labeled' : null,
+    ]"
+  >
     <div v-if="label || $slots.label" class="form-field-label">
       <slot name="label">
         <label :for="name">{{ label }}</label>
@@ -33,7 +38,9 @@ const props = defineProps<{
 }>();
 
 // Filter out empty errors (from .required("") validation)
-const displayErrors = computed(() => props.errors?.filter((e) => e?.trim()) || []);
+const displayErrors = computed(
+  () => props.errors?.filter((e) => e?.trim()) || [],
+);
 
 // Default translations for error codes
 const defaultTranslations: Record<string, string> = {
@@ -46,7 +53,10 @@ const defaultTranslations: Record<string, string> = {
 };
 
 // Allow overriding translations via provide/inject
-const injectedTranslations = inject<Record<string, string>>("formFieldTranslations", {});
+const injectedTranslations = inject<Record<string, string>>(
+  "formFieldTranslations",
+  {},
+);
 const errorMessages = { ...defaultTranslations, ...injectedTranslations };
 
 const translateError = (error: string): string => {

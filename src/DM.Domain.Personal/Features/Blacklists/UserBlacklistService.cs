@@ -57,10 +57,10 @@ internal class UserBlacklistService : IUserBlacklistService
     }
 
     /// <inheritdoc />
-    public async Task<BlacklistEntry> BlockUser(string username, CancellationToken ct = default)
+    public async Task<BlacklistEntry> Block(OperateUserBlacklistLink dto, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
-        var userToBlock = await _userRepository.GetUserAsync(username);
+        var userToBlock = await _userRepository.GetUserAsync(dto.Username);
 
         if (userToBlock == null)
         {
@@ -91,10 +91,10 @@ internal class UserBlacklistService : IUserBlacklistService
     }
 
     /// <inheritdoc />
-    public async Task UnblockUser(string username, CancellationToken ct = default)
+    public async Task Unblock(OperateUserBlacklistLink dto, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
-        var userToUnblock = await _userRepository.GetUserAsync(username);
+        var userToUnblock = await _userRepository.GetUserAsync(dto.Username);
 
         if (userToUnblock == null)
         {

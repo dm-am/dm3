@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Game.Features.Games;
 using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 
@@ -16,19 +17,12 @@ namespace DM.Web.API.Features.Community.Users;
 /// - GET /v1/users/{username}
 /// - post.author, comment.author, etc.
 ///
+/// Inherits from UserRef (id, username, lastActivityUtc).
 /// For full profile information, use UserProfile or PersonalProfile.
 /// </remarks>
-public class User
+public class User : UserRef
 {
-    /// <summary>
-    /// User identifier
-    /// </summary>
-    public Guid Id { get; set; }
-
-    /// <summary>
-    /// User's display name (unique username)
-    /// </summary>
-    public string Username { get; set; } = string.Empty;
+    // Id, Username, LastActivityUtc, Role, IsNewbie, IsHonorary inherited from UserRef
 
     /// <summary>
     /// History of username changes
@@ -38,28 +32,6 @@ public class User
     /// Helps identify "is this the former johnny?"
     /// </remarks>
     public IReadOnlyCollection<UsernameHistoryEntry> UsernameHistory { get; set; } = Array.Empty<UsernameHistoryEntry>();
-
-    /// <summary>
-    /// User role (RegularUser, Mentor, Moderator, etc.)
-    /// </summary>
-    public UserRole Role { get; set; }
-
-    /// <summary>
-    /// Honorary status (visual badge for former moderators, helpers, etc.)
-    /// </summary>
-    /// <remarks>
-    /// Visual distinction only, no additional permissions.
-    /// </remarks>
-    public bool IsHonorary { get; set; }
-
-    /// <summary>
-    /// Newbie status (less than 100 posts)
-    /// </summary>
-    /// <remarks>
-    /// Computed from QuantityRating in database.
-    /// Used in UI and business logic (restrictions on reviews).
-    /// </remarks>
-    public bool IsNewbie { get; set; }
 
     /// <summary>
     /// User rating information
@@ -75,10 +47,62 @@ public class User
     /// </summary>
     public UserPicture Picture { get; set; } = new();
 
+    // ========== Statistics for community list ==========
+
     /// <summary>
-    /// Last activity moment (UTC)
+    /// Registration date (UTC)
     /// </summary>
-    public DateTimeOffset? LastActivityUtc { get; set; }
+    public DateTimeOffset? RegisteredUtc { get; set; }
+
+    /// <summary>
+    /// Number of games where user is master or assistant
+    /// </summary>
+    public int GamesHosting { get; set; }
+
+    /// <summary>
+    /// Games hosting breakdown by status (for tooltips)
+    /// </summary>
+    public ModuleStatusCounts? GamesHostingByStatus { get; set; }
+
+    /// <summary>
+    /// Number of games where user is a player (has active character)
+    /// </summary>
+    public int GamesPlaying { get; set; }
+
+    /// <summary>
+    /// Games playing breakdown by status (for tooltips)
+    /// </summary>
+    public ModuleStatusCounts? GamesPlayingByStatus { get; set; }
+
+    /// <summary>
+    /// Number of blogs where user is owner or assistant
+    /// </summary>
+    public int BlogsHosting { get; set; }
+
+    /// <summary>
+    /// Blogs hosting breakdown by status (for tooltips)
+    /// </summary>
+    public ModuleStatusCounts? BlogsHostingByStatus { get; set; }
+
+    /// <summary>
+    /// Number of post reviews given to other users
+    /// </summary>
+    public int ReviewsGiven { get; set; }
+
+    /// <summary>
+    /// Number of post reviews received from other users
+    /// </summary>
+    public int ReviewsReceived { get; set; }
+
+    /// <summary>
+    /// Number of subscribers (users following this user)
+    /// </summary>
+    public int SubscribersCount { get; set; }
+
+    /// <summary>
+    /// Subscriber usernames for tooltip display (limited to first 20)
+    /// </summary>
+    public IReadOnlyCollection<string> SubscriberUsernames { get; set; } = [];
 }
 
 /// <summary>
@@ -132,20 +156,16 @@ public class UserProfile : User
     /// </summary>
     public IReadOnlyCollection<Contact> Contacts { get; set; } = Array.Empty<Contact>();
 
-    /// <summary>
-    /// User registration date (UTC)
-    /// </summary>
-    public DateTimeOffset RegisteredAtUtc { get; set; }
+    // Note: RegisteredUtc is now in base User class
 
     /// <summary>
-    /// User's featured post (highest rated)
+    /// User's best post (highest rated)
     /// </summary>
     /// <remarks>
     /// Automatically selected post with highest rating.
-    /// Null if user has no posts.
-    /// AuthorUsername is null (implied by profile context).
+    /// Null if user has no posts with positive rating.
     /// </remarks>
-    public FeaturedPost? FeaturedPost { get; set; }
+    public BestPostResult? BestPost { get; set; }
 
     /// <summary>
     /// Number of post reviews given to other users
@@ -278,7 +298,7 @@ public class UsernameHistoryEntry
     /// <summary>
     /// When the username was changed (UTC)
     /// </summary>
-    public DateTimeOffset ChangedAtUtc { get; set; }
+    public DateTimeOffset ChangedUtc { get; set; }
 }
 
 /// <summary>
@@ -308,12 +328,97 @@ public class UsersQuery : PagingQuery
     public UserActivityFilter Activity { get; set; } = UserActivityFilter.Active;
 
     /// <summary>
-    /// Sort order
+    /// Filter to show only currently online users
     /// </summary>
     /// <remarks>
-    /// Name - alphabetically (default), Rating - by post review score sum descending.
+    /// When true, only shows users who are currently online (activity within last 5 minutes).
+    /// Requires Activity=Active to be meaningful.
+    /// </remarks>
+    public bool? IsOnline { get; set; }
+
+    /// <summary>
+    /// Filter by honorary status (only applicable for RegularUser role)
+    /// </summary>
+    /// <remarks>
+    /// true = only honorary users, false = only non-honorary, null = all
+    /// </remarks>
+    public bool? IsHonorary { get; set; }
+
+    /// <summary>
+    /// Filter by newbie status (users with less than 100 posts)
+    /// </summary>
+    /// <remarks>
+    /// true = only newbies, false = only experienced (100+ posts), null = all
+    /// </remarks>
+    public bool? IsNewbie { get; set; }
+
+    /// <summary>
+    /// Minimum rating (post review score sum) filter
+    /// </summary>
+    public int? MinRating { get; set; }
+
+    /// <summary>
+    /// Maximum rating (post review score sum) filter
+    /// </summary>
+    public int? MaxRating { get; set; }
+
+    /// <summary>
+    /// Minimum number of games hosting (master or assistant)
+    /// </summary>
+    public int? MinGamesHosting { get; set; }
+
+    /// <summary>
+    /// Maximum number of games hosting (master or assistant)
+    /// </summary>
+    public int? MaxGamesHosting { get; set; }
+
+    /// <summary>
+    /// Minimum number of games playing (has active character)
+    /// </summary>
+    public int? MinGamesPlaying { get; set; }
+
+    /// <summary>
+    /// Maximum number of games playing (has active character)
+    /// </summary>
+    public int? MaxGamesPlaying { get; set; }
+
+    /// <summary>
+    /// Minimum number of blogs hosting (owner or assistant)
+    /// </summary>
+    public int? MinBlogsHosting { get; set; }
+
+    /// <summary>
+    /// Maximum number of blogs hosting (owner or assistant)
+    /// </summary>
+    public int? MaxBlogsHosting { get; set; }
+
+    /// <summary>
+    /// Filter by registration date - from (inclusive)
+    /// </summary>
+    public DateTimeOffset? RegisteredFromUtc { get; set; }
+
+    /// <summary>
+    /// Filter by registration date - to (inclusive)
+    /// </summary>
+    public DateTimeOffset? RegisteredToUtc { get; set; }
+
+    /// <summary>
+    /// Sort field
+    /// </summary>
+    /// <remarks>
+    /// Name - alphabetically, Rating - by post review score sum, LastActivity, Registered, etc.
     /// </remarks>
     public UserSort Sort { get; set; } = UserSort.Name;
+
+    /// <summary>
+    /// Sort direction: asc or desc
+    /// </summary>
+    /// <remarks>
+    /// Default depends on sort field:
+    /// - Name: asc (alphabetical)
+    /// - Others: desc (best/newest first)
+    /// </remarks>
+    public string? SortOrder { get; set; }
 }
 
 /// <summary>
@@ -365,4 +470,25 @@ public class LoginHistoryDto
     /// User agent string
     /// </summary>
     public string? UserAgent { get; set; }
+}
+
+/// <summary>
+/// Count breakdown by module status (for games/blogs)
+/// </summary>
+public class ModuleStatusCounts
+{
+    /// <summary>
+    /// Number of items in Draft status
+    /// </summary>
+    public int Draft { get; set; }
+
+    /// <summary>
+    /// Number of items in Active status
+    /// </summary>
+    public int Active { get; set; }
+
+    /// <summary>
+    /// Number of items in Closed status
+    /// </summary>
+    public int Closed { get; set; }
 }

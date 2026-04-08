@@ -12,29 +12,44 @@ namespace DM.Web.API.Features.Blog.Blogs;
 public interface IBlogApiService
 {
     /// <summary>
-    /// Get public blogs
+    /// Get blogs with filtering and sorting (full, with rubrics array)
     /// </summary>
-    Task<ListEnvelope<Blog>> GetPublicBlogs(PagingQuery query);
+    Task<ListEnvelope<Blog>> GetBlogs(BlogsQuery query);
 
     /// <summary>
-    /// Get popular blogs ordered by participant count
+    /// Get blogs as lightweight refs (for sidebars/menus, no rubrics)
     /// </summary>
-    Task<ListEnvelope<Blog>> GetPopularBlogs();
+    Task<ListEnvelope<BlogRef>> GetBlogRefs(BlogsQuery query);
 
     /// <summary>
-    /// Get user blogs
-    /// </summary>
-    Task<ListEnvelope<Blog>> GetUserBlogs(string login);
-
-    /// <summary>
-    /// Get blog by ID
+    /// Get blog by ID (lightweight)
     /// </summary>
     Task<Envelope<Blog>> Get(Guid id);
 
     /// <summary>
-    /// Get blog by owner login
+    /// Get blog by public ID (5 letters)
+    /// </summary>
+    Task<Envelope<Blog>> GetByPublicId(string publicId);
+
+    /// <summary>
+    /// Get blog details by ID (full, with subscribers and assistants)
+    /// </summary>
+    Task<Envelope<BlogDetails>> GetDetails(Guid id);
+
+    /// <summary>
+    /// Get blog details by public ID (5 letters)
+    /// </summary>
+    Task<Envelope<BlogDetails>> GetDetailsByPublicId(string publicId);
+
+    /// <summary>
+    /// Get blog by owner login (lightweight)
     /// </summary>
     Task<Envelope<Blog>> GetByOwnerLogin(string login);
+
+    /// <summary>
+    /// Get blog details by owner login (full)
+    /// </summary>
+    Task<Envelope<BlogDetails>> GetDetailsByOwnerLogin(string login);
 
     /// <summary>
     /// Create a new blog

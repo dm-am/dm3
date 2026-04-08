@@ -4,7 +4,7 @@ import { storeToRefs } from "pinia";
 import { useUserStore } from "@/entities/user";
 import type { Username, UserProfileNote } from "@/shared/api/models/community";
 import { communityApi } from "@/shared/api";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 
 const props = defineProps<{
   username: Username;
@@ -51,7 +51,10 @@ async function saveNote() {
   }
 
   isSaving.value = true;
-  const { data } = await communityApi.upsertUserProfileNote(props.username, editText.value);
+  const { data } = await communityApi.upsertUserProfileNote(
+    props.username,
+    editText.value,
+  );
   if (data) {
     note.value = data;
   }
@@ -87,19 +90,19 @@ async function deleteNote() {
           rows="4"
         />
         <div class="note-actions">
-          <the-button :disabled="isSaving" @click="saveNote">
+          <Button :disabled="isSaving" @click="saveNote">
             {{ isSaving ? "Сохранение..." : "Сохранить" }}
-          </the-button>
-          <the-button secondary @click="cancelEditing">Отмена</the-button>
+          </Button>
+          <Button secondary @click="cancelEditing">Отмена</Button>
         </div>
       </template>
 
       <template v-else>
         <div v-if="note?.text" class="note-content">{{ note.text }}</div>
         <div v-else class="note-empty">Заметка не добавлена</div>
-        <the-button secondary @click="startEditing">
+        <Button secondary @click="startEditing">
           {{ note?.text ? "Редактировать" : "Добавить заметку" }}
-        </the-button>
+        </Button>
       </template>
     </template>
   </section>

@@ -98,7 +98,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 | Mentor | `TestMentor` | mentor@test.local |
 | RegularUser | `TestUser` | user@test.local |
 
-**Граничные случаи имён (см. [USERNAME_POLICY.md](../conventions/USERNAME_POLICY.md)):**
+**Граничные случаи имен (см. [USERNAME_POLICY.md](../conventions/USERNAME_POLICY.md)):**
 
 | Логин | Особенность |
 |-------|-------------|
@@ -116,7 +116,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 
 | Логин | Особенность |
 |-------|-------------|
-| `TestHonorary` | Honorary goblin (почётный гоблин) |
+| `TestHonorary` | Honorary goblin (почетный гоблин) |
 
 **Pending Registrations (для тестирования активации):**
 

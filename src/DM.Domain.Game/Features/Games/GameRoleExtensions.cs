@@ -25,11 +25,11 @@ public static class GameRoleExtensions
     /// <param name="game">Mapped game</param>
     /// <param name="userId">User identifier</param>
     /// <returns>Collection of game roles</returns>
-    public static IReadOnlyCollection<GameRole> GetRoles(this GameModel game, Guid userId)
+    public static IReadOnlyCollection<GameRole> GetRoles(this Game game, Guid userId)
     {
         var roles = new List<GameRole>();
 
-        if (game.Author.UserId == userId)
+        if (game.Master.UserId == userId)
         {
             roles.Add(GameRole.Master);
         }
@@ -44,12 +44,12 @@ public static class GameRoleExtensions
             roles.Add(GameRole.Mentor);
         }
 
-        if (game.ActiveCharacterUserIds.Contains(userId))
+        if (game.Players.Any(p => p.UserId == userId))
         {
             roles.Add(GameRole.Player);
         }
 
-        if (game.ReaderUserIds.Contains(userId))
+        if (game.SubscriberIds.Contains(userId))
         {
             roles.Add(GameRole.Reader);
         }
@@ -76,7 +76,7 @@ public static class GameRoleExtensions
     /// <summary>
     /// Checks if user has a pending invitation (player or reader)
     /// </summary>
-    public static bool HasPendingInvitation(this GameModel game, Guid userId)
+    public static bool HasPendingInvitation(this Game game, Guid userId)
     {
         return game.PendingInvitedUserIds.Contains(userId);
     }
@@ -84,7 +84,7 @@ public static class GameRoleExtensions
     /// <summary>
     /// Checks if user has a pending PLAYER invitation
     /// </summary>
-    public static bool HasPendingPlayerInvitation(this GameModel game, Guid userId)
+    public static bool HasPendingPlayerInvitation(this Game game, Guid userId)
     {
         return game.PendingPlayerInvitedUserIds.Contains(userId);
     }
@@ -92,7 +92,7 @@ public static class GameRoleExtensions
     /// <summary>
     /// Checks if user is a pending assistant
     /// </summary>
-    public static bool IsPendingAssistant(this GameModel game, Guid userId)
+    public static bool IsPendingAssistant(this Game game, Guid userId)
     {
         return game.PendingAssistant?.UserId == userId;
     }

@@ -28,7 +28,7 @@ internal class BanApiService : IBanApiService
 
         return new UserBanStatus
         {
-            Login = login,
+            Username = login,
             IsBanned = activeBan != null,
             ActiveBan = activeBan != null ? _mapper.Map<Ban>(activeBan) : null,
             History = bans.Select(_mapper.Map<Ban>)
@@ -54,7 +54,7 @@ internal class BanApiService : IBanApiService
     {
         var createBan = new CreateBan
         {
-            Username = request.UserLogin,
+            Username = request.Username,
             ExpiresUtc = request.ExpiresUtc,
             DurationHours = request.DurationHours,
             Comment = request.Comment,

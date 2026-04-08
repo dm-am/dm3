@@ -41,6 +41,5 @@ public interface IModeratedProfileNoteService
     /// Delete a moderator note
     /// </summary>
     /// <param name="noteId">Note ID</param>
-    /// <returns></returns>
     Task Delete(Guid noteId);
 }

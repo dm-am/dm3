@@ -18,10 +18,8 @@ using ApiChat = DM.Web.API.Features.Messaging.Chats.Chat;
 using ApiCreateChat = DM.Web.API.Features.Messaging.Chats.CreateChat;
 using ApiUpdateChat = DM.Web.API.Features.Messaging.Chats.UpdateChat;
 using ApiChatAvailability = DM.Web.API.Features.Messaging.Chats.ChatAvailability;
-using ApiConversation = DM.Web.API.Features.Messaging.Conversations.Conversation;
-using ApiCreateConversation = DM.Web.API.Features.Messaging.Conversations.CreateConversation;
-using ApiUpdateConversation = DM.Web.API.Features.Messaging.Conversations.UpdateConversation;
 using ApiMessage = DM.Web.API.Features.Messaging.Messages.Message;
+using DbChat = DM.Infrastructure.Persistence.Entities.Messaging.Chat;
 
 namespace DM.Web.API.Features.Messaging;
 
@@ -53,28 +51,7 @@ internal class MessagingApiService : IMessagingApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<ApiConversation>> GetConversations(PagingQuery query)
-    {
-        var (conversations, paging) = await _chatService.GetAsync(query);
-        return new ListEnvelope<ApiConversation>(conversations.Select(_mapper.Map<ApiConversation>), new PagingInfo(paging));
-    }
-
-    /// <inheritdoc />
-    public async Task<Envelope<ApiConversation>> GetConversation(Guid id)
-    {
-        var conversation = await _chatService.GetAsync(id);
-        return new Envelope<ApiConversation>(_mapper.Map<ApiConversation>(conversation));
-    }
-
-    /// <inheritdoc />
-    public async Task<Envelope<ApiConversation>> GetDirectConversation(string login)
-    {
-        var conversation = await _chatService.GetOrCreateDirectAsync(login);
-        return new Envelope<ApiConversation>(_mapper.Map<ApiConversation>(conversation));
-    }
-
-    /// <inheritdoc />
-    public async Task<ListEnvelope<ApiMessage>> GetMessages(Guid conversationId, PagingQuery query)
+    public async Task<ListEnvelope<ApiMessage>> GetMessagesAsync(Guid chatId, PagingQuery query)
     {
         var cursorQuery = new CursorQuery
         {
@@ -82,7 +59,7 @@ internal class MessagingApiService : IMessagingApiService
             Limit = query.Take
         };
 
-        var result = await _messageService.GetWithCursorAsync(conversationId, cursorQuery);
+        var result = await _messageService.GetWithCursorAsync(chatId, cursorQuery);
 
         // Note: Cursor-based pagination doesn't support traditional paging info
         // This is a compatibility shim for legacy API
@@ -93,8 +70,8 @@ internal class MessagingApiService : IMessagingApiService
     }
 
     /// <inheritdoc />
-    public async Task<CursorEnvelope<ApiMessage>> GetMessagesWithCursor(
-        Guid conversationId,
+    public async Task<CursorEnvelope<ApiMessage>> GetMessagesWithCursorAsync(
+        Guid chatId,
         string? cursor = null,
         Guid? aroundMessageId = null,
         DateTimeOffset? nearTimestampUtc = null,
@@ -108,7 +85,7 @@ internal class MessagingApiService : IMessagingApiService
             Limit = limit
         };
 
-        var result = await _messageService.GetWithCursorAsync(conversationId, cursorQuery);
+        var result = await _messageService.GetWithCursorAsync(chatId, cursorQuery);
 
         var cursorPaging = new CursorPaging
         {
@@ -124,23 +101,23 @@ internal class MessagingApiService : IMessagingApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<ApiMessage>> CreateMessage(Guid conversationId, ApiMessage message)
+    public async Task<Envelope<ApiMessage>> CreateMessageAsync(Guid chatId, ApiMessage message)
     {
         var createMessage = _mapper.Map<ServiceCreateMessage>(message);
-        createMessage.ChatId = conversationId;
+        createMessage.ChatId = chatId;
         var createdMessage = await _messageService.CreateAsync(createMessage);
         return new Envelope<ApiMessage>(_mapper.Map<ApiMessage>(createdMessage));
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<ApiMessage>> GetMessage(Guid messageId)
+    public async Task<Envelope<ApiMessage>> GetMessageAsync(Guid messageId)
     {
         var message = await _messageService.GetAsync(messageId);
         return new Envelope<ApiMessage>(_mapper.Map<ApiMessage>(message));
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<ApiMessage>> UpdateMessage(Guid messageId, ApiMessage message)
+    public async Task<Envelope<ApiMessage>> UpdateMessageAsync(Guid messageId, ApiMessage message)
     {
         var updateMessage = _mapper.Map<ServiceUpdateMessage>(message);
         updateMessage.MessageId = messageId;
@@ -149,78 +126,68 @@ internal class MessagingApiService : IMessagingApiService
     }
 
     /// <inheritdoc />
-    public Task DeleteMessage(Guid messageId) => _messageService.DeleteAsync(messageId);
+    public Task DeleteMessageAsync(Guid messageId) => _messageService.DeleteAsync(messageId);
 
     /// <inheritdoc />
-    public Task MarkAsRead(Guid conversationId) => _chatService.MarkAsReadAsync(conversationId);
+    public Task MarkAsReadAsync(Guid chatId) => _chatService.MarkAsReadAsync(chatId);
 
     /// <inheritdoc />
-    public async Task<Envelope<ApiMessage>> LikeMessage(Guid messageId)
+    public async Task<Envelope<ApiMessage>> LikeMessageAsync(Guid messageId)
     {
         await _messageLikeService.LikeMessageAsync(messageId);
-        return await GetMessage(messageId);
+        return await GetMessageAsync(messageId);
     }
 
     /// <inheritdoc />
-    public Task UnlikeMessage(Guid messageId) => _messageLikeService.UnlikeMessageAsync(messageId);
+    public Task UnlikeMessageAsync(Guid messageId) => _messageLikeService.UnlikeMessageAsync(messageId);
 
     /// <inheritdoc />
-    public async Task<Envelope<ApiConversation>> CreateConversation(ApiCreateConversation createConversation)
+    public async Task<(IEnumerable<ApiChat> Chats, PagingInfo Paging)> GetChatsAsync(PagingQuery query)
     {
-        var serviceCreateConversation = _mapper.Map<ServiceCreateChat>(createConversation);
-        var conversation = await _chatService.CreateGroupAsync(serviceCreateConversation);
-        return new Envelope<ApiConversation>(_mapper.Map<ApiConversation>(conversation));
+        var (chats, paging) = await _chatService.GetAsync(query);
+        return (chats.Select(_mapper.Map<ApiChat>), new PagingInfo(paging));
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<ApiConversation>> UpdateConversation(Guid conversationId, ApiUpdateConversation updateConversation)
+    public async Task<ApiChat> GetDirectChatAsync(string username)
     {
-        var serviceUpdateConversation = _mapper.Map<ServiceUpdateChat>(updateConversation);
-        serviceUpdateConversation.ChatId = conversationId;
-        var conversation = await _chatService.UpdateAsync(serviceUpdateConversation);
-        return new Envelope<ApiConversation>(_mapper.Map<ApiConversation>(conversation));
+        var chat = await _chatService.GetOrCreateDirectAsync(username);
+        return _mapper.Map<ApiChat>(chat);
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<ApiChat> Chats, PagingInfo Paging)> GetChats(PagingQuery query)
+    public async Task<ApiChat> GetChatAsync(Guid id)
     {
-        var (conversations, paging) = await _chatService.GetAsync(query);
-        return (conversations.Select(_mapper.Map<ApiChat>), new PagingInfo(paging));
+        var chat = await _chatService.GetAsync(id);
+        return _mapper.Map<ApiChat>(chat);
     }
 
     /// <inheritdoc />
-    public async Task<ApiChat> GetDirectChat(string username)
+    public async Task<ApiChat> GetChatByPublicIdAsync(string publicId)
     {
-        var conversation = await _chatService.GetOrCreateDirectAsync(username);
-        return _mapper.Map<ApiChat>(conversation);
+        var chat = await _chatService.GetByPublicIdAsync(publicId);
+        return _mapper.Map<ApiChat>(chat);
     }
 
     /// <inheritdoc />
-    public async Task<ApiChat> GetChat(Guid id)
-    {
-        var conversation = await _chatService.GetAsync(id);
-        return _mapper.Map<ApiChat>(conversation);
-    }
-
-    /// <inheritdoc />
-    public async Task<ApiChat> CreateChat(ApiCreateChat createChat)
+    public async Task<ApiChat> CreateChatAsync(ApiCreateChat createChat)
     {
         var serviceCreateChat = _mapper.Map<ServiceCreateChat>(createChat);
-        var conversation = await _chatService.CreateGroupAsync(serviceCreateChat);
-        return _mapper.Map<ApiChat>(conversation);
+        var chat = await _chatService.CreateGroupAsync(serviceCreateChat);
+        return _mapper.Map<ApiChat>(chat);
     }
 
     /// <inheritdoc />
-    public async Task<ApiChat> UpdateChat(Guid id, ApiUpdateChat updateChat)
+    public async Task<ApiChat> UpdateChatAsync(Guid id, ApiUpdateChat updateChat)
     {
         var serviceUpdateChat = _mapper.Map<ServiceUpdateChat>(updateChat);
         serviceUpdateChat.ChatId = id;
-        var conversation = await _chatService.UpdateAsync(serviceUpdateChat);
-        return _mapper.Map<ApiChat>(conversation);
+        var chat = await _chatService.UpdateAsync(serviceUpdateChat);
+        return _mapper.Map<ApiChat>(chat);
     }
 
     /// <inheritdoc />
-    public async Task<ApiChatAvailability> CanStartChat(string username)
+    public async Task<ApiChatAvailability> CanStartChatAsync(string username)
     {
         // Get target user to resolve username to ID
         var targetUser = await _userService.GetAsync(username);
@@ -229,5 +196,30 @@ internal class MessagingApiService : IMessagingApiService
         var blockStatus = await _userBlacklistService.GetBlockStatus(targetUser.UserId);
 
         return new ApiChatAvailability { CanStart = blockStatus.CanCommunicate };
+    }
+
+    // ═══ GLOBAL CHAT ═══
+
+    /// <inheritdoc />
+    public Task<CursorEnvelope<ApiMessage>> GetGlobalChatMessagesAsync(
+        string? cursor = null,
+        Guid? aroundMessageId = null,
+        DateTimeOffset? nearTimestampUtc = null,
+        int limit = 50) =>
+        GetMessagesWithCursorAsync(DbChat.GlobalChatId, cursor, aroundMessageId, nearTimestampUtc, limit);
+
+    /// <inheritdoc />
+    public Task<Envelope<ApiMessage>> CreateGlobalChatMessageAsync(ApiMessage message) =>
+        CreateMessageAsync(DbChat.GlobalChatId, message);
+
+    /// <inheritdoc />
+    public Task MarkGlobalChatAsReadAsync() =>
+        MarkAsReadAsync(DbChat.GlobalChatId);
+
+    /// <inheritdoc />
+    public async Task<int> GetGlobalChatUnreadCountAsync()
+    {
+        var chat = await _chatService.GetAsync(DbChat.GlobalChatId);
+        return chat.UnreadMessagesCount;
     }
 }

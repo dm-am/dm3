@@ -8,11 +8,13 @@ const { signOut } = userStore;
 
 <template>
   <router-link :to="{ name: 'messenger' }" data-testid="messages-link">
-    <the-icon :font="IconType.MessagesNoUnread" />
+    <Icon :font="IconType.MessagesNoUnread" />
     Сообщения
   </router-link>
   |
-  <a @click="signOut" data-testid="logout-button"><the-icon :font="IconType.Logout" /> Выйти</a>
+  <a @click="signOut" data-testid="logout-button"
+    ><Icon :font="IconType.Logout" /> Выйти</a
+  >
 </template>
 
 <style scoped lang="sass"></style>

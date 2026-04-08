@@ -36,6 +36,7 @@ using Jamq.Client.Rabbit.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -107,6 +108,18 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         services
             .AddAutoMapper(config => config.AllowNullCollections = true)
             .AddMemoryCache()
+            .AddResponseCompression(options =>
+            {
+                options.EnableForHttps = true;
+                options.Providers.Add<BrotliCompressionProvider>();
+                options.Providers.Add<GzipCompressionProvider>();
+                options.MimeTypes = System.Linq.Enumerable.Concat(
+                    ResponseCompressionDefaults.MimeTypes,
+                    new[] { "application/json", "application/problem+json" });
+            })
+            .Configure<BrotliCompressionProviderOptions>(options => options.Level = System.IO.Compression.CompressionLevel.Fastest)
+            .Configure<GzipCompressionProviderOptions>(options => options.Level = System.IO.Compression.CompressionLevel.Fastest)
+            .AddResponseCaching()
             .AddDbContextPool<DmDbContext>(options =>
             {
                 options.UseNpgsql(configuration.GetConnectionString(nameof(ConnectionStrings.Rdb)),
@@ -145,6 +158,8 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             services.AddHostedService<HostedServices.PendingRegistrationCleanupService>();
             services.AddHostedService<HostedServices.UsernameChangeCleanupService>();
             services.AddHostedService<HostedServices.PendencyReminderService>();
+            services.AddHostedService<HostedServices.GameInactivityService>();
+            services.AddHostedService<HostedServices.PopularityScoreService>();
         }
 
         var connectionStrings = new ConnectionStrings();
@@ -356,6 +371,8 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         }
 
         appBuilder
+            .UseResponseCompression()
+            .UseResponseCaching()
             .UseMiddleware<SecurityHeadersMiddleware>()
             .UseMiddleware<CorrelationMiddleware>()
             .UseMiddleware<ErrorHandlingMiddleware>()

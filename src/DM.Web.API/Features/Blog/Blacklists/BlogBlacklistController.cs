@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Features.Blog.Blogs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -23,17 +24,24 @@ namespace DM.Web.API.Features.Blog.Blacklists;
 public class BlogBlacklistController : ControllerBase
 {
     private readonly IBlogBlacklistApiService _blacklistApiService;
+    private readonly IBlogApiService _blogApiService;
 
     /// <inheritdoc />
-    public BlogBlacklistController(IBlogBlacklistApiService blacklistApiService)
+    public BlogBlacklistController(
+        IBlogBlacklistApiService blacklistApiService,
+        IBlogApiService blogApiService)
     {
         _blacklistApiService = blacklistApiService;
+        _blogApiService = blogApiService;
     }
+
+    private async Task<Guid> ResolveBlogId(string id) =>
+        Guid.TryParse(id, out var guid) ? guid : (await _blogApiService.GetByPublicId(id)).Resource.Id;
 
     /// <summary>
     /// Get list of blacklisted users in blog
     /// </summary>
-    /// <param name="id">Blog identifier</param>
+    /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <response code="200">Returns the list of blacklisted users for the blog</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to read blacklist of this blog</response>
@@ -44,13 +52,16 @@ public class BlogBlacklistController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetBlogBlacklist(Guid id) =>
-        Ok(new ListEnvelope<User>(await _blacklistApiService.Get(id)));
+    public async Task<IActionResult> GetBlogBlacklist(string id)
+    {
+        var blogId = await ResolveBlogId(id);
+        return Ok(new ListEnvelope<User>(await _blacklistApiService.Get(blogId)));
+    }
 
     /// <summary>
     /// Add user to blog blacklist
     /// </summary>
-    /// <param name="id">Blog identifier</param>
+    /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <param name="request">User to blacklist</param>
     /// <response code="201">User successfully added to blacklist</response>
     /// <response code="400">Invalid request</response>
@@ -66,16 +77,17 @@ public class BlogBlacklistController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> AddToBlogBlacklist(Guid id, [FromBody] BlockUserRequest request)
+    public async Task<IActionResult> AddToBlogBlacklist(string id, [FromBody] BlockUserRequest request)
     {
-        var result = await _blacklistApiService.Create(id, request.Username);
+        var blogId = await ResolveBlogId(id);
+        var result = await _blacklistApiService.Create(blogId, request.Username);
         return CreatedAtRoute(nameof(GetBlogBlacklist), new { id }, result);
     }
 
     /// <summary>
     /// Remove user from blog blacklist
     /// </summary>
-    /// <param name="id">Blog identifier</param>
+    /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <param name="username">User's display name</param>
     /// <response code="204">User successfully removed from blacklist</response>
     /// <response code="401">User must be authenticated</response>
@@ -89,9 +101,10 @@ public class BlogBlacklistController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> RemoveFromBlogBlacklist(Guid id, string username)
+    public async Task<IActionResult> RemoveFromBlogBlacklist(string id, string username)
     {
-        await _blacklistApiService.Delete(id, username);
+        var blogId = await ResolveBlogId(id);
+        await _blacklistApiService.Delete(blogId, username);
         return NoContent();
     }
 }

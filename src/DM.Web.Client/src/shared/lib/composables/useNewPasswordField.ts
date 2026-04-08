@@ -12,27 +12,34 @@ export interface UseNewPasswordFieldOptions {
  */
 export function useNewPasswordField(options: UseNewPasswordFieldOptions = {}) {
   const password = ref("");
-  const { isCompromised, isChecking, checkPassword, reset: resetHibp } = useHibpCheck();
+  const {
+    isCompromised,
+    isChecking,
+    checkPassword,
+    reset: resetHibp,
+  } = useHibpCheck();
 
   const meetsMinimum = computed(() => password.value.length >= 8);
 
-  const isSameAsOld = computed(() =>
-    options.oldPassword !== undefined &&
-    password.value.length > 0 &&
-    password.value === options.oldPassword.value
+  const isSameAsOld = computed(
+    () =>
+      options.oldPassword !== undefined &&
+      password.value.length > 0 &&
+      password.value === options.oldPassword.value,
   );
 
   const hibpStatus = computed<HibpStatus>(() => {
-    if (isChecking.value) return 'checking';
-    if (isCompromised.value) return 'compromised';
-    return 'safe';
+    if (isChecking.value) return "checking";
+    if (isCompromised.value) return "compromised";
+    return "safe";
   });
 
-  const isValid = computed(() =>
-    meetsMinimum.value &&
-    !isChecking.value &&
-    !isCompromised.value &&
-    !isSameAsOld.value
+  const isValid = computed(
+    () =>
+      meetsMinimum.value &&
+      !isChecking.value &&
+      !isCompromised.value &&
+      !isSameAsOld.value,
   );
 
   const onInput = () => {

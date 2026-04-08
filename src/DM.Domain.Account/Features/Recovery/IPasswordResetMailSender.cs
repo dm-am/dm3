@@ -14,6 +14,5 @@ internal interface IPasswordResetMailSender
     /// <param name="email">User email</param>
     /// <param name="username">Username</param>
     /// <param name="token">Confirmation token</param>
-    /// <returns></returns>
     Task Send(string email, string username, Guid token);
 }

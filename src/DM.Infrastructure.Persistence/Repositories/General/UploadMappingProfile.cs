@@ -13,7 +13,6 @@ internal class UploadMappingProfile : Profile
     public UploadMappingProfile()
     {
         CreateMap<DbUpload, Upload>()
-            .ForMember(d => d.Id, s => s.MapFrom(u => u.UploadId))
-            .ForMember(d => d.Owner, s => s.MapFrom(u => u.Owner));
+            .ForMember(d => d.Id, s => s.MapFrom(u => u.UploadId));
     }
 }

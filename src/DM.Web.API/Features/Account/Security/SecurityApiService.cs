@@ -45,7 +45,7 @@ internal class SecurityApiService : ISecurityApiService
         Id = entry.Id,
         EventType = (SecurityEventType)entry.EventType,
         Description = GetEventDescription(entry.EventType),
-        Timestamp = entry.Timestamp,
+        TimestampUtc = entry.TimestampUtc,
         IpAddress = entry.IpAddress,
         DeviceInfo = entry.DeviceInfo,
         Details = entry.Details

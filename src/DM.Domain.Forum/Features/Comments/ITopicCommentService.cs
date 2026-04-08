@@ -17,12 +17,12 @@ public interface ITopicCommentService
     Task<Comment> CreateAsync(CreateComment createComment);
 
     /// <summary>
-    /// Get comments for a topic
+    /// Get comments for a topic with filtering and sorting
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
-    /// <param name="query">Paging query</param>
+    /// <param name="query">Query with paging, search, author filter, and sorting</param>
     /// <param name="excludeUserIds">Optional user IDs to exclude from results</param>
-    Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid topicId, PagingQuery query,
+    Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid topicId, CommentsQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null);
 
     /// <summary>

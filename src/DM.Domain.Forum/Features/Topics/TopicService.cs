@@ -94,43 +94,73 @@ internal class TopicService : ITopicService
             topic.UnreadCommentsCount = (await _unreadCountersRepository.SelectByEntitiesAsync(
                 identity.User.UserId, UnreadEntryType.Message, topicId))[topicId];
         }
+        else
+        {
+            // Anonymous users: show total counts
+            topic.UnreadCommentsCount = topic.TotalCommentsCount;
+        }
 
         return topic;
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<Topic> topics, PagingResult paging)> GetListAsync(
-        string boardTitle, PagingQuery query, CancellationToken ct = default)
+    public async Task<Topic> GetByBoardAndNumberAsync(string boardAlias, int topicNumber, CancellationToken ct = default)
     {
-        var board = await _boardService.GetBoard(boardTitle);
-
-        var totalCount = await _repository.Count(board.Id, ct);
+        var board = await _boardService.GetBoardByAlias(boardAlias);
         var identity = _identityProvider.Current;
-        var pagingData = new PagingData(query, identity.Settings.Paging.TopicsPerPage, totalCount);
+        var accessPolicy = _accessPolicyConverter.Convert(identity.User.Role);
 
-        var topics = (await _repository.Get(board.Id, pagingData, false, ct)).ToArray();
-        if (identity.User.IsAuthenticated)
+        var topic = await _repository.GetByBoardAndNumber(board.Id, topicNumber, accessPolicy, ct);
+        if (topic == null)
         {
-            await _unreadCountersRepository.FillEntityCounters(topics, identity.User.UserId,
-                t => t.Id, t => t.UnreadCommentsCount);
+            throw new HttpException(HttpStatusCode.Gone, $"Topic #{topicNumber} not found in board {boardAlias}");
         }
 
-        return (topics, pagingData.Result);
+        if (identity.User.IsAuthenticated)
+        {
+            topic.UnreadCommentsCount = (await _unreadCountersRepository.SelectByEntitiesAsync(
+                identity.User.UserId, UnreadEntryType.Message, topic.Id))[topic.Id];
+        }
+        else
+        {
+            topic.UnreadCommentsCount = topic.TotalCommentsCount;
+        }
+
+        return topic;
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Topic>> GetAttachedAsync(string boardTitle, CancellationToken ct = default)
+    public async Task<(IEnumerable<Topic> topics, PagingResult? paging)> GetListAsync(
+        string boardTitle, TopicsQuery query, CancellationToken ct = default)
     {
         var board = await _boardService.GetBoard(boardTitle);
-        var topics = (await _repository.Get(board.Id, null, true, ct)).ToArray();
         var identity = _identityProvider.Current;
+
+        // For attached-only queries, no paging needed
+        PagingData? pagingData = null;
+        if (query.IsAttached != true)
+        {
+            var totalCount = await _repository.Count(board.Id, query, ct);
+            pagingData = new PagingData(query, identity.Settings.Paging.TopicsPerPage, totalCount);
+        }
+
+        var topics = (await _repository.Get(board.Id, pagingData, query, ct)).ToArray();
+
         if (identity.User.IsAuthenticated)
         {
             await _unreadCountersRepository.FillEntityCounters(topics, identity.User.UserId,
                 t => t.Id, t => t.UnreadCommentsCount);
         }
+        else
+        {
+            // Anonymous users: show total counts
+            foreach (var topic in topics)
+            {
+                topic.UnreadCommentsCount = topic.TotalCommentsCount;
+            }
+        }
 
-        return topics;
+        return (topics, pagingData?.Result);
     }
 
     /// <inheritdoc />
@@ -184,5 +214,19 @@ internal class TopicService : ITopicService
         await _repository.Delete(topicId);
         await _unreadCountersRepository.DeleteAsync(topicId, UnreadEntryType.Message);
         await _invokedEventProducer.SendAsync(EventType.DeletedTopic, topicId);
+    }
+
+    /// <inheritdoc />
+    public async Task ReorderPinnedAsync(string boardTitle, IReadOnlyList<Guid> topicIds, CancellationToken ct = default)
+    {
+        var board = await _boardService.GetBoard(boardTitle);
+        _intentionManager.ThrowIfForbidden(ForumIntention.AdministrateTopics, board);
+
+        // Create order map: first topic in list = order 0
+        var orderMap = topicIds
+            .Select((id, index) => (id, index))
+            .ToDictionary(x => x.id, x => x.index);
+
+        await _repository.UpdateAttachOrder(orderMap, ct);
     }
 }

@@ -1,16 +1,18 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using AutoMapper;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
-using DtoGame = DM.Domain.Game.Features.Games.GameModel;
-using DtoGameExtended = DM.Domain.Game.Features.Games.GameExtended;
+using DtoGame = DM.Domain.Game.Features.Games.Game;
+using DtoGameDetails = DM.Domain.Game.Features.Games.GameDetails;
 using DtoGameRecruitment = DM.Domain.Game.Features.Games.GameRecruitment;
 using DtoCharacterShortInfo = DM.Domain.Game.Features.Games.CharacterShortInfo;
 using DtoGamesQuery = DM.Domain.Game.Features.Games.GamesQuery;
 using DtoGameTag = DM.Domain.Game.Features.Games.GameTag;
 using DtoCreateGame = DM.Domain.Game.Features.Games.CreateGame;
 using DtoUpdateGame = DM.Domain.Game.Features.Games.UpdateGame;
+using DtoActiveCharacterInfo = DM.Domain.Game.Features.Games.ActiveCharacterInfo;
 
 namespace DM.Web.API.Features.Game.Games;
 
@@ -26,32 +28,59 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.Statuses, o => o.MapFrom(s =>
                 s.Statuses != null && s.Statuses.Any()
                     ? new HashSet<ModuleStatus>(s.Statuses)
-                    : new HashSet<ModuleStatus> { ModuleStatus.Active }));
+                    : null))
+            .ForMember(d => d.RequiredTags, o => o.MapFrom(s =>
+                s.RequiredTags != null && s.RequiredTags.Any()
+                    ? new HashSet<int>(s.RequiredTags)
+                    : null))
+            .ForMember(d => d.OptionalTags, o => o.MapFrom(s =>
+                s.OptionalTags != null && s.OptionalTags.Any()
+                    ? new HashSet<int>(s.OptionalTags)
+                    : null))
+            .ForMember(d => d.ExcludedTags, o => o.MapFrom(s =>
+                s.ExcludedTags != null && s.ExcludedTags.Any()
+                    ? new HashSet<int>(s.ExcludedTags)
+                    : null))
+            .ForMember(d => d.OwnerUsernames, o => o.MapFrom(s =>
+                s.AuthorUsernames != null && s.AuthorUsernames.Any(u => !string.IsNullOrWhiteSpace(u))
+                    ? new HashSet<string>(s.AuthorUsernames.Where(u => !string.IsNullOrWhiteSpace(u)))
+                    : null));
+            // RecruitmentFilter, ClosedReasonFilter, PlayerUsername map by convention
 
         CreateMap<DtoGameRecruitment, GameRecruitment>();
+        CreateMap<DtoActiveCharacterInfo, ActiveCharacterInfo>();
 
-        // Base Game mapping (lightweight)
-        CreateMap<DtoGame, Game>()
-            .ForMember(d => d.System, s => s.MapFrom(g => g.SystemName))
-            .ForMember(d => d.Setting, s => s.MapFrom(g => g.NarrativeSetting))
-            .ForMember(d => d.SchemaId, s => s.MapFrom(g => g.AttributeSchemaId))
-            .ForMember(d => d.Released, s => s.MapFrom(g => g.ReleaseDate ?? g.CreatedUtc))
-            .ForMember(d => d.Participation, s => s.MapFrom<GameParticipationResolver>());
+        // Note: GameAssistantInfo → UserRef mapping is in UserRefMappingProfile
 
-        // GameDetails mapping (full, inherits from Game)
-        CreateMap<DtoGameExtended, GameDetails>()
-            .ForMember(d => d.System, s => s.MapFrom(g => g.SystemName))
-            .ForMember(d => d.Setting, s => s.MapFrom(g => g.NarrativeSetting))
-            .ForMember(d => d.SchemaId, s => s.MapFrom(g => g.AttributeSchemaId))
-            .ForMember(d => d.Released, s => s.MapFrom(g => g.ReleaseDate ?? g.CreatedUtc))
+        // GameRef mapping (lightweight, counts only - for sidebars/menus)
+        // This is the BASE mapping that Game and GameDetails inherit from
+        CreateMap<DtoGame, GameRef>()
+            .ForMember(d => d.ActivatedUtc, s => s.MapFrom(g => g.ActivatedUtc))
             .ForMember(d => d.Participation, s => s.MapFrom<GameParticipationResolver>())
+            .ForMember(d => d.Master, s => s.MapFrom(g => g.Master))
+            .ForMember(d => d.Assistants, s => s.MapFrom(g => g.Assistants))
+            .ForMember(d => d.SubscribersCount, s => s.MapFrom(g => g.SubscriberIds.Count()));
+
+        // Game mapping (extends GameRef with additional fields)
+        CreateMap<DtoGame, Game>()
+            .IncludeBase<DtoGame, GameRef>()
+            .ForMember(d => d.System, s => s.MapFrom(g => g.SystemName))
+            .ForMember(d => d.Setting, s => s.MapFrom(g => g.NarrativeSetting))
+            .ForMember(d => d.SchemaId, s => s.MapFrom(g => g.AttributeSchemaId))
+            .ForMember(d => d.TagIds, s => s.MapFrom(g => g.TagIds));
+
+        // GameDetails mapping (extends Game with full details)
+        CreateMap<DtoGameDetails, GameDetails>()
+            .IncludeBase<DtoGame, Game>()
             .ForMember(d => d.PrivacySettings, s => s.MapFrom(g => g))
-            .ForMember(d => d.Schema, s => s.MapFrom(g => g.AttributeSchema));
+            .ForMember(d => d.Schema, s => s.MapFrom(g => g.AttributeSchema))
+            .ForMember(d => d.FullAssistants, s => s.MapFrom(g => g.FullAssistants))
+            .ForMember(d => d.Subscribers, s => s.MapFrom(g => g.Subscribers));
 
         CreateMap<DtoCharacterShortInfo, CharacterShortInfo>()
             .ForMember(d => d.Author, s => s.MapFrom(c => c.Author));
 
-        CreateMap<DtoGameExtended, GamePrivacySettings>()
+        CreateMap<DtoGameDetails, GamePrivacySettings>()
             .ForMember(d => d.ViewTemper, s => s.MapFrom(g => !g.HideTemper))
             .ForMember(d => d.ViewStory, s => s.MapFrom(g => !g.HideStory))
             .ForMember(d => d.ViewSkills, s => s.MapFrom(g => !g.HideSkills))
@@ -62,7 +91,7 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.CommentariesAccess, s => s.MapFrom(g => g.CommentsAccessMode));
 
         CreateMap<DtoGameTag, Tag>()
-            .ReverseMap();
+            .ForMember(d => d.Id, o => o.MapFrom(s => s.ShortId));
 
         // For game creation from API request
         CreateMap<CreateGameRequest, DtoCreateGame>()
@@ -77,13 +106,15 @@ internal class GameMappingProfile : Profile
             .ForMember(g => g.ShowPrivateMessages, s => s.MapFrom(r => r.PrivacySettings != null && r.PrivacySettings.ViewPrivates))
             .ForMember(g => g.HidePostStats, s => s.MapFrom(r => r.PrivacySettings != null && !r.PrivacySettings.ViewPostStats))
             .ForMember(g => g.CommentsAccessMode, s => s.MapFrom(r => r.PrivacySettings != null ? r.PrivacySettings.CommentariesAccess : CommentsAccessMode.Public))
-            .ForMember(g => g.DisableAlignment, s => s.Ignore());
+            .ForMember(g => g.DisableAlignment, s => s.Ignore())
+            .ForMember(g => g.AssistantUsername, opt => opt.Ignore())
+            .ForMember(g => g.CopyBlacklist, opt => opt.Ignore());
 
         // For game update, use GameDetails (has PrivacySettings)
         CreateMap<GameDetails, DtoUpdateGame>()
             .ForMember(g => g.SystemName, s => s.MapFrom(g => g.System))
             .ForMember(g => g.NarrativeSetting, s => s.MapFrom(g => g.Setting))
-            .ForMember(g => g.AssistantUsername, s => s.MapFrom(g => g.Assistant != null ? g.Assistant.Username : null))
+            .ForMember(g => g.AssistantUsername, opt => opt.Ignore())
             .ForMember(g => g.HideTemper, s => s.MapFrom(g => g.PrivacySettings != null ? !g.PrivacySettings.ViewTemper : null))
             .ForMember(g => g.HideStory, s => s.MapFrom(g => g.PrivacySettings != null ? !g.PrivacySettings.ViewStory : null))
             .ForMember(g => g.HideSkills, s => s.MapFrom(g => g.PrivacySettings != null ? !g.PrivacySettings.ViewSkills : null))
@@ -93,6 +124,14 @@ internal class GameMappingProfile : Profile
             .ForMember(g => g.HidePostStats, s => s.MapFrom(g => g.PrivacySettings != null ? !g.PrivacySettings.ViewPostStats : null))
             .ForMember(g => g.CommentsAccessMode, s => s.MapFrom(g => g.PrivacySettings != null ? g.PrivacySettings.CommentariesAccess : null))
             .ForMember(g => g.IsRecruitmentOpen, s => s.MapFrom(g => g.Recruitment != null ? g.Recruitment.IsOpen : (bool?)null))
-            .ForMember(g => g.RecruitmentPlayerLimit, s => s.MapFrom(g => g.Recruitment != null ? g.Recruitment.PlayerLimit : null));
+            .ForMember(g => g.RecruitmentPcLimit, s => s.MapFrom(g => g.Recruitment != null ? g.Recruitment.PcLimit : null))
+            .ForMember(g => g.GameId, opt => opt.Ignore())
+            .ForMember(g => g.PremoderationStatus, opt => opt.Ignore())
+            .ForMember(g => g.ClosedReason, opt => opt.Ignore())
+            .ForMember(g => g.DisableAlignment, opt => opt.Ignore())
+            .ForMember(g => g.ActivatedUtc, opt => opt.Ignore())
+            .ForMember(g => g.ClosedUtc, opt => opt.Ignore())
+            .ForMember(g => g.IsRemoved, opt => opt.Ignore())
+            .ForMember(g => g.Tags, opt => opt.Ignore());
     }
 }

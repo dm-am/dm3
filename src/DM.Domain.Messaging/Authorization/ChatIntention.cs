@@ -13,5 +13,10 @@ public enum ChatIntention
     /// <summary>
     /// Update chat (title, participants)
     /// </summary>
-    UpdateChat = 1
+    UpdateChat = 1,
+
+    /// <summary>
+    /// Delete chat (group chats only)
+    /// </summary>
+    DeleteChat = 2
 }

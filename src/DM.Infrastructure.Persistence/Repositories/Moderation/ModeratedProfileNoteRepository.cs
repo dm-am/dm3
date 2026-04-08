@@ -47,7 +47,7 @@ internal class ModeratedProfileNoteRepository : IModeratedProfileNoteRepository
     {
         var note = new DbNote
         {
-            ModeratedProfileNoteId = entity.NoteId,
+            ModeratedProfileNoteId = entity.Id,
             UserId = entity.UserId,
             AuthorId = entity.AuthorId,
             Text = entity.Text,
@@ -64,10 +64,10 @@ internal class ModeratedProfileNoteRepository : IModeratedProfileNoteRepository
     /// <inheritdoc />
     public async Task Update(UpdateModeratedProfileNoteEntity entity)
     {
-        var note = await _dbContext.ModeratedProfileNotes.FindAsync(entity.NoteId);
+        var note = await _dbContext.ModeratedProfileNotes.FindAsync(entity.Id);
         if (note == null)
         {
-            throw new InvalidOperationException($"ModeratedProfileNote {entity.NoteId} not found");
+            throw new InvalidOperationException($"ModeratedProfileNote {entity.Id} not found");
         }
 
         if (entity.Text != null)

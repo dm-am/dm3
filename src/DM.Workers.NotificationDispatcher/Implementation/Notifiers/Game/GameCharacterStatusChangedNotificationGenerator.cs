@@ -63,8 +63,8 @@ internal class GameCharacterStatusChangedNotificationGenerator : INotificationGe
                 c.Status,
                 c.GameId,
                 GameTitle = c.Game!.Title,
-                MasterUsername = c.Game.Author!.Username,
-                GameAuthorId = c.Game.AuthorId,
+                MasterUsername = c.Game.Master!.Username,
+                GameMasterId = c.Game.MasterId,
                 AssistantIds = c.Game.Assistants.Select(a => a.UserId).ToList()
             })
             .FirstOrDefaultAsync();
@@ -77,7 +77,7 @@ internal class GameCharacterStatusChangedNotificationGenerator : INotificationGe
         var usersInterested = new HashSet<Guid>();
 
         // Always notify character owner (unless they are the master who made the change)
-        if (data.AuthorId.HasValue && data.AuthorId != data.GameAuthorId)
+        if (data.AuthorId.HasValue && data.AuthorId != data.GameMasterId)
         {
             usersInterested.Add(data.AuthorId.Value);
         }
@@ -93,7 +93,7 @@ internal class GameCharacterStatusChangedNotificationGenerator : INotificationGe
             foreach (var sub in readerSubscriptions)
             {
                 // Don't notify game team members (they see it in game)
-                if (sub.SubscriberId != data.GameAuthorId &&
+                if (sub.SubscriberId != data.GameMasterId &&
                     !data.AssistantIds.Contains(sub.SubscriberId))
                 {
                     usersInterested.Add(sub.SubscriberId);

@@ -42,30 +42,109 @@ internal class TopicRepository : ITopicRepository
     // --- READ ---
 
     /// <inheritdoc />
-    public Task<int> Count(Guid boardId, CancellationToken ct = default) => _dbContext.Topics
-        .TagWith("DM.Forum.TopicsCount")
-        .CountAsync(t => !t.IsRemoved && t.BoardId == boardId && !t.IsAttached, ct);
+    public Task<int> Count(Guid boardId, TopicsQuery query, CancellationToken ct = default)
+    {
+        var dbQuery = _dbContext.Topics
+            .TagWith("DM.Forum.TopicsCount")
+            .Where(t => !t.IsRemoved && t.BoardId == boardId);
+
+        // Filter by attached status
+        if (query.IsAttached.HasValue)
+        {
+            dbQuery = dbQuery.Where(t => t.IsAttached == query.IsAttached.Value);
+        }
+
+        // Search by title
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var searchTerm = query.Search.Trim();
+            dbQuery = dbQuery.Where(t => EF.Functions.ILike(t.Title, $"%{searchTerm}%"));
+        }
+
+        // Filter by authors (OR logic)
+        if (query.Authors is { Count: > 0 })
+        {
+            var authorNames = query.Authors.Select(a => a.ToLowerInvariant()).ToArray();
+            dbQuery = dbQuery.Where(t => authorNames.Contains(t.Author.Username.ToLower()));
+        }
+
+        // Filter by created date range
+        if (query.CreatedFromUtc.HasValue)
+        {
+            dbQuery = dbQuery.Where(t => t.CreatedUtc >= query.CreatedFromUtc.Value);
+        }
+
+        if (query.CreatedToUtc.HasValue)
+        {
+            dbQuery = dbQuery.Where(t => t.CreatedUtc <= query.CreatedToUtc.Value);
+        }
+
+        return dbQuery.CountAsync(ct);
+    }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Topic>> Get(Guid boardId, PagingData? pagingData, bool attached, CancellationToken ct = default)
+    public async Task<IEnumerable<Topic>> Get(Guid boardId, PagingData? pagingData, TopicsQuery query, CancellationToken ct = default)
     {
-        var query = _dbContext.Topics
+        var dbQuery = _dbContext.Topics
             .TagWith("DM.Forum.TopicsList")
-            .Where(t => !t.IsRemoved && t.BoardId == boardId && t.IsAttached == attached)
-            .ProjectTo<Topic>(_mapper.ConfigurationProvider);
+            .Where(t => !t.IsRemoved && t.BoardId == boardId);
 
-        IOrderedQueryable<Topic> orderedQuery;
-        if (boardId == NewsBoardId || attached)
+        // Filter by attached status
+        if (query.IsAttached.HasValue)
         {
-            orderedQuery = query.OrderByDescending(q => q.CreatedUtc);
+            dbQuery = dbQuery.Where(t => t.IsAttached == query.IsAttached.Value);
         }
-        else if (boardId == ErrorsBoardId)
+
+        // Search by title
+        if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            orderedQuery = query.OrderBy(q => q.IsClosed).ThenByDescending(q => q.LastActivityUtc);
+            var searchTerm = query.Search.Trim();
+            dbQuery = dbQuery.Where(t => EF.Functions.ILike(t.Title, $"%{searchTerm}%"));
         }
-        else
+
+        // Filter by authors (OR logic)
+        if (query.Authors is { Count: > 0 })
         {
-            orderedQuery = query.OrderByDescending(q => q.LastActivityUtc);
+            var authorNames = query.Authors.Select(a => a.ToLowerInvariant()).ToArray();
+            dbQuery = dbQuery.Where(t => authorNames.Contains(t.Author.Username.ToLower()));
+        }
+
+        // Filter by created date range
+        if (query.CreatedFromUtc.HasValue)
+        {
+            dbQuery = dbQuery.Where(t => t.CreatedUtc >= query.CreatedFromUtc.Value);
+        }
+
+        if (query.CreatedToUtc.HasValue)
+        {
+            dbQuery = dbQuery.Where(t => t.CreatedUtc <= query.CreatedToUtc.Value);
+        }
+
+        var projected = dbQuery.ProjectTo<Topic>(_mapper.ConfigurationProvider);
+
+        // Determine sort parameters
+        var sortBy = (query.SortBy ?? "lastActivity").ToLowerInvariant();
+        var sortDesc = string.IsNullOrEmpty(query.SortOrder) || query.SortOrder.Equals("desc", StringComparison.OrdinalIgnoreCase);
+
+        // Apply sorting
+        IOrderedQueryable<Topic> orderedQuery = (sortBy, sortDesc) switch
+        {
+            ("created", true) => projected.OrderByDescending(t => t.CreatedUtc),
+            ("created", false) => projected.OrderBy(t => t.CreatedUtc),
+            ("comments", true) => projected.OrderByDescending(t => t.TotalCommentsCount),
+            ("comments", false) => projected.OrderBy(t => t.TotalCommentsCount),
+            ("title", true) => projected.OrderByDescending(t => t.Title),
+            ("title", false) => projected.OrderBy(t => t.Title),
+            (_, true) => projected.OrderByDescending(t => t.LastActivityUtc),
+            (_, false) => projected.OrderBy(t => t.LastActivityUtc),
+        };
+
+        // For attached topics without custom sort, use AttachOrder then CreatedUtc
+        if (query.IsAttached == true && string.IsNullOrEmpty(query.SortBy))
+        {
+            orderedQuery = projected
+                .OrderBy(t => t.AttachOrder ?? int.MaxValue)
+                .ThenByDescending(t => t.CreatedUtc);
         }
 
         return await orderedQuery.Page(pagingData).ToArrayAsync(ct);
@@ -82,6 +161,17 @@ internal class TopicRepository : ITopicRepository
             .FirstOrDefaultAsync(ct);
     }
 
+    /// <inheritdoc />
+    public async Task<Topic?> GetByBoardAndNumber(Guid boardId, int topicNumber, BoardAccessPolicy accessPolicy, CancellationToken ct = default)
+    {
+        return await _dbContext.Topics
+            .TagWith("DM.Forum.TopicByBoardAndNumber")
+            .Where(t => !t.IsRemoved && t.BoardId == boardId && t.TopicNumber == topicNumber &&
+                        (t.Board.ViewPolicy & accessPolicy) != BoardAccessPolicy.None)
+            .ProjectTo<Topic>(_mapper.ConfigurationProvider)
+            .FirstOrDefaultAsync(ct);
+    }
+
     // --- WRITE ---
 
     /// <inheritdoc />
@@ -90,10 +180,19 @@ internal class TopicRepository : ITopicRepository
         var topicId = _guidFactory.Create();
         var now = _dateTimeProvider.Now;
 
+        // Calculate next TopicNumber for this board
+        var maxTopicNumber = await _dbContext.Topics
+            .TagWith("DM.Forum.MaxTopicNumber")
+            .Where(t => t.BoardId == boardId)
+            .Select(t => (int?)t.TopicNumber)
+            .MaxAsync(ct) ?? 0;
+        var topicNumber = maxTopicNumber + 1;
+
         var topic = new Entities.Forum.Topic
         {
             TopicId = topicId,
             BoardId = boardId,
+            TopicNumber = topicNumber,
             AuthorId = authorId,
             Title = createTopic.Title.Trim(),
             Text = createTopic.Text.Trim(),
@@ -105,6 +204,19 @@ internal class TopicRepository : ITopicRepository
         };
 
         _dbContext.Topics.Add(topic);
+
+        // Update board's last topic (denormalized fields)
+        var board = await _dbContext.Boards.FindAsync([boardId], ct);
+        if (board != null)
+        {
+            board.LastTopicId = topicId;
+            board.LastTopicNumber = topicNumber;
+            board.LastTopicTitle = topic.Title;
+            board.LastTopicAuthorId = authorId;
+            board.LastTopicCreatedUtc = now;
+            board.TopicsCount++;
+        }
+
         await _dbContext.SaveChangesAsync(ct);
 
         return await _dbContext.Topics
@@ -164,5 +276,30 @@ internal class TopicRepository : ITopicRepository
             topic.IsRemoved = true;
             await _dbContext.SaveChangesAsync();
         }
+    }
+
+    /// <inheritdoc />
+    public async Task UpdateAttachOrder(IReadOnlyDictionary<Guid, int> topicOrders, CancellationToken ct = default)
+    {
+        if (topicOrders.Count == 0)
+        {
+            return;
+        }
+
+        var topicIds = topicOrders.Keys.ToArray();
+        var topics = await _dbContext.Topics
+            .TagWith("DM.Forum.UpdateAttachOrder")
+            .Where(t => topicIds.Contains(t.TopicId))
+            .ToArrayAsync(ct);
+
+        foreach (var topic in topics)
+        {
+            if (topicOrders.TryGetValue(topic.TopicId, out var order))
+            {
+                topic.AttachOrder = order;
+            }
+        }
+
+        await _dbContext.SaveChangesAsync(ct);
     }
 }

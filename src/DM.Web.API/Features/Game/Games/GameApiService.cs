@@ -28,21 +28,24 @@ internal class GameApiService : IGameApiService
     {
         var query = _mapper.Map<DomainGamesQuery>(gamesQuery);
         var (games, paging) = await _gameService.GetGamesAsync(query);
-        return new ListEnvelope<Game>(games.Select(_mapper.Map<Game>), new PagingInfo(paging));
+
+        // Map and clear Tags (use TagIds + cached /games/tags for descriptions)
+        var mappedGames = games.Select(g =>
+        {
+            var mapped = _mapper.Map<Game>(g);
+            mapped.Tags = null; // Payload optimization: 58% smaller without embedded tag descriptions
+            return mapped;
+        });
+
+        return new ListEnvelope<Game>(mappedGames, new PagingInfo(paging));
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Game>> GetOwn()
+    public async Task<ListEnvelope<GameRef>> GetRefs(GamesQuery gamesQuery)
     {
-        var games = await _gameService.GetOwnGamesAsync();
-        return new ListEnvelope<Game>(games.Select(_mapper.Map<Game>));
-    }
-
-    /// <inheritdoc />
-    public async Task<ListEnvelope<Game>> GetPopular()
-    {
-        var games = await _gameService.GetPopularAsync();
-        return new ListEnvelope<Game>(games.Select(_mapper.Map<Game>));
+        var query = _mapper.Map<DomainGamesQuery>(gamesQuery);
+        var (games, paging) = await _gameService.GetGamesAsync(query);
+        return new ListEnvelope<GameRef>(games.Select(_mapper.Map<GameRef>), new PagingInfo(paging));
     }
 
     /// <inheritdoc />
@@ -53,9 +56,23 @@ internal class GameApiService : IGameApiService
     }
 
     /// <inheritdoc />
+    public async Task<Envelope<Game>> GetByPublicId(string publicId)
+    {
+        var game = await _gameService.GetByPublicIdAsync(publicId);
+        return new Envelope<Game>(_mapper.Map<Game>(game));
+    }
+
+    /// <inheritdoc />
     public async Task<Envelope<GameDetails>> GetDetails(Guid gameId)
     {
         var game = await _gameService.GetDetailsAsync(gameId);
+        return new Envelope<GameDetails>(_mapper.Map<GameDetails>(game));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<GameDetails>> GetDetailsByPublicId(string publicId)
+    {
+        var game = await _gameService.GetDetailsByPublicIdAsync(publicId);
         return new Envelope<GameDetails>(_mapper.Map<GameDetails>(game));
     }
 
@@ -104,4 +121,5 @@ internal class GameApiService : IGameApiService
             $"GET /v1/games/{gameId}/notepad to list entries, " +
             $"POST /v1/games/{gameId}/notepad to create entries.");
     }
+
 }

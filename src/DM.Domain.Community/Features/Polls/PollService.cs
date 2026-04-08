@@ -69,13 +69,12 @@ internal class PollService : IPollService
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<Poll> Polls, PagingResult Paging)> GetListAsync(PagingQuery pagingQuery, bool onlyActive)
+    public async Task<(IEnumerable<Poll> Polls, PagingResult Paging)> GetListAsync(PollsQuery query)
     {
-        var activeAt = onlyActive ? _dateTimeProvider.Now : (DateTimeOffset?)null;
-        var totalCount = await _repository.Count(activeAt);
+        var totalCount = await _repository.Count(query);
         var pageSize = _identityProvider.Current.Settings.Paging.EntitiesPerPage;
-        var pagingData = new PagingData(pagingQuery, pageSize, (int)totalCount);
-        var polls = await _repository.Get(activeAt, pagingData);
+        var pagingData = new PagingData(query, pageSize, (int)totalCount);
+        var polls = await _repository.Get(query, pagingData);
         return (polls, pagingData.Result);
     }
 
@@ -88,7 +87,10 @@ internal class PollService : IPollService
         return await _repository.Update(
             updatePoll.Id,
             updatePoll.Title,
-            updatePoll.EndDate);
+            updatePoll.Details,
+            updatePoll.StartsUtc,
+            updatePoll.EndsUtc,
+            updatePoll.IsAnonymous);
     }
 
     /// <inheritdoc />

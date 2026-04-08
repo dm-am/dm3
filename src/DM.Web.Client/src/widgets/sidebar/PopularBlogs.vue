@@ -1,50 +1,57 @@
-﻿<template>
-  <menu-block token="PopularBlogs">
+<template>
+  <SidebarBlock token="PopularBlogs">
     <template #title>Популярные блоги</template>
-    <template v-if="!store.popularBlogs || store.popularBlogs.length === 0">
-      <secondary-text>Нет блогов с читателями</secondary-text>
-    </template>
+    <SidebarSkeleton v-if="store.popularBlogs === null" :lines="10" />
+    <SecondaryText v-else-if="store.popularBlogs.length === 0">
+      Нет популярных блогов
+    </SecondaryText>
     <template v-else>
-      <div v-for="blog in store.popularBlogs" :key="blog.id" class="blog-item">
-        <span class="muted">- </span>
-        <router-link
-          :to="{ name: 'blogs' }"
-          :title="`${blog.owner?.username} | Читателей: ${blog.subscribersCount ?? 0}`"
-        >
-          {{ blog.title }}
-        </router-link>
-        <span class="counters">
-          <span class="muted"> (</span>{{ blog.publicationCount || 0 }}<span class="muted">/</span>{{ blog.commentsCount || 0 }}<span class="muted">)</span>
-        </span>
-      </div>
+      <BlogLink
+        v-for="blog in store.popularBlogs"
+        :key="blog.id"
+        :blog="blog"
+        :counters="true"
+        :always-show-counters="!userStore.user"
+      />
     </template>
-  </menu-block>
+    <div class="separator">
+      - - - - - - - - - - - - - - - - - - - - - - - - - -
+    </div>
+    <div>
+      <span class="muted">- </span>
+      <router-link
+        class="forward"
+        :to="{ name: 'blogs', query: { sortBy: 'popularity', sortOrder: 'desc' } }"
+        >Все популярные блоги</router-link
+      >
+    </div>
+  </SidebarBlock>
 </template>
 
 <script setup lang="ts">
-import MenuBlock from "@/widgets/menu/MenuBlock.vue";
+import SidebarBlock from "./SidebarBlock.vue";
+import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import BlogLink from "./BlogLink.vue";
 import { useBlogsStore } from "@/entities/blog";
+import { useUserStore } from "@/entities/user";
 import { onMounted } from "vue";
 
 const store = useBlogsStore();
+const userStore = useUserStore();
 
 onMounted(() => store.fetchPopularBlogs());
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
-
-.blog-item
-  margin-bottom: $tiny
-
-  &:last-child
-    margin-bottom: 0
 
 .muted
   color: $text-muted
 
-.counters .muted
-  user-select: text
+.forward
+  font-weight: bold
+
+.separator
+  color: $text-muted
 </style>

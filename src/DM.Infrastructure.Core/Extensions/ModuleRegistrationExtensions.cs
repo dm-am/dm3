@@ -21,7 +21,7 @@ public static class ModuleRegistrationExtensions
     /// </summary>
     /// <param name="builder"></param>
     /// <typeparam name="TModule"></typeparam>
-    /// <returns></returns>
+    /// <returns>Container builder for chaining</returns>
     public static ContainerBuilder RegisterModuleOnce<TModule>(this ContainerBuilder builder)
         where TModule : IModule, new()
     {
@@ -44,7 +44,7 @@ public static class ModuleRegistrationExtensions
     /// <param name="builder"></param>
     /// <param name="module">Module instance to register</param>
     /// <typeparam name="TModule"></typeparam>
-    /// <returns></returns>
+    /// <returns>Container builder for chaining</returns>
     public static ContainerBuilder RegisterModuleOnce<TModule>(this ContainerBuilder builder, TModule module)
         where TModule : IModule
     {
@@ -73,7 +73,7 @@ public static class ModuleRegistrationExtensions
     /// Register default types of the calling assembly
     /// </summary>
     /// <param name="builder"></param>
-    /// <returns></returns>
+    /// <returns>Container builder for chaining</returns>
     public static ContainerBuilder RegisterDefaultTypes(this ContainerBuilder builder)
         => builder.RegisterDefaultTypes(Assembly.GetCallingAssembly());
 
@@ -82,7 +82,7 @@ public static class ModuleRegistrationExtensions
     /// </summary>
     /// <param name="builder"></param>
     /// <param name="assembly">Assembly to scan for types</param>
-    /// <returns></returns>
+    /// <returns>Container builder for chaining</returns>
     public static ContainerBuilder RegisterDefaultTypes(this ContainerBuilder builder, Assembly assembly)
     {
         builder.RegisterAssemblyTypes(assembly)
@@ -108,7 +108,7 @@ public static class ModuleRegistrationExtensions
     /// Register mappings from the calling assembly
     /// </summary>
     /// <param name="builder"></param>
-    /// <returns></returns>
+    /// <returns>Container builder for chaining</returns>
     public static ContainerBuilder RegisterMapper(this ContainerBuilder builder)
         => builder.RegisterMapper(Assembly.GetCallingAssembly());
 
@@ -117,7 +117,7 @@ public static class ModuleRegistrationExtensions
     /// </summary>
     /// <param name="builder"></param>
     /// <param name="assembly">Assembly to scan for AutoMapper profiles</param>
-    /// <returns></returns>
+    /// <returns>Container builder for chaining</returns>
     public static ContainerBuilder RegisterMapper(this ContainerBuilder builder, Assembly assembly)
     {
         builder.RegisterAssemblyTypes(assembly)

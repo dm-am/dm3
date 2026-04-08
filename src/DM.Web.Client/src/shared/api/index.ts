@@ -15,7 +15,10 @@ export { default as CommunityApi } from "./communityApi";
 export { default as ModerationApi } from "./moderationApi";
 export { default as NotepadApi } from "./notepadApi";
 export { default as NotificationApi } from "./notificationApi";
-export { default as PersonalApi } from "./personalApi";
+export {
+  default as PersonalApi,
+  type UpdateProfilePayload,
+} from "./personalApi";
 export { default as SubscriptionApi } from "./subscriptionApi";
 export { default as UploadApi } from "./uploadApi";
 

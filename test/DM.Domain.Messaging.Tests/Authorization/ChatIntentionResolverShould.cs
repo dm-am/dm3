@@ -149,4 +149,67 @@ public class ChatIntentionResolverShould
 
         result.Should().BeFalse();
     }
+
+    // ═══ DELETE CHAT TESTS ═══
+
+    [Fact]
+    public void AllowParticipantToDeleteGroupChat()
+    {
+        var user = CreateUser(_testUserId);
+        var chat = new Chat
+        {
+            Type = ChatType.Group,
+            Participants = new[] { new GeneralUser { UserId = _testUserId } }
+        };
+
+        var result = _resolver.IsAllowed(user, ChatIntention.DeleteChat, chat);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DenyDeleteDirectChat()
+    {
+        var user = CreateUser(_testUserId);
+        var chat = new Chat
+        {
+            Type = ChatType.Direct,
+            Participants = new[] { new GeneralUser { UserId = _testUserId } }
+        };
+
+        var result = _resolver.IsAllowed(user, ChatIntention.DeleteChat, chat);
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DenyNonParticipantToDeleteGroupChat()
+    {
+        var user = CreateUser(_testUserId);
+        var otherId = Guid.NewGuid();
+        var chat = new Chat
+        {
+            Type = ChatType.Group,
+            Participants = new[] { new GeneralUser { UserId = otherId } }
+        };
+
+        var result = _resolver.IsAllowed(user, ChatIntention.DeleteChat, chat);
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DenyDeleteGlobalChat()
+    {
+        var user = CreateUser(_testUserId);
+        var chat = new Chat
+        {
+            Type = ChatType.Global,
+            Participants = Array.Empty<GeneralUser>()
+        };
+
+        var result = _resolver.IsAllowed(user, ChatIntention.DeleteChat, chat);
+
+        result.Should().BeFalse();
+    }
 }

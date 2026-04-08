@@ -20,7 +20,7 @@ public class CreateGame
     public string SystemName { get; set; } = null!;
 
     /// <summary>
-    /// Narrative setting (e.g. Mass Effect, WarHammer, Our world)
+    /// Narrative setting (e.g. Mass Effect, Warhammer, Our world)
     /// </summary>
     public string NarrativeSetting { get; set; } = null!;
 
@@ -93,6 +93,11 @@ public class CreateGame
     /// Create game as a draft
     /// </summary>
     public bool Draft { get; set; }
+
+    /// <summary>
+    /// Visibility of draft content (when Draft = true)
+    /// </summary>
+    public DraftVisibility DraftVisibility { get; set; }
 
     /// <summary>
     /// Copy personal blacklist to game blacklist on creation

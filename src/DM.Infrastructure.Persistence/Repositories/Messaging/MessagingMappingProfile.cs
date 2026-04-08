@@ -20,27 +20,29 @@ internal class MessagingMappingProfile : Profile
         CreateMap<DbChat, Chat>()
             .ForMember(d => d.Id, s => s.MapFrom(c => c.ChatId))
             .ForMember(d => d.Participants, s => s.MapFrom(c => c.UserLinks
-                .Select(l => l.User)));
+                .Select(l => l.User)))
+            .ForMember(d => d.UnreadMessagesCount, opt => opt.Ignore())
+            .ForMember(d => d.TotalMessagesCount, opt => opt.Ignore());
 
         CreateMap<DbMessage, Message>()
             .ForMember(d => d.Id, s => s.MapFrom(m => m.MessageId))
             .ForMember(d => d.ChatId, s => s.MapFrom(m => m.ChatId))
             .ForMember(d => d.ChatType, s => s.MapFrom(m => m.Chat.Type))
             .ForMember(d => d.Likes, s => s.Ignore()) // Likes fetched via EntityType+EntityId pattern
-            .ForMember(d => d.Edits, s => s.MapFrom(m => m.Edits.OrderBy(e => e.EditedAtUtc)));
+            .ForMember(d => d.Edits, s => s.MapFrom(m => m.Edits.OrderBy(e => e.EditedUtc)));
 
         CreateMap<DbMessageEdit, MessageEdit>()
             .ForMember(d => d.Id, s => s.MapFrom(e => e.MessageEditId));
 
         CreateMap<DbGlobalChatEvent, GlobalChatEvent>()
             .ForMember(d => d.Id, s => s.MapFrom(e => e.GlobalChatEventId))
-            .ForMember(d => d.StartsAt, s => s.MapFrom(e => e.StartsAtUtc))
-            .ForMember(d => d.CreatedAt, s => s.MapFrom(e => e.CreatedUtc))
-            .ForMember(d => d.StartedAt, s => s.MapFrom(e => e.StartedAtUtc))
-            .ForMember(d => d.EndedAt, s => s.MapFrom(e => e.EndedAtUtc));
+            .ForMember(d => d.StartsUtc, s => s.MapFrom(e => e.StartsUtc))
+            .ForMember(d => d.CreatedUtc, s => s.MapFrom(e => e.CreatedUtc))
+            .ForMember(d => d.StartedUtc, s => s.MapFrom(e => e.StartedUtc))
+            .ForMember(d => d.EndedUtc, s => s.MapFrom(e => e.EndedUtc));
 
         CreateMap<DbGlobalChatEventParticipant, GlobalChatEventParticipant>()
             .ForMember(d => d.Id, s => s.MapFrom(p => p.GlobalChatEventParticipantId))
-            .ForMember(d => d.JoinedAt, s => s.MapFrom(p => p.JoinedAtUtc));
+            .ForMember(d => d.JoinedUtc, s => s.MapFrom(p => p.JoinedUtc));
     }
 }

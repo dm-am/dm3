@@ -1,19 +1,23 @@
-import { test, expect, APIRequestContext } from '@playwright/test';
-import { loginWithCookies } from '../../fixtures/auth';
+import { test, expect, APIRequestContext } from "@playwright/test";
+import { loginWithCookies } from "../../fixtures/auth";
 
-const API_URL = process.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
 
 // Test credentials
 const TEST_USER = {
-  username: 'Alice',
-  password: 'Xk9#mQz2$vL7nW',
+  username: "Alice",
+  password: "Xk9#mQz2$vL7nW",
 };
 
 let authContext: APIRequestContext;
 
 test.beforeAll(async ({ request }) => {
   // Login to get authenticated context with cookies
-  authContext = await loginWithCookies(request, TEST_USER.username, TEST_USER.password);
+  authContext = await loginWithCookies(
+    request,
+    TEST_USER.username,
+    TEST_USER.password,
+  );
 });
 
 test.afterAll(async () => {
@@ -23,25 +27,25 @@ test.afterAll(async () => {
   }
 });
 
-test.describe('Blog API', () => {
-  test('should get public blogs list', async ({ request }) => {
+test.describe("Blog API", () => {
+  test("should get public blogs list", async ({ request }) => {
     const response = await request.get(`${API_URL}/v1/blogs`);
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
-    expect(data).toHaveProperty('resources');
+    expect(data).toHaveProperty("resources");
     expect(Array.isArray(data.resources)).toBeTruthy();
   });
 
-  test('should create and delete a blog', async () => {
+  test("should create and delete a blog", async () => {
     // Create blog (cookies are automatically sent)
     const createResponse = await authContext.post(`${API_URL}/v1/blogs`, {
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       data: {
-        title: 'Test Blog',
-        description: 'A test blog for E2E testing',
+        title: "Test Blog",
+        description: "A test blog for E2E testing",
         isPublic: true,
         commentsEnabled: true,
       },
@@ -49,8 +53,8 @@ test.describe('Blog API', () => {
 
     expect(createResponse.status()).toBe(201);
     const created = await createResponse.json();
-    expect(created).toHaveProperty('id');
-    expect(created.title).toBe('Test Blog');
+    expect(created).toHaveProperty("id");
+    expect(created.title).toBe("Test Blog");
 
     const blogId = created.id;
 
@@ -59,23 +63,25 @@ test.describe('Blog API', () => {
 
     expect(getResponse.ok()).toBeTruthy();
     const blog = await getResponse.json();
-    expect(blog.title).toBe('Test Blog');
+    expect(blog.title).toBe("Test Blog");
 
     // Delete blog
-    const deleteResponse = await authContext.delete(`${API_URL}/v1/blogs/${blogId}`);
+    const deleteResponse = await authContext.delete(
+      `${API_URL}/v1/blogs/${blogId}`,
+    );
 
     expect(deleteResponse.status()).toBe(204);
   });
 
-  test('should update a blog', async () => {
+  test("should update a blog", async () => {
     // Create blog
     const createResponse = await authContext.post(`${API_URL}/v1/blogs`, {
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       data: {
-        title: 'Blog to Update',
-        description: 'Original description',
+        title: "Blog to Update",
+        description: "Original description",
         isPublic: true,
         commentsEnabled: true,
       },
@@ -85,31 +91,36 @@ test.describe('Blog API', () => {
     const blogId = (await createResponse.json()).id;
 
     // Update blog
-    const updateResponse = await authContext.patch(`${API_URL}/v1/blogs/${blogId}`, {
-      headers: {
-        'Content-Type': 'application/json',
+    const updateResponse = await authContext.patch(
+      `${API_URL}/v1/blogs/${blogId}`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        data: {
+          title: "Updated Blog Title",
+          description: "Updated description",
+        },
       },
-      data: {
-        title: 'Updated Blog Title',
-        description: 'Updated description',
-      },
-    });
+    );
 
     expect(updateResponse.ok()).toBeTruthy();
     const updated = await updateResponse.json();
-    expect(updated.title).toBe('Updated Blog Title');
+    expect(updated.title).toBe("Updated Blog Title");
 
     // Cleanup
     await authContext.delete(`${API_URL}/v1/blogs/${blogId}`);
   });
 
-  test('should require authentication for creating blog', async ({ request }) => {
+  test("should require authentication for creating blog", async ({
+    request,
+  }) => {
     const response = await request.post(`${API_URL}/v1/blogs`, {
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       data: {
-        title: 'Unauthorized Blog',
+        title: "Unauthorized Blog",
         isPublic: true,
       },
     });
@@ -118,17 +129,17 @@ test.describe('Blog API', () => {
   });
 });
 
-test.describe('Blog Publications API', () => {
+test.describe("Blog Publications API", () => {
   let testBlogId: string;
 
   test.beforeAll(async () => {
     // Create a test blog for publications
     const createResponse = await authContext.post(`${API_URL}/v1/blogs`, {
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       data: {
-        title: 'Publications Test Blog',
+        title: "Publications Test Blog",
         isPublic: true,
         commentsEnabled: true,
       },
@@ -145,72 +156,81 @@ test.describe('Blog Publications API', () => {
     }
   });
 
-  test('should create and get a publication', async () => {
+  test("should create and get a publication", async () => {
     if (!testBlogId) {
       test.skip();
       return;
     }
 
     // Create publication
-    const createResponse = await authContext.post(`${API_URL}/v1/blogs/${testBlogId}/publications`, {
-      headers: {
-        'Content-Type': 'application/json',
+    const createResponse = await authContext.post(
+      `${API_URL}/v1/blogs/${testBlogId}/publications`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        data: {
+          title: "Test Publication",
+          content: "This is the content of the test publication.",
+          preview: "Test preview text",
+          publishImmediately: true,
+          commentsEnabled: true,
+        },
       },
-      data: {
-        title: 'Test Publication',
-        content: 'This is the content of the test publication.',
-        preview: 'Test preview text',
-        publishImmediately: true,
-        commentsEnabled: true,
-      },
-    });
+    );
 
     expect(createResponse.status()).toBe(201);
     const created = await createResponse.json();
-    expect(created).toHaveProperty('id');
-    expect(created.title).toBe('Test Publication');
+    expect(created).toHaveProperty("id");
+    expect(created.title).toBe("Test Publication");
 
     const publicationId = created.id;
 
     // Get publication
-    const getResponse = await authContext.get(`${API_URL}/v1/blogs/publications/${publicationId}`);
+    const getResponse = await authContext.get(
+      `${API_URL}/v1/blogs/publications/${publicationId}`,
+    );
 
     expect(getResponse.ok()).toBeTruthy();
     const publication = await getResponse.json();
-    expect(publication.title).toBe('Test Publication');
+    expect(publication.title).toBe("Test Publication");
 
     // Delete publication
-    const deleteResponse = await authContext.delete(`${API_URL}/v1/blogs/publications/${publicationId}`);
+    const deleteResponse = await authContext.delete(
+      `${API_URL}/v1/blogs/publications/${publicationId}`,
+    );
 
     expect(deleteResponse.status()).toBe(204);
   });
 
-  test('should list publications in a blog', async () => {
+  test("should list publications in a blog", async () => {
     if (!testBlogId) {
       test.skip();
       return;
     }
 
-    const response = await authContext.get(`${API_URL}/v1/blogs/${testBlogId}/publications`);
+    const response = await authContext.get(
+      `${API_URL}/v1/blogs/${testBlogId}/publications`,
+    );
 
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
-    expect(data).toHaveProperty('resources');
+    expect(data).toHaveProperty("resources");
     expect(Array.isArray(data.resources)).toBeTruthy();
   });
 });
 
-test.describe('Blog Rubrics API', () => {
+test.describe("Blog Rubrics API", () => {
   let testBlogId: string;
 
   test.beforeAll(async () => {
     // Create a test blog for rubrics
     const createResponse = await authContext.post(`${API_URL}/v1/blogs`, {
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       data: {
-        title: 'Rubrics Test Blog',
+        title: "Rubrics Test Blog",
         isPublic: true,
         commentsEnabled: true,
       },
@@ -227,32 +247,37 @@ test.describe('Blog Rubrics API', () => {
     }
   });
 
-  test('should create and delete a rubric', async () => {
+  test("should create and delete a rubric", async () => {
     if (!testBlogId) {
       test.skip();
       return;
     }
 
     // Create rubric
-    const createResponse = await authContext.post(`${API_URL}/v1/blogs/${testBlogId}/rubrics`, {
-      headers: {
-        'Content-Type': 'application/json',
+    const createResponse = await authContext.post(
+      `${API_URL}/v1/blogs/${testBlogId}/rubrics`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        data: {
+          title: "Test Rubric",
+          sortOrder: 1,
+        },
       },
-      data: {
-        title: 'Test Rubric',
-        sortOrder: 1,
-      },
-    });
+    );
 
     expect(createResponse.status()).toBe(201);
     const created = await createResponse.json();
-    expect(created).toHaveProperty('id');
-    expect(created.title).toBe('Test Rubric');
+    expect(created).toHaveProperty("id");
+    expect(created.title).toBe("Test Rubric");
 
     const rubricId = created.id;
 
     // Delete rubric
-    const deleteResponse = await authContext.delete(`${API_URL}/v1/blogs/rubrics/${rubricId}`);
+    const deleteResponse = await authContext.delete(
+      `${API_URL}/v1/blogs/rubrics/${rubricId}`,
+    );
 
     expect(deleteResponse.status()).toBe(204);
   });

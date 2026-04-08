@@ -51,7 +51,9 @@ internal class ForumCommentApiService : IForumCommentApiService
             }
         }
 
-        var (comments, paging) = await _commentService.GetAsync(topicId, query, excludeUserIds);
+        // Convert PagingQuery to CommentsQuery
+        var commentsQuery = new CommentsQuery { Skip = query.Skip, Take = query.Take };
+        var (comments, paging) = await _commentService.GetAsync(topicId, commentsQuery, excludeUserIds);
         var isAuthenticated = identity.User?.IsAuthenticated ?? false;
         var isModerator = (identity.User?.Role ?? UserRole.Guest) >= UserRole.Moderator;
 

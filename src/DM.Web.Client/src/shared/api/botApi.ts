@@ -25,9 +25,7 @@ export default {
   },
 
   getSettings() {
-    return Api.get<NotificationSettings>(
-      "users/me/notifications/settings",
-    );
+    return Api.get<NotificationSettings>("users/me/notifications/settings");
   },
 
   updateSettings(request: UpdateNotificationSettingsRequest) {

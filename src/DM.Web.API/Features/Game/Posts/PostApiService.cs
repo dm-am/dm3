@@ -62,4 +62,11 @@ internal class PostApiService : IPostApiService
 
     /// <inheritdoc />
     public Task MarkAsRead(Guid roomId) => _postService.MarkAsReadAsync(roomId);
+
+    /// <inheritdoc />
+    public async Task<ListEnvelope<Post>> GetRated(PostsQuery query)
+    {
+        var (posts, paging) = await _postService.GetRatedAsync(query);
+        return new ListEnvelope<Post>(posts.Select(_mapper.Map<Post>), new PagingInfo(paging));
+    }
 }

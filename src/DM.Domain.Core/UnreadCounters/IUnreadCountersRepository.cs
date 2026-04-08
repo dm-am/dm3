@@ -16,7 +16,6 @@ public interface IUnreadCountersRepository
     /// <param name="entityId">Entity Id</param>
     /// <param name="entryType">Entry type</param>
     /// <param name="userIds">User Ids</param>
-    /// <returns></returns>
     Task CreateAsync(Guid entityId, UnreadEntryType entryType, IEnumerable<Guid> userIds);
 
     /// <summary>
@@ -25,7 +24,6 @@ public interface IUnreadCountersRepository
     /// <param name="entityId">Entity Id</param>
     /// <param name="parentId">Parent entity Id</param>
     /// <param name="entryType">Entry type</param>
-    /// <returns></returns>
     Task CreateAsync(Guid entityId, Guid parentId, UnreadEntryType entryType);
 
     /// <summary>
@@ -33,7 +31,6 @@ public interface IUnreadCountersRepository
     /// </summary>
     /// <param name="entityId">Entity id</param>
     /// <param name="entryType">Entry type</param>
-    /// <returns></returns>
     Task CreateAsync(Guid entityId, UnreadEntryType entryType);
 
     /// <summary>
@@ -41,7 +38,6 @@ public interface IUnreadCountersRepository
     /// </summary>
     /// <param name="entityId">Entity Id</param>
     /// <param name="entryType">Entry type</param>
-    /// <returns></returns>
     Task IncrementAsync(Guid entityId, UnreadEntryType entryType);
 
     /// <summary>
@@ -50,7 +46,6 @@ public interface IUnreadCountersRepository
     /// <param name="entityId">Entity Id</param>
     /// <param name="entryType">Entry type</param>
     /// <param name="excludeUserId">User Id to exclude from increment</param>
-    /// <returns></returns>
     Task IncrementExcludingAsync(Guid entityId, UnreadEntryType entryType, Guid excludeUserId);
 
     /// <summary>
@@ -59,7 +54,6 @@ public interface IUnreadCountersRepository
     /// <param name="entityId">Entity Id</param>
     /// <param name="entryType">Entry type</param>
     /// <param name="createDate">Given time</param>
-    /// <returns></returns>
     Task DecrementAsync(Guid entityId, UnreadEntryType entryType, DateTimeOffset createDate);
 
     /// <summary>
@@ -67,7 +61,6 @@ public interface IUnreadCountersRepository
     /// </summary>
     /// <param name="entityId">Entity Id</param>
     /// <param name="entryType">Entry type</param>
-    /// <returns></returns>
     Task DeleteAsync(Guid entityId, UnreadEntryType entryType);
 
     /// <summary>
@@ -106,7 +99,6 @@ public interface IUnreadCountersRepository
     /// <param name="userId">User Id</param>
     /// <param name="entryType">Entry type</param>
     /// <param name="entityId">Entity Id</param>
-    /// <returns></returns>
     Task FlushAsync(Guid userId, UnreadEntryType entryType, Guid entityId);
 
     /// <summary>
@@ -115,7 +107,6 @@ public interface IUnreadCountersRepository
     /// <param name="userId">User Id</param>
     /// <param name="entryType">Entry type</param>
     /// <param name="parentId">Parent entity Id</param>
-    /// <returns></returns>
     Task FlushAllAsync(Guid userId, UnreadEntryType entryType, Guid parentId);
 
     /// <summary>
@@ -124,7 +115,6 @@ public interface IUnreadCountersRepository
     /// <param name="parentId">Parent Id</param>
     /// <param name="entryType">Entry type</param>
     /// <param name="newParentId">New parent Id</param>
-    /// <returns></returns>
     Task ChangeParentAsync(Guid parentId, UnreadEntryType entryType, Guid newParentId);
 
     /// <summary>

@@ -15,20 +15,21 @@ public interface ITopicRepository
     // --- READ ---
 
     /// <summary>
-    /// Get number of non-attached topics in a board
+    /// Get number of topics matching query
     /// </summary>
     /// <param name="boardId">Board identifier</param>
+    /// <param name="query">Filter parameters</param>
     /// <param name="ct">Cancellation token</param>
-    Task<int> Count(Guid boardId, CancellationToken ct = default);
+    Task<int> Count(Guid boardId, TopicsQuery query, CancellationToken ct = default);
 
     /// <summary>
-    /// Get list of board topics
+    /// Get list of board topics with filtering and sorting
     /// </summary>
     /// <param name="boardId">Board identifier</param>
     /// <param name="pagingData">Paging data</param>
-    /// <param name="attached">Select attached/not attached topics exclusively</param>
+    /// <param name="query">Filter and sort parameters</param>
     /// <param name="ct">Cancellation token</param>
-    Task<IEnumerable<Topic>> Get(Guid boardId, PagingData? pagingData, bool attached, CancellationToken ct = default);
+    Task<IEnumerable<Topic>> Get(Guid boardId, PagingData? pagingData, TopicsQuery query, CancellationToken ct = default);
 
     /// <summary>
     /// Get single topic by identifier
@@ -37,6 +38,15 @@ public interface ITopicRepository
     /// <param name="accessPolicy">Board access policy</param>
     /// <param name="ct">Cancellation token</param>
     Task<Topic?> Get(Guid topicId, BoardAccessPolicy accessPolicy, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get single topic by board ID and topic number
+    /// </summary>
+    /// <param name="boardId">Board identifier</param>
+    /// <param name="topicNumber">Topic number within board</param>
+    /// <param name="accessPolicy">Board access policy</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<Topic?> GetByBoardAndNumber(Guid boardId, int topicNumber, BoardAccessPolicy accessPolicy, CancellationToken ct = default);
 
     // --- WRITE ---
 
@@ -63,6 +73,13 @@ public interface ITopicRepository
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
     Task Delete(Guid topicId);
+
+    /// <summary>
+    /// Update attach order for multiple topics (batch operation)
+    /// </summary>
+    /// <param name="topicOrders">Dictionary of topic ID to attach order</param>
+    /// <param name="ct">Cancellation token</param>
+    Task UpdateAttachOrder(IReadOnlyDictionary<Guid, int> topicOrders, CancellationToken ct = default);
 }
 
 /// <summary>

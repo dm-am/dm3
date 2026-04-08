@@ -80,6 +80,12 @@ public class NotepadCategory : ISoftDeletable
     public virtual User Author { get; set; } = null!;
 
     /// <summary>
+    /// User who deleted this category
+    /// </summary>
+    [ForeignKey(nameof(DeletedByUserId))]
+    public virtual User? DeletedBy { get; set; }
+
+    /// <summary>
     /// Entries in this category
     /// </summary>
     [InverseProperty(nameof(NotepadEntry.Category))]

@@ -23,7 +23,7 @@ public static class GameAccessibilityFilters
             game.BlackList.Any(b => b.BlockedUserId == userId)
         ) &&
         (
-            game.AuthorId == userId ||
+            game.MasterId == userId ||
             game.Assistants.Any(a => a.UserId == userId) ||
             game.MentorId == userId ||
             // User has pending invitation (player, reader, or assistant)
@@ -33,8 +33,10 @@ public static class GameAccessibilityFilters
                 (t.Type == TokenType.GamePlayerInvitation ||
                  t.Type == TokenType.GameReaderInvitation ||
                  t.Type == TokenType.GameAssistantInvitation)) ||
-            (game.Status != ModuleStatus.Draft &&
-             game.PremoderationStatus == PremoderationStatus.Approved)
+            // Public games (non-draft with approved premoderation, or public draft with approved premoderation)
+            (game.PremoderationStatus == PremoderationStatus.Approved &&
+             (game.Status != ModuleStatus.Draft ||
+              game.DraftVisibility == DraftVisibility.Public))
         );
 
     /// <summary>
@@ -48,17 +50,19 @@ public static class GameAccessibilityFilters
             room.Game.BlackList.Any(b => b.BlockedUserId == userId)
         ) &&
         (
-            room.Game.AuthorId == userId ||
+            room.Game.MasterId == userId ||
             room.Game.Assistants.Any(a => a.UserId == userId) ||
             room.Game.MentorId == userId ||
-            (room.Game.Status != ModuleStatus.Draft &&
-             room.Game.PremoderationStatus == PremoderationStatus.Approved)
+            // Public games (non-draft with approved premoderation, or public draft with approved premoderation)
+            (room.Game.PremoderationStatus == PremoderationStatus.Approved &&
+             (room.Game.Status != ModuleStatus.Draft ||
+              room.Game.DraftVisibility == DraftVisibility.Public))
         ) &&
         (
             room.AccessType == RoomAccessType.Open ||
             room.AccessType == RoomAccessType.Private &&
             (
-                room.Game.AuthorId == userId ||
+                room.Game.MasterId == userId ||
                 room.Game.Assistants.Any(a => a.UserId == userId)
             ) ||
             room.RoomAccesses.Any(l => (l.Character != null && l.Character.AuthorId == userId) || l.ReaderUserId == userId)

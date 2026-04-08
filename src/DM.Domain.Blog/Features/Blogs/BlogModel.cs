@@ -6,9 +6,9 @@ using DM.Domain.Core.Enums;
 namespace DM.Domain.Blog.Features.Blogs;
 
 /// <summary>
-/// DTO for blog
+/// DTO for blog (lightweight, for lists)
 /// </summary>
-public class BlogModel
+public class Blog
 {
     /// <summary>
     /// Blog identifier
@@ -16,7 +16,7 @@ public class BlogModel
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Blog author (owner)
+    /// Blog author
     /// </summary>
     public GeneralUser Author { get; set; } = null!;
 
@@ -36,14 +36,24 @@ public class BlogModel
     public string Description { get; set; } = null!;
 
     /// <summary>
-    /// Creation date
+    /// Creation date (UTC)
     /// </summary>
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Last update date
+    /// Blog status (Draft, Active, Closed)
     /// </summary>
-    public DateTimeOffset? UpdatedAt { get; set; }
+    public ModuleStatus Status { get; set; }
+
+    /// <summary>
+    /// When the blog was first activated (changed from Draft to Active)
+    /// </summary>
+    public DateTimeOffset? ActivatedUtc { get; set; }
+
+    /// <summary>
+    /// When the blog was closed
+    /// </summary>
+    public DateTimeOffset? ClosedUtc { get; set; }
 
     /// <summary>
     /// Draft visibility (Private = only roles, Public = preview visible to all)
@@ -71,6 +81,16 @@ public class BlogModel
     public int CommentsCount { get; set; }
 
     /// <summary>
+    /// Unread publications count
+    /// </summary>
+    public int UnreadPublicationsCount { get; set; }
+
+    /// <summary>
+    /// Unread comments count (to blog + all publications)
+    /// </summary>
+    public int UnreadCommentsCount { get; set; }
+
+    /// <summary>
     /// Last comment identifier for navigation
     /// </summary>
     public Guid? LastCommentId { get; set; }
@@ -91,6 +111,16 @@ public class BlogModel
     public IReadOnlySet<Guid> SubscriberIds { get; set; } = new HashSet<Guid>();
 
     /// <summary>
+    /// Subscriber usernames for tooltip display (first 5)
+    /// </summary>
+    public IEnumerable<string> SubscriberUsernames { get; set; } = [];
+
+    /// <summary>
+    /// Count of active subscribers (readers who were active within last 30 days)
+    /// </summary>
+    public int ActiveSubscribersCount { get; set; }
+
+    /// <summary>
     /// User ids with pending invitations (assistant or reader)
     /// </summary>
     public IEnumerable<Guid> PendingInvitedUserIds { get; set; } = [];
@@ -102,7 +132,7 @@ public class BlogModel
 }
 
 /// <summary>
-/// Simplified blog assistant info for authorization checks
+/// Simplified blog assistant info for authorization checks and display
 /// </summary>
 public class BlogAssistantInfo
 {
@@ -112,9 +142,50 @@ public class BlogAssistantInfo
     public Guid UserId { get; set; }
 
     /// <summary>
+    /// Username for display
+    /// </summary>
+    public string Username { get; set; } = string.Empty;
+
+    /// <summary>
     /// When the assistant joined
     /// </summary>
     public DateTimeOffset JoinedUtc { get; set; }
+
+    /// <summary>
+    /// Last activity moment (UTC) - for online indicators
+    /// </summary>
+    public DateTimeOffset? LastActivityUtc { get; set; }
+
+    /// <summary>
+    /// User role (for displaying role badges [А], [С], [М], [Н], [Р])
+    /// </summary>
+    public UserRole Role { get; set; }
+
+    /// <summary>
+    /// Whether user is a newbie (less than 100 posts) - affects name color
+    /// </summary>
+    public bool IsNewbie { get; set; }
+
+    /// <summary>
+    /// Honorary status (visual badge [П] for former staff)
+    /// </summary>
+    public bool IsHonorary { get; set; }
+}
+
+/// <summary>
+/// Extended DTO model for blog (full details, for detail pages)
+/// </summary>
+public class BlogDetails : Blog
+{
+    /// <summary>
+    /// Blog subscribers (full user information)
+    /// </summary>
+    public IEnumerable<GeneralUser> Subscribers { get; set; } = [];
+
+    /// <summary>
+    /// Blog assistants with role information (full user details)
+    /// </summary>
+    public IEnumerable<BlogUser> FullAssistants { get; set; } = [];
 }
 
 /// <summary>

@@ -1,6 +1,9 @@
 // Note: Single resources are returned directly without wrapper (per API_STANDARDS.md)
 // Only collections use ListEnvelope or CursorEnvelope
 
+// Re-export branded types from parent index
+export { type Id, type Served, type Post, type Patch } from "../index";
+
 // Base user types (for FSD compliance - entities import from shared)
 export * from "./user";
 
@@ -25,7 +28,7 @@ export type Paging = {
 
 export type PagingQuery = {
   skip?: number;
-  size?: number;
+  take?: number;
   number?: number;
 };
 
@@ -46,11 +49,17 @@ export type CursorEnvelope<T> = {
   paging: CursorPaging;
 };
 
+// Single resource envelope (for consistency with list envelopes)
+export type Envelope<T> = {
+  resource: T;
+};
+
 export type GeneralError = {
   type: string;
   title: string;
   status: number;
   traceId: string;
+  message?: string;
 };
 
 export enum ValidationErrorCode {

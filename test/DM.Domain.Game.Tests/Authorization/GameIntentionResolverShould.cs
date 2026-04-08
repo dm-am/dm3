@@ -79,7 +79,7 @@ public class GameIntentionResolverShould : UnitTestBase
     {
         var masterId = Guid.NewGuid();
         var game = Create.Game()
-            .WithAuthor(masterId)
+            .WithMaster(masterId)
             .WithStatus(ModuleStatus.Draft)
             .Please();
         var user = Create.User(masterId).WithRole(UserRole.RegularUser).Please();
@@ -92,7 +92,7 @@ public class GameIntentionResolverShould : UnitTestBase
     {
         var masterId = Guid.NewGuid();
         var game = Create.Game()
-            .WithAuthor(masterId)
+            .WithMaster(masterId)
             .Please();
         var user = Create.User(masterId).WithRole(UserRole.RegularUser).Please();
 
@@ -128,7 +128,7 @@ public class GameIntentionResolverShould : UnitTestBase
     {
         var masterId = Guid.NewGuid();
         var game = Create.Game()
-            .WithAuthor(masterId)
+            .WithMaster(masterId)
             .Please();
         var user = Create.User(masterId).WithRole(UserRole.RegularUser).Please();
 
@@ -141,7 +141,7 @@ public class GameIntentionResolverShould : UnitTestBase
         var masterId = Guid.NewGuid();
         var assistantId = Guid.NewGuid();
         var game = Create.Game()
-            .WithAuthor(masterId)
+            .WithMaster(masterId)
             .WithAssistants(assistantId)
             .Please();
         var user = Create.User(assistantId).WithRole(UserRole.RegularUser).Please();

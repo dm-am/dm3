@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
+using DM.Web.API.Features.Game.Games;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -21,12 +22,19 @@ namespace DM.Web.API.Features.Game.Users;
 public class GameUserController : ControllerBase
 {
     private readonly IGameUserApiService _userApiService;
+    private readonly IGameApiService _gameApiService;
 
     /// <inheritdoc />
-    public GameUserController(IGameUserApiService userApiService)
+    public GameUserController(
+        IGameUserApiService userApiService,
+        IGameApiService gameApiService)
     {
         _userApiService = userApiService;
+        _gameApiService = gameApiService;
     }
+
+    private async Task<Guid> ResolveGameId(string id) =>
+        Guid.TryParse(id, out var guid) ? guid : (await _gameApiService.GetByPublicId(id)).Resource.Id;
 
     #region Users
 
@@ -41,16 +49,17 @@ public class GameUserController : ControllerBase
     /// - formerPlayer - users with only inactive characters (no active or pending)
     /// - reader - subscribed users without other roles
     /// </remarks>
-    /// <param name="id">Game ID</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <param name="role">Optional role filter</param>
     /// <response code="200">List of users</response>
     /// <response code="404">Game not found</response>
     [HttpGet(Name = nameof(GetGameUsers))]
     [ProducesResponseType(typeof(ListEnvelope<GameUser>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetGameUsers(Guid id, [FromQuery] string? role = null)
+    public async Task<IActionResult> GetGameUsers(string id, [FromQuery] string? role = null)
     {
-        var users = await _userApiService.GetUsers(id, role);
+        var gameId = await ResolveGameId(id);
+        var users = await _userApiService.GetUsers(gameId, role);
         return Ok(new ListEnvelope<GameUser>(users));
     }
 
@@ -61,7 +70,7 @@ public class GameUserController : ControllerBase
     /// Only the game master can remove assistants.
     /// Players are removed by deleting their characters. Readers cannot be removed.
     /// </remarks>
-    /// <param name="id">Game ID</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <param name="userId">Assistant user ID to remove</param>
     /// <response code="204">Assistant removed</response>
     /// <response code="401">User must be authenticated</response>
@@ -73,9 +82,10 @@ public class GameUserController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RemoveGameUser(Guid id, Guid userId)
+    public async Task<IActionResult> RemoveGameUser(string id, Guid userId)
     {
-        await _userApiService.RemoveUser(id, userId);
+        var gameId = await ResolveGameId(id);
+        await _userApiService.RemoveUser(gameId, userId);
         return NoContent();
     }
 
@@ -86,22 +96,23 @@ public class GameUserController : ControllerBase
     /// <summary>
     /// Get list of game assistants
     /// </summary>
-    /// <param name="id">Game ID</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <response code="200">List of assistants</response>
     /// <response code="404">Game not found</response>
     [HttpGet("assistants", Name = nameof(GetGameAssistants))]
     [ProducesResponseType(typeof(ListEnvelope<GameUser>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetGameAssistants(Guid id)
+    public async Task<IActionResult> GetGameAssistants(string id)
     {
-        var assistants = await _userApiService.GetAssistants(id);
+        var gameId = await ResolveGameId(id);
+        var assistants = await _userApiService.GetAssistants(gameId);
         return Ok(new ListEnvelope<GameUser>(assistants));
     }
 
     /// <summary>
     /// Remove assistant from game by username
     /// </summary>
-    /// <param name="id">Game ID</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <param name="username">Assistant username</param>
     /// <response code="204">Assistant removed</response>
     /// <response code="401">User must be authenticated</response>
@@ -113,9 +124,10 @@ public class GameUserController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RemoveGameAssistant(Guid id, string username)
+    public async Task<IActionResult> RemoveGameAssistant(string id, string username)
     {
-        await _userApiService.RemoveAssistantByUsername(id, username);
+        var gameId = await ResolveGameId(id);
+        await _userApiService.RemoveAssistantByUsername(gameId, username);
         return NoContent();
     }
 

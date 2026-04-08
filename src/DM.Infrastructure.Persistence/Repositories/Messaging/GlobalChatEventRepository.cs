@@ -40,7 +40,7 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
     public async Task<IEnumerable<GlobalChatEvent>> GetByStatus(params GlobalChatEventStatus[] statuses) =>
         await _dbContext.GlobalChatEvents
             .Where(e => statuses.Contains(e.Status))
-            .OrderByDescending(e => e.StartsAtUtc)
+            .OrderByDescending(e => e.StartsUtc)
             .ProjectTo<GlobalChatEvent>(_mapper.ConfigurationProvider)
             .ToArrayAsync().ConfigureAwait(false);
 
@@ -54,7 +54,7 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
     public async Task<IEnumerable<GlobalChatEvent>> GetUpcomingEvents() =>
         await _dbContext.GlobalChatEvents
             .Where(e => e.Status == GlobalChatEventStatus.Scheduled)
-            .OrderBy(e => e.StartsAtUtc)
+            .OrderBy(e => e.StartsUtc)
             .ProjectTo<GlobalChatEvent>(_mapper.ConfigurationProvider)
             .ToArrayAsync().ConfigureAwait(false);
 
@@ -80,7 +80,7 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
             GlobalChatEventId = chatEvent.GlobalChatEventId,
             Title = chatEvent.Title,
             Description = chatEvent.Description,
-            StartsAtUtc = chatEvent.StartsAtUtc,
+            StartsUtc = chatEvent.StartsUtc,
             Duration = chatEvent.Duration,
             IsOpen = chatEvent.IsOpen,
             Status = chatEvent.Status,
@@ -94,7 +94,7 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
             GlobalChatEventId = creatorParticipant.GlobalChatEventId,
             UserId = creatorParticipant.UserId,
             IsOrganizer = creatorParticipant.IsOrganizer,
-            JoinedAtUtc = creatorParticipant.JoinedAtUtc
+            JoinedUtc = creatorParticipant.JoinedUtc
         };
 
         _dbContext.GlobalChatEvents.Add(dbChatEvent);
@@ -120,18 +120,18 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
             dbEvent.Title = update.Title;
         if (update.Description != null)
             dbEvent.Description = update.Description;
-        if (update.StartsAtUtc.HasValue)
-            dbEvent.StartsAtUtc = update.StartsAtUtc.Value;
+        if (update.StartsUtc.HasValue)
+            dbEvent.StartsUtc = update.StartsUtc.Value;
         if (update.Duration.HasValue)
             dbEvent.Duration = update.Duration.Value;
         if (update.IsOpen.HasValue)
             dbEvent.IsOpen = update.IsOpen.Value;
         if (update.Status.HasValue)
             dbEvent.Status = update.Status.Value;
-        if (update.StartedAtUtc.HasValue)
-            dbEvent.StartedAtUtc = update.StartedAtUtc.Value;
-        if (update.EndedAtUtc.HasValue)
-            dbEvent.EndedAtUtc = update.EndedAtUtc.Value;
+        if (update.StartedUtc.HasValue)
+            dbEvent.StartedUtc = update.StartedUtc.Value;
+        if (update.EndedUtc.HasValue)
+            dbEvent.EndedUtc = update.EndedUtc.Value;
 
         await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
     }
@@ -172,11 +172,11 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
         chatEvent.Status = status;
         if (startedAt.HasValue)
         {
-            chatEvent.StartedAtUtc = startedAt.Value;
+            chatEvent.StartedUtc = startedAt.Value;
         }
         if (endedAt.HasValue)
         {
-            chatEvent.EndedAtUtc = endedAt.Value;
+            chatEvent.EndedUtc = endedAt.Value;
         }
 
         await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -193,7 +193,7 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
     public async Task<IEnumerable<GlobalChatEventParticipant>> GetParticipants(Guid eventId) =>
         await _dbContext.GlobalChatEventParticipants
             .Where(p => p.GlobalChatEventId == eventId)
-            .OrderBy(p => p.JoinedAtUtc)
+            .OrderBy(p => p.JoinedUtc)
             .ProjectTo<GlobalChatEventParticipant>(_mapper.ConfigurationProvider)
             .ToArrayAsync().ConfigureAwait(false);
 
@@ -208,7 +208,7 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
             GlobalChatEventId = participant.GlobalChatEventId,
             UserId = participant.UserId,
             IsOrganizer = participant.IsOrganizer,
-            JoinedAtUtc = participant.JoinedAtUtc
+            JoinedUtc = participant.JoinedUtc
         };
 
         _dbContext.GlobalChatEventParticipants.Add(dbParticipant);

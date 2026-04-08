@@ -24,7 +24,7 @@ public class GlobalChatEventParticipant
     public bool IsOrganizer { get; set; }
 
     /// <summary>
-    /// When the participant joined the event
+    /// When the participant joined the event (UTC)
     /// </summary>
-    public DateTimeOffset JoinedAt { get; set; }
+    public DateTimeOffset JoinedUtc { get; set; }
 }

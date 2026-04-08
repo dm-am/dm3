@@ -5,9 +5,10 @@
     <div class="sessions-content">
       <!-- Sessions list -->
       <div v-if="loading" class="loading-state">Загрузка...</div>
-      <div v-else-if="sessions.length === 0" class="empty-state">
-        Нет активных сессий
-      </div>
+      <EmptyState
+        v-else-if="sessions.length === 0"
+        title="Нет активных сессий"
+      />
       <div v-else class="sessions-list">
         <div
           v-for="session in sessions"
@@ -18,11 +19,17 @@
           <div class="session-info">
             <div class="session-device">
               {{ session.deviceInfo || "Неизвестное устройство" }}
-              <span v-if="session.isCurrent" class="current-badge">текущая</span>
+              <span v-if="session.isCurrent" class="current-badge"
+                >текущая</span
+              >
             </div>
             <div class="session-details">
-              <span v-if="session.ipAddress" class="session-ip">{{ session.ipAddress }}</span>
-              <span class="session-date">{{ formatDate(session.createdAt) }}</span>
+              <span v-if="session.ipAddress" class="session-ip">{{
+                session.ipAddress
+              }}</span>
+              <span class="session-date">{{
+                formatDate(session.createdUtc)
+              }}</span>
             </div>
           </div>
           <button
@@ -41,13 +48,13 @@
         <span v-if="logoutAllAction.error.value" class="error-text">
           {{ logoutAllAction.error.value }}
         </span>
-        <TheButton
+        <Button
           v-if="hasOtherSessions"
           :loading="logoutAllAction.loading.value"
           @click="logoutFromAll"
         >
           Выйти со всех других устройств
-        </TheButton>
+        </Button>
       </div>
     </div>
   </section>
@@ -55,8 +62,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
+import dayjs from "dayjs";
 import { AccountApi } from "@/shared/api";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
+import { EmptyState } from "@/shared/ui";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { SessionInfo } from "@/shared/api/models/account";
@@ -68,7 +77,7 @@ const loading = ref(true);
 const terminatingId = ref<string | null>(null);
 
 const hasOtherSessions = computed(() =>
-  sessions.value.some(s => !s.isCurrent)
+  sessions.value.some((s) => !s.isCurrent),
 );
 
 onMounted(async () => {
@@ -86,14 +95,7 @@ async function loadSessions() {
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  return dayjs(dateStr).format("DD.MM.YYYY HH:mm");
 }
 
 async function terminateSession(sessionId: string) {
@@ -104,7 +106,7 @@ async function terminateSession(sessionId: string) {
   if (error) {
     toast.error("Не удалось завершить сессию");
   } else {
-    sessions.value = sessions.value.filter(s => s.id !== sessionId);
+    sessions.value = sessions.value.filter((s) => s.id !== sessionId);
     toast.success("Сессия завершена");
   }
 }
@@ -117,7 +119,7 @@ const logoutFromAll = () => {
     const { error } = await AccountApi.logoutAll();
     if (error) throw new Error("Не удалось завершить сессии");
     // Keep only current session
-    sessions.value = sessions.value.filter(s => s.isCurrent);
+    sessions.value = sessions.value.filter((s) => s.isCurrent);
     toast.success("Вы вышли со всех других устройств");
   });
 };
@@ -133,8 +135,7 @@ const logoutFromAll = () => {
   background-color: $bg-element
   border-radius: $border-radius
 
-.loading-state,
-.empty-state
+.loading-state
   color: $text-muted
   text-align: center
   padding: $medium

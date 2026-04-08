@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
+using DM.Domain.Game.Features.Games;
 using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Community.Users;
@@ -30,9 +31,9 @@ public interface ICommunityUserApiService
     Task<Envelope<UserProfile>> GetUserProfile(string username);
 
     /// <summary>
-    /// Get user's featured post
+    /// Get user's best post (highest rated)
     /// </summary>
-    Task<Envelope<FeaturedPost>> GetFeaturedPost(string username);
+    Task<Envelope<BestPostResult?>> GetBestPost(string username);
 
     /// <summary>
     /// Get login history by username

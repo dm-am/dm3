@@ -36,7 +36,7 @@ internal class GameReaderInvitationNotificationGenerator : BaseNotificationGener
                 t.UserId,
                 t.EntityId,
                 GameTitle = t.Game!.Title,
-                InviterUsername = t.Game.Author!.Username
+                InviterUsername = t.Game.Master!.Username
             })
             .FirstOrDefaultAsync();
 

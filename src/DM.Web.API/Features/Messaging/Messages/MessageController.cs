@@ -9,7 +9,13 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DM.Web.API.Features.Messaging.Messages;
 
-/// <inheritdoc />
+/// <summary>
+/// Message management endpoints
+/// </summary>
+/// <remarks>
+/// Provides operations for individual messages within conversations and chats.
+/// Supports cursor-based pagination, editing, and deletion.
+/// </remarks>
 [ApiController]
 [Route("v1/messages")]
 [ApiExplorerSettings(GroupName = "Messaging")]
@@ -18,15 +24,20 @@ public class MessageController : ControllerBase
 {
     private readonly IMessagingApiService _apiService;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Creates a new instance of MessageController
+    /// </summary>
     public MessageController(
         IMessagingApiService apiService)
     {
         _apiService = apiService;
     }
 
+    private async Task<Guid> ResolveChatId(string id) =>
+        Guid.TryParse(id, out var guid) ? guid : (await _apiService.GetChatByPublicIdAsync(id)).Id;
+
     /// <summary>
-    /// Get list of messages in conversation with cursor-based pagination
+    /// Get list of messages in chat with cursor-based pagination
     /// </summary>
     /// <remarks>
     /// This endpoint supports multiple pagination modes:
@@ -37,48 +48,52 @@ public class MessageController : ControllerBase
     ///
     /// The `limit` parameter controls how many messages to return (max 100, default 50).
     /// </remarks>
-    /// <param name="id">Conversation identifier</param>
+    /// <param name="id">Chat public ID (5 letters) or GUID</param>
     /// <param name="cursor">Opaque cursor for pagination (from previous response)</param>
     /// <param name="aroundMessageId">Get messages around this message</param>
     /// <param name="nearTimestampUtc">Get messages near this UTC timestamp (ISO 8601 format)</param>
     /// <param name="limit">Maximum number of messages to return (1-100, default 50)</param>
     /// <response code="200">Messages with cursor pagination info</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="404">Conversation not found</response>
-    [HttpGet("~/v1/conversations/{id:guid}/messages", Name = nameof(GetMessages))]
+    /// <response code="404">Chat not found</response>
+    [HttpGet("~/v1/chats/{id}/messages", Name = nameof(GetMessages))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(CursorEnvelope<Message>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMessages(
-        Guid id,
+        string id,
         [FromQuery] string? cursor = null,
         [FromQuery] Guid? aroundMessageId = null,
         [FromQuery] DateTimeOffset? nearTimestampUtc = null,
-        [FromQuery] int limit = 50) =>
-        Ok(await _apiService.GetMessagesWithCursor(id, cursor, aroundMessageId, nearTimestampUtc, limit));
+        [FromQuery] int limit = 50)
+    {
+        var chatId = await ResolveChatId(id);
+        return Ok(await _apiService.GetMessagesWithCursorAsync(chatId, cursor, aroundMessageId, nearTimestampUtc, limit));
+    }
 
     /// <summary>
-    /// Create message in conversation
+    /// Create message in chat
     /// </summary>
-    /// <param name="id">Conversation identifier</param>
+    /// <param name="id">Chat public ID (5 letters) or GUID</param>
     /// <param name="input">Message content</param>
     /// <response code="201">Message created successfully</response>
     /// <response code="400">Some message parameters were invalid</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User is not allowed to create message in this conversation</response>
-    /// <response code="404">Dialogue not found</response>
-    [HttpPost("~/v1/conversations/{id:guid}/messages", Name = nameof(PostMessage))]
+    /// <response code="403">User is not allowed to create message in this chat</response>
+    /// <response code="404">Chat not found</response>
+    [HttpPost("~/v1/chats/{id}/messages", Name = nameof(PostMessage))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Message>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PostMessage(Guid id, [FromBody] CreateMessageInput input)
+    public async Task<IActionResult> PostMessage(string id, [FromBody] CreateMessageInput input)
     {
+        var chatId = await ResolveChatId(id);
         var message = new Message { Text = new CommonBbText { Value = input.Text } };
-        var result = await _apiService.CreateMessage(id, message);
+        var result = await _apiService.CreateMessageAsync(chatId, message);
         return CreatedAtRoute(nameof(GetMessage), new { id = result.Resource.Id }, result);
     }
 
@@ -94,7 +109,7 @@ public class MessageController : ControllerBase
     [ProducesResponseType(typeof(Envelope<Message>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetMessage(Guid id) => Ok(await _apiService.GetMessage(id));
+    public async Task<IActionResult> GetMessage(Guid id) => Ok(await _apiService.GetMessageAsync(id));
 
     /// <summary>
     /// Update message
@@ -116,7 +131,7 @@ public class MessageController : ControllerBase
     public async Task<IActionResult> PatchMessage(Guid id, [FromBody] UpdateMessageInput input)
     {
         var message = new Message { Text = new CommonBbText { Value = input.Text } };
-        return Ok(await _apiService.UpdateMessage(id, message));
+        return Ok(await _apiService.UpdateMessageAsync(id, message));
     }
 
     /// <summary>
@@ -134,7 +149,7 @@ public class MessageController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteMessage(Guid id)
     {
-        await _apiService.DeleteMessage(id);
+        await _apiService.DeleteMessageAsync(id);
         return NoContent();
     }
 
@@ -153,7 +168,7 @@ public class MessageController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostMessageLike(Guid id) =>
-        CreatedAtRoute(nameof(GetMessage), new { id }, await _apiService.LikeMessage(id));
+        CreatedAtRoute(nameof(GetMessage), new { id }, await _apiService.LikeMessageAsync(id));
 
     /// <summary>
     /// Delete like from message
@@ -171,7 +186,7 @@ public class MessageController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteMessageLike(Guid id)
     {
-        await _apiService.UnlikeMessage(id);
+        await _apiService.UnlikeMessageAsync(id);
         return NoContent();
     }
 }

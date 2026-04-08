@@ -106,16 +106,16 @@ public class ChatControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Get chat with invalid GUID should return NotFound (route doesn't match)
+    /// Get chat with non-GUID string returns Unauthorized (route accepts string, auth first)
     /// </summary>
     [Fact]
-    public async Task GetChat_WithInvalidGuid_ReturnsNotFound()
+    public async Task GetChat_WithNonGuidString_ReturnsUnauthorized()
     {
         // Act
         var response = await Client.GetAsync("/v1/chats/not-a-guid");
 
-        // Assert - invalid GUID format results in route not found
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        // Assert - route matches (accepts string id), auth check happens first
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     #endregion
@@ -269,10 +269,10 @@ public class ChatControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Update chat with invalid GUID should return NotFound (route doesn't match)
+    /// Update chat with non-GUID string returns Unauthorized (route accepts string, auth first)
     /// </summary>
     [Fact]
-    public async Task UpdateChat_WithInvalidGuid_ReturnsNotFound()
+    public async Task UpdateChat_WithNonGuidString_ReturnsUnauthorized()
     {
         // Arrange
         var update = new
@@ -288,8 +288,8 @@ public class ChatControllerShould : IntegrationTestBase
         // Act
         var response = await Client.SendAsync(request);
 
-        // Assert - invalid GUID format results in route not found
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        // Assert - route matches (accepts string id), auth check happens first
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     #endregion

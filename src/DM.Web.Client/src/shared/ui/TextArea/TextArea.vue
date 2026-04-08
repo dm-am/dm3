@@ -50,25 +50,17 @@ onMounted(adjustHeight);
 
 <style scoped lang="sass">
 @import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 
 textarea
-  display: block
-  width: 100%
-  min-height: $big * 3
-  box-sizing: border-box
-  padding: $small
-  resize: none
-  overflow: hidden
-  font-family: inherit
-  font-size: inherit
-  background-color: $input-bg-overlay
-  color: $text
-  border: 1px dashed $border
-
-  &:focus
-    outline: none
-    border-style: solid
-    border-color: $button-border-hover
+  +input()
+  &
+    display: block
+    width: 100%
+    min-height: $big * 3
+    box-sizing: border-box
+    resize: none
+    overflow: hidden
 
   &::placeholder
     color: $text-muted

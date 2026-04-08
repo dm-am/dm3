@@ -34,13 +34,11 @@ public interface IModeratedProfileNoteRepository
     /// Update an existing moderator note
     /// </summary>
     /// <param name="entity">Note update entity DTO</param>
-    /// <returns></returns>
     Task Update(UpdateModeratedProfileNoteEntity entity);
 
     /// <summary>
     /// Soft-delete a moderator note
     /// </summary>
     /// <param name="noteId">Note ID</param>
-    /// <returns></returns>
     Task Delete(Guid noteId);
 }

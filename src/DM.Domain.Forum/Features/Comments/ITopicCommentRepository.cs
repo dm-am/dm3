@@ -12,19 +12,21 @@ namespace DM.Domain.Forum.Features.Comments;
 public interface ITopicCommentRepository
 {
     /// <summary>
-    /// Count comments of the topic
+    /// Count comments of the topic with optional filtering
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
+    /// <param name="query">Query with search and author filter</param>
     /// <param name="excludeUserIds">Optional user IDs to exclude from count</param>
-    Task<int> Count(Guid topicId, IReadOnlyCollection<Guid>? excludeUserIds = null);
+    Task<int> Count(Guid topicId, CommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null);
 
     /// <summary>
-    /// Get comments list of the topic
+    /// Get comments list of the topic with filtering and sorting
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
+    /// <param name="query">Query with search, author filter, and sorting</param>
     /// <param name="paging">Paging data</param>
     /// <param name="excludeUserIds">Optional user IDs to exclude from results</param>
-    Task<IEnumerable<Comment>> Get(Guid topicId, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null);
+    Task<IEnumerable<Comment>> Get(Guid topicId, CommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null);
 
     /// <summary>
     /// Get single comment by its identifier

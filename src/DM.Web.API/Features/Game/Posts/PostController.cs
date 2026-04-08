@@ -1,16 +1,21 @@
 using System;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
+using DM.Domain.Game.Features.Posts;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using IFeaturedPostsService = DM.Domain.Game.Features.Posts.IFeaturedPostsService;
-using FeaturedPostsEnvelope = DM.Domain.Game.Features.Posts.FeaturedPostsEnvelope;
 
 namespace DM.Web.API.Features.Game.Posts;
 
-/// <inheritdoc />
+/// <summary>
+/// Post management endpoints
+/// </summary>
+/// <remarks>
+/// Provides CRUD operations for game posts (in-character messages).
+/// Posts belong to rooms and can be written by characters.
+/// </remarks>
 [ApiController]
 [Route("v1/posts")]
 [ApiExplorerSettings(GroupName = "Game")]
@@ -18,15 +23,13 @@ namespace DM.Web.API.Features.Game.Posts;
 public class PostController : ControllerBase
 {
     private readonly IPostApiService _postApiService;
-    private readonly IFeaturedPostsService _featuredPostsService;
 
-    /// <inheritdoc />
-    public PostController(
-        IPostApiService postApiService,
-        IFeaturedPostsService featuredPostsService)
+    /// <summary>
+    /// Creates a new instance of PostController
+    /// </summary>
+    public PostController(IPostApiService postApiService)
     {
         _postApiService = postApiService;
-        _featuredPostsService = featuredPostsService;
     }
 
     /// <summary>
@@ -74,6 +77,7 @@ public class PostController : ControllerBase
     /// <response code="404">Post not found</response>
     [HttpGet("{id}", Name = nameof(GetPost))]
     [ProducesResponseType(typeof(Envelope<Post>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPost(Guid id) => Ok(await _postApiService.Get(id));
 
     /// <summary>
@@ -117,15 +121,26 @@ public class PostController : ControllerBase
     }
 
     /// <summary>
-    /// Get featured posts (best of week and last with plus)
+    /// Get posts with rating info
     /// </summary>
-    /// <response code="200">Returns featured posts</response>
-    [HttpGet("featured", Name = nameof(GetFeaturedPosts))]
-    [ProducesResponseType(typeof(FeaturedPostsEnvelope), StatusCodes.Status200OK)]
-    [ResponseCache(Duration = 300)] // 5 minutes cache
-    public async Task<IActionResult> GetFeaturedPosts()
-    {
-        var result = await _featuredPostsService.Get();
-        return Ok(result);
-    }
+    /// <remarks>
+    /// Returns posts sorted by rating or review date.
+    ///
+    /// Sort options (sortBy):
+    /// - rating: Sort by sum of reviews (default)
+    /// - lastreview: Sort by most recent review
+    /// - created: Sort by post creation date
+    ///
+    /// Filters:
+    /// - hasReviews: Only posts with at least one review
+    /// - reviewedAfter: Posts reviewed after this date (ISO 8601)
+    /// - gameId: Filter by specific game
+    /// </remarks>
+    /// <param name="query">Filter and sorting parameters</param>
+    /// <response code="200">Returns the list of rated posts</response>
+    [HttpGet(Name = nameof(GetRatedPosts))]
+    [ProducesResponseType(typeof(ListEnvelope<Post>), StatusCodes.Status200OK)]
+    [ResponseCache(Duration = 60)]
+    public async Task<IActionResult> GetRatedPosts([FromQuery] PostsQuery query) =>
+        Ok(await _postApiService.GetRated(query));
 }

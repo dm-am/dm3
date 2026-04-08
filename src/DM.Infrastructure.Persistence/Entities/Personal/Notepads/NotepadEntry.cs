@@ -94,6 +94,12 @@ public class NotepadEntry : ISoftDeletable
     public virtual User Author { get; set; } = null!;
 
     /// <summary>
+    /// User who deleted this entry
+    /// </summary>
+    [ForeignKey(nameof(DeletedByUserId))]
+    public virtual User? DeletedBy { get; set; }
+
+    /// <summary>
     /// Category navigation property
     /// </summary>
     [ForeignKey(nameof(CategoryId))]

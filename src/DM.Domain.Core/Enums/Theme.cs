@@ -16,6 +16,6 @@ public enum Theme
     /// <summary>
     /// Dark theme
     /// </summary>
-    [Description("Тёмная")]
+    [Description("Темная")]
     Dark = 1
 }

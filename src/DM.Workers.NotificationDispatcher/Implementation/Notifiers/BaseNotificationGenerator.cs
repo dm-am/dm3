@@ -20,6 +20,6 @@ public abstract class BaseNotificationGenerator : INotificationGenerator
     /// Generate DAL models of notifications to be stored
     /// </summary>
     /// <param name="entityId">Entity identifier</param>
-    /// <returns></returns>
+    /// <returns>Async enumerable of notifications to create</returns>
     public abstract IAsyncEnumerable<CreateNotification> Generate(Guid entityId);
 }

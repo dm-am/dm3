@@ -1,4 +1,8 @@
-import type { PersonalProfile, Gender, Contact } from "./models/community/users";
+import type {
+  PersonalProfile,
+  Gender,
+  Contact,
+} from "./models/community/users";
 import type { Preferences, ReceivedInvitation } from "./models/personal";
 import type { ListEnvelope } from "./models/common";
 import Api from "./client";

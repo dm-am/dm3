@@ -6,23 +6,37 @@ import { SubscriptionApi } from "@/shared/api";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
 
 export const useSubscriptionsStore = defineStore("subscriptions", () => {
-  const all = useApiList<Subscription>(() => SubscriptionApi.getMySubscriptions());
+  const all = useApiList<Subscription>(() =>
+    SubscriptionApi.getMySubscriptions(),
+  );
 
   // Filtered subscriptions by type
-  const gameSubscriptions = computed(() =>
-    all.data.value?.filter(s => s.targetType === SubscriptionTargetType.Game) ?? []
+  const gameSubscriptions = computed(
+    () =>
+      all.data.value?.filter(
+        (s) => s.targetType === SubscriptionTargetType.Game,
+      ) ?? [],
   );
 
-  const blogSubscriptions = computed(() =>
-    all.data.value?.filter(s => s.targetType === SubscriptionTargetType.Blog) ?? []
+  const blogSubscriptions = computed(
+    () =>
+      all.data.value?.filter(
+        (s) => s.targetType === SubscriptionTargetType.Blog,
+      ) ?? [],
   );
 
-  const topicSubscriptions = computed(() =>
-    all.data.value?.filter(s => s.targetType === SubscriptionTargetType.Topic) ?? []
+  const topicSubscriptions = computed(
+    () =>
+      all.data.value?.filter(
+        (s) => s.targetType === SubscriptionTargetType.Topic,
+      ) ?? [],
   );
 
-  const userSubscriptions = computed(() =>
-    all.data.value?.filter(s => s.targetType === SubscriptionTargetType.User) ?? []
+  const userSubscriptions = computed(
+    () =>
+      all.data.value?.filter(
+        (s) => s.targetType === SubscriptionTargetType.User,
+      ) ?? [],
   );
 
   // Subscription counts
@@ -33,16 +47,24 @@ export const useSubscriptionsStore = defineStore("subscriptions", () => {
   const totalCount = computed(() => all.data.value?.length ?? 0);
 
   // Check if subscribed to a target
-  const isSubscribed = (targetType: SubscriptionTargetType, targetId: string) => {
-    return all.data.value?.some(
-      s => s.targetType === targetType && s.targetId === targetId
-    ) ?? false;
+  const isSubscribed = (
+    targetType: SubscriptionTargetType,
+    targetId: string,
+  ) => {
+    return (
+      all.data.value?.some(
+        (s) => s.targetType === targetType && s.targetId === targetId,
+      ) ?? false
+    );
   };
 
   // Get subscription for a target
-  const getSubscription = (targetType: SubscriptionTargetType, targetId: string) => {
+  const getSubscription = (
+    targetType: SubscriptionTargetType,
+    targetId: string,
+  ) => {
     return all.data.value?.find(
-      s => s.targetType === targetType && s.targetId === targetId
+      (s) => s.targetType === targetType && s.targetId === targetId,
     );
   };
 
@@ -50,7 +72,7 @@ export const useSubscriptionsStore = defineStore("subscriptions", () => {
   const subscribe = async (
     targetType: SubscriptionTargetType,
     targetId: string,
-    settings?: number
+    settings?: number,
   ) => {
     await SubscriptionApi.subscribe({ targetType, targetId, settings });
     await all.fetch();
@@ -65,7 +87,7 @@ export const useSubscriptionsStore = defineStore("subscriptions", () => {
   // Unsubscribe by target
   const unsubscribeByTarget = async (
     targetType: SubscriptionTargetType,
-    targetId: string
+    targetId: string,
   ) => {
     const subscription = getSubscription(targetType, targetId);
     if (subscription) {

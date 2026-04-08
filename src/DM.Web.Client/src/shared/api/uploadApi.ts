@@ -1,4 +1,8 @@
-import type { Upload, PresignRequest, PresignResponse } from "./models/common/upload";
+import type {
+  Upload,
+  PresignRequest,
+  PresignResponse,
+} from "./models/common/upload";
 import Api from "./client";
 import type { AxiosProgressEvent } from "axios";
 

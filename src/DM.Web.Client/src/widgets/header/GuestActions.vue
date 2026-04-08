@@ -19,7 +19,9 @@ const prefillEmail = ref("");
 const { open: openLogin, close: closeLogin } = useModal({
   component: LoginForm,
   attrs: {
-    get prefillEmail() { return prefillEmail.value; },
+    get prefillEmail() {
+      return prefillEmail.value;
+    },
     onSuccess: () => closeLogin(),
     onCancel: () => closeLogin(),
     onCantSignIn: (email?: string) => {
@@ -60,7 +62,9 @@ const { open: openRegistrar, close: closeRegistrar } = useModal({
 const { open: openRegistrarSuccess, close: closeRegistrarSuccess } = useModal({
   component: RegistrationSuccess,
   attrs: {
-    get email() { return registeredEmail.value; },
+    get email() {
+      return registeredEmail.value;
+    },
     onConfirm: () => closeRegistrarSuccess(),
   },
 });
@@ -68,7 +72,9 @@ const { open: openRegistrarSuccess, close: closeRegistrarSuccess } = useModal({
 const { open: openRecovery, close: closeRecovery } = useModal({
   component: AccessRecoveryForm,
   attrs: {
-    get prefillEmail() { return prefillEmail.value; },
+    get prefillEmail() {
+      return prefillEmail.value;
+    },
     onCancel: () => closeRecovery(),
   },
 });
@@ -93,17 +99,29 @@ function handleActionParam() {
 
 onMounted(handleActionParam);
 watch(() => route.query.action, handleActionParam);
+
+// Extract handlers to avoid inline arrow functions in template
+function handleLoginClick() {
+  prefillEmail.value = "";
+  openLogin();
+}
+
+function handleRecoveryClick() {
+  prefillEmail.value = "";
+  openRecovery();
+}
 </script>
 
 <template>
   <div class="guest-actions">
-    <a @click="prefillEmail = ''; openLogin()" data-testid="login-button">Вход</a>
+    <a @click="handleLoginClick" data-testid="login-button">Вход</a>
     |
     <a @click="openRegistrar" data-testid="register-button">Регистрация</a>
     |
-    <a @click="prefillEmail = ''; openRecovery()" data-testid="recovery-button">Восстановление доступа</a>
+    <a @click="handleRecoveryClick" data-testid="recovery-button"
+      >Восстановление доступа</a
+    >
   </div>
 </template>
 
-<style scoped lang="sass">
-</style>
+<style scoped lang="sass"></style>

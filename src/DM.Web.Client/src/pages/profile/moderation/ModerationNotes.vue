@@ -4,7 +4,7 @@ import type { ModNote } from "@/shared/api/models/moderation";
 import type { Username } from "@/shared/api/models/community";
 import { moderationApi } from "@/shared/api";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
 import dayjs from "dayjs";
 
@@ -47,7 +47,7 @@ async function createNote() {
 }
 
 function startEdit(note: ModNote) {
-  editingNoteId.value = note.noteId;
+  editingNoteId.value = note.id;
   editText.value = note.text;
 }
 
@@ -83,20 +83,18 @@ async function deleteNote(noteId: string) {
 
 <template>
   <div class="mod-section">
-    <h4 class="mod-section_title">
-      Заметки модератора ({{ notes.length }})
-    </h4>
+    <h4 class="mod-section_title">Заметки модератора ({{ notes.length }})</h4>
 
-    <div v-for="note in notes" :key="note.noteId" class="mod-note">
+    <div v-for="note in notes" :key="note.id" class="mod-note">
       <div class="mod-note_header">
         <strong>{{ note.authorUsername }}</strong>
         <secondary-text>{{ formatDateTime(note.createdUtc) }}</secondary-text>
-        <secondary-text v-if="note.updatedUtc">
-          (изм. {{ formatDateTime(note.updatedUtc) }})
+        <secondary-text v-if="note.modifiedUtc">
+          (изм. {{ formatDateTime(note.modifiedUtc) }})
         </secondary-text>
       </div>
 
-      <template v-if="editingNoteId !== note.noteId">
+      <template v-if="editingNoteId !== note.id">
         <div class="mod-note_text">{{ note.text }}</div>
         <div v-if="note.canEdit || note.canDelete" class="mod-note_actions">
           <a v-if="note.canEdit" class="mod-action" @click="startEdit(note)">
@@ -105,7 +103,7 @@ async function deleteNote(noteId: string) {
           <a
             v-if="note.canDelete"
             class="mod-action mod-action-danger"
-            @click="deleteNote(note.noteId)"
+            @click="deleteNote(note.id)"
           >
             Удалить
           </a>
@@ -116,13 +114,10 @@ async function deleteNote(noteId: string) {
         <div class="mod-note_edit">
           <textarea v-model="editText" rows="3" class="mod-textarea" />
           <div class="mod-note_edit-actions">
-            <the-button
-              :disabled="!editText.trim()"
-              @click="saveEdit(note.noteId)"
-            >
+            <Button :disabled="!editText.trim()" @click="saveEdit(note.id)">
               Сохранить
-            </the-button>
-            <the-button secondary @click="cancelEdit">Отмена</the-button>
+            </Button>
+            <Button secondary @click="cancelEdit">Отмена</Button>
           </div>
         </div>
       </template>
@@ -135,13 +130,13 @@ async function deleteNote(noteId: string) {
         placeholder="Заметка модератора..."
         class="mod-textarea"
       />
-      <the-button
+      <Button
         :disabled="!newNoteText.trim()"
         :loading="creating"
         @click="createNote"
       >
         Добавить заметку
-      </the-button>
+      </Button>
     </div>
   </div>
 </template>

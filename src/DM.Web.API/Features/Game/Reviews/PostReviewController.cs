@@ -6,20 +6,16 @@ using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Exceptions;
-using DM.Domain.Game.Features.Games;
 using DM.Domain.Core.Users;
-using DM.Domain.Game.Features.Reviews;
+using DM.Domain.Game.Features.PostReviews;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using ApiReview = DM.Web.API.Features.Community.Reviews.Review;
-using CreateReviewRequest = DM.Web.API.Features.Community.Reviews.CreateReviewRequest;
-using ReviewController = DM.Web.API.Features.Community.Reviews.ReviewController;
 
 namespace DM.Web.API.Features.Game.Reviews;
 
 /// <summary>
-/// Post reviews API - list and create reviews on game posts
+/// post reviews API - list and create reviews on game posts
 /// </summary>
 [ApiController]
 [Route("v1/reviews")]
@@ -27,17 +23,17 @@ namespace DM.Web.API.Features.Game.Reviews;
 [Tags("Posts")]
 public class PostReviewController : ControllerBase
 {
-    private readonly IPostReviewService _postReviewService;
+    private readonly IPostReviewService _ratedPostReviewService;
     private readonly IUserLookupService _userLookupService;
     private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public PostReviewController(
-        IPostReviewService postReviewService,
+        IPostReviewService ratedPostReviewService,
         IUserLookupService userLookupService,
         IMapper mapper)
     {
-        _postReviewService = postReviewService;
+        _ratedPostReviewService = ratedPostReviewService;
         _userLookupService = userLookupService;
         _mapper = mapper;
     }
@@ -46,7 +42,7 @@ public class PostReviewController : ControllerBase
     /// Get all post reviews with optional filters
     /// </summary>
     /// <remarks>
-    /// Returns post reviews (ratings) across all games with optional filtering.
+    /// Returns post reviews across all games with optional filtering.
     ///
     /// Filter options:
     /// - **authorUsername**: Reviews written BY this user
@@ -59,7 +55,7 @@ public class PostReviewController : ControllerBase
     /// <param name="gameId">Filter by game</param>
     /// <response code="200">List of post reviews</response>
     [HttpGet("posts", Name = nameof(GetAllPostReviews))]
-    [ProducesResponseType(typeof(ListEnvelope<ApiReview>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ListEnvelope<PostReviewDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllPostReviews(
         [FromQuery] PagingQuery q,
         [FromQuery] string? authorUsername = null,
@@ -83,46 +79,46 @@ public class PostReviewController : ControllerBase
             filter.RecipientId = recipient.UserId;
         }
 
-        var (reviews, paging) = await _postReviewService.GetAllAsync(q, filter);
-        var apiReviews = reviews.Select(_mapper.Map<ApiReview>);
-        return Ok(new ListEnvelope<ApiReview>(apiReviews, new PagingInfo(paging)));
+        var (reviews, paging) = await _ratedPostReviewService.GetAllAsync(q, filter);
+        var apiReviews = reviews.Select(_mapper.Map<PostReviewDto>);
+        return Ok(new ListEnvelope<PostReviewDto>(apiReviews, new PagingInfo(paging)));
     }
 
     /// <summary>
-    /// Get reviews for a specific post
+    /// Get rated reviews for a specific post
     /// </summary>
     /// <remarks>
-    /// Returns all reviews (ratings) for the specified post.
+    /// Returns all rated reviews for the specified post.
     /// </remarks>
     /// <param name="postId">Post ID</param>
     /// <param name="q">Paging parameters</param>
     /// <response code="200">List of post reviews</response>
     /// <response code="404">Post not found</response>
     [HttpGet("~/v1/posts/{postId:guid}/reviews", Name = nameof(GetPostReviews))]
-    [ProducesResponseType(typeof(ListEnvelope<ApiReview>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ListEnvelope<PostReviewDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPostReviews(Guid postId, [FromQuery] PagingQuery q)
     {
-        var (reviews, paging) = await _postReviewService.GetListAsync(postId, q);
-        var apiReviews = reviews.Select(_mapper.Map<ApiReview>);
-        return Ok(new ListEnvelope<ApiReview>(apiReviews, new PagingInfo(paging)));
+        var (reviews, paging) = await _ratedPostReviewService.GetListAsync(postId, q);
+        var apiReviews = reviews.Select(_mapper.Map<PostReviewDto>);
+        return Ok(new ListEnvelope<PostReviewDto>(apiReviews, new PagingInfo(paging)));
     }
 
     /// <summary>
     /// Create post review
     /// </summary>
     /// <remarks>
-    /// Creates a rating/review for the specified post.
+    /// Creates a rated review for the specified post.
     ///
     /// **Requirements:**
     /// - Cannot review your own posts
     /// - Cannot create multiple reviews for the same post
     /// - Must be authenticated
-    /// - Newbie users (registered less than a week ago with no games) cannot create reviews
+    /// - Newbie users (less than 100 game posts) can only create neutral reviews
+    /// - Cooldown: one review per game every 3 days
     ///
     /// **Request body:**
     /// - **sign** (required): Positive, Neutral, or Negative
-    /// - **reasonType** (optional): Fun, Roleplay, Literature (flags)
     /// </remarks>
     /// <param name="postId">Post ID</param>
     /// <param name="request">Review data</param>
@@ -132,31 +128,42 @@ public class PostReviewController : ControllerBase
     /// <response code="403">Not allowed (own post, newbie restriction)</response>
     /// <response code="404">Post not found</response>
     /// <response code="409">Review already exists for this post</response>
+    /// <response code="429">Too many requests (cooldown period)</response>
     [HttpPost("~/v1/posts/{postId:guid}/reviews", Name = nameof(CreatePostReview))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(ApiReview), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(Envelope<PostReviewDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> CreatePostReview(Guid postId, [FromBody] CreateReviewRequest request)
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> CreatePostReview(Guid postId, [FromBody] CreatePostReviewRequest request)
     {
-        if (!request.Sign.HasValue)
-        {
-            throw new HttpBadRequestException(
-                new Dictionary<string, string> { ["Sign"] = "Sign is required for post reviews" },
-                "Sign is required for post reviews");
-        }
-
         var createReview = new CreatePostReview
         {
             PostId = postId,
-            Sign = request.Sign.Value,
-            ReasonType = request.ReasonType
+            Sign = request.Sign,
+            Text = request.Text
         };
-        var review = await _postReviewService.CreateAsync(createReview);
-        var apiReview = _mapper.Map<ApiReview>(review);
-        return CreatedAtRoute(nameof(ReviewController.GetReview), new { id = review.Id }, apiReview);
+        var review = await _ratedPostReviewService.CreateAsync(createReview);
+        var apiReview = _mapper.Map<PostReviewDto>(review);
+        return CreatedAtRoute(nameof(GetPostReview), new { postId, reviewId = review.Id }, new Envelope<PostReviewDto>(apiReview));
+    }
+
+    /// <summary>
+    /// Get single post review by ID
+    /// </summary>
+    /// <param name="postId">Post ID</param>
+    /// <param name="reviewId">Review ID</param>
+    /// <response code="200">post review</response>
+    /// <response code="404">Review not found</response>
+    [HttpGet("~/v1/posts/{postId:guid}/reviews/{reviewId:guid}", Name = nameof(GetPostReview))]
+    [ProducesResponseType(typeof(Envelope<PostReviewDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPostReview(Guid postId, Guid reviewId)
+    {
+        var review = await _ratedPostReviewService.GetAsync(reviewId);
+        return Ok(new Envelope<PostReviewDto>(_mapper.Map<PostReviewDto>(review)));
     }
 }

@@ -33,10 +33,10 @@ internal class SessionFactory : ISessionFactory
             Id = _guidFactory.Create(),
             Persistent = persistent,
             Invisible = invisible,
-            ExpirationDate = persistent
+            ExpirationUtc = persistent
                 ? rightNow.AddDays(_config.PersistentSessionExpirationDays)
                 : rightNow.AddHours(_config.SessionExpirationHours),
-            CreatedAt = rightNow,
+            CreatedUtc = rightNow,
             IpAddress = context?.IpAddress,
             UserAgent = context?.UserAgent,
             DeviceInfo = UserAgentParser.Parse(context?.UserAgent)

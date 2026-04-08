@@ -1,37 +1,61 @@
 // Table styling mixins
+// Unified with DataTable visual style: uses border-spacing to create gaps
+//
 // Usage:
 //   .my-table
-//     +table          // внешняя граница
-//   .my-header, .my-row
-//     +table-columns  // границы столбцов + padding
+//     +table                    // container with gap background
 //   .my-header
-//     +table-header   // фон, цвет, border-bottom
+//     +table-header             // header row styling
 //   .my-row
-//     +table-row      // фон, border-bottom
+//     +table-row                // data row styling
+//   .my-row (expandable)
+//     +expandable-row           // clickable expandable row
+//   .my-details
+//     +expandable-details       // expanded content
+//
+// Note: For full-featured data tables with sorting/pagination, use DataTable component
 
 @import "Themes"
 
+// Shared spacing/sizing
+$table-cell-padding-v: $small
+$table-cell-padding-h: 12px
+$table-gap: 1px
+
 =table
-  border: 1px solid $border
+  display: flex
+  flex-direction: column
+  gap: $table-gap
+  padding: $table-gap
+  background-color: $border
 
 =table-header
+  padding: $table-cell-padding-v $table-cell-padding-h
   background-color: $bg-element-accent
   color: $text
-  border-bottom: 1px solid $border
   font-weight: bold
 
 =table-row
+  padding: $table-cell-padding-v $table-cell-padding-h
   background-color: $bg-element
-  border-bottom: 1px solid $border
-  &:last-child
-    border-bottom: none
+
+// Row hover effect (for interactive tables)
+=table-row-hover
+  transition: background-color 0.15s ease
+  &:hover
+    background-color: $bg-element-hover
+
+// Avatar in table cells (consistent sizing)
+=table-avatar($size: 24px)
+  width: $size
+  height: $size
+  border-radius: 50%
+  object-fit: cover
+  flex-shrink: 0
 
 =table-columns
   & > *
-    padding: $small $medium
-    border-right: 1px solid $border
-    &:last-child
-      border-right: none
+    padding: $table-cell-padding-v $table-cell-padding-h
 
 // Expandable row/details mixins (for interactive tables with click-to-expand)
 $expand-icon-size: 10px
@@ -39,24 +63,21 @@ $expand-icon-width: 12px
 $details-offset: 20px
 
 =expandable-row
-  // Inline table-row styles (declarations before nested rules)
-  background-color: $bg-element
-  border-bottom: 1px solid $border
   display: flex
   align-items: center
   gap: $small
-  padding: $small $medium
+  padding: $table-cell-padding-v $table-cell-padding-h
+  background-color: $bg-element
   cursor: pointer
   user-select: none
   transition: background-color 0.15s ease
-  // All nested rules at the end
-  &:last-child
-    border-bottom: none
+
   &:hover
     background-color: $bg-element-hover
+
   &.expanded
     background-color: $bg-element-hover
-    border-bottom: none
+
   &:focus-visible
     outline: 2px solid $link
     outline-offset: -2px
@@ -65,11 +86,12 @@ $details-offset: 20px
   font-size: $expand-icon-size
   color: $text-muted
   width: $expand-icon-width
+  flex-shrink: 0
+  transition: transform 0.15s ease
 
 =expandable-details
-  padding: $small $medium $small ($medium + $details-offset)
+  padding: $table-cell-padding-v $table-cell-padding-h $table-cell-padding-v ($table-cell-padding-h + $details-offset)
   background-color: $bg-page
-  border-bottom: 1px solid $border
   line-height: 1.6
   font-size: $secondary-font-size
   color: $text
@@ -80,10 +102,11 @@ $details-offset: 20px
 =expandable-details-list
   ul
     margin: 0
-    padding-left: 0
-    list-style: none
+    padding-left: $medium
+    list-style: disc
+
     li
-      margin: $small 0
+      margin: $minor 0
       color: $text
       font-size: $secondary-font-size
 
@@ -99,7 +122,7 @@ $details-offset: 20px
 $mobile-breakpoint: 600px
 
 =expandable-row-mobile
-  padding: $small
+  padding: $small $table-cell-padding-h
 
 =expandable-details-mobile
-  padding: $small $small $small ($small + 12px)
+  padding: $small $table-cell-padding-h $small ($table-cell-padding-h + 12px)

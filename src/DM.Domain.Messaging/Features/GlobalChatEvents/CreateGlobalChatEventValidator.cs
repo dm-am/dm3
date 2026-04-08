@@ -18,7 +18,7 @@ internal class CreateGlobalChatEventValidator : AbstractValidator<CreateGlobalCh
         RuleFor(e => e.Description)
             .MaximumLength(10000).WithMessage(ValidationError.Long);
 
-        RuleFor(e => e.StartsAt)
+        RuleFor(e => e.StartsUtc)
             .Must(startsAt => startsAt > dateTimeProvider.Now)
             .WithMessage(ValidationError.MustBeFuture);
 

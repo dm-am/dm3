@@ -1,6 +1,10 @@
 ﻿<script setup lang="ts">
 import { ref, onMounted, watch } from "vue";
-import type { Username, PublicWarning, PublicBan } from "@/shared/api/models/community";
+import type {
+  Username,
+  PublicWarning,
+  PublicBan,
+} from "@/shared/api/models/community";
 import { communityApi } from "@/shared/api";
 import dayjs from "dayjs";
 
@@ -32,7 +36,8 @@ const hasViolations = ref(false);
 
 watch([warnings, bans], () => {
   activeBans.value = bans.value.filter((b) => b.isActive);
-  hasViolations.value = warnings.value.length > 0 || activeBans.value.length > 0;
+  hasViolations.value =
+    warnings.value.length > 0 || activeBans.value.length > 0;
 });
 </script>
 
@@ -45,24 +50,44 @@ watch([warnings, bans], () => {
         <div class="violation-header">
           <span class="violation-type">Бан</span>
           <span class="violation-date">
-            {{ ban.isPermanent ? "Постоянный" : `до ${dayjs(ban.endUtc).format("DD.MM.YYYY")}` }}
+            {{
+              ban.isPermanent
+                ? "Постоянный"
+                : `до ${dayjs(ban.endUtc).format("DD.MM.YYYY")}`
+            }}
           </span>
         </div>
         <div class="violation-reason">{{ ban.reason }}</div>
-        <div class="violation-moderator">Модератор: {{ ban.moderatorUsername }}</div>
+        <div class="violation-moderator">
+          Модератор:
+          <router-link :to="{ name: 'profile', params: { username: ban.moderatorUsername } }">
+            {{ ban.moderatorUsername }}
+          </router-link>
+        </div>
       </div>
     </div>
 
     <div v-if="warnings.length" class="violations-group">
-      <div v-for="warning in warnings" :key="warning.id" class="violation warning">
+      <div
+        v-for="warning in warnings"
+        :key="warning.id"
+        class="violation warning"
+      >
         <div class="violation-header">
-          <span class="violation-type">Предупреждение ({{ warning.points }} балл.)</span>
+          <span class="violation-type"
+            >Предупреждение ({{ warning.points }} балл.)</span
+          >
           <span v-if="warning.expiresUtc" class="violation-date">
             до {{ dayjs(warning.expiresUtc).format("DD.MM.YYYY") }}
           </span>
         </div>
         <div class="violation-reason">{{ warning.text }}</div>
-        <div class="violation-moderator">Модератор: {{ warning.moderatorUsername }}</div>
+        <div class="violation-moderator">
+          Модератор:
+          <router-link :to="{ name: 'profile', params: { username: warning.moderatorUsername } }">
+            {{ warning.moderatorUsername }}
+          </router-link>
+        </div>
       </div>
     </div>
   </section>

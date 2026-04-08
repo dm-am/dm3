@@ -97,10 +97,10 @@ public class Ban
 public class CreateBanRequest
 {
     /// <summary>
-    /// Target user login
+    /// Target user username
     /// </summary>
     /// <example>problemuser</example>
-    public string UserLogin { get; set; } = "";
+    public string Username { get; set; } = "";
 
     /// <summary>
     /// Ban type
@@ -142,9 +142,9 @@ public class LiftBanRequest
 public class UserBanStatus
 {
     /// <summary>
-    /// User login
+    /// User username
     /// </summary>
-    public string Login { get; set; } = "";
+    public string Username { get; set; } = "";
 
     /// <summary>
     /// Whether user is currently banned

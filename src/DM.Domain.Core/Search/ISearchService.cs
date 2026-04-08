@@ -16,7 +16,7 @@ public interface ISearchService
     /// <param name="query">Search query</param>
     /// <param name="types">Entity types</param>
     /// <param name="pagingQuery">Paging query</param>
-    /// <returns></returns>
+    /// <returns>Search results with paging information</returns>
     Task<(IEnumerable<FoundEntity> results, PagingResult paging)> Search(string query,
         IEnumerable<SearchEntityType> types, PagingQuery pagingQuery);
 }

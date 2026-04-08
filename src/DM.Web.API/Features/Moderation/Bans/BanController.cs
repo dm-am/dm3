@@ -76,7 +76,7 @@ public class BanController : ControllerBase
     /// Get all active bans (moderators only)
     /// </summary>
     /// <remarks>
-    /// Returns all currently active bans across the platform.
+    /// Returns all currently active bans across the website.
     /// </remarks>
     /// <param name="type">Optional ban type filter</param>
     /// <response code="200">List of active bans</response>
@@ -121,7 +121,7 @@ public class BanController : ControllerBase
     public async Task<IActionResult> CreateBan([FromBody] CreateBanRequest request)
     {
         var result = await _banApiService.CreateBan(request);
-        return CreatedAtRoute(nameof(GetUserBans), new { login = request.UserLogin }, result);
+        return CreatedAtRoute(nameof(GetUserBans), new { login = request.Username }, result);
     }
 
     /// <summary>

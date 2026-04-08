@@ -11,7 +11,11 @@
         autocomplete="off"
         spellcheck="false"
       />
-      <span v-if="showStatus && !checking" class="status-icon" :class="statusClass">
+      <span
+        v-if="showStatus && !checking"
+        class="status-icon"
+        :class="statusClass"
+      >
         <span v-if="isAvailable === true">&#10003;</span>
         <span v-else-if="isAvailable === false">&#10007;</span>
       </span>
@@ -63,7 +67,8 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Forbidden: control chars, HTML/URL unsafe, quotes, brackets, special chars, zero-width
 // See: docs/architecture/USERNAME_POLICY.md
-const forbiddenPattern = /[\x00-\x1F\x7F<>"'`\\/@?#%&\[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]/;
+const forbiddenPattern =
+  /[\x00-\x1F\x7F<>"'`\\/@?#%&\[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]/;
 
 const showStatus = computed(() => {
   return (
@@ -71,7 +76,6 @@ const showStatus = computed(() => {
     (checking.value || isAvailable.value !== null)
   );
 });
-
 
 const statusClass = computed(() => {
   if (isAvailable.value === true) return "available";
@@ -129,7 +133,10 @@ function onInput(event: Event) {
   // Check availability with debounce
   if (value.length >= 2) {
     checking.value = true;
-    debounceTimer = setTimeout(() => checkAvailability(value), props.debounceMs);
+    debounceTimer = setTimeout(
+      () => checkAvailability(value),
+      props.debounceMs,
+    );
   } else {
     emit("availability", false);
   }

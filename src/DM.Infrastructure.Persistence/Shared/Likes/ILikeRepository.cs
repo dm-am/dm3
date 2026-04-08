@@ -13,7 +13,6 @@ internal interface ILikeRepository
     /// Store new like
     /// </summary>
     /// <param name="like">Like DAL model</param>
-    /// <returns></returns>
     Task Add(Like like);
 
     /// <summary>
@@ -21,6 +20,5 @@ internal interface ILikeRepository
     /// </summary>
     /// <param name="entityId">Entity identifier</param>
     /// <param name="userId">User identifier</param>
-    /// <returns></returns>
     Task Delete(Guid entityId, Guid userId);
 }

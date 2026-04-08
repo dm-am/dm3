@@ -19,31 +19,16 @@ public class UpdatePost
     public Optional<Guid>? CharacterId { get; set; }
 
     /// <summary>
-    /// Text
+    /// Game text (in-character content)
     /// </summary>
-    public string Text { get; set; } = null!;
+    public string GameText { get; set; } = null!;
 
     /// <summary>
-    /// Comment
+    /// Metagame text (OOC commentary)
     /// </summary>
-    public string Comment { get; set; } = null!;
-
-    /// <summary>
-    /// Master message
-    /// </summary>
-    public string MasterMessage { get; set; } = null!;
+    public string MetagameText { get; set; } = null!;
 
     #region Internal fields (set by service)
-
-    /// <summary>
-    /// Modified timestamp (internal)
-    /// </summary>
-    public DateTimeOffset? ModifiedUtc { get; set; }
-
-    /// <summary>
-    /// Modified by user ID (internal)
-    /// </summary>
-    public Guid? ModifiedByUserId { get; set; }
 
     /// <summary>
     /// Soft delete flag (internal)

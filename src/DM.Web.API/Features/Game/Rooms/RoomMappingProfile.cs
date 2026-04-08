@@ -21,18 +21,31 @@ internal class RoomMappingProfile : Profile
     /// <inheritdoc />
     public RoomMappingProfile()
     {
-        CreateMap<DomainRoom, Room>();
+        CreateMap<DomainRoom, Room>()
+            .ForMember(d => d.Access, opt => opt.Ignore());
+
         CreateMap<DomainRoomSettings, RoomSettings>();
 
-        CreateMap<CreateRoomRequest, CreateRoom>();
-        CreateMap<Room, UpdateRoom>();
+        CreateMap<CreateRoomRequest, CreateRoom>()
+            .ForMember(d => d.GameId, opt => opt.Ignore());
+
+        CreateMap<Room, UpdateRoom>()
+            .ForMember(d => d.RoomId, opt => opt.Ignore())
+            .ForMember(d => d.AccessType, opt => opt.Ignore())
+            .ForMember(d => d.ViewPrivateText, opt => opt.Ignore())
+            .ForMember(d => d.ViewDiceResults, opt => opt.Ignore())
+            .ForMember(d => d.DiceEnabled, opt => opt.Ignore())
+            .ForMember(d => d.IsRemoved, opt => opt.Ignore());
 
         CreateMap<DomainRoomAccess, RoomAccess>()
-            .ForMember(d => d.Character, s => s.MapFrom(a => a.Character));
+            .ForMember(d => d.Character, s => s.MapFrom(a => a.Character))
+            .ForMember(d => d.Policy, opt => opt.Ignore());
 
         CreateMap<RoomAccess, CreateRoomAccess>()
             .ForMember(d => d.CharacterId, s => s.MapFrom(r => r.Character != null ? r.Character.Id : (Guid?)null))
-            .ForMember(d => d.ReaderUsername, s => s.MapFrom(r => r.User != null ? r.User.Username : null));
+            .ForMember(d => d.ReaderUsername, s => s.MapFrom(r => r.User != null ? r.User.Username : null))
+            .ForMember(d => d.RoomId, opt => opt.Ignore());
+
         CreateMap<RoomAccess, UpdateRoomAccess>()
             .ForMember(d => d.AccessId, s => s.MapFrom(r => r.Id));
 

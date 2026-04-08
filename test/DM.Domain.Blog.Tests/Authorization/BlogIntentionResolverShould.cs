@@ -1,3 +1,4 @@
+using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 using System;
 using System.Collections.Generic;
 using DM.Domain.Account.Features.Authentication;
@@ -28,14 +29,14 @@ public class BlogIntentionResolverShould
         };
     }
 
-    private BlogModel CreateBlog(
+    private BlogDto CreateBlog(
         DraftVisibility draftVisibility = DraftVisibility.Public,
         bool commentsEnabled = true,
         IEnumerable<BlogAssistantInfo>? assistants = null,
         IReadOnlySet<Guid>? subscriberIds = null,
         GeneralUser? mentor = null)
     {
-        return new BlogModel
+        return new BlogDto
         {
             Id = Guid.NewGuid(),
             Author = new GeneralUser { UserId = _ownerId },

@@ -68,6 +68,14 @@ internal class ChatService : IChatService
         return result;
     }
 
+    /// <inheritdoc />
+    public async Task<Chat> CreateGameRoomChatAsync(Guid roomId, string title)
+    {
+        var chat = _factory.CreateGameRoom(roomId, title);
+        var result = await _repository.CreateGameRoomChat(chat);
+        return result;
+    }
+
     // ═══ READ ═══
 
     /// <inheritdoc />
@@ -89,6 +97,22 @@ internal class ChatService : IChatService
     {
         var currentUserId = _identityProvider.Current.User.UserId;
         var chat = await _repository.Get(chatId, currentUserId);
+        if (chat == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, "Chat not found");
+        }
+
+        await _unreadCountersRepository.FillEntityCounters(new[] { chat }, currentUserId,
+            c => c.Id, c => c.UnreadMessagesCount);
+
+        return chat;
+    }
+
+    /// <inheritdoc />
+    public async Task<Chat> GetByPublicIdAsync(string publicId)
+    {
+        var currentUserId = _identityProvider.Current.User.UserId;
+        var chat = await _repository.GetByPublicId(publicId, currentUserId);
         if (chat == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, "Chat not found");
@@ -195,5 +219,22 @@ internal class ChatService : IChatService
         }
 
         return result;
+    }
+
+    // ═══ DELETE ═══
+
+    /// <inheritdoc />
+    public async Task DeleteAsync(Guid chatId)
+    {
+        var chat = await _repository.GetForUpdate(chatId);
+        if (chat == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, "Chat not found");
+        }
+
+        _intentionManager.ThrowIfForbidden(ChatIntention.DeleteChat, chat);
+
+        await _repository.Delete(chatId);
+        await _unreadCountersRepository.DeleteAsync(chatId, UnreadEntryType.Message);
     }
 }

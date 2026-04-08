@@ -57,7 +57,7 @@ internal class BotLinkService : IBotLinkService
         return new BotLinkCode
         {
             Code = code,
-            ExpiresAt = now.Add(CodeLifetime)
+            ExpiresUtc = now.Add(CodeLifetime)
         };
     }
 

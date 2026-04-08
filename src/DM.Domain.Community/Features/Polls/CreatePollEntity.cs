@@ -14,24 +14,29 @@ public class CreatePollEntity
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Poll start date
+    /// Poll start moment (UTC)
     /// </summary>
-    public DateTime StartDate { get; set; }
+    public DateTime StartsUtc { get; set; }
 
     /// <summary>
-    /// Poll end date
+    /// Poll end moment (UTC)
     /// </summary>
-    public DateTime EndDate { get; set; }
-
-    /// <summary>
-    /// Whether the poll is global
-    /// </summary>
-    public bool Global { get; set; }
+    public DateTime EndsUtc { get; set; }
 
     /// <summary>
     /// Poll title
     /// </summary>
     public string Title { get; set; } = null!;
+
+    /// <summary>
+    /// Optional description/details for the poll
+    /// </summary>
+    public string? Details { get; set; }
+
+    /// <summary>
+    /// Whether poll is anonymous
+    /// </summary>
+    public bool IsAnonymous { get; set; } = true;
 
     /// <summary>
     /// Poll options

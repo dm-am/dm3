@@ -29,7 +29,7 @@ public class Program
     /// Create web host builder
     /// </summary>
     /// <param name="args"></param>
-    /// <returns></returns>
+    /// <returns>Configured host builder</returns>
     public static IHostBuilder CreateWebHostBuilder(string[] args)
     {
         return Host.CreateDefaultBuilder(args)

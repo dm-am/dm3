@@ -16,7 +16,7 @@ public interface IChatRepository
     /// Count user participated chats
     /// </summary>
     /// <param name="userId">User identifier</param>
-    /// <returns></returns>
+    /// <returns>Number of chats</returns>
     Task<int> Count(Guid userId);
 
     /// <summary>
@@ -24,7 +24,7 @@ public interface IChatRepository
     /// </summary>
     /// <param name="userId">User identifier</param>
     /// <param name="paging">Paging data</param>
-    /// <returns></returns>
+    /// <returns>List of chats</returns>
     Task<IEnumerable<Chat>> Get(Guid userId, PagingData paging);
 
     /// <summary>
@@ -32,8 +32,16 @@ public interface IChatRepository
     /// </summary>
     /// <param name="chatId">Chat identifier</param>
     /// <param name="userId">User identifier</param>
-    /// <returns></returns>
+    /// <returns>Chat or null</returns>
     Task<Chat?> Get(Guid chatId, Guid userId);
+
+    /// <summary>
+    /// Get single chat by public ID for user
+    /// </summary>
+    /// <param name="publicId">Chat public ID (5 letters)</param>
+    /// <param name="userId">User identifier</param>
+    /// <returns>Chat or null</returns>
+    Task<Chat?> GetByPublicId(string publicId, Guid userId);
 
     /// <summary>
     /// Get chat for update validation (without user filter)
@@ -46,7 +54,7 @@ public interface IChatRepository
     /// Find user for chat by username
     /// </summary>
     /// <param name="username">Username</param>
-    /// <returns></returns>
+    /// <returns>User identifier or null</returns>
     Task<Guid?> FindUser(string username);
 
     /// <summary>
@@ -54,7 +62,7 @@ public interface IChatRepository
     /// </summary>
     /// <param name="userId">User identifier</param>
     /// <param name="otherUserId">Other user identifier</param>
-    /// <returns></returns>
+    /// <returns>Direct chat or null</returns>
     Task<Chat?> FindDirectChat(Guid userId, Guid otherUserId);
 
     // ═══ WRITE ═══
@@ -64,7 +72,7 @@ public interface IChatRepository
     /// </summary>
     /// <param name="chat">Chat data</param>
     /// <param name="chatLinks">Chat links data</param>
-    /// <returns></returns>
+    /// <returns>Created chat</returns>
     Task<Chat> Create(CreateChatEntity chat, IEnumerable<CreateChatLinkEntity> chatLinks);
 
     /// <summary>
@@ -73,4 +81,17 @@ public interface IChatRepository
     /// <param name="update">Update data including links to add/remove</param>
     /// <returns>Updated chat</returns>
     Task<Chat> Update(UpdateChatEntity update);
+
+    /// <summary>
+    /// Create game room chat (no user links)
+    /// </summary>
+    /// <param name="chat">Chat data</param>
+    /// <returns>Created chat</returns>
+    Task<Chat> CreateGameRoomChat(CreateChatEntity chat);
+
+    /// <summary>
+    /// Delete chat
+    /// </summary>
+    /// <param name="chatId">Chat identifier</param>
+    Task Delete(Guid chatId);
 }

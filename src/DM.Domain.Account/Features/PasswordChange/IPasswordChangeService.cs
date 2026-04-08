@@ -19,8 +19,8 @@ public interface IPasswordChangeService
     /// <summary>
     /// Change user password
     /// </summary>
-    /// <param name="passwordChange"></param>
-    /// <returns></returns>
+    /// <param name="passwordChange">Password change data</param>
+    /// <returns>Updated user</returns>
     Task<GeneralUser> Change(UserPasswordChange passwordChange);
 }
 

@@ -31,7 +31,7 @@ export default new (class SubscriptionApi {
    */
   public checkSubscription(type: SubscriptionTargetType, targetId: string) {
     return Api.get<Subscription>(
-      `${this.basePath}/check?type=${type}&targetId=${targetId}`
+      `${this.basePath}/check?type=${type}&targetId=${targetId}`,
     );
   }
 

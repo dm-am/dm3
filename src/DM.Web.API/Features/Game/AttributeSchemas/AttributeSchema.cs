@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using DM.Domain.Core.Enums;
-using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Game.AttributeSchemas;
 
@@ -21,9 +21,9 @@ public class AttributeSchema
     public string Title { get; set; } = null!;
 
     /// <summary>
-    /// Schema author
+    /// Schema author (lightweight reference)
     /// </summary>
-    public User Author { get; set; } = null!;
+    public UserRef Author { get; set; } = null!;
 
     /// <summary>
     /// Schema type

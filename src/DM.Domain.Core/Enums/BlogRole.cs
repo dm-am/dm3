@@ -4,13 +4,13 @@ namespace DM.Domain.Core.Enums;
 /// User's role in a blog (for API/DTO purposes)
 /// </summary>
 /// <remarks>
-/// Privilege order: None &lt; Reader &lt; Mentor &lt; Assistant &lt; Owner
+/// Privilege order: None &lt; Reader &lt; Mentor &lt; Assistant &lt; Author
 /// These roles are computed from multiple sources:
 /// - None: No relation to the blog
 /// - Reader: Subscriptions table (TargetType=Blog)
 /// - Mentor: Blog.MentorId
 /// - Assistant: BlogAssistants table
-/// - Owner: Blog.AuthorId
+/// - Author: Blog.AuthorId
 /// </remarks>
 public enum BlogRole
 {
@@ -35,7 +35,7 @@ public enum BlogRole
     Assistant = 3,
 
     /// <summary>
-    /// Blog owner (creator, stored in Blog.AuthorId)
+    /// Blog author (creator, stored in Blog.AuthorId)
     /// </summary>
-    Owner = 4
+    Author = 4
 }

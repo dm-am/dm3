@@ -1,5 +1,5 @@
 using System;
-using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Blog.Invitations;
 
@@ -24,12 +24,12 @@ public class BlogInvitation
     public string BlogTitle { get; set; } = string.Empty;
 
     /// <summary>
-    /// Invited user
+    /// Invited user (lightweight reference)
     /// </summary>
-    public User InvitedUser { get; set; } = null!;
+    public UserRef InvitedUser { get; set; } = null!;
 
     /// <summary>
-    /// Username of user who sent the invitation (BlogModel owner)
+    /// Username of user who sent the invitation (Blog owner)
     /// </summary>
     public string InviterUsername { get; set; } = string.Empty;
 
@@ -67,10 +67,10 @@ public class CreateInvitationRequest
 public class CreateAssistantInvitationRequest
 {
     /// <summary>
-    /// Login of user to invite
+    /// Username of user to invite
     /// </summary>
     [System.ComponentModel.DataAnnotations.Required]
-    public string Login { get; set; } = string.Empty;
+    public string Username { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -79,8 +79,8 @@ public class CreateAssistantInvitationRequest
 public class CreateReaderInvitationRequest
 {
     /// <summary>
-    /// Login of user to invite
+    /// Username of user to invite
     /// </summary>
     [System.ComponentModel.DataAnnotations.Required]
-    public string Login { get; set; } = string.Empty;
+    public string Username { get; set; } = string.Empty;
 }

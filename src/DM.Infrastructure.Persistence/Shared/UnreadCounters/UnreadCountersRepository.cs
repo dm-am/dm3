@@ -33,7 +33,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
             EntityId = entityId,
             ParentId = id,
             EntryType = entryType,
-            LastRead = _dateTimeProvider.Now.UtcDateTime,
+            LastReadUtc =_dateTimeProvider.Now.UtcDateTime,
             Counter = 0
         }));
     }
@@ -47,7 +47,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
             EntityId = entityId,
             ParentId = parentId,
             EntryType = entryType,
-            LastRead = _dateTimeProvider.Now.UtcDateTime,
+            LastReadUtc =_dateTimeProvider.Now.UtcDateTime,
             Counter = 0
         });
     }
@@ -79,7 +79,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     {
         return Collection.UpdateManyAsync(Filter.Eq(c => c.EntityId, entityId) &
                                           Filter.Eq(c => c.EntryType, entryType) &
-                                          Filter.Lt(c => c.LastRead, createDate.UtcDateTime),
+                                          Filter.Lt(c => c.LastReadUtc, createDate.UtcDateTime),
             Update.Inc(c => c.Counter, -1));
     }
 
@@ -191,7 +191,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
                     EntityId = entityId,
                     ParentId = counter.ParentId,
                     EntryType = entryType,
-                    LastRead = _dateTimeProvider.Now.UtcDateTime,
+                    LastReadUtc =_dateTimeProvider.Now.UtcDateTime,
                     Counter = 0
                 },
                 new ReplaceOptions {IsUpsert = true});
@@ -217,7 +217,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
                         EntityId = id,
                         ParentId = parentId,
                         EntryType = entryType,
-                        LastRead = rightNow,
+                        LastReadUtc =rightNow,
                         Counter = 0
                     })
                 {IsUpsert = true}));
@@ -243,7 +243,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
                 Filter.Eq(c => c.IsRemoved, false))
             .FirstOrDefaultAsync();
 
-        return counter?.LastRead;
+        return counter?.LastReadUtc;
     }
 
     /// <inheritdoc />
@@ -257,6 +257,6 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
                 Filter.Eq(c => c.IsRemoved, false))
             .ToListAsync();
 
-        return counters.ToDictionary(c => c.EntityId, c => c.LastRead);
+        return counters.ToDictionary(c => c.EntityId, c => c.LastReadUtc);
     }
 }

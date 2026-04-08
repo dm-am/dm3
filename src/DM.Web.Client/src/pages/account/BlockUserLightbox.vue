@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { BlacklistApi } from "@/shared/api";
-import TheLightbox from "@/shared/ui/Layout/TheLightbox.vue";
+import Lightbox from "@/shared/ui/Layout/Lightbox.vue";
 import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
-import TheForm from "@/shared/ui/Form/TheForm.vue";
+import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import type { BlacklistEntry } from "@/shared/api/models/personal";
 
@@ -30,7 +30,7 @@ async function submit() {
   error.value = null;
 
   const { data, error: apiError } = await BlacklistApi.blockUser({
-    username: username.value.trim()
+    username: username.value.trim(),
   });
 
   loading.value = false;
@@ -47,10 +47,10 @@ async function submit() {
 </script>
 
 <template>
-  <the-lightbox narrow>
+  <Lightbox narrow>
     <lightbox-title>Заблокировать пользователя</lightbox-title>
 
-    <the-form
+    <Form
       @submit="submit"
       @cancel="emit('cancel')"
       :valid="canSubmit"
@@ -67,14 +67,14 @@ async function submit() {
           v-model="username"
           type="text"
           autocomplete="off"
-          placeholder="Введите имя..."
+          placeholder="Введите имя"
           :readonly="isUsernameLocked"
           :class="{ locked: isUsernameLocked }"
           @input="error = null"
         />
       </form-field>
-    </the-form>
-  </the-lightbox>
+    </Form>
+  </Lightbox>
 </template>
 
 <style scoped lang="sass">

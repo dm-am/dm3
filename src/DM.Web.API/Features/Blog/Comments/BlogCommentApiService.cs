@@ -7,7 +7,6 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Comments;
 using DM.Domain.Blog.Features.Comments;
-using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Dto;
 using Comment = DM.Web.API.Shared.Dto.Comment;
@@ -38,7 +37,7 @@ internal class BlogCommentApiService : IBlogCommentApiService
     }
 
     /// <inheritdoc />
-    public async Task<DiscussionResponse> GetDiscussion(Guid blogId, PagingQuery query)
+    public async Task<DiscussionResponse> GetDiscussion(Guid blogId, BlogCommentsQuery query)
     {
         var identity = _identityProvider.Current;
         var currentUserId = identity.User?.UserId ?? Guid.Empty;
@@ -80,7 +79,7 @@ internal class BlogCommentApiService : IBlogCommentApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Comment>> Get(Guid blogId, PagingQuery query)
+    public async Task<ListEnvelope<Comment>> Get(Guid blogId, BlogCommentsQuery query)
     {
         var identity = _identityProvider.Current;
         IReadOnlyCollection<Guid>? excludeUserIds = null;

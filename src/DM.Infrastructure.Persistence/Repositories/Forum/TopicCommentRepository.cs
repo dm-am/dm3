@@ -34,37 +34,96 @@ internal class TopicCommentRepository : ITopicCommentRepository
     }
 
     /// <inheritdoc />
-    public Task<int> Count(Guid topicId, IReadOnlyCollection<Guid>? excludeUserIds = null)
+    public Task<int> Count(Guid topicId, CommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
-        var query = _dbContext.Comments
+        var dbQuery = _dbContext.Comments
             .TagWith("DM.TopicComments.Count")
             .Where(c => !c.IsRemoved && c.EntityId == topicId);
 
-        if (excludeUserIds is { Count: > 0 })
-        {
-            query = query.Where(c => !excludeUserIds.Contains(c.AuthorId));
-        }
+        dbQuery = ApplyFilters(dbQuery, query, excludeUserIds);
 
-        return query.CountAsync();
+        return dbQuery.CountAsync();
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Comment>> Get(Guid topicId, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null)
+    public async Task<IEnumerable<Comment>> Get(Guid topicId, CommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
-        var query = _dbContext.Comments
+        var dbQuery = _dbContext.Comments
             .TagWith("DM.TopicComments.List")
             .Where(c => !c.IsRemoved && c.EntityId == topicId);
 
+        dbQuery = ApplyFilters(dbQuery, query, excludeUserIds);
+
+        var orderedQuery = ApplySorting(dbQuery, query, _dbContext);
+
+        return await orderedQuery
+            .Page(paging)
+            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
+            .ToArrayAsync();
+    }
+
+    private static IQueryable<Entities.Shared.Comment> ApplyFilters(
+        IQueryable<Entities.Shared.Comment> query,
+        CommentsQuery commentsQuery,
+        IReadOnlyCollection<Guid>? excludeUserIds)
+    {
+        // Exclude blocked users
         if (excludeUserIds is { Count: > 0 })
         {
             query = query.Where(c => !excludeUserIds.Contains(c.AuthorId));
         }
 
-        return await query
-            .OrderBy(c => c.CreatedUtc)
-            .Page(paging)
-            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
-            .ToArrayAsync();
+        // Filter by authors (OR logic)
+        if (commentsQuery.Authors is { Count: > 0 })
+        {
+            var authorNames = commentsQuery.Authors.Select(a => a.ToLowerInvariant()).ToArray();
+            query = query.Where(c => c.Author != null && authorNames.Contains(c.Author.Username.ToLower()));
+        }
+
+        // Filter by created date range
+        if (commentsQuery.CreatedFromUtc.HasValue)
+        {
+            query = query.Where(c => c.CreatedUtc >= commentsQuery.CreatedFromUtc.Value);
+        }
+
+        if (commentsQuery.CreatedToUtc.HasValue)
+        {
+            query = query.Where(c => c.CreatedUtc <= commentsQuery.CreatedToUtc.Value);
+        }
+
+        // Search by text content
+        if (!string.IsNullOrWhiteSpace(commentsQuery.Search))
+        {
+            var searchLower = commentsQuery.Search.ToLowerInvariant();
+            query = query.Where(c => c.Text.ToLower().Contains(searchLower));
+        }
+
+        return query;
+    }
+
+    private static IOrderedQueryable<Entities.Shared.Comment> ApplySorting(
+        IQueryable<Entities.Shared.Comment> query,
+        CommentsQuery commentsQuery,
+        DmDbContext dbContext)
+    {
+        var sortBy = commentsQuery.SortBy?.ToLowerInvariant() ?? "created";
+        var isDescending = string.Equals(commentsQuery.SortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+
+        return sortBy switch
+        {
+            "likes" => isDescending
+                ? query.OrderByDescending(c => dbContext.Likes.Count(l =>
+                    !l.IsRemoved &&
+                    l.EntityId == c.CommentId &&
+                    l.EntityType == Domain.Core.Enums.LikeEntityType.Comment))
+                : query.OrderBy(c => dbContext.Likes.Count(l =>
+                    !l.IsRemoved &&
+                    l.EntityId == c.CommentId &&
+                    l.EntityType == Domain.Core.Enums.LikeEntityType.Comment)),
+            _ => isDescending // "created" or default
+                ? query.OrderByDescending(c => c.CreatedUtc)
+                : query.OrderBy(c => c.CreatedUtc)
+        };
     }
 
     /// <inheritdoc />
@@ -119,7 +178,7 @@ internal class TopicCommentRepository : ITopicCommentRepository
         if (dbComment != null)
         {
             dbComment.Text = updateComment.Text;
-            dbComment.ModifiedUtc = updateComment.LastUpdateUtc;
+            // Modification tracking is handled via Edit history, not inline ModifiedUtc
             await _dbContext.SaveChangesAsync();
         }
 

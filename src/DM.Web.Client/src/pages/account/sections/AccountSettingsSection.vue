@@ -27,7 +27,9 @@
               v-model.number="settingsForm.paging.postsPerPage"
               class="form-select"
             >
-              <option v-for="opt in pagingOptions" :key="opt" :value="opt">{{ opt }}</option>
+              <option v-for="opt in pagingOptions" :key="opt" :value="opt">
+                {{ opt }}
+              </option>
             </select>
           </div>
 
@@ -40,7 +42,9 @@
               v-model.number="settingsForm.paging.commentsPerPage"
               class="form-select"
             >
-              <option v-for="opt in pagingOptions" :key="opt" :value="opt">{{ opt }}</option>
+              <option v-for="opt in pagingOptions" :key="opt" :value="opt">
+                {{ opt }}
+              </option>
             </select>
           </div>
 
@@ -53,7 +57,9 @@
               v-model.number="settingsForm.paging.topicsPerPage"
               class="form-select"
             >
-              <option v-for="opt in pagingOptions" :key="opt" :value="opt">{{ opt }}</option>
+              <option v-for="opt in pagingOptions" :key="opt" :value="opt">
+                {{ opt }}
+              </option>
             </select>
           </div>
 
@@ -66,7 +72,9 @@
               v-model.number="settingsForm.paging.messagesPerPage"
               class="form-select"
             >
-              <option v-for="opt in pagingOptions" :key="opt" :value="opt">{{ opt }}</option>
+              <option v-for="opt in pagingOptions" :key="opt" :value="opt">
+                {{ opt }}
+              </option>
             </select>
           </div>
 
@@ -79,7 +87,9 @@
               v-model.number="settingsForm.paging.entitiesPerPage"
               class="form-select"
             >
-              <option v-for="opt in pagingOptions" :key="opt" :value="opt">{{ opt }}</option>
+              <option v-for="opt in pagingOptions" :key="opt" :value="opt">
+                {{ opt }}
+              </option>
             </select>
           </div>
         </div>
@@ -88,13 +98,13 @@
       <span v-if="saveSettingsAction.error.value" class="error-text">
         {{ saveSettingsAction.error.value }}
       </span>
-      <TheButton
+      <Button
         :loading="saveSettingsAction.loading.value"
         @click="saveSettings"
         class="save-button"
       >
         Сохранить настройки
-      </TheButton>
+      </Button>
     </div>
   </section>
 </template>
@@ -103,7 +113,7 @@
 import { ref, watch } from "vue";
 import { useUserStore } from "@/entities/user";
 import { PersonalApi } from "@/shared/api";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { Theme, type Preferences } from "@/shared/api/models/personal";
@@ -129,8 +139,8 @@ const settingsForm = ref({
     commentsPerPage: 50,
     topicsPerPage: 50,
     messagesPerPage: 50,
-    entitiesPerPage: 50
-  }
+    entitiesPerPage: 50,
+  },
 });
 
 // Initialize form from user data
@@ -139,18 +149,18 @@ watch(
   (currentUser) => {
     if (currentUser) {
       settingsForm.value = {
-        theme: currentUser.settings.theme || Theme.Light,
-        paging: currentUser.settings.paging || {
+        theme: currentUser.settings?.theme || Theme.Light,
+        paging: currentUser.settings?.paging || {
           postsPerPage: 50,
           commentsPerPage: 50,
           topicsPerPage: 50,
           messagesPerPage: 50,
-          entitiesPerPage: 50
-        }
+          entitiesPerPage: 50,
+        },
       };
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 // Save settings
@@ -160,7 +170,7 @@ const saveSettings = () => {
   saveSettingsAction.execute(async () => {
     const preferences: Partial<Preferences> = {
       theme: settingsForm.value.theme,
-      paging: settingsForm.value.paging
+      paging: settingsForm.value.paging,
     };
 
     const { error } = await PersonalApi.updateMyPreferences(preferences);

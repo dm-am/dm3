@@ -16,7 +16,7 @@ namespace DM.Infrastructure.Persistence.Entities.Game;
 /// DAL model for game
 /// </summary>
 [Table("Games")]
-public class Game : IRemovable
+public class Game : ISoftDeletable
 {
     /// <summary>
     /// Game identifier
@@ -25,14 +25,25 @@ public class Game : IRemovable
     public Guid GameId { get; set; }
 
     /// <summary>
+    /// Auto-incrementing serial number for PublicId generation
+    /// </summary>
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int SerialNumber { get; set; }
+
+    /// <summary>
+    /// Short public identifier for URLs (5 lowercase letters)
+    /// </summary>
+    public string PublicId { get; set; } = null!;
+
+    /// <summary>
     /// Creation moment (UTC)
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Release moment (first time the game started requirement)
+    /// Activation moment (first time the game became active, UTC)
     /// </summary>
-    public DateTimeOffset? ReleaseDate { get; set; }
+    public DateTimeOffset? ActivatedUtc { get; set; }
 
     /// <summary>
     /// Status
@@ -45,14 +56,14 @@ public class Game : IRemovable
     public PremoderationStatus PremoderationStatus { get; set; }
 
     /// <summary>
-    /// Game was completed successfully (only when Status = Closed)
+    /// Reason why the game was closed (only applicable when Status = Closed)
     /// </summary>
-    public bool IsFinished { get; set; }
+    public ClosedReason ClosedReason { get; set; }
 
     /// <summary>
-    /// Game was frozen due to inactivity (only when Status = Closed)
+    /// Visibility of draft content (when Status = Draft)
     /// </summary>
-    public bool IsFrozen { get; set; }
+    public DraftVisibility DraftVisibility { get; set; }
 
     /// <summary>
     /// Recruitment is open for new players
@@ -60,9 +71,9 @@ public class Game : IRemovable
     public bool IsRecruitmentOpen { get; set; }
 
     /// <summary>
-    /// Maximum number of players allowed (null = unlimited)
+    /// Maximum number of player characters allowed (null = unlimited)
     /// </summary>
-    public int? RecruitmentPlayerLimit { get; set; }
+    public int? RecruitmentPcLimit { get; set; }
 
     /// <summary>
     /// When the recruitment was opened
@@ -70,14 +81,46 @@ public class Game : IRemovable
     public DateTimeOffset? RecruitmentStartedUtc { get; set; }
 
     /// <summary>
+    /// Number of times recruitment has been opened (0 = never, 1 = first, 2+ = subsequent/донабор)
+    /// </summary>
+    public int RecruitmentCount { get; set; }
+
+    /// <summary>
     /// When the game was closed
     /// </summary>
     public DateTimeOffset? ClosedUtc { get; set; }
 
     /// <summary>
-    /// Author (GM) identifier
+    /// When the last post was created (denormalized for inactivity tracking)
     /// </summary>
-    public Guid AuthorId { get; set; }
+    public DateTimeOffset? LastPostCreatedUtc { get; set; }
+
+    /// <summary>
+    /// When the inactivity warning was sent (null = no warning yet)
+    /// </summary>
+    public DateTimeOffset? InactivityWarningUtc { get; set; }
+
+    /// <summary>
+    /// When the closure warning was sent for frozen games (null = no warning yet)
+    /// </summary>
+    public DateTimeOffset? ClosureWarningUtc { get; set; }
+
+    /// <summary>
+    /// Pre-computed popularity score for efficient sorting.
+    /// Score = active players (unique authors of active characters) + active readers (subscribers active within 30 days).
+    /// Updated by PopularityScoreService background job.
+    /// </summary>
+    public int PopularityScore { get; set; }
+
+    /// <summary>
+    /// When the popularity score was last recalculated (UTC)
+    /// </summary>
+    public DateTimeOffset? PopularityScoreUpdatedUtc { get; set; }
+
+    /// <summary>
+    /// Game master (GM) identifier
+    /// </summary>
+    public Guid MasterId { get; set; }
 
     /// <summary>
     /// Premoderation assistant identifier
@@ -100,7 +143,7 @@ public class Game : IRemovable
     public string? SystemName { get; set; }
 
     /// <summary>
-    /// Narrative setting (e.g. Mass Effect, WarHammer, Our world)
+    /// Narrative setting (e.g. Mass Effect, Warhammer, Our world)
     /// </summary>
     public string? NarrativeSetting { get; set; }
 
@@ -167,11 +210,23 @@ public class Game : IRemovable
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
 
+    /// <inheritdoc />
+    public Guid? DeletedByUserId { get; set; }
+
+    /// <inheritdoc />
+    public DateTimeOffset? DeletedUtc { get; set; }
+
     /// <summary>
-    /// Game author (Master/GM)
+    /// Game master (GM)
     /// </summary>
-    [ForeignKey(nameof(AuthorId))]
-    public User Author { get; set; } = null!;
+    [ForeignKey(nameof(MasterId))]
+    public User Master { get; set; } = null!;
+
+    /// <summary>
+    /// User who deleted the game
+    /// </summary>
+    [ForeignKey(nameof(DeletedByUserId))]
+    public User? DeletedBy { get; set; }
 
     /// <summary>
     /// Premoderation assistant
@@ -215,11 +270,7 @@ public class Game : IRemovable
     [NotMapped]
     public virtual ICollection<Comment> Comments { get; set; } = [];
 
-    /// <summary>
-    /// Game preview picture
-    /// </summary>
-    [InverseProperty(nameof(Upload.Game))]
-    public virtual ICollection<Upload> Pictures { get; set; } = [];
+    // NOTE: Pictures navigation removed - Upload.EntityId is polymorphic without FK constraints
 
     /// <summary>
     /// Game authorization tokens

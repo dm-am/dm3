@@ -16,7 +16,7 @@ public class MessageEdit
     /// <summary>
     /// Edit timestamp (UTC)
     /// </summary>
-    public DateTimeOffset EditedAtUtc { get; set; }
+    public DateTimeOffset EditedUtc { get; set; }
 
     /// <summary>
     /// Editor user

@@ -18,5 +18,15 @@ public enum RoomIntention
     /// <summary>
     /// Delete post pendency
     /// </summary>
-    DeletePostPendency = 3
+    DeletePostPendency = 3,
+
+    /// <summary>
+    /// View messages in chat room
+    /// </summary>
+    ViewMessages = 4,
+
+    /// <summary>
+    /// Send message to chat room
+    /// </summary>
+    SendMessage = 5
 }

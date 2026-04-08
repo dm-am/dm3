@@ -1,11 +1,13 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, onMounted, watch } from "vue";
-import type { Blog } from "@/entities/blog";
-import { blogApi } from "@/entities/blog";
+import { blogApi, useBlogDisplay, type Blog } from "@/entities/blog";
+import { Tooltip } from "@/shared/ui/Tooltip";
 
 const props = defineProps<{
   username: string;
 }>();
+
+const { buildTooltip } = useBlogDisplay();
 
 const blogs = ref<Blog[]>([]);
 const loading = ref(true);
@@ -28,12 +30,21 @@ watch(() => props.username, fetchBlogs);
     <div v-if="loading" class="loading">Загрузка...</div>
 
     <div v-else class="blogs-list">
-      <div v-for="blog in blogs" :key="blog.id" class="blog-item">
-        <span class="blog-title">{{ blog.title }}</span>
-        <span v-if="blog.publicationCount" class="blog-count">
-          {{ blog.publicationCount }} публикаций
-        </span>
-      </div>
+      <Tooltip
+        v-for="blog in blogs"
+        :key="blog.id"
+        :text="buildTooltip(blog)"
+      >
+        <router-link
+          :to="{ name: 'blog', params: { id: blog.id } }"
+          class="blog-item"
+        >
+          <span class="blog-title">{{ blog.title }}</span>
+          <span class="blog-stats">
+            {{ blog.publicationCount ?? 0 }} / {{ blog.commentsCount ?? 0 }}
+          </span>
+        </router-link>
+      </Tooltip>
     </div>
   </section>
 </template>
@@ -69,12 +80,17 @@ watch(() => props.username, fetchBlogs);
   padding: $small
   background: $bg-element-overlay
   border-radius: $border-radius
+  text-decoration: none
+  transition: background 0.2s
+
+  &:hover
+    background: $bg-element-hover
 
 .blog-title
-  color: $text
+  color: $link
   font-weight: 500
 
-.blog-count
+.blog-stats
   font-size: $secondary-font-size
   color: $text-muted
 </style>

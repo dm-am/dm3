@@ -1,11 +1,18 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, onMounted, watch } from "vue";
-import type { Game } from "@/entities/game";
-import { gameApi } from "@/entities/game";
+import {
+  gameApi,
+  useGameDisplay,
+  GameStatusBadge,
+  type Game,
+} from "@/entities/game";
+import { Tooltip } from "@/shared/ui/Tooltip";
 
 const props = defineProps<{
   username: string;
 }>();
+
+const { buildTooltip } = useGameDisplay();
 
 const masterGames = ref<Game[]>([]);
 const playerGames = ref<Game[]>([]);
@@ -43,41 +50,57 @@ watch([masterGames, playerGames], () => {
       <div v-if="masterGames.length" class="games-group">
         <h4 class="group-title">Как мастер</h4>
         <div class="games-list">
-          <router-link
+          <Tooltip
             v-for="game in masterGames"
             :key="game.id"
-            :to="{ name: 'game', params: { id: game.id } }"
-            class="game-link"
+            :text="buildTooltip(game)"
           >
-            <span class="game-title">{{ game.title }}</span>
-            <span class="game-status" :class="game.status.toLowerCase()">
-              {{ game.status === "Active" ? "Активна" : game.status === "Draft" ? "Черновик" : "Закрыта" }}
-            </span>
-          </router-link>
+            <router-link
+              :to="{ name: 'game', params: { id: game.publicId || game.id } }"
+              class="game-link"
+            >
+              <span class="game-title">{{ game.title }}</span>
+              <GameStatusBadge
+                :status="game.status"
+                :is-recruiting="game.recruitment?.isOpen"
+                :is-subsequent="game.recruitment?.isSubsequent"
+                :closed-reason="game.closedReason"
+                class="game-status"
+                :class="game.status.toLowerCase()"
+              />
+            </router-link>
+          </Tooltip>
         </div>
       </div>
 
       <div v-if="playerGames.length" class="games-group">
         <h4 class="group-title">Как игрок</h4>
         <div class="games-list">
-          <router-link
+          <Tooltip
             v-for="game in playerGames"
             :key="game.id"
-            :to="{ name: 'game', params: { id: game.id } }"
-            class="game-link"
+            :text="buildTooltip(game)"
           >
-            <span class="game-title">{{ game.title }}</span>
-            <span class="game-status" :class="game.status.toLowerCase()">
-              {{ game.status === "Active" ? "Активна" : game.status === "Draft" ? "Черновик" : "Закрыта" }}
-            </span>
-          </router-link>
+            <router-link
+              :to="{ name: 'game', params: { id: game.publicId || game.id } }"
+              class="game-link"
+            >
+              <span class="game-title">{{ game.title }}</span>
+              <GameStatusBadge
+                :status="game.status"
+                :is-recruiting="game.recruitment?.isOpen"
+                :is-subsequent="game.recruitment?.isSubsequent"
+                :closed-reason="game.closedReason"
+                class="game-status"
+                :class="game.status.toLowerCase()"
+              />
+            </router-link>
+          </Tooltip>
         </div>
       </div>
     </template>
 
-    <div v-else class="no-games">
-      Пользователь не участвует ни в одной игре
-    </div>
+    <div v-else class="no-games">Пользователь не участвует ни в одной игре</div>
   </section>
 </template>
 

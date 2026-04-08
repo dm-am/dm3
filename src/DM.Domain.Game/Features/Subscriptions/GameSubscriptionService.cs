@@ -68,7 +68,7 @@ internal class GameSubscriptionService : IGameSubscriptionService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetReadersAsync(Guid gameId, CancellationToken ct = default)
+    public async Task<IEnumerable<GeneralUser>> GetSubscribersAsync(Guid gameId, CancellationToken ct = default)
     {
         var subscriberIds = await _repository.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Game, gameId, ct);
         var subscriberIdList = subscriberIds.ToList();

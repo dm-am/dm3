@@ -14,6 +14,7 @@ public class PagingQuery
     /// <summary>
     /// Number of records to skip
     /// </summary>
+    [Range(0, int.MaxValue, ErrorMessage = "Skip must be non-negative")]
     public int Skip { get; set; } = 0;
 
     /// <summary>

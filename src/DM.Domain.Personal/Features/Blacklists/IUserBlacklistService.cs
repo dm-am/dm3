@@ -29,12 +29,17 @@ public interface IUserBlacklistService
     /// <summary>
     /// Block a user
     /// </summary>
-    Task<BlacklistEntry> BlockUser(string username, CancellationToken ct = default);
+    /// <param name="dto">DTO with username to block</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Created blacklist entry</returns>
+    Task<BlacklistEntry> Block(OperateUserBlacklistLink dto, CancellationToken ct = default);
 
     /// <summary>
     /// Unblock a user
     /// </summary>
-    Task UnblockUser(string username, CancellationToken ct = default);
+    /// <param name="dto">DTO with username to unblock</param>
+    /// <param name="ct">Cancellation token</param>
+    Task Unblock(OperateUserBlacklistLink dto, CancellationToken ct = default);
 
     /// <summary>
     /// Check if a user is blocked by current user

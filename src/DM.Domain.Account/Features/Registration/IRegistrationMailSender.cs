@@ -14,6 +14,5 @@ internal interface IRegistrationMailSender
     /// </summary>
     /// <param name="email">User email</param>
     /// <param name="token">Confirmation token</param>
-    /// <returns></returns>
     Task Send(string email, Guid token);
 }

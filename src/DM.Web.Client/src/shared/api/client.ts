@@ -11,7 +11,10 @@ import type { ApiResult } from "./models/common";
 import { BbRenderMode } from "./bbRenderMode";
 import { useToast } from "@/shared/lib/composables/useToast";
 
-type QueryParams = Record<string, string | number | boolean | undefined>;
+type QueryParams = Record<
+  string,
+  string | number | boolean | string[] | number[] | undefined
+>;
 type RequestBody = object | FormData;
 
 const renderKey = "x-dm-bb-render-mode";
@@ -31,6 +34,10 @@ const configuration: AxiosRequestConfig = {
   responseType: "json",
   timeout: 30000,
   withCredentials: true, // Required for HttpOnly cookie authentication
+  paramsSerializer: {
+    // ASP.NET Core expects: key=val1&key=val2 (no brackets/indices)
+    indexes: null,
+  },
 };
 
 class Api {
@@ -53,9 +60,11 @@ class Api {
         if (error.response?.status === 429) {
           const { warning } = useToast();
           const retryAfter = error.response.headers?.["retry-after"];
-          warning(retryAfter
-            ? `Слишком много запросов. Повторите через ${retryAfter} сек.`
-            : "Слишком много запросов. Повторите позже.");
+          warning(
+            retryAfter
+              ? `Слишком много запросов. Повторите через ${retryAfter} сек.`
+              : "Слишком много запросов. Повторите позже.",
+          );
         }
 
         // Handle 500+ Server Errors
@@ -71,7 +80,7 @@ class Api {
         }
 
         return Promise.reject(error);
-      }
+      },
     );
   }
 
@@ -101,9 +110,7 @@ class Api {
       );
     }
 
-    return this.send(() =>
-      this.axios.get(url, { params, headers }),
-    );
+    return this.send(() => this.axios.get(url, { params, headers }));
   }
 
   public post<T>(url: string, body?: RequestBody): Promise<ApiResult<T>> {

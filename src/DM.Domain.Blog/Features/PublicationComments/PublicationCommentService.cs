@@ -61,7 +61,7 @@ internal class PublicationCommentService : IPublicationCommentService
         _intentionManager.ThrowIfForbidden(PublicationIntention.CreateComment, publication);
 
         // Check blacklist
-        var blog = await _blogService.GetBlog(publication.BlogId);
+        var blog = await _blogService.GetBlogAsync(publication.BlogId);
         var currentUserId = _identityProvider.Current.User.UserId;
         if (blog.BlacklistedUserIds.Contains(currentUserId))
         {
@@ -81,15 +81,15 @@ internal class PublicationCommentService : IPublicationCommentService
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid publicationId, PagingQuery query,
+    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid publicationId, PublicationCommentsQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
         await _blogService.GetPublication(publicationId);
 
-        var totalCount = await _repository.Count(publicationId, excludeUserIds);
+        var totalCount = await _repository.Count(publicationId, query, excludeUserIds);
         var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.CommentsPerPage, totalCount);
 
-        var comments = await _repository.Get(publicationId, paging, excludeUserIds);
+        var comments = await _repository.Get(publicationId, query, paging, excludeUserIds);
 
         return (comments, paging.Result);
     }

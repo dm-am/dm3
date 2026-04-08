@@ -27,10 +27,9 @@ public interface IPollService
     /// <summary>
     /// Get list of polls
     /// </summary>
-    /// <param name="pagingQuery">Paging query</param>
-    /// <param name="onlyActive">Only get active polls</param>
+    /// <param name="query">Polls query with filters and sorting</param>
     /// <returns>Polls with paging info</returns>
-    Task<(IEnumerable<Poll> Polls, PagingResult Paging)> GetListAsync(PagingQuery pagingQuery, bool onlyActive);
+    Task<(IEnumerable<Poll> Polls, PagingResult Paging)> GetListAsync(PollsQuery query);
 
     /// <summary>
     /// Update existing poll

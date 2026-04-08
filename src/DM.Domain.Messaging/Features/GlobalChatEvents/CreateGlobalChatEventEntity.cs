@@ -26,7 +26,7 @@ public class CreateGlobalChatEventEntity
     /// <summary>
     /// Event start time
     /// </summary>
-    public DateTimeOffset StartsAtUtc { get; set; }
+    public DateTimeOffset StartsUtc { get; set; }
 
     /// <summary>
     /// Event duration
@@ -82,5 +82,5 @@ public class CreateGlobalChatEventParticipantEntity
     /// <summary>
     /// Join timestamp
     /// </summary>
-    public DateTimeOffset JoinedAtUtc { get; set; }
+    public DateTimeOffset JoinedUtc { get; set; }
 }

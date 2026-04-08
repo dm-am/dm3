@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Blog.Features.Blogs;
 
@@ -15,10 +16,34 @@ public interface IBlogService
     /// Get public blogs with paging
     /// </summary>
     /// <param name="query">Paging query</param>
+    /// <param name="search">Optional text search by title (fuzzy matching)</param>
+    /// <param name="status">Optional status filter</param>
+    /// <param name="hostUsernames">Optional host usernames (owner or assistant, OR logic)</param>
+    /// <param name="sortBy">Sort field: title, status, popularity, created (default), activated, closed</param>
+    /// <param name="sortOrder">Sort direction: asc or desc (default: desc)</param>
+    /// <param name="createdFromUtc">Created date range start</param>
+    /// <param name="createdToUtc">Created date range end</param>
+    /// <param name="activatedFromUtc">Activated date range start</param>
+    /// <param name="activatedToUtc">Activated date range end</param>
+    /// <param name="closedFromUtc">Closed date range start</param>
+    /// <param name="closedToUtc">Closed date range end</param>
     /// <param name="excludeOwnerIds">Optional owner IDs to exclude (for blacklist filtering)</param>
     /// <param name="ct">Cancellation token</param>
-    Task<(IEnumerable<BlogModel> blogs, PagingResult paging)> GetPublicBlogs(
-        PagingQuery query, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default);
+    Task<(IEnumerable<Blog> blogs, PagingResult paging)> GetPublicBlogs(
+        PagingQuery query,
+        string? search = null,
+        ModuleStatus? status = null,
+        IReadOnlyCollection<string>? hostUsernames = null,
+        string? sortBy = null,
+        string? sortOrder = null,
+        DateTimeOffset? createdFromUtc = null,
+        DateTimeOffset? createdToUtc = null,
+        DateTimeOffset? activatedFromUtc = null,
+        DateTimeOffset? activatedToUtc = null,
+        DateTimeOffset? closedFromUtc = null,
+        DateTimeOffset? closedToUtc = null,
+        IReadOnlyCollection<Guid>? excludeOwnerIds = null,
+        CancellationToken ct = default);
 
     /// <summary>
     /// Get popular blogs ordered by subscriber count
@@ -26,28 +51,38 @@ public interface IBlogService
     /// <param name="count">Number of blogs to return</param>
     /// <param name="excludeOwnerIds">Optional owner IDs to exclude (for blacklist filtering)</param>
     /// <param name="ct">Cancellation token</param>
-    Task<IEnumerable<BlogModel>> GetPopularBlogs(
+    Task<IEnumerable<Blog>> GetPopularBlogs(
         int count = 5, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default);
 
     /// <summary>
-    /// Get blogs by username
+    /// Get blogs where user is owner or assistant
     /// </summary>
-    Task<IEnumerable<BlogModel>> GetUserBlogs(string username, CancellationToken ct = default);
+    Task<IEnumerable<Blog>> GetUserBlogs(string username, CancellationToken ct = default);
 
     /// <summary>
     /// Get blog by ID
     /// </summary>
-    Task<BlogModel> Get(Guid blogId, CancellationToken ct = default);
+    Task<Blog> GetAsync(Guid blogId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get blog by ID (for authorization checks)
+    /// Get blog by public ID (5-letter URL identifier)
     /// </summary>
-    Task<BlogModel> GetBlog(Guid blogId, CancellationToken ct = default);
+    Task<Blog> GetByPublicIdAsync(string publicId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get blog details by ID (with full subscribers and assistants)
+    /// </summary>
+    Task<BlogDetails> GetDetailsAsync(Guid blogId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get blog by ID (for authorization checks, skips draft visibility)
+    /// </summary>
+    Task<Blog> GetBlogAsync(Guid blogId, CancellationToken ct = default);
 
     /// <summary>
     /// Get blog by owner username (personal blog)
     /// </summary>
-    Task<BlogModel> GetByOwnerUsername(string username, CancellationToken ct = default);
+    Task<Blog> GetByOwnerUsernameAsync(string username, CancellationToken ct = default);
 
     /// <summary>
     /// Add an assistant to a blog
@@ -57,12 +92,12 @@ public interface IBlogService
     /// <summary>
     /// Create a new blog
     /// </summary>
-    Task<BlogModel> Create(CreateBlog createBlog, CancellationToken ct = default);
+    Task<Blog> Create(CreateBlog createBlog, CancellationToken ct = default);
 
     /// <summary>
     /// Update blog
     /// </summary>
-    Task<BlogModel> Update(UpdateBlog updateBlog, CancellationToken ct = default);
+    Task<Blog> Update(UpdateBlog updateBlog, CancellationToken ct = default);
 
     /// <summary>
     /// Delete blog
@@ -150,5 +185,10 @@ public interface IBlogService
     /// <summary>
     /// Get blogs by IDs (for subscribed blogs)
     /// </summary>
-    Task<IEnumerable<BlogModel>> GetSubscribedBlogs(IEnumerable<Guid> blogIds, CancellationToken ct = default);
+    Task<IEnumerable<Blog>> GetSubscribedBlogs(IEnumerable<Guid> blogIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get blogs where current user is owner, mentor, or assistant
+    /// </summary>
+    Task<IEnumerable<Blog>> GetOwnBlogsAsync(CancellationToken ct = default);
 }

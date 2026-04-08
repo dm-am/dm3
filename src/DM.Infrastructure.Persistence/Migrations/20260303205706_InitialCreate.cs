@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,6 +12,9 @@ namespace DM.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            // Enable pg_trgm extension for fuzzy text search
+            migrationBuilder.Sql("CREATE EXTENSION IF NOT EXISTS pg_trgm;");
+
             migrationBuilder.CreateTable(
                 name: "OutboxEvents",
                 columns: table => new
@@ -21,8 +24,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     AggregateId = table.Column<Guid>(type: "uuid", nullable: false),
                     EventType = table.Column<int>(type: "integer", nullable: false),
                     Payload = table.Column<string>(type: "text", nullable: true),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    ProcessedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ProcessedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     IsProcessed = table.Column<bool>(type: "boolean", nullable: false),
                     RetryCount = table.Column<int>(type: "integer", nullable: false),
                     NextRetryUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
@@ -57,11 +60,28 @@ namespace DM.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     TagGroupId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Title = table.Column<string>(type: "text", nullable: false)
+                    Title = table.Column<string>(type: "text", nullable: false),
+                    Description = table.Column<string>(type: "text", nullable: true),
+                    SortOrder = table.Column<int>(type: "integer", nullable: false, defaultValue: 0)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_TagGroups", x => x.TagGroupId);
+                });
+
+            migrationBuilder.InsertData(
+                table: "TagGroups",
+                columns: new[] { "TagGroupId", "Title", "Description", "SortOrder" },
+                values: new object[,]
+                {
+                    { Guid.Parse("00000000-0000-0000-0000-000000000000"), "Система", "Ролевая система или набор правил, по которым ведется игра", 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000001"), "Жанр", "Жанр и сеттинг игрового мира", 1 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000002"), "Формат игры", "Тип игрового процесса и взаимодействия между участниками", 2 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000003"), "Формат постов", "Стиль и объем игровых постов", 3 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000004"), "Темп", "Ожидаемая скорость игры и частота постов", 4 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000005"), "Ограничения", "Особые требования и ограничения для участников", 5 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000006"), "Новички", "Игры от новичков и для новичков", 6 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000007"), "Деликатный контент", "Контент, требующий осознанного согласия участников", 7 }
                 });
 
             migrationBuilder.CreateTable(
@@ -69,8 +89,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     TagId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ShortId = table.Column<int>(type: "integer", nullable: false),
                     TagGroupId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Title = table.Column<string>(type: "text", nullable: false)
+                    Title = table.Column<string>(type: "text", nullable: false),
+                    Description = table.Column<string>(type: "text", nullable: true),
+                    SortOrder = table.Column<int>(type: "integer", nullable: false, defaultValue: 0)
                 },
                 constraints: table =>
                 {
@@ -81,6 +104,102 @@ namespace DM.Infrastructure.Persistence.Migrations
                         principalTable: "TagGroups",
                         principalColumn: "TagGroupId",
                         onDelete: ReferentialAction.Cascade);
+                });
+
+            // Tag group GUIDs:
+            // 00000000-0000-0000-0000-000000000000 = Система
+            // 00000000-0000-0000-0000-000000000001 = Жанр
+            // 00000000-0000-0000-0000-000000000002 = Формат игры
+            // 00000000-0000-0000-0000-000000000003 = Формат постов
+            // 00000000-0000-0000-0000-000000000004 = Темп
+            // 00000000-0000-0000-0000-000000000005 = Ограничения
+            // 00000000-0000-0000-0000-000000000006 = Новички
+            // 00000000-0000-0000-0000-000000000007 = Деликатный контент
+            migrationBuilder.InsertData(
+                table: "Tags",
+                columns: new[] { "TagId", "ShortId", "TagGroupId", "Title", "Description", "SortOrder" },
+                values: new object[,]
+                {
+                    // === Система ===
+                    { Guid.Parse("00000000-0000-0000-0000-000000000001"), 1, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Black Bird Pie", "Простая система с кубиком d6", 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000002"), 2, Guid.Parse("00000000-0000-0000-0000-000000000000"), "D&D", "Dungeons & Dragons — все редакции классической ролевой системы", 1 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000003"), 3, Guid.Parse("00000000-0000-0000-0000-000000000000"), "D&D 5e", "Dungeons & Dragons 5th Edition", 2 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000004"), 4, Guid.Parse("00000000-0000-0000-0000-000000000000"), "D100", "Системы на основе процентного броска", 3 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000005"), 5, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Dawn of Worlds", "Система для совместного создания мира", 4 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000006"), 6, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Fallout", "Адаптация сеттинга Fallout", 5 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000007"), 7, Guid.Parse("00000000-0000-0000-0000-000000000000"), "FATAL", "Без комментариев", 6 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000008"), 8, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Fate", "Нарративная система с аспектами и фейт-пойнтами", 7 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000009"), 9, Guid.Parse("00000000-0000-0000-0000-000000000000"), "FUDGE", "Универсальный движок для реализации практически любого концепта", 8 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000000a"), 10, Guid.Parse("00000000-0000-0000-0000-000000000000"), "GURPS", "Универсальная система на базе броска 3d6 vs Сложность", 9 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000000b"), 11, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Interlock", "Система от R. Talsorian Games (Cyberpunk 2020 и другие)", 10 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000000c"), 12, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Microscope", "Система для создания эпических историй", 11 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000000d"), 13, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Pathfinder 1e", "Pathfinder первой редакции", 12 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000000e"), 14, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Pathfinder 2e", "Pathfinder второй редакции", 13 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000000f"), 15, Guid.Parse("00000000-0000-0000-0000-000000000000"), "PbtA", "Нарративные системы на базе 2d6 vs Сложность", 14 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000010"), 16, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Risus", "Минималистичная комедийная система", 15 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000011"), 17, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Savage Worlds", "Легковесная универсальная система — Fast! Furious! Fun!", 16 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000012"), 18, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Starfinder 1e", "Sci-fi спин-офф Pathfinder", 17 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000013"), 19, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Starfinder 2e", "Starfinder второй редакции", 18 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000014"), 20, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Warhammer", "Системы по вселенной Warhammer", 19 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000015"), 21, Guid.Parse("00000000-0000-0000-0000-000000000000"), "World of Darkness", "Мир Тьмы — вампиры, оборотни, маги", 20 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000016"), 22, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Авторская", "Оригинальная система от мастера игры", 21 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000017"), 23, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Мафия", "Психологическая детективная командная игра", 22 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000018"), 24, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Словеска", "Игра без формальной системы правил", 23 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000019"), 25, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Эра Водолея", "Отечественная система ролевых игр", 24 },
+
+                    // === Жанр ===
+                    { Guid.Parse("00000000-0000-0000-0000-00000000001a"), 26, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Альтернативная история", "Переосмысление исторических событий", 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000001b"), 27, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Боевик", "Акцент на экшн и сражениях", 1 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000001c"), 28, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Детектив", "Расследования и разгадывание тайн", 2 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000001d"), 29, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Зомби", "Зомби-апокалипсис и выживание", 3 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000001e"), 30, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Историческое", "Действие в реальную историческую эпоху", 4 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000001f"), 31, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Киберпанк", "Высокие технологии, низкий уровень жизни", 5 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000020"), 32, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Комедия", "Юмор и абсурдные ситуации", 6 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000021"), 33, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Космоопера", "Эпические приключения в космосе", 7 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000022"), 34, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Мистика", "Сверхъестественные элементы и тайны", 8 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000023"), 35, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Наши дни", "Современный реалистичный сеттинг", 9 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000024"), 36, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Постапокалипсис", "Мир после катастрофы", 10 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000025"), 37, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Психоделика", "Сюрреалистичные и необычные миры", 11 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000026"), 38, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Стимпанк", "Паровые технологии и викторианская эстетика", 12 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000027"), 39, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Триллер", "Напряжение и саспенс", 13 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000028"), 40, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Трэш", "Нарочито нелепый и провокационный контент", 14 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000029"), 41, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Ужасы", "Хоррор и атмосфера страха", 15 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000002a"), 42, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Фантастика", "Научная фантастика и будущее", 16 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000002b"), 43, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Фэнтези", "Магия, мечи и волшебные миры", 17 },
+
+                    // === Формат игры ===
+                    { Guid.Parse("00000000-0000-0000-0000-00000000002c"), 44, Guid.Parse("00000000-0000-0000-0000-000000000002"), "Dungeon Crawl", "Исследование подземелий и сражения с монстрами", 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000002d"), 45, Guid.Parse("00000000-0000-0000-0000-000000000002"), "PvP", "Противостояние между игроками", 1 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000002e"), 46, Guid.Parse("00000000-0000-0000-0000-000000000002"), "Выживание", "Борьба за выживание в суровых условиях", 2 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000002f"), 47, Guid.Parse("00000000-0000-0000-0000-000000000002"), "Песочница", "Открытый мир без сюжетных ограничений", 3 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000030"), 48, Guid.Parse("00000000-0000-0000-0000-000000000002"), "Стратегия", "Управление ресурсами и принятие глобальных решений", 4 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000031"), 49, Guid.Parse("00000000-0000-0000-0000-000000000002"), "Сюжетная", "Фокус на развитии истории", 5 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000032"), 50, Guid.Parse("00000000-0000-0000-0000-000000000002"), "Тактика", "Тактические бои и позиционирование", 6 },
+
+                    // === Формат постов ===
+                    { Guid.Parse("00000000-0000-0000-0000-000000000033"), 51, Guid.Parse("00000000-0000-0000-0000-000000000003"), "Короткопост", "Короткие посты в 1-3 абзаца", 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000034"), 52, Guid.Parse("00000000-0000-0000-0000-000000000003"), "Литературная", "Развернутые литературные посты", 1 },
+
+                    // === Темп ===
+                    { Guid.Parse("00000000-0000-0000-0000-000000000035"), 53, Guid.Parse("00000000-0000-0000-0000-000000000004"), "Неторопливый", "Посты раз в несколько дней", 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000036"), 54, Guid.Parse("00000000-0000-0000-0000-000000000004"), "Скоростной", "Несколько постов в день", 1 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000003e"), 62, Guid.Parse("00000000-0000-0000-0000-000000000004"), "Сухие сезоны", "Возможны продолжительные периоды без постов", 2 },
+
+                    // === Ограничения ===
+                    { Guid.Parse("00000000-0000-0000-0000-000000000037"), 55, Guid.Parse("00000000-0000-0000-0000-000000000005"), "Без мата", "Нецензурная лексика запрещена", 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000038"), 56, Guid.Parse("00000000-0000-0000-0000-000000000005"), "Без насилия", "Минимум жестокости и крови", 1 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000039"), 57, Guid.Parse("00000000-0000-0000-0000-000000000005"), "Grammar Nazi", "Повышенные требования к грамотности", 2 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000003a"), 58, Guid.Parse("00000000-0000-0000-0000-000000000005"), "Для своих", "Игра для знакомой компании", 3 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000003b"), 59, Guid.Parse("00000000-0000-0000-0000-000000000005"), "Обязателен мессенджер", "Обсуждение игровых вопросов во внешнем мессенджере", 4 },
+
+                    // === Новички ===
+                    { Guid.Parse("00000000-0000-0000-0000-00000000003c"), 60, Guid.Parse("00000000-0000-0000-0000-000000000006"), "Для новичков", "Игра подходит для начинающих", 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000003d"), 61, Guid.Parse("00000000-0000-0000-0000-000000000006"), "Мастер-новичок", "Мастер игры — начинающий", 1 },
+
+                    // === Деликатный контент ===
+                    { Guid.Parse("00000000-0000-0000-0000-00000000003f"), 63, Guid.Parse("00000000-0000-0000-0000-000000000007"), "ERP", "Erotic Role-Play: [tipimg:/images/erp-tooltip.gif]эротические сцены[/tipimg] как основа игрового процесса", 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000040"), 64, Guid.Parse("00000000-0000-0000-0000-000000000007"), "Шок-контент", "Чернуха, максимально шокирующий и отталкивающий контент без ограничений", 1 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000041"), 65, Guid.Parse("00000000-0000-0000-0000-000000000007"), "Острые темы", "Игра затрагивает спорные или чувствительные социальные темы", 2 }
                 });
 
             migrationBuilder.CreateTable(
@@ -136,18 +255,25 @@ namespace DM.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     BlogId = table.Column<Guid>(type: "uuid", nullable: false),
+                    SerialNumber = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    PublicId = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
                     AuthorId = table.Column<Guid>(type: "uuid", nullable: false),
                     Title = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     Description = table.Column<string>(type: "text", nullable: false),
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     UpdatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     Status = table.Column<int>(type: "integer", nullable: false),
+                    ActivatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ClosedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     PremoderationStatus = table.Column<int>(type: "integer", nullable: false),
                     MentorId = table.Column<Guid>(type: "uuid", nullable: true),
                     DraftVisibility = table.Column<int>(type: "integer", nullable: false),
                     CommentsEnabled = table.Column<bool>(type: "boolean", nullable: false),
                     PublicationCount = table.Column<int>(type: "integer", nullable: false),
                     CommentCount = table.Column<int>(type: "integer", nullable: false),
+                    PopularityScore = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    PopularityScoreUpdatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     LastCommentId = table.Column<Guid>(type: "uuid", nullable: true),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
@@ -177,6 +303,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                 {
                     BoardId = table.Column<Guid>(type: "uuid", nullable: false),
                     Title = table.Column<string>(type: "text", nullable: false),
+                    Alias = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     Description = table.Column<string>(type: "text", nullable: true),
                     Order = table.Column<int>(type: "integer", nullable: false),
                     ViewPolicy = table.Column<int>(type: "integer", nullable: false),
@@ -185,12 +312,47 @@ namespace DM.Infrastructure.Persistence.Migrations
                     CommentsCount = table.Column<int>(type: "integer", nullable: false),
                     LastCommentId = table.Column<Guid>(type: "uuid", nullable: true),
                     LastCommentTopicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastCommentTopicTitle = table.Column<string>(type: "text", nullable: true),
+                    LastCommentTopicNumber = table.Column<int>(type: "integer", nullable: true),
                     LastCommentAuthorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastCommentUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                    LastCommentUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    LastTopicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastTopicNumber = table.Column<int>(type: "integer", nullable: true),
+                    LastTopicTitle = table.Column<string>(type: "text", nullable: true),
+                    LastTopicAuthorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastTopicCreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Boards", x => x.BoardId);
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Boards_Alias",
+                table: "Boards",
+                column: "Alias",
+                unique: true);
+
+            // Seed forum boards
+            // ViewPolicy and CreateTopicPolicy use BoardAccessPolicy flags:
+            // RegularUser = 32, Mentor = 4, Moderator = 7, SeniorModerator = 11, Admin = 15, Everyone = 64, Nobody = 1
+            // Alias: ASCII lowercase with hyphens, no Cyrillic
+            migrationBuilder.InsertData(
+                table: "Boards",
+                columns: new[] { "BoardId", "Title", "Alias", "Description", "Order", "ViewPolicy", "CreateTopicPolicy", "TopicsCount", "CommentsCount" },
+                values: new object[,]
+                {
+                    { Guid.Parse("00000000-0000-0000-0000-000000000001"), "Общий", "general", "Жизнь сообщества и решения администрации", 1, 64, 32, 1, 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000002"), "Игровые системы", "game-systems", "Обсуждение правил и помощь в выборе системы", 2, 64, 32, 0, 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000003"), "Поиск мастера и игроков", "looking-for-group", "Набор игроков в игру или поиск мастера", 3, 64, 32, 0, 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000004"), "Котел идей", "ideas", "Обкатка задумок и поиск единомышленников", 4, 64, 32, 0, 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000005"), "Конкурсы", "contests", "Литературные и творческие состязания", 5, 64, 4, 0, 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000006"), "Под столом", "off-topic", "Музыка, книги, кино, мемы и все остальное", 6, 64, 32, 0, 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000007"), "Неролевые игры", "forum-games", "Словесные игры, ассоциации и прочие развлечения", 7, 64, 32, 0, 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000008"), "Улучшение сайта", "improvements", "Идеи и предложения по развитию сайта", 8, 64, 32, 0, 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-000000000009"), "Ошибки", "bugs", "Сообщения об ошибках на сайте", 9, 64, 32, 0, 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000000a"), "Для новичков", "newbies", "Руководства, ответы на вопросы и помощь новичкам", 10, 64, 32, 0, 0 },
+                    { Guid.Parse("00000000-0000-0000-0000-00000000000b"), "Новости проекта", "news", "Официальные новости, обновления и статистика", 11, 64, 4, 0, 0 }
                 });
 
             migrationBuilder.CreateTable(
@@ -214,7 +376,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     CharacterEditId = table.Column<Guid>(type: "uuid", nullable: false),
                     CharacterId = table.Column<Guid>(type: "uuid", nullable: false),
                     EditorUserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EditedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    EditedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -233,8 +395,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     IsPlayerLeft = table.Column<bool>(type: "boolean", nullable: false),
                     IsPlayerExiled = table.Column<bool>(type: "boolean", nullable: false),
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    ModifiedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    ModifiedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     Name = table.Column<string>(type: "text", nullable: false),
                     Race = table.Column<string>(type: "text", nullable: true),
                     Class = table.Column<string>(type: "text", nullable: true),
@@ -260,8 +420,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     ChatId = table.Column<Guid>(type: "uuid", nullable: false),
+                    SerialNumber = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    PublicId = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
                     Type = table.Column<int>(type: "integer", nullable: false),
                     Title = table.Column<string>(type: "text", nullable: true),
+                    RoomId = table.Column<Guid>(type: "uuid", nullable: true),
                     LastMessageId = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
@@ -270,17 +434,17 @@ namespace DM.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "CommentEditHistory",
+                name: "CommentEdits",
                 columns: table => new
                 {
                     CommentEditId = table.Column<Guid>(type: "uuid", nullable: false),
                     CommentId = table.Column<Guid>(type: "uuid", nullable: false),
                     EditorUserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EditedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    EditedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_CommentEditHistory", x => x.CommentEditId);
+                    table.PrimaryKey("PK_CommentEdits", x => x.CommentEditId);
                 });
 
             migrationBuilder.CreateTable(
@@ -291,8 +455,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     EntityId = table.Column<Guid>(type: "uuid", nullable: false),
                     AuthorId = table.Column<Guid>(type: "uuid", nullable: false),
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    ModifiedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    ModifiedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     Text = table.Column<string>(type: "text", nullable: false),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
@@ -337,17 +499,26 @@ namespace DM.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     GameId = table.Column<Guid>(type: "uuid", nullable: false),
+                    SerialNumber = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    PublicId = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    ReleaseDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ActivatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     Status = table.Column<int>(type: "integer", nullable: false),
                     PremoderationStatus = table.Column<int>(type: "integer", nullable: false),
-                    IsFinished = table.Column<bool>(type: "boolean", nullable: false),
-                    IsFrozen = table.Column<bool>(type: "boolean", nullable: false),
+                    ClosedReason = table.Column<int>(type: "integer", nullable: false),
+                    DraftVisibility = table.Column<int>(type: "integer", nullable: false),
                     IsRecruitmentOpen = table.Column<bool>(type: "boolean", nullable: false),
-                    RecruitmentPlayerLimit = table.Column<int>(type: "integer", nullable: true),
+                    RecruitmentPcLimit = table.Column<int>(type: "integer", nullable: true),
                     RecruitmentStartedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    RecruitmentCount = table.Column<int>(type: "integer", nullable: false),
                     ClosedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    AuthorId = table.Column<Guid>(type: "uuid", nullable: false),
+                    LastPostCreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    InactivityWarningUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ClosureWarningUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    PopularityScore = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    PopularityScoreUpdatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    MasterId = table.Column<Guid>(type: "uuid", nullable: false),
                     MentorId = table.Column<Guid>(type: "uuid", nullable: true),
                     AttributeSchemaId = table.Column<Guid>(type: "uuid", nullable: true),
                     Title = table.Column<string>(type: "text", nullable: false),
@@ -365,7 +536,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                     CommentsAccessMode = table.Column<int>(type: "integer", nullable: false),
                     CommentCount = table.Column<int>(type: "integer", nullable: false),
                     LastCommentId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false)
+                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -403,6 +576,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                 {
                     RoomId = table.Column<Guid>(type: "uuid", nullable: false),
                     GameId = table.Column<Guid>(type: "uuid", nullable: false),
+                    RoomNumber = table.Column<int>(type: "integer", nullable: false),
                     Title = table.Column<string>(type: "text", nullable: false),
                     AccessType = table.Column<int>(type: "integer", nullable: false),
                     Type = table.Column<int>(type: "integer", nullable: false),
@@ -412,7 +586,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                     DiceEnabled = table.Column<bool>(type: "boolean", nullable: false),
                     PreviousRoomId = table.Column<Guid>(type: "uuid", nullable: true),
                     NextRoomId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false)
+                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ChatId = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -443,7 +620,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     GlobalChatEventId = table.Column<Guid>(type: "uuid", nullable: false),
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
                     IsOrganizer = table.Column<bool>(type: "boolean", nullable: false),
-                    JoinedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    JoinedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -457,14 +634,14 @@ namespace DM.Infrastructure.Persistence.Migrations
                     GlobalChatEventId = table.Column<Guid>(type: "uuid", nullable: false),
                     Title = table.Column<string>(type: "text", nullable: false),
                     Description = table.Column<string>(type: "text", nullable: false),
-                    StartsAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    StartsUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     Duration = table.Column<TimeSpan>(type: "interval", nullable: true),
                     IsOpen = table.Column<bool>(type: "boolean", nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
                     CreatedByUserId = table.Column<Guid>(type: "uuid", nullable: false),
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    StartedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    EndedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                    StartedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    EndedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -477,6 +654,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                 {
                     LikeId = table.Column<Guid>(type: "uuid", nullable: false),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     EntityId = table.Column<Guid>(type: "uuid", nullable: false),
                     EntityType = table.Column<int>(type: "integer", nullable: false),
                     UserId = table.Column<Guid>(type: "uuid", nullable: false)
@@ -493,7 +672,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     MessageEditId = table.Column<Guid>(type: "uuid", nullable: false),
                     MessageId = table.Column<Guid>(type: "uuid", nullable: false),
                     EditorUserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EditedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    EditedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -508,8 +687,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
                     ChatId = table.Column<Guid>(type: "uuid", nullable: false),
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    ModifiedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    ModifiedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     Text = table.Column<string>(type: "text", nullable: false),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
@@ -568,6 +745,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_NotepadCategories", x => x.CategoryId);
+                    // FK_NotepadCategories_Users_DeletedByUserId added after Users table is created
                 });
 
             migrationBuilder.CreateTable(
@@ -597,6 +775,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         column: x => x.CategoryId,
                         principalTable: "NotepadCategories",
                         principalColumn: "CategoryId");
+                    // FK_NotepadEntries_Users_DeletedByUserId added after Users table is created
                 });
 
             migrationBuilder.CreateTable(
@@ -606,7 +785,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     PostEditId = table.Column<Guid>(type: "uuid", nullable: false),
                     PostId = table.Column<Guid>(type: "uuid", nullable: false),
                     EditorUserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EditedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    EditedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -653,11 +832,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     CharacterId = table.Column<Guid>(type: "uuid", nullable: true),
                     AuthorId = table.Column<Guid>(type: "uuid", nullable: false),
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    ModifiedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ModifiedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    Text = table.Column<string>(type: "text", nullable: false),
-                    comment = table.Column<string>(type: "text", nullable: true),
-                    MasterMessage = table.Column<string>(type: "text", nullable: true),
+                    GameText = table.Column<string>(type: "text", nullable: false),
+                    MetagameText = table.Column<string>(type: "text", nullable: true),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
@@ -684,6 +860,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                 {
                     PublicationId = table.Column<Guid>(type: "uuid", nullable: false),
                     BlogId = table.Column<Guid>(type: "uuid", nullable: false),
+                    PublicationNumber = table.Column<int>(type: "integer", nullable: false),
                     RubricId = table.Column<Guid>(type: "uuid", nullable: true),
                     AuthorId = table.Column<Guid>(type: "uuid", nullable: false),
                     Title = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
@@ -711,35 +888,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         principalTable: "Blogs",
                         principalColumn: "BlogId",
                         onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Reviews",
-                columns: table => new
-                {
-                    ReviewId = table.Column<Guid>(type: "uuid", nullable: false),
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    TargetType = table.Column<int>(type: "integer", nullable: false),
-                    TargetId = table.Column<Guid>(type: "uuid", nullable: true),
-                    CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    ModifiedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    ModifiedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Text = table.Column<string>(type: "text", nullable: true),
-                    IsApproved = table.Column<bool>(type: "boolean", nullable: false),
-                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
-                    SignValue = table.Column<short>(type: "smallint", nullable: true),
-                    ReasonType = table.Column<int>(type: "integer", nullable: true),
-                    PostAuthorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    GameId = table.Column<Guid>(type: "uuid", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Reviews", x => x.ReviewId);
-                    table.ForeignKey(
-                        name: "FK_Reviews_Games_GameId",
-                        column: x => x.GameId,
-                        principalTable: "Games",
-                        principalColumn: "GameId");
                 });
 
             migrationBuilder.CreateTable(
@@ -882,6 +1030,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     Type = table.Column<int>(type: "integer", nullable: false),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     CreatorId = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
@@ -906,7 +1056,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     TopicEditId = table.Column<Guid>(type: "uuid", nullable: false),
                     TopicId = table.Column<Guid>(type: "uuid", nullable: false),
                     EditorUserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EditedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    EditedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -919,13 +1069,13 @@ namespace DM.Infrastructure.Persistence.Migrations
                 {
                     TopicId = table.Column<Guid>(type: "uuid", nullable: false),
                     BoardId = table.Column<Guid>(type: "uuid", nullable: false),
+                    TopicNumber = table.Column<int>(type: "integer", nullable: false),
                     AuthorId = table.Column<Guid>(type: "uuid", nullable: false),
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    ModifiedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    ModifiedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     Title = table.Column<string>(type: "text", nullable: false),
                     Text = table.Column<string>(type: "text", nullable: false),
                     IsAttached = table.Column<bool>(type: "boolean", nullable: false),
+                    AttachOrder = table.Column<int>(type: "integer", nullable: true),
                     IsClosed = table.Column<bool>(type: "boolean", nullable: false),
                     CommentCount = table.Column<int>(type: "integer", nullable: false),
                     LastCommentId = table.Column<Guid>(type: "uuid", nullable: true),
@@ -968,26 +1118,16 @@ namespace DM.Infrastructure.Persistence.Migrations
                     MediumFilePath = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     SmallFilePath = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     FileName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
-                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false)
+                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Uploads", x => x.UploadId);
-                    table.ForeignKey(
-                        name: "FK_Uploads_Characters_EntityId",
-                        column: x => x.EntityId,
-                        principalTable: "Characters",
-                        principalColumn: "CharacterId");
-                    table.ForeignKey(
-                        name: "FK_Uploads_Games_EntityId",
-                        column: x => x.EntityId,
-                        principalTable: "Games",
-                        principalColumn: "GameId");
-                    table.ForeignKey(
-                        name: "FK_Uploads_Posts_EntityId",
-                        column: x => x.EntityId,
-                        principalTable: "Posts",
-                        principalColumn: "PostId");
+                    // NOTE: FK constraints on EntityId are removed because it's a polymorphic column
+                    // that can reference Users, Games, Characters, or Posts depending on UploadType.
+                    // Application logic ensures referential integrity.
                 });
 
             migrationBuilder.CreateTable(
@@ -1032,6 +1172,231 @@ namespace DM.Infrastructure.Persistence.Migrations
                         onDelete: ReferentialAction.SetNull);
                 });
 
+            // Seed system user (Robot Administrator) for automated actions
+            migrationBuilder.InsertData(
+                table: "Users",
+                columns: new[] { "UserId", "Username", "Email", "CreatedUtc", "Role", "IsHonorary", "AccessPolicy", "Salt", "PasswordHash", "PasswordHashVersion", "RatingDisabled", "QualityRating", "QuantityRating", "IsRemoved", "Gender", "ShowBirthday" },
+                values: new object[]
+                {
+                    Guid.Parse("00000000-0000-0000-0000-000000000001"), // SystemUser.Id
+                    "Робот-Администратор", // SystemUser.Username
+                    "system@dm.local", // SystemUser.Email
+                    new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero), // CreatedUtc
+                    6, // UserRole.System
+                    false, // IsHonorary
+                    0, // AccessPolicy.NotSpecified
+                    "", // Salt (not used, cannot login)
+                    "", // PasswordHash (not used, cannot login)
+                    0, // PasswordHashVersion
+                    true, // RatingDisabled
+                    0, // QualityRating
+                    0, // QuantityRating
+                    false, // IsRemoved
+                    0, // Gender.NotSpecified
+                    false // ShowBirthday
+                });
+
+            // Seed global chat (well-known ID for site-wide chat)
+            migrationBuilder.InsertData(
+                table: "Chats",
+                columns: new[] { "ChatId", "Type", "Title", "RoomId", "LastMessageId" },
+                values: new object[]
+                {
+                    Guid.Parse("00000000-0000-0000-0000-000000000001"), // Chat.GlobalChatId
+                    2, // ChatType.Global
+                    "Глобальный чат", // Title
+                    null, // RoomId
+                    null // LastMessageId
+                });
+
+            // === UserEndorsements: Positive recommendations of users (BBCode, no likes) ===
+            migrationBuilder.CreateTable(
+                name: "UserEndorsements",
+                columns: table => new
+                {
+                    UserEndorsementId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AuthorId = table.Column<Guid>(type: "uuid", nullable: false),
+                    TargetUserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ModifiedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ModifiedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Text = table.Column<string>(type: "text", nullable: false),
+                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UserEndorsements", x => x.UserEndorsementId);
+                    table.ForeignKey(
+                        name: "FK_UserEndorsements_Users_AuthorId",
+                        column: x => x.AuthorId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_UserEndorsements_Users_DeletedByUserId",
+                        column: x => x.DeletedByUserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_UserEndorsements_Users_TargetUserId",
+                        column: x => x.TargetUserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_UserEndorsements_Users_ModifiedByUserId",
+                        column: x => x.ModifiedByUserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            // === WebsiteTestimonials: Positive website reviews (plain text, no likes) ===
+            migrationBuilder.CreateTable(
+                name: "WebsiteTestimonials",
+                columns: table => new
+                {
+                    WebsiteTestimonialId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AuthorId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ModifiedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ModifiedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Text = table.Column<string>(type: "text", nullable: false),
+                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_WebsiteTestimonials", x => x.WebsiteTestimonialId);
+                    table.ForeignKey(
+                        name: "FK_WebsiteTestimonials_Users_AuthorId",
+                        column: x => x.AuthorId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_WebsiteTestimonials_Users_DeletedByUserId",
+                        column: x => x.DeletedByUserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_WebsiteTestimonials_Users_ModifiedByUserId",
+                        column: x => x.ModifiedByUserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            // === GameReviews: Reviews of games by players (BBCode, no likes) ===
+            migrationBuilder.CreateTable(
+                name: "GameReviews",
+                columns: table => new
+                {
+                    GameReviewId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AuthorId = table.Column<Guid>(type: "uuid", nullable: false),
+                    GameId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ModifiedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ModifiedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Text = table.Column<string>(type: "text", nullable: false),
+                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_GameReviews", x => x.GameReviewId);
+                    table.ForeignKey(
+                        name: "FK_GameReviews_Users_AuthorId",
+                        column: x => x.AuthorId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_GameReviews_Games_GameId",
+                        column: x => x.GameId,
+                        principalTable: "Games",
+                        principalColumn: "GameId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_GameReviews_Users_ModifiedByUserId",
+                        column: x => x.ModifiedByUserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_GameReviews_Users_DeletedByUserId",
+                        column: x => x.DeletedByUserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            // === PostReviews: Post reviews with ratings (BBCode, HAS likes) ===
+            migrationBuilder.CreateTable(
+                name: "PostReviews",
+                columns: table => new
+                {
+                    PostReviewId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AuthorId = table.Column<Guid>(type: "uuid", nullable: false),
+                    PostId = table.Column<Guid>(type: "uuid", nullable: false),
+                    PostAuthorId = table.Column<Guid>(type: "uuid", nullable: false),
+                    GameId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ModifiedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ModifiedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Text = table.Column<string>(type: "text", nullable: true),
+                    SignValue = table.Column<short>(type: "smallint", nullable: false),
+                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PostReviews", x => x.PostReviewId);
+                    table.ForeignKey(
+                        name: "FK_PostReviews_Users_AuthorId",
+                        column: x => x.AuthorId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_PostReviews_Posts_PostId",
+                        column: x => x.PostId,
+                        principalTable: "Posts",
+                        principalColumn: "PostId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_PostReviews_Users_PostAuthorId",
+                        column: x => x.PostAuthorId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_PostReviews_Games_GameId",
+                        column: x => x.GameId,
+                        principalTable: "Games",
+                        principalColumn: "GameId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_PostReviews_Users_ModifiedByUserId",
+                        column: x => x.ModifiedByUserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_PostReviews_Users_DeletedByUserId",
+                        column: x => x.DeletedByUserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
             migrationBuilder.CreateTable(
                 name: "UserBlacklists",
                 columns: table => new
@@ -1065,7 +1430,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                     UserChatLinkId = table.Column<Guid>(type: "uuid", nullable: false),
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
                     ChatId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false)
+                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1082,6 +1449,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                         principalTable: "Users",
                         principalColumn: "UserId",
                         onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_UserChatLinks_Users_DeletedByUserId",
+                        column: x => x.DeletedByUserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
@@ -1138,7 +1511,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     Status = table.Column<int>(type: "integer", nullable: false),
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     ApprovalToken = table.Column<Guid>(type: "uuid", nullable: true),
-                    ApprovalTokenExpiresAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ApprovalTokenExpiresUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     ResolvedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     ResolvedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     ResolverComment = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true)
@@ -1245,6 +1618,23 @@ namespace DM.Infrastructure.Persistence.Migrations
                         onDelete: ReferentialAction.Cascade);
                 });
 
+            // Add FKs for Notepad entities (created before Users table)
+            migrationBuilder.AddForeignKey(
+                name: "FK_NotepadCategories_Users_DeletedByUserId",
+                table: "NotepadCategories",
+                column: "DeletedByUserId",
+                principalTable: "Users",
+                principalColumn: "UserId",
+                onDelete: ReferentialAction.SetNull);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_NotepadEntries_Users_DeletedByUserId",
+                table: "NotepadEntries",
+                column: "DeletedByUserId",
+                principalTable: "Users",
+                principalColumn: "UserId",
+                onDelete: ReferentialAction.SetNull);
+
             migrationBuilder.CreateIndex(
                 name: "IX_Bans_AuthorId",
                 table: "Bans",
@@ -1295,6 +1685,26 @@ namespace DM.Infrastructure.Persistence.Migrations
                 table: "Blogs",
                 column: "MentorId");
 
+            // Performance index for popularity sorting
+            migrationBuilder.CreateIndex(
+                name: "IX_Blogs_PopularityScore",
+                table: "Blogs",
+                column: "PopularityScore");
+
+            // Unique index for PublicId lookups
+            migrationBuilder.CreateIndex(
+                name: "IX_Blogs_PublicId",
+                table: "Blogs",
+                column: "PublicId",
+                unique: true);
+
+            // Unique index for SerialNumber (auto-increment)
+            migrationBuilder.CreateIndex(
+                name: "IX_Blogs_SerialNumber",
+                table: "Blogs",
+                column: "SerialNumber",
+                unique: true);
+
             migrationBuilder.CreateIndex(
                 name: "IX_BoardModerators_BoardId",
                 table: "BoardModerators",
@@ -1314,6 +1724,16 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "IX_Boards_LastCommentId",
                 table: "Boards",
                 column: "LastCommentId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Boards_LastTopicAuthorId",
+                table: "Boards",
+                column: "LastTopicAuthorId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Boards_LastTopicId",
+                table: "Boards",
+                column: "LastTopicId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_CharacterAttributes_CharacterId",
@@ -1346,23 +1766,33 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "GameId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Characters_ModifiedByUserId",
-                table: "Characters",
-                column: "ModifiedByUserId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Chats_LastMessageId",
                 table: "Chats",
                 column: "LastMessageId");
 
+            // Unique index for PublicId lookups (only for group chats)
             migrationBuilder.CreateIndex(
-                name: "IX_CommentEditHistory_CommentId",
-                table: "CommentEditHistory",
+                name: "IX_Chats_PublicId",
+                table: "Chats",
+                column: "PublicId",
+                unique: true,
+                filter: "\"PublicId\" IS NOT NULL");
+
+            // Unique index for SerialNumber
+            migrationBuilder.CreateIndex(
+                name: "IX_Chats_SerialNumber",
+                table: "Chats",
+                column: "SerialNumber",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_CommentEdits_CommentId",
+                table: "CommentEdits",
                 column: "CommentId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_CommentEditHistory_EditorUserId",
-                table: "CommentEditHistory",
+                name: "IX_CommentEdits_EditorUserId",
+                table: "CommentEdits",
                 column: "EditorUserId");
 
             migrationBuilder.CreateIndex(
@@ -1379,11 +1809,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "IX_Comments_EntityId",
                 table: "Comments",
                 column: "EntityId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Comments_ModifiedByUserId",
-                table: "Comments",
-                column: "ModifiedByUserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_GameAssistants_GameId",
@@ -1411,14 +1836,63 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "GameId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Games_AuthorId",
+                name: "IX_Games_MasterId",
                 table: "Games",
-                column: "AuthorId");
+                column: "MasterId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Games_MentorId",
                 table: "Games",
                 column: "MentorId");
+
+            // Performance index for popularity sorting
+            migrationBuilder.CreateIndex(
+                name: "IX_Games_PopularityScore",
+                table: "Games",
+                column: "PopularityScore");
+
+            // Performance index for status-based queries
+            migrationBuilder.CreateIndex(
+                name: "IX_Games_Status_IsRemoved",
+                table: "Games",
+                columns: new[] { "Status", "IsRemoved" });
+
+            // Unique index for PublicId lookups
+            migrationBuilder.CreateIndex(
+                name: "IX_Games_PublicId",
+                table: "Games",
+                column: "PublicId",
+                unique: true);
+
+            // Unique index for SerialNumber (auto-increment)
+            migrationBuilder.CreateIndex(
+                name: "IX_Games_SerialNumber",
+                table: "Games",
+                column: "SerialNumber",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Games_DeletedByUserId",
+                table: "Games",
+                column: "DeletedByUserId");
+
+            // Performance index for active characters query (popularity calculation)
+            migrationBuilder.CreateIndex(
+                name: "IX_Characters_GameId_Status_IsNpc_AuthorId",
+                table: "Characters",
+                columns: new[] { "GameId", "Status", "IsNpc", "AuthorId" });
+
+            // Performance index for subscriptions lookup (popularity calculation)
+            migrationBuilder.CreateIndex(
+                name: "IX_Subscriptions_TargetType_TargetId",
+                table: "Subscriptions",
+                columns: new[] { "TargetType", "TargetId" });
+
+            // Performance index for active users (active readers calculation)
+            migrationBuilder.CreateIndex(
+                name: "IX_Users_LastActivityUtc",
+                table: "Users",
+                column: "LastActivityUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_GameTags_GameId",
@@ -1451,6 +1925,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Likes_DeletedByUserId",
+                table: "Likes",
+                column: "DeletedByUserId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_MessageEdits_EditorUserId",
                 table: "MessageEdits",
                 column: "EditorUserId");
@@ -1476,11 +1955,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "GlobalChatEventId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Messages_ModifiedByUserId",
-                table: "Messages",
-                column: "ModifiedByUserId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Messages_UserId",
                 table: "Messages",
                 column: "UserId");
@@ -1501,9 +1975,19 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "AuthorId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_NotepadCategories_DeletedByUserId",
+                table: "NotepadCategories",
+                column: "DeletedByUserId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_NotepadEntries_AuthorId",
                 table: "NotepadEntries",
                 column: "AuthorId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_NotepadEntries_DeletedByUserId",
+                table: "NotepadEntries",
+                column: "DeletedByUserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_NotepadEntries_CategoryId",
@@ -1573,11 +2057,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "DeletedByUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Posts_ModifiedByUserId",
-                table: "Posts",
-                column: "ModifiedByUserId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Posts_RoomId",
                 table: "Posts",
                 column: "RoomId");
@@ -1607,35 +2086,114 @@ namespace DM.Infrastructure.Persistence.Migrations
                 table: "Publications",
                 column: "RubricId");
 
+            // Unique index for PublicationNumber within a Blog
             migrationBuilder.CreateIndex(
-                name: "IX_Reviews_GameId",
-                table: "Reviews",
-                column: "GameId",
-                filter: "\"IsRemoved\" = false AND \"GameId\" IS NOT NULL");
+                name: "IX_Publications_BlogId_PublicationNumber",
+                table: "Publications",
+                columns: new[] { "BlogId", "PublicationNumber" },
+                unique: true);
+
+            // === UserEndorsements indexes ===
+            migrationBuilder.CreateIndex(
+                name: "IX_UserEndorsements_AuthorId_TargetUserId",
+                table: "UserEndorsements",
+                columns: new[] { "AuthorId", "TargetUserId" },
+                unique: true,
+                filter: "\"IsRemoved\" = false");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Reviews_ModifiedByUserId",
-                table: "Reviews",
+                name: "IX_UserEndorsements_TargetUserId",
+                table: "UserEndorsements",
+                column: "TargetUserId",
+                filter: "\"IsRemoved\" = false");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UserEndorsements_ModifiedByUserId",
+                table: "UserEndorsements",
                 column: "ModifiedByUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Reviews_PostAuthorId",
-                table: "Reviews",
-                column: "PostAuthorId",
-                filter: "\"IsRemoved\" = false AND \"PostAuthorId\" IS NOT NULL");
+                name: "IX_UserEndorsements_DeletedByUserId",
+                table: "UserEndorsements",
+                column: "DeletedByUserId");
 
+            // === WebsiteTestimonials indexes ===
             migrationBuilder.CreateIndex(
-                name: "IX_Reviews_TargetType_TargetId",
-                table: "Reviews",
-                columns: new[] { "TargetType", "TargetId" },
-                filter: "\"IsRemoved\" = false");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Reviews_UserId_TargetType_TargetId",
-                table: "Reviews",
-                columns: new[] { "UserId", "TargetType", "TargetId" },
+                name: "IX_WebsiteTestimonials_AuthorId",
+                table: "WebsiteTestimonials",
+                column: "AuthorId",
                 unique: true,
                 filter: "\"IsRemoved\" = false");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WebsiteTestimonials_ModifiedByUserId",
+                table: "WebsiteTestimonials",
+                column: "ModifiedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WebsiteTestimonials_DeletedByUserId",
+                table: "WebsiteTestimonials",
+                column: "DeletedByUserId");
+
+            // === GameReviews indexes ===
+            migrationBuilder.CreateIndex(
+                name: "IX_GameReviews_AuthorId_GameId",
+                table: "GameReviews",
+                columns: new[] { "AuthorId", "GameId" },
+                unique: true,
+                filter: "\"IsRemoved\" = false");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_GameReviews_GameId",
+                table: "GameReviews",
+                column: "GameId",
+                filter: "\"IsRemoved\" = false");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_GameReviews_ModifiedByUserId",
+                table: "GameReviews",
+                column: "ModifiedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_GameReviews_DeletedByUserId",
+                table: "GameReviews",
+                column: "DeletedByUserId");
+
+            // === PostReviews indexes ===
+            migrationBuilder.CreateIndex(
+                name: "IX_PostReviews_AuthorId_PostId",
+                table: "PostReviews",
+                columns: new[] { "AuthorId", "PostId" },
+                unique: true,
+                filter: "\"IsRemoved\" = false");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PostReviews_PostAuthorId",
+                table: "PostReviews",
+                column: "PostAuthorId",
+                filter: "\"IsRemoved\" = false");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PostReviews_GameId",
+                table: "PostReviews",
+                column: "GameId",
+                filter: "\"IsRemoved\" = false");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PostReviews_PostId",
+                table: "PostReviews",
+                column: "PostId",
+                filter: "\"IsRemoved\" = false");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PostReviews_ModifiedByUserId",
+                table: "PostReviews",
+                column: "ModifiedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PostReviews_DeletedByUserId",
+                table: "PostReviews",
+                column: "DeletedByUserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RoomAccesses_CharacterId",
@@ -1666,6 +2224,18 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "IX_Rooms_PreviousRoomId",
                 table: "Rooms",
                 column: "PreviousRoomId");
+
+            // Unique index for RoomNumber within a Game
+            migrationBuilder.CreateIndex(
+                name: "IX_Rooms_GameId_RoomNumber",
+                table: "Rooms",
+                columns: new[] { "GameId", "RoomNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Rooms_DeletedByUserId",
+                table: "Rooms",
+                column: "DeletedByUserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RubricAccesses_RubricId",
@@ -1753,6 +2323,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                 columns: new[] { "UserId", "Type" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_Tokens_DeletedByUserId",
+                table: "Tokens",
+                column: "DeletedByUserId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_TopicEdits_EditorUserId",
                 table: "TopicEdits",
                 column: "EditorUserId");
@@ -1782,10 +2357,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                 table: "Topics",
                 column: "LastCommentId");
 
+            // Unique index for TopicNumber within a Board
             migrationBuilder.CreateIndex(
-                name: "IX_Topics_ModifiedByUserId",
+                name: "IX_Topics_BoardId_TopicNumber",
                 table: "Topics",
-                column: "ModifiedByUserId");
+                columns: new[] { "BoardId", "TopicNumber" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Uploads_EntityId",
@@ -1796,6 +2373,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "IX_Uploads_UserId",
                 table: "Uploads",
                 column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Uploads_DeletedByUserId",
+                table: "Uploads",
+                column: "DeletedByUserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserBlacklists_BlockedUserId",
@@ -1817,6 +2399,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "IX_UserChatLinks_UserId",
                 table: "UserChatLinks",
                 column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UserChatLinks_DeletedByUserId",
+                table: "UserChatLinks",
+                column: "DeletedByUserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserContacts_UserId",
@@ -2008,6 +2595,20 @@ namespace DM.Infrastructure.Persistence.Migrations
                 principalColumn: "UserId");
 
             migrationBuilder.AddForeignKey(
+                name: "FK_Boards_Topics_LastTopicId",
+                table: "Boards",
+                column: "LastTopicId",
+                principalTable: "Topics",
+                principalColumn: "TopicId");
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_Boards_Users_LastTopicAuthorId",
+                table: "Boards",
+                column: "LastTopicAuthorId",
+                principalTable: "Users",
+                principalColumn: "UserId");
+
+            migrationBuilder.AddForeignKey(
                 name: "FK_CharacterAttributes_Characters_CharacterId",
                 table: "CharacterAttributes",
                 column: "CharacterId",
@@ -2055,14 +2656,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 onDelete: ReferentialAction.SetNull);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_Characters_Users_ModifiedByUserId",
-                table: "Characters",
-                column: "ModifiedByUserId",
-                principalTable: "Users",
-                principalColumn: "UserId",
-                onDelete: ReferentialAction.SetNull);
-
-            migrationBuilder.AddForeignKey(
                 name: "FK_Chats_Messages_LastMessageId",
                 table: "Chats",
                 column: "LastMessageId",
@@ -2070,27 +2663,22 @@ namespace DM.Infrastructure.Persistence.Migrations
                 principalColumn: "MessageId");
 
             migrationBuilder.AddForeignKey(
-                name: "FK_CommentEditHistory_Comments_CommentId",
-                table: "CommentEditHistory",
+                name: "FK_CommentEdits_Comments_CommentId",
+                table: "CommentEdits",
                 column: "CommentId",
                 principalTable: "Comments",
                 principalColumn: "CommentId",
                 onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_CommentEditHistory_Users_EditorUserId",
-                table: "CommentEditHistory",
+                name: "FK_CommentEdits_Users_EditorUserId",
+                table: "CommentEdits",
                 column: "EditorUserId",
                 principalTable: "Users",
                 principalColumn: "UserId",
                 onDelete: ReferentialAction.Cascade);
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_Comments_Topics_EntityId",
-                table: "Comments",
-                column: "EntityId",
-                principalTable: "Topics",
-                principalColumn: "TopicId");
+            // NOTE: FK_Comments_Topics_EntityId removed - EntityId is polymorphic (Topics, Games, Blogs, Publications)
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Comments_Users_AuthorId",
@@ -2104,14 +2692,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "FK_Comments_Users_DeletedByUserId",
                 table: "Comments",
                 column: "DeletedByUserId",
-                principalTable: "Users",
-                principalColumn: "UserId",
-                onDelete: ReferentialAction.SetNull);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Comments_Users_ModifiedByUserId",
-                table: "Comments",
-                column: "ModifiedByUserId",
                 principalTable: "Users",
                 principalColumn: "UserId",
                 onDelete: ReferentialAction.SetNull);
@@ -2157,9 +2737,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                 onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_Games_Users_AuthorId",
+                name: "FK_Games_Users_MasterId",
                 table: "Games",
-                column: "AuthorId",
+                column: "MasterId",
                 principalTable: "Users",
                 principalColumn: "UserId",
                 onDelete: ReferentialAction.Cascade);
@@ -2170,6 +2750,22 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "MentorId",
                 principalTable: "Users",
                 principalColumn: "UserId");
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_Games_Users_DeletedByUserId",
+                table: "Games",
+                column: "DeletedByUserId",
+                principalTable: "Users",
+                principalColumn: "UserId",
+                onDelete: ReferentialAction.SetNull);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_Rooms_Users_DeletedByUserId",
+                table: "Rooms",
+                column: "DeletedByUserId",
+                principalTable: "Users",
+                principalColumn: "UserId",
+                onDelete: ReferentialAction.SetNull);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_GlobalChatEventParticipants_GlobalChatEvents_GlobalChatEven~",
@@ -2204,6 +2800,14 @@ namespace DM.Infrastructure.Persistence.Migrations
                 onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.AddForeignKey(
+                name: "FK_Likes_Users_DeletedByUserId",
+                table: "Likes",
+                column: "DeletedByUserId",
+                principalTable: "Users",
+                principalColumn: "UserId",
+                onDelete: ReferentialAction.SetNull);
+
+            migrationBuilder.AddForeignKey(
                 name: "FK_MessageEdits_Messages_MessageId",
                 table: "MessageEdits",
                 column: "MessageId",
@@ -2223,14 +2827,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "FK_Messages_Users_DeletedByUserId",
                 table: "Messages",
                 column: "DeletedByUserId",
-                principalTable: "Users",
-                principalColumn: "UserId",
-                onDelete: ReferentialAction.SetNull);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Messages_Users_ModifiedByUserId",
-                table: "Messages",
-                column: "ModifiedByUserId",
                 principalTable: "Users",
                 principalColumn: "UserId",
                 onDelete: ReferentialAction.SetNull);
@@ -2323,14 +2919,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 onDelete: ReferentialAction.SetNull);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_Posts_Users_ModifiedByUserId",
-                table: "Posts",
-                column: "ModifiedByUserId",
-                principalTable: "Users",
-                principalColumn: "UserId",
-                onDelete: ReferentialAction.SetNull);
-
-            migrationBuilder.AddForeignKey(
                 name: "FK_Publications_Rubrics_RubricId",
                 table: "Publications",
                 column: "RubricId",
@@ -2359,27 +2947,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                 principalTable: "Users",
                 principalColumn: "UserId");
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_Reviews_Users_ModifiedByUserId",
-                table: "Reviews",
-                column: "ModifiedByUserId",
-                principalTable: "Users",
-                principalColumn: "UserId");
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Reviews_Users_PostAuthorId",
-                table: "Reviews",
-                column: "PostAuthorId",
-                principalTable: "Users",
-                principalColumn: "UserId");
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Reviews_Users_UserId",
-                table: "Reviews",
-                column: "UserId",
-                principalTable: "Users",
-                principalColumn: "UserId",
-                onDelete: ReferentialAction.Cascade);
+            // Foreign keys for review tables are added inline during table creation
 
             migrationBuilder.AddForeignKey(
                 name: "FK_RoomAccesses_Users_ReaderUserId",
@@ -2488,6 +3056,14 @@ namespace DM.Infrastructure.Persistence.Migrations
                 onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.AddForeignKey(
+                name: "FK_Tokens_Users_DeletedByUserId",
+                table: "Tokens",
+                column: "DeletedByUserId",
+                principalTable: "Users",
+                principalColumn: "UserId",
+                onDelete: ReferentialAction.SetNull);
+
+            migrationBuilder.AddForeignKey(
                 name: "FK_TopicEdits_Topics_TopicId",
                 table: "TopicEdits",
                 column: "TopicId",
@@ -2519,20 +3095,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                 principalColumn: "UserId",
                 onDelete: ReferentialAction.SetNull);
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_Topics_Users_ModifiedByUserId",
-                table: "Topics",
-                column: "ModifiedByUserId",
-                principalTable: "Users",
-                principalColumn: "UserId",
-                onDelete: ReferentialAction.SetNull);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Uploads_Users_EntityId",
-                table: "Uploads",
-                column: "EntityId",
-                principalTable: "Users",
-                principalColumn: "UserId");
+            // NOTE: FK_Uploads_Users_EntityId is not created because EntityId is polymorphic
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Uploads_Users_UserId",
@@ -2541,6 +3104,84 @@ namespace DM.Infrastructure.Persistence.Migrations
                 principalTable: "Users",
                 principalColumn: "UserId",
                 onDelete: ReferentialAction.Cascade);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_Uploads_Users_DeletedByUserId",
+                table: "Uploads",
+                column: "DeletedByUserId",
+                principalTable: "Users",
+                principalColumn: "UserId",
+                onDelete: ReferentialAction.SetNull);
+
+            // Trigram indexes for fuzzy search
+            migrationBuilder.Sql(
+                "CREATE INDEX IX_Users_Username_Trgm ON \"Users\" USING gin (\"Username\" gin_trgm_ops);");
+            migrationBuilder.Sql(
+                "CREATE INDEX IX_UsernameHistories_OldUsername_Trgm ON \"UsernameHistories\" USING gin (\"OldUsername\" gin_trgm_ops);");
+            migrationBuilder.Sql(
+                "CREATE INDEX IX_Games_Title_Trgm ON \"Games\" USING gin (\"Title\" gin_trgm_ops);");
+            migrationBuilder.Sql(
+                "CREATE INDEX IX_Blogs_Title_Trgm ON \"Blogs\" USING gin (\"Title\" gin_trgm_ops);");
+
+            // Seed forum topic for website reviews
+            migrationBuilder.InsertData(
+                table: "Topics",
+                columns: new[] { "TopicId", "BoardId", "TopicNumber", "AuthorId", "CreatedUtc", "Title", "Text", "IsAttached", "IsClosed", "CommentCount", "LastCommentId", "IsRemoved", "DeletedByUserId", "DeletedUtc" },
+                values: new object[]
+                {
+                    Guid.Parse("00000000-0000-0000-0000-000000000001"), // TopicId
+                    Guid.Parse("00000000-0000-0000-0000-000000000001"), // BoardId (Общий)
+                    1, // TopicNumber
+                    Guid.Parse("00000000-0000-0000-0000-000000000001"), // AuthorId (Robot)
+                    new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero), // CreatedUtc
+                    "Отзывы о ДМ", // Title
+                    "Ваши отзывы отсюда попадают (после минимального анализа на нарушения правил) прямиком на главную.", // Text
+                    true, // IsAttached (закреплена)
+                    false, // IsClosed
+                    0, // CommentCount
+                    null, // LastCommentId
+                    false, // IsRemoved
+                    null, // DeletedByUserId
+                    null // DeletedUtc
+                });
+
+            // Seed forum topic for admin discussion (referenced in helpLinks.ts)
+            migrationBuilder.InsertData(
+                table: "Topics",
+                columns: new[] { "TopicId", "BoardId", "TopicNumber", "AuthorId", "CreatedUtc", "Title", "Text", "IsAttached", "IsClosed", "CommentCount", "LastCommentId", "IsRemoved", "DeletedByUserId", "DeletedUtc" },
+                values: new object[]
+                {
+                    Guid.Parse("00000000-0000-0000-0000-000000000100"), // TopicId (well-known ID)
+                    Guid.Parse("00000000-0000-0000-0000-000000000001"), // BoardId (Общий)
+                    2, // TopicNumber
+                    Guid.Parse("00000000-0000-0000-0000-000000000001"), // AuthorId (Robot)
+                    new DateTimeOffset(2020, 1, 1, 0, 0, 1, TimeSpan.Zero), // CreatedUtc (+1 sec to be "newer")
+                    "Обсуждение действий администрации", // Title
+                    "Здесь можно обсудить решения модераторов и администрации. Конструктивная критика приветствуется.", // Text
+                    true, // IsAttached (закреплена)
+                    false, // IsClosed
+                    0, // CommentCount
+                    null, // LastCommentId
+                    false, // IsRemoved
+                    null, // DeletedByUserId
+                    null // DeletedUtc
+                });
+
+            // Update Board's LastTopic fields and TopicsCount for seeded topics
+            migrationBuilder.UpdateData(
+                table: "Boards",
+                keyColumn: "BoardId",
+                keyValue: Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                columns: new[] { "TopicsCount", "LastTopicId", "LastTopicNumber", "LastTopicTitle", "LastTopicAuthorId", "LastTopicCreatedUtc" },
+                values: new object[]
+                {
+                    2, // TopicsCount
+                    Guid.Parse("00000000-0000-0000-0000-000000000100"), // LastTopicId (admin discussion)
+                    2, // LastTopicNumber
+                    "Обсуждение действий администрации", // LastTopicTitle
+                    Guid.Parse("00000000-0000-0000-0000-000000000001"), // LastTopicAuthorId (Robot)
+                    new DateTimeOffset(2020, 1, 1, 0, 0, 1, TimeSpan.Zero) // LastTopicCreatedUtc
+                });
         }
 
         /// <inheritdoc />
@@ -2559,10 +3200,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 table: "Characters");
 
             migrationBuilder.DropForeignKey(
-                name: "FK_Characters_Users_ModifiedByUserId",
-                table: "Characters");
-
-            migrationBuilder.DropForeignKey(
                 name: "FK_Comments_Users_AuthorId",
                 table: "Comments");
 
@@ -2571,11 +3208,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                 table: "Comments");
 
             migrationBuilder.DropForeignKey(
-                name: "FK_Comments_Users_ModifiedByUserId",
-                table: "Comments");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_Games_Users_AuthorId",
+                name: "FK_Games_Users_MasterId",
                 table: "Games");
 
             migrationBuilder.DropForeignKey(
@@ -2583,15 +3216,19 @@ namespace DM.Infrastructure.Persistence.Migrations
                 table: "Games");
 
             migrationBuilder.DropForeignKey(
+                name: "FK_Games_Users_DeletedByUserId",
+                table: "Games");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_Rooms_Users_DeletedByUserId",
+                table: "Rooms");
+
+            migrationBuilder.DropForeignKey(
                 name: "FK_GlobalChatEvents_Users_CreatedByUserId",
                 table: "GlobalChatEvents");
 
             migrationBuilder.DropForeignKey(
                 name: "FK_Messages_Users_DeletedByUserId",
-                table: "Messages");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_Messages_Users_ModifiedByUserId",
                 table: "Messages");
 
             migrationBuilder.DropForeignKey(
@@ -2607,10 +3244,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 table: "Posts");
 
             migrationBuilder.DropForeignKey(
-                name: "FK_Posts_Users_ModifiedByUserId",
-                table: "Posts");
-
-            migrationBuilder.DropForeignKey(
                 name: "FK_Topics_Users_AuthorId",
                 table: "Topics");
 
@@ -2618,17 +3251,23 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "FK_Topics_Users_DeletedByUserId",
                 table: "Topics");
 
-            migrationBuilder.DropForeignKey(
-                name: "FK_Topics_Users_ModifiedByUserId",
-                table: "Topics");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_Uploads_Users_EntityId",
-                table: "Uploads");
+            // NOTE: FK_Uploads_Users_EntityId doesn't exist (EntityId is polymorphic)
 
             migrationBuilder.DropForeignKey(
                 name: "FK_Uploads_Users_UserId",
                 table: "Uploads");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_Uploads_Users_DeletedByUserId",
+                table: "Uploads");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_GameReviews_Users_DeletedByUserId",
+                table: "GameReviews");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_PostReviews_Users_DeletedByUserId",
+                table: "PostReviews");
 
             migrationBuilder.DropForeignKey(
                 name: "FK_Topics_Boards_BoardId",
@@ -2658,7 +3297,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "CharacterEdits");
 
             migrationBuilder.DropTable(
-                name: "CommentEditHistory");
+                name: "CommentEdits");
 
             migrationBuilder.DropTable(
                 name: "GameAssistants");
@@ -2700,7 +3339,13 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "Publications");
 
             migrationBuilder.DropTable(
-                name: "Reviews");
+                name: "UserEndorsements");
+
+            migrationBuilder.DropTable(
+                name: "GameReviews");
+
+            migrationBuilder.DropTable(
+                name: "PostReviews");
 
             migrationBuilder.DropTable(
                 name: "RoomAccesses");
@@ -2713,6 +3358,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "TicketResponses");
+
+            migrationBuilder.DropTable(
+                name: "WebsiteTestimonials");
 
             migrationBuilder.DropTable(
                 name: "Tokens");
@@ -2800,6 +3448,15 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "GlobalChatEvents");
+
+            // Drop trigram indexes
+            migrationBuilder.Sql("DROP INDEX IF EXISTS IX_Users_Username_Trgm;");
+            migrationBuilder.Sql("DROP INDEX IF EXISTS IX_UsernameHistories_OldUsername_Trgm;");
+            migrationBuilder.Sql("DROP INDEX IF EXISTS IX_Games_Title_Trgm;");
+            migrationBuilder.Sql("DROP INDEX IF EXISTS IX_Blogs_Title_Trgm;");
+
+            // Drop pg_trgm extension
+            migrationBuilder.Sql("DROP EXTENSION IF EXISTS pg_trgm;");
         }
     }
 }

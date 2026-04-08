@@ -33,8 +33,8 @@ internal class RegistrationRepository : IRegistrationRepository
 
     /// <inheritdoc />
     public async Task<bool> UsernameFree(string username, CancellationToken cancellationToken) =>
-        !await _dbContext.Users.AnyAsync(u => EF.Functions.ILike(u.Username, username), cancellationToken) &&
-        !await _dbContext.UsernameHistories.AnyAsync(h => EF.Functions.ILike(h.OldUsername, username), cancellationToken);
+        !await _dbContext.Users.AnyAsync(u => u.Username.ToLower() == username.ToLower(), cancellationToken) &&
+        !await _dbContext.UsernameHistories.AnyAsync(h => h.OldUsername.ToLower() == username.ToLower(), cancellationToken);
 
     /// <inheritdoc />
     public async Task<bool> PendingExists(string email, CancellationToken cancellationToken) =>

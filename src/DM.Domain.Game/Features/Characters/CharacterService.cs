@@ -234,8 +234,8 @@ internal class CharacterService : ICharacterService
             {
                 Id = a.Id,
                 Value = a.Value
-            }),
-            ModifiedUtc = _dateTimeProvider.Now
+            })
+            // Modification tracking is handled via Edit history, not inline ModifiedUtc
         };
 
         var character = await _repository.Update(entity);

@@ -155,7 +155,7 @@ internal class NotificationApiService : INotificationApiService
         return new BotLinkResult
         {
             Code = result.Code,
-            ExpiresAt = result.ExpiresAt
+            ExpiresUtc = result.ExpiresUtc
         };
     }
 

@@ -16,7 +16,7 @@ public interface IGameService
     /// <summary>
     /// Create new game
     /// </summary>
-    Task<GameExtended> CreateAsync(CreateGame createGame);
+    Task<GameDetails> CreateAsync(CreateGame createGame);
 
     #endregion
 
@@ -28,38 +28,40 @@ public interface IGameService
     Task<IEnumerable<GameTag>> GetTagsAsync();
 
     /// <summary>
-    /// Get user's own games
-    /// </summary>
-    Task<IEnumerable<GameModel>> GetOwnGamesAsync();
-
-    /// <summary>
     /// Get games page with filtering
     /// </summary>
     /// <param name="query">Search query</param>
     /// <returns>List of fetched games and paging data</returns>
-    Task<(IEnumerable<GameModel> games, PagingResult paging)> GetGamesAsync(GamesQuery query);
+    Task<(IEnumerable<Game> games, PagingResult paging)> GetGamesAsync(GamesQuery query);
 
     /// <summary>
     /// Get game by identifier
     /// </summary>
     /// <param name="gameId">Game identifier</param>
-    Task<GameModel> GetAsync(Guid gameId);
+    Task<Game> GetAsync(Guid gameId);
+
+    /// <summary>
+    /// Get game by public ID (5-letter URL identifier)
+    /// </summary>
+    /// <param name="publicId">Public identifier</param>
+    Task<Game> GetByPublicIdAsync(string publicId);
 
     /// <summary>
     /// Get game details by identifier
     /// </summary>
-    Task<GameExtended> GetDetailsAsync(Guid gameId);
+    Task<GameDetails> GetDetailsAsync(Guid gameId);
 
     /// <summary>
-    /// Get popular games
+    /// Get game details by public ID (5-letter URL identifier)
     /// </summary>
-    Task<IEnumerable<GameModel>> GetPopularAsync();
+    /// <param name="publicId">Public identifier</param>
+    Task<GameDetails> GetDetailsByPublicIdAsync(string publicId);
 
     /// <summary>
     /// Get games by IDs (for subscribed games)
     /// </summary>
     /// <param name="gameIds">Game identifiers</param>
-    Task<IEnumerable<GameModel>> GetSubscribedAsync(IEnumerable<Guid> gameIds);
+    Task<IEnumerable<Game>> GetSubscribedAsync(IEnumerable<Guid> gameIds);
 
     #endregion
 
@@ -69,7 +71,7 @@ public interface IGameService
     /// Update existing game
     /// </summary>
     /// <param name="updateGame">Update game model</param>
-    Task<GameExtended> UpdateAsync(UpdateGame updateGame);
+    Task<GameDetails> UpdateAsync(UpdateGame updateGame);
 
     #endregion
 
@@ -84,16 +86,6 @@ public interface IGameService
     #endregion
 
     #region Users
-
-    /// <summary>
-    /// Get list of game players (users with active characters)
-    /// </summary>
-    Task<IEnumerable<GeneralUser>> GetPlayersAsync(Guid gameId);
-
-    /// <summary>
-    /// Remove player from game (exile all their characters)
-    /// </summary>
-    Task RemovePlayerAsync(Guid gameId, string username);
 
     /// <summary>
     /// Get list of game assistants

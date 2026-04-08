@@ -15,6 +15,11 @@ public class Topic : ILikable
     /// <inheritdoc />
     public Guid Id { get; set; }
 
+    /// <summary>
+    /// Topic number within board (for URL, stable)
+    /// </summary>
+    public int TopicNumber { get; set; }
+
     /// <inheritdoc />
     public LikeEntityType LikeEntityType => LikeEntityType.Topic;
 
@@ -67,6 +72,11 @@ public class Topic : ILikable
     /// Attached
     /// </summary>
     public bool IsAttached { get; set; }
+
+    /// <summary>
+    /// Sort order for attached topics (0 = first, null = default order)
+    /// </summary>
+    public int? AttachOrder { get; set; }
 
     /// <summary>
     /// Closed

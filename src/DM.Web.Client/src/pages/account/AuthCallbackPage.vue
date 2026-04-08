@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
 import { useRouter } from "vue-router";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 
 const router = useRouter();
 
@@ -23,10 +23,10 @@ function goHome() {
 <template>
   <div class="auth-callback">
     <div class="callback-message">
-      <h2>OAuth не настроен</h2>
+      <page-title>OAuth не настроен</page-title>
       <p>Внешняя авторизация (Discord, Google) пока не реализована.</p>
       <p class="redirect-text">Перенаправляем на главную...</p>
-      <the-button @click="goHome">На главную</the-button>
+      <Button @click="goHome">На главную</Button>
     </div>
   </div>
 </template>

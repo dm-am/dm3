@@ -18,7 +18,22 @@ public class UpdatePoll
     public string? Title { get; set; }
 
     /// <summary>
-    /// Desired poll end date
+    /// Optional description/details for the poll
     /// </summary>
-    public DateTimeOffset? EndDate { get; set; }
+    public string? Details { get; set; }
+
+    /// <summary>
+    /// Poll start date (UTC)
+    /// </summary>
+    public DateTimeOffset? StartsUtc { get; set; }
+
+    /// <summary>
+    /// Poll end date (UTC)
+    /// </summary>
+    public DateTimeOffset? EndsUtc { get; set; }
+
+    /// <summary>
+    /// Whether poll is anonymous. Changing from anonymous to public resets all votes.
+    /// </summary>
+    public bool? IsAnonymous { get; set; }
 }

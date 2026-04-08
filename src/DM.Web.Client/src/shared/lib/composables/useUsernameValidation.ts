@@ -4,7 +4,8 @@ import { AccountApi } from "@/shared/api";
 
 // Forbidden characters pattern
 // See: docs/architecture/USERNAME_POLICY.md
-const forbiddenPattern = /[\x00-\x1F\x7F<>"'`\\/@?#%&\[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]/;
+const forbiddenPattern =
+  /[\x00-\x1F\x7F<>"'`\\/@?#%&\[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]/;
 
 /**
  * Validates username format (sync validation).
@@ -29,7 +30,9 @@ export interface UseUsernameValidationOptions {
  * Composable for username validation using useValidatedField.
  * Provides sync format validation + async availability check.
  */
-export function useUsernameValidation(options: UseUsernameValidationOptions = {}) {
+export function useUsernameValidation(
+  options: UseUsernameValidationOptions = {},
+) {
   const { asyncDelay = 300 } = options;
 
   const reason = ref<string | null>(null);

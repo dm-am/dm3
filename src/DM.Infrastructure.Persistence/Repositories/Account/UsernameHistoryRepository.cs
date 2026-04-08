@@ -41,14 +41,14 @@ internal class UsernameHistoryRepository : IUsernameHistoryRepository
     public async Task<bool> IsUsernameReserved(string username, CancellationToken ct = default)
     {
         return await _dbContext.UsernameHistories
-            .AnyAsync(h => EF.Functions.ILike(h.OldUsername, username), ct);
+            .AnyAsync(h => h.OldUsername.ToLower() == username.ToLower(), ct);
     }
 
     /// <inheritdoc />
     public async Task<bool> IsUsernameReservedForOthers(string username, Guid excludeUserId, CancellationToken ct = default)
     {
         return await _dbContext.UsernameHistories
-            .AnyAsync(h => EF.Functions.ILike(h.OldUsername, username) && h.UserId != excludeUserId, ct);
+            .AnyAsync(h => h.OldUsername.ToLower() == username.ToLower() && h.UserId != excludeUserId, ct);
     }
 
     /// <inheritdoc />

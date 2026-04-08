@@ -107,7 +107,7 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
         return Collection<UserSession>().FindOneAndUpdateAsync(
             Filter<UserSession>().Eq(u => u.Id, userId) &
             Filter<UserSession>().ElemMatch(u => u.Sessions, s => s.Id == sessionId),
-            Update<UserSession>().Set(u => u.Sessions[-1].ExpirationDate, expirationDate.UtcDateTime));
+            Update<UserSession>().Set(u => u.Sessions[-1].ExpirationUtc, expirationDate.UtcDateTime));
     }
 
     /// <inheritdoc />
@@ -116,10 +116,10 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
         var dbSession = new DbSession
         {
             Id = session.Id,
-            ExpirationDate = session.ExpirationDate,
+            ExpirationUtc = session.ExpirationUtc,
             Persistent = session.Persistent,
             Invisible = session.Invisible,
-            CreatedAt = session.CreatedAt,
+            CreatedUtc = session.CreatedUtc,
             IpAddress = session.IpAddress,
             UserAgent = session.UserAgent,
             DeviceInfo = session.DeviceInfo
@@ -171,7 +171,7 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
                 return session;
             })
             .OrderByDescending(s => s.IsCurrent)
-            .ThenByDescending(s => s.CreatedAt)
+            .ThenByDescending(s => s.CreatedUtc)
             .ToList();
     }
 

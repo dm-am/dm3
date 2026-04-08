@@ -23,14 +23,14 @@ public class Session
     public bool Invisible { get; set; }
 
     /// <summary>
-    /// Expiration date
+    /// Expiration date (UTC)
     /// </summary>
-    public DateTimeOffset ExpirationDate { get; set; }
+    public DateTimeOffset ExpirationUtc { get; set; }
 
     /// <summary>
-    /// Session creation time
+    /// Session creation time (UTC)
     /// </summary>
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Client IP address at session creation

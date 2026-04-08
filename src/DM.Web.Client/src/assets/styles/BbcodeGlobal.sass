@@ -1,0 +1,23 @@
+// ============================================================================
+// Global BBCode Content Styles
+// ============================================================================
+// These styles are applied GLOBALLY to any element with .bbcode-content class.
+// This is the correct approach for v-html content because:
+//
+// 1. Vue scoped styles don't penetrate v-html without :deep()
+// 2. BBCode HTML comes from the server and is rendered in many places
+// 3. Global styles ensure consistency without repeating :deep() everywhere
+// 4. Single source of truth for BBCode appearance
+//
+// Usage:
+//   <div class="bbcode-content" v-html="htmlFromServer" />
+//   OR use ContentText component which applies this class automatically
+// ============================================================================
+
+@import "BbcodeContent"
+
+.bbcode-content
+  word-wrap: break-word
+  word-break: break-word
+  overflow-wrap: break-word
+  +bbcode-content

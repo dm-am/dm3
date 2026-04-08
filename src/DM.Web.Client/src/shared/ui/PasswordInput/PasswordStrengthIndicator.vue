@@ -8,45 +8,56 @@
       />
     </div>
     <div v-if="warningText" class="warning-text">{{ warningText }}</div>
-    <div v-else-if="strengthText" class="strength-text" :style="{ '--progress': strengthProgress }">{{ strengthText }}</div>
+    <div
+      v-else-if="strengthText"
+      class="strength-text"
+      :style="{ '--progress': strengthProgress }"
+    >
+      {{ strengthText }}
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
 
-export type HibpStatus = 'idle' | 'checking' | 'compromised' | 'safe';
+export type HibpStatus = "idle" | "checking" | "compromised" | "safe";
 
-const props = withDefaults(defineProps<{
-  password: string;
-  hibpStatus?: HibpStatus;
-  isSameAsOld?: boolean;
-}>(), {
-  hibpStatus: 'idle',
-  isSameAsOld: false
-});
+const props = withDefaults(
+  defineProps<{
+    password: string;
+    hibpStatus?: HibpStatus;
+    isSameAsOld?: boolean;
+  }>(),
+  {
+    hibpStatus: "idle",
+    isSameAsOld: false,
+  },
+);
 
 const meetsMinimum = computed(() => props.password.length >= 8);
 
 const warningText = computed(() => {
-  if (!meetsMinimum.value) return 'Минимум 8 символов';
-  if (props.hibpStatus === 'compromised') return 'Пароль найден в утечках данных';
-  if (props.isSameAsOld) return 'Новый пароль совпадает с текущим';
+  if (!meetsMinimum.value) return "Минимум 8 символов";
+  if (props.hibpStatus === "compromised")
+    return "Пароль найден в утечках данных";
+  if (props.isSameAsOld) return "Новый пароль совпадает с текущим";
   return null;
 });
 
 const strengthText = computed(() => {
   if (!meetsMinimum.value || hasError.value) return null;
   const len = props.password.length;
-  if (len < 10) return 'Слабый';
-  if (len < 13) return 'Средний';
-  return 'Надежный';
+  if (len < 10) return "Слабый";
+  if (len < 13) return "Средний";
+  return "Надежный";
 });
 
-const hasError = computed(() =>
-  !meetsMinimum.value ||
-  props.hibpStatus === 'compromised' ||
-  props.isSameAsOld
+const hasError = computed(
+  () =>
+    !meetsMinimum.value ||
+    props.hibpStatus === "compromised" ||
+    props.isSameAsOld,
 );
 
 const barPercent = computed(() => {
@@ -66,7 +77,7 @@ const strengthProgress = computed(() => {
 });
 
 const barClass = computed(() => {
-  if (hasError.value) return 'error';
+  if (hasError.value) return "error";
   return null;
 });
 </script>

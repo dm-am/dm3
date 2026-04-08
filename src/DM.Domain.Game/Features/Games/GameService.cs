@@ -23,7 +23,7 @@ using DM.Domain.Game.Features.Subscriptions;
 using FluentValidation;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
-using Game = DM.Domain.Game.Features.Games.GameModel;
+using Game = DM.Domain.Game.Features.Games.Game;
 
 namespace DM.Domain.Game.Features.Games;
 
@@ -46,6 +46,7 @@ internal class GameService : IGameService
     private readonly IGameBlacklistRepository _gameBlacklistRepository;
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly IGameSubscriptionService _subscriptionService;
+    private readonly IRoomRepository _roomRepository;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IGameIntentionConverter _intentionConverter;
@@ -54,10 +55,7 @@ internal class GameService : IGameService
     private readonly ILogger<GameService> _logger;
 
     private const string TagListCacheKey = nameof(TagListCacheKey);
-    private const string PopularGamesCacheKey = nameof(PopularGamesCacheKey);
     private const string GamesByStatusCacheKeyPrefix = "GamesByStatus_";
-    private const string OwnGamesCacheKeyPrefix = "OwnGames_";
-    private const int PopularGamesLimit = 10;
 
     public GameService(
         IValidator<GamesQuery> gamesQueryValidator,
@@ -74,6 +72,7 @@ internal class GameService : IGameService
         IGameBlacklistRepository gameBlacklistRepository,
         IUnreadCountersRepository unreadCountersRepository,
         IGameSubscriptionService subscriptionService,
+        IRoomRepository roomRepository,
         IDateTimeProvider dateTimeProvider,
         IGuidFactory guidFactory,
         IGameIntentionConverter intentionConverter,
@@ -95,6 +94,7 @@ internal class GameService : IGameService
         _gameBlacklistRepository = gameBlacklistRepository;
         _unreadCountersRepository = unreadCountersRepository;
         _subscriptionService = subscriptionService;
+        _roomRepository = roomRepository;
         _dateTimeProvider = dateTimeProvider;
         _guidFactory = guidFactory;
         _intentionConverter = intentionConverter;
@@ -105,7 +105,7 @@ internal class GameService : IGameService
 
     #region Create
 
-    public async Task<GameExtended> CreateAsync(CreateGame createGame)
+    public async Task<GameDetails> CreateAsync(CreateGame createGame)
     {
         _logger.LogDebug("Creating game. Title={Title}", createGame.Title);
 
@@ -136,13 +136,14 @@ internal class GameService : IGameService
         var createGameEntity = new CreateGameEntity
         {
             GameId = gameId,
-            AuthorId = userId,
+            MasterId = userId,
             Title = createGame.Title,
             SystemName = createGame.SystemName,
             NarrativeSetting = createGame.NarrativeSetting,
             Info = createGame.Info,
             Status = createGame.Draft ? ModuleStatus.Draft : ModuleStatus.Active,
-            ReleaseDate = createGame.Draft ? null : now,
+            DraftVisibility = createGame.DraftVisibility,
+            ActivatedUtc = createGame.Draft ? null : now,
             HideTemper = createGame.HideTemper,
             HideSkills = createGame.HideSkills,
             HideInventory = createGame.HideInventory,
@@ -155,6 +156,7 @@ internal class GameService : IGameService
             AttributeSchemaId = createGame.AttributeSchemaId,
             IsRecruitmentOpen = !createGame.Draft,
             RecruitmentStartedUtc = createGame.Draft ? null : now,
+            RecruitmentCount = createGame.Draft ? 0 : 1,
             TagIds = validTagIds,
             CreatedUtc = now
         };
@@ -221,53 +223,7 @@ internal class GameService : IGameService
         }))!;
     }
 
-    public async Task<IEnumerable<GameModel>> GetOwnGamesAsync()
-    {
-        var currentUserId = _identityProvider.Current.User.UserId;
-        var cacheKey = $"{OwnGamesCacheKeyPrefix}{currentUserId}";
-
-        if (_cache.TryGetValue(cacheKey, out GameModel[]? cachedGames) && cachedGames != null)
-        {
-            return cachedGames;
-        }
-
-        var games = (await _repository.GetOwn(currentUserId)).ToArray();
-        if (games.Length == 0)
-        {
-            _cache.Set(cacheKey, games, CachePolicy.Short);
-            return games;
-        }
-
-        var gameIds = games.Select(g => g.Id).ToArray();
-        var fillCommentsTask = _unreadCountersRepository.FillEntityCounters(
-            games, currentUserId, g => g.Id, g => g.UnreadCommentsCount);
-        var fillCharactersTask = _unreadCountersRepository.FillEntityCounters(
-            games, currentUserId, g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
-        var roomsTask = _repository.GetRoomsAndPostPendencies(gameIds, currentUserId);
-
-        await Task.WhenAll(fillCommentsTask, fillCharactersTask, roomsTask);
-
-        var (gameRooms, postPendencies) = await roomsTask;
-        var postPendenciesArray = postPendencies.ToArray();
-        var allRoomIds = gameRooms.SelectMany(r => r.Value).ToArray();
-        var unreadPostCounters = allRoomIds.Length > 0
-            ? await _unreadCountersRepository.SelectByEntitiesAsync(currentUserId, UnreadEntryType.Message, allRoomIds)
-            : new Dictionary<Guid, int>();
-
-        foreach (var game in games)
-        {
-            if (!gameRooms.TryGetValue(game.Id, out var roomIds)) continue;
-            var gameRoomIds = roomIds.ToArray();
-            game.UnreadPostsCount = gameRoomIds.Sum(id =>
-                unreadPostCounters.TryGetValue(id, out var count) ? count : 0);
-            game.Pendencies = postPendenciesArray.Where(p => gameRoomIds.Contains(p.RoomId));
-        }
-
-        _cache.Set(cacheKey, games, CachePolicy.Short);
-        return games;
-    }
-
-    public async Task<(IEnumerable<GameModel> games, PagingResult paging)> GetGamesAsync(GamesQuery query)
+    public async Task<(IEnumerable<Game> games, PagingResult paging)> GetGamesAsync(GamesQuery query)
     {
         await _gamesQueryValidator.ValidateAndThrowAsync(query);
         var identity = _identityProvider.Current;
@@ -275,11 +231,23 @@ internal class GameService : IGameService
         var isAnonymous = !identity.User.IsAuthenticated;
         var pageSize = identity.Settings.Paging.EntitiesPerPage;
 
-        if (isAnonymous && !query.TagId.HasValue && query.Skip == 0)
+        // Only cache simple anonymous queries (no search, no complex filters)
+        var canCache = isAnonymous
+            && query.Skip == 0
+            && string.IsNullOrEmpty(query.Search)
+            && query.RequiredTags == null
+            && query.OptionalTags == null
+            && query.ExcludedTags == null
+            && (query.OwnerUsernames == null || query.OwnerUsernames.Count == 0)
+            && string.IsNullOrEmpty(query.PlayerUsername);
+
+        if (canCache)
         {
-            var recruitingPart = query.IsRecruiting.HasValue ? $"_recruiting_{query.IsRecruiting.Value}" : "";
-            var finishedPart = query.IsFinished.HasValue ? $"_finished_{query.IsFinished.Value}" : "";
-            var cacheKey = $"{GamesByStatusCacheKeyPrefix}{string.Join("_", query.Statuses)}{recruitingPart}{finishedPart}";
+            var statusPart = query.Statuses is { Count: > 0 } ? string.Join("_", query.Statuses) : "all";
+            var recruitingPart = query.RecruitmentFilter.HasValue ? $"_recruiting_{query.RecruitmentFilter.Value}" : "";
+            var closedReasonPart = query.ClosedReasonFilter.HasValue ? $"_closedReason_{query.ClosedReasonFilter.Value}" : "";
+            var sortPart = !string.IsNullOrEmpty(query.SortBy) ? $"_sort_{query.SortBy}_{query.SortOrder ?? "desc"}" : "";
+            var cacheKey = $"{GamesByStatusCacheKeyPrefix}{statusPart}{recruitingPart}{closedReasonPart}{sortPart}";
             var cached = await _cache.GetOrCreateAsync(cacheKey, async e =>
             {
                 e.AbsoluteExpirationRelativeToNow = CachePolicy.Medium;
@@ -302,9 +270,17 @@ internal class GameService : IGameService
             return cached;
         }
 
-        var totalCountAuth = await _repository.Count(query, currentUserId);
-        var pagingDataAuth = new PagingData(query, pageSize, totalCountAuth);
-        var games = (await _repository.GetGames(pagingDataAuth, query, currentUserId)).ToArray();
+        // Cache base data for authenticated users (short TTL, unread counters always fresh)
+        var queryHash = GetQueryHash(query);
+        var authCacheKey = $"AuthGames_{currentUserId}_{queryHash}_{pageSize}";
+        var (games, pagingDataAuth) = await _cache.GetOrCreateAsync(authCacheKey, async e =>
+        {
+            e.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(15);
+            var totalCountAuth = await _repository.Count(query, currentUserId);
+            var paging = new PagingData(query, pageSize, totalCountAuth);
+            var gamesList = (await _repository.GetGames(paging, query, currentUserId)).ToArray();
+            return (games: gamesList, paging);
+        });
 
         if (games.Length == 0)
         {
@@ -312,20 +288,33 @@ internal class GameService : IGameService
         }
 
         var gameIds = games.Select(g => g.Id).ToArray();
-        var fillCharactersTask = _unreadCountersRepository.FillEntityCounters(games, currentUserId,
+
+        // Anonymous users: show total counts (they can't mark anything as read)
+        if (isAnonymous)
+        {
+            var postCounts = await _repository.GetTotalPostCounts(gameIds);
+            var commentCounts = await _repository.GetTotalCommentCounts(gameIds);
+            foreach (var game in games)
+            {
+                game.UnreadPostsCount = postCounts.TryGetValue(game.Id, out var pc) ? pc : 0;
+                game.UnreadCommentsCount = commentCounts.TryGetValue(game.Id, out var cc) ? cc : 0;
+            }
+            return (games, pagingDataAuth.Result);
+        }
+
+        // Authenticated users: show actual unread counts
+        await _unreadCountersRepository.FillEntityCounters(games, currentUserId,
             g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
         var gamesWithAvailableComments = games
             .Where(g => _intentionManager.IsAllowed(GameIntention.ReadComments, g))
             .ToArray();
-        var fillCommentsTask = gamesWithAvailableComments.Length > 0
-            ? _unreadCountersRepository.FillEntityCounters(gamesWithAvailableComments, currentUserId,
-                g => g.Id, g => g.UnreadCommentsCount)
-            : Task.CompletedTask;
-        var roomsTask = _repository.GetRoomsAndPostPendencies(gameIds, currentUserId);
+        if (gamesWithAvailableComments.Length > 0)
+        {
+            await _unreadCountersRepository.FillEntityCounters(gamesWithAvailableComments, currentUserId,
+                g => g.Id, g => g.UnreadCommentsCount);
+        }
 
-        await Task.WhenAll(fillCharactersTask, fillCommentsTask, roomsTask);
-
-        var (gameRooms, _) = await roomsTask;
+        var (gameRooms, _) = await _repository.GetRoomsAndPostPendencies(gameIds, currentUserId);
         var allRoomIds = gameRooms.SelectMany(r => r.Value).ToArray();
 
         if (allRoomIds.Length > 0)
@@ -344,7 +333,7 @@ internal class GameService : IGameService
         return (games, pagingDataAuth.Result);
     }
 
-    public async Task<GameModel> GetAsync(Guid gameId)
+    public async Task<Game> GetAsync(Guid gameId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
         var game = await _repository.GetGame(gameId, currentUserId);
@@ -355,16 +344,34 @@ internal class GameService : IGameService
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
 
-        var fillCommentsTask = _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
+        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
             g => g.Id, g => g.UnreadCommentsCount);
-        var fillCharactersTask = _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
+        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
             g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
 
-        await Task.WhenAll(fillCommentsTask, fillCharactersTask);
         return game;
     }
 
-    public async Task<GameExtended> GetDetailsAsync(Guid gameId)
+    public async Task<Game> GetByPublicIdAsync(string publicId)
+    {
+        var currentUserId = _identityProvider.Current.User.UserId;
+        var game = await _repository.GetGameByPublicId(publicId, currentUserId);
+        if (game == null)
+        {
+            throw new HttpException(HttpStatusCode.Gone, "Game not found");
+        }
+
+        _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
+
+        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
+            g => g.Id, g => g.UnreadCommentsCount);
+        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
+            g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
+
+        return game;
+    }
+
+    public async Task<GameDetails> GetDetailsAsync(Guid gameId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
         var game = await _repository.GetGameDetails(gameId, currentUserId);
@@ -380,46 +387,47 @@ internal class GameService : IGameService
             game.AttributeSchema = await _schemaService.GetAsync(game.AttributeSchemaId.Value);
         }
 
-        var readersTask = _subscriptionService.GetReadersAsync(gameId);
-        var fillCommentsTask = _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
+        game.Subscribers = await _subscriptionService.GetSubscribersAsync(gameId);
+        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
             g => g.Id, g => g.UnreadCommentsCount);
-        var fillCharactersTask = _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
+        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
             g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
-
-        await Task.WhenAll(readersTask, fillCommentsTask, fillCharactersTask);
-        game.Readers = await readersTask;
 
         return game;
     }
 
-    public async Task<IEnumerable<GameModel>> GetPopularAsync()
+    public async Task<GameDetails> GetDetailsByPublicIdAsync(string publicId)
     {
-        return (await _cache.GetOrCreateAsync(PopularGamesCacheKey, async e =>
+        var currentUserId = _identityProvider.Current.User.UserId;
+        var game = await _repository.GetGameDetailsByPublicId(publicId, currentUserId);
+        if (game == null)
         {
-            e.AbsoluteExpirationRelativeToNow = CachePolicy.LongLived;
-            var games = (await _repository.GetPopularGames(PopularGamesLimit)).ToArray();
-            if (games.Length > 0)
-            {
-                var gameIds = games.Select(g => g.Id).ToArray();
-                var postCounts = await _repository.GetTotalPostCounts(gameIds);
-                var commentCounts = await _repository.GetTotalCommentCounts(gameIds);
-                foreach (var game in games)
-                {
-                    game.UnreadPostsCount = postCounts.TryGetValue(game.Id, out var pc) ? pc : 0;
-                    game.UnreadCommentsCount = commentCounts.TryGetValue(game.Id, out var cc) ? cc : 0;
-                }
-            }
-            return games.AsEnumerable();
-        }))!;
+            throw new HttpException(HttpStatusCode.Gone, "Game not found");
+        }
+
+        _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
+
+        if (game.AttributeSchemaId.HasValue)
+        {
+            game.AttributeSchema = await _schemaService.GetAsync(game.AttributeSchemaId.Value);
+        }
+
+        game.Subscribers = await _subscriptionService.GetSubscribersAsync(game.Id);
+        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
+            g => g.Id, g => g.UnreadCommentsCount);
+        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
+            g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
+
+        return game;
     }
 
-    public async Task<IEnumerable<GameModel>> GetSubscribedAsync(IEnumerable<Guid> gameIds)
+    public async Task<IEnumerable<Game>> GetSubscribedAsync(IEnumerable<Guid> gameIds)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
         var gameIdList = gameIds.ToArray();
         if (gameIdList.Length == 0)
         {
-            return Array.Empty<GameModel>();
+            return Array.Empty<Game>();
         }
 
         var games = (await _repository.GetByIds(gameIdList, currentUserId)).ToArray();
@@ -436,7 +444,7 @@ internal class GameService : IGameService
 
     #region Update
 
-    public async Task<GameExtended> UpdateAsync(UpdateGame updateGame)
+    public async Task<GameDetails> UpdateAsync(UpdateGame updateGame)
     {
         await _updateGameValidator.ValidateAndThrowAsync(updateGame);
         var game = await GetDetailsAsync(updateGame.GameId);
@@ -471,9 +479,9 @@ internal class GameService : IGameService
             {
                 invokedEvents.Add(eventType);
 
-                if (!game.ReleaseDate.HasValue && updateGame.Status == ModuleStatus.Active)
+                if (!game.ActivatedUtc.HasValue && updateGame.Status == ModuleStatus.Active)
                 {
-                    updateGame.ReleaseDate = _dateTimeProvider.Now;
+                    updateGame.ActivatedUtc = _dateTimeProvider.Now;
                 }
 
                 if (updateGame.Status == ModuleStatus.Closed)
@@ -485,8 +493,7 @@ internal class GameService : IGameService
                 if (game.Status == ModuleStatus.Closed && updateGame.Status != ModuleStatus.Closed)
                 {
                     updateGame.ClosedUtc = null;
-                    updateGame.IsFinished = false;
-                    updateGame.IsFrozen = false;
+                    updateGame.ClosedReason = ClosedReason.None;
                 }
             }
             else
@@ -517,15 +524,19 @@ internal class GameService : IGameService
             }
         }
 
+        // Check if recruitment is being opened (was closed, now opening)
+        var isOpeningRecruitment = !game.Recruitment.IsOpen &&
+                                   updateGame.IsRecruitmentOpen == true;
+
         var updateEntity = new UpdateGameEntity
         {
             GameId = updateGame.GameId,
             Status = updateGame.Status,
             PremoderationStatus = updateGame.PremoderationStatus,
-            IsFinished = updateGame.IsFinished,
-            IsFrozen = updateGame.IsFrozen,
+            ClosedReason = updateGame.ClosedReason,
             IsRecruitmentOpen = updateGame.IsRecruitmentOpen,
-            RecruitmentPlayerLimit = updateGame.RecruitmentPlayerLimit,
+            IncrementRecruitmentCount = isOpeningRecruitment,
+            RecruitmentPcLimit = updateGame.RecruitmentPcLimit,
             Title = updateGame.Title,
             SystemName = updateGame.SystemName,
             NarrativeSetting = updateGame.NarrativeSetting,
@@ -540,10 +551,14 @@ internal class GameService : IGameService
             HidePostStats = updateGame.HidePostStats,
             CommentsAccessMode = updateGame.CommentsAccessMode,
             TagIds = updateGame.Tags,
-            UpdatedUtc = _dateTimeProvider.Now
+            UpdatedUtc = _dateTimeProvider.Now,
+            ActivatedUtc = updateGame.ActivatedUtc,
+            ClosedUtc = updateGame.ClosedUtc,
+            ClearClosedUtc = updateGame.ClosedUtc == null && game.ClosedUtc.HasValue
         };
 
         var result = await _repository.Update(updateEntity);
+
         await _producer.SendAsync(invokedEvents, game.Id);
 
         return result;
@@ -564,31 +579,6 @@ internal class GameService : IGameService
     #endregion
 
     #region Users
-
-    public async Task<IEnumerable<GeneralUser>> GetPlayersAsync(Guid gameId)
-    {
-        await GetAsync(gameId);
-        return await _userRepository.GetPlayers(gameId);
-    }
-
-    public async Task RemovePlayerAsync(Guid gameId, string username)
-    {
-        var game = await GetAsync(gameId);
-        _intentionManager.ThrowIfForbidden(GameIntention.Edit, game);
-
-        if (!await _userRepository.IsPlayer(gameId, username))
-        {
-            throw new HttpException(HttpStatusCode.NotFound, "Player not found in this game");
-        }
-
-        var exiledCharacterIds = await _userRepository.ExilePlayer(gameId, username);
-        await _producer.SendAsync(EventType.ChangedGame, gameId);
-
-        foreach (var characterId in exiledCharacterIds)
-        {
-            await _producer.SendAsync(EventType.StatusCharacterExiled, characterId);
-        }
-    }
 
     public async Task<IEnumerable<GeneralUser>> GetAssistantsAsync(Guid gameId)
     {
@@ -619,7 +609,7 @@ internal class GameService : IGameService
         var userId = _identityProvider.Current.User.UserId;
 
         // Cannot leave own game
-        if (game.Author.UserId == userId)
+        if (game.Master.UserId == userId)
         {
             throw new HttpException(HttpStatusCode.Forbidden, "Cannot leave own game");
         }
@@ -670,6 +660,36 @@ internal class GameService : IGameService
     private Task PublishGameCreatedAsync(Guid gameId)
     {
         return _producer.SendAsync(EventType.NewGame, gameId);
+    }
+
+    /// <summary>
+    /// Generate hash for query parameters (for cache key)
+    /// </summary>
+    private static string GetQueryHash(GamesQuery query)
+    {
+        var parts = new List<string>
+        {
+            query.Skip.ToString(),
+            query.Search ?? "",
+            query.SortBy ?? "",
+            query.SortOrder ?? "",
+            query.Statuses != null ? string.Join(",", query.Statuses) : "",
+            query.RecruitmentFilter?.ToString() ?? "",
+            query.ClosedReasonFilter?.ToString() ?? "",
+            query.RequiredTags != null ? string.Join(",", query.RequiredTags) : "",
+            query.OptionalTags != null ? string.Join(",", query.OptionalTags) : "",
+            query.ExcludedTags != null ? string.Join(",", query.ExcludedTags) : "",
+            query.OwnerUsernames != null ? string.Join(",", query.OwnerUsernames) : "",
+            query.PlayerUsername ?? "",
+            query.Participating?.ToString() ?? "",
+            query.CreatedFrom?.ToString("O") ?? "",
+            query.CreatedTo?.ToString("O") ?? "",
+            query.ActivatedFrom?.ToString("O") ?? "",
+            query.ActivatedTo?.ToString("O") ?? "",
+            query.ClosedFrom?.ToString("O") ?? "",
+            query.ClosedTo?.ToString("O") ?? ""
+        };
+        return string.Join("|", parts).GetHashCode().ToString();
     }
 
     #endregion

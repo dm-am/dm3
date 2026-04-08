@@ -48,7 +48,7 @@ internal class PersonalProfileMappingProfile : Profile
                 })))
             .ForMember(d => d.PostReviewsGiven, o => o.MapFrom(s => s.PostReviewsGivenCount))
             .ForMember(d => d.PostReviewsReceived, o => o.MapFrom(s => s.PostReviewsReceivedCount))
-            .ForMember(d => d.RegisteredAtUtc, o => o.MapFrom(s => s.CreatedUtc))
+            .ForMember(d => d.RegisteredUtc, o => o.MapFrom(s => s.CreatedUtc))
             .ForMember(d => d.Visibility, o => o.MapFrom(s => new VisibilitySettings
             {
                 ShowBirthday = s.ShowBirthday,
@@ -58,7 +58,8 @@ internal class PersonalProfileMappingProfile : Profile
                 ? null
                 : new InfoBbText { Value = s.Info }))
             .ForMember(d => d.UsernameHistory, o => o.Ignore())
-            .ForMember(d => d.FeaturedPost, o => o.Ignore());
+            .ForMember(d => d.PersonalNote, o => o.Ignore())
+            .ForMember(d => d.BestPost, o => o.Ignore());
 
         // UpdateProfile (API) -> UpdateUser (domain)
         CreateMap<UpdateProfile, UpdateUser>()

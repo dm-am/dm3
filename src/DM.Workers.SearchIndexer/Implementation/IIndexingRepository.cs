@@ -15,21 +15,18 @@ internal interface IIndexingRepository
     /// Store searchable entities in index
     /// </summary>
     /// <param name="entities">Entities to store</param>
-    /// <returns></returns>
     Task Index(params SearchEntity[] entities);
 
     /// <summary>
     /// Delete indexed document
     /// </summary>
     /// <param name="entityId">Entity identifier</param>
-    /// <returns></returns>
     Task Delete(Guid entityId);
 
     /// <summary>
     /// Delete indexed documents by their parent entity identifier
     /// </summary>
     /// <param name="parentEntityId">Parent entity identifier</param>
-    /// <returns></returns>
     Task DeleteByParent(Guid parentEntityId);
 
     /// <summary>
@@ -37,7 +34,6 @@ internal interface IIndexingRepository
     /// </summary>
     /// <param name="parentEntityId">Parent entity identifier</param>
     /// <param name="roles">New authorized roles list</param>
-    /// <returns></returns>
     Task UpdateByParent(Guid parentEntityId, IEnumerable<UserRole> roles);
 
     /// <summary>
@@ -45,6 +41,5 @@ internal interface IIndexingRepository
     /// </summary>
     /// <param name="parentEntityId">Parent entity identifier</param>
     /// <param name="userIds">New authorized users ids list</param>
-    /// <returns></returns>
     Task UpdateByParent(Guid parentEntityId, IEnumerable<Guid> userIds);
 }

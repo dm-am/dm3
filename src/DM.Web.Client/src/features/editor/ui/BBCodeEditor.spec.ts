@@ -558,7 +558,7 @@ describe("BBCodeEditor", () => {
       expect(loadBtn).toBeDefined();
     });
 
-    it("load draft button has correct title", () => {
+    it("load draft button has correct aria-label", () => {
       const wrapper = mount(BBCodeEditor, {
         props: { modelValue: "" },
       });
@@ -567,7 +567,8 @@ describe("BBCodeEditor", () => {
         .findAll(".tag-btn")
         .find((btn) => btn.attributes("aria-label") === "Загрузить черновик");
 
-      expect(loadBtn?.attributes("title")).toBe("Загрузить черновик");
+      // Button uses Tooltip component for tooltip, not title attribute
+      expect(loadBtn?.attributes("aria-label")).toBe("Загрузить черновик");
     });
 
     it("load draft button is present in BBCode mode", async () => {

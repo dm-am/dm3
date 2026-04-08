@@ -1,7 +1,7 @@
 // Game entity types
 // Migrated from api/models/game/
 
-import type { PagingQuery, User } from "@/shared/api/models/common";
+import type { PagingQuery, User, UserRef } from "@/shared/api/models/common";
 import type { Id, Served } from "@/shared/api/models";
 
 // === Game Status & Roles ===
@@ -10,6 +10,17 @@ export enum GameStatus {
   Draft = "Draft",
   Active = "Active",
   Closed = "Closed",
+}
+
+export enum ClosedReason {
+  None = "None",
+  Finished = "Finished",
+  Frozen = "Frozen",
+}
+
+export enum DraftVisibility {
+  Private = "Private",
+  Public = "Public",
 }
 
 export enum GameRole {
@@ -24,12 +35,20 @@ export enum GameRole {
 
 // === Tags ===
 
-export type TagId = Id<string>;
 export type Tag = {
-  id: Served<TagId>;
-  title: Served<string>;
-  groupTitle: Served<string>;
-  gamesCount: Served<number>;
+  /** Numeric tag ID for filtering */
+  id: number;
+  title: string;
+  /** Tag description (may contain [tipimg:] markup for inline image tooltips) */
+  description?: string;
+  groupTitle: string;
+  /** Tag group description */
+  groupDescription?: string;
+  gamesCount: number;
+  /** Tag sort order within its group */
+  sortOrder: number;
+  /** Tag group sort order */
+  groupSortOrder: number;
 };
 
 // === Game Settings ===
@@ -52,45 +71,100 @@ export interface GamePrivacySettings {
 
 export interface GameRecruitment {
   isOpen: boolean;
-  playerLimit?: number;
-  playerCount: number;
+  pcLimit?: number;
+  pcCount: number;
+  /** When recruitment was started (ISO date string) */
+  startedUtc?: string;
+  /** Whether this is a subsequent recruitment (донабор) */
+  isSubsequent: boolean;
 }
 
 // === Game ===
 
 export type GameId = Id<string>;
-export type Game = {
+
+// === GameRef (lightweight for sidebars/menus) ===
+
+/**
+ * Lightweight game reference for sidebars and menus.
+ * Uses counts instead of user arrays for players/readers.
+ * Request with ?projection=ref to get this type.
+ */
+export type GameRef = {
   id: Served<GameId>;
+  publicId: Served<string>;
   title: string;
+  status: GameStatus;
+  closedReason?: ClosedReason;
+  activatedUtc?: string;
+  master: Served<UserRef>;
+  assistants: Served<UserRef[]>;
+  /** User participation flags */
+  participation: Served<GameRole[]>;
+  subscribersCount: number;
+  recruitment: Served<GameRecruitment>;
+  unreadPostsCount: Served<number>;
+  unreadCommentsCount: Served<number>;
+  /** Number of reviews about the game itself */
+  gameReviewsCount: Served<number>;
+  /** Number of reviews about posts in the game */
+  postReviewsCount: Served<number>;
+  /** Subscriber usernames for tooltip (limited to first 20) */
+  subscriberUsernames?: string[];
+  /** Active characters info for [X/Y] tooltip */
+  activeCharacters?: ActiveCharacterInfo[];
+};
+
+/** Active character info for tooltip */
+export interface ActiveCharacterInfo {
+  /** Character name */
+  name: string;
+  /** Owner's username */
+  ownerUsername: string;
+}
+
+// === Game (full, for lists and tables) ===
+
+/**
+ * Full game DTO for lists and tables.
+ * Extends GameRef with additional fields for display.
+ *
+ * Inherits from GameRef:
+ * - id, title, status, closedReason, activatedUtc
+ * - master, assistants, participation
+ * - subscribersCount, recruitment, unreadPostsCount, unreadCommentsCount
+ */
+export interface Game extends GameRef {
   system: string;
   setting: string;
-  status: GameStatus;
-  roles: Served<GameRole[]>;
-  released: Served<string>;
+  draftVisibility?: DraftVisibility;
+  closedUtc?: string;
+  createdUtc: string;
 
-  master: Served<User>;
-  assistants: Served<User[]>;
-  pendingAssistant: Served<User | null>;
-  mentor: Served<User | null>;
+  /** Full assistant details (only on game detail page) */
+  fullAssistants?: Served<User[]>;
+  pendingAssistant: Served<UserRef | null>;
+  mentor: Served<UserRef | null>;
   notes: string;
   info: string;
 
-  tags: Tag[];
+  /** Full tags (only for single game details, null for lists) */
+  tags?: Tag[];
+  /** Tag IDs only (for lists - use cached /games/tags for descriptions) */
+  tagIds: number[];
   privacySettings: GamePrivacySettings;
   schema: AttributeSchema | null;
+  /** Attribute schema identifier */
+  schemaId?: string;
 
-  // Sidebar data
-  activeCharacterUserIds: Served<string[]>;
-  readerUserIds: Served<string[]>;
-  recruitment: Served<GameRecruitment>;
+  /** Unique players (authors of active characters) - for game details page */
+  players?: Served<UserRef[]>;
 
-  unreadPostsCount: Served<number>;
-  unreadCommentsCount: Served<number>;
   unreadCharactersCount: Served<number>;
 
   // Used only at creation time
   copyBlacklist?: boolean;
-};
+}
 
 export interface GamesQuery extends PagingQuery {
   statuses: GameStatus[];
@@ -104,7 +178,7 @@ export interface Invitation {
   id: string;
   gameId: string;
   gameTitle: string;
-  invitedUser: User;
+  invitedUser: UserRef;
   inviterUsername: string;
   type: InvitationType;
   createdUtc: string;
@@ -112,7 +186,7 @@ export interface Invitation {
 }
 
 export interface GameUser {
-  user: User;
+  user: UserRef;
   role: "master" | "mentor" | "assistant" | "player" | "reader";
   joinedUtc: string;
   characterId?: string;
@@ -152,7 +226,7 @@ export interface AttributeSpecification {
 export interface AttributeSchema {
   id: string | null;
   title: string;
-  author: User | null;
+  author: UserRef | null;
   type: AttributeSchemaType;
   specifications: AttributeSpecification[];
 }
@@ -197,13 +271,15 @@ export type CharacterAttribute = {
 export type CharacterId = Id<string>;
 export type Character = {
   id: Served<CharacterId>;
-  author: Served<User>;
+  author: Served<UserRef>;
   status: CharacterStatus;
   name: string;
   race: string;
   class: string;
   alignment: Alignment;
   pictureUrl: Served<string>;
+  /** Character is NPC (controlled by game master) */
+  isNpc: Served<boolean>;
   appearance: string;
   temper: string;
   story: string;
@@ -240,8 +316,8 @@ export interface PendingPost {
   id: string;
   characterId: string;
   characterName: string;
-  createdAt: string;
-  awaitingUser: User;
+  createdUtc: string;
+  awaitingUser: UserRef;
 }
 
 export interface RoomSettings {
@@ -252,6 +328,7 @@ export interface RoomSettings {
 
 export type Room = {
   id: Served<RoomId>;
+  roomNumber: Served<number>;
   previousRoomId?: string;
   title: string;
   access?: RoomAccessType;
@@ -260,6 +337,12 @@ export type Room = {
   pendings?: PendingPost[];
   unreadPostsCount: number;
   settings?: RoomSettings;
+  /** Game reference (for navigation in post listings) */
+  game?: {
+    id: string;
+    publicId: string;
+    title: string;
+  };
 };
 
 export interface DiceRoll {
@@ -270,63 +353,56 @@ export interface DiceRoll {
   comment?: string;
 }
 
-export interface PostBbText {
-  value: string;
-  html: string;
-}
+/**
+ * BBCode text - the API returns this as a plain HTML string.
+ * The backend converts BBCode to HTML during JSON serialization.
+ */
+export type PostBbText = string;
 
 export type PostId = Id<string>;
 export type Post = {
   id: Served<PostId>;
   room?: Room;
   character?: Character;
-  author?: User;
+  author?: UserRef;
+  /** Author's game role: DungeonMaster, Assistant, or null for player posts */
+  authorGameRole?: "DungeonMaster" | "Assistant";
   createdUtc: string;
-  updatedUtc?: string;
-  text: PostBbText;
-  commentary?: PostBbText;
-  masterMessage?: PostBbText;
+  gameText: PostBbText;
+  metagameText?: PostBbText;
   diceRolls?: DiceRoll[];
+  rating?: number;
+  reviewCount?: number;
 };
 
-// === Featured Posts ===
-
-export type FeaturedPostId = Id<string>;
-
-export interface FeaturedPost {
-  id: Served<FeaturedPostId>;
-  textPreview: string;
-  author: User;
-  characterName?: string;
-  createdUtc: string;
-  gameId: string;
-  gameTitle: string;
-  roomId: string;
-  roomTitle: string;
-  rating: number;
-  reviewCount: number;
-}
-
-export interface FeaturedPostsEnvelope {
-  bestOfWeek?: FeaturedPost;
-  lastWithPlus?: FeaturedPost;
-}
-
+/**
+ * Review rating sign/sentiment
+ * @see src/DM.Domain.Core/Enums/ReviewSign.cs
+ */
 export enum ReviewSign {
-  Positive = "Positive",
-  Neutral = "Neutral",
-  Negative = "Negative",
+  Negative = -1,
+  Neutral = 0,
+  Positive = 1,
 }
 
+/**
+ * post review (оценка поста)
+ * Rating with optional comment for a post
+ * - BBCode supported (optional)
+ * - Likes support (ONLY for PostReviews)
+ * - One review per post per user
+ */
 export interface PostReview {
   id: string;
-  authorId: string;
-  author?: User;
-  targetType: string;
-  targetId?: string;
-  text?: string;
-  sign?: ReviewSign;
+  postId: string;
+  gameId: string;
+  author: UserRef;
+  postAuthor: UserRef;
+  text: string;
+  sign: ReviewSign;
   createdUtc: string;
+  modifiedUtc?: string;
+  likes: UserRef[];
 }
 
 // === Unread Results ===

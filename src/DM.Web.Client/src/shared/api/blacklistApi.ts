@@ -1,5 +1,9 @@
 import type { ListEnvelope } from "./models/common";
-import type { BlacklistEntry, BlockUserRequest, BlacklistSettings } from "./models/personal";
+import type {
+  BlacklistEntry,
+  BlockUserRequest,
+  BlacklistSettings,
+} from "./models/personal";
 import Api from "./client";
 
 export default new (class BlacklistApi {
@@ -9,7 +13,9 @@ export default new (class BlacklistApi {
    * @param take Number of items to take (default 20, max 100)
    */
   public getBlacklist(skip = 0, take = 50) {
-    return Api.get<ListEnvelope<BlacklistEntry>>(`users/me/blacklist?skip=${skip}&take=${take}`);
+    return Api.get<ListEnvelope<BlacklistEntry>>(
+      `users/me/blacklist?skip=${skip}&take=${take}`,
+    );
   }
 
   /**
@@ -23,7 +29,10 @@ export default new (class BlacklistApi {
    * Update blacklist behavior settings
    */
   public updateSettings(settings: BlacklistSettings) {
-    return Api.patch<BlacklistSettings>("users/me/blacklist/settings", settings);
+    return Api.patch<BlacklistSettings>(
+      "users/me/blacklist/settings",
+      settings,
+    );
   }
 
   /**

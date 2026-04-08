@@ -77,16 +77,36 @@ internal class CommunityProfileService : ICommunityProfileService
         UserActivityFilter filter,
         string? search = null,
         UserRole? role = null,
-        UserSort sort = UserSort.Name)
+        UserSort sort = UserSort.Name,
+        bool sortAscending = true,
+        bool? isHonorary = null,
+        bool? isNewbie = null,
+        bool? isOnline = null,
+        int? minRating = null,
+        int? maxRating = null,
+        int? minGamesHosting = null,
+        int? maxGamesHosting = null,
+        int? minGamesPlaying = null,
+        int? maxGamesPlaying = null,
+        int? minBlogsHosting = null,
+        int? maxBlogsHosting = null,
+        DateTimeOffset? registeredFromUtc = null,
+        DateTimeOffset? registeredToUtc = null)
     {
         if (filter == UserActivityFilter.Pending)
         {
             _intentionManager.ThrowIfForbidden(CommunityIntention.ViewPendingUsers);
         }
 
-        var totalCount = await _userRepository.CountUsersAsync(filter, search, role);
+        var totalCount = await _userRepository.CountUsersAsync(
+            filter, search, role, isHonorary, isNewbie, isOnline, minRating, maxRating,
+            minGamesHosting, maxGamesHosting, minGamesPlaying, maxGamesPlaying, minBlogsHosting, maxBlogsHosting,
+            registeredFromUtc, registeredToUtc);
         var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
-        var users = await _userRepository.GetUsersAsync(paging, filter, search, role, sort);
+        var users = await _userRepository.GetUsersAsync(
+            paging, filter, search, role, sort, sortAscending, isHonorary, isNewbie, isOnline, minRating, maxRating,
+            minGamesHosting, maxGamesHosting, minGamesPlaying, maxGamesPlaying, minBlogsHosting, maxBlogsHosting,
+            registeredFromUtc, registeredToUtc);
         return (users, paging.Result);
     }
 

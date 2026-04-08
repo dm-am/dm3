@@ -1,3 +1,4 @@
+using System;
 using AutoMapper;
 using DM.Domain.Core.Identity;
 
@@ -10,6 +11,9 @@ internal class AccountMappingProfile : Profile
 {
     public AccountMappingProfile()
     {
-        CreateMap<Entities.Account.Session, Session>();
+        CreateMap<Entities.Account.Session, Session>()
+            .ForMember(d => d.IsCurrent, opt => opt.Ignore())
+            .ForMember(d => d.ExpirationUtc, opt => opt.MapFrom(s => new DateTimeOffset(s.ExpirationUtc, TimeSpan.Zero)))
+            .ForMember(d => d.CreatedUtc, opt => opt.MapFrom(s => new DateTimeOffset(s.CreatedUtc, TimeSpan.Zero)));
     }
 }

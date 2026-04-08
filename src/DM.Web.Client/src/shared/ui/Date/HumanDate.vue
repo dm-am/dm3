@@ -6,10 +6,9 @@
 import { computed } from "vue";
 import dayjs from "dayjs";
 
-const props = withDefaults(
-  defineProps<{ date: string; format?: string }>(),
-  { format: "D MMMM YYYY, HH:mm" },
-);
+const props = withDefaults(defineProps<{ date: string; format?: string }>(), {
+  format: "DD.MM.YYYY HH:mm",
+});
 
 const humanDate = computed(() => dayjs(props.date).format(props.format));
 </script>

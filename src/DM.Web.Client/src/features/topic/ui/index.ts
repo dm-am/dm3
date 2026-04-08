@@ -1,1 +1,1 @@
-export { default as TopicOpening } from "./TopicOpening.vue";
+export { default as Topic } from "./Topic.vue";

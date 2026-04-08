@@ -94,7 +94,7 @@ internal class UsernameChangeCleanupService : BackgroundService
                 .ExecuteUpdateAsync(
                     s => s.SetProperty(r => r.Status, UsernameChangeRequestStatus.Expired)
                           .SetProperty(r => r.ResolvedUtc, DateTimeOffset.UtcNow)
-                          .SetProperty(r => r.ResolverComment, "Автоматически отклонено: истёк срок ожидания модерации"),
+                          .SetProperty(r => r.ResolverComment, "Автоматически отклонено: истек срок ожидания модерации"),
                     cancellationToken);
 
             if (expiredCount > 0)
@@ -136,13 +136,13 @@ internal class UsernameChangeCleanupService : BackgroundService
             // Update approved requests with expired tokens to Expired status
             var expiredCount = await dbContext.UsernameChangeRequests
                 .Where(r => r.Status == UsernameChangeRequestStatus.Approved &&
-                           r.ApprovalTokenExpiresAt.HasValue &&
-                           r.ApprovalTokenExpiresAt.Value < now)
+                           r.ApprovalTokenExpiresUtc.HasValue &&
+                           r.ApprovalTokenExpiresUtc.Value < now)
                 .ExecuteUpdateAsync(
                     s => s.SetProperty(r => r.Status, UsernameChangeRequestStatus.Expired)
                           .SetProperty(r => r.ApprovalToken, (Guid?)null)
                           .SetProperty(r => r.ResolverComment,
-                              r => r.ResolverComment + " | Токен истёк: пользователь не выбрал новое имя в отведённое время"),
+                              r => r.ResolverComment + " | Токен истек: пользователь не выбрал новое имя в отведенное время"),
                     cancellationToken);
 
             if (expiredCount > 0)

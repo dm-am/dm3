@@ -26,7 +26,7 @@ public class UpdateGlobalChatEventEntity
     /// <summary>
     /// Updated start time (null to keep current)
     /// </summary>
-    public DateTimeOffset? StartsAtUtc { get; set; }
+    public DateTimeOffset? StartsUtc { get; set; }
 
     /// <summary>
     /// Updated duration (null to keep current)
@@ -46,10 +46,10 @@ public class UpdateGlobalChatEventEntity
     /// <summary>
     /// Updated started timestamp (null to keep current)
     /// </summary>
-    public DateTimeOffset? StartedAtUtc { get; set; }
+    public DateTimeOffset? StartedUtc { get; set; }
 
     /// <summary>
     /// Updated ended timestamp (null to keep current)
     /// </summary>
-    public DateTimeOffset? EndedAtUtc { get; set; }
+    public DateTimeOffset? EndedUtc { get; set; }
 }

@@ -3,9 +3,6 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Entities.Contracts;
-using DM.Infrastructure.Persistence.Entities.Game;
-using DM.Infrastructure.Persistence.Entities.Game.Characters;
-using DM.Infrastructure.Persistence.Entities.Game.Posts;
 using DM.Infrastructure.Persistence.Entities.Account;
 
 namespace DM.Infrastructure.Persistence.Entities.Shared;
@@ -14,7 +11,7 @@ namespace DM.Infrastructure.Persistence.Entities.Shared;
 /// DAL model for user uploaded content
 /// </summary>
 [Table("Uploads")]
-public class Upload : IRemovable
+public class Upload : ISoftDeletable
 {
     /// <summary>
     /// Upload identifier
@@ -101,6 +98,12 @@ public class Upload : IRemovable
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
 
+    /// <inheritdoc />
+    public Guid? DeletedByUserId { get; set; }
+
+    /// <inheritdoc />
+    public DateTimeOffset? DeletedUtc { get; set; }
+
     /// <summary>
     /// Owner
     /// </summary>
@@ -108,26 +111,13 @@ public class Upload : IRemovable
     public virtual User Owner { get; set; } = null!;
 
     /// <summary>
-    /// User profile (for user profile picture)
+    /// User who deleted the upload
     /// </summary>
-    [ForeignKey(nameof(EntityId))]
-    public virtual User? UserProfile { get; set; }
+    [ForeignKey(nameof(DeletedByUserId))]
+    public virtual User? DeletedBy { get; set; }
 
-    /// <summary>
-    /// Game (for game preview picture)
-    /// </summary>
-    [ForeignKey(nameof(EntityId))]
-    public virtual Game.Game? Game { get; set; }
-
-    /// <summary>
-    /// Character (for character portrait)
-    /// </summary>
-    [ForeignKey(nameof(EntityId))]
-    public virtual Character? Character { get; set; }
-
-    /// <summary>
-    /// Post (for post attachment)
-    /// </summary>
-    [ForeignKey(nameof(EntityId))]
-    public virtual Post? Post { get; set; }
+    // NOTE: EntityId is a polymorphic FK that can reference User, Game, Character, or Post
+    // depending on UploadType. No navigation properties are defined to avoid EF Core
+    // creating FK constraints on a polymorphic column. Referential integrity is managed
+    // by application logic.
 }

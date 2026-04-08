@@ -20,6 +20,5 @@ public interface IGameCommentLikeApiService
     /// Remove user's like from comment
     /// </summary>
     /// <param name="commentId">Comment identifier</param>
-    /// <returns></returns>
     Task UnlikeComment(Guid commentId);
 }

@@ -23,14 +23,14 @@ public class Session
     public bool Persistent { get; set; }
 
     /// <summary>
-    /// Session expiration date
+    /// Session expiration date (UTC)
     /// </summary>
-    public DateTimeOffset ExpirationDate { get; set; }
+    public DateTimeOffset ExpirationUtc { get; set; }
 
     /// <summary>
     /// Session creation date (UTC)
     /// </summary>
-    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Device/browser description (e.g., "Chrome on Windows")

@@ -28,7 +28,6 @@ public interface IIntentionManager
     /// </summary>
     /// <param name="intention">Intended action</param>
     /// <typeparam name="TIntention">Type of intention</typeparam>
-    /// <returns></returns>
     void ThrowIfForbidden<TIntention>(TIntention intention) where TIntention : struct;
 
     /// <summary>
@@ -38,6 +37,5 @@ public interface IIntentionManager
     /// <param name="target">Object of the action</param>
     /// <typeparam name="TIntention">Type of intention</typeparam>
     /// <typeparam name="TTarget">Type of action object</typeparam>
-    /// <returns></returns>
     void ThrowIfForbidden<TIntention, TTarget>(TIntention intention, TTarget target) where TIntention : struct;
 }

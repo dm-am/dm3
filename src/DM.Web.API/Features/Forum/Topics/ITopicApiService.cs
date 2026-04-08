@@ -25,6 +25,14 @@ public interface ITopicApiService
     Task<Envelope<Topic>> Get(Guid topicId);
 
     /// <summary>
+    /// Get topic by board alias and topic number
+    /// </summary>
+    /// <param name="boardAlias">Board URL alias</param>
+    /// <param name="topicNumber">Topic number within board</param>
+    /// <returns>Envelope of topic</returns>
+    Task<Envelope<Topic>> GetByBoardAndNumber(string boardAlias, int topicNumber);
+
+    /// <summary>
     /// Create new topic
     /// </summary>
     /// <param name="forumId">Forum identifier</param>
@@ -44,6 +52,12 @@ public interface ITopicApiService
     /// Removes topic
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
-    /// <returns></returns>
     Task Delete(Guid topicId);
+
+    /// <summary>
+    /// Reorders pinned topics in a board
+    /// </summary>
+    /// <param name="boardId">Board identifier</param>
+    /// <param name="request">Reorder request with topic IDs</param>
+    Task ReorderPinned(string boardId, ReorderPinnedRequest request);
 }

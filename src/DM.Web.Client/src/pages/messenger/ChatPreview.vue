@@ -38,9 +38,7 @@ const lastMessageDate = computed(() => {
   return dayjs(msg.createdUtc).format("DD.MM.YYYY HH:mm");
 });
 
-const hasUnread = computed(
-  () => (props.chat.unreadMessagesCount ?? 0) > 0,
-);
+const hasUnread = computed(() => (props.chat.unreadMessagesCount ?? 0) > 0);
 </script>
 
 <template>

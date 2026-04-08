@@ -37,7 +37,7 @@ public class GlobalChatEventParticipant
     /// <summary>
     /// When the participant joined the event
     /// </summary>
-    public DateTimeOffset JoinedAtUtc { get; set; }
+    public DateTimeOffset JoinedUtc { get; set; }
 
     /// <summary>
     /// The event

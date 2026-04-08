@@ -14,9 +14,24 @@ public class CreatePoll
     public string Title { get; set; } = null!;
 
     /// <summary>
-    /// Desired poll end date
+    /// Optional description/details for the poll
     /// </summary>
-    public DateTimeOffset EndDate { get; set; }
+    public string? Details { get; set; }
+
+    /// <summary>
+    /// Poll start date (UTC)
+    /// </summary>
+    public DateTimeOffset StartsUtc { get; set; }
+
+    /// <summary>
+    /// Poll end date (UTC)
+    /// </summary>
+    public DateTimeOffset EndsUtc { get; set; }
+
+    /// <summary>
+    /// Whether poll is anonymous (default: true)
+    /// </summary>
+    public bool IsAnonymous { get; set; } = true;
 
     /// <summary>
     /// List of possible poll answers

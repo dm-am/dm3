@@ -37,7 +37,7 @@ internal class TopicCommentApiService : ITopicCommentApiService
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<Comment> Comments, PagingInfo Paging)> Get(Guid topicId, PagingQuery query)
+    public async Task<(IEnumerable<Comment> Comments, PagingInfo Paging)> Get(Guid topicId, CommentsQuery query)
     {
         var identity = _identityProvider.Current;
         IReadOnlyCollection<Guid>? excludeUserIds = null;

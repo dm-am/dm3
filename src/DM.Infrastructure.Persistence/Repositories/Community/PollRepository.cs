@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Core.Dto;
 using DM.Domain.Community.Features.Polls;
 using DM.Infrastructure.Persistence.MongoIntegration;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 using DbPoll = DM.Infrastructure.Persistence.Entities.Forum.Poll;
@@ -27,32 +29,155 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
     // ═══ READ ═══
 
     /// <inheritdoc />
-    public Task<long> Count(DateTimeOffset? activeAt)
+    public Task<long> Count(PollsQuery query)
     {
-        var filter = Filter.Eq(p => p.IsRemoved, false);
-        if (activeAt.HasValue)
-        {
-            filter &= Filter.Gte(p => p.EndDate, activeAt.Value.UtcDateTime);
-        }
-        return Collection.CountDocumentsAsync(filter);
+        return Collection.CountDocumentsAsync(BuildFilter(query));
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Poll>> Get(DateTimeOffset? activeAt, PagingData pagingData)
+    public async Task<IEnumerable<Poll>> Get(PollsQuery query, PagingData pagingData)
     {
-        var filter = Filter.Eq(p => p.IsRemoved, false);
-        if (activeAt.HasValue)
+        var filter = BuildFilter(query);
+
+        // Status sort requires aggregation to compute status order
+        if (string.Equals(query?.SortBy, "status", StringComparison.OrdinalIgnoreCase))
         {
-            filter &= Filter.Gte(p => p.EndDate, activeAt.Value.UtcDateTime);
+            var dbPolls = await GetWithStatusSort(filter, query!, pagingData);
+            return dbPolls.Select(_mapper.Map<Poll>);
         }
 
-        var dbPolls = await Collection
+        var sort = BuildSort(query);
+        var dbPollsSimple = await Collection
             .Find(filter)
-            .Sort(Sort.Descending(p => p.StartDate))
+            .Sort(sort)
             .Skip(pagingData.Skip)
             .Limit(pagingData.Take)
             .ToListAsync();
-        return dbPolls.Select(_mapper.Map<Poll>);
+        return dbPollsSimple.Select(_mapper.Map<Poll>);
+    }
+
+    /// <summary>
+    /// Get polls with proper status sorting using aggregation.
+    /// Status order: Pending (0) → Active (1) → Closed (2)
+    /// </summary>
+    private async Task<List<DbPoll>> GetWithStatusSort(
+        FilterDefinition<DbPoll> filter,
+        PollsQuery query,
+        PagingData pagingData)
+    {
+        var now = DateTime.UtcNow;
+        var isDesc = string.Equals(query.SortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+
+        // Build aggregation pipeline with computed statusOrder field
+        // Pending: StartsUtc > now → order 0
+        // Active: StartsUtc <= now AND EndsUtc > now → order 1
+        // Closed: EndsUtc <= now → order 2
+        var pipeline = Collection.Aggregate()
+            .Match(filter)
+            .AppendStage<BsonDocument>(new BsonDocument("$addFields", new BsonDocument("statusOrder",
+                new BsonDocument("$cond", new BsonArray
+                {
+                    new BsonDocument("$gt", new BsonArray { "$StartsUtc", now }),
+                    0, // Pending
+                    new BsonDocument("$cond", new BsonArray
+                    {
+                        new BsonDocument("$gt", new BsonArray { "$EndsUtc", now }),
+                        1, // Active
+                        2  // Closed
+                    })
+                }))))
+            .AppendStage<BsonDocument>(new BsonDocument("$sort", isDesc
+                ? new BsonDocument { { "statusOrder", -1 }, { "StartsUtc", -1 } }
+                : new BsonDocument { { "statusOrder", 1 }, { "StartsUtc", -1 } }))
+            .Skip(pagingData.Skip)
+            .Limit(pagingData.Take)
+            // Remove computed field before deserializing to DbPoll
+            .AppendStage<BsonDocument>(new BsonDocument("$unset", "statusOrder"))
+            .As<DbPoll>();
+
+        return await pipeline.ToListAsync();
+    }
+
+    private FilterDefinition<DbPoll> BuildFilter(PollsQuery? query)
+    {
+        var filter = Filter.Eq(p => p.IsRemoved, false);
+
+        if (query == null)
+            return filter;
+
+        // Status filter (3 statuses: pending, active, closed)
+        var now = DateTime.UtcNow;
+        if (string.Equals(query.Status, "pending", StringComparison.OrdinalIgnoreCase))
+        {
+            // now < StartsUtc
+            filter &= Filter.Gt(p => p.StartsUtc, now);
+        }
+        else if (string.Equals(query.Status, "active", StringComparison.OrdinalIgnoreCase))
+        {
+            // StartsUtc <= now < EndsUtc
+            filter &= Filter.Lte(p => p.StartsUtc, now) & Filter.Gt(p => p.EndsUtc, now);
+        }
+        else if (string.Equals(query.Status, "closed", StringComparison.OrdinalIgnoreCase))
+        {
+            // now >= EndsUtc
+            filter &= Filter.Lte(p => p.EndsUtc, now);
+        }
+
+        // Search filter (Title + Details)
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            // Escape regex special characters for literal search
+            var escapedSearch = Regex.Escape(query.Search);
+            var regex = new MongoDB.Bson.BsonRegularExpression(escapedSearch, "i");
+            filter &= Filter.Or(
+                Filter.Regex(p => p.Title, regex),
+                Filter.Regex(p => p.Details, regex));
+        }
+
+        // Date range filters for StartsUtc
+        if (query.StartsFrom.HasValue)
+        {
+            filter &= Filter.Gte(p => p.StartsUtc, query.StartsFrom.Value.UtcDateTime);
+        }
+        if (query.StartsTo.HasValue)
+        {
+            filter &= Filter.Lte(p => p.StartsUtc, query.StartsTo.Value.UtcDateTime);
+        }
+
+        // Date range filters for EndsUtc
+        if (query.EndsFrom.HasValue)
+        {
+            filter &= Filter.Gte(p => p.EndsUtc, query.EndsFrom.Value.UtcDateTime);
+        }
+        if (query.EndsTo.HasValue)
+        {
+            filter &= Filter.Lte(p => p.EndsUtc, query.EndsTo.Value.UtcDateTime);
+        }
+
+        // Anonymous/Public filter
+        if (query.IsAnonymous.HasValue)
+        {
+            filter &= Filter.Eq(p => p.IsAnonymous, query.IsAnonymous.Value);
+        }
+
+        return filter;
+    }
+
+    private SortDefinition<DbPoll> BuildSort(PollsQuery? query)
+    {
+        // Note: "status" sort is handled via aggregation
+        if (query == null)
+            return Sort.Ascending(p => p.StartsUtc);
+
+        var isDesc = string.Equals(query.SortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+
+        return query.SortBy?.ToLowerInvariant() switch
+        {
+            "starts" => isDesc ? Sort.Descending(p => p.StartsUtc) : Sort.Ascending(p => p.StartsUtc),
+            "ends" => isDesc ? Sort.Descending(p => p.EndsUtc) : Sort.Ascending(p => p.EndsUtc),
+            // Default to StartsUtc
+            _ => isDesc ? Sort.Descending(p => p.StartsUtc) : Sort.Ascending(p => p.StartsUtc),
+        };
     }
 
     /// <inheritdoc />
@@ -72,10 +197,11 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
         var dbPoll = new DbPoll
         {
             Id = poll.Id,
-            StartDate = poll.StartDate,
-            EndDate = poll.EndDate,
-            Global = poll.Global,
+            StartsUtc = poll.StartsUtc,
+            EndsUtc = poll.EndsUtc,
             Title = poll.Title,
+            Details = poll.Details,
+            IsAnonymous = poll.IsAnonymous,
             IsRemoved = false,
             Options = poll.Options.Select(o => new DbPollOption
             {
@@ -92,8 +218,10 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
     }
 
     /// <inheritdoc />
-    public new async Task<Poll> Update(Guid pollId, string? title, DateTimeOffset? endDate)
+    public new async Task<Poll> Update(Guid pollId, string? title, string? details,
+        DateTimeOffset? startDate, DateTimeOffset? endDate, bool? isAnonymous)
     {
+        var currentPoll = await Collection.Find(Filter.Eq(p => p.Id, pollId)).FirstAsync();
         var update = Builders<DbPoll>.Update;
         var updates = new List<UpdateDefinition<DbPoll>>();
 
@@ -102,9 +230,35 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
             updates.Add(update.Set(p => p.Title, title));
         }
 
+        if (details != null)
+        {
+            updates.Add(update.Set(p => p.Details, details == string.Empty ? null : details));
+        }
+
+        if (startDate.HasValue)
+        {
+            updates.Add(update.Set(p => p.StartsUtc, startDate.Value.UtcDateTime));
+        }
+
         if (endDate.HasValue)
         {
-            updates.Add(update.Set(p => p.EndDate, endDate.Value));
+            updates.Add(update.Set(p => p.EndsUtc, endDate.Value.UtcDateTime));
+        }
+
+        if (isAnonymous.HasValue)
+        {
+            // Reset votes when changing from Anonymous to Public
+            if (currentPoll.IsAnonymous && !isAnonymous.Value)
+            {
+                updates.Add(update.Set(p => p.Options,
+                    currentPoll.Options.Select(o => new DbPollOption
+                    {
+                        Id = o.Id,
+                        Text = o.Text,
+                        UserIds = []
+                    }).ToList()));
+            }
+            updates.Add(update.Set(p => p.IsAnonymous, isAnonymous.Value));
         }
 
         if (updates.Count > 0)

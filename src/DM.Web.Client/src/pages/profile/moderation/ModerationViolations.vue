@@ -14,7 +14,7 @@ import type {
 import { BanType } from "@/shared/api/moderationApi";
 import { moderationApi } from "@/shared/api";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
 import dayjs from "dayjs";
 
@@ -73,7 +73,9 @@ async function toggleWarnings() {
   showWarnings.value = !showWarnings.value;
   if (showWarnings.value && warningsList.value === null) {
     loadingWarnings.value = true;
-    const { data } = await moderationApi.getWarnings(props.targetUsername as Username);
+    const { data } = await moderationApi.getWarnings(
+      props.targetUsername as Username,
+    );
     warningsList.value = data?.warnings ?? [];
     loadingWarnings.value = false;
   }
@@ -83,7 +85,9 @@ async function toggleBans() {
   showBans.value = !showBans.value;
   if (showBans.value && bansList.value === null) {
     loadingBans.value = true;
-    const { data } = await moderationApi.getBans(props.targetUsername as Username);
+    const { data } = await moderationApi.getBans(
+      props.targetUsername as Username,
+    );
     bansList.value = data?.history ?? [];
     loadingBans.value = false;
   }
@@ -91,7 +95,12 @@ async function toggleBans() {
 
 async function issueWarning() {
   if (!warningReason.value.trim()) return;
-  if (!confirm(`Вынести предупреждение (${warningPoints.value} б.) пользователю ${props.targetUsername}?`)) return;
+  if (
+    !confirm(
+      `Вынести предупреждение (${warningPoints.value} б.) пользователю ${props.targetUsername}?`,
+    )
+  )
+    return;
   issuingWarning.value = true;
   const payload: CreateWarning = {
     username: props.targetUsername,
@@ -125,7 +134,10 @@ async function removeWarning(warningId: string) {
 
 async function issueBan() {
   if (!banComment.value.trim()) return;
-  const banTypeStr = banType.value === BanType.Permanent ? "перманентный" : `на ${banDurationHours.value} ч.`;
+  const banTypeStr =
+    banType.value === BanType.Permanent
+      ? "перманентный"
+      : `на ${banDurationHours.value} ч.`;
   if (!confirm(`Забанить ${props.targetUsername} (${banTypeStr})?`)) return;
   issuingBan.value = true;
   const payload: CreateBan = {
@@ -195,7 +207,9 @@ async function liftBan(banId: string) {
             :class="{ 'mod-violation-active': w.isActive }"
           >
             <div class="mod-violation-item_header">
-              <secondary-text>{{ formatDateTime(w.createdUtc) }}</secondary-text>
+              <secondary-text>{{
+                formatDateTime(w.createdUtc)
+              }}</secondary-text>
               <span v-if="w.moderator">{{ w.moderator.username }}</span>
               <span class="mod-warning-badge">{{ w.points }} б.</span>
             </div>
@@ -241,7 +255,9 @@ async function liftBan(banId: string) {
             :class="{ 'mod-violation-active': b.isActive }"
           >
             <div class="mod-violation-item_header">
-              <secondary-text>{{ formatDateTime(b.startedUtc) }}</secondary-text>
+              <secondary-text>{{
+                formatDateTime(b.startedUtc)
+              }}</secondary-text>
               <span v-if="b.moderator">{{ b.moderator.username }}</span>
               <span class="mod-ban-type">{{ b.type }}</span>
               <span v-if="b.expiresUtc">
@@ -263,19 +279,19 @@ async function liftBan(banId: string) {
 
     <!-- Action buttons -->
     <div class="mod-violations_actions">
-      <the-button
+      <Button
         v-if="permissions.canIssueWarning"
         @click="showWarningForm = !showWarningForm"
       >
         {{ showWarningForm ? "Отмена" : "Вынести предупреждение" }}
-      </the-button>
+      </Button>
 
-      <the-button
+      <Button
         v-if="permissions.canIssueBan"
         @click="showBanForm = !showBanForm"
       >
         {{ showBanForm ? "Отмена" : "Забанить" }}
-      </the-button>
+      </Button>
     </div>
 
     <!-- Inline Warning Form -->
@@ -298,13 +314,13 @@ async function liftBan(banId: string) {
           class="mod-textarea"
         />
       </div>
-      <the-button
+      <Button
         :disabled="!warningReason.trim()"
         :loading="issuingWarning"
         @click="issueWarning"
       >
         Вынести предупреждение
-      </the-button>
+      </Button>
     </div>
 
     <!-- Inline Ban Form -->
@@ -338,13 +354,13 @@ async function liftBan(banId: string) {
           class="mod-textarea"
         />
       </div>
-      <the-button
+      <Button
         :disabled="!banComment.trim()"
         :loading="issuingBan"
         @click="issueBan"
       >
         Забанить
-      </the-button>
+      </Button>
     </div>
   </div>
 </template>

@@ -13,19 +13,19 @@ public class UpdateTopic
     public Guid TopicId { get; set; }
 
     /// <summary>
-    /// New title
+    /// New title (null = don't update)
     /// </summary>
-    public string Title { get; set; } = null!;
+    public string? Title { get; set; }
 
     /// <summary>
-    /// New description
+    /// New description (null = don't update)
     /// </summary>
-    public string Text { get; set; } = null!;
+    public string? Text { get; set; }
 
     /// <summary>
-    /// New parent board title
+    /// New parent board title (null = don't update)
     /// </summary>
-    public string BoardTitle { get; set; } = null!;
+    public string? BoardTitle { get; set; }
 
     /// <summary>
     /// Is attached

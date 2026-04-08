@@ -15,7 +15,7 @@ public class CreateSession
     /// <summary>
     /// Expiration moment (UTC)
     /// </summary>
-    public DateTime ExpirationDate { get; set; }
+    public DateTime ExpirationUtc { get; set; }
 
     /// <summary>
     /// Persistence flag (remember me)
@@ -30,7 +30,7 @@ public class CreateSession
     /// <summary>
     /// Session creation time (UTC)
     /// </summary>
-    public DateTime CreatedAt { get; set; }
+    public DateTime CreatedUtc { get; set; }
 
     /// <summary>
     /// Client IP address at session creation
@@ -91,7 +91,7 @@ public record UserIpInfo(
     string IpAddress,
     DateTimeOffset FirstSeenUtc,
     DateTimeOffset LastSeenUtc,
-    int LoginCount);
+    int LoginsCount);
 
 /// <summary>
 /// User sharing IP addresses with the target user
@@ -99,5 +99,5 @@ public record UserIpInfo(
 public record LinkedProfile(
     Guid UserId,
     string Username,
-    int SharedIpCount,
+    int SharedIpsCount,
     DateTimeOffset LastSharedLoginUtc);

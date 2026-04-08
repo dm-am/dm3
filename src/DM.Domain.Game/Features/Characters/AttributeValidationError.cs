@@ -28,8 +28,8 @@ public static class AttributeValidationError
     /// <summary>
     /// Specifications are missing entirely from the data
     /// </summary>
-    /// <param name="specifications"></param>
-    /// <returns></returns>
+    /// <param name="specifications">Missing required specifications</param>
+    /// <returns>Error message listing missing specifications</returns>
     public static string ManyRequiredMissing(IEnumerable<(Guid Id, string Title)> specifications) =>
         $"These specifications were not found, but required: {string.Join(", ", specifications.Select(s => $"{s.Id.EncodeToReadable()} ({s.Title})"))}";
 
@@ -41,24 +41,24 @@ public static class AttributeValidationError
     /// <summary>
     /// Number should be in range
     /// </summary>
-    /// <param name="min"></param>
-    /// <param name="max"></param>
-    /// <returns></returns>
+    /// <param name="min">Minimum value</param>
+    /// <param name="max">Maximum value</param>
+    /// <returns>Error message with valid range</returns>
     public static string NumberNotInRange(int? min, int? max) =>
         $"Value should be in range from {min?.ToString() ?? "-∞"} to {max?.ToString() ?? "+∞"}";
 
     /// <summary>
     /// Value should be a short enough string
     /// </summary>
-    /// <param name="maxLength"></param>
-    /// <returns></returns>
+    /// <param name="maxLength">Maximum allowed length</param>
+    /// <returns>Error message with max length</returns>
     public static string StringTooLong(int maxLength) => $"Value should be at most {maxLength} characters long";
 
     /// <summary>
     /// Value should be present in list
     /// </summary>
-    /// <param name="possibleValues"></param>
-    /// <returns></returns>
+    /// <param name="possibleValues">List of allowed values</param>
+    /// <returns>Error message with allowed values</returns>
     public static string NotPresentInList(IEnumerable<string> possibleValues) =>
         $"Value should be on of following values: {string.Join(", ", possibleValues)}";
 }

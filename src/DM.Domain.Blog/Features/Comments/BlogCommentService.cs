@@ -57,7 +57,7 @@ internal class BlogCommentService : IBlogCommentService
     {
         await _createValidator.ValidateAndThrowAsync(createComment);
 
-        var blog = await _blogService.GetBlog(createComment.EntityId);
+        var blog = await _blogService.GetBlogAsync(createComment.EntityId);
         _intentionManager.ThrowIfForbidden(BlogIntention.CreateComment, blog);
 
         // Check blacklist
@@ -80,15 +80,15 @@ internal class BlogCommentService : IBlogCommentService
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid blogId, PagingQuery query,
+    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid blogId, BlogCommentsQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
-        await _blogService.GetBlog(blogId);
+        await _blogService.GetBlogAsync(blogId);
 
-        var totalCount = await _repository.Count(blogId, excludeUserIds);
+        var totalCount = await _repository.Count(blogId, query, excludeUserIds);
         var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.CommentsPerPage, totalCount);
 
-        var comments = await _repository.Get(blogId, paging, excludeUserIds);
+        var comments = await _repository.Get(blogId, query, paging, excludeUserIds);
 
         return (comments, paging.Result);
     }
@@ -163,7 +163,7 @@ internal class BlogCommentService : IBlogCommentService
     /// <inheritdoc />
     public async Task MarkAsReadAsync(Guid blogId)
     {
-        await _blogService.GetBlog(blogId);
+        await _blogService.GetBlogAsync(blogId);
         await _countersRepository.FlushAsync(_identityProvider.Current.User.UserId,
             UnreadEntryType.Message, blogId);
     }

@@ -1,9 +1,14 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { onMounted, onUnmounted, ref, nextTick, computed, watch } from "vue";
 import { storeToRefs } from "pinia";
-import { useGlobalChatStore, type GlobalChatMessage } from "@/entities/global-chat";
+import {
+  useGlobalChatStore,
+  type GlobalChatMessage,
+} from "@/entities/global-chat";
 import { useUserStore, UserRole } from "@/entities/user";
+import { useUiStore } from "@/shared/stores/ui";
 import { AccessPolicy } from "@/shared/api/models/community";
+import { Tooltip } from "@/shared/ui/Tooltip";
 import dayjs from "dayjs";
 import defaultAvatar from "@/assets/images/userpic.png";
 import { BBCodeEditor } from "@/features/editor";
@@ -23,61 +28,11 @@ const {
   highlightedMessageId,
 } = storeToRefs(globalChatStore);
 const { user } = storeToRefs(userStore);
+const { isCompactMode } = storeToRefs(useUiStore());
 
 const ONLINE_THRESHOLD_MINUTES = 5;
 const EDIT_TIME_LIMIT_MINUTES = 15;
 const MAX_MESSAGE_HEIGHT = 500;
-
-// Compact mode (persisted in localStorage)
-const COMPACT_MODE_KEY = "globalChat-compact-mode";
-const isCompactMode = ref(localStorage.getItem(COMPACT_MODE_KEY) === "true");
-function toggleCompactMode() {
-  const container = messagesContainer.value;
-  let wasAtBottom = false;
-  let bottomMessageId: string | null = null;
-
-  if (container) {
-    // Check if we're at the bottom (within 50px threshold)
-    wasAtBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight <
-      50;
-
-    if (!wasAtBottom) {
-      // Find the bottom-most visible message
-      const containerRect = container.getBoundingClientRect();
-      const messageElements = container.querySelectorAll(
-        ".globalChat-message[data-id]",
-      );
-      for (const el of messageElements) {
-        const rect = el.getBoundingClientRect();
-        if (rect.top < containerRect.bottom) {
-          bottomMessageId = el.getAttribute("data-id");
-        }
-      }
-    }
-  }
-
-  isCompactMode.value = !isCompactMode.value;
-  localStorage.setItem(COMPACT_MODE_KEY, String(isCompactMode.value));
-
-  nextTick(() => {
-    if (wasAtBottom) {
-      // Stay at bottom
-      scrollToBottom();
-    } else if (bottomMessageId && messagesContainer.value) {
-      // Keep the same message at bottom of viewport
-      const el = messagesContainer.value.querySelector(
-        `.globalChat-message[data-id="${bottomMessageId}"]`,
-      );
-      if (el) {
-        const containerRect = messagesContainer.value.getBoundingClientRect();
-        const elRect = el.getBoundingClientRect();
-        messagesContainer.value.scrollTop +=
-          elRect.bottom - containerRect.bottom;
-      }
-    }
-  });
-}
 
 const isBanned = computed(() => {
   if (!user.value?.accessPolicy) return false;
@@ -118,24 +73,6 @@ const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 const editEditorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 const topSentinel = ref<HTMLElement | null>(null);
 const bottomSentinel = ref<HTMLElement | null>(null);
-const viewToggleRef = ref<HTMLElement | null>(null);
-const viewIndicatorStyle = ref({ left: "0px", width: "50%" });
-
-function updateViewIndicator() {
-  if (!viewToggleRef.value) return;
-  const btns = viewToggleRef.value.querySelectorAll(".view-toggle-btn");
-  const activeIndex = isCompactMode.value ? 0 : 1;
-  const activeBtn = btns[activeIndex] as HTMLElement;
-  if (!activeBtn) return;
-  viewIndicatorStyle.value = {
-    left: `${activeBtn.offsetLeft}px`,
-    width: `${activeBtn.offsetWidth}px`,
-  };
-}
-
-watch(isCompactMode, () => {
-  nextTick(updateViewIndicator);
-});
 
 let topObserver: IntersectionObserver | null = null;
 let bottomObserver: IntersectionObserver | null = null;
@@ -194,7 +131,12 @@ function setupInfiniteScroll() {
   if (bottomSentinel.value) {
     bottomObserver = new IntersectionObserver(
       async (entries) => {
-        if (isInitialScrolling || !entries[0].isIntersecting || isLoadingNewer || !hasMoreAfter.value)
+        if (
+          isInitialScrolling ||
+          !entries[0].isIntersecting ||
+          isLoadingNewer ||
+          !hasMoreAfter.value
+        )
           return;
         isLoadingNewer = true;
 
@@ -235,7 +177,7 @@ let hideToolbarTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const hoveredMessage = computed(() => {
   if (!hoveredMessageId.value) return null;
-  return messages.value.find((m) => m.id === hoveredMessageId.value) || null;
+  return globalChatStore.findMessageInLoaded(hoveredMessageId.value);
 });
 
 // Toolbar is always visible when message is hovered - clipping is handled by CSS
@@ -465,8 +407,9 @@ watch(isCompactMode, (newValue) => {
 });
 
 // Watch for new messages to init interactive BBCode elements
+// Only watch message count changes, not deep properties (performance)
 watch(
-  messages,
+  () => messages.value?.length,
   () => {
     nextTick(() => {
       initBbcodeInteractive(messagesContainer.value);
@@ -475,7 +418,6 @@ watch(
       }
     });
   },
-  { deep: true },
 );
 
 onMounted(async () => {
@@ -506,9 +448,6 @@ onMounted(async () => {
   if (isCompactMode.value) {
     replaceImagesWithLinks(messagesContainer.value);
   }
-
-  // Initialize view toggle indicator
-  nextTick(updateViewIndicator);
 });
 
 onUnmounted(() => {
@@ -535,9 +474,12 @@ function formatFullDate(msg: GlobalChatMessage) {
   let result = `Отправлено: ${dayjs(msg.createdUtc).format("DD.MM.YYYY HH:mm")}`;
   if (msg.edits?.length) {
     for (const edit of msg.edits) {
-      const isSelf = user.value && edit.editor?.username === user.value.username;
-      const editorName = isSelf ? "вами" : edit.editor?.username || "неизвестно";
-      result += `\nРедактирование: ${dayjs(edit.editedAtUtc).format("DD.MM.YYYY HH:mm")} (${editorName})`;
+      const isSelf =
+        user.value && edit.editor?.username === user.value.username;
+      const editorName = isSelf
+        ? "вами"
+        : edit.editor?.username || "неизвестно";
+      result += `\nРедактирование: ${dayjs(edit.editedUtc).format("DD.MM.YYYY HH:mm")} (${editorName})`;
     }
   }
   return result;
@@ -547,31 +489,36 @@ function formatDeletedDate(msg: GlobalChatMessage) {
   let result = `Отправлено: ${dayjs(msg.createdUtc).format("DD.MM.YYYY HH:mm")}`;
   if (msg.edits?.length) {
     for (const edit of msg.edits) {
-      const isSelf = user.value && edit.editor?.username === user.value.username;
-      const editorName = isSelf ? "вами" : edit.editor?.username || "неизвестно";
-      result += `\nРедактирование: ${dayjs(edit.editedAtUtc).format("DD.MM.YYYY HH:mm")} (${editorName})`;
+      const isSelf =
+        user.value && edit.editor?.username === user.value.username;
+      const editorName = isSelf
+        ? "вами"
+        : edit.editor?.username || "неизвестно";
+      result += `\nРедактирование: ${dayjs(edit.editedUtc).format("DD.MM.YYYY HH:mm")} (${editorName})`;
     }
   }
   const deleterUsername = msg.deletedBy?.username;
   const isSelfDelete = user.value && deleterUsername === user.value.username;
   const deleterName = isSelfDelete ? "вами" : deleterUsername || "неизвестно";
-  const deletedAtUtcStr = msg.deletedAtUtc
-    ? dayjs(msg.deletedAtUtc).format("DD.MM.YYYY HH:mm")
+  const deletedUtcStr = msg.deletedUtc
+    ? dayjs(msg.deletedUtc).format("DD.MM.YYYY HH:mm")
     : "";
-  result += deletedAtUtcStr
-    ? `\nУдалено: ${deletedAtUtcStr} (${deleterName})`
+  result += deletedUtcStr
+    ? `\nУдалено: ${deletedUtcStr} (${deleterName})`
     : `\nУдалено (${deleterName})`;
   return result;
 }
 
 // Track latest activity per username
+// Using ISO string comparison (lexicographic) instead of dayjs for performance
 const latestActivityByUsername = computed(() => {
   const map = new Map<string, string>();
   if (!messages.value?.length) return map;
   for (const msg of messages.value) {
     if (!msg.author?.username || !msg.author?.lastActivityUtc) continue;
     const existing = map.get(msg.author.username);
-    if (!existing || dayjs(msg.author.lastActivityUtc).isAfter(dayjs(existing))) {
+    // ISO 8601 strings compare correctly lexicographically
+    if (!existing || msg.author.lastActivityUtc > existing) {
       map.set(msg.author.username, msg.author.lastActivityUtc);
     }
   }
@@ -582,7 +529,11 @@ function isOnline(author: any) {
   if (!author?.username) return false;
   const lastActivityUtc = latestActivityByUsername.value.get(author.username);
   if (!lastActivityUtc) return false;
-  const minutesSinceOnline = dayjs().diff(dayjs(lastActivityUtc), "minute", true);
+  const minutesSinceOnline = dayjs().diff(
+    dayjs(lastActivityUtc),
+    "minute",
+    true,
+  );
   return minutesSinceOnline <= ONLINE_THRESHOLD_MINUTES;
 }
 
@@ -610,7 +561,9 @@ function canLikeMessage(_msg: GlobalChatMessage) {
 
 function isLikedByMe(msg: GlobalChatMessage) {
   if (!user.value) return false;
-  return msg.likes?.some((u: any) => u.username === user.value?.username) ?? false;
+  return (
+    msg.likes?.some((u: any) => u.username === user.value?.username) ?? false
+  );
 }
 
 function getLikesTooltip(msg: GlobalChatMessage) {
@@ -836,44 +789,20 @@ async function confirmDelete() {
         </span>
       </template>
     </div>
-    <div ref="viewToggleRef" class="view-toggle">
-      <button
-        class="view-toggle-btn"
-        :class="{ active: isCompactMode }"
-        title="Компактный вид"
-        @click="!isCompactMode && toggleCompactMode()"
-      >
-        <svg viewBox="0 0 16 12" width="16" height="12" fill="currentColor">
-          <rect x="0" y="0" width="16" height="2" />
-          <rect x="0" y="3.33" width="16" height="2" />
-          <rect x="0" y="6.67" width="16" height="2" />
-          <rect x="0" y="10" width="16" height="2" />
-        </svg>
-      </button>
-      <button
-        class="view-toggle-btn"
-        :class="{ active: !isCompactMode }"
-        title="Обычный вид"
-        @click="isCompactMode && toggleCompactMode()"
-      >
-        <svg viewBox="0 0 16 12" width="16" height="12" fill="currentColor">
-          <circle cx="1.5" cy="1.5" r="1.5" />
-          <rect x="5" y="0" width="11" height="2.5" />
-          <circle cx="1.5" cy="6" r="1.5" />
-          <rect x="5" y="4.75" width="11" height="2.5" />
-          <circle cx="1.5" cy="10.5" r="1.5" />
-          <rect x="5" y="9.25" width="11" height="2.5" />
-        </svg>
-      </button>
-      <span class="view-indicator" :style="viewIndicatorStyle"></span>
-    </div>
   </div>
 
-  <div ref="globalChatContainer" class="globalChat-container" :class="{ 'compact-mode': isCompactMode }">
+  <div
+    ref="globalChatContainer"
+    class="globalChat-container"
+    :class="{ 'compact-mode': isCompactMode }"
+  >
     <div
       ref="messagesContainer"
       class="globalChat-messages"
-      :class="{ 'is-scrolling': isScrolling }"
+      :class="{
+        'is-scrolling': isScrolling,
+        'is-empty': !loading && !messages?.length,
+      }"
       @scroll="handleScroll"
       @wheel.passive="handleWheel"
     >
@@ -889,8 +818,7 @@ async function confirmDelete() {
           v-if="hasMoreBefore"
           ref="topSentinel"
           class="scroll-sentinel top-sentinel"
-        >
-        </div>
+        ></div>
 
         <template
           v-for="item in messagesWithSeparators"
@@ -913,7 +841,8 @@ async function confirmDelete() {
               removed: item.isRemoved,
               hovered: hoveredMessageId === item.id,
               continuation: item.isContinuation,
-              'deleted-collapsed': item.isRemoved && !isDeletedExpanded(item.id),
+              'deleted-collapsed':
+                item.isRemoved && !isDeletedExpanded(item.id),
             }"
             @mouseenter="handleMessageMouseEnter($event, item.id)"
             @mouseleave="handleMessageMouseLeave"
@@ -927,15 +856,14 @@ async function confirmDelete() {
               >
                 <div class="msg-body">
                   <div class="msg-header msg-header-compact">
-                    <span
-                      class="msg-time-group"
-                      :title="formatDeletedDate(item)"
-                    >
-                      <span class="msg-icon-placeholder"></span
-                      ><span class="msg-time">{{
-                        formatTime(item.createdUtc)
-                      }}</span>
-                    </span>
+                    <Tooltip :text="formatDeletedDate(item)">
+                      <span class="msg-time-group">
+                        <span class="msg-icon-placeholder"></span
+                        ><span class="msg-time">{{
+                          formatTime(item.createdUtc)
+                        }}</span>
+                      </span>
+                    </Tooltip>
                     <span
                       class="msg-deleted-inline"
                       :class="{ clickable: isModerator }"
@@ -1004,26 +932,24 @@ async function confirmDelete() {
                   >
                     <!-- Compact mode: trash + time | name + Скрыть -->
                     <template v-if="isCompactMode">
-                      <span
-                        class="msg-time-group"
-                        :title="formatDeletedDate(item)"
-                      >
-                        <svg
-                          class="msg-deleted-icon"
-                          viewBox="-2.27 -3.0 28.54 28.54"
-                          fill="none"
-                        >
-                          <path
-                            d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                          />
-                        </svg
-                        ><span class="msg-time">{{
-                          formatTime(item.createdUtc)
-                        }}</span>
-                      </span>
+                      <Tooltip :text="formatDeletedDate(item)">
+                        <span class="msg-time-group">
+                          <svg
+                            class="msg-deleted-icon"
+                            viewBox="-2.27 -3.0 28.54 28.54"
+                            fill="none"
+                          >
+                            <path
+                              d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                            /></svg
+                          ><span class="msg-time">{{
+                            formatTime(item.createdUtc)
+                          }}</span>
+                        </span>
+                      </Tooltip>
                       <router-link
                         :to="{
                           name: 'profile',
@@ -1050,26 +976,25 @@ async function confirmDelete() {
                         :class="{ online: isOnline(item.author) }"
                         >{{ item.author.username }}</router-link
                       >
-                      <span
-                        class="msg-time-group"
-                        :title="formatDeletedDate(item)"
-                      >
-                        <span class="msg-time">{{
-                          formatTime(item.createdUtc)
-                        }}</span>
-                        <svg
-                          class="msg-deleted-icon"
-                          viewBox="-2.27 -3.0 28.54 28.54"
-                          fill="none"
-                        >
-                          <path
-                            d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                          />
-                        </svg>
-                      </span>
+                      <Tooltip :text="formatDeletedDate(item)">
+                        <span class="msg-time-group">
+                          <span class="msg-time">{{
+                            formatTime(item.createdUtc)
+                          }}</span>
+                          <svg
+                            class="msg-deleted-icon"
+                            viewBox="-2.27 -3.0 28.54 28.54"
+                            fill="none"
+                          >
+                            <path
+                              d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                            />
+                          </svg>
+                        </span>
+                      </Tooltip>
                       <a
                         class="msg-hide-link"
                         href="#"
@@ -1079,7 +1004,7 @@ async function confirmDelete() {
                     </template>
                   </div>
                   <div class="msg-content">
-                    <div class="msg-text" v-html="item.text" />
+                    <div class="msg-text bbcode-content" v-html="item.text" />
                   </div>
                 </div>
               </div>
@@ -1093,27 +1018,27 @@ async function confirmDelete() {
                 class="msg-layout msg-continuation"
               >
                 <div class="msg-time-gutter">
-                  <span
-                    class="msg-time-group msg-time-hover"
-                    :title="formatFullDate(item)"
-                    ><span class="msg-time">{{
-                      formatTime(item.createdUtc)
-                    }}</span
-                    ><svg
-                      v-if="item.edits?.length"
-                      class="msg-edited-icon"
-                      viewBox="-0.7 -1.2 25.4 25.4"
-                      fill="none"
-                    >
-                      <path
-                        d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      /></svg
-                    ><span v-else class="msg-icon-placeholder"></span
-                  ></span>
+                  <Tooltip :text="formatFullDate(item)">
+                    <span class="msg-time-group msg-time-hover"
+                      ><span class="msg-time">{{
+                        formatTime(item.createdUtc)
+                      }}</span
+                      ><svg
+                        v-if="item.edits?.length"
+                        class="msg-edited-icon"
+                        viewBox="-0.7 -1.2 25.4 25.4"
+                        fill="none"
+                      >
+                        <path
+                          d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        /></svg
+                      ><span v-else class="msg-icon-placeholder"></span
+                    ></span>
+                  </Tooltip>
                 </div>
                 <div class="msg-body">
                   <template v-if="!isEditing(item.id)">
@@ -1124,7 +1049,7 @@ async function confirmDelete() {
                       class="msg-content"
                       :class="{ collapsed: isTruncated(item) }"
                     >
-                      <div class="msg-text" v-html="item.text" />
+                      <div class="msg-text bbcode-content" v-html="item.text" />
                     </div>
                     <div
                       v-if="needsTruncation(item)"
@@ -1166,27 +1091,28 @@ async function confirmDelete() {
                       v-if="!isCompactMode && item.likes?.length > 0"
                       class="msg-reactions"
                     >
-                      <button
-                        class="reaction-badge"
-                        :class="{ 'my-reaction': isLikedByMe(item) }"
-                        :title="getLikesTooltip(item)"
-                        @click="toggleLike(item)"
-                      >
-                        <svg
-                          viewBox="-1.2 -0.75 26.4 26.4"
-                          class="reaction-heart"
-                          fill="none"
+                      <Tooltip :text="getLikesTooltip(item)">
+                        <button
+                          class="reaction-badge"
+                          :class="{ 'my-reaction': isLikedByMe(item) }"
+                          @click="toggleLike(item)"
                         >
-                          <path
-                            d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          />
-                        </svg>
-                        <span class="reaction-count">{{
-                          item.likes.length
-                        }}</span>
-                      </button>
+                          <svg
+                            viewBox="-1.2 -0.75 26.4 26.4"
+                            class="reaction-heart"
+                            fill="none"
+                          >
+                            <path
+                              d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+                              stroke="currentColor"
+                              stroke-width="2"
+                            />
+                          </svg>
+                          <span class="reaction-count">{{
+                            item.likes.length
+                          }}</span>
+                        </button>
+                      </Tooltip>
                     </div>
                   </template>
                   <div v-else class="msg-edit">
@@ -1248,28 +1174,27 @@ async function confirmDelete() {
                   >
                     <!-- Compact mode: icon + time | name + likes -->
                     <template v-if="isCompactMode">
-                      <span
-                        class="msg-time-group"
-                        :title="formatFullDate(item)"
-                      >
-                        <svg
-                          v-if="item.edits?.length"
-                          class="msg-edited-icon"
-                          viewBox="-0.7 -1.2 25.4 25.4"
-                          fill="none"
-                        >
-                          <path
-                            d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                          /></svg
-                        ><span v-else class="msg-icon-placeholder"></span
-                        ><span class="msg-time">{{
-                          formatTime(item.createdUtc)
-                        }}</span>
-                      </span>
+                      <Tooltip :text="formatFullDate(item)">
+                        <span class="msg-time-group">
+                          <svg
+                            v-if="item.edits?.length"
+                            class="msg-edited-icon"
+                            viewBox="-0.7 -1.2 25.4 25.4"
+                            fill="none"
+                          >
+                            <path
+                              d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            /></svg
+                          ><span v-else class="msg-icon-placeholder"></span
+                          ><span class="msg-time">{{
+                            formatTime(item.createdUtc)
+                          }}</span>
+                        </span>
+                      </Tooltip>
                       <router-link
                         :to="{
                           name: 'profile',
@@ -1278,21 +1203,24 @@ async function confirmDelete() {
                         class="msg-author"
                         :class="{ online: isOnline(item.author) }"
                         >{{ item.author.username }}</router-link
-                      ><button
+                      ><Tooltip
                         v-if="item.likes?.length > 0"
-                        class="msg-likes-inline"
-                        :class="{ 'my-like': isLikedByMe(item) }"
-                        :title="getLikesTooltip(item)"
-                        @click="toggleLike(item)"
+                        :text="getLikesTooltip(item)"
                       >
-                        <svg viewBox="-1.2 -0.75 26.4 26.4" fill="none">
-                          <path
-                            d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          /></svg
-                        >{{ item.likes.length }}</button
-                      >
+                        <button
+                          class="msg-likes-inline"
+                          :class="{ 'my-like': isLikedByMe(item) }"
+                          @click="toggleLike(item)"
+                        >
+                          <svg viewBox="-1.2 -0.75 26.4 26.4" fill="none">
+                            <path
+                              d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+                              stroke="currentColor"
+                              stroke-width="2"
+                            /></svg
+                          >{{ item.likes.length }}
+                        </button>
+                      </Tooltip>
                     </template>
                     <!-- Normal mode: name first, then time -->
                     <template v-else>
@@ -1305,28 +1233,27 @@ async function confirmDelete() {
                         :class="{ online: isOnline(item.author) }"
                         >{{ item.author.username }}</router-link
                       >
-                      <span
-                        class="msg-time-group"
-                        :title="formatFullDate(item)"
-                      >
-                        <span class="msg-time">{{
-                          formatTime(item.createdUtc)
-                        }}</span
-                        ><svg
-                          v-if="item.edits?.length"
-                          class="msg-edited-icon"
-                          viewBox="-0.7 -1.2 25.4 25.4"
-                          fill="none"
-                        >
-                          <path
-                            d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                          /></svg
-                        ><span v-else class="msg-icon-placeholder"></span>
-                      </span>
+                      <Tooltip :text="formatFullDate(item)">
+                        <span class="msg-time-group">
+                          <span class="msg-time">{{
+                            formatTime(item.createdUtc)
+                          }}</span
+                          ><svg
+                            v-if="item.edits?.length"
+                            class="msg-edited-icon"
+                            viewBox="-0.7 -1.2 25.4 25.4"
+                            fill="none"
+                          >
+                            <path
+                              d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            /></svg
+                          ><span v-else class="msg-icon-placeholder"></span>
+                        </span>
+                      </Tooltip>
                     </template>
                   </div>
 
@@ -1338,7 +1265,7 @@ async function confirmDelete() {
                       class="msg-content"
                       :class="{ collapsed: isTruncated(item) }"
                     >
-                      <div class="msg-text" v-html="item.text" />
+                      <div class="msg-text bbcode-content" v-html="item.text" />
                     </div>
                     <div v-if="needsTruncation(item)" class="msg-expand-row">
                       <button
@@ -1377,27 +1304,28 @@ async function confirmDelete() {
                       v-if="!isCompactMode && item.likes?.length > 0"
                       class="msg-reactions"
                     >
-                      <button
-                        class="reaction-badge"
-                        :class="{ 'my-reaction': isLikedByMe(item) }"
-                        :title="getLikesTooltip(item)"
-                        @click="toggleLike(item)"
-                      >
-                        <svg
-                          viewBox="-1.2 -0.75 26.4 26.4"
-                          class="reaction-heart"
-                          fill="none"
+                      <Tooltip :text="getLikesTooltip(item)">
+                        <button
+                          class="reaction-badge"
+                          :class="{ 'my-reaction': isLikedByMe(item) }"
+                          @click="toggleLike(item)"
                         >
-                          <path
-                            d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          />
-                        </svg>
-                        <span class="reaction-count">{{
-                          item.likes.length
-                        }}</span>
-                      </button>
+                          <svg
+                            viewBox="-1.2 -0.75 26.4 26.4"
+                            class="reaction-heart"
+                            fill="none"
+                          >
+                            <path
+                              d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+                              stroke="currentColor"
+                              stroke-width="2"
+                            />
+                          </svg>
+                          <span class="reaction-count">{{
+                            item.likes.length
+                          }}</span>
+                        </button>
+                      </Tooltip>
                     </div>
                   </template>
 
@@ -1439,8 +1367,7 @@ async function confirmDelete() {
           v-if="hasMoreAfter"
           ref="bottomSentinel"
           class="scroll-sentinel bottom-sentinel"
-        >
-        </div>
+        ></div>
       </template>
     </div>
 
@@ -1460,11 +1387,11 @@ async function confirmDelete() {
       @mouseenter="handleToolbarMouseEnter"
       @mouseleave="handleToolbarMouseLeave"
     >
-        <!-- Delete confirmation mode -->
-        <template v-if="confirmingDeleteId === hoveredMessage.id">
+      <!-- Delete confirmation mode -->
+      <template v-if="confirmingDeleteId === hoveredMessage.id">
+        <Tooltip text="Подтвердить удаление">
           <button
             class="toolbar-btn toolbar-btn-delete-confirm"
-            title="Подтвердить удаление"
             @click="confirmDelete"
           >
             <svg
@@ -1481,11 +1408,9 @@ async function confirmDelete() {
               />
             </svg>
           </button>
-          <button
-            class="toolbar-btn toolbar-btn-cancel"
-            title="Отмена"
-            @click="cancelDelete"
-          >
+        </Tooltip>
+        <Tooltip text="Отмена">
+          <button class="toolbar-btn toolbar-btn-cancel" @click="cancelDelete">
             <svg viewBox="3.1 3.1 17.8 17.8" width="20" height="20" fill="none">
               <path
                 d="M18 6L6 18M6 6l12 12"
@@ -1495,14 +1420,17 @@ async function confirmDelete() {
               />
             </svg>
           </button>
-        </template>
-        <!-- Normal mode -->
-        <template v-else>
+        </Tooltip>
+      </template>
+      <!-- Normal mode -->
+      <template v-else>
+        <Tooltip
+          v-if="canLikeMessage(hoveredMessage)"
+          :text="isLikedByMe(hoveredMessage) ? 'Убрать лайк' : 'Нравится'"
+        >
           <button
-            v-if="canLikeMessage(hoveredMessage)"
             class="toolbar-btn"
             :class="{ active: isLikedByMe(hoveredMessage) }"
-            :title="isLikedByMe(hoveredMessage) ? 'Убрать лайк' : 'Нравится'"
             @click="toggleLike(hoveredMessage)"
           >
             <svg
@@ -1518,12 +1446,9 @@ async function confirmDelete() {
               />
             </svg>
           </button>
-          <button
-            v-if="canEditMessage(hoveredMessage)"
-            class="toolbar-btn"
-            title="Редактировать"
-            @click="startEdit(hoveredMessage)"
-          >
+        </Tooltip>
+        <Tooltip v-if="canEditMessage(hoveredMessage)" text="Редактировать">
+          <button class="toolbar-btn" @click="startEdit(hoveredMessage)">
             <svg
               viewBox="-0.7 -1.2 25.4 25.4"
               width="20"
@@ -1539,12 +1464,9 @@ async function confirmDelete() {
               />
             </svg>
           </button>
-          <button
-            v-if="canDeleteMessage(hoveredMessage)"
-            class="toolbar-btn"
-            title="Удалить"
-            @click="requestDelete(hoveredMessage.id)"
-          >
+        </Tooltip>
+        <Tooltip v-if="canDeleteMessage(hoveredMessage)" text="Удалить">
+          <button class="toolbar-btn" @click="requestDelete(hoveredMessage.id)">
             <svg
               viewBox="-2.27 -3.0 28.54 28.54"
               width="20"
@@ -1559,9 +1481,10 @@ async function confirmDelete() {
               />
             </svg>
           </button>
+        </Tooltip>
+        <Tooltip text="Ссылка на сообщение">
           <a
             class="toolbar-btn"
-            title="Ссылка на сообщение"
             :href="`#msg-${hoveredMessage.id}`"
             @click.prevent="copyAnchor(hoveredMessage.id)"
           >
@@ -1582,7 +1505,8 @@ async function confirmDelete() {
               />
             </svg>
           </a>
-        </template>
+        </Tooltip>
+      </template>
     </div>
 
     <!-- Scroll to latest button (centered over globalChat) -->
@@ -1637,7 +1561,7 @@ async function confirmDelete() {
         Вы не можете отправлять сообщения из-за ограничений аккаунта
       </secondary-text>
       <secondary-text v-else class="globalChat-login-hint">
-        <router-link to="/login">Войдите</router-link>, чтобы отправлять
+        <router-link to="/?action=login">Войдите</router-link>, чтобы отправлять
         сообщения
       </secondary-text>
     </div>
@@ -1649,6 +1573,7 @@ async function confirmDelete() {
 @import "src/assets/styles/Themes"
 @import "src/assets/styles/BbcodeContent"
 @import "src/assets/styles/Inputs"
+@import "src/assets/styles/ZIndex"
 
 .globalChat-archive
   display: flex
@@ -1669,37 +1594,6 @@ async function confirmDelete() {
 
 .archive-sep
   color: $text
-
-.view-toggle
-  display: flex
-  border-bottom: 2px solid $border
-  position: relative
-
-.view-toggle-btn
-  display: flex
-  align-items: center
-  justify-content: center
-  padding: $tiny $small
-  border: none
-  background: none
-  color: $text-muted
-  cursor: pointer
-  transition: filter 0.2s ease
-
-  &:hover:not(.active)
-    filter: brightness($hover-brightness)
-
-  &.active
-    filter: brightness($hover-brightness)
-    cursor: default
-
-.view-indicator
-  position: absolute
-  bottom: -2px
-  height: 2px
-  background-color: $text-muted
-  transition: left 0.25s ease, width 0.25s ease
-  pointer-events: none
 
 .globalChat-container
   display: flex
@@ -1746,7 +1640,8 @@ async function confirmDelete() {
       min-width: 62px  // icon 16px + gap 6px + time ~40px
 
     .msg-author
-      display: inline
+      display: inline-flex
+      align-items: center
 
     // Content on new line, aligned with author name
     .msg-content
@@ -1813,7 +1708,7 @@ async function confirmDelete() {
 .globalChat-messages
   height: calc(100vh - 350px)
   min-height: 200px
-  overflow-y: scroll
+  overflow-y: auto
   overflow-x: hidden
   padding: 0
   position: relative
@@ -1832,8 +1727,15 @@ async function confirmDelete() {
   // Disable hover effects during scroll
   &.is-scrolling .globalChat-message
     pointer-events: none
+  // Hide scrollbar when empty
+  &.is-empty
+    overflow: hidden
 
 .globalChat-empty
+  display: flex
+  align-items: center
+  justify-content: center
+  height: 100%
   text-align: center
   padding: $big
 
@@ -1981,6 +1883,7 @@ async function confirmDelete() {
   align-items: center
   gap: 6px
   color: $text-muted
+  cursor: help
 
 // Иконки inline (карандаш, мусорка)
 .msg-edited-icon,
@@ -2048,12 +1951,11 @@ async function confirmDelete() {
 .globalChat-message.hovered .msg-content.collapsed::after
   background: linear-gradient(to bottom, transparent, var(--bg-element))
 
+// .msg-text uses global .bbcode-content class
 .msg-text
-  :deep()
-    +bbcode-content
-    // Images should align to top so time aligns with first "line"
-    img, .image
-      vertical-align: top
+  // Images should align to top so time aligns with first "line"
+  :deep(img), :deep(.image)
+    vertical-align: top
 
 .msg-edit
   margin-top: 0
@@ -2114,7 +2016,7 @@ async function confirmDelete() {
   background-color: $bg-element
   box-shadow: 0 0 0 1px var(--hover-overlay), 0 2px 8px var(--shadow-color)
   border-radius: $border-radius
-  z-index: 100
+  z-index: $z-dropdown
   pointer-events: auto
 
 .toolbar-btn-delete-confirm

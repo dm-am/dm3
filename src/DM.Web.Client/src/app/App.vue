@@ -3,24 +3,25 @@
     <div class="main" ref="scroll">
       <div class="content-container">
         <div class="content-wrapper">
-          <the-header />
+          <Header />
           <div class="content-body">
-            <div class="content-menu">
-              <router-view name="menu" />
+            <div class="sidebar-left">
+              <router-view name="left" />
             </div>
             <div class="content">
               <router-view name="page" />
             </div>
-            <div class="content-sidebar">
-              <router-view name="sidebar" />
+            <div class="sidebar-right">
+              <router-view name="right" />
             </div>
           </div>
         </div>
-        <the-footer />
+        <Footer />
       </div>
     </div>
     <modals-container />
-    <TheToastContainer />
+    <ToastContainer />
+    <ScrollNav />
   </div>
 </template>
 
@@ -30,9 +31,10 @@ import { useUserStore } from "@/entities/user";
 import { useMessagingStore } from "@/entities/message";
 import { onMounted, watch } from "vue";
 import { ModalsContainer } from "vue-final-modal";
-import { TheHeader } from "@/widgets/header";
-import { TheFooter } from "@/widgets/footer";
-import { TheToastContainer } from "@/shared/ui/Toast";
+import { Header } from "@/widgets/header";
+import { Footer } from "@/widgets/footer";
+import { ToastContainer } from "@/shared/ui/Toast";
+import { ScrollNav } from "@/shared/ui/ScrollNav";
 import { useGlobalSignalR } from "@/shared/lib/composables/useSignalR";
 import { EventType } from "@/shared/api/models/notifications/signalr";
 import type { SignalRNotification } from "@/shared/api/models/notifications/signalr";
@@ -40,7 +42,11 @@ import type { SignalRNotification } from "@/shared/api/models/notifications/sign
 const uiStore = useUiStore();
 const userStore = useUserStore();
 const messagingStore = useMessagingStore();
-const { connect: connectSignalR, disconnect: disconnectSignalR, onNotification } = useGlobalSignalR();
+const {
+  connect: connectSignalR,
+  disconnect: disconnectSignalR,
+  onNotification,
+} = useGlobalSignalR();
 
 // Map Theme to CSS theme class (now 1:1 mapping)
 const themeToClass = (theme: string) => theme;
@@ -88,7 +94,7 @@ onMounted(async () => {
   // User уже инициализирован из localStorage в store
   // Параллельно обновляем данные с сервера
   userStore.fetchUser();
-  messagingStore.fetchUnreadCount();
+  messagingStore.fetchUnreadCount(true); // immediate on app start
 
   // Connect to SignalR if already authenticated
   if (userStore.isAuthenticated) {
@@ -135,7 +141,7 @@ onMounted(async () => {
   display: flex
   padding-bottom: $big
 
-.content-menu
+.sidebar-left
   width: $sidebar-width
   flex-shrink: 0
   padding-left: $big
@@ -146,7 +152,7 @@ onMounted(async () => {
   padding: 0 $big
   box-sizing: border-box
 
-.content-sidebar
+.sidebar-right
   width: $sidebar-width
   flex-shrink: 0
   padding-right: $big

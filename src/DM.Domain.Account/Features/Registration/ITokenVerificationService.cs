@@ -13,6 +13,6 @@ public interface ITokenVerificationService
     /// Verify if the token is available
     /// </summary>
     /// <param name="token">Token</param>
-    /// <returns></returns>
+    /// <returns>User associated with the token</returns>
     Task<GeneralUser> Verify(Guid token);
 }

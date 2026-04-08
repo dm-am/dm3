@@ -1,0 +1,73 @@
+// =============================================================================
+// ANIMATION STANDARDS
+// =============================================================================
+// Centralized animation/transition utilities.
+// All animations should respect prefers-reduced-motion.
+// See UI_STANDARDS.md for documentation.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Transition Durations
+// -----------------------------------------------------------------------------
+
+$transition-fast: 0.1s ease
+$transition-normal: 0.15s ease
+$transition-slow: 0.3s ease
+
+// -----------------------------------------------------------------------------
+// Accessible Transition Mixin
+// -----------------------------------------------------------------------------
+// Use this instead of raw "transition:" to respect user preferences.
+// Automatically disables transition when user prefers reduced motion.
+//
+// Usage:
+//   .my-element
+//     +transition-safe(background-color)
+//     +transition-safe(opacity, $transition-slow)
+//     +transition-safe((background-color, transform))
+//
+// For multiple properties:
+//   .my-element
+//     +transition-safe-multi((background-color, color, transform))
+
+=transition-safe($property, $duration: $transition-normal)
+  transition: $property $duration
+  @media (prefers-reduced-motion: reduce)
+    transition: none
+
+=transition-safe-multi($properties, $duration: $transition-normal)
+  $transitions: ()
+  @each $prop in $properties
+    $transitions: append($transitions, $prop $duration, comma)
+  transition: $transitions
+  @media (prefers-reduced-motion: reduce)
+    transition: none
+
+// -----------------------------------------------------------------------------
+// Animation Mixin (for keyframe animations)
+// -----------------------------------------------------------------------------
+
+=animation-safe($animation)
+  animation: $animation
+  @media (prefers-reduced-motion: reduce)
+    animation: none
+
+// -----------------------------------------------------------------------------
+// Common Transitions
+// -----------------------------------------------------------------------------
+// Pre-built classes for common use cases
+
+=fade-transition
+  +transition-safe(opacity)
+
+=hover-transition
+  +transition-safe(background-color, $transition-fast)
+
+=scale-transition
+  +transition-safe(transform)
+
+=color-transition
+  +transition-safe(color)
+
+=all-transition
+  +transition-safe(all)

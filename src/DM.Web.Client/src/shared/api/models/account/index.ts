@@ -118,8 +118,8 @@ export type SessionInfo = {
   id: string;
   isCurrent: boolean;
   persistent: boolean;
-  expirationDate: string;
-  createdAt: string;
+  expirationUtc: string;
+  createdUtc: string;
   deviceInfo?: string;
   ipAddress?: string;
 };
@@ -210,7 +210,7 @@ export type UpdateNotificationPreferences = UpdateNotificationSettingsRequest;
  */
 export type BotLinkResult = {
   code: string;
-  expiresAt: string;
+  expiresUtc: string;
 };
 
 // === Security History ===
@@ -238,7 +238,7 @@ export type SecurityEvent = {
   id: string;
   eventType: SecurityEventType;
   description: string;
-  timestamp: string;
+  timestampUtc: string;
   ipAddress?: string;
   deviceInfo?: string;
   details?: string;

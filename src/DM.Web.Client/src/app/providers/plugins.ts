@@ -10,6 +10,7 @@ export const vfm = createVfm();
 
 export const i18n = createI18n({
   locale: "ru",
+  legacy: false, // Use Composition API mode - prevents __disposer errors during rapid unmount
 });
 
 export const toastOptions: PluginOptions = {

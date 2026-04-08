@@ -21,12 +21,7 @@ public interface IGameRepository
     /// <summary>
     /// Get games with paging
     /// </summary>
-    Task<IEnumerable<GameModel>> GetGames(PagingData pagingData, GamesQuery query, Guid userId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Get user's own games (master, assistant, player, reader)
-    /// </summary>
-    Task<IEnumerable<GameModel>> GetOwn(Guid userId, CancellationToken ct = default);
+    Task<IEnumerable<Game>> GetGames(PagingData pagingData, GamesQuery query, Guid userId, CancellationToken ct = default);
 
     /// <summary>
     /// Get available room IDs for games
@@ -57,12 +52,22 @@ public interface IGameRepository
     /// <summary>
     /// Get game details
     /// </summary>
-    Task<GameExtended?> GetGameDetails(Guid gameId, Guid userId, CancellationToken ct = default);
+    Task<GameDetails?> GetGameDetails(Guid gameId, Guid userId, CancellationToken ct = default);
 
     /// <summary>
     /// Get game
     /// </summary>
-    Task<GameModel?> GetGame(Guid gameId, Guid userId, CancellationToken ct = default);
+    Task<Game?> GetGame(Guid gameId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get game by public ID
+    /// </summary>
+    Task<Game?> GetGameByPublicId(string publicId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get game details by public ID
+    /// </summary>
+    Task<GameDetails?> GetGameDetailsByPublicId(string publicId, Guid userId, CancellationToken ct = default);
 
     /// <summary>
     /// Get all tags
@@ -70,26 +75,21 @@ public interface IGameRepository
     Task<IEnumerable<GameTag>> GetTags(CancellationToken ct = default);
 
     /// <summary>
-    /// Get popular games by subscriber count
-    /// </summary>
-    Task<IEnumerable<GameModel>> GetPopularGames(int gamesCount, CancellationToken ct = default);
-
-    /// <summary>
     /// Get games by IDs
     /// </summary>
-    Task<IEnumerable<GameModel>> GetByIds(IEnumerable<Guid> gameIds, Guid userId, CancellationToken ct = default);
+    Task<IEnumerable<Game>> GetByIds(IEnumerable<Guid> gameIds, Guid userId, CancellationToken ct = default);
 
     // === WRITE ===
 
     /// <summary>
     /// Create game with initial room
     /// </summary>
-    Task<GameExtended> Create(CreateGameEntity game, CreateRoomEntity room, CancellationToken ct = default);
+    Task<GameDetails> Create(CreateGameEntity game, CreateRoomEntity room, CancellationToken ct = default);
 
     /// <summary>
     /// Update game
     /// </summary>
-    Task<GameExtended> Update(UpdateGameEntity updateGame, CancellationToken ct = default);
+    Task<GameDetails> Update(UpdateGameEntity updateGame, CancellationToken ct = default);
 
     /// <summary>
     /// Delete game (soft delete)

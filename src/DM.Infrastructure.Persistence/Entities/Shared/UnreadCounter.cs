@@ -11,7 +11,7 @@ namespace DM.Infrastructure.Persistence.Entities.Shared;
 /// </summary>
 [MongoCollectionName("UnreadCounters")]
 [BsonIgnoreExtraElements]
-public class UnreadCounter : IRemovable
+public class UnreadCounter : ISoftDeletable
 {
     /// <summary>
     /// User identifier
@@ -30,10 +30,10 @@ public class UnreadCounter : IRemovable
     public Guid ParentId { get; set; }
 
     /// <summary>
-    /// Last read moment
+    /// Last read moment (UTC)
     /// </summary>
     [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
-    public DateTime LastRead { get; set; }
+    public DateTime LastReadUtc { get; set; }
 
     /// <summary>
     /// Entry type
@@ -47,4 +47,11 @@ public class UnreadCounter : IRemovable
 
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
+
+    /// <inheritdoc />
+    public Guid? DeletedByUserId { get; set; }
+
+    /// <inheritdoc />
+    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
+    public DateTimeOffset? DeletedUtc { get; set; }
 }

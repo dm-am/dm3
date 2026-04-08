@@ -22,19 +22,16 @@ public interface IForumCommentApiService
     /// Mark topic comments as read
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
-    /// <returns></returns>
     Task MarkAsRead(Guid topicId);
 
     /// <summary>
     /// Mark all forum comments as read
     /// </summary>
     /// <param name="forumId">Forum identifier</param>
-    /// <returns></returns>
     Task MarkAsRead(string forumId);
 
     /// <summary>
     /// Mark all comments on all forums as read
     /// </summary>
-    /// <returns></returns>
     Task MarkAllAsRead();
 }

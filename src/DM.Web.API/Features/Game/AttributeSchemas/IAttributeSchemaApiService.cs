@@ -12,21 +12,21 @@ public interface IAttributeSchemaApiService
     /// <summary>
     /// Get all available attribute schemas
     /// </summary>
-    /// <returns></returns>
+    /// <returns>List envelope containing all attribute schemas</returns>
     Task<ListEnvelope<AttributeSchema>> Get();
 
     /// <summary>
     /// Get single attribute schema
     /// </summary>
     /// <param name="schemaId">Schema identifier</param>
-    /// <returns></returns>
+    /// <returns>Envelope containing the attribute schema</returns>
     Task<Envelope<AttributeSchema>> Get(Guid schemaId);
 
     /// <summary>
     /// Create new attribute schema
     /// </summary>
     /// <param name="schema">Schema DTO</param>
-    /// <returns></returns>
+    /// <returns>Envelope containing the created attribute schema</returns>
     Task<Envelope<AttributeSchema>> Create(AttributeSchema schema);
 
     /// <summary>
@@ -34,13 +34,12 @@ public interface IAttributeSchemaApiService
     /// </summary>
     /// <param name="schemaId">Schema identifier</param>
     /// <param name="schema">Schema DTO</param>
-    /// <returns></returns>
+    /// <returns>Envelope containing the updated attribute schema</returns>
     Task<Envelope<AttributeSchema>> Update(Guid schemaId, AttributeSchema schema);
 
     /// <summary>
     /// Delete existing attribute schema
     /// </summary>
     /// <param name="schemaId"></param>
-    /// <returns></returns>
     Task Delete(Guid schemaId);
 }

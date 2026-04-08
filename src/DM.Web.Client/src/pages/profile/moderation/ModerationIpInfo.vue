@@ -48,7 +48,7 @@ function formatDateTime(dateStr: string): string {
             <td class="mod-ip">{{ ip.ipAddress }}</td>
             <td>{{ formatDate(ip.firstSeenUtc) }}</td>
             <td>{{ formatDate(ip.lastSeenUtc) }}</td>
-            <td>{{ ip.loginCount }}</td>
+            <td>{{ ip.loginsCount }}</td>
           </tr>
         </tbody>
       </table>
@@ -63,10 +63,7 @@ function formatDateTime(dateStr: string): string {
         История входов ({{ loginHistory?.length ?? 0 }})
         <span class="mod-expand-icon">{{ showLoginHistory ? "▼" : "▶" }}</span>
       </h5>
-      <table
-        v-if="showLoginHistory && loginHistory?.length"
-        class="mod-table"
-      >
+      <table v-if="showLoginHistory && loginHistory?.length" class="mod-table">
         <thead>
           <tr>
             <th>Дата</th>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
-import TheLightbox from "@/shared/ui/Layout/TheLightbox.vue";
+import Lightbox from "@/shared/ui/Layout/Lightbox.vue";
 import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
 
 const props = defineProps<{
@@ -20,17 +20,18 @@ onMounted(() => {
 </script>
 
 <template>
-  <the-lightbox>
+  <Lightbox>
     <div class="success-content">
       <lightbox-title>Проверьте почту</lightbox-title>
 
       <p class="main-text">
-        Мы отправили письмо на <strong>{{ email }}</strong> со ссылкой для активации.
+        Мы отправили письмо на <strong>{{ email }}</strong> со ссылкой для
+        активации.
       </p>
 
       <p class="expiry-note">Ссылка действительна 48 часов</p>
     </div>
-  </the-lightbox>
+  </Lightbox>
 </template>
 
 <style scoped lang="sass">

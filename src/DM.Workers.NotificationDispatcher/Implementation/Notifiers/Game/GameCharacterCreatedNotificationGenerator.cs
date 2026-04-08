@@ -42,7 +42,7 @@ internal class GameCharacterCreatedNotificationGenerator : BaseNotificationGener
                 c.Game!.Title,
                 c.Author!.Username,
                 c.AuthorId,
-                GameAuthorId = c.Game.AuthorId,
+                GameMasterId = c.Game.MasterId,
                 AssistantIds = c.Game.Assistants.Select(a => a.UserId).ToList()
             })
             .FirstOrDefaultAsync();
@@ -53,7 +53,7 @@ internal class GameCharacterCreatedNotificationGenerator : BaseNotificationGener
         }
 
         // Direct game members: Master and Assistants (always notified)
-        var usersInterested = new HashSet<Guid> { data.GameAuthorId };
+        var usersInterested = new HashSet<Guid> { data.GameMasterId };
         usersInterested.UnionWith(data.AssistantIds);
 
         // Subscribers with CharacterUpdates enabled

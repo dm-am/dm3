@@ -20,9 +20,9 @@ public interface IBlogCommentService
     /// Get comments for a blog
     /// </summary>
     /// <param name="blogId">Blog identifier</param>
-    /// <param name="query">Paging query</param>
+    /// <param name="query">Query with filtering, sorting and paging</param>
     /// <param name="excludeUserIds">Optional user IDs to exclude from results</param>
-    Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid blogId, PagingQuery query,
+    Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid blogId, BlogCommentsQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null);
 
     /// <summary>

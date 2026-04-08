@@ -69,7 +69,7 @@ internal class GlobalChatEventApiService : IGlobalChatEventApiService
             Id = id,
             Title = input.Title,
             Description = input.Description,
-            StartsAt = input.StartsAt,
+            StartsUtc = input.StartsUtc,
             Duration = input.Duration,
             IsOpen = input.IsOpen
         };
@@ -116,8 +116,8 @@ internal class GlobalChatEventApiService : IGlobalChatEventApiService
     /// <inheritdoc />
     public async Task<Envelope<GlobalChatEvent>> AddParticipant(Guid id, AddParticipantInput input, CancellationToken ct = default)
     {
-        // Resolve user by login
-        var user = await _userService.GetAsync(input.Login);
+        // Resolve user by username
+        var user = await _userService.GetAsync(input.Username);
 
         await _eventService.AddParticipantAsync(id, user.UserId, ct);
         var chatEvent = await _eventService.GetAsync(id);

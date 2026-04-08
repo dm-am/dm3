@@ -19,7 +19,9 @@ internal class AttributeSchemaMappingProfile : Profile
 {
     public AttributeSchemaMappingProfile()
     {
-        CreateMap<DbSchema, DtoAttributeSchema>();
+        CreateMap<DbSchema, DtoAttributeSchema>()
+            .ForMember(d => d.Author, opt => opt.Ignore())
+            .ForMember(d => d.Description, opt => opt.Ignore());
         CreateMap<DbSpecification, DtoAttributeSpec>()
             .ConvertUsing<SpecificationConverter>();
         CreateMap<DbListValue, DtoListValue>();

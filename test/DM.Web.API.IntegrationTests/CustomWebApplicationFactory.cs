@@ -210,7 +210,9 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             // Register DbContext with PostgreSQL connection string from Testcontainers
             services.AddDbContext<DmDbContext>(options =>
             {
-                options.UseNpgsql(_databaseFixture.ConnectionString);
+                options.UseNpgsql(_databaseFixture.ConnectionString)
+                    .EnableSensitiveDataLogging()
+                    .EnableDetailedErrors();
             }, ServiceLifetime.Scoped, ServiceLifetime.Scoped);
         });
 

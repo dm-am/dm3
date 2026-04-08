@@ -54,6 +54,16 @@ public class TotalsWithDelta
     /// Total game posts count
     /// </summary>
     public StatValue GamePosts { get; set; } = new();
+
+    /// <summary>
+    /// Total blogs count
+    /// </summary>
+    public StatValue Blogs { get; set; } = new();
+
+    /// <summary>
+    /// Total blog publications count
+    /// </summary>
+    public StatValue Publications { get; set; } = new();
 }
 
 /// <summary>
@@ -93,9 +103,9 @@ public class PostHighlight
     public string GameTitle { get; set; } = string.Empty;
 
     /// <summary>
-    /// Post author login
+    /// Post author username
     /// </summary>
-    public string AuthorLogin { get; set; } = string.Empty;
+    public string AuthorUsername { get; set; } = string.Empty;
 
     /// <summary>
     /// Total rating sum (for weekly best)

@@ -5,6 +5,7 @@ using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Community.Features.Profiles;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Users;
+using DM.Domain.Game.Features.Games;
 using DM.Domain.Personal.Features.ProfileNotes;
 using DM.Web.API.Shared.Dto;
 using IPostService = DM.Domain.Game.Features.Posts.IPostService;
@@ -43,7 +44,36 @@ internal class CommunityUserApiService : ICommunityUserApiService
     /// <inheritdoc />
     public async Task<ListEnvelope<User>> GetUsers(UsersQuery query)
     {
-        var (users, paging) = await _profileService.GetUsers(query, query.Activity, query.Q, query.Role, query.Sort);
+        // Parse sort order: default depends on sort field
+        // - Name: ascending (alphabetical)
+        // - Others: descending (best/newest first)
+        var sortAscending = query.SortOrder?.ToLowerInvariant() switch
+        {
+            "asc" => true,
+            "desc" => false,
+            _ => query.Sort == UserSort.Name // Default: asc for Name, desc for others
+        };
+
+        var (users, paging) = await _profileService.GetUsers(
+            query,
+            query.Activity,
+            query.Q,
+            query.Role,
+            query.Sort,
+            sortAscending,
+            query.IsHonorary,
+            query.IsNewbie,
+            query.IsOnline,
+            query.MinRating,
+            query.MaxRating,
+            query.MinGamesHosting,
+            query.MaxGamesHosting,
+            query.MinGamesPlaying,
+            query.MaxGamesPlaying,
+            query.MinBlogsHosting,
+            query.MaxBlogsHosting,
+            query.RegisteredFromUtc,
+            query.RegisteredToUtc);
         return new ListEnvelope<User>(users.Select(_mapper.Map<User>), new PagingInfo(paging));
     }
 
@@ -82,18 +112,14 @@ internal class CommunityUserApiService : ICommunityUserApiService
         var profile = _mapper.Map<UserProfile>(user);
         profile.UsernameHistory = fetchUsernameHistory.Result.Select(_mapper.Map<UsernameHistoryEntry>).ToList();
 
-        var bestPost = fetchBestPost.Result;
-        if (bestPost != null)
-        {
-            profile.FeaturedPost = _mapper.Map<FeaturedPost>(bestPost);
-        }
+        profile.BestPost = fetchBestPost.Result;
 
         var personalNote = fetchPersonalNote.Result;
         if (personalNote != null)
         {
             profile.PersonalNote = new PersonalNote
             {
-                Id = personalNote.NoteId,
+                Id = personalNote.Id,
                 Text = personalNote.Text,
                 CreatedUtc = personalNote.CreatedUtc,
                 UpdatedUtc = personalNote.UpdatedUtc
@@ -104,11 +130,11 @@ internal class CommunityUserApiService : ICommunityUserApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<FeaturedPost>> GetFeaturedPost(string username)
+    public async Task<Envelope<BestPostResult?>> GetBestPost(string username)
     {
         var user = await _userLookupService.GetAsync(username);
         var bestPost = await _postService.GetBestPostAsync(user.UserId);
-        return new Envelope<FeaturedPost>(bestPost != null ? _mapper.Map<FeaturedPost>(bestPost) : null!);
+        return new Envelope<BestPostResult?>(bestPost);
     }
 
     /// <inheritdoc />

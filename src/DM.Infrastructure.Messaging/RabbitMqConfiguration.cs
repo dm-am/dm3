@@ -30,8 +30,8 @@ public class RabbitMqConfiguration
     /// <summary>
     /// Bind configuration parameters to new instance
     /// </summary>
-    /// <param name="configuration"></param>
-    /// <returns></returns>
+    /// <param name="configuration">Configuration source</param>
+    /// <returns>Configuration instance</returns>
     public static RabbitMqConfiguration From(IConfiguration configuration)
     {
         var result = new RabbitMqConfiguration();

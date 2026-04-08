@@ -1,0 +1,650 @@
+// =============================================================================
+// FILTER COMPONENT STYLES
+// =============================================================================
+// Shared styles for filter components (GamesFilter, BlogsFilter, etc.)
+// See UI_STANDARDS.md for documentation.
+// =============================================================================
+
+@import "Themes"
+@import "ZIndex"
+
+// -----------------------------------------------------------------------------
+// Variables
+// -----------------------------------------------------------------------------
+
+$filter-control-height: 38px
+$filter-dropdown-min-width: 260px
+$filter-dropdown-max-height: 300px
+$filter-avatar-size: 24px
+
+// -----------------------------------------------------------------------------
+// Filter Bar Container
+// -----------------------------------------------------------------------------
+
+=filter-bar
+  .filter-bar
+    display: flex
+    align-items: center
+    gap: $small
+
+// -----------------------------------------------------------------------------
+// Search Container
+// -----------------------------------------------------------------------------
+
+=filter-search-container
+  .search-container
+    display: flex
+    align-items: center
+    flex: 1
+    height: $filter-control-height
+    box-sizing: border-box
+    padding: 0 $small
+    border: 1px solid $border
+    border-radius: $border-radius
+    background-color: $bg-element
+    cursor: text
+
+    &:focus-within
+      border-color: $link
+
+  .search-icon
+    width: 16px
+    height: 16px
+    flex-shrink: 0
+    color: $text-muted
+    margin-right: $small
+
+  .the-input
+    flex: 1
+    min-width: 80px
+    height: 100%
+    padding: 0
+    margin: 0
+    font-size: $secondary-font-size
+    font-family: inherit
+    line-height: $filter-control-height - 2px
+    border: none
+    background: none
+    color: $text
+    outline: none
+
+    &::placeholder
+      color: $text-muted
+
+  .clear-input-btn
+    display: flex
+    align-items: center
+    justify-content: center
+    width: 20px
+    height: 20px
+    padding: 0
+    flex-shrink: 0
+    margin-left: auto
+    cursor: pointer
+    border: none
+    background: none
+    color: $text-muted
+
+    &:hover
+      color: $text
+
+    svg
+      width: 14px
+      height: 14px
+
+// -----------------------------------------------------------------------------
+// Filter Button
+// -----------------------------------------------------------------------------
+
+=filter-button
+  .filter-section
+    position: relative
+    flex-shrink: 0
+
+  .filter-btn
+    display: inline-flex
+    align-items: center
+    justify-content: flex-start
+    gap: $small
+    height: $filter-control-height
+    box-sizing: border-box
+    padding: 0 $medium
+    font-size: $secondary-font-size
+    font-family: inherit
+    white-space: nowrap
+    cursor: pointer
+    border: 1px solid $border
+    border-radius: $border-radius
+    background-color: $bg-element
+    color: $text
+
+    &:hover,
+    &.active
+      background-color: $bg-element-accent
+
+  .filter-icon
+    width: 20px
+    height: 20px
+    flex-shrink: 0
+
+// -----------------------------------------------------------------------------
+// Dropdown Base
+// -----------------------------------------------------------------------------
+
+=filter-dropdown-base
+  .dropdown
+    position: absolute
+    top: calc(100% + $tiny)
+    left: auto
+    right: 0
+    min-width: $filter-dropdown-min-width
+    z-index: $z-dropdown
+    max-height: $filter-dropdown-max-height
+    overflow-y: auto
+    background-color: $bg-element
+    border: 1px solid $border
+    border-radius: $border-radius
+    box-shadow: 0 4px 12px $shadow-color
+
+  .dropdown-nav-header
+    display: flex
+    align-items: center
+    justify-content: space-between
+    padding: $small $medium
+    background-color: $bg-element-accent
+    border-bottom: 1px solid $border
+
+  .nav-back-btn
+    display: flex
+    align-items: center
+    justify-content: center
+    width: 20px
+    height: 20px
+    padding: 0
+    cursor: pointer
+    border: none
+    background: none
+    color: $text-muted
+
+    &:hover
+      color: $text
+
+    svg
+      width: 14px
+      height: 14px
+
+  .nav-title
+    font-size: $secondary-font-size
+    font-weight: 500
+    color: $text
+
+  .dropdown-header
+    padding: $small $medium
+    font-size: $tertiary-font-size
+    font-weight: 600
+    color: $text-muted
+    text-transform: uppercase
+    letter-spacing: 0.5px
+    background-color: $bg-element-accent
+    border-bottom: 1px solid $border
+
+    &:not(:first-child)
+      border-top: 1px solid $border
+      margin-top: $tiny
+
+  .dropdown-empty
+    padding: $medium
+    font-size: $secondary-font-size
+    color: $text-muted
+    text-align: center
+
+// -----------------------------------------------------------------------------
+// Dropdown Search Input
+// -----------------------------------------------------------------------------
+
+=dropdown-search-input
+  .dropdown-search
+    padding: $small
+    border-bottom: 1px solid $border
+
+  .dropdown-search-input
+    width: 100%
+    padding: $small
+    font-size: $secondary-font-size
+    font-family: inherit
+    border: 1px solid $border
+    border-radius: $border-radius
+    background-color: $bg-element
+    color: $text
+    outline: none
+    box-sizing: border-box
+
+    &:focus
+      border-color: $link
+
+    &::placeholder
+      color: $text-muted
+
+// -----------------------------------------------------------------------------
+// Dropdown Date Range
+// -----------------------------------------------------------------------------
+
+=dropdown-date-range
+  .dropdown-date-range
+    padding: $small
+    border-bottom: 1px solid $border
+
+  .date-range-row
+    display: flex
+    align-items: center
+    gap: $small
+    margin-bottom: $small
+
+    &:last-of-type
+      margin-bottom: $small
+
+  .date-label
+    width: 30px
+    font-size: $secondary-font-size
+    color: $text-muted
+
+  .date-input
+    flex: 1
+    padding: $small
+    font-size: $secondary-font-size
+    font-family: inherit
+    border: 1px solid $border
+    border-radius: $border-radius
+    background-color: $bg-element
+    color: $text
+    color-scheme: light dark
+    outline: none
+    box-sizing: border-box
+
+    &:focus
+      border-color: $link
+
+    &::-webkit-calendar-picker-indicator
+      opacity: 0.6
+      cursor: pointer
+
+      &:hover
+        opacity: 1
+
+  .date-apply-btn
+    width: 100%
+    padding: $small
+    font-size: $secondary-font-size
+    font-family: inherit
+    cursor: pointer
+    border: 1px solid $border
+    border-radius: $border-radius
+    background-color: $bg-element
+    color: $text
+
+    &:hover:not(:disabled)
+      background-color: $bg-element-accent
+
+    &:disabled
+      opacity: 0.5
+      cursor: not-allowed
+
+// -----------------------------------------------------------------------------
+// Dropdown Items
+// -----------------------------------------------------------------------------
+
+=dropdown-items
+  .dropdown-item
+    display: flex
+    align-items: center
+    gap: $small
+    width: 100%
+    padding: $small $medium
+    font-size: $secondary-font-size
+    font-family: inherit
+    text-align: left
+    cursor: pointer
+    border: none
+    background: none
+    color: $text
+    transition: background-color 0.1s
+
+    &.indented
+      padding-left: $large
+
+    &:hover,
+    &.highlighted
+      background-color: $bg-element-accent
+
+  .item-avatar
+    width: $filter-avatar-size
+    height: $filter-avatar-size
+    border-radius: 50%
+    flex-shrink: 0
+
+  .item-content
+    display: flex
+    flex-direction: column
+    gap: 1px
+
+  .item-label
+    color: $text
+
+  .item-hint
+    font-size: $tertiary-font-size
+    color: $text-muted
+
+// -----------------------------------------------------------------------------
+// Filter Bubbles
+// -----------------------------------------------------------------------------
+
+=filter-bubbles
+  .bubbles-row
+    display: flex
+    flex-wrap: wrap
+    gap: $small
+
+  .bubble
+    display: inline-flex
+    align-items: center
+    gap: 2px
+    padding: 4px $small
+    font-size: $secondary-font-size
+    font-family: inherit
+    border: 1px solid $border
+    border-radius: $border-radius
+    background-color: $bg-element
+    white-space: nowrap
+
+    &:not(.bubble-owners):not(.bubble-expandable):hover,
+    &.bubble-single-owner:hover
+      background-color: $bg-element-accent
+
+      .bubble-remove-btn,
+      .bubble-owner-remove
+        opacity: 1
+
+    &.bubble-single-owner .bubble-owner-item:hover
+      background-color: transparent
+
+  .bubble-prefix
+    color: $text-muted
+    margin-right: 2px
+
+  .bubble-separator
+    color: $text-muted
+    margin: 0 2px
+
+  .bubble-value-text
+    color: $text
+
+  .bubble-remove-btn
+    display: inline-flex
+    align-items: center
+    justify-content: center
+    width: 16px
+    height: 16px
+    margin-left: 4px
+    padding: 0
+    flex-shrink: 0
+    cursor: pointer
+    border: none
+    background: none
+    color: $text-muted
+    opacity: 0.5
+    transition: opacity 0.1s
+
+    &:hover
+      color: $text
+      opacity: 1
+
+    svg
+      width: 12px
+      height: 12px
+
+  .clear-all-link
+    align-self: center
+    padding: 4px 0
+    font-size: $secondary-font-size
+    color: $link
+    cursor: pointer
+    white-space: nowrap
+
+    &:hover
+      color: $link-hover
+      text-decoration: underline
+
+  // Owner/Author items with inline remove buttons
+  .bubble-owner-item
+    display: inline-flex
+    align-items: center
+    padding: 2px 4px
+    border-radius: $border-radius
+    transition: background-color 0.1s
+
+    &:hover
+      background-color: $bg-element-accent
+
+      .bubble-owner-remove
+        opacity: 1
+
+  .bubble-owner-remove
+    display: inline-flex
+    align-items: center
+    justify-content: center
+    width: 14px
+    height: 14px
+    margin-left: 2px
+    padding: 0
+    flex-shrink: 0
+    cursor: pointer
+    border: none
+    background: none
+    color: $text-muted
+    opacity: 0.5
+    transition: opacity 0.1s
+
+    &:hover
+      color: $text
+      opacity: 1
+
+    svg
+      width: 10px
+      height: 10px
+
+  // Expandable bubble (for owners/authors with multiple values)
+  .bubble-expandable
+    position: relative
+
+  .bubble-remaining
+    color: $text-muted
+    margin-left: 2px
+
+  .bubble-expand-btn
+    display: inline-flex
+    align-items: center
+    justify-content: center
+    width: 18px
+    height: 18px
+    margin-left: 2px
+    padding: 0
+    cursor: pointer
+    border: none
+    background: none
+    color: $text-muted
+    border-radius: 2px
+    transition: all 0.1s
+
+    &:hover,
+    &.active
+      background-color: $bg-element-accent
+      color: $text
+
+    svg
+      width: 16px
+      height: 16px
+      transition: transform 0.15s
+
+    &.active svg
+      transform: rotate(180deg)
+
+  .owners-dropdown
+    position: absolute
+    top: calc(100% + $tiny)
+    right: 0
+    z-index: $z-dropdown
+    min-width: 200px
+    max-height: 200px
+    overflow-y: auto
+    background-color: $bg-element
+    border: 1px solid $border
+    border-radius: $border-radius
+    box-shadow: 0 4px 12px $shadow-color
+
+  .owners-dropdown-item
+    display: flex
+    align-items: center
+    justify-content: space-between
+    width: calc(100% - $small)
+    margin: 0 $tiny
+    padding: $small calc($medium - $tiny)
+    font-size: $secondary-font-size
+    font-family: inherit
+    text-align: left
+    cursor: pointer
+    border: none
+    border-radius: $border-radius
+    background: none
+    color: $text
+    transition: background-color 0.1s
+
+    &:hover
+      background-color: $bg-element-accent
+
+      .owner-remove
+        opacity: 1
+
+  .owner-name
+    flex: 1
+    white-space: nowrap
+    overflow: hidden
+    text-overflow: ellipsis
+
+  .owner-remove
+    flex-shrink: 0
+    width: 12px
+    height: 12px
+    color: $text-muted
+    opacity: 0.5
+    transition: opacity 0.1s
+
+    &:hover
+      color: $accent-red
+      opacity: 1
+
+// -----------------------------------------------------------------------------
+// Sort Control
+// -----------------------------------------------------------------------------
+
+=sort-control
+  .sort-section
+    position: relative
+    flex-shrink: 0
+
+  .sort-btn
+    display: inline-flex
+    align-items: center
+    justify-content: flex-start
+    gap: $small
+    height: $filter-control-height
+    box-sizing: border-box
+    padding: 0 $medium
+    font-size: $secondary-font-size
+    font-family: inherit
+    white-space: nowrap
+    cursor: pointer
+    border: 1px solid $border
+    border-radius: $border-radius
+    background-color: $bg-element
+    color: $text
+
+    &:hover,
+    &.active
+      background-color: $bg-element-accent
+
+  .sort-icon
+    width: 24px
+    height: 24px
+    flex-shrink: 0
+
+  .sort-dropdown
+    position: absolute
+    top: calc(100% + $tiny)
+    right: 0
+    z-index: $z-dropdown
+    min-width: 270px
+    padding: $small 0
+    background-color: $bg-element
+    border: 1px solid $border
+    border-radius: $border-radius
+    box-shadow: 0 4px 12px $shadow-color
+
+  .sort-option
+    display: block
+    width: 100%
+    padding: $small $medium
+    font-size: $secondary-font-size
+    font-family: inherit
+    text-align: left
+    cursor: pointer
+    border: none
+    background: none
+    color: $text
+
+    &:hover
+      background-color: $bg-element-accent
+
+    &.selected
+      .sort-option-label
+        color: $link
+        font-weight: 500
+
+    &.sort-direction
+      display: flex
+      align-items: center
+      gap: $small
+
+  .sort-option-content
+    display: flex
+    flex-direction: column
+    gap: 1px
+
+  .sort-option-label
+    color: $text
+
+  .sort-option-hint
+    font-size: $tertiary-font-size
+    color: $text-muted
+
+  .sort-direction-icon
+    width: 18px
+    height: 18px
+    flex-shrink: 0
+
+  .sort-divider
+    height: 1px
+    margin: $small 0
+    background-color: $border
+
+// -----------------------------------------------------------------------------
+// Responsive
+// -----------------------------------------------------------------------------
+
+=filter-responsive
+  @media (max-width: 600px)
+    .filter-bar
+      flex-wrap: wrap
+
+    .search-container
+      flex: 1 1 100%
+      order: -1

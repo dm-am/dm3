@@ -1,20 +1,20 @@
-import { test as base, Page, APIRequestContext } from '@playwright/test';
+import { test as base, Page, APIRequestContext } from "@playwright/test";
 
-const API_URL = process.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
 
 // Test credentials - loaded from environment variables for security
 // Set these in your .env.local or CI/CD environment:
 // E2E_TEST_USERNAME, E2E_TEST_PASSWORD
 const TEST_USER = {
-  username: process.env.E2E_TEST_USERNAME || 'Alice',
-  password: process.env.E2E_TEST_PASSWORD || '',
+  username: process.env.E2E_TEST_USERNAME || "Alice",
+  password: process.env.E2E_TEST_PASSWORD || "",
 };
 
 // Validate credentials are set
 if (!TEST_USER.password) {
   console.warn(
-    'Warning: E2E_TEST_PASSWORD environment variable not set. ' +
-    'E2E tests requiring authentication will fail.'
+    "Warning: E2E_TEST_PASSWORD environment variable not set. " +
+      "E2E tests requiring authentication will fail.",
   );
 }
 
@@ -25,14 +25,14 @@ if (!TEST_USER.password) {
 export async function loginWithCookies(
   request: APIRequestContext,
   username: string,
-  password: string
+  password: string,
 ): Promise<APIRequestContext> {
   // Create a new context to isolate cookies
   const context = await request.newContext();
 
   const response = await context.post(`${API_URL}/v1/account/login`, {
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     data: {
       email: username,
@@ -42,7 +42,9 @@ export async function loginWithCookies(
 
   if (!response.ok()) {
     const error = await response.text();
-    throw new Error(`Auth failed for ${username}: ${response.status()} - ${error}`);
+    throw new Error(
+      `Auth failed for ${username}: ${response.status()} - ${error}`,
+    );
   }
 
   // Cookie is automatically stored in the context
@@ -54,7 +56,7 @@ export const test = base.extend<{ authenticatedPage: Page }>({
     // Login via cookie-based API
     const response = await page.request.post(`${API_URL}/v1/account/login`, {
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       data: {
         email: TEST_USER.username,
@@ -72,4 +74,4 @@ export const test = base.extend<{ authenticatedPage: Page }>({
   },
 });
 
-export { expect } from '@playwright/test';
+export { expect } from "@playwright/test";

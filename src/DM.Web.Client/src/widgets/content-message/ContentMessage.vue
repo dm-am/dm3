@@ -3,6 +3,8 @@ import { ref, computed, onMounted, watch, nextTick } from "vue";
 import { storeToRefs } from "pinia";
 import { useUserStore } from "@/entities/user";
 import { UserRole, type User } from "@/shared/api/models/community";
+import { Tooltip } from "@/shared/ui/Tooltip";
+import { SvgIcon } from "@/shared/ui/Icon";
 import defaultPicture from "@/assets/images/userpic.png";
 import dayjs from "dayjs";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
@@ -63,6 +65,31 @@ const formattedTime = computed(() => {
   return dayjs(props.message.createdUtc).format("HH:mm");
 });
 
+const formattedDate = computed(() => {
+  if (!props.message.createdUtc) return "";
+  return dayjs(props.message.createdUtc).format("DD.MM.YYYY HH:mm");
+});
+
+const authorRole = computed(() => props.message.author?.role);
+
+// Role badges - same as Comment.vue
+const roleBadge = computed(() => {
+  switch (authorRole.value) {
+    case UserRole.Admin:
+      return { label: "А", title: "Администратор" };
+    case UserRole.SeniorModerator:
+      return { label: "С", title: "Старший модератор" };
+    case UserRole.Moderator:
+      return { label: "М", title: "Модератор" };
+    case UserRole.Mentor:
+      return { label: "Н", title: "Наставник" };
+    case UserRole.System:
+      return { label: "Р", title: "Робот-администратор" };
+    default:
+      return null;
+  }
+});
+
 const tooltipText = computed(() => {
   if (!props.message.createdUtc) return "";
   let result = `Отправлено: ${dayjs(props.message.createdUtc).format("DD.MM.YYYY HH:mm")}`;
@@ -76,7 +103,7 @@ const isEdited = computed(() => !!props.message.modifiedUtc);
 
 const isModerator = computed(() => {
   if (!currentUser.value) return false;
-  return currentUser.value.roles.some((r) =>
+  return (currentUser.value.roles ?? []).some((r) =>
     [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(r),
   );
 });
@@ -105,7 +132,9 @@ const canWarn = computed(() => isModerator.value && props.isPublic);
 
 const isLikedByMe = computed(() => {
   if (!currentUser.value) return false;
-  return props.message.likes?.some((u) => u.username === currentUser.value?.username);
+  return props.message.likes?.some(
+    (u) => u.username === currentUser.value?.username,
+  );
 });
 
 const canLike = computed(() => {
@@ -121,7 +150,11 @@ const ONLINE_THRESHOLD_MINUTES = 5;
 const isAuthorOnline = computed(() => {
   const lastActivityUtc = props.message.author?.lastActivityUtc;
   if (!lastActivityUtc) return false;
-  const minutesSinceOnline = dayjs().diff(dayjs(lastActivityUtc), "minute", true);
+  const minutesSinceOnline = dayjs().diff(
+    dayjs(lastActivityUtc),
+    "minute",
+    true,
+  );
   return minutesSinceOnline <= ONLINE_THRESHOLD_MINUTES;
 });
 
@@ -227,12 +260,18 @@ watch(
   <div
     :id="`message-${message.id}`"
     class="content-message"
-    :class="{ hidden: message.isHiddenByBlacklist, removed: message.isRemoved && !showDeletedContent, compact }"
+    :class="{
+      hidden: message.isHiddenByBlacklist,
+      removed: message.isRemoved && !showDeletedContent,
+      compact,
+    }"
   >
     <!-- Hidden by blacklist placeholder -->
     <template v-if="message.isHiddenByBlacklist">
       <div class="hidden-placeholder">
-        <span class="hidden-text">Контент от заблокированного пользователя скрыт</span>
+        <span class="hidden-text"
+          >Контент от заблокированного пользователя скрыт</span
+        >
       </div>
     </template>
 
@@ -257,80 +296,35 @@ watch(
         :to="{ name: 'profile', params: { username: message.author.username } }"
         class="avatar-link"
       >
-        <img :src="authorPicture" :alt="message.author.username" class="avatar" />
+        <img
+          :src="authorPicture"
+          :alt="message.author.username"
+          class="avatar"
+        />
       </router-link>
 
       <div class="message-body">
-        <!-- Header -->
-        <div class="message-header">
+        <!-- Header (non-compact mode only) -->
+        <div v-if="!compact" class="message-header">
           <router-link
-            :to="{ name: 'profile', params: { username: message.author.username } }"
+            :to="{
+              name: 'profile',
+              params: { username: message.author.username },
+            }"
             class="author-name"
-            :class="{ online: isAuthorOnline, offline: !isAuthorOnline }"
+            :class="{ online: isAuthorOnline }"
           >
             {{ message.author.username }}
           </router-link>
-          <span class="message-time" :title="tooltipText">
-            {{ formattedTime
-            }}<span v-if="isEdited" class="edited-marker">(ред.)</span>
+          <span v-if="roleBadge" class="role-badge">
+            [<Tooltip :text="roleBadge.title"><b>{{ roleBadge.label }}</b></Tooltip>]
           </span>
-
-          <!-- Likes inline in compact mode -->
-          <div
-            v-if="compact && (canLike || likesCount > 0)"
-            class="likes-container inline-likes"
-            @mouseenter="showLikesPopup = true"
-            @mouseleave="showLikesPopup = false"
-          >
-            <button
-              class="like-btn"
-              :class="{ liked: isLikedByMe }"
-              :disabled="!canLike"
-              @click="toggleLike"
-            >
-              <span class="like-icon">♥</span>
-              <span v-if="likesCount > 0" class="likes-count">{{
-                likesCount
-              }}</span>
-            </button>
-            <div v-if="showLikesPopup && likesCount > 0" class="likes-popup">
-              <div
-                v-for="liker in message.likes"
-                :key="liker.username"
-                class="liker"
-              >
-                {{ liker.username }}
-              </div>
-            </div>
-          </div>
-
-          <!-- Compact actions (visible on hover) -->
-          <div v-if="compact" class="compact-actions">
-            <button
-              v-if="canEdit"
-              class="compact-action-btn"
-              @click="startEdit"
-              title="Редактировать"
-            >
-              ✎
-            </button>
-            <button
-              v-if="canDelete"
-              class="compact-action-btn delete"
-              @click="handleDelete"
-              title="Удалить"
-            >
-              ✕
-            </button>
-            <button
-              v-if="canWarn"
-              class="compact-action-btn warn"
-              @click="handleWarn"
-              title="Предупреждение"
-            >
-              ⚠
-            </button>
-          </div>
+          <Tooltip :text="tooltipText">
+            <span class="message-time">
+              {{ formattedTime
+              }}<span v-if="isEdited" class="edited-marker"> (ред.)</span>
+            </span>
+          </Tooltip>
 
           <!-- Hide deleted button for moderators -->
           <button
@@ -342,12 +336,99 @@ watch(
           </button>
         </div>
 
-        <!-- Compact message content (separate line, Teams-style) -->
+        <!-- Content (compact mode) -->
         <div
           v-if="compact && !isEditing"
-          class="compact-content"
+          ref="contentRef"
+          class="message-content bbcode-content"
+          :class="{ collapsed: needsTruncation && !isExpanded }"
+          :style="{
+            maxHeight: needsTruncation && !isExpanded ? `${maxHeight}px` : 'none',
+          }"
           v-html="displayText"
         />
+
+        <!-- Expand/collapse button (compact mode) -->
+        <button
+          v-if="compact && !isEditing && needsTruncation"
+          class="expand-btn"
+          @click="toggleExpand"
+        >
+          {{ isExpanded ? "Свернуть" : "Читать далее" }}
+        </button>
+
+        <!-- Compact mode footer -->
+        <div v-if="compact && !isEditing" class="message-footer">
+          <!-- Author info (compact mode) -->
+          <span class="author-label">Автор:</span>
+          <router-link
+            :to="{ name: 'profile', params: { username: message.author.username } }"
+            class="author-link"
+          >
+            {{ message.author.username }}
+          </router-link>
+          <span v-if="roleBadge" class="role-badge">
+            [<Tooltip :text="roleBadge.title"><b>{{ roleBadge.label }}</b></Tooltip>]
+          </span>
+          <span class="status-badge">
+            [<span :class="isAuthorOnline ? 'online' : 'offline'">{{
+              isAuthorOnline ? "online" : "offline"
+            }}</span>]
+          </span>
+          <Tooltip :text="tooltipText">
+            <span class="message-date">, {{ formattedDate }}<span v-if="isEdited" class="edited-marker"> (ред.)</span></span>
+          </Tooltip>
+
+          <!-- Actions -->
+          <span class="message-actions">
+            <!-- Likes -->
+            <span
+              v-if="canLike || likesCount > 0"
+              class="likes-container"
+              @mouseenter="showLikesPopup = true"
+              @mouseleave="showLikesPopup = false"
+            >
+              <button
+                class="like-btn"
+                :class="{ liked: isLikedByMe }"
+                :disabled="!canLike"
+                @click="toggleLike"
+              >
+                <span class="like-icon">♥</span><span v-if="likesCount > 0" class="likes-count">{{ likesCount }}</span>
+              </button>
+
+              <div v-if="showLikesPopup && likesCount > 0" class="likes-popup">
+                <div
+                  v-for="liker in message.likes"
+                  :key="liker.username"
+                  class="liker"
+                >
+                  {{ liker.username }}
+                </div>
+              </div>
+            </span>
+
+            <button v-if="canEdit" class="action-btn" @click="startEdit">ред.</button>
+            <button v-if="canDelete" class="action-btn delete-btn" @click="handleDelete">удл.</button>
+            <button v-if="canWarn" class="action-btn warn-btn" @click="handleWarn">пред.</button>
+          </span>
+
+          <!-- Hide deleted button (compact) -->
+          <button
+            v-if="message.isRemoved && isModerator"
+            class="hide-deleted-btn"
+            @click="toggleDeletedContent"
+          >
+            Скрыть
+          </button>
+
+          <!-- Anchor link -->
+          <Tooltip text="Скопировать ссылку">
+            <button class="anchor-btn" @click="copyAnchorLink">
+              <SvgIcon name="anchor" />
+            </button>
+          </Tooltip>
+        </div>
 
         <!-- Content (non-compact mode) -->
         <template v-if="!compact">
@@ -373,7 +454,7 @@ watch(
           <template v-else>
             <div
               ref="contentRef"
-              class="message-content"
+              class="message-content bbcode-content"
               :class="{ collapsed: needsTruncation && !isExpanded }"
               :style="{
                 maxHeight:
@@ -428,7 +509,7 @@ watch(
               </div>
 
               <!-- Actions -->
-              <div class="message-actions">
+              <span class="message-actions full-mode">
                 <button v-if="canEdit" class="action-btn" @click="startEdit">
                   Редактировать
                 </button>
@@ -446,16 +527,14 @@ watch(
                 >
                   Предупреждение
                 </button>
-              </div>
+              </span>
 
               <!-- Anchor link -->
-              <button
-                class="anchor-btn"
-                :title="messageAnchor"
-                @click="copyAnchorLink"
-              >
-                🔗
-              </button>
+              <Tooltip text="Скопировать ссылку">
+                <button class="anchor-btn" @click="copyAnchorLink">
+                  <SvgIcon name="anchor" />
+                </button>
+              </Tooltip>
             </div>
           </template>
         </template>
@@ -486,20 +565,22 @@ watch(
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
 @import "src/assets/styles/BbcodeContent"
+@import "src/assets/styles/ZIndex"
 
 .content-message
   display: flex
   gap: $small
   padding: $small
   position: relative
+  border: 1px dashed $border
+  background-color: $bg-element
 
   &:not(:last-child)
-    border-bottom: 1px solid
-    border-bottom-color: $border
+    margin-bottom: $small
 
   &.removed,
   &.hidden
-    background-color: $bg-element
+    background-color: $bg-element-accent
 
 .hidden-placeholder,
 .deleted-placeholder
@@ -568,18 +649,16 @@ watch(
 .message-time
   font-size: $secondary-font-size
   color: $text-muted
+  cursor: help
 
 .edited-marker
   margin-left: $tiny
   color: $text-muted
 
+// .message-content uses global .bbcode-content class
 .message-content
-  word-wrap: break-word
-  word-break: break-word
-  overflow-wrap: break-word
   overflow: hidden
   color: $text
-  +bbcode-content
 
   &.collapsed
     overflow: hidden
@@ -635,23 +714,62 @@ watch(
 
 .message-footer
   display: flex
-  align-items: center
-  gap: $medium
+  align-items: baseline
+  flex-wrap: wrap
+  gap: 0 $tiny
   margin-top: $small
+  font-size: $secondary-font-size
+  color: $text-muted
+  line-height: 1.6
+
+.author-label
+  color: $text-muted
+
+.author-link
+  color: $link
+  text-decoration: none
+
+  &:hover
+    color: $link-hover
+    text-decoration: underline
+
+// Role badges: [А], [С], [М], [Н], [Р] - gray brackets, green bold letter
+.role-badge
+  display: inline
+  color: $text-muted
+
+  b
+    font-weight: bold
+    color: $accent-green
+    cursor: help
+
+.status-badge
+  color: $text-muted
+
+  .online
+    color: $accent-green
+
+  .offline
+    color: $text-muted
+
+.message-date
+  color: $text-muted
+  cursor: help
 
 .likes-container
   position: relative
+  display: inline-flex
 
 .like-btn
-  display: flex
+  display: inline-flex
   align-items: center
-  gap: $tiny
-  padding: $tiny $small
+  gap: 2px
+  padding: 0 $tiny
   border: none
-  border-radius: $tiny
+  background: transparent
   cursor: pointer
-  background-color: $bg-element-accent
   color: $text-muted
+  font-size: $secondary-font-size
 
   &:hover:not(:disabled)
     color: $accent-red
@@ -664,7 +782,7 @@ watch(
     opacity: 0.6
 
 .like-icon
-  font-size: 1.1em
+  font-size: 1em
 
 .likes-count
   font-weight: bold
@@ -675,7 +793,7 @@ watch(
   left: 0
   padding: $small
   border-radius: $border-radius
-  z-index: 100
+  z-index: $z-dropdown
   min-width: $grid-step * 30
   background-color: $bg-highlight-blue
   border: 1px solid $border
@@ -684,18 +802,24 @@ watch(
 .liker
   padding: $tiny 0
   color: $text
+  white-space: nowrap
 
 .message-actions
-  display: flex
+  display: inline-flex
+  align-items: center
   gap: $small
+  margin-left: $small
+
+  &.full-mode
+    margin-left: 0
+    margin-top: $small
 
 .action-btn
-  padding: $tiny $small
+  padding: 0 $tiny
   font-size: $secondary-font-size
   border: none
-  border-radius: $tiny
+  background: transparent
   cursor: pointer
-  background-color: $bg-element-accent
   color: $text-muted
 
   &:hover
@@ -704,6 +828,11 @@ watch(
   &.save-btn
     background-color: $button-bg
     color: $button-text
+    padding: $tiny $small
+    border-radius: $tiny
+
+  &.cancel-btn
+    padding: $tiny $small
 
   &.delete-btn:hover
     color: $accent-red
@@ -713,87 +842,28 @@ watch(
 
 .anchor-btn
   margin-left: auto
-  padding: $tiny
+  padding: 0 $tiny
   border: none
   background: transparent
   cursor: pointer
-  opacity: 0.5
-  font-size: 0.9em
+  color: $text-muted
+  display: inline-flex
+  align-items: center
+
+  svg
+    width: 14px
+    height: 14px
 
   &:hover
-    opacity: 1
+    color: $link
 
-// Compact mode styles (Teams-like)
+// Compact mode styles (matches Comment.vue)
 .content-message.compact
-  padding: $small
-  gap: $small
-  align-items: flex-start
+  display: block
 
-  .avatar
-    width: $grid-step * 5
-    height: $grid-step * 5
-    margin-top: 2px
-
-  .message-header
-    display: flex
-    align-items: baseline
-    gap: $small
-    margin-bottom: 0
-    flex-wrap: nowrap
-
-  .author-name
-    flex-shrink: 0
-
-  .message-time
-    flex-shrink: 0
-    font-size: 11px
-
-  .compact-content
-    margin-top: $tiny
-    color: $text
-    line-height: 1.4
-    word-break: break-word
-    overflow-wrap: break-word
-    +bbcode-content
-
-    :deep(p)
-      margin: 0
-
-      &:not(:last-child)
-        margin-bottom: $tiny
-
-  .inline-likes
-    flex-shrink: 0
-    margin-left: auto
-
-    .like-btn
-      padding: 0 $tiny
-      background: transparent
-
-  .compact-actions
+  // Hide avatar in compact mode
+  .avatar-link
     display: none
-    gap: $tiny
-    margin-left: $tiny
-
-  &:hover .compact-actions
-    display: flex
-
-  .compact-action-btn
-    padding: 0 $tiny
-    border: none
-    background: transparent
-    cursor: pointer
-    font-size: 12px
-    color: $text-muted
-
-    &:hover
-      color: $link
-
-    &.delete:hover
-      color: $accent-red
-
-    &.warn:hover
-      color: $accent-red
 
   .compact-edit
     margin-top: $tiny

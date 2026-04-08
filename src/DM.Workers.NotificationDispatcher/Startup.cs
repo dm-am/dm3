@@ -40,10 +40,9 @@ public class Startup
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     /// <param name="services"></param>
-    /// <returns></returns>
     public void ConfigureServices(IServiceCollection services)
     {
         services

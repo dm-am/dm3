@@ -26,6 +26,11 @@ internal class ChatIntentionResolver : IIntentionResolver<ChatIntention, Chat>
                 target.Type == ChatType.Group &&
                 (target.Participants?.Any(p => p.UserId == user.UserId) ?? false),
 
+            // Only group chats can be deleted, by participants
+            ChatIntention.DeleteChat =>
+                target.Type == ChatType.Group &&
+                (target.Participants?.Any(p => p.UserId == user.UserId) ?? false),
+
             _ => false
         };
 }

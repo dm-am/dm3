@@ -15,7 +15,7 @@ public static class AttributeExtensions
     /// <param name="structValue"></param>
     /// <typeparam name="TStruct"></typeparam>
     /// <typeparam name="TAttr"></typeparam>
-    /// <returns></returns>
+    /// <returns>The attribute instance</returns>
     /// <exception cref="AmbiguousAttributesException"></exception>
     public static TAttr GetAttribute<TStruct, TAttr>(this TStruct structValue)
         where TStruct : struct
@@ -35,7 +35,7 @@ public static class AttributeExtensions
     /// <param name="structValue"></param>
     /// <typeparam name="TStruct"></typeparam>
     /// <typeparam name="TAttr"></typeparam>
-    /// <returns></returns>
+    /// <returns>Array of attribute instances</returns>
     public static TAttr[] GetAllAttributes<TStruct, TAttr>(this TStruct structValue)
         where TStruct : struct
         where TAttr : Attribute

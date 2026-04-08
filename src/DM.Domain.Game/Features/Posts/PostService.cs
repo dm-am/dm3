@@ -32,6 +32,7 @@ internal class PostService : IPostService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IPostRepository _repository;
+    private readonly IDiceRollRepository _diceRollRepository;
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly IEventProducer _producer;
     private readonly IIdentityProvider _identityProvider;
@@ -45,6 +46,7 @@ internal class PostService : IPostService
         IDateTimeProvider dateTimeProvider,
         IGuidFactory guidFactory,
         IPostRepository repository,
+        IDiceRollRepository diceRollRepository,
         IUnreadCountersRepository unreadCountersRepository,
         IEventProducer producer,
         IIdentityProvider identityProvider)
@@ -57,6 +59,7 @@ internal class PostService : IPostService
         _dateTimeProvider = dateTimeProvider;
         _guidFactory = guidFactory;
         _repository = repository;
+        _diceRollRepository = diceRollRepository;
         _unreadCountersRepository = unreadCountersRepository;
         _producer = producer;
         _identityProvider = identityProvider;
@@ -89,9 +92,8 @@ internal class PostService : IPostService
             RoomId = createPost.RoomId,
             AuthorId = identity.User.UserId,
             CharacterId = createPost.CharacterId,
-            Text = createPost.Text.Trim(),
-            Comment = createPost.Comment?.Trim(),
-            MasterMessage = createPost.MasterMessage?.Trim(),
+            GameText = createPost.GameText.Trim(),
+            MetagameText = createPost.MetagameText?.Trim(),
             CreatedUtc = _dateTimeProvider.Now
         };
 
@@ -114,7 +116,10 @@ internal class PostService : IPostService
         var identity = _identityProvider.Current;
         var totalCount = await _repository.Count(roomId, identity.User.UserId);
         var paging = new PagingData(query, identity.Settings.Paging.PostsPerPage, totalCount);
-        var posts = await _repository.Get(roomId, paging, identity.User.UserId);
+        var posts = (await _repository.Get(roomId, paging, identity.User.UserId)).ToList();
+
+        // Enrich posts with dice rolls
+        await EnrichWithDiceRollsAsync(posts);
 
         return (posts, paging.Result);
     }
@@ -126,6 +131,10 @@ internal class PostService : IPostService
         {
             throw new HttpException(HttpStatusCode.NotFound, "Post not found");
         }
+
+        // Enrich post with dice rolls
+        post.DiceRolls = await _diceRollRepository.GetByPostIdAsync(postId);
+
         return post;
     }
 
@@ -141,6 +150,13 @@ internal class PostService : IPostService
         return _repository.GetBestPost(userId);
     }
 
+    public async Task<(IEnumerable<Post> Posts, PagingResult Paging)> GetRatedAsync(PostsQuery query)
+    {
+        var (posts, totalCount) = await _repository.GetRated(query);
+        var paging = new PagingData(query, query.Take, totalCount);
+        return (posts, paging.Result);
+    }
+
     #endregion
 
     #region Update
@@ -154,27 +170,20 @@ internal class PostService : IPostService
 
         var entity = new UpdatePostEntity
         {
-            PostId = updatePost.PostId,
-            ModifiedUtc = _dateTimeProvider.Now
+            PostId = updatePost.PostId
         };
 
         // Check text edit permission
         if (_intentionManager.IsAllowed(PostIntention.EditText, (post, room)))
         {
-            entity.Text = updatePost.Text.Trim();
-            entity.Comment = updatePost.Comment?.Trim();
+            entity.GameText = updatePost.GameText.Trim();
+            entity.MetagameText = updatePost.MetagameText?.Trim();
         }
         else
         {
-            entity.Text = post.Text; // Keep original
-            entity.Comment = post.Comment;
+            entity.GameText = post.GameText; // Keep original
+            entity.MetagameText = post.MetagameText;
         }
-
-        // Check master message permission
-        if (_intentionManager.IsAllowed(PostIntention.EditMasterMessage, (post, room)))
-            entity.MasterMessage = updatePost.MasterMessage?.Trim();
-        else
-            entity.MasterMessage = post.MasterMessage;
 
         // Check character change permission
         if (updatePost.CharacterId != null)
@@ -193,6 +202,20 @@ internal class PostService : IPostService
         await _producer.SendAsync(EventType.ChangedPost, post.Id);
 
         return updatedPost!;
+    }
+
+    private async Task EnrichWithDiceRollsAsync(List<Post> posts)
+    {
+        if (posts.Count == 0) return;
+
+        var postIds = posts.Select(p => p.Id).ToList();
+        var diceRollsByPost = await _diceRollRepository.GetByPostIdsAsync(postIds);
+
+        foreach (var post in posts)
+        {
+            if (diceRollsByPost.TryGetValue(post.Id, out var rolls))
+                post.DiceRolls = rolls;
+        }
     }
 
     #endregion

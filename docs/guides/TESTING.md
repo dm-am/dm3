@@ -25,7 +25,7 @@ dotnet test test/DM.Domain.Forum.Tests
 # С фильтром
 dotnet test --filter "TopicCreatingService"
 
-# С отчётом
+# С отчетом
 dotnet test --logger "trx;LogFileName=results.trx"
 ```
 

@@ -1,6 +1,7 @@
 using AutoMapper;
 using DomainBoard = DM.Domain.Forum.Features.Boards.Board;
 using DomainBoardLastComment = DM.Domain.Forum.Features.Boards.BoardLastComment;
+using DomainBoardLastTopic = DM.Domain.Forum.Features.Boards.BoardLastTopic;
 
 namespace DM.Web.API.Features.Forum.Boards;
 
@@ -12,10 +13,12 @@ internal class BoardMappingProfile : Profile
     /// <inheritdoc />
     public BoardMappingProfile()
     {
-        CreateMap<DomainBoard, Board>()
-            .ForMember(d => d.Id, s => s.MapFrom(b => b.Title));
+        CreateMap<DomainBoard, Board>();
 
         CreateMap<DomainBoardLastComment, BoardLastComment>()
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(c => c.CreatedUtc));
+
+        CreateMap<DomainBoardLastTopic, BoardLastTopic>()
+            .ForMember(d => d.CreatedUtc, s => s.MapFrom(t => t.CreatedUtc));
     }
 }

@@ -17,12 +17,19 @@ public interface IGameCommentRepository
     /// <summary>
     /// Count comments in game
     /// </summary>
-    Task<int> Count(Guid gameId, IReadOnlyCollection<Guid>? excludeUserIds = null);
+    /// <param name="gameId">Game identifier</param>
+    /// <param name="query">Query parameters for filtering</param>
+    /// <param name="excludeUserIds">Optional user IDs to exclude from count</param>
+    Task<int> Count(Guid gameId, GameCommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null);
 
     /// <summary>
     /// Get comments with paging
     /// </summary>
-    Task<IEnumerable<Comment>> Get(Guid gameId, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null);
+    /// <param name="gameId">Game identifier</param>
+    /// <param name="query">Query parameters for filtering and sorting</param>
+    /// <param name="paging">Paging data</param>
+    /// <param name="excludeUserIds">Optional user IDs to exclude from results</param>
+    Task<IEnumerable<Comment>> Get(Guid gameId, GameCommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null);
 
     /// <summary>
     /// Get single comment

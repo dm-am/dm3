@@ -14,7 +14,7 @@ public interface IRoomApiService
     /// Get list of all available game rooms
     /// </summary>
     /// <param name="gameId">Game identifier</param>
-    /// <returns></returns>
+    /// <returns>List envelope containing all game rooms</returns>
     Task<ListEnvelope<Room>> GetAll(Guid gameId);
 
     /// <summary>
@@ -22,14 +22,14 @@ public interface IRoomApiService
     /// </summary>
     /// <param name="gameId">Game identifier</param>
     /// <param name="roomType">Room type filter</param>
-    /// <returns></returns>
+    /// <returns>List envelope containing rooms of specified type</returns>
     Task<ListEnvelope<Room>> GetByType(Guid gameId, RoomType roomType);
 
     /// <summary>
     /// Get single room
     /// </summary>
     /// <param name="roomId">Room identifier</param>
-    /// <returns></returns>
+    /// <returns>Envelope containing the room</returns>
     Task<Envelope<Room>> Get(Guid roomId);
 
     /// <summary>
@@ -37,7 +37,7 @@ public interface IRoomApiService
     /// </summary>
     /// <param name="gameId">Game identifier</param>
     /// <param name="room">Room creation request</param>
-    /// <returns></returns>
+    /// <returns>Envelope containing the created room</returns>
     Task<Envelope<Room>> Create(Guid gameId, CreateRoomRequest room);
 
     /// <summary>
@@ -45,13 +45,12 @@ public interface IRoomApiService
     /// </summary>
     /// <param name="roomId">Room identifier</param>
     /// <param name="room">Room model</param>
-    /// <returns></returns>
+    /// <returns>Envelope containing the updated room</returns>
     Task<Envelope<Room>> Update(Guid roomId, Room room);
 
     /// <summary>
     /// Delete existing room
     /// </summary>
     /// <param name="roomId">Room identifier</param>
-    /// <returns></returns>
     Task Delete(Guid roomId);
 }

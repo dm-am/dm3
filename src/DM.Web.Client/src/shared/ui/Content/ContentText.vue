@@ -25,15 +25,7 @@ watch(
 </script>
 
 <template>
-  <div ref="contentRef" class="content-text" v-html="html" />
+  <div ref="contentRef" class="bbcode-content" v-html="html" />
 </template>
 
-<style scoped lang="sass">
-@import "src/assets/styles/BbcodeContent"
-
-.content-text
-  word-wrap: break-word
-  word-break: break-word
-  overflow-wrap: break-word
-  +bbcode-content
-</style>
+<!-- No scoped styles needed - .bbcode-content is defined globally in BbcodeGlobal.sass -->

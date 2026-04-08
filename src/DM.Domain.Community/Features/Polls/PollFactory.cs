@@ -24,10 +24,11 @@ internal class PollFactory : IPollFactory
         return new CreatePollEntity
         {
             Id = _guidFactory.Create(),
-            StartDate = _dateTimeProvider.Now.UtcDateTime,
-            EndDate = createPoll.EndDate.UtcDateTime,
-            Global = true,
+            StartsUtc = createPoll.StartsUtc.UtcDateTime,
+            EndsUtc = createPoll.EndsUtc.UtcDateTime,
             Title = createPoll.Title,
+            Details = createPoll.Details,
+            IsAnonymous = createPoll.IsAnonymous,
             Options = createPoll.Options
                 .Select(o => new CreatePollOptionEntity
                 {

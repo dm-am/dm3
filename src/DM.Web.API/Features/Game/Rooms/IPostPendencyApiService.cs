@@ -14,13 +14,12 @@ public interface IPostPendencyApiService
     /// </summary>
     /// <param name="roomId">Room identifier</param>
     /// <param name="postPendency">API DTO model</param>
-    /// <returns></returns>
+    /// <returns>Envelope containing the created post pendency</returns>
     Task<Envelope<PostPendency>> Create(Guid roomId, PostPendency postPendency);
 
     /// <summary>
     /// Delete existing post pendency
     /// </summary>
     /// <param name="postPendencyId">Post pendency identifier</param>
-    /// <returns></returns>
     Task Delete(Guid postPendencyId);
 }

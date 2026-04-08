@@ -86,7 +86,7 @@ public class SecurityEvent
     /// <summary>
     /// When the event occurred
     /// </summary>
-    public DateTimeOffset Timestamp { get; set; }
+    public DateTimeOffset TimestampUtc { get; set; }
 
     /// <summary>
     /// IP address of the client

@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import type { GlobalChatMessage as GlobalChatMessageType } from "@/entities/global-chat";
 import { ContentMessage } from "@/widgets/content-message";
+import { useUiStore } from "@/shared/stores/ui";
+import { storeToRefs } from "pinia";
+
+const { isCompactMode } = storeToRefs(useUiStore());
 
 defineProps<{
   message: GlobalChatMessageType;
@@ -39,7 +43,7 @@ function handleWarn(id: string) {
   <content-message
     :message="message"
     :is-public="true"
-    :compact="true"
+    :compact="isCompactMode"
     @edit="handleEdit"
     @delete="handleDelete"
     @like="handleLike"

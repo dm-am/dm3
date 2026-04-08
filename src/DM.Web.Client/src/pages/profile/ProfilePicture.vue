@@ -3,7 +3,7 @@ import { ref, computed, onUnmounted } from "vue";
 import type { AxiosProgressEvent } from "axios";
 import { personalApi } from "@/shared/api";
 import { uploadApi } from "@/shared/api";
-import { TheUpload } from "@/features/upload";
+import { Upload } from "@/features/upload";
 let resetTimeout: ReturnType<typeof setTimeout> | null = null;
 
 onUnmounted(() => {
@@ -95,7 +95,7 @@ const onUploading = async (formData: FormData) => {
   <div class="profile-picture-upload">
     <div class="upload-overlay">
       <span class="upload-label">{{ stateLabel }}</span>
-      <the-upload
+      <Upload
         v-if="uploadState === 'idle'"
         accept="image/jpeg,image/png,image/webp,image/gif"
         @uploading="onUploading"

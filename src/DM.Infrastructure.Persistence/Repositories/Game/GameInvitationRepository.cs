@@ -38,13 +38,13 @@ internal class GameInvitationRepository : IGameInvitationRepository
             {
                 User = new GeneralUser
                 {
-                    UserId = g.Author.UserId,
-                    Username = g.Author.Username,
-                    Role = g.Author.Role,
-                    Status = g.Author.Status,
-                    LastActivityUtc = g.Author.LastActivityUtc,
-                    SmallPictureUrl = g.Author.AvatarUpload != null ? (g.Author.AvatarUpload.SmallFilePath ?? g.Author.AvatarUpload.FilePath) : null,
-                    MediumPictureUrl = g.Author.AvatarUpload != null ? (g.Author.AvatarUpload.MediumFilePath ?? g.Author.AvatarUpload.FilePath) : null
+                    UserId = g.Master.UserId,
+                    Username = g.Master.Username,
+                    Role = g.Master.Role,
+                    Status = g.Master.Status,
+                    LastActivityUtc = g.Master.LastActivityUtc,
+                    SmallPictureUrl = g.Master.AvatarUpload != null ? (g.Master.AvatarUpload.SmallFilePath ?? g.Master.AvatarUpload.FilePath) : null,
+                    MediumPictureUrl = g.Master.AvatarUpload != null ? (g.Master.AvatarUpload.MediumFilePath ?? g.Master.AvatarUpload.FilePath) : null
                 },
                 Role = GameRole.Master,
                 JoinedUtc = g.CreatedUtc
@@ -205,7 +205,7 @@ internal class GameInvitationRepository : IGameInvitationRepository
         await _dbContext.Games
             .Where(g => g.GameId == entity.GameId)
             .ExecuteUpdateAsync(setters => setters
-                .SetProperty(g => g.AuthorId, entity.NewMasterId), ct);
+                .SetProperty(g => g.MasterId, entity.NewMasterId), ct);
     }
 
     #endregion
@@ -265,11 +265,11 @@ internal class GameInvitationRepository : IGameInvitationRepository
                 }
                 : new GeneralUser
                 {
-                    UserId = t.Game!.Author.UserId,
-                    Username = t.Game.Author.Username,
-                    Role = t.Game.Author.Role,
-                    Status = t.Game.Author.Status,
-                    LastActivityUtc = t.Game.Author.LastActivityUtc
+                    UserId = t.Game!.Master.UserId,
+                    Username = t.Game.Master.Username,
+                    Role = t.Game.Master.Role,
+                    Status = t.Game.Master.Status,
+                    LastActivityUtc = t.Game.Master.LastActivityUtc
                 },
             TargetRole = t.Type == TokenType.GamePlayerInvitation ? GameRole.Player :
                          t.Type == TokenType.GameReaderInvitation ? GameRole.Reader :
@@ -286,7 +286,7 @@ internal class GameInvitationRepository : IGameInvitationRepository
             .Include(t => t.User)
             .Include(t => t.Creator)
             .Include(t => t.Game)
-            .ThenInclude(g => g!.Author)
+            .ThenInclude(g => g!.Master)
             .FirstOrDefaultAsync(t => t.TokenId == tokenId && !t.IsRemoved, ct);
 
         if (token == null)
@@ -310,7 +310,7 @@ internal class GameInvitationRepository : IGameInvitationRepository
             InvitedUser = MapToGeneralUser(token.User),
             InvitedBy = token.Creator != null
                 ? MapToGeneralUser(token.Creator)
-                : MapToGeneralUser(token.Game!.Author),
+                : MapToGeneralUser(token.Game!.Master),
             TargetRole = MapTokenTypeToRole(token.Type),
             CreatedUtc = token.CreatedUtc,
             ExpiresUtc = token.CreatedUtc.AddDays(30)

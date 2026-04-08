@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json.Serialization;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Community.Polls;
 
@@ -18,20 +18,34 @@ public class Poll
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Poll type (Community, Topic, etc.)
+    /// Poll start date and time (UTC)
     /// </summary>
-    public PollType PollType { get; set; }
+    public DateTimeOffset StartsUtc { get; set; }
 
     /// <summary>
     /// Poll end date and time (UTC)
     /// </summary>
-    [JsonPropertyName("ends")]
     public DateTimeOffset EndsUtc { get; set; }
 
     /// <summary>
     /// Poll question/title
     /// </summary>
     public string Title { get; set; } = "";
+
+    /// <summary>
+    /// Optional description/details for the poll
+    /// </summary>
+    public string? Details { get; set; }
+
+    /// <summary>
+    /// Poll status (computed from StartsUtc and EndsUtc)
+    /// </summary>
+    public PollStatus Status { get; set; }
+
+    /// <summary>
+    /// Whether poll is anonymous (votes are hidden)
+    /// </summary>
+    public bool IsAnonymous { get; set; }
 
     /// <summary>
     /// Available answer options
@@ -63,6 +77,16 @@ public class PollOption
     /// Whether the current user has voted for this option (null if not authenticated)
     /// </summary>
     public bool? Voted { get; set; }
+
+    /// <summary>
+    /// Users who voted for this option (null for anonymous polls, max 15)
+    /// </summary>
+    public IEnumerable<UserRef>? Voters { get; set; }
+
+    /// <summary>
+    /// Total voters count if exceeds 15 (null otherwise)
+    /// </summary>
+    public int? TotalVoters { get; set; }
 }
 
 /// <summary>
@@ -79,16 +103,22 @@ public class CreatePollRequest
     public string Title { get; set; } = "";
 
     /// <summary>
-    /// Poll type
+    /// Optional description/details for the poll (max 1000 characters)
     /// </summary>
-    [Required(ErrorMessage = "Poll type is required")]
-    public PollType PollType { get; set; }
+    [StringLength(1000, ErrorMessage = "Details cannot exceed 1000 characters")]
+    public string? Details { get; set; }
 
     /// <summary>
-    /// Poll duration in days (1-365)
+    /// Poll start date and time (UTC)
     /// </summary>
-    [Range(1, 365, ErrorMessage = "Duration must be between 1 and 365 days")]
-    public int DurationDays { get; set; } = 7;
+    [Required(ErrorMessage = "Start date is required")]
+    public DateTimeOffset StartsUtc { get; set; }
+
+    /// <summary>
+    /// Poll end date and time (UTC)
+    /// </summary>
+    [Required(ErrorMessage = "End date is required")]
+    public DateTimeOffset EndsUtc { get; set; }
 
     /// <summary>
     /// Answer options (2-10 options required)
@@ -97,6 +127,11 @@ public class CreatePollRequest
     [MinLength(2, ErrorMessage = "At least 2 options are required")]
     [MaxLength(10, ErrorMessage = "Maximum 10 options allowed")]
     public List<string> Options { get; set; } = new();
+
+    /// <summary>
+    /// Whether poll is anonymous (default: true)
+    /// </summary>
+    public bool IsAnonymous { get; set; } = true;
 }
 
 /// <summary>
@@ -111,13 +146,25 @@ public class UpdatePollRequest
     public string? Title { get; set; }
 
     /// <summary>
+    /// Updated description/details (max 1000 characters, optional)
+    /// </summary>
+    [StringLength(1000, ErrorMessage = "Details cannot exceed 1000 characters")]
+    public string? Details { get; set; }
+
+    /// <summary>
+    /// New start date and time (UTC, optional)
+    /// </summary>
+    public DateTimeOffset? StartsUtc { get; set; }
+
+    /// <summary>
     /// New end date and time (UTC, optional)
     /// </summary>
-    /// <remarks>
-    /// Must be in the future and cannot be shortened if poll has votes
-    /// </remarks>
-    [JsonPropertyName("ends")]
     public DateTimeOffset? EndsUtc { get; set; }
+
+    /// <summary>
+    /// Whether poll is anonymous. Changing from anonymous to public resets all votes.
+    /// </summary>
+    public bool? IsAnonymous { get; set; }
 }
 
 /// <summary>
@@ -138,7 +185,56 @@ public class VoteRequest
 public class PollsQuery : PagingQuery
 {
     /// <summary>
-    /// Only get active polls
+    /// Filter by status: "pending", "active", "closed", or omit for all
     /// </summary>
-    public bool OnlyActive { get; set; }
+    /// <example>active</example>
+    public string? Status { get; set; }
+
+    /// <summary>
+    /// Search polls by title and details (case-insensitive substring match)
+    /// </summary>
+    /// <example>game</example>
+    public string? Search { get; set; }
+
+    /// <summary>
+    /// Filter by minimum start date (ISO 8601, inclusive)
+    /// </summary>
+    /// <example>2024-01-01T00:00:00Z</example>
+    public DateTimeOffset? StartsFrom { get; set; }
+
+    /// <summary>
+    /// Filter by maximum start date (ISO 8601, inclusive)
+    /// </summary>
+    /// <example>2024-12-31T23:59:59Z</example>
+    public DateTimeOffset? StartsTo { get; set; }
+
+    /// <summary>
+    /// Filter by minimum end date (ISO 8601, inclusive)
+    /// </summary>
+    /// <example>2024-01-01T00:00:00Z</example>
+    public DateTimeOffset? EndsFrom { get; set; }
+
+    /// <summary>
+    /// Filter by maximum end date (ISO 8601, inclusive)
+    /// </summary>
+    /// <example>2024-12-31T23:59:59Z</example>
+    public DateTimeOffset? EndsTo { get; set; }
+
+    /// <summary>
+    /// Sort field: "status" (default), "starts", "ends"
+    /// </summary>
+    /// <example>status</example>
+    public string SortBy { get; set; } = "status";
+
+    /// <summary>
+    /// Sort direction: "asc" (default) or "desc"
+    /// </summary>
+    /// <example>asc</example>
+    public string SortOrder { get; set; } = "asc";
+
+    /// <summary>
+    /// Filter by poll type: true for anonymous, false for public, null for all
+    /// </summary>
+    /// <example>true</example>
+    public bool? IsAnonymous { get; set; }
 }

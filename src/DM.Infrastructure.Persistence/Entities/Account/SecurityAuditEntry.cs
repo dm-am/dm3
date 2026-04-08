@@ -29,7 +29,7 @@ public class SecurityAuditEntry
     /// When the event occurred (UTC)
     /// </summary>
     [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
-    public DateTime Timestamp { get; set; }
+    public DateTime TimestampUtc { get; set; }
 
     /// <summary>
     /// IP address of the client

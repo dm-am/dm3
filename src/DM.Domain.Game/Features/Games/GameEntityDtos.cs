@@ -15,9 +15,9 @@ public class CreateGameEntity
     public Guid GameId { get; set; }
 
     /// <summary>
-    /// Author (master) user identifier
+    /// Game master user identifier
     /// </summary>
-    public Guid AuthorId { get; set; }
+    public Guid MasterId { get; set; }
 
     /// <summary>
     /// Game title
@@ -45,9 +45,14 @@ public class CreateGameEntity
     public ModuleStatus Status { get; set; }
 
     /// <summary>
-    /// Release date (null for drafts)
+    /// Visibility of draft content (when Status = Draft)
     /// </summary>
-    public DateTimeOffset? ReleaseDate { get; set; }
+    public DraftVisibility DraftVisibility { get; set; }
+
+    /// <summary>
+    /// Activation date (null for drafts, UTC)
+    /// </summary>
+    public DateTimeOffset? ActivatedUtc { get; set; }
 
     /// <summary>
     /// Only GM and character author can see character temper
@@ -108,6 +113,11 @@ public class CreateGameEntity
     /// Recruitment start timestamp (null for drafts)
     /// </summary>
     public DateTimeOffset? RecruitmentStartedUtc { get; set; }
+
+    /// <summary>
+    /// Number of times recruitment has been opened (1 for first activation)
+    /// </summary>
+    public int RecruitmentCount { get; set; }
 
     /// <summary>
     /// Game tag identifiers
@@ -192,14 +202,14 @@ public class UpdateGameEntity
     public PremoderationStatus? PremoderationStatus { get; set; }
 
     /// <summary>
-    /// Game was completed successfully (if changed)
+    /// Reason why the game was closed (if changed)
     /// </summary>
-    public bool? IsFinished { get; set; }
+    public ClosedReason? ClosedReason { get; set; }
 
     /// <summary>
-    /// Game was frozen due to inactivity (if changed)
+    /// Visibility of draft content (if changed)
     /// </summary>
-    public bool? IsFrozen { get; set; }
+    public DraftVisibility? DraftVisibility { get; set; }
 
     /// <summary>
     /// Recruitment is open for new players (if changed)
@@ -207,9 +217,14 @@ public class UpdateGameEntity
     public bool? IsRecruitmentOpen { get; set; }
 
     /// <summary>
-    /// Maximum number of players allowed (if changed)
+    /// Increment recruitment count (when reopening recruitment)
     /// </summary>
-    public int? RecruitmentPlayerLimit { get; set; }
+    public bool IncrementRecruitmentCount { get; set; }
+
+    /// <summary>
+    /// Maximum number of player characters allowed (if changed)
+    /// </summary>
+    public int? RecruitmentPcLimit { get; set; }
 
     /// <summary>
     /// Game title (if changed)
@@ -285,6 +300,21 @@ public class UpdateGameEntity
     /// Update timestamp
     /// </summary>
     public DateTimeOffset UpdatedUtc { get; set; }
+
+    /// <summary>
+    /// Activation timestamp (set on first activation)
+    /// </summary>
+    public DateTimeOffset? ActivatedUtc { get; set; }
+
+    /// <summary>
+    /// Closed timestamp (set when closing)
+    /// </summary>
+    public DateTimeOffset? ClosedUtc { get; set; }
+
+    /// <summary>
+    /// Whether to clear ClosedUtc (when reopening)
+    /// </summary>
+    public bool ClearClosedUtc { get; set; }
 }
 
 /// <summary>
@@ -338,6 +368,16 @@ public class UpdateRoomEntity
     public bool? DiceEnabled { get; set; }
 
     /// <summary>
+    /// Linked chat identifier (for RoomType.Chat rooms)
+    /// </summary>
+    public Guid? ChatId { get; set; }
+
+    /// <summary>
+    /// Whether ChatId should be set
+    /// </summary>
+    public bool ShouldSetChatId { get; set; }
+
+    /// <summary>
     /// Soft delete flag (if changed)
     /// </summary>
     public bool? IsRemoved { get; set; }
@@ -369,19 +409,14 @@ public class CreatePostEntity
     public Guid? CharacterId { get; set; }
 
     /// <summary>
-    /// Post text
+    /// Game text (in-character content)
     /// </summary>
-    public string Text { get; set; } = null!;
+    public string GameText { get; set; } = null!;
 
     /// <summary>
-    /// Comment text
+    /// Metagame text (OOC commentary)
     /// </summary>
-    public string? Comment { get; set; }
-
-    /// <summary>
-    /// Master message
-    /// </summary>
-    public string? MasterMessage { get; set; }
+    public string? MetagameText { get; set; }
 
     /// <summary>
     /// Creation timestamp
@@ -410,24 +445,14 @@ public class UpdatePostEntity
     public bool ShouldChangeCharacter { get; set; }
 
     /// <summary>
-    /// Post text
+    /// Game text (in-character content)
     /// </summary>
-    public string Text { get; set; } = null!;
+    public string GameText { get; set; } = null!;
 
     /// <summary>
-    /// Comment text
+    /// Metagame text (OOC commentary)
     /// </summary>
-    public string? Comment { get; set; }
-
-    /// <summary>
-    /// Master message
-    /// </summary>
-    public string? MasterMessage { get; set; }
-
-    /// <summary>
-    /// Modified timestamp
-    /// </summary>
-    public DateTimeOffset ModifiedUtc { get; set; }
+    public string? MetagameText { get; set; }
 
     /// <summary>
     /// Soft delete flag (if changed)
@@ -631,11 +656,6 @@ public class UpdateCharacterEntity
     /// Character attributes (if changed)
     /// </summary>
     public IEnumerable<CharacterAttributeInput>? Attributes { get; set; }
-
-    /// <summary>
-    /// Modified timestamp
-    /// </summary>
-    public DateTimeOffset ModifiedUtc { get; set; }
 }
 
 /// <summary>
@@ -965,90 +985,6 @@ public class GameReviewFilter
 }
 
 /// <summary>
-/// Entity DTO for creating a post review (repository level)
-/// </summary>
-public class CreatePostReviewEntity
-{
-    /// <summary>
-    /// Review identifier
-    /// </summary>
-    public Guid ReviewId { get; set; }
-
-    /// <summary>
-    /// Author user identifier
-    /// </summary>
-    public Guid UserId { get; set; }
-
-    /// <summary>
-    /// Target post identifier
-    /// </summary>
-    public Guid PostId { get; set; }
-
-    /// <summary>
-    /// Post author identifier (for denormalization)
-    /// </summary>
-    public Guid PostAuthorId { get; set; }
-
-    /// <summary>
-    /// Game identifier (for cooldown check)
-    /// </summary>
-    public Guid GameId { get; set; }
-
-    /// <summary>
-    /// Creation timestamp
-    /// </summary>
-    public DateTimeOffset CreatedUtc { get; set; }
-
-    /// <summary>
-    /// Review sentiment sign
-    /// </summary>
-    public ReviewSign Sign { get; set; }
-
-    /// <summary>
-    /// Optional reason type
-    /// </summary>
-    public ReviewReasonType? ReasonType { get; set; }
-}
-
-/// <summary>
-/// Entity DTO for updating a post review (repository level)
-/// </summary>
-/// <param name="ReviewId">Review identifier</param>
-/// <param name="Sign">Updated sign (null to keep current)</param>
-/// <param name="ReasonType">Updated reason type (null to keep current)</param>
-/// <param name="IsRemoved">Updated removed status (null to keep current)</param>
-/// <param name="ModifiedUtc">Modification timestamp</param>
-/// <param name="ModifiedByUserId">User who modified the review</param>
-public record UpdatePostReviewEntity(
-    Guid ReviewId,
-    ReviewSign? Sign = null,
-    ReviewReasonType? ReasonType = null,
-    bool? IsRemoved = null,
-    DateTimeOffset? ModifiedUtc = null,
-    Guid? ModifiedByUserId = null);
-
-/// <summary>
-/// Filter parameters for post reviews queries
-/// </summary>
-public class PostReviewFilter
-{
-    /// <summary>
-    /// Filter by review author ID (reviews BY this user)
-    /// </summary>
-    public Guid? AuthorId { get; set; }
-
-    /// <summary>
-    /// Filter by post author ID (reviews ON this user's posts)
-    /// </summary>
-    public Guid? RecipientId { get; set; }
-
-    /// <summary>
-    /// Filter by game ID (reviews on posts in this game)
-    /// </summary>
-    public Guid? GameId { get; set; }
-}
-
-/// <summary>
 /// Post information for review creation
 /// </summary>
 public class PostInfo
@@ -1063,6 +999,67 @@ public class PostInfo
     /// </summary>
     public Guid GameId { get; set; }
 }
+
+/// <summary>
+/// Entity DTO for creating a post review (repository level)
+/// </summary>
+public class CreatePostReviewEntity
+{
+    /// <summary>
+    /// Review identifier
+    /// </summary>
+    public Guid PostReviewId { get; set; }
+
+    /// <summary>
+    /// Author user identifier
+    /// </summary>
+    public Guid AuthorId { get; set; }
+
+    /// <summary>
+    /// Target post identifier
+    /// </summary>
+    public Guid PostId { get; set; }
+
+    /// <summary>
+    /// Post author identifier (denormalized for efficient filtering)
+    /// </summary>
+    public Guid PostAuthorId { get; set; }
+
+    /// <summary>
+    /// Game identifier (denormalized for efficient filtering)
+    /// </summary>
+    public Guid GameId { get; set; }
+
+    /// <summary>
+    /// Creation timestamp (UTC)
+    /// </summary>
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    /// <summary>
+    /// Review sentiment sign (+1, 0, -1)
+    /// </summary>
+    public ReviewSign Sign { get; set; }
+
+    /// <summary>
+    /// Review text (BBCode supported)
+    /// </summary>
+    public string Text { get; set; } = null!;
+}
+
+/// <summary>
+/// Entity DTO for updating a post review (repository level)
+/// </summary>
+/// <param name="PostReviewId">Review identifier</param>
+/// <param name="Sign">Updated sign (null to keep current)</param>
+/// <param name="IsRemoved">Updated removed status (null to keep current)</param>
+/// <param name="ModifiedUtc">Modification timestamp</param>
+/// <param name="ModifiedByUserId">User who modified the review</param>
+public record UpdatePostReviewEntity(
+    Guid PostReviewId,
+    ReviewSign? Sign = null,
+    bool? IsRemoved = null,
+    DateTimeOffset? ModifiedUtc = null,
+    Guid? ModifiedByUserId = null);
 
 /// <summary>
 /// DTO for creating an attribute schema

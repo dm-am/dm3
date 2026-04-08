@@ -14,6 +14,7 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Users;
 using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Events;
+using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 
 namespace DM.Domain.Blog.Features.Invitations;
 
@@ -58,7 +59,7 @@ internal class BlogInvitationService : IBlogInvitationService
     /// <inheritdoc />
     public async Task<BlogInvitation> InviteAssistant(Guid blogId, string username)
     {
-        var blog = await _blogService.GetBlog(blogId);
+        var blog = await _blogService.GetBlogAsync(blogId);
         _intentionManager.ThrowIfForbidden(BlogIntention.InviteAssistant, blog);
 
         var user = await _userLookupService.GetAsync(username);
@@ -72,7 +73,7 @@ internal class BlogInvitationService : IBlogInvitationService
     /// <inheritdoc />
     public async Task<BlogInvitation> InviteReader(Guid blogId, string username)
     {
-        var blog = await _blogService.GetBlog(blogId);
+        var blog = await _blogService.GetBlogAsync(blogId);
         _intentionManager.ThrowIfForbidden(BlogIntention.InviteReader, blog);
 
         var user = await _userLookupService.GetAsync(username);
@@ -83,7 +84,7 @@ internal class BlogInvitationService : IBlogInvitationService
         return await CreateInvitation(blogId, userId, username, TokenType.BlogReaderInvitation);
     }
 
-    private async Task ValidateInvitation(BlogModel blog, Guid userId)
+    private async Task ValidateInvitation(BlogDto blog, Guid userId)
     {
         // Check content blacklist
         if (blog.BlacklistedUserIds.Contains(userId))
@@ -120,7 +121,7 @@ internal class BlogInvitationService : IBlogInvitationService
         await _eventProducer.SendAsync(EventType.BlogInvitationCreated, tokenId);
 
         var currentUser = _identityProvider.Current.User;
-        var blog = await _blogService.GetBlog(blogId);
+        var blog = await _blogService.GetBlogAsync(blogId);
         return new BlogInvitation
         {
             TokenId = tokenId,
@@ -197,7 +198,7 @@ internal class BlogInvitationService : IBlogInvitationService
             throw new HttpException(HttpStatusCode.NotFound, "Invitation not found");
         }
 
-        var blog = await _blogService.GetBlog(invitation.BlogId);
+        var blog = await _blogService.GetBlogAsync(invitation.BlogId);
         _intentionManager.ThrowIfForbidden(BlogIntention.CancelInvitation, blog);
 
         await _repository.Invalidate(tokenId);
@@ -208,7 +209,7 @@ internal class BlogInvitationService : IBlogInvitationService
     /// <inheritdoc />
     public async Task<IEnumerable<BlogInvitation>> GetPendingInvitations(Guid blogId)
     {
-        var blog = await _blogService.GetBlog(blogId);
+        var blog = await _blogService.GetBlogAsync(blogId);
         _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
 
         return await _repository.GetPendingInvitations(blogId);

@@ -3,7 +3,7 @@ import { ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { AccountApi } from "@/shared/api";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
 import StatusIcon from "@/shared/ui/Icon/StatusIcon.vue";
 import { parseApiErrors } from "@/shared/lib/utils/apiErrors";
@@ -30,7 +30,9 @@ onMounted(async () => {
       if (errorMessages.length > 0) {
         throw new Error(errorMessages[0]);
       }
-      throw new Error("Не удалось подтвердить смену почты. Ссылка недействительна или устарела.");
+      throw new Error(
+        "Не удалось подтвердить смену почты. Ссылка недействительна или устарела.",
+      );
     }
 
     confirmed.value = true;
@@ -56,7 +58,7 @@ function goHome() {
         <lightbox-title>Почта изменена</lightbox-title>
         <p class="status-description">Ваша почта успешно обновлена.</p>
         <div class="status-actions">
-          <the-button @click="goHome">На главную</the-button>
+          <Button @click="goHome">На главную</Button>
         </div>
       </template>
 
@@ -64,14 +66,17 @@ function goHome() {
       <template v-else>
         <status-icon type="error" />
         <lightbox-title>Ошибка подтверждения</lightbox-title>
-        <p class="status-description error-text">{{ error || "Ссылка недействительна или устарела." }}</p>
+        <p class="status-description error-text">
+          {{ error || "Ссылка недействительна или устарела." }}
+        </p>
         <div class="status-actions">
-          <the-button @click="goHome">На главную</the-button>
+          <Button @click="goHome">На главную</Button>
         </div>
       </template>
 
       <div class="help-section">
-        Нужна помощь? Обратитесь в <a href="/support?reason=access">поддержку</a>
+        Нужна помощь? Обратитесь в
+        <a href="/support?reason=access">поддержку</a>
       </div>
     </div>
   </div>
@@ -112,7 +117,7 @@ function goHome() {
 .status-actions
   margin-top: $big
 
-  :deep(.the-button)
+  :deep(.button)
     min-width: 200px
 
 .help-section

@@ -9,7 +9,7 @@ using DM.Domain.Game.Features.Subscriptions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Extensions;
-using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.Dto;
 using DomainGameUser = DM.Domain.Game.Features.Games.GameUser;
 
 namespace DM.Web.API.Features.Game.Users;
@@ -92,7 +92,7 @@ internal class GameUserApiService : IGameUserApiService
     public async Task<IEnumerable<GameUser>> GetReaders(Guid gameId)
     {
         await _gameService.GetAsync(gameId); // Validate game exists
-        var subscribers = await _subscriptionService.GetReadersAsync(gameId);
+        var subscribers = await _subscriptionService.GetSubscribersAsync(gameId);
         return subscribers.Select(u => MapUserToGameUser(u, GameRole.Reader));
     }
 
@@ -101,7 +101,7 @@ internal class GameUserApiService : IGameUserApiService
     {
         await _subscriptionService.SubscribeAsync(gameId);
         var currentUserId = _identityProvider.Current.User.UserId;
-        var subscribers = await _subscriptionService.GetReadersAsync(gameId);
+        var subscribers = await _subscriptionService.GetSubscribersAsync(gameId);
         var currentUser = subscribers.First(s => s.UserId == currentUserId);
         return MapUserToGameUser(currentUser, GameRole.Reader);
     }
@@ -123,10 +123,11 @@ internal class GameUserApiService : IGameUserApiService
     {
         return new GameUser
         {
-            User = new User
+            User = new UserRef
             {
                 Id = user.User.UserId,
-                Username = user.User.Username
+                Username = user.User.Username,
+                LastActivityUtc = user.User.LastActivityUtc
             },
             Role = user.Role.ToApiString(),
             JoinedUtc = user.JoinedUtc,
@@ -140,10 +141,11 @@ internal class GameUserApiService : IGameUserApiService
     {
         return new GameUser
         {
-            User = new User
+            User = new UserRef
             {
                 Id = user.UserId,
-                Username = user.Username
+                Username = user.Username,
+                LastActivityUtc = user.LastActivityUtc
             },
             Role = role.ToApiString(),
             JoinedUtc = DateTimeOffset.MinValue // Not available from GeneralUser

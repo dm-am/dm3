@@ -11,13 +11,13 @@ public interface ISymmetricCryptoService
     /// Encrypts value for storage
     /// </summary>
     /// <param name="valueToEncrypt">Given value</param>
-    /// <returns></returns>
+    /// <returns>Encrypted value</returns>
     Task<string> Encrypt(string valueToEncrypt);
 
     /// <summary>
     /// Decrypts stored value
     /// </summary>
     /// <param name="valueToDecrypt">Stored value</param>
-    /// <returns></returns>
+    /// <returns>Decrypted value</returns>
     Task<string> Decrypt(string valueToDecrypt);
 }

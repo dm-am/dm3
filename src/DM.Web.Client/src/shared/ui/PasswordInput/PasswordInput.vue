@@ -4,7 +4,9 @@
       ref="inputRef"
       :type="visible ? 'text' : 'password'"
       :value="modelValue"
-      @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
+      @input="
+        $emit('update:modelValue', ($event.target as HTMLInputElement).value)
+      "
       @blur="$emit('blur', $event)"
       v-bind="$attrs"
     />

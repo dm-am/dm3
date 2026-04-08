@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 
-import { GeneralMenu } from "@/widgets/menu";
-import { GeneralSidebar } from "@/widgets/sidebar";
+import { LeftSidebar, RightSidebar } from "@/widgets/sidebar";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -10,41 +9,44 @@ const router = createRouter({
       path: "/",
       name: "home",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/home/HomePage.vue"),
       },
     },
     {
       name: "about",
-      path: "/about/:n?",
+      path: "/about",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/about/AboutPage.vue"),
       },
     },
     {
+      name: "testimonials",
+      path: "/testimonials",
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/about/TestimonialsPage.vue"),
+      },
+    },
+    {
+      name: "polls",
       path: "/polls",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/community/PollsPage.vue"),
       },
-      children: [
-        {
-          name: "polls",
-          path: ":n?",
-          component: () => import("@/pages/community/PollsList.vue"),
-        },
-      ],
     },
     {
       name: "rules",
       path: "/rules",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/rules/RulesPage.vue"),
       },
     },
@@ -52,22 +54,22 @@ const router = createRouter({
       name: "globalChat",
       path: "/chat",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/global-chat/GlobalChatPage.vue"),
       },
     },
     {
       path: "/messenger",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/messenger/MessengerPage.vue"),
       },
       children: [
         {
           name: "messenger",
-          path: ":n?",
+          path: "",
           component: () => import("@/pages/messenger/ChatsList.vue"),
         },
         {
@@ -87,8 +89,8 @@ const router = createRouter({
       path: "/notifications",
       meta: { requiresAuth: true },
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/personal/NotificationsPage.vue"),
       },
     },
@@ -97,8 +99,8 @@ const router = createRouter({
       path: "/subscriptions",
       meta: { requiresAuth: true },
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/personal/SubscriptionsPage.vue"),
       },
     },
@@ -107,144 +109,72 @@ const router = createRouter({
       path: "/notepad",
       meta: { requiresAuth: true },
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/personal/NotepadPage.vue"),
       },
     },
     {
-      name: "donate",
-      path: "/donate",
-      redirect: "/",
-    },
-
-    {
+      name: "community",
       path: "/community",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/community/CommunityPage.vue"),
       },
-      children: [
-        {
-          name: "community",
-          path: ":n?",
-          meta: { filter: "Active" },
-          component: () => import("@/pages/community/UsersList.vue"),
-        },
-        {
-          name: "community-all",
-          path: "all/:n?",
-          meta: { filter: "All" },
-          component: () => import("@/pages/community/UsersList.vue"),
-        },
-        {
-          name: "community-pending",
-          path: "pending/:n?",
-          meta: { filter: "Pending" },
-          component: () => import("@/pages/community/UsersList.vue"),
-        },
-      ],
-    },
-    {
-      path: "/Azur",
-      name: "azur-profile",
-      beforeEnter() {
-        window.location.href = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
-        return false;
-      },
-      redirect: "/",
     },
     {
       name: "profile",
       path: "/users/:username",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/profile/ProfilePage.vue"),
       },
     },
-    // Old profile sub-routes redirect to main profile
-    {
-      path: "/users/:username/games",
-      redirect: (to) => ({ name: "profile", params: { username: to.params.username } }),
-    },
-    {
-      path: "/users/:username/characters",
-      redirect: (to) => ({ name: "profile", params: { username: to.params.username } }),
-    },
 
     {
-      path: "/forum/:id",
+      path: "/forum/:alias",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/forum/ForumPage.vue"),
       },
       children: [
         {
           name: "forum",
-          path: ":n?",
+          path: "",
           component: () => import("@/pages/forum/TopicsList.vue"),
         },
-      ],
-    },
-    {
-      path: "/topic/:id",
-      components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
-        page: () => import("@/pages/forum/TopicPage.vue"),
-      },
-      children: [
         {
-          name: "topic",
-          path: ":n?",
-          component: () => import("@/pages/forum/CommentsList.vue"),
+          path: ":num",
+          component: () => import("@/pages/forum/TopicPage.vue"),
+          children: [
+            {
+              name: "topic",
+              path: "",
+              component: () => import("@/pages/forum/CommentsList.vue"),
+            },
+          ],
         },
       ],
     },
 
     {
+      name: "games",
       path: "/games",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/game/GamesPage.vue"),
       },
-      children: [
-        {
-          name: "games-active",
-          path: "",
-          meta: { status: "active" },
-          component: () => import("@/pages/game/GamesList.vue"),
-        },
-        {
-          name: "games-recruiting",
-          path: "recruiting",
-          meta: { status: "recruiting" },
-          component: () => import("@/pages/game/GamesList.vue"),
-        },
-        {
-          name: "games-finished",
-          path: "finished",
-          meta: { status: "finished" },
-          component: () => import("@/pages/game/GamesList.vue"),
-        },
-        {
-          name: "games-moderation",
-          path: "moderation",
-          meta: { status: "moderation" },
-          component: () => import("@/pages/game/GamesList.vue"),
-        },
-      ],
     },
     {
       name: "blogs",
       path: "/blogs",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/blog/BlogsPage.vue"),
       },
     },
@@ -252,8 +182,8 @@ const router = createRouter({
       name: "forum-index",
       path: "/forum",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/forum/ForumIndexPage.vue"),
       },
     },
@@ -261,8 +191,8 @@ const router = createRouter({
       path: "/moderation",
       meta: { requiresAuth: true },
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/moderation/ModerationPage.vue"),
       },
       children: [
@@ -274,7 +204,13 @@ const router = createRouter({
         {
           name: "moderation-username-changes",
           path: "username-changes",
-          component: () => import("@/pages/moderation/ModerationUsernameChanges.vue"),
+          component: () =>
+            import("@/pages/moderation/ModerationUsernameChanges.vue"),
+        },
+        {
+          name: "moderation-tags",
+          path: "tags",
+          component: () => import("@/pages/moderation/ModerationTags.vue"),
         },
       ],
     },
@@ -282,16 +218,16 @@ const router = createRouter({
       name: "create-game",
       path: "/create-game",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/features/create-game/ui/CreateGamePage.vue"),
       },
     },
     {
       path: "/game/:id",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/game/GamePage.vue"),
       },
       children: [
@@ -307,7 +243,7 @@ const router = createRouter({
         },
         {
           name: "game-room",
-          path: "rooms/:roomId/:n?",
+          path: "rooms/:num",
           component: () => import("@/pages/game/GameRoom.vue"),
         },
         {
@@ -317,8 +253,18 @@ const router = createRouter({
         },
         {
           name: "game-comments",
-          path: "comments/:n?",
+          path: "comments",
           component: () => import("@/pages/game/GameComments.vue"),
+        },
+        {
+          name: "game-reviews",
+          path: "reviews",
+          component: () => import("@/pages/game/GameReviews.vue"),
+        },
+        {
+          name: "game-post-reviews",
+          path: "post-reviews",
+          component: () => import("@/pages/game/GamePostReviews.vue"),
         },
       ],
     },
@@ -326,8 +272,8 @@ const router = createRouter({
       name: "game-first-unread-post",
       path: "/game/:id/posts/unread",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/game/GameFirstUnreadPost.vue"),
       },
     },
@@ -335,8 +281,8 @@ const router = createRouter({
       name: "game-first-unread-comment",
       path: "/game/:id/comments/unread",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/game/GameFirstUnreadComment.vue"),
       },
     },
@@ -353,8 +299,8 @@ const router = createRouter({
       name: "auth-transfer",
       path: "/auth/transfer",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/account/TransferPage.vue"),
       },
     },
@@ -363,8 +309,8 @@ const router = createRouter({
       path: "/account",
       meta: { requiresAuth: true },
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/account/AccountPage.vue"),
       },
     },
@@ -372,8 +318,8 @@ const router = createRouter({
       name: "activation",
       path: "/activate/:token",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/account/AccountActivationPage.vue"),
       },
     },
@@ -381,8 +327,8 @@ const router = createRouter({
       name: "confirm-email",
       path: "/confirm-email/:token",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/account/EmailChangePage.vue"),
       },
     },
@@ -390,8 +336,8 @@ const router = createRouter({
       name: "reset-password",
       path: "/reset-password/:token",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/account/PasswordResetPage.vue"),
       },
     },
@@ -400,9 +346,63 @@ const router = createRouter({
       name: "theme-colors",
       path: "/dev/theme-colors",
       components: {
-        menu: GeneralMenu,
-        sidebar: GeneralSidebar,
+        left: LeftSidebar,
+        right: RightSidebar,
         page: () => import("@/pages/dev/ThemeColorsPage.vue"),
+      },
+    },
+    {
+      name: "support",
+      path: "/support",
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/support/SupportPage.vue"),
+      },
+    },
+    {
+      name: "complaint",
+      path: "/complaint",
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/support/ComplaintPage.vue"),
+      },
+    },
+    {
+      name: "pulse",
+      path: "/pulse",
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/pulse/PulsePage.vue"),
+      },
+    },
+    {
+      name: "warnings",
+      path: "/warnings",
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/warnings/WarningsPage.vue"),
+      },
+    },
+    {
+      name: "privacy-policy",
+      path: "/privacy",
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/legal/PrivacyPolicyPage.vue"),
+      },
+    },
+    {
+      name: "user-agreement",
+      path: "/agreement",
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/legal/UserAgreementPage.vue"),
       },
     },
   ],

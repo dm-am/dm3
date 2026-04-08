@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Blog.Features.Blogs;
 
@@ -16,33 +17,82 @@ public interface IBlogRepository
     /// <summary>
     /// Count public blogs
     /// </summary>
+    /// <param name="search">Optional text search by title (fuzzy matching)</param>
+    /// <param name="status">Optional status filter</param>
+    /// <param name="hostUserIds">Optional host user IDs (owner or assistant, OR logic)</param>
+    /// <param name="createdFromUtc">Created date range start</param>
+    /// <param name="createdToUtc">Created date range end</param>
+    /// <param name="activatedFromUtc">Activated date range start</param>
+    /// <param name="activatedToUtc">Activated date range end</param>
+    /// <param name="closedFromUtc">Closed date range start</param>
+    /// <param name="closedToUtc">Closed date range end</param>
     /// <param name="excludeOwnerIds">Optional owner IDs to exclude (for blacklist filtering)</param>
     /// <param name="ct">Cancellation token</param>
-    Task<int> CountPublicBlogs(IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default);
+    Task<int> CountPublicBlogs(
+        string? search = null,
+        ModuleStatus? status = null,
+        IReadOnlyCollection<Guid>? hostUserIds = null,
+        DateTimeOffset? createdFromUtc = null,
+        DateTimeOffset? createdToUtc = null,
+        DateTimeOffset? activatedFromUtc = null,
+        DateTimeOffset? activatedToUtc = null,
+        DateTimeOffset? closedFromUtc = null,
+        DateTimeOffset? closedToUtc = null,
+        IReadOnlyCollection<Guid>? excludeOwnerIds = null,
+        CancellationToken ct = default);
 
     /// <summary>
     /// Get public blogs with paging
     /// </summary>
     /// <param name="paging">Paging data</param>
+    /// <param name="search">Optional text search by title (fuzzy matching)</param>
+    /// <param name="status">Optional status filter</param>
+    /// <param name="hostUserIds">Optional host user IDs (owner or assistant, OR logic)</param>
+    /// <param name="sortBy">Sort field: title, status, popularity, created (default), activated, closed</param>
+    /// <param name="sortOrder">Sort direction: asc or desc (default: desc)</param>
+    /// <param name="createdFromUtc">Created date range start</param>
+    /// <param name="createdToUtc">Created date range end</param>
+    /// <param name="activatedFromUtc">Activated date range start</param>
+    /// <param name="activatedToUtc">Activated date range end</param>
+    /// <param name="closedFromUtc">Closed date range start</param>
+    /// <param name="closedToUtc">Closed date range end</param>
     /// <param name="excludeOwnerIds">Optional owner IDs to exclude (for blacklist filtering)</param>
     /// <param name="ct">Cancellation token</param>
-    Task<IEnumerable<BlogModel>> GetPublicBlogs(
-        PagingData paging, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default);
+    Task<IEnumerable<Blog>> GetPublicBlogs(
+        PagingData paging,
+        string? search = null,
+        ModuleStatus? status = null,
+        IReadOnlyCollection<Guid>? hostUserIds = null,
+        string? sortBy = null,
+        string? sortOrder = null,
+        DateTimeOffset? createdFromUtc = null,
+        DateTimeOffset? createdToUtc = null,
+        DateTimeOffset? activatedFromUtc = null,
+        DateTimeOffset? activatedToUtc = null,
+        DateTimeOffset? closedFromUtc = null,
+        DateTimeOffset? closedToUtc = null,
+        IReadOnlyCollection<Guid>? excludeOwnerIds = null,
+        CancellationToken ct = default);
 
     /// <summary>
-    /// Get blogs by owner
+    /// Get blogs where user is owner or assistant
     /// </summary>
-    Task<IEnumerable<BlogModel>> GetUserBlogs(Guid userId, CancellationToken ct = default);
+    Task<IEnumerable<Blog>> GetUserBlogs(Guid userId, CancellationToken ct = default);
 
     /// <summary>
     /// Get blog by ID
     /// </summary>
-    Task<BlogModel?> Get(Guid blogId, CancellationToken ct = default);
+    Task<Blog?> Get(Guid blogId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get blog by public ID (5-letter URL identifier)
+    /// </summary>
+    Task<Blog?> GetByPublicId(string publicId, CancellationToken ct = default);
 
     /// <summary>
     /// Get blog by owner username (personal blog)
     /// </summary>
-    Task<BlogModel?> GetByOwnerUsername(string username, CancellationToken ct = default);
+    Task<Blog?> GetByOwnerUsernameAsync(string username, CancellationToken ct = default);
 
     /// <summary>
     /// Count publications for a blog
@@ -76,7 +126,7 @@ public interface IBlogRepository
     /// <param name="count">Number of blogs to return</param>
     /// <param name="excludeOwnerIds">Optional owner IDs to exclude (for blacklist filtering)</param>
     /// <param name="ct">Cancellation token</param>
-    Task<IEnumerable<BlogModel>> GetPopularBlogs(
+    Task<IEnumerable<Blog>> GetPopularBlogs(
         int count, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default);
 
     /// <summary>
@@ -97,7 +147,12 @@ public interface IBlogRepository
     /// <summary>
     /// Get blogs by IDs
     /// </summary>
-    Task<IEnumerable<BlogModel>> GetByIds(IEnumerable<Guid> blogIds, CancellationToken ct = default);
+    Task<IEnumerable<Blog>> GetByIds(IEnumerable<Guid> blogIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get blogs where user is owner, mentor, or assistant
+    /// </summary>
+    Task<IEnumerable<Blog>> GetOwnBlogs(Guid userId, CancellationToken ct = default);
 
     // === WRITE ===
 
@@ -106,12 +161,12 @@ public interface IBlogRepository
     /// </summary>
     /// <param name="entity">Blog creation entity</param>
     /// <param name="ct">Cancellation token</param>
-    Task<BlogModel> CreateBlog(CreateBlogEntity entity, CancellationToken ct = default);
+    Task<Blog> CreateBlog(CreateBlogEntity entity, CancellationToken ct = default);
 
     /// <summary>
     /// Update blog
     /// </summary>
-    Task<BlogModel> UpdateBlog(UpdateBlogEntity entity, CancellationToken ct = default);
+    Task<Blog> UpdateBlog(UpdateBlogEntity entity, CancellationToken ct = default);
 
     /// <summary>
     /// Delete blog (soft delete)

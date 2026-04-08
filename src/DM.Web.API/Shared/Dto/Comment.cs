@@ -26,9 +26,9 @@ public class Comment
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Last update moment
+    /// Last modification moment
     /// </summary>
-    public DateTimeOffset? UpdatedUtc { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
     /// Text

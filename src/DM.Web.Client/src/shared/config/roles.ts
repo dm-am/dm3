@@ -13,10 +13,10 @@ export interface RoleInfo {
 
 export const ROLE_INFO: Record<UserRole, RoleInfo> = {
   [UserRole.Admin]: {
-    title: "Администратор",
-    nickname: "Тролль",
+    title: "Администраторы",
+    nickname: "Тролли",
     description:
-      "Определяет политику сайта, технические решения, является последней инстанцией.",
+      "Определяют политику сайта, технические решения, являются последней инстанцией.",
   },
   [UserRole.SeniorModerator]: {
     title: "Старшие модераторы",
@@ -45,6 +45,11 @@ export const ROLE_INFO: Record<UserRole, RoleInfo> = {
     title: "Гость",
     nickname: "",
     description: "Неавторизованный посетитель.",
+  },
+  [UserRole.System]: {
+    title: "Система",
+    nickname: "",
+    description: "Системный пользователь (робот-администратор).",
   },
 };
 

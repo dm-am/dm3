@@ -40,11 +40,7 @@ onMounted(loadSchemas);
 
     <div v-else class="schema-options">
       <label class="schema-option">
-        <input
-          type="radio"
-          :value="null"
-          v-model="model"
-        />
+        <input type="radio" :value="null" v-model="model" />
         <span class="option-label">Без системы атрибутов</span>
       </label>
       <label
@@ -52,11 +48,7 @@ onMounted(loadSchemas);
         :key="schema.id ?? index"
         class="schema-option"
       >
-        <input
-          type="radio"
-          :value="schema.id"
-          v-model="model"
-        />
+        <input type="radio" :value="schema.id" v-model="model" />
         <span class="option-label">{{ schema.title }}</span>
       </label>
     </div>

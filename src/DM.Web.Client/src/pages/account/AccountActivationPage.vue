@@ -5,7 +5,7 @@ import { useToast } from "@/shared/lib/composables/useToast";
 import { useUserStore } from "@/entities/user";
 import { AccountApi } from "@/shared/api";
 import type { User } from "@/shared/api/models/community";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 import { UsernameInput } from "@/shared/ui/UsernameInput";
 import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
 import StatusIcon from "@/shared/ui/Icon/StatusIcon.vue";
@@ -98,7 +98,9 @@ onUnmounted(() => {
 async function checkTokenStatus() {
   phase.value = "loading";
 
-  const { data, error: apiError } = await AccountApi.getActivationInfo(token.value);
+  const { data, error: apiError } = await AccountApi.getActivationInfo(
+    token.value,
+  );
 
   if (apiError) {
     // 404 - token not found
@@ -214,7 +216,10 @@ function goToRegister() {
 </script>
 
 <template>
-  <div class="activation-page" :class="{ 'activation-page--wide': phase === 'notFound' }">
+  <div
+    class="activation-page"
+    :class="{ 'activation-page--wide': phase === 'notFound' }"
+  >
     <div class="activation-card">
       <!-- Step 1: Username Selection -->
       <template v-if="phase === 'selectUsername'">
@@ -229,13 +234,13 @@ function goToRegister() {
 
           <p v-if="error" class="username-error">{{ error }}</p>
 
-          <the-button
+          <Button
             @click="proceedToConfirm"
             :disabled="!canProceed"
             class="submit-button"
           >
             Продолжить
-          </the-button>
+          </Button>
         </div>
       </template>
 
@@ -246,27 +251,34 @@ function goToRegister() {
         <div class="confirm-form">
           <div class="username-warning">
             <p><strong>Будьте внимательны</strong></p>
-            <p>Дальнейшая смена имени возможна только в исключительных случаях</p>
+            <p>
+              Дальнейшая смена имени возможна только в исключительных случаях
+            </p>
           </div>
 
           <div class="username-display">
             <div class="username-display__label">
               <span>Имя пользователя</span>
-              <a href="#" @click.prevent="goBackToSelect" :class="{ disabled: phase === 'submitting' }">Изменить</a>
+              <a
+                href="#"
+                @click.prevent="goBackToSelect"
+                :class="{ disabled: phase === 'submitting' }"
+                >Изменить</a
+              >
             </div>
             <div class="username-display__value">{{ username }}</div>
           </div>
 
           <p v-if="error" class="username-error">{{ error }}</p>
 
-          <the-button
+          <Button
             @click="submitActivation"
             :disabled="!canSubmit"
             :loading="phase === 'submitting'"
             class="submit-button"
           >
             Завершить регистрацию
-          </the-button>
+          </Button>
         </div>
       </template>
 
@@ -275,10 +287,11 @@ function goToRegister() {
         <status-icon type="success" />
         <lightbox-title>Регистрация завершена</lightbox-title>
         <p class="status-description">
-          Добро пожаловать, <strong>{{ activatedUser?.username }}</strong>!
+          Добро пожаловать, <strong>{{ activatedUser?.username }}</strong
+          >!
         </p>
         <div class="status-actions">
-          <the-button @click="goToProfile">Перейти в профиль</the-button>
+          <Button @click="goToProfile">Перейти в профиль</Button>
         </div>
       </template>
 
@@ -288,15 +301,18 @@ function goToRegister() {
         <lightbox-title>Токен регистрации устарел</lightbox-title>
 
         <div v-if="!resendSuccess" class="expired-action">
-          <p class="main-text">Отправить новую ссылку на <strong>{{ pendingEmail }}</strong>?</p>
+          <p class="main-text">
+            Отправить новую ссылку на <strong>{{ pendingEmail }}</strong
+            >?
+          </p>
           <p class="expiry-note">Ссылка действительна 48 часов</p>
-          <the-button @click="resend" :loading="resendLoading">
-            Отправить
-          </the-button>
+          <Button @click="resend" :loading="resendLoading"> Отправить </Button>
         </div>
 
         <div v-else class="expired-action">
-          <p class="main-text">Письмо отправлено на <strong>{{ pendingEmail }}</strong></p>
+          <p class="main-text">
+            Письмо отправлено на <strong>{{ pendingEmail }}</strong>
+          </p>
         </div>
       </template>
 
@@ -306,18 +322,28 @@ function goToRegister() {
         <lightbox-title>Токен регистрации недействителен</lightbox-title>
 
         <div class="error-info">
-          <p v-if="error"><strong>{{ error }}</strong></p>
+          <p v-if="error">
+            <strong>{{ error }}</strong>
+          </p>
           <p><strong>Возможные причины:</strong></p>
           <ul>
-            <li>Аккаунт уже активирован — попробуйте <a href="#" @click.prevent="goToLogin">войти</a></li>
+            <li>
+              Аккаунт уже активирован — попробуйте
+              <a href="#" @click.prevent="goToLogin">войти</a>
+            </li>
             <li>Был запрошен новый токен — проверьте последнее письмо</li>
-            <li>Регистрация устарела — <a href="#" @click.prevent="goToRegister">зарегистрируйтесь</a> заново</li>
+            <li>
+              Регистрация устарела —
+              <a href="#" @click.prevent="goToRegister">зарегистрируйтесь</a>
+              заново
+            </li>
           </ul>
         </div>
       </template>
 
       <div class="help-section">
-        Нужна помощь? Обратитесь в <a href="/support?reason=access">поддержку</a>
+        Нужна помощь? Обратитесь в
+        <a href="/support?reason=access">поддержку</a>
       </div>
     </div>
   </div>
@@ -499,7 +525,7 @@ function goToRegister() {
 .status-actions
   margin-top: $big
 
-  :deep(.the-button)
+  :deep(.button)
     min-width: 200px
 
 // Help section
@@ -516,6 +542,6 @@ function goToRegister() {
 // Mobile adjustments
 @media (max-width: 480px)
   .username-form
-    :deep(.the-button)
+    :deep(.button)
       width: 100%
 </style>

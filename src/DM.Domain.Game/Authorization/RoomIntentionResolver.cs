@@ -50,6 +50,13 @@ internal class RoomIntentionResolver :
     {
         RoomIntention.CreatePostPendency => target.Accesses.Any(a => a.Character?.Author.UserId == user.UserId) ||
                                             target.Game.GetRoles(user.UserId).HasEditAccess(),
+        // Chat room message permissions: master/assistant or users with Reader access
+        RoomIntention.ViewMessages or RoomIntention.SendMessage =>
+            target.Type == RoomType.Chat &&
+            (target.Game.GetRoles(user.UserId).HasEditAccess() ||
+             target.Accesses.Any(a =>
+                 a.TargetType == RoomAccessTargetType.Reader &&
+                 a.User?.UserId == user.UserId)),
         _ => false
     };
 

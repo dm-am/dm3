@@ -1,10 +1,11 @@
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
+using DM.Domain.Blog.Features.Comments;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Blog.Likes;
+using DM.Web.API.Features.Blog.Blogs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Comment = DM.Web.API.Shared.Dto.Comment;
@@ -16,7 +17,7 @@ namespace DM.Web.API.Features.Blog.Comments;
 /// Blog discussion comment management endpoints
 /// </summary>
 /// <remarks>
-/// Provides CRUD operations for comments on the blog itself (BlogModel discussion).
+/// Provides CRUD operations for comments on the blog itself (Blog discussion).
 /// These are comments directly on the blog, not on individual publications.
 ///
 /// ## Available Operations
@@ -40,38 +41,52 @@ public class BlogCommentController : ControllerBase
 {
     private readonly IBlogCommentApiService _commentApiService;
     private readonly IBlogLikeApiService _likeApiService;
+    private readonly IBlogApiService _blogApiService;
 
     /// <summary>
     /// Creates a new instance of BlogCommentController
     /// </summary>
     public BlogCommentController(
         IBlogCommentApiService commentApiService,
-        IBlogLikeApiService likeApiService)
+        IBlogLikeApiService likeApiService,
+        IBlogApiService blogApiService)
     {
         _commentApiService = commentApiService;
         _likeApiService = likeApiService;
+        _blogApiService = blogApiService;
     }
+
+    private async Task<Guid> ResolveBlogId(string id) =>
+        Guid.TryParse(id, out var guid) ? guid : (await _blogApiService.GetByPublicId(id)).Resource.Id;
 
     /// <summary>
     /// Get list of comments on blog
     /// </summary>
     /// <remarks>
-    /// Returns paginated list of comments on the blog itself (BlogModel discussion).
-    /// Comments are sorted by creation date (oldest first).
+    /// Returns paginated list of comments on the blog itself (Blog discussion).
+    /// Supports filtering by authors, text search, date range and sorting.
     ///
-    /// Example request:
-    ///     GET /v1/blogs/3fa85f64-5717-4562-b3fc-2c963f66afa6/comments?skip=0&amp;number=20
+    /// ## Query Parameters
+    /// - **skip**: Number of items to skip (pagination)
+    /// - **take**: Number of items to return (max 100, default 20)
+    /// - **search**: Text search in comment content (case-insensitive)
+    /// - **authors**: Filter by author usernames (comma-separated, OR logic)
+    /// - **createdFromUtc**: Filter by creation date start (ISO 8601)
+    /// - **createdToUtc**: Filter by creation date end (ISO 8601)
+    /// - **sortBy**: Sort field - "created" (default) or "likes"
+    /// - **sortOrder**: Sort direction - "asc" (default for created) or "desc"
     /// </remarks>
-    /// <param name="id">Blog identifier (GUID)</param>
-    /// <param name="q">Pagination parameters (skip, number)</param>
+    /// <param name="id">Blog public ID (5 letters) or GUID</param>
+    /// <param name="q">Query parameters with filtering, sorting and pagination</param>
     /// <response code="200">Paginated list of comments</response>
     /// <response code="404">Blog not found</response>
     [HttpGet("{id}/comments", Name = nameof(GetBlogComments))]
     [ProducesResponseType(typeof(ListEnvelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetBlogComments(Guid id, [FromQuery] PagingQuery q)
+    public async Task<IActionResult> GetBlogComments(string id, [FromQuery] BlogCommentsQuery q)
     {
-        var (comments, paging) = await _commentApiService.Get(id, q);
+        var blogId = await ResolveBlogId(id);
+        var (comments, paging) = await _commentApiService.Get(blogId, q);
         return Ok(new ListEnvelope<Comment>(comments, paging));
     }
 
@@ -83,12 +98,12 @@ public class BlogCommentController : ControllerBase
     /// Requires blog to have CommentsEnabled.
     ///
     /// Example request:
-    ///     POST /v1/blogs/3fa85f64-5717-4562-b3fc-2c963f66afa6/comments
+    ///     POST /v1/blogs/abcde/comments
     ///     {
     ///       "text": "Welcome to the blog!"
     ///     }
     /// </remarks>
-    /// <param name="id">Blog identifier (GUID)</param>
+    /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <param name="request">Comment creation request with text content</param>
     /// <response code="201">Comment created successfully</response>
     /// <response code="400">Invalid comment data (empty text, etc.)</response>
@@ -102,9 +117,10 @@ public class BlogCommentController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PostBlogComment(Guid id, [FromBody] CreateCommentRequest request)
+    public async Task<IActionResult> PostBlogComment(string id, [FromBody] CreateCommentRequest request)
     {
-        var result = await _commentApiService.Create(id, request);
+        var blogId = await ResolveBlogId(id);
+        var result = await _commentApiService.Create(blogId, request);
         return CreatedAtRoute(nameof(GetBlogComment), new { id = result.Resource.Id }, result);
     }
 
@@ -254,9 +270,9 @@ public class BlogCommentController : ControllerBase
     /// Useful for clearing unread counters.
     ///
     /// Example request:
-    ///     DELETE /v1/blogs/3fa85f64-5717-4562-b3fc-2c963f66afa6/comments/unread
+    ///     DELETE /v1/blogs/abcde/comments/unread
     /// </remarks>
-    /// <param name="id">Blog identifier (GUID)</param>
+    /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <response code="204">All comments marked as read</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="404">Blog not found</response>
@@ -265,9 +281,10 @@ public class BlogCommentController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> MarkBlogCommentsAsRead(Guid id)
+    public async Task<IActionResult> MarkBlogCommentsAsRead(string id)
     {
-        await _commentApiService.MarkAsRead(id);
+        var blogId = await ResolveBlogId(id);
+        await _commentApiService.MarkAsRead(blogId);
         return NoContent();
     }
 }

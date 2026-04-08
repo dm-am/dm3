@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
+using DM.Web.API.Features.Game.Games;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -21,17 +22,24 @@ namespace DM.Web.API.Features.Game.Invitations;
 public class GameInvitationController : ControllerBase
 {
     private readonly IGameInvitationApiService _invitationApiService;
+    private readonly IGameApiService _gameApiService;
 
     /// <inheritdoc />
-    public GameInvitationController(IGameInvitationApiService invitationApiService)
+    public GameInvitationController(
+        IGameInvitationApiService invitationApiService,
+        IGameApiService gameApiService)
     {
         _invitationApiService = invitationApiService;
+        _gameApiService = gameApiService;
     }
+
+    private async Task<Guid> ResolveGameId(string id) =>
+        Guid.TryParse(id, out var guid) ? guid : (await _gameApiService.GetByPublicId(id)).Resource.Id;
 
     /// <summary>
     /// Get all pending invitations for a game
     /// </summary>
-    /// <param name="id">Game ID</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <response code="200">List of invitations</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not game master or assistant</response>
@@ -42,16 +50,17 @@ public class GameInvitationController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetGameInvitations(Guid id)
+    public async Task<IActionResult> GetGameInvitations(string id)
     {
-        var invitations = await _invitationApiService.GetGameInvitations(id);
+        var gameId = await ResolveGameId(id);
+        var invitations = await _invitationApiService.GetGameInvitations(gameId);
         return Ok(new ListEnvelope<GameInvitation>(invitations));
     }
 
     /// <summary>
     /// Invite a player to the game
     /// </summary>
-    /// <param name="id">Game ID</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <param name="request">Invitation request with username</param>
     /// <response code="201">Invitation created</response>
     /// <response code="401">User must be authenticated</response>
@@ -63,16 +72,17 @@ public class GameInvitationController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> InvitePlayer(Guid id, [FromBody] CreateInvitationRequest request)
+    public async Task<IActionResult> InvitePlayer(string id, [FromBody] CreateInvitationRequest request)
     {
-        var invitation = await _invitationApiService.InvitePlayer(id, request.Username);
+        var gameId = await ResolveGameId(id);
+        var invitation = await _invitationApiService.InvitePlayer(gameId, request.Username);
         return CreatedAtRoute(nameof(GetGameInvitations), new { id }, invitation);
     }
 
     /// <summary>
     /// Invite a reader to the game
     /// </summary>
-    /// <param name="id">Game ID</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <param name="request">Invitation request with username</param>
     /// <response code="201">Invitation created</response>
     /// <response code="401">User must be authenticated</response>
@@ -84,16 +94,17 @@ public class GameInvitationController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> InviteReader(Guid id, [FromBody] CreateInvitationRequest request)
+    public async Task<IActionResult> InviteReader(string id, [FromBody] CreateInvitationRequest request)
     {
-        var invitation = await _invitationApiService.InviteReader(id, request.Username);
+        var gameId = await ResolveGameId(id);
+        var invitation = await _invitationApiService.InviteReader(gameId, request.Username);
         return CreatedAtRoute(nameof(GetGameInvitations), new { id }, invitation);
     }
 
     /// <summary>
     /// Invite an assistant to the game
     /// </summary>
-    /// <param name="id">Game ID</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <param name="request">Invitation request with username</param>
     /// <response code="201">Invitation created</response>
     /// <response code="401">User must be authenticated</response>
@@ -105,9 +116,10 @@ public class GameInvitationController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> InviteAssistant(Guid id, [FromBody] CreateInvitationRequest request)
+    public async Task<IActionResult> InviteAssistant(string id, [FromBody] CreateInvitationRequest request)
     {
-        var invitation = await _invitationApiService.InviteAssistant(id, request.Username);
+        var gameId = await ResolveGameId(id);
+        var invitation = await _invitationApiService.InviteAssistant(gameId, request.Username);
         return CreatedAtRoute(nameof(GetGameInvitations), new { id }, invitation);
     }
 
@@ -117,7 +129,7 @@ public class GameInvitationController : ControllerBase
     /// <remarks>
     /// Cancels a pending invitation. Only the game master or assistant can cancel invitations.
     /// </remarks>
-    /// <param name="id">Game ID</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <param name="invitationId">Invitation ID</param>
     /// <response code="204">Invitation cancelled</response>
     /// <response code="401">User must be authenticated</response>
@@ -129,7 +141,7 @@ public class GameInvitationController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> CancelInvitation(Guid id, Guid invitationId)
+    public async Task<IActionResult> CancelInvitation(string id, Guid invitationId)
     {
         await _invitationApiService.CancelInvitation(invitationId);
         return NoContent();

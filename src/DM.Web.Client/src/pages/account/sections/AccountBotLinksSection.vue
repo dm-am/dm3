@@ -17,18 +17,18 @@
               @{{ telegramBotUsername }}
             </a>
           </p>
-          <p class="link-instructions">
-            2. Отправьте команду:
-          </p>
+          <p class="link-instructions">2. Отправьте команду:</p>
           <div class="code-block">
             <code>/connect {{ telegramCode }}</code>
-            <button
-              class="copy-btn"
-              @click="copyToClipboard(`/connect ${telegramCode}`)"
-              :title="copied === 'telegram' ? 'Скопировано!' : 'Скопировать'"
-            >
-              {{ copied === 'telegram' ? "\u2713" : "\uD83D\uDCCB" }}
-            </button>
+            <Tooltip :text="copied === 'telegram' ? 'Скопировано!' : 'Скопировать'">
+              <button
+                class="copy-btn"
+                @click="copyToClipboard(`/connect ${telegramCode}`)"
+                aria-label="Скопировать код"
+              >
+                {{ copied === "telegram" ? "\u2713" : "\uD83D\uDCCB" }}
+              </button>
+            </Tooltip>
           </div>
           <div class="timer-section">
             <span class="timer-label">Код действителен:</span>
@@ -47,14 +47,15 @@
 
         <div v-else class="bot-action">
           <p class="bot-description">
-            Получайте уведомления о новых сообщениях, комментариях и событиях в играх.
+            Получайте уведомления о новых сообщениях, комментариях и событиях в
+            играх.
           </p>
           <button
             class="connect-btn"
             :disabled="generatingCode === 'telegram'"
             @click="startTelegramLinking"
           >
-            {{ generatingCode === 'telegram' ? "..." : "Подключить Telegram" }}
+            {{ generatingCode === "telegram" ? "..." : "Подключить Telegram" }}
           </button>
         </div>
       </div>
@@ -73,18 +74,18 @@
               DM3 Bot
             </a>
           </p>
-          <p class="link-instructions">
-            2. Отправьте команду:
-          </p>
+          <p class="link-instructions">2. Отправьте команду:</p>
           <div class="code-block">
             <code>/connect {{ discordCode }}</code>
-            <button
-              class="copy-btn"
-              @click="copyToClipboard(`/connect ${discordCode}`)"
-              :title="copied === 'discord' ? 'Скопировано!' : 'Скопировать'"
-            >
-              {{ copied === 'discord' ? "\u2713" : "\uD83D\uDCCB" }}
-            </button>
+            <Tooltip :text="copied === 'discord' ? 'Скопировано!' : 'Скопировать'">
+              <button
+                class="copy-btn"
+                @click="copyToClipboard(`/connect ${discordCode}`)"
+                aria-label="Скопировать код"
+              >
+                {{ copied === "discord" ? "\u2713" : "\uD83D\uDCCB" }}
+              </button>
+            </Tooltip>
           </div>
           <div class="timer-section">
             <span class="timer-label">Код действителен:</span>
@@ -110,7 +111,7 @@
             :disabled="generatingCode === 'discord'"
             @click="startDiscordLinking"
           >
-            {{ generatingCode === 'discord' ? "..." : "Подключить Discord" }}
+            {{ generatingCode === "discord" ? "..." : "Подключить Discord" }}
           </button>
         </div>
       </div>
@@ -121,6 +122,7 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from "vue";
 import { AccountApi } from "@/shared/api";
+import { Tooltip } from "@/shared/ui/Tooltip";
 import { useToast } from "@/shared/lib/composables/useToast";
 
 // Bot configuration (should match backend config)
@@ -158,8 +160,11 @@ async function startTelegramLinking() {
 
   if (data) {
     telegramCode.value = data.code;
-    const expiresAt = new Date(data.expiresAt).getTime();
-    telegramTimeLeft.value = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+    const expiresAt = new Date(data.expiresUtc).getTime();
+    telegramTimeLeft.value = Math.max(
+      0,
+      Math.floor((expiresAt - Date.now()) / 1000),
+    );
     telegramLinking.value = true;
 
     // Start countdown
@@ -195,8 +200,11 @@ async function startDiscordLinking() {
 
   if (data) {
     discordCode.value = data.code;
-    const expiresAt = new Date(data.expiresAt).getTime();
-    discordTimeLeft.value = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+    const expiresAt = new Date(data.expiresUtc).getTime();
+    discordTimeLeft.value = Math.max(
+      0,
+      Math.floor((expiresAt - Date.now()) / 1000),
+    );
     discordLinking.value = true;
 
     // Start countdown

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ using DM.Domain.Blog.Features.Blacklists;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
+using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Core.Users;
 using DM.Domain.Blog.Features.Subscriptions;
 using DM.Domain.Core.Events;
@@ -25,6 +27,7 @@ internal class BlogService : IBlogService
     private readonly IBlogBlacklistRepository _blacklistRepository;
     private readonly IUserLookupService _userLookupService;
     private readonly IBlogSubscriptionService _subscriptionService;
+    private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly IIdentityProvider _identityProvider;
     private readonly IIntentionManager _intentionManager;
     private readonly IValidator<CreateBlog> _createBlogValidator;
@@ -42,6 +45,7 @@ internal class BlogService : IBlogService
         IBlogBlacklistRepository blacklistRepository,
         IUserLookupService userLookupService,
         IBlogSubscriptionService subscriptionService,
+        IUnreadCountersRepository unreadCountersRepository,
         IIdentityProvider identityProvider,
         IIntentionManager intentionManager,
         IValidator<CreateBlog> createBlogValidator,
@@ -57,6 +61,7 @@ internal class BlogService : IBlogService
         _blacklistRepository = blacklistRepository;
         _userLookupService = userLookupService;
         _subscriptionService = subscriptionService;
+        _unreadCountersRepository = unreadCountersRepository;
         _identityProvider = identityProvider;
         _intentionManager = intentionManager;
         _createBlogValidator = createBlogValidator;
@@ -70,24 +75,69 @@ internal class BlogService : IBlogService
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<BlogModel> blogs, PagingResult paging)> GetPublicBlogs(
-        PagingQuery query, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default)
+    public async Task<(IEnumerable<Blog> blogs, PagingResult paging)> GetPublicBlogs(
+        PagingQuery query,
+        string? search = null,
+        ModuleStatus? status = null,
+        IReadOnlyCollection<string>? hostUsernames = null,
+        string? sortBy = null,
+        string? sortOrder = null,
+        DateTimeOffset? createdFromUtc = null,
+        DateTimeOffset? createdToUtc = null,
+        DateTimeOffset? activatedFromUtc = null,
+        DateTimeOffset? activatedToUtc = null,
+        DateTimeOffset? closedFromUtc = null,
+        DateTimeOffset? closedToUtc = null,
+        IReadOnlyCollection<Guid>? excludeOwnerIds = null,
+        CancellationToken ct = default)
     {
-        var totalCount = await _repository.CountPublicBlogs(excludeOwnerIds, ct);
+        // Resolve usernames to user IDs if provided
+        IReadOnlyCollection<Guid>? hostUserIds = null;
+        if (hostUsernames?.Count > 0)
+        {
+            var userIds = new List<Guid>();
+            foreach (var username in hostUsernames)
+            {
+                var user = await _userLookupService.GetAsync(username);
+                if (user != null)
+                {
+                    userIds.Add(user.UserId);
+                }
+            }
+            hostUserIds = userIds.Count > 0 ? userIds : null;
+        }
+
+        var totalCount = await _repository.CountPublicBlogs(
+            search, status, hostUserIds,
+            createdFromUtc, createdToUtc,
+            activatedFromUtc, activatedToUtc,
+            closedFromUtc, closedToUtc,
+            excludeOwnerIds, ct);
+
         var pagingData = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
-        var blogs = await _repository.GetPublicBlogs(pagingData, excludeOwnerIds, ct);
+
+        var blogs = (await _repository.GetPublicBlogs(
+            pagingData, search, status, hostUserIds, sortBy, sortOrder,
+            createdFromUtc, createdToUtc,
+            activatedFromUtc, activatedToUtc,
+            closedFromUtc, closedToUtc,
+            excludeOwnerIds, ct)).ToArray();
+
+        await FillBlogUnreadCounters(blogs);
         return (blogs, pagingData.Result);
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<BlogModel>> GetPopularBlogs(
+    public async Task<IEnumerable<Blog>> GetPopularBlogs(
         int count = 5, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default)
     {
-        return await _repository.GetPopularBlogs(count, excludeOwnerIds, ct);
+        var blogs = (await _repository.GetPopularBlogs(count, excludeOwnerIds, ct)).ToArray();
+        await FillBlogUnreadCounters(blogs);
+        return blogs;
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<BlogModel>> GetUserBlogs(string username, CancellationToken ct = default)
+    public async Task<IEnumerable<Blog>> GetUserBlogs(string username, CancellationToken ct = default)
     {
         var user = await _userLookupService.GetAsync(username);
         if (user == null)
@@ -95,11 +145,13 @@ internal class BlogService : IBlogService
             throw new HttpException(HttpStatusCode.NotFound, $"User {username} not found");
         }
 
-        return await _repository.GetUserBlogs(user.UserId, ct);
+        var blogs = (await _repository.GetUserBlogs(user.UserId, ct)).ToArray();
+        await FillBlogUnreadCounters(blogs);
+        return blogs;
     }
 
     /// <inheritdoc />
-    public async Task<BlogModel> Get(Guid blogId, CancellationToken ct = default)
+    public async Task<Blog> GetAsync(Guid blogId, CancellationToken ct = default)
     {
         var blog = await _repository.Get(blogId, ct);
         if (blog == null)
@@ -112,13 +164,32 @@ internal class BlogService : IBlogService
             _intentionManager.ThrowIfForbidden(BlogIntention.ViewDraft, blog);
         }
 
+        await FillBlogUnreadCounters(new[] { blog });
         return blog;
     }
 
     /// <inheritdoc />
-    public async Task<BlogModel> GetByOwnerUsername(string username, CancellationToken ct = default)
+    public async Task<Blog> GetByPublicIdAsync(string publicId, CancellationToken ct = default)
     {
-        var blog = await _repository.GetByOwnerUsername(username, ct);
+        var blog = await _repository.GetByPublicId(publicId, ct);
+        if (blog == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, "Blog not found");
+        }
+
+        if (blog.DraftVisibility == DraftVisibility.Private)
+        {
+            _intentionManager.ThrowIfForbidden(BlogIntention.ViewDraft, blog);
+        }
+
+        await FillBlogUnreadCounters(new[] { blog });
+        return blog;
+    }
+
+    /// <inheritdoc />
+    public async Task<Blog> GetByOwnerUsernameAsync(string username, CancellationToken ct = default)
+    {
+        var blog = await _repository.GetByOwnerUsernameAsync(username, ct);
         if (blog == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, $"Blog for user {username} not found");
@@ -129,11 +200,53 @@ internal class BlogService : IBlogService
             _intentionManager.ThrowIfForbidden(BlogIntention.ViewDraft, blog);
         }
 
+        await FillBlogUnreadCounters(new[] { blog });
         return blog;
     }
 
     /// <inheritdoc />
-    public async Task<BlogModel> GetBlog(Guid blogId, CancellationToken ct = default)
+    public async Task<BlogDetails> GetDetailsAsync(Guid blogId, CancellationToken ct = default)
+    {
+        var blog = await GetAsync(blogId, ct);
+
+        // Fetch subscribers and assistants in parallel
+        var subscribersTask = _subscriptionService.GetReadersAsync(blogId, ct);
+        var assistantsTask = _repository.GetAssistantsWithJoinDate(blogId, ct);
+
+        await Task.WhenAll(subscribersTask, assistantsTask);
+
+        // Create extended model with full details
+        return new BlogDetails
+        {
+            // Copy all base properties
+            Id = blog.Id,
+            Author = blog.Author,
+            Mentor = blog.Mentor,
+            Title = blog.Title,
+            Description = blog.Description,
+            CreatedUtc = blog.CreatedUtc,
+            DraftVisibility = blog.DraftVisibility,
+            CommentsEnabled = blog.CommentsEnabled,
+            PublicationCount = blog.PublicationCount,
+            CommentCount = blog.CommentCount,
+            CommentsCount = blog.CommentsCount,
+            UnreadPublicationsCount = blog.UnreadPublicationsCount,
+            UnreadCommentsCount = blog.UnreadCommentsCount,
+            LastCommentId = blog.LastCommentId,
+            Rubrics = blog.Rubrics,
+            Assistants = blog.Assistants,
+            SubscriberIds = blog.SubscriberIds,
+            PendingInvitedUserIds = blog.PendingInvitedUserIds,
+            BlacklistedUserIds = blog.BlacklistedUserIds,
+
+            // Extended properties
+            Subscribers = await subscribersTask,
+            FullAssistants = await assistantsTask
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<Blog> GetBlogAsync(Guid blogId, CancellationToken ct = default)
     {
         var blog = await _repository.Get(blogId, ct);
         if (blog == null)
@@ -164,7 +277,7 @@ internal class BlogService : IBlogService
     }
 
     /// <inheritdoc />
-    public async Task<BlogModel> Create(CreateBlog createBlog, CancellationToken ct = default)
+    public async Task<Blog> Create(CreateBlog createBlog, CancellationToken ct = default)
     {
         _intentionManager.ThrowIfForbidden(BlogIntention.Create);
         await _createBlogValidator.ValidateAndThrowAsync(createBlog, ct);
@@ -192,11 +305,11 @@ internal class BlogService : IBlogService
     }
 
     /// <inheritdoc />
-    public async Task<BlogModel> Update(UpdateBlog updateBlog, CancellationToken ct = default)
+    public async Task<Blog> Update(UpdateBlog updateBlog, CancellationToken ct = default)
     {
         await _updateBlogValidator.ValidateAndThrowAsync(updateBlog, ct);
 
-        var blog = await Get(updateBlog.BlogId, ct);
+        var blog = await GetAsync(updateBlog.BlogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
 
         var entity = new UpdateBlogEntity
@@ -214,7 +327,7 @@ internal class BlogService : IBlogService
     /// <inheritdoc />
     public async Task Delete(Guid blogId, CancellationToken ct = default)
     {
-        var blog = await Get(blogId, ct);
+        var blog = await GetAsync(blogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.Delete, blog);
 
         var userId = _identityProvider.Current.User.UserId;
@@ -225,13 +338,14 @@ internal class BlogService : IBlogService
     public async Task<(IEnumerable<Publication> publications, PagingResult paging)> GetPublications(
         Guid blogId, Guid? rubricId, PagingQuery query, CancellationToken ct = default)
     {
-        var blog = await Get(blogId, ct);
+        var blog = await GetAsync(blogId, ct);
         var includeUnpublished = _intentionManager.IsAllowed(BlogIntention.ViewDraft, blog);
 
         var totalCount = await _repository.CountPublications(blogId, rubricId, includeUnpublished, ct);
         var pagingData = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
 
-        var publications = await _repository.GetPublications(blogId, rubricId, includeUnpublished, pagingData, ct);
+        var publications = (await _repository.GetPublications(blogId, rubricId, includeUnpublished, pagingData, ct)).ToArray();
+        await FillPublicationUnreadCounters(publications);
         return (publications, pagingData.Result);
     }
 
@@ -249,6 +363,7 @@ internal class BlogService : IBlogService
             _intentionManager.ThrowIfForbidden(PublicationIntention.ViewDraft, publication);
         }
 
+        await FillPublicationUnreadCounters(new[] { publication });
         return publication;
     }
 
@@ -257,7 +372,7 @@ internal class BlogService : IBlogService
     {
         await _createPublicationValidator.ValidateAndThrowAsync(createPublication, ct);
 
-        var blog = await Get(createPublication.BlogId, ct);
+        var blog = await GetAsync(createPublication.BlogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.CreatePublication, blog);
 
         var userId = _identityProvider.Current.User.UserId;
@@ -276,7 +391,9 @@ internal class BlogService : IBlogService
             CreatedUtc = now
         };
         var createdPublication = await _repository.CreatePublication(entity, ct);
-        await _eventProducer.SendAsync(EventType.NewPublication, createdPublication.Id);
+        await Task.WhenAll(
+            _unreadCountersRepository.CreateAsync(createdPublication.Id, createPublication.BlogId, UnreadEntryType.Message),
+            _eventProducer.SendAsync(EventType.NewPublication, createdPublication.Id));
         return createdPublication;
     }
 
@@ -319,7 +436,9 @@ internal class BlogService : IBlogService
 
         var userId = _identityProvider.Current.User.UserId;
         await _repository.DeletePublication(publicationId, userId, ct);
-        await _eventProducer.SendAsync(EventType.DeletedPublication, publicationId);
+        await Task.WhenAll(
+            _unreadCountersRepository.DeleteAsync(publicationId, UnreadEntryType.Message),
+            _eventProducer.SendAsync(EventType.DeletedPublication, publicationId));
     }
 
     /// <inheritdoc />
@@ -327,7 +446,7 @@ internal class BlogService : IBlogService
     {
         await _createRubricValidator.ValidateAndThrowAsync(createRubric, ct);
 
-        var blog = await Get(createRubric.BlogId, ct);
+        var blog = await GetAsync(createRubric.BlogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.CreateRubric, blog);
 
         var entity = new CreateRubricEntity
@@ -349,7 +468,7 @@ internal class BlogService : IBlogService
             throw new HttpException(HttpStatusCode.NotFound, "Rubric not found");
         }
 
-        var blog = await Get(blogId, ct);
+        var blog = await GetAsync(blogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.CreateRubric, blog);
 
         var userId = _identityProvider.Current.User.UserId;
@@ -360,14 +479,14 @@ internal class BlogService : IBlogService
     public async Task<IEnumerable<Rubric>> GetRubrics(Guid blogId, CancellationToken ct = default)
     {
         // Verify blog exists and user has access
-        await Get(blogId, ct);
+        await GetAsync(blogId, ct);
         return await _repository.GetRubrics(blogId, ct);
     }
 
     /// <inheritdoc />
     public async Task<GeneralUser> Subscribe(Guid blogId, CancellationToken ct = default)
     {
-        var blog = await GetBlog(blogId, ct);
+        var blog = await GetBlogAsync(blogId, ct);
         var userId = _identityProvider.Current.User.UserId;
 
         // Cannot subscribe to own blog
@@ -390,7 +509,7 @@ internal class BlogService : IBlogService
     /// <inheritdoc />
     public async Task Unsubscribe(Guid blogId, CancellationToken ct = default)
     {
-        var blog = await GetBlog(blogId, ct);
+        var blog = await GetBlogAsync(blogId, ct);
         var userId = _identityProvider.Current.User.UserId;
 
         // Owner cannot unsubscribe from their own blog
@@ -406,7 +525,7 @@ internal class BlogService : IBlogService
     /// <inheritdoc />
     public async Task Leave(Guid blogId, CancellationToken ct = default)
     {
-        var blog = await GetBlog(blogId, ct);
+        var blog = await GetBlogAsync(blogId, ct);
         var userId = _identityProvider.Current.User.UserId;
 
         // Owner cannot leave their own blog
@@ -426,7 +545,7 @@ internal class BlogService : IBlogService
     /// <inheritdoc />
     public async Task<IEnumerable<GeneralUser>> GetReaders(Guid blogId, CancellationToken ct = default)
     {
-        await Get(blogId, ct);
+        await GetAsync(blogId, ct);
         // Get subscribers via BlogSubscriptionService
         return await _subscriptionService.GetReadersAsync(blogId, ct);
     }
@@ -434,14 +553,14 @@ internal class BlogService : IBlogService
     /// <inheritdoc />
     public async Task<IEnumerable<BlogUser>> GetAssistants(Guid blogId, CancellationToken ct = default)
     {
-        await Get(blogId, ct);
+        await GetAsync(blogId, ct);
         return await _repository.GetAssistantsWithJoinDate(blogId, ct);
     }
 
     /// <inheritdoc />
     public async Task RemoveAssistant(Guid blogId, string username, CancellationToken ct = default)
     {
-        var blog = await GetBlog(blogId, ct);
+        var blog = await GetBlogAsync(blogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
 
         var removed = await _repository.RemoveAssistantByUsername(blogId, username, ct);
@@ -452,8 +571,78 @@ internal class BlogService : IBlogService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<BlogModel>> GetSubscribedBlogs(IEnumerable<Guid> blogIds, CancellationToken ct = default)
+    public async Task<IEnumerable<Blog>> GetSubscribedBlogs(IEnumerable<Guid> blogIds, CancellationToken ct = default)
     {
-        return await _repository.GetByIds(blogIds, ct);
+        var blogs = (await _repository.GetByIds(blogIds, ct)).ToArray();
+        await FillBlogUnreadCounters(blogs);
+        return blogs;
+    }
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<Blog>> GetOwnBlogsAsync(CancellationToken ct = default)
+    {
+        var identity = _identityProvider.Current;
+        if (!identity.User.IsAuthenticated)
+        {
+            return [];
+        }
+
+        var blogs = (await _repository.GetOwnBlogs(identity.User.UserId, ct)).ToArray();
+        await FillBlogUnreadCounters(blogs);
+        return blogs;
+    }
+
+    // ═══ PRIVATE HELPERS ═══
+
+    private async Task FillBlogUnreadCounters(Blog[] blogs)
+    {
+        if (blogs.Length == 0) return;
+
+        var identity = _identityProvider.Current;
+
+        // Anonymous users: show total counts (they can't mark anything as read)
+        if (!identity.User.IsAuthenticated)
+        {
+            foreach (var blog in blogs)
+            {
+                blog.UnreadPublicationsCount = blog.PublicationCount;
+                blog.UnreadCommentsCount = blog.CommentsCount;
+            }
+            return;
+        }
+
+        // Authenticated users: show actual unread counts
+        var userId = identity.User.UserId;
+
+        // UnreadPublicationsCount: count publications with unread comments (parent = blogId)
+        var fillPublicationsTask = _unreadCountersRepository.FillParentCounters(blogs, userId,
+            b => b.Id, b => b.UnreadPublicationsCount);
+
+        // UnreadCommentsCount: total unread comments across all publications
+        var fillCommentsTask = _unreadCountersRepository.FillTotalUnreadCounters(blogs, userId,
+            b => b.Id, b => b.UnreadCommentsCount);
+
+        await Task.WhenAll(fillPublicationsTask, fillCommentsTask);
+    }
+
+    private async Task FillPublicationUnreadCounters(Publication[] publications)
+    {
+        if (publications.Length == 0) return;
+
+        var identity = _identityProvider.Current;
+
+        // Anonymous users: show total counts
+        if (!identity.User.IsAuthenticated)
+        {
+            foreach (var publication in publications)
+            {
+                publication.UnreadCommentsCount = publication.CommentCount;
+            }
+            return;
+        }
+
+        // Authenticated users: show actual unread counts
+        await _unreadCountersRepository.FillEntityCounters(publications, identity.User.UserId,
+            p => p.Id, p => p.UnreadCommentsCount);
     }
 }

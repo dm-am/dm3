@@ -10,7 +10,7 @@ internal class UpdateModeratedProfileNoteValidator : AbstractValidator<UpdateMod
 {
     public UpdateModeratedProfileNoteValidator()
     {
-        RuleFor(n => n.NoteId)
+        RuleFor(n => n.Id)
             .NotEmpty().WithMessage(ValidationError.Empty);
 
         RuleFor(n => n.Text)

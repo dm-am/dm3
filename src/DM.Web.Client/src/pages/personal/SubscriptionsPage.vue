@@ -6,7 +6,6 @@ import {
   type Subscription,
 } from "@/shared/api/models/subscriptions";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import LoadingSpinner from "@/shared/ui/Layout/LoadingSpinner.vue";
 
 const store = useSubscriptionsStore();
 const activeTab = ref<"all" | "games" | "blogs" | "topics" | "users">("all");
@@ -36,7 +35,7 @@ const getTargetTypeLabel = (type: SubscriptionTargetType): string => {
     case SubscriptionTargetType.Blog:
       return "Блог";
     case SubscriptionTargetType.Topic:
-      return "Тема";
+      return "Топик";
     case SubscriptionTargetType.User:
       return "Пользователь";
     default:
@@ -66,7 +65,7 @@ const handleUnsubscribe = async (subscription: Subscription) => {
 
 <template>
   <div class="subscriptions-page">
-    <h1>Подписки</h1>
+    <page-title>Подписки</page-title>
 
     <div class="tabs">
       <button
@@ -91,7 +90,7 @@ const handleUnsubscribe = async (subscription: Subscription) => {
         :class="{ active: activeTab === 'topics' }"
         @click="activeTab = 'topics'"
       >
-        Темы ({{ store.topicCount }})
+        Топики ({{ store.topicCount }})
       </button>
       <button
         :class="{ active: activeTab === 'users' }"
@@ -101,7 +100,7 @@ const handleUnsubscribe = async (subscription: Subscription) => {
       </button>
     </div>
 
-    <loading-spinner v-if="store.subscriptionsLoading" />
+    <secondary-text v-if="store.subscriptionsLoading">Загрузка...</secondary-text>
 
     <template v-else-if="filteredSubscriptions.length === 0">
       <secondary-text>Нет подписок</secondary-text>
@@ -113,11 +112,16 @@ const handleUnsubscribe = async (subscription: Subscription) => {
         :key="subscription.id"
         class="subscription-item"
       >
-        <span class="type-badge">{{ getTargetTypeLabel(subscription.targetType) }}</span>
+        <span class="type-badge">{{
+          getTargetTypeLabel(subscription.targetType)
+        }}</span>
         <router-link :to="getTargetLink(subscription)" class="target-link">
           {{ subscription.targetId }}
         </router-link>
-        <button class="unsubscribe-btn" @click="handleUnsubscribe(subscription)">
+        <button
+          class="unsubscribe-btn"
+          @click="handleUnsubscribe(subscription)"
+        >
           Отписаться
         </button>
       </li>

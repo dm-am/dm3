@@ -1,1 +1,1 @@
-export { default as ThePaging } from "./ThePaging.vue";
+export { default as Paging } from "./Paging.vue";

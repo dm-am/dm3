@@ -15,4 +15,20 @@ public interface IBoardModeratorsApiService
     /// <param name="id">Forum id</param>
     /// <returns>Envelope of moderators list</returns>
     Task<ListEnvelope<User>> GetModerators(string id);
+
+    /// <summary>
+    /// Add a user as board moderator
+    /// </summary>
+    /// <param name="id">Board id</param>
+    /// <param name="username">Username to add</param>
+    /// <returns>Envelope with added user</returns>
+    Task<Envelope<User>> AddModerator(string id, string username);
+
+    /// <summary>
+    /// Remove a user from board moderators
+    /// </summary>
+    /// <param name="id">Board id</param>
+    /// <param name="username">Username to remove</param>
+    /// <returns>Task</returns>
+    Task RemoveModerator(string id, string username);
 }

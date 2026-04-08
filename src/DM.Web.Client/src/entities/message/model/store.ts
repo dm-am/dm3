@@ -1,12 +1,7 @@
 import { defineStore, storeToRefs } from "pinia";
 import { ref, computed } from "vue";
 import type { ListEnvelope, CursorPaging } from "@/shared/api/models/common";
-import type {
-  Chat,
-  ChatId,
-  Message,
-  MessageId,
-} from "./types";
+import type { Chat, ChatId, Message, MessageId } from "./types";
 import type { Username } from "@/shared/api/models/common";
 import messagingApi from "../api/messagingApi";
 import { useAuthStore } from "@/shared/stores";
@@ -26,11 +21,10 @@ export const useMessagingStore = defineStore("messaging", () => {
   async function fetchChats(number: number = 1) {
     loadingChats.value = true;
     try {
-      const size =
-        currentUser.value?.settings?.paging?.entitiesPerPage ?? 20;
+      const take = currentUser.value?.settings?.paging?.entitiesPerPage ?? 20;
       const { data, error: err } = await messagingApi.getChats({
         number,
-        size,
+        take,
       });
       if (err) {
         error.value = "Не удалось загрузить переписки";
@@ -67,7 +61,8 @@ export const useMessagingStore = defineStore("messaging", () => {
   async function selectDirectChat(username: Username) {
     loadingChat.value = true;
     try {
-      const { data, error: err } = await messagingApi.getOrCreateDirectChat(username);
+      const { data, error: err } =
+        await messagingApi.getOrCreateDirectChat(username);
       if (err) {
         error.value = "Не удалось загрузить прямую переписку";
         selectedChat.value = null;
@@ -195,16 +190,38 @@ export const useMessagingStore = defineStore("messaging", () => {
     );
   });
 
-  // Fetch just enough data to get unread counts (called on app start)
-  async function fetchUnreadCount() {
+  // Debounce state for fetchUnreadCount (prevents request flood from SignalR)
+  let fetchUnreadDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  const FETCH_UNREAD_DEBOUNCE_MS = 2000; // 2 seconds
+
+  /**
+   * Fetch just enough data to get unread counts.
+   * @param immediate - If true, fetches immediately (for app start). If false, debounces (for SignalR).
+   */
+  async function fetchUnreadCount(immediate = false) {
     if (!currentUser.value) return;
-    // Load first page to get unread counts
-    const { data } = await messagingApi.getChats({
-      number: 1,
-      size: 20,
-    });
-    if (data) {
-      chats.value = data;
+
+    // Clear any pending debounced fetch
+    if (fetchUnreadDebounceTimer) {
+      clearTimeout(fetchUnreadDebounceTimer);
+      fetchUnreadDebounceTimer = null;
+    }
+
+    const doFetch = async () => {
+      const { data } = await messagingApi.getChats({
+        number: 1,
+        take: 20,
+      });
+      if (data) {
+        chats.value = data;
+      }
+    };
+
+    if (immediate) {
+      await doFetch();
+    } else {
+      // Debounce: wait before fetching (batches rapid SignalR messages)
+      fetchUnreadDebounceTimer = setTimeout(doFetch, FETCH_UNREAD_DEBOUNCE_MS);
     }
   }
 
@@ -217,12 +234,9 @@ export const useMessagingStore = defineStore("messaging", () => {
         0 as Chat["unreadMessagesCount"];
     }
     if (chats.value) {
-      const chat = chats.value.resources.find(
-        (c) => c.id === chatId,
-      );
+      const chat = chats.value.resources.find((c) => c.id === chatId);
       if (chat) {
-        (chat as Chat).unreadMessagesCount =
-          0 as Chat["unreadMessagesCount"];
+        (chat as Chat).unreadMessagesCount = 0 as Chat["unreadMessagesCount"];
       }
     }
   }
@@ -234,20 +248,14 @@ export const useMessagingStore = defineStore("messaging", () => {
     if (!text.trim()) return null;
     sending.value = true;
     try {
-      const { data, error } = await messagingApi.sendMessage(
-        chatId,
-        text,
-      );
+      const { data, error } = await messagingApi.sendMessage(chatId, text);
       if (!error && data) {
         messagesList.value.push(data as Message);
         // Update last message in chat list
         if (chats.value) {
-          const chat = chats.value.resources.find(
-            (c) => c.id === chatId,
-          );
+          const chat = chats.value.resources.find((c) => c.id === chatId);
           if (chat) {
-            (chat as Chat).lastMessage =
-              data as typeof chat.lastMessage;
+            (chat as Chat).lastMessage = data as typeof chat.lastMessage;
           }
         }
         if (selectedChat.value?.id === chatId) {
@@ -323,7 +331,9 @@ export const useMessagingStore = defineStore("messaging", () => {
   // Check if current user liked a message
   function isLikedByCurrentUser(message: Message): boolean {
     if (!currentUser.value || !message.likes) return false;
-    return message.likes.some((u) => u.username === currentUser.value!.username);
+    return message.likes.some(
+      (u) => u.username === currentUser.value!.username,
+    );
   }
 
   // Clear selected chat

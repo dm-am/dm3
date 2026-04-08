@@ -12,12 +12,15 @@ internal class CommentMappingProfile : Profile
     /// <inheritdoc />
     public CommentMappingProfile()
     {
-        CreateMap<DM.Domain.Core.Comments.Comment, Comment>()
-            .ForMember(d => d.CreatedUtc, s => s.MapFrom(c => c.CreatedUtc))
-            .ForMember(d => d.UpdatedUtc, s => s.MapFrom(c => c.ModifiedUtc));
+        CreateMap<DM.Domain.Core.Comments.Comment, Comment>();
 
-        CreateMap<Comment, CreateComment>();
-        CreateMap<Comment, UpdateComment>();
-        CreateMap<CreateCommentRequest, CreateComment>();
+        CreateMap<Comment, CreateComment>()
+            .ForMember(d => d.EntityId, opt => opt.Ignore());
+
+        CreateMap<Comment, UpdateComment>()
+            .ForMember(d => d.CommentId, opt => opt.Ignore());
+
+        CreateMap<CreateCommentRequest, CreateComment>()
+            .ForMember(d => d.EntityId, opt => opt.Ignore());
     }
 }

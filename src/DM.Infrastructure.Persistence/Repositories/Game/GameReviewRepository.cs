@@ -5,13 +5,11 @@ using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Dto;
-using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Games;
-using DM.Domain.Game.Features.Reviews;
-using DM.Domain.Core.Reviews;
+using DM.Domain.Game.Features.GameReviews;
 using Microsoft.EntityFrameworkCore;
-using DbReview = DM.Infrastructure.Persistence.Entities.Shared.Review;
+using DbGameReview = DM.Infrastructure.Persistence.Entities.Game.GameReview;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
@@ -30,50 +28,43 @@ internal class GameReviewRepository : IGameReviewRepository
     // ═══ READ ═══
 
     /// <inheritdoc />
-    public Task<int> CountAsync(Guid gameId) => _dbContext.Reviews
+    public Task<int> CountAsync(Guid gameId) => _dbContext.GameReviews
         .TagWith("DM.GameReview.Count")
-        .Where(r => r.TargetType == ReviewTargetType.Game &&
-                    r.TargetId == gameId &&
-                    !r.IsRemoved)
+        .Where(r => r.GameId == gameId && !r.IsRemoved)
         .CountAsync();
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Review>> GetAsync(Guid gameId, PagingData paging) =>
-        await _dbContext.Reviews
+    public async Task<IEnumerable<GameReview>> GetAsync(Guid gameId, PagingData paging) =>
+        await _dbContext.GameReviews
             .TagWith("DM.GameReview.GetByGame")
-            .Where(r => r.TargetType == ReviewTargetType.Game &&
-                        r.TargetId == gameId &&
-                        !r.IsRemoved)
+            .Where(r => r.GameId == gameId && !r.IsRemoved)
             .OrderByDescending(r => r.CreatedUtc)
             .Page(paging)
-            .ProjectTo<Review>(_mapper.ConfigurationProvider)
+            .ProjectTo<GameReview>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
 
     /// <inheritdoc />
-    public Task<Review?> GetAsync(Guid id) => _dbContext.Reviews
+    public Task<GameReview?> GetAsync(Guid id) => _dbContext.GameReviews
         .TagWith("DM.GameReview.GetById")
-        .Where(r => !r.IsRemoved &&
-                    r.ReviewId == id &&
-                    r.TargetType == ReviewTargetType.Game)
-        .ProjectTo<Review>(_mapper.ConfigurationProvider)
+        .Where(r => !r.IsRemoved && r.GameReviewId == id)
+        .ProjectTo<GameReview>(_mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
-    public Task<Review?> GetByAuthorAsync(Guid gameId, Guid authorId) => _dbContext.Reviews
+    public Task<GameReview?> GetByAuthorAsync(Guid gameId, Guid authorId) => _dbContext.GameReviews
         .TagWith("DM.GameReview.GetByAuthor")
-        .Where(r => r.TargetType == ReviewTargetType.Game &&
-                    r.TargetId == gameId &&
-                    r.UserId == authorId &&
+        .Where(r => r.GameId == gameId &&
+                    r.AuthorId == authorId &&
                     !r.IsRemoved)
-        .ProjectTo<Review>(_mapper.ConfigurationProvider)
+        .ProjectTo<GameReview>(_mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
     public Task<int> CountAllAsync(GameReviewFilter? filter = null)
     {
-        var query = _dbContext.Reviews
+        var query = _dbContext.GameReviews
             .TagWith("DM.GameReview.CountAll")
-            .Where(r => r.TargetType == ReviewTargetType.Game && !r.IsRemoved);
+            .Where(r => !r.IsRemoved);
 
         query = ApplyFilter(query, filter);
 
@@ -81,60 +72,57 @@ internal class GameReviewRepository : IGameReviewRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Review>> GetAllAsync(PagingData paging, GameReviewFilter? filter = null)
+    public async Task<IEnumerable<GameReview>> GetAllAsync(PagingData paging, GameReviewFilter? filter = null)
     {
-        var query = _dbContext.Reviews
+        var query = _dbContext.GameReviews
             .TagWith("DM.GameReview.GetAll")
-            .Where(r => r.TargetType == ReviewTargetType.Game && !r.IsRemoved);
+            .Where(r => !r.IsRemoved);
 
         query = ApplyFilter(query, filter);
 
         return await query
             .OrderByDescending(r => r.CreatedUtc)
             .Page(paging)
-            .ProjectTo<Review>(_mapper.ConfigurationProvider)
+            .ProjectTo<GameReview>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
     }
 
     // ═══ WRITE ═══
 
     /// <inheritdoc />
-    public Task<bool> ExistsAsync(Guid authorId, Guid gameId) => _dbContext.Reviews
+    public Task<bool> ExistsAsync(Guid authorId, Guid gameId) => _dbContext.GameReviews
         .TagWith("DM.GameReview.Exists")
-        .AnyAsync(r => r.TargetType == ReviewTargetType.Game &&
-                       r.UserId == authorId &&
-                       r.TargetId == gameId &&
+        .AnyAsync(r => r.AuthorId == authorId &&
+                       r.GameId == gameId &&
                        !r.IsRemoved);
 
     /// <inheritdoc />
-    public async Task<Review> CreateAsync(CreateGameReviewEntity entity)
+    public async Task<GameReview> CreateAsync(CreateGameReviewEntity entity)
     {
-        var dbReview = new DbReview
+        var dbReview = new DbGameReview
         {
-            ReviewId = entity.ReviewId,
-            UserId = entity.UserId,
-            TargetType = ReviewTargetType.Game,
-            TargetId = entity.GameId,
+            GameReviewId = entity.ReviewId,
+            AuthorId = entity.UserId,
+            GameId = entity.GameId,
             CreatedUtc = entity.CreatedUtc,
             Text = entity.Text,
-            IsApproved = true, // Game reviews are always approved
             IsRemoved = false
         };
 
-        _dbContext.Reviews.Add(dbReview);
+        _dbContext.GameReviews.Add(dbReview);
         await _dbContext.SaveChangesAsync();
 
-        return await _dbContext.Reviews
+        return await _dbContext.GameReviews
             .TagWith("DM.GameReview.Created")
-            .Where(r => r.ReviewId == dbReview.ReviewId)
-            .ProjectTo<Review>(_mapper.ConfigurationProvider)
+            .Where(r => r.GameReviewId == dbReview.GameReviewId)
+            .ProjectTo<GameReview>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }
 
     /// <inheritdoc />
-    public async Task<Review> UpdateAsync(UpdateGameReviewEntity entity)
+    public async Task<GameReview> UpdateAsync(UpdateGameReviewEntity entity)
     {
-        var dbReview = await _dbContext.Reviews.FindAsync(entity.ReviewId);
+        var dbReview = await _dbContext.GameReviews.FindAsync(entity.ReviewId);
         if (dbReview == null)
         {
             throw new InvalidOperationException($"Review {entity.ReviewId} not found");
@@ -151,10 +139,10 @@ internal class GameReviewRepository : IGameReviewRepository
 
         await _dbContext.SaveChangesAsync();
 
-        return await _dbContext.Reviews
+        return await _dbContext.GameReviews
             .TagWith("DM.GameReview.Updated")
-            .Where(r => r.ReviewId == entity.ReviewId)
-            .ProjectTo<Review>(_mapper.ConfigurationProvider)
+            .Where(r => r.GameReviewId == entity.ReviewId)
+            .ProjectTo<GameReview>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }
 
@@ -177,21 +165,21 @@ internal class GameReviewRepository : IGameReviewRepository
 
     // ═══ PRIVATE ═══
 
-    private IQueryable<DbReview> ApplyFilter(IQueryable<DbReview> query, GameReviewFilter? filter)
+    private IQueryable<DbGameReview> ApplyFilter(IQueryable<DbGameReview> query, GameReviewFilter? filter)
     {
         if (filter == null)
             return query;
 
         if (filter.AuthorId.HasValue)
-            query = query.Where(r => r.UserId == filter.AuthorId.Value);
+            query = query.Where(r => r.AuthorId == filter.AuthorId.Value);
 
         if (filter.GameId.HasValue)
-            query = query.Where(r => r.TargetId == filter.GameId.Value);
+            query = query.Where(r => r.GameId == filter.GameId.Value);
 
         if (filter.GmId.HasValue)
         {
             query = query.Where(r => _dbContext.Games
-                .Any(g => g.GameId == r.TargetId && g.AuthorId == filter.GmId.Value && !g.IsRemoved));
+                .Any(g => g.GameId == r.GameId && g.MasterId == filter.GmId.Value && !g.IsRemoved));
         }
 
         return query;

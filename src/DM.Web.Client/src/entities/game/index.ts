@@ -1,35 +1,26 @@
 // Game entity - public API
-// Types
+// Pure types (interfaces, type aliases)
 export type {
   Game,
+  GameRef,
   GameId,
-  GameStatus,
-  GameRole,
   GameUser,
   GamePrivacySettings,
   GameRecruitment,
   GamesQuery,
   Tag,
-  TagId,
-  CommentariesAccessMode,
   Invitation,
   InvitationType,
   AttributeSchema,
-  AttributeSchemaType,
   AttributeSpecification,
-  AttributeSpecificationType,
   AttributeValueSpecification,
   Character,
   CharacterId,
-  CharacterStatus,
   CharacterAttribute,
   CharacterAttributeId,
   CharacterPrivacySettings,
-  Alignment,
   Room,
   RoomId,
-  RoomType,
-  RoomAccessType,
   RoomClaim,
   RoomSettings,
   PendingPost,
@@ -37,19 +28,16 @@ export type {
   PostId,
   PostBbText,
   DiceRoll,
-  FeaturedPost,
-  FeaturedPostId,
-  FeaturedPostsEnvelope,
   PostReview,
-  ReviewSign,
   FirstUnreadPostResult,
   FirstUnreadCommentResult,
 } from "./model/types";
 
-// Re-export enums as values (not just types)
+// Enums (exported as values, can also be used as types)
 export {
   GameStatus,
   GameRole,
+  ClosedReason,
   CommentariesAccessMode,
   AttributeSchemaType,
   AttributeSpecificationType,
@@ -63,7 +51,15 @@ export {
 // Store
 export { useGamesStore, useGameDetailsStore } from "./model/store";
 export { useFeaturedPostsStore } from "./model/featuredPostsStore";
+export { usePulseStore, getWeekStartUtc } from "./model/pulseStore";
+export type { PulseSearchParams } from "./model/pulseStore";
+
+// Composables
+export { useGameDisplay } from "./model/useGameDisplay";
 
 // API
 export { gameApi } from "./api";
 export { default as gameApiDefault } from "./api";
+
+// UI Components
+export { GameStatusBadge, UnreadCounters, PostRating, PostReviewItem } from "./ui";

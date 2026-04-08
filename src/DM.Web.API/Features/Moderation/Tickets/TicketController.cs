@@ -139,7 +139,7 @@ public class TicketController : ControllerBase
     public async Task<IActionResult> CreateTicket([FromBody] CreateTicketRequest request)
     {
         var ticket = await _ticketApiService.CreateTicket(request);
-        return CreatedAtRoute(nameof(GetTicket), new { ticketId = ticket.Resource.TicketId }, ticket);
+        return CreatedAtRoute(nameof(GetTicket), new { ticketId = ticket.Resource.Id }, ticket);
     }
 
     /// <summary>

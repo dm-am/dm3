@@ -143,7 +143,9 @@ internal class RoomService : IRoomService
             DiceEnabled = updateRoom.DiceEnabled,
             IsRemoved = updateRoom.IsRemoved,
             ShouldReorder = updateRoom.PreviousRoomId != null,
-            NewPreviousRoomId = updateRoom.PreviousRoomId?.Value
+            NewPreviousRoomId = updateRoom.PreviousRoomId?.Value,
+            ChatId = updateRoom.ChatId,
+            ShouldSetChatId = updateRoom.ChatId.HasValue
         };
 
         var result = await _repository.Update(entity);

@@ -41,7 +41,7 @@ watch(() => route.params.username, loadDirectChat, { immediate: true });
   <div class="loading-container">
     <template v-if="error">
       <secondary-text class="error-text">{{ error }}</secondary-text>
-      <the-button @click="goBack">Назад к списку</the-button>
+      <Button @click="goBack">Назад к списку</Button>
     </template>
     <secondary-text v-else>Загрузка переписки...</secondary-text>
   </div>

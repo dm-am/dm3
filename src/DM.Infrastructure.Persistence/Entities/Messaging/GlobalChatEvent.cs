@@ -34,7 +34,7 @@ public class GlobalChatEvent
     /// <summary>
     /// Scheduled start time (for display purposes, actual start is manual)
     /// </summary>
-    public DateTimeOffset StartsAtUtc { get; set; }
+    public DateTimeOffset StartsUtc { get; set; }
 
     /// <summary>
     /// Planned duration. Null means no time limit, event ends manually.
@@ -65,12 +65,12 @@ public class GlobalChatEvent
     /// <summary>
     /// When the event was actually started (null if not started yet)
     /// </summary>
-    public DateTimeOffset? StartedAtUtc { get; set; }
+    public DateTimeOffset? StartedUtc { get; set; }
 
     /// <summary>
     /// When the event was ended (null if not ended yet)
     /// </summary>
-    public DateTimeOffset? EndedAtUtc { get; set; }
+    public DateTimeOffset? EndedUtc { get; set; }
 
     /// <summary>
     /// Event creator

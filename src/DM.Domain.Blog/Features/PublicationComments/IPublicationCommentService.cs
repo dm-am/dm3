@@ -20,9 +20,9 @@ public interface IPublicationCommentService
     /// Get comments for a publication
     /// </summary>
     /// <param name="publicationId">Publication identifier</param>
-    /// <param name="query">Paging query</param>
+    /// <param name="query">Query with filtering, sorting and paging</param>
     /// <param name="excludeUserIds">Optional user IDs to exclude from results</param>
-    Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid publicationId, PagingQuery query,
+    Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid publicationId, PublicationCommentsQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null);
 
     /// <summary>

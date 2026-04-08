@@ -88,7 +88,7 @@ public class OutboxProcessor : BackgroundService
 
                 // Success: mark as processed
                 evt.IsProcessed = true;
-                evt.ProcessedAt = now;
+                evt.ProcessedUtc = now;
                 await dbContext.SaveChangesAsync(ct);
             }
             catch (Exception ex)

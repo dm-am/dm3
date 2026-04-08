@@ -24,7 +24,7 @@ internal class PersonalMappingProfile : Profile
 
         // UserProfileNote -> Domain.Core.Personal.UserProfileNote
         CreateMap<DbUserProfileNote, UserProfileNote>()
-            .ForMember(d => d.NoteId, o => o.MapFrom(s => s.UserProfileNoteId))
+            .ForMember(d => d.Id, o => o.MapFrom(s => s.UserProfileNoteId))
             .ForMember(d => d.SubjectUsername, o => o.MapFrom(s => s.SubjectUser.Username))
             .ForMember(d => d.SubjectUserId, o => o.MapFrom(s => s.SubjectUserId))
             .ForMember(d => d.Text, o => o.MapFrom(s => s.Text))

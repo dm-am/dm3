@@ -16,7 +16,7 @@ onMounted(() => {
 <template>
   <div class="transfer-page">
     <div class="transfer-message">
-      <h2>Переход на зеркало</h2>
+      <page-title>Переход на зеркало</page-title>
       <p>Перенос сессии не поддерживается.</p>
       <p>Войдите заново на этом зеркале.</p>
       <p class="redirect-text">Перенаправляем на главную...</p>
@@ -40,10 +40,6 @@ onMounted(() => {
   padding: $big
   box-shadow: 0 2px 8px $shadow-color
 
-h2
-  color: $text
-  margin-bottom: $medium
-  font-size: 1.5rem
 
 p
   color: $text-muted

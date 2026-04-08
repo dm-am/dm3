@@ -8,12 +8,12 @@ using DM.Domain.Core.Subscriptions;
 namespace DM.Domain.Game.Features.Subscriptions;
 
 /// <summary>
-/// Service for managing game subscriptions (readers)
+/// Service for managing game subscriptions
 /// </summary>
 public interface IGameSubscriptionService
 {
     /// <summary>
-    /// Subscribe current user to a game as reader
+    /// Subscribe current user to a game
     /// </summary>
     Task<Subscription> SubscribeAsync(Guid gameId, CancellationToken ct = default);
 
@@ -23,12 +23,12 @@ public interface IGameSubscriptionService
     Task UnsubscribeAsync(Guid gameId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get readers (subscribers) of a game
+    /// Get subscribers of a game
     /// </summary>
-    Task<IEnumerable<GeneralUser>> GetReadersAsync(Guid gameId, CancellationToken ct = default);
+    Task<IEnumerable<GeneralUser>> GetSubscribersAsync(Guid gameId, CancellationToken ct = default);
 
     /// <summary>
-    /// Check if a user is subscribed to a game (is a reader)
+    /// Check if a user is subscribed to a game
     /// </summary>
     Task<bool> IsSubscribedAsync(Guid userId, Guid gameId, CancellationToken ct = default);
 }

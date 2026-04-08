@@ -14,7 +14,7 @@ public static class InvokedEventTypeExtensions
     /// Map event types to routing keys
     /// </summary>
     /// <param name="eventTypes">Event types</param>
-    /// <returns></returns>
+    /// <returns>Collection of routing keys</returns>
     public static IEnumerable<string> ToRoutingKeys(this IEnumerable<EventType> eventTypes) =>
         eventTypes.Select(eventType =>
             eventType.GetAttribute<EventType, EventRoutingKeyAttribute>().RoutingKey);

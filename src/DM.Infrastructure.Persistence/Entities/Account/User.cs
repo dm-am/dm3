@@ -12,6 +12,7 @@ using DM.Infrastructure.Persistence.Entities.Game.Characters;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
 using DM.Infrastructure.Persistence.Entities.Game.Posts;
 using DM.Infrastructure.Persistence.Entities.Messaging;
+using DM.Infrastructure.Persistence.Entities.Community;
 using DM.Infrastructure.Persistence.Entities.Moderation;
 using DM.Infrastructure.Persistence.Entities.Personal.Notepads;
 using DM.Infrastructure.Persistence.Entities.Subscriptions;
@@ -156,11 +157,7 @@ public class User : IUser, IRemovable
     [ForeignKey(nameof(AvatarUploadId))]
     public virtual Upload? AvatarUpload { get; set; }
 
-    /// <summary>
-    /// Profile picture (should only be one active)
-    /// </summary>
-    [InverseProperty(nameof(Upload.UserProfile))]
-    public virtual ICollection<Upload> ProfilePictures { get; set; } = [];
+    // NOTE: ProfilePictures navigation removed - Upload.EntityId is polymorphic without FK constraints
 
     /// <summary>
     /// Authorization tokens
@@ -203,22 +200,40 @@ public class User : IUser, IRemovable
     public virtual ICollection<Like> Likes { get; set; } = [];
 
     /// <summary>
-    /// User reviews
+    /// User endorsements authored
     /// </summary>
-    [InverseProperty(nameof(Review.Author))]
-    public virtual ICollection<Review> Reviews { get; set; } = [];
+    [InverseProperty(nameof(UserEndorsement.Author))]
+    public virtual ICollection<UserEndorsement> UserEndorsementsAuthored { get; set; } = [];
 
     /// <summary>
-    /// Reviews modified by user
+    /// User endorsements received
     /// </summary>
-    [InverseProperty(nameof(Review.ModifiedBy))]
-    public virtual ICollection<Review> ReviewsModified { get; set; } = [];
+    [InverseProperty(nameof(UserEndorsement.TargetUser))]
+    public virtual ICollection<UserEndorsement> UserEndorsementsReceived { get; set; } = [];
 
     /// <summary>
-    /// Reviews of user's posts (as post author)
+    /// Website testimonials authored
     /// </summary>
-    [InverseProperty(nameof(Review.PostAuthor))]
-    public virtual ICollection<Review> ReviewsAsPostAuthor { get; set; } = [];
+    [InverseProperty(nameof(WebsiteTestimonial.Author))]
+    public virtual ICollection<WebsiteTestimonial> WebsiteTestimonials { get; set; } = [];
+
+    /// <summary>
+    /// Game reviews authored
+    /// </summary>
+    [InverseProperty(nameof(GameReview.Author))]
+    public virtual ICollection<GameReview> GameReviews { get; set; } = [];
+
+    /// <summary>
+    /// post reviews authored
+    /// </summary>
+    [InverseProperty(nameof(PostReview.Author))]
+    public virtual ICollection<PostReview> PostReviewsAuthored { get; set; } = [];
+
+    /// <summary>
+    /// post reviews of user's posts (as post author)
+    /// </summary>
+    [InverseProperty(nameof(PostReview.PostAuthor))]
+    public virtual ICollection<PostReview> PostReviewsReceived { get; set; } = [];
 
     /// <summary>
     /// User uploads
@@ -249,7 +264,7 @@ public class User : IUser, IRemovable
     /// <summary>
     /// Games user is GM of
     /// </summary>
-    [InverseProperty(nameof(Game.Game.Author))]
+    [InverseProperty(nameof(Game.Game.Master))]
     public virtual ICollection<Game.Game> GamesAsMaster { get; set; } = [];
 
     /// <summary>

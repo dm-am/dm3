@@ -1,5 +1,5 @@
 using System;
-using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Game.Invitations;
 
@@ -24,9 +24,9 @@ public class GameInvitation
     public string GameTitle { get; set; } = string.Empty;
 
     /// <summary>
-    /// Invited user
+    /// Invited user (lightweight reference)
     /// </summary>
-    public User InvitedUser { get; set; } = null!;
+    public UserRef InvitedUser { get; set; } = null!;
 
     /// <summary>
     /// Username of user who sent the invitation (master)

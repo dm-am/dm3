@@ -8,10 +8,9 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Games;
-using DM.Domain.Game.Features.Reviews;
-using DM.Domain.Core.Reviews;
+using DM.Domain.Game.Features.PostReviews;
 using Microsoft.EntityFrameworkCore;
-using DbReview = DM.Infrastructure.Persistence.Entities.Shared.Review;
+using DbPostReview = DM.Infrastructure.Persistence.Entities.Game.PostReview;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
@@ -30,50 +29,43 @@ internal class PostReviewRepository : IPostReviewRepository
     // ═══ READ ═══
 
     /// <inheritdoc />
-    public Task<int> CountAsync(Guid postId) => _dbContext.Reviews
+    public Task<int> CountAsync(Guid postId) => _dbContext.PostReviews
         .TagWith("DM.PostReview.Count")
-        .Where(r => r.TargetType == ReviewTargetType.Post &&
-                    r.TargetId == postId &&
-                    !r.IsRemoved)
+        .Where(r => r.PostId == postId && !r.IsRemoved)
         .CountAsync();
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Review>> GetAsync(Guid postId, PagingData paging) =>
-        await _dbContext.Reviews
+    public async Task<IEnumerable<PostReview>> GetAsync(Guid postId, PagingData paging) =>
+        await _dbContext.PostReviews
             .TagWith("DM.PostReview.GetByPost")
-            .Where(r => r.TargetType == ReviewTargetType.Post &&
-                        r.TargetId == postId &&
-                        !r.IsRemoved)
+            .Where(r => r.PostId == postId && !r.IsRemoved)
             .OrderByDescending(r => r.CreatedUtc)
             .Page(paging)
-            .ProjectTo<Review>(_mapper.ConfigurationProvider)
+            .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
 
     /// <inheritdoc />
-    public Task<Review?> GetAsync(Guid id) => _dbContext.Reviews
+    public Task<PostReview?> GetAsync(Guid id) => _dbContext.PostReviews
         .TagWith("DM.PostReview.GetById")
-        .Where(r => !r.IsRemoved &&
-                    r.ReviewId == id &&
-                    r.TargetType == ReviewTargetType.Post)
-        .ProjectTo<Review>(_mapper.ConfigurationProvider)
+        .Where(r => !r.IsRemoved && r.PostReviewId == id)
+        .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
-    public Task<Review?> GetByAuthorAsync(Guid postId, Guid authorId) => _dbContext.Reviews
+    public Task<PostReview?> GetByAuthorAsync(Guid postId, Guid authorId) => _dbContext.PostReviews
         .TagWith("DM.PostReview.GetByAuthor")
-        .Where(r => r.TargetType == ReviewTargetType.Post &&
-                    r.TargetId == postId &&
-                    r.UserId == authorId &&
+        .Where(r => r.PostId == postId &&
+                    r.AuthorId == authorId &&
                     !r.IsRemoved)
-        .ProjectTo<Review>(_mapper.ConfigurationProvider)
+        .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
     public Task<int> CountAllAsync(PostReviewFilter? filter = null)
     {
-        var query = _dbContext.Reviews
+        var query = _dbContext.PostReviews
             .TagWith("DM.PostReview.CountAll")
-            .Where(r => r.TargetType == ReviewTargetType.Post && !r.IsRemoved);
+            .Where(r => !r.IsRemoved);
 
         query = ApplyFilter(query, filter);
 
@@ -81,72 +73,67 @@ internal class PostReviewRepository : IPostReviewRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Review>> GetAllAsync(PagingData paging, PostReviewFilter? filter = null)
+    public async Task<IEnumerable<PostReview>> GetAllAsync(PagingData paging, PostReviewFilter? filter = null)
     {
-        var query = _dbContext.Reviews
+        var query = _dbContext.PostReviews
             .TagWith("DM.PostReview.GetAll")
-            .Where(r => r.TargetType == ReviewTargetType.Post && !r.IsRemoved);
+            .Where(r => !r.IsRemoved);
 
         query = ApplyFilter(query, filter);
 
         return await query
             .OrderByDescending(r => r.CreatedUtc)
             .Page(paging)
-            .ProjectTo<Review>(_mapper.ConfigurationProvider)
+            .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
     }
 
     // ═══ WRITE ═══
 
     /// <inheritdoc />
-    public Task<bool> ExistsAsync(Guid authorId, Guid postId) => _dbContext.Reviews
+    public Task<bool> ExistsAsync(Guid authorId, Guid postId) => _dbContext.PostReviews
         .TagWith("DM.PostReview.Exists")
-        .AnyAsync(r => r.TargetType == ReviewTargetType.Post &&
-                       r.UserId == authorId &&
-                       r.TargetId == postId &&
+        .AnyAsync(r => r.AuthorId == authorId &&
+                       r.PostId == postId &&
                        !r.IsRemoved);
 
     /// <inheritdoc />
-    public async Task<Review> CreateAsync(CreatePostReviewEntity entity)
+    public async Task<PostReview> CreateAsync(CreatePostReviewEntity entity)
     {
-        var dbReview = new DbReview
+        var dbReview = new DbPostReview
         {
-            ReviewId = entity.ReviewId,
-            UserId = entity.UserId,
-            TargetType = ReviewTargetType.Post,
-            TargetId = entity.PostId,
+            PostReviewId = entity.PostReviewId,
+            AuthorId = entity.AuthorId,
+            PostId = entity.PostId,
             PostAuthorId = entity.PostAuthorId,
             GameId = entity.GameId,
             CreatedUtc = entity.CreatedUtc,
-            SignValue = (short)entity.Sign,
-            ReasonType = entity.ReasonType,
-            IsApproved = true, // Post reviews are always approved
+            Sign = entity.Sign,
+            Text = entity.Text,
             IsRemoved = false
         };
 
-        _dbContext.Reviews.Add(dbReview);
+        _dbContext.PostReviews.Add(dbReview);
         await _dbContext.SaveChangesAsync();
 
-        return await _dbContext.Reviews
+        return await _dbContext.PostReviews
             .TagWith("DM.PostReview.Created")
-            .Where(r => r.ReviewId == dbReview.ReviewId)
-            .ProjectTo<Review>(_mapper.ConfigurationProvider)
+            .Where(r => r.PostReviewId == dbReview.PostReviewId)
+            .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }
 
     /// <inheritdoc />
-    public async Task<Review> UpdateAsync(UpdatePostReviewEntity entity)
+    public async Task<PostReview> UpdateAsync(UpdatePostReviewEntity entity)
     {
-        var dbReview = await _dbContext.Reviews.FindAsync(entity.ReviewId);
+        var dbReview = await _dbContext.PostReviews.FindAsync(entity.PostReviewId);
         if (dbReview == null)
         {
-            throw new InvalidOperationException($"Review {entity.ReviewId} not found");
+            throw new InvalidOperationException($"Review {entity.PostReviewId} not found");
         }
 
         if (entity.Sign.HasValue)
-            dbReview.SignValue = (short)entity.Sign.Value;
-        if (entity.ReasonType.HasValue)
-            dbReview.ReasonType = entity.ReasonType.Value;
+            dbReview.Sign = entity.Sign.Value;
         if (entity.IsRemoved.HasValue)
             dbReview.IsRemoved = entity.IsRemoved.Value;
         if (entity.ModifiedUtc.HasValue)
@@ -156,10 +143,10 @@ internal class PostReviewRepository : IPostReviewRepository
 
         await _dbContext.SaveChangesAsync();
 
-        return await _dbContext.Reviews
+        return await _dbContext.PostReviews
             .TagWith("DM.PostReview.Updated")
-            .Where(r => r.ReviewId == entity.ReviewId)
-            .ProjectTo<Review>(_mapper.ConfigurationProvider)
+            .Where(r => r.PostReviewId == entity.PostReviewId)
+            .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }
 
@@ -193,10 +180,9 @@ internal class PostReviewRepository : IPostReviewRepository
 
     /// <inheritdoc />
     public Task<bool> HasRecentReviewInGameAsync(Guid authorId, Guid gameId, DateTimeOffset cutoffDate) =>
-        _dbContext.Reviews
+        _dbContext.PostReviews
             .TagWith("DM.PostReview.HasRecentInGame")
-            .AnyAsync(r => r.TargetType == ReviewTargetType.Post &&
-                           r.UserId == authorId &&
+            .AnyAsync(r => r.AuthorId == authorId &&
                            r.GameId == gameId &&
                            r.CreatedUtc >= cutoffDate &&
                            !r.IsRemoved);
@@ -208,13 +194,13 @@ internal class PostReviewRepository : IPostReviewRepository
 
     // ═══ PRIVATE ═══
 
-    private IQueryable<DbReview> ApplyFilter(IQueryable<DbReview> query, PostReviewFilter? filter)
+    private IQueryable<DbPostReview> ApplyFilter(IQueryable<DbPostReview> query, PostReviewFilter? filter)
     {
         if (filter == null)
             return query;
 
         if (filter.AuthorId.HasValue)
-            query = query.Where(r => r.UserId == filter.AuthorId.Value);
+            query = query.Where(r => r.AuthorId == filter.AuthorId.Value);
 
         if (filter.RecipientId.HasValue)
             query = query.Where(r => r.PostAuthorId == filter.RecipientId.Value);

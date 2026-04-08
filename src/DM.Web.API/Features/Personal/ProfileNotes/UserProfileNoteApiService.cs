@@ -55,11 +55,11 @@ internal class UserProfileNoteApiService : IUserProfileNoteApiService
     {
         return new UserProfileNote
         {
-            Id = dto.NoteId,
+            Id = dto.Id,
             Username = dto.SubjectUsername,
             Text = dto.Text,
-            CreatedAt = dto.CreatedUtc,
-            UpdatedAt = dto.UpdatedUtc
+            CreatedUtc = dto.CreatedUtc,
+            UpdatedUtc = dto.UpdatedUtc
         };
     }
 }

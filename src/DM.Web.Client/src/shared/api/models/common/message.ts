@@ -28,7 +28,7 @@ export type ChatType = "Direct" | "Group" | "Global";
  */
 export type MessageEdit = {
   id: string;
-  editedAtUtc: string;
+  editedUtc: string;
   editor: User;
 };
 
@@ -45,7 +45,7 @@ export type Message = {
   text: string;
   isRemoved: boolean;
   deletedBy: User | null;
-  deletedAtUtc: string | null;
+  deletedUtc: string | null;
   likes: User[];
   edits: MessageEdit[];
 };

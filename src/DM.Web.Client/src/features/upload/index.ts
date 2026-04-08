@@ -1,1 +1,1 @@
-export { TheUpload } from "./ui";
+export { Upload } from "./ui";

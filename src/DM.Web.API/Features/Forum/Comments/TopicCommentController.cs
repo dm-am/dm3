@@ -1,7 +1,7 @@
 using DM.Web.API.Shared.Authentication;
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
+using DM.Domain.Forum.Features.Comments;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Forum.Likes;
@@ -56,17 +56,27 @@ public class TopicCommentController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Returns paginated list of comments in the specified topic.
-    /// Comments are sorted by creation date (oldest first).
+    /// Supports filtering by authors, text search, date range and sorting.
     /// Marks comments as read for authenticated users.
+    ///
+    /// ## Query Parameters
+    /// - **skip**: Number of items to skip (pagination)
+    /// - **take**: Number of items to return (max 100, default 20)
+    /// - **search**: Text search in comment content (case-insensitive)
+    /// - **authors**: Filter by author usernames (comma-separated, OR logic)
+    /// - **createdFromUtc**: Filter by creation date start (ISO 8601)
+    /// - **createdToUtc**: Filter by creation date end (ISO 8601)
+    /// - **sortBy**: Sort field - "created" (default) or "likes"
+    /// - **sortOrder**: Sort direction - "asc" (default for created) or "desc"
     /// </remarks>
     /// <param name="id">Topic identifier (GUID)</param>
-    /// <param name="q">Pagination parameters (skip, number)</param>
+    /// <param name="q">Query parameters with filtering, sorting and pagination</param>
     /// <response code="200">Paginated list of comments</response>
     /// <response code="404">Topic not found</response>
     [HttpGet("~/v1/topics/{id}/comments", Name = nameof(GetTopicComments))]
     [ProducesResponseType(typeof(ListEnvelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetTopicComments(Guid id, [FromQuery] PagingQuery q)
+    public async Task<IActionResult> GetTopicComments(Guid id, [FromQuery] CommentsQuery q)
     {
         var (comments, paging) = await _commentApiService.Get(id, q);
         return Ok(new ListEnvelope<Comment>(comments, paging));

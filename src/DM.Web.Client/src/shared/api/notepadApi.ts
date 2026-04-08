@@ -77,8 +77,15 @@ export default new (class NotepadApi {
   /**
    * Update game notepad entry
    */
-  public updateGameEntry(gameId: string, entryId: string, request: UpdateNotepadEntryRequest) {
-    return Api.patch<NotepadEntry>(`${this.gamePath(gameId)}/${entryId}`, request);
+  public updateGameEntry(
+    gameId: string,
+    entryId: string,
+    request: UpdateNotepadEntryRequest,
+  ) {
+    return Api.patch<NotepadEntry>(
+      `${this.gamePath(gameId)}/${entryId}`,
+      request,
+    );
   }
 
   /**
@@ -116,8 +123,15 @@ export default new (class NotepadApi {
   /**
    * Update blog notepad entry
    */
-  public updateBlogEntry(blogId: string, entryId: string, request: UpdateNotepadEntryRequest) {
-    return Api.patch<NotepadEntry>(`${this.blogPath(blogId)}/${entryId}`, request);
+  public updateBlogEntry(
+    blogId: string,
+    entryId: string,
+    request: UpdateNotepadEntryRequest,
+  ) {
+    return Api.patch<NotepadEntry>(
+      `${this.blogPath(blogId)}/${entryId}`,
+      request,
+    );
   }
 
   /**
@@ -129,17 +143,26 @@ export default new (class NotepadApi {
 
   // ==================== Categories ====================
 
-  private categoryPath = (notepadType: "user" | "game" | "blog", containerId?: string) => {
+  private categoryPath = (
+    notepadType: "user" | "game" | "blog",
+    containerId?: string,
+  ) => {
     if (notepadType === "user") return `${this.userPath}/categories`;
-    if (notepadType === "game") return `games/${containerId}/notepad/categories`;
+    if (notepadType === "game")
+      return `games/${containerId}/notepad/categories`;
     return `blogs/${containerId}/notepad/categories`;
   };
 
   /**
    * Get notepad categories
    */
-  public getCategories(notepadType: "user" | "game" | "blog", containerId?: string) {
-    return Api.get<ListEnvelope<NotepadCategory>>(this.categoryPath(notepadType, containerId));
+  public getCategories(
+    notepadType: "user" | "game" | "blog",
+    containerId?: string,
+  ) {
+    return Api.get<ListEnvelope<NotepadCategory>>(
+      this.categoryPath(notepadType, containerId),
+    );
   }
 
   /**
@@ -148,9 +171,12 @@ export default new (class NotepadApi {
   public createCategory(
     notepadType: "user" | "game" | "blog",
     request: CreateNotepadCategoryRequest,
-    containerId?: string
+    containerId?: string,
   ) {
-    return Api.post<NotepadCategory>(this.categoryPath(notepadType, containerId), request);
+    return Api.post<NotepadCategory>(
+      this.categoryPath(notepadType, containerId),
+      request,
+    );
   }
 
   /**
@@ -160,18 +186,24 @@ export default new (class NotepadApi {
     notepadType: "user" | "game" | "blog",
     categoryId: string,
     request: UpdateNotepadCategoryRequest,
-    containerId?: string
+    containerId?: string,
   ) {
     return Api.patch<NotepadCategory>(
       `${this.categoryPath(notepadType, containerId)}/${categoryId}`,
-      request
+      request,
     );
   }
 
   /**
    * Delete notepad category
    */
-  public deleteCategory(notepadType: "user" | "game" | "blog", categoryId: string, containerId?: string) {
-    return Api.delete(`${this.categoryPath(notepadType, containerId)}/${categoryId}`);
+  public deleteCategory(
+    notepadType: "user" | "game" | "blog",
+    categoryId: string,
+    containerId?: string,
+  ) {
+    return Api.delete(
+      `${this.categoryPath(notepadType, containerId)}/${categoryId}`,
+    );
   }
 })();

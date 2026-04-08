@@ -46,7 +46,7 @@ public class UsernameChangeRequest
     /// <summary>
     /// When the approval token expires (UTC)
     /// </summary>
-    public DateTimeOffset? ApprovalTokenExpiresAt { get; set; }
+    public DateTimeOffset? ApprovalTokenExpiresUtc { get; set; }
 
     /// <summary>
     /// When the request was resolved (UTC)
@@ -124,7 +124,7 @@ public class UsernameChangeRequestEntry
     /// <summary>
     /// When the approval token expires (if approved)
     /// </summary>
-    public DateTimeOffset? ApprovalTokenExpiresAt { get; set; }
+    public DateTimeOffset? ApprovalTokenExpiresUtc { get; set; }
 
     /// <summary>
     /// When the request was resolved

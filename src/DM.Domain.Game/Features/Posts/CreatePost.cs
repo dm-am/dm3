@@ -18,17 +18,12 @@ public class CreatePost
     public Guid? CharacterId { get; set; }
 
     /// <summary>
-    /// Text
+    /// Game text (in-character content)
     /// </summary>
-    public string Text { get; set; } = null!;
+    public string GameText { get; set; } = null!;
 
     /// <summary>
-    /// Comment
+    /// Metagame text (OOC commentary)
     /// </summary>
-    public string? Comment { get; set; }
-
-    /// <summary>
-    /// Message to master
-    /// </summary>
-    public string? MasterMessage { get; set; }
+    public string? MetagameText { get; set; }
 }

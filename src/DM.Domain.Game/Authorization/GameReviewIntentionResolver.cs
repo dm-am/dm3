@@ -1,6 +1,6 @@
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Reviews;
+using DM.Domain.Game.Features.GameReviews;
 
 namespace DM.Domain.Game.Authorization;
 
@@ -11,7 +11,7 @@ namespace DM.Domain.Game.Authorization;
 /// </remarks>
 internal class GameReviewIntentionResolver :
     IIntentionResolver<GameReviewIntention>,
-    IIntentionResolver<GameReviewIntention, Review>
+    IIntentionResolver<GameReviewIntention, GameReview>
 {
     /// <inheritdoc />
     public bool IsAllowed(IAuthorizationSubject user, GameReviewIntention intention) => intention switch
@@ -22,7 +22,7 @@ internal class GameReviewIntentionResolver :
     };
 
     /// <inheritdoc />
-    public bool IsAllowed(IAuthorizationSubject user, GameReviewIntention intention, Review target) => intention switch
+    public bool IsAllowed(IAuthorizationSubject user, GameReviewIntention intention, GameReview target) => intention switch
     {
         // Edit is allowed for the author
         GameReviewIntention.Edit => user.UserId == target.Author.UserId,

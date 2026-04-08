@@ -5,7 +5,6 @@ using AutoMapper;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Comments;
 using DM.Domain.Blog.Features.PublicationComments;
-using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Dto;
 using Comment = DM.Web.API.Shared.Dto.Comment;
@@ -33,7 +32,7 @@ internal class PublicationCommentApiService : IPublicationCommentApiService
     }
 
     /// <inheritdoc />
-    public async Task<DiscussionResponse> GetDiscussion(Guid publicationId, PagingQuery query)
+    public async Task<DiscussionResponse> GetDiscussion(Guid publicationId, PublicationCommentsQuery query)
     {
         var (comments, paging) = await _commentService.GetAsync(publicationId, query);
         var identity = _identityProvider.Current;
@@ -62,7 +61,7 @@ internal class PublicationCommentApiService : IPublicationCommentApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Comment>> Get(Guid publicationId, PagingQuery query)
+    public async Task<ListEnvelope<Comment>> Get(Guid publicationId, PublicationCommentsQuery query)
     {
         var (comments, paging) = await _commentService.GetAsync(publicationId, query);
         return new ListEnvelope<Comment>(comments.Select(_mapper.Map<Comment>), new PagingInfo(paging));

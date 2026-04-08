@@ -192,15 +192,25 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
         var postsToday = await _dbContext.Posts.CountAsync(p =>
             !p.IsRemoved && p.CreatedUtc >= todayStartUtc);
 
+        // Count all blogs (including drafts and private)
+        var totalBlogs = await _dbContext.Blogs.CountAsync(b => !b.IsRemoved);
+        var blogsToday = await _dbContext.Blogs.CountAsync(b =>
+            !b.IsRemoved && b.CreatedUtc >= todayStartUtc);
+
+        // Count all publications (including unpublished drafts)
+        var totalPublications = await _dbContext.Publications.CountAsync(p => !p.IsRemoved);
+        var publicationsToday = await _dbContext.Publications.CountAsync(p =>
+            !p.IsRemoved && p.CreatedUtc >= todayStartUtc);
+
         // Weekly best post (highest total rating from post reviews)
-        var weeklyBest = await _dbContext.Reviews
-            .Where(r => !r.IsRemoved && r.TargetType == ReviewTargetType.Post && r.CreatedUtc >= weekAgo)
-            .GroupBy(r => new { r.TargetId, r.GameId })
+        var weeklyBest = await _dbContext.PostReviews
+            .Where(r => !r.IsRemoved && r.CreatedUtc >= weekAgo)
+            .GroupBy(r => new { r.PostId, r.GameId })
             .Select(g => new
             {
-                PostId = g.Key.TargetId!.Value,
-                GameId = g.Key.GameId!.Value,
-                RatingSum = g.Sum(r => r.SignValue ?? 0)
+                PostId = g.Key.PostId,
+                GameId = g.Key.GameId,
+                RatingSum = g.Sum(r => r.SignValue)
             })
             .OrderByDescending(x => x.RatingSum)
             .Take(1)
@@ -212,7 +222,7 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
                     x.PostId,
                     x.GameId,
                     GameTitle = p.Room.Game.Title,
-                    AuthorLogin = p.Author.Username,
+                    AuthorUsername = p.Author.Username,
                     x.RatingSum
                 })
             .FirstOrDefaultAsync();
@@ -225,7 +235,9 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
                 Users = new StatValue { Value = totalUsers, TodayDelta = usersToday },
                 Characters = new StatValue { Value = totalCharacters, TodayDelta = charactersToday },
                 Games = new StatValue { Value = totalGames, TodayDelta = gamesToday },
-                GamePosts = new StatValue { Value = totalPosts, TodayDelta = postsToday }
+                GamePosts = new StatValue { Value = totalPosts, TodayDelta = postsToday },
+                Blogs = new StatValue { Value = totalBlogs, TodayDelta = blogsToday },
+                Publications = new StatValue { Value = totalPublications, TodayDelta = publicationsToday }
             },
             WeeklyBestPost = weeklyBest != null && weeklyBest.RatingSum > 0
                 ? new PostHighlight
@@ -233,7 +245,7 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
                     PostId = weeklyBest.PostId,
                     GameId = weeklyBest.GameId,
                     GameTitle = weeklyBest.GameTitle,
-                    AuthorLogin = weeklyBest.AuthorLogin,
+                    AuthorUsername = weeklyBest.AuthorUsername,
                     RatingSum = weeklyBest.RatingSum
                 }
                 : null
@@ -267,11 +279,10 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
         }
 
         // Top players by rating received (sum of post review ratings)
-        var topByRating = await _dbContext.Reviews
-            .Where(r => !r.IsRemoved && r.TargetType == ReviewTargetType.Post
-                && r.CreatedUtc >= startDate && r.CreatedUtc < endDate && r.PostAuthorId.HasValue)
-            .GroupBy(r => r.PostAuthorId!.Value)
-            .Select(g => new { UserId = g.Key, TotalRating = g.Sum(r => (int)(r.SignValue ?? 0)) })
+        var topByRating = await _dbContext.PostReviews
+            .Where(r => !r.IsRemoved && r.CreatedUtc >= startDate && r.CreatedUtc < endDate)
+            .GroupBy(r => r.PostAuthorId)
+            .Select(g => new { UserId = g.Key, TotalRating = g.Sum(r => (int)r.SignValue) })
             .OrderByDescending(x => x.TotalRating)
             .Take(10)
             .Join(_dbContext.Users.Include(u => u.AvatarUpload), x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
@@ -307,11 +318,10 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
             topByPosts[i].Rank = i + 1;
 
         // Top games by rating (sum of post review ratings)
-        var topGamesByRating = await _dbContext.Reviews
-            .Where(r => !r.IsRemoved && r.TargetType == ReviewTargetType.Post
-                && r.CreatedUtc >= startDate && r.CreatedUtc < endDate && r.GameId.HasValue)
-            .GroupBy(r => r.GameId!.Value)
-            .Select(g => new { GameId = g.Key, TotalRating = g.Sum(r => (int)(r.SignValue ?? 0)) })
+        var topGamesByRating = await _dbContext.PostReviews
+            .Where(r => !r.IsRemoved && r.CreatedUtc >= startDate && r.CreatedUtc < endDate)
+            .GroupBy(r => r.GameId)
+            .Select(g => new { GameId = g.Key, TotalRating = g.Sum(r => (int)r.SignValue) })
             .OrderByDescending(x => x.TotalRating)
             .Take(10)
             .Join(_dbContext.Games, x => x.GameId, g => g.GameId, (x, g) => new LeaderboardEntry
@@ -388,8 +398,16 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
         var gamePosts = await _dbContext.Posts.CountAsync(p =>
             !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate);
 
-        var reviews = await _dbContext.Reviews.CountAsync(r =>
+        // Count all review types
+        var gameReviews = await _dbContext.GameReviews.CountAsync(r =>
             !r.IsRemoved && r.CreatedUtc >= startDate && r.CreatedUtc < endDate);
+        var postReviews = await _dbContext.PostReviews.CountAsync(r =>
+            !r.IsRemoved && r.CreatedUtc >= startDate && r.CreatedUtc < endDate);
+        var userEndorsements = await _dbContext.UserEndorsements.CountAsync(r =>
+            !r.IsRemoved && r.CreatedUtc >= startDate && r.CreatedUtc < endDate);
+        var websiteTestimonials = await _dbContext.WebsiteTestimonials.CountAsync(r =>
+            !r.IsRemoved && r.CreatedUtc >= startDate && r.CreatedUtc < endDate);
+        var reviews = gameReviews + postReviews + userEndorsements + websiteTestimonials;
 
         // Unique active users (posted at least once)
         var activeUsers = await _dbContext.Posts

@@ -10,8 +10,8 @@ internal interface IMessageFactory
     /// <summary>
     /// Create new message data
     /// </summary>
-    /// <param name="createMessage"></param>
-    /// <param name="userId"></param>
-    /// <returns></returns>
+    /// <param name="createMessage">Message creation data</param>
+    /// <param name="userId">User identifier</param>
+    /// <returns>Message entity DTO</returns>
     CreateMessageEntity Create(CreateMessage createMessage, Guid userId);
 }

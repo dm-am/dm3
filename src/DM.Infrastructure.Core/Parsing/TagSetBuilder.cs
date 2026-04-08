@@ -19,7 +19,7 @@ internal class TagSetBuilder
     /// <summary>
     /// Build set of tags
     /// </summary>
-    /// <returns></returns>
+    /// <returns>Array of tags</returns>
     public Tag[] Build()
     {
         return _set.ToArray();

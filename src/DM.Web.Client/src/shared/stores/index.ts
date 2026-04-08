@@ -12,6 +12,6 @@ export { useAuthStore, useUserStore } from "./auth";
 export { useUiStore } from "./ui";
 
 // Data stores
-export { useWebsiteReviewStore } from "./websiteReviews";
+export { useTestimonialStore } from "./testimonials";
 export { useStatisticsStore } from "./statistics";
 export { useSubscriptionsStore } from "./subscriptions";

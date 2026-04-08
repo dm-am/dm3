@@ -20,6 +20,5 @@ internal interface IIndexer
     /// Indexes event entity in search engine
     /// </summary>
     /// <param name="message">Event</param>
-    /// <returns></returns>
     Task Index(InvokedEvent message);
 }

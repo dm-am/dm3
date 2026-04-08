@@ -14,6 +14,7 @@ using DM.Infrastructure.Persistence.Entities.Messaging;
 using DM.Infrastructure.Persistence.Entities.Personal.Notepads;
 using DM.Infrastructure.Persistence.Entities.Subscriptions;
 using DM.Infrastructure.Persistence.Entities.Account;
+using DM.Infrastructure.Persistence.Entities.Community;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence;
@@ -35,55 +36,129 @@ public class DmDbContext : DbContext
 
         var isPostgres = Database.IsNpgsql();
 
-        // One active review per user per target (filtered unique index - PostgreSQL only)
-        // Platform reviews: one per user
-        // User/Game reviews: one per (author, target) pair
-        var reviewEntity = modelBuilder.Entity<Review>();
-        var reviewIndexBuilder = reviewEntity
-            .HasIndex(r => new { r.UserId, r.TargetType, r.TargetId });
+        #region UserEndorsement Indexes
 
-        // SQLite doesn't support partial indexes with filters
+        // One active endorsement per author-target pair
+        var userEndorsementIndexBuilder = modelBuilder.Entity<UserEndorsement>()
+            .HasIndex(e => new { e.AuthorId, e.TargetUserId });
         if (isPostgres)
         {
-            reviewIndexBuilder.HasFilter("\"IsRemoved\" = false");
+            userEndorsementIndexBuilder.HasFilter("\"IsRemoved\" = false");
         }
+        userEndorsementIndexBuilder.IsUnique();
 
-        reviewIndexBuilder.IsUnique();
-
-        // Index for efficient lookup by target
-        var targetIndexBuilder = reviewEntity
-            .HasIndex(r => new { r.TargetType, r.TargetId });
+        // Index for efficient lookup by target user (endorsements received)
+        var endorsementTargetIndexBuilder = modelBuilder.Entity<UserEndorsement>()
+            .HasIndex(e => e.TargetUserId);
         if (isPostgres)
         {
-            targetIndexBuilder.HasFilter("\"IsRemoved\" = false");
+            endorsementTargetIndexBuilder.HasFilter("\"IsRemoved\" = false");
         }
 
-        // Index for Post reviews by PostAuthorId (for "reviews ON user's posts" queries)
-        var postAuthorIndexBuilder = reviewEntity
-            .HasIndex(r => r.PostAuthorId);
+        #endregion
+
+        #region WebsiteTestimonial Indexes
+
+        // One testimonial per user
+        var testimonialIndexBuilder = modelBuilder.Entity<WebsiteTestimonial>()
+            .HasIndex(t => t.AuthorId);
         if (isPostgres)
         {
-            postAuthorIndexBuilder.HasFilter("\"IsRemoved\" = false AND \"PostAuthorId\" IS NOT NULL");
+            testimonialIndexBuilder.HasFilter("\"IsRemoved\" = false");
         }
+        testimonialIndexBuilder.IsUnique();
 
-        // Index for Post reviews by GameId (for "reviews in game" queries)
-        var gameIndexBuilder = reviewEntity
+        #endregion
+
+        #region GameReview Indexes
+
+        // One active review per author-game pair
+        var gameReviewIndexBuilder = modelBuilder.Entity<GameReview>()
+            .HasIndex(r => new { r.AuthorId, r.GameId });
+        if (isPostgres)
+        {
+            gameReviewIndexBuilder.HasFilter("\"IsRemoved\" = false");
+        }
+        gameReviewIndexBuilder.IsUnique();
+
+        // Index for efficient lookup by game (reviews of a game)
+        var gameReviewByGameIndexBuilder = modelBuilder.Entity<GameReview>()
             .HasIndex(r => r.GameId);
         if (isPostgres)
         {
-            gameIndexBuilder.HasFilter("\"IsRemoved\" = false AND \"GameId\" IS NOT NULL");
+            gameReviewByGameIndexBuilder.HasFilter("\"IsRemoved\" = false");
         }
 
-        // Note: TargetId is a polymorphic reference (User, Game, or Post based on TargetType)
-        // Navigation properties are not used - target entities are loaded manually in repositories
+        #endregion
 
-        // Configure relationships for soft-deletable and editable entities
-        // These have DeletedBy and ModifiedBy navigation properties without inverse collections
-        ConfigureSoftDeletableRelationships<Comment>(modelBuilder);
-        ConfigureSoftDeletableRelationships<Topic>(modelBuilder);
-        ConfigureSoftDeletableRelationships<Message>(modelBuilder);
-        ConfigureSoftDeletableRelationships<Post>(modelBuilder);
-        ConfigureSoftDeletableRelationships<Character>(modelBuilder);
+        #region PostReview Indexes
+
+        // One active review per author-post pair
+        var ratedPostReviewIndexBuilder = modelBuilder.Entity<PostReview>()
+            .HasIndex(r => new { r.AuthorId, r.PostId });
+        if (isPostgres)
+        {
+            ratedPostReviewIndexBuilder.HasFilter("\"IsRemoved\" = false");
+        }
+        ratedPostReviewIndexBuilder.IsUnique();
+
+        // Index for reviews by PostAuthorId (for "reviews ON user's posts" queries)
+        var postReviewByAuthorIndexBuilder = modelBuilder.Entity<PostReview>()
+            .HasIndex(r => r.PostAuthorId);
+        if (isPostgres)
+        {
+            postReviewByAuthorIndexBuilder.HasFilter("\"IsRemoved\" = false");
+        }
+
+        // Index for reviews by GameId (for "reviews in game" queries)
+        var postReviewByGameIndexBuilder = modelBuilder.Entity<PostReview>()
+            .HasIndex(r => r.GameId);
+        if (isPostgres)
+        {
+            postReviewByGameIndexBuilder.HasFilter("\"IsRemoved\" = false");
+        }
+
+        // Index for reviews by PostId (for "reviews of a post" queries)
+        var postReviewByPostIndexBuilder = modelBuilder.Entity<PostReview>()
+            .HasIndex(r => r.PostId);
+        if (isPostgres)
+        {
+            postReviewByPostIndexBuilder.HasFilter("\"IsRemoved\" = false");
+        }
+
+        #endregion
+
+        // Configure DeletedBy relationships for soft-deletable entities (no inverse collections)
+        ConfigureDeletedByRelationship<Comment>(modelBuilder);
+        ConfigureDeletedByRelationship<Topic>(modelBuilder);
+        ConfigureDeletedByRelationship<Message>(modelBuilder);
+        ConfigureDeletedByRelationship<Post>(modelBuilder);
+        ConfigureDeletedByRelationship<Character>(modelBuilder);
+
+        // Configure both DeletedBy and ModifiedBy for editable entities (no inverse collections)
+        ConfigureEditableRelationships<GameReview>(modelBuilder);
+        ConfigureEditableRelationships<PostReview>(modelBuilder);
+        ConfigureEditableRelationships<UserEndorsement>(modelBuilder);
+        ConfigureEditableRelationships<WebsiteTestimonial>(modelBuilder);
+
+        // Token has 3 user relationships: User (owner), Creator, DeletedBy
+        modelBuilder.Entity<Token>()
+            .HasOne(t => t.User)
+            .WithMany(u => u.Tokens)
+            .HasForeignKey(t => t.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<Token>()
+            .HasOne(t => t.Creator)
+            .WithMany()
+            .HasForeignKey(t => t.CreatorId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
+        modelBuilder.Entity<Token>()
+            .HasOne(t => t.DeletedBy)
+            .WithMany()
+            .HasForeignKey(t => t.DeletedByUserId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // Comment.EntityId is a polymorphic reference - it can point to Topic, Game, Blog, or Publication.
         // Blog.Comments, Game.Comments, Publication.Comments are [NotMapped] to prevent shadow FK creation.
@@ -183,6 +258,10 @@ public class DmDbContext : DbContext
                 .HasDatabaseName("IX_PendingRegistrations_CreatedUtc");
         });
 
+        // NOTE: Upload.EntityId is a polymorphic FK (points to User, Game, Character, or Post)
+        // depending on UploadType. No navigation properties or FK constraints are defined
+        // because the same column cannot have FK constraints to multiple tables.
+
         // Global Query Filter: automatically exclude soft-deleted entities
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
@@ -197,14 +276,28 @@ public class DmDbContext : DbContext
     }
 
     /// <summary>
-    /// Configure relationships for entities with DeletedBy and ModifiedBy without inverse properties
+    /// Configure DeletedBy relationship for ISoftDeletable entities without inverse properties
     /// </summary>
-    private static void ConfigureSoftDeletableRelationships<TEntity>(ModelBuilder modelBuilder)
+    private static void ConfigureDeletedByRelationship<TEntity>(ModelBuilder modelBuilder)
+        where TEntity : class
+    {
+        modelBuilder.Entity<TEntity>()
+            .HasOne<User>("DeletedBy")
+            .WithMany()
+            .HasForeignKey("DeletedByUserId")
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
+    }
+
+    /// <summary>
+    /// Configure DeletedBy and ModifiedBy relationships for editable entities without inverse properties
+    /// </summary>
+    private static void ConfigureEditableRelationships<TEntity>(ModelBuilder modelBuilder)
         where TEntity : class
     {
         var entityBuilder = modelBuilder.Entity<TEntity>();
 
-        // Configure DeletedBy relationship without inverse collection
+        // Configure DeletedBy relationship
         entityBuilder
             .HasOne<User>("DeletedBy")
             .WithMany()
@@ -212,7 +305,7 @@ public class DmDbContext : DbContext
             .IsRequired(false)
             .OnDelete(DeleteBehavior.SetNull);
 
-        // Configure ModifiedBy relationship without inverse collection
+        // Configure ModifiedBy relationship
         entityBuilder
             .HasOne<User>("ModifiedBy")
             .WithMany()
@@ -270,17 +363,12 @@ public class DmDbContext : DbContext
     /// <summary>
     /// Comment edit history
     /// </summary>
-    public DbSet<CommentEditHistory> CommentEditHistory { get; set; }
+    public DbSet<CommentEdit> CommentEdits { get; set; }
 
     /// <summary>
     /// Likes
     /// </summary>
     public DbSet<Like> Likes { get; set; }
-
-    /// <summary>
-    /// Reviews
-    /// </summary>
-    public DbSet<Review> Reviews { get; set; }
 
     /// <summary>
     /// Tag groups
@@ -342,7 +430,7 @@ public class DmDbContext : DbContext
     /// <summary>
     /// Games
     /// </summary>
-    public DbSet<Game> Games { get; set; }
+    public DbSet<Entities.Game.Game> Games { get; set; }
 
     /// <summary>
     /// Game tags
@@ -399,6 +487,15 @@ public class DmDbContext : DbContext
     /// </summary>
     public DbSet<PostPendency> PostPendencies { get; set; }
 
+    /// <summary>
+    /// Game reviews (reviews of games by players)
+    /// </summary>
+    public DbSet<GameReview> GameReviews { get; set; }
+
+    /// <summary>
+    /// post reviews (reviews of posts with ratings and likes)
+    /// </summary>
+    public DbSet<PostReview> PostReviews { get; set; }
 
     #endregion
 
@@ -528,6 +625,20 @@ public class DmDbContext : DbContext
     /// Rubric access entries
     /// </summary>
     public DbSet<RubricAccess> RubricAccesses { get; set; }
+
+    #endregion
+
+    #region Community
+
+    /// <summary>
+    /// Website testimonials (positive reviews about the website)
+    /// </summary>
+    public DbSet<WebsiteTestimonial> WebsiteTestimonials { get; set; }
+
+    /// <summary>
+    /// User endorsements (positive recommendations between users)
+    /// </summary>
+    public DbSet<UserEndorsement> UserEndorsements { get; set; }
 
     #endregion
 }

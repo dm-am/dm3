@@ -13,7 +13,7 @@ internal interface IChatFactory
     /// </summary>
     /// <param name="userId">User identifier</param>
     /// <param name="otherUserId">Other user identifier</param>
-    /// <returns></returns>
+    /// <returns>Chat entity and link entities</returns>
     (CreateChatEntity chat, IEnumerable<CreateChatLinkEntity> links) CreateDirect(Guid userId, Guid otherUserId);
 
     /// <summary>
@@ -21,6 +21,14 @@ internal interface IChatFactory
     /// </summary>
     /// <param name="title">Chat title</param>
     /// <param name="participantIds">Participant user identifiers (including creator)</param>
-    /// <returns></returns>
+    /// <returns>Chat entity and link entities</returns>
     (CreateChatEntity chat, IEnumerable<CreateChatLinkEntity> links) CreateGroup(string title, IEnumerable<Guid> participantIds);
+
+    /// <summary>
+    /// Create data for game room chat (no user links needed)
+    /// </summary>
+    /// <param name="roomId">Room identifier to link</param>
+    /// <param name="title">Chat title</param>
+    /// <returns>Chat entity</returns>
+    CreateChatEntity CreateGameRoom(Guid roomId, string title);
 }

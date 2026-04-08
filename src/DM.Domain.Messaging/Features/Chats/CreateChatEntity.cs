@@ -22,6 +22,11 @@ public class CreateChatEntity
     /// Chat title (for group chats)
     /// </summary>
     public string? Title { get; set; }
+
+    /// <summary>
+    /// Room identifier (for game room chats)
+    /// </summary>
+    public Guid? RoomId { get; set; }
 }
 
 /// <summary>

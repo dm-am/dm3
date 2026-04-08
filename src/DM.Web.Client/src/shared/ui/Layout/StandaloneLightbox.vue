@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Standalone lightbox for pages that should look like modals (email-initiated flows)
-// Unlike TheLightbox (vue-final-modal), this is a regular component for router pages
+// Unlike Lightbox (vue-final-modal), this is a regular component for router pages
 </script>
 
 <template>
@@ -22,5 +22,5 @@
   padding: $big
   background: var(--overlay-bg)
 
-// .lightbox styles are inherited from TheLightbox.vue (global)
+// .lightbox styles are inherited from Lightbox.vue (global)
 </style>

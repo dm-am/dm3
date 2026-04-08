@@ -76,7 +76,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
         {
             if (existingNote != null)
             {
-                await _repository.Delete(existingNote.NoteId, ct);
+                await _repository.Delete(existingNote.Id, ct);
             }
             return null;
         }
@@ -87,7 +87,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
         {
             var update = new UpdateUserProfileNoteEntity
             {
-                NoteId = existingNote.NoteId,
+                Id = existingNote.Id,
                 Text = createNote.Text,
                 UpdatedUtc = now
             };
@@ -96,7 +96,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
 
         var entity = new CreateUserProfileNoteEntity
         {
-            NoteId = _guidFactory.Create(),
+            Id = _guidFactory.Create(),
             OwnerId = currentUser.UserId,
             SubjectUserId = subjectUser.UserId,
             Text = createNote.Text,
@@ -124,7 +124,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
         var note = await _repository.Get(currentUser.UserId, subjectUser.UserId, ct);
         if (note != null)
         {
-            await _repository.Delete(note.NoteId, ct);
+            await _repository.Delete(note.Id, ct);
         }
     }
 }

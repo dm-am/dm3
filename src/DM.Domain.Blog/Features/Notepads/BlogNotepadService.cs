@@ -215,7 +215,7 @@ internal class BlogNotepadService : IBlogNotepadService
 
     private async Task ThrowIfNotBlogParticipant(Guid blogId, CancellationToken ct)
     {
-        var blog = await _blogService.GetBlog(blogId, ct);
+        var blog = await _blogService.GetBlogAsync(blogId, ct);
         var isOwner = blog.Author.UserId == UserId;
         var isAssistant = blog.Assistants.Any(a => a.UserId == UserId);
 

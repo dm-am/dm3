@@ -9,9 +9,6 @@ using ServiceUpdateChat = DM.Domain.Messaging.Features.Chats.UpdateChat;
 using ApiChat = DM.Web.API.Features.Messaging.Chats.Chat;
 using ApiCreateChat = DM.Web.API.Features.Messaging.Chats.CreateChat;
 using ApiUpdateChat = DM.Web.API.Features.Messaging.Chats.UpdateChat;
-using ApiConversation = DM.Web.API.Features.Messaging.Conversations.Conversation;
-using ApiCreateConversation = DM.Web.API.Features.Messaging.Conversations.CreateConversation;
-using ApiUpdateConversation = DM.Web.API.Features.Messaging.Conversations.UpdateConversation;
 using ApiMessage = DM.Web.API.Features.Messaging.Messages.Message;
 using ApiMessageEdit = DM.Web.API.Features.Messaging.Messages.MessageEdit;
 
@@ -24,20 +21,16 @@ internal class MessagingMappingProfile : Profile
     public MessagingMappingProfile()
     {
         CreateMap<DtoChat, ApiChat>();
-        CreateMap<DtoChat, ApiConversation>();
         CreateMap<DtoMessageEdit, ApiMessageEdit>();
-        CreateMap<DtoMessage, ApiMessage>()
-            .ForMember(d => d.CreatedUtc, s => s.MapFrom(m => m.CreatedUtc))
-            .ForMember(d => d.ModifiedUtc, s => s.MapFrom(m => m.ModifiedUtc))
-            .ForMember(d => d.DeletedBy, s => s.MapFrom(m => m.DeletedBy))
-            .ForMember(d => d.DeletedUtc, s => s.MapFrom(m => m.DeletedUtc))
-            .ForMember(d => d.Edits, s => s.MapFrom(m => m.Edits));
-        CreateMap<ApiMessage, CreateMessage>();
-        CreateMap<ApiMessage, UpdateMessage>();
+        CreateMap<DtoMessage, ApiMessage>();
+        CreateMap<ApiMessage, CreateMessage>()
+            .ForMember(d => d.ChatId, opt => opt.Ignore());
+
+        CreateMap<ApiMessage, UpdateMessage>()
+            .ForMember(d => d.MessageId, opt => opt.Ignore());
 
         CreateMap<ApiCreateChat, ServiceCreateChat>();
-        CreateMap<ApiUpdateChat, ServiceUpdateChat>();
-        CreateMap<ApiCreateConversation, ServiceCreateChat>();
-        CreateMap<ApiUpdateConversation, ServiceUpdateChat>();
+        CreateMap<ApiUpdateChat, ServiceUpdateChat>()
+            .ForMember(d => d.ChatId, opt => opt.Ignore());
     }
 }

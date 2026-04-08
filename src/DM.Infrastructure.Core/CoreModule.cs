@@ -5,6 +5,7 @@ using Amazon.S3;
 using Autofac;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Identity;
 using DM.Domain.Core.Search;
 using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Core.Authorization;
@@ -98,6 +99,11 @@ public class CoreModule : Module
         builder.RegisterType<SearchEngineRepository>()
             .As<ISearchEngineRepository>()
             .InstancePerLifetimeScope();
+
+        // PublicId encoding/decoding service (stateless, singleton)
+        builder.RegisterType<PublicIdService>()
+            .As<IPublicIdService>()
+            .SingleInstance();
 
         base.Load(builder);
     }

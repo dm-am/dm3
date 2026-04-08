@@ -17,7 +17,7 @@ export default new (class NotificationApi {
    */
   public getNotifications(skip = 0, take = 20) {
     return Api.get<ListEnvelope<UserNotification>>(
-      `${this.basePath}?skip=${skip}&take=${take}`
+      `${this.basePath}?skip=${skip}&take=${take}`,
     );
   }
 
@@ -49,6 +49,9 @@ export default new (class NotificationApi {
    * Update notification settings
    */
   public updateSettings(request: UpdateNotificationSettingsRequest) {
-    return Api.patch<NotificationSettings>(`${this.basePath}/settings`, request);
+    return Api.patch<NotificationSettings>(
+      `${this.basePath}/settings`,
+      request,
+    );
   }
 })();

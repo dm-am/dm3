@@ -35,9 +35,9 @@ public class OutboxEvent
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Processing moment
+    /// Processing moment (UTC)
     /// </summary>
-    public DateTimeOffset? ProcessedAt { get; set; }
+    public DateTimeOffset? ProcessedUtc { get; set; }
 
     /// <summary>
     /// Whether the event has been processed

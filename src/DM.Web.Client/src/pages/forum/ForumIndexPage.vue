@@ -1,17 +1,49 @@
 <script setup lang="ts">
-import { useBoardsStore } from "@/entities/forum";
-import { useUserStore } from "@/entities/user";
+import { computed, onMounted, ref } from "vue";
 import { storeToRefs } from "pinia";
-import { onMounted, ref } from "vue";
-import { UserLink } from "@/entities/user";
+import { DataTable, type Column } from "@/shared/ui/DataTable";
+import { Tooltip } from "@/shared/ui/Tooltip";
+import { useBoardsStore, forumApi, type Board } from "@/entities/forum";
+import { useUserStore, UserLink } from "@/entities/user";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
-import { forumApi } from "@/entities/forum";
 
 const store = useBoardsStore();
-const { boards } = storeToRefs(store);
+const { boards, boardsLoading } = storeToRefs(store);
 const { user } = storeToRefs(useUserStore());
 
 const markingAllAsRead = ref(false);
+
+// Columns for boards table
+const columns: Column[] = [
+  { key: "title", label: "Раздел", width: "18%", align: "left" },
+  { key: "moderators", label: "Модераторы раздела", width: "28%", align: "left", hideOnMobile: true },
+  { key: "topics", label: "Топики", width: "8%", align: "center" },
+  { key: "comments", label: "Комментарии", width: "11%", align: "center" },
+  { key: "lastActivity", label: "Последняя активность", width: "35%", align: "center", hideOnMobile: true },
+];
+
+// Map boards to include 'id' as string for DataTable requirement
+const boardsData = computed(() =>
+  (boards.value ?? []).map((b) => ({ ...b, id: b.id as string }))
+);
+
+// Determine last activity type: "comment" | "topic" | null
+type LastActivityType = "comment" | "topic" | null;
+type BoardRow = (typeof boardsData)["value"][number];
+
+function getLastActivityType(board: BoardRow): LastActivityType {
+  const hasComment = !!board.lastComment;
+  const hasTopic = !!board.lastTopic;
+
+  if (!hasComment && !hasTopic) return null;
+  if (hasComment && !hasTopic) return "comment";
+  if (!hasComment && hasTopic) return "topic";
+
+  // Both exist - compare dates
+  const commentDate = new Date(board.lastComment!.createdUtc).getTime();
+  const topicDate = new Date(board.lastTopic!.createdUtc).getTime();
+  return commentDate >= topicDate ? "comment" : "topic";
+}
 
 async function markAllAsRead() {
   if (!boards.value) return;
@@ -19,10 +51,10 @@ async function markAllAsRead() {
   markingAllAsRead.value = true;
   try {
     await forumApi.markForumAsRead();
-    // Update local state
+    // Update local state (cast needed for Served<number> type)
     boards.value.forEach((board) => {
-      (board as any).unreadCommentsCount = 0;
-      (board as any).unreadTopicsCount = 0;
+      (board as { unreadCommentsCount: number }).unreadCommentsCount = 0;
+      (board as { unreadTopicsCount: number }).unreadTopicsCount = 0;
     });
   } finally {
     markingAllAsRead.value = false;
@@ -45,51 +77,71 @@ onMounted(() => store.fetchBoards());
     </button>
   </div>
 
-  <div class="boards-table">
-    <div class="boards-header">
-      <div class="col-title">Раздел</div>
-      <div class="col-description">Описание</div>
-      <div class="col-topics">Темы</div>
-      <div class="col-comments">Комментарии</div>
-      <div class="col-last">Последняя активность</div>
-    </div>
-
-    <secondary-text v-if="!boards?.length" class="boards-empty">
-      Нет доступных разделов
-    </secondary-text>
-    <template v-else>
-      <div v-for="board in boards" :key="board.id" class="boards-row">
-        <div class="col-title">
-          <router-link :to="{ name: 'forum', params: { id: board.id } }">
-            {{ board.id }}
-          </router-link>
-        </div>
-        <div class="col-description">{{ board.description || "" }}</div>
-        <div class="col-topics">{{ board.topicsCount || 0 }}</div>
-        <div class="col-comments">
-          {{ board.commentsCount || 0 }}
-          <span v-if="board.unreadCommentsCount" class="unread">
-            ({{ board.unreadCommentsCount }})
-          </span>
-        </div>
-        <div class="col-last">
-          <template v-if="board.lastComment">
-            <user-link :user="board.lastComment.author" />,
-            <human-date
-              :date="board.lastComment.createdUtc"
-              format="DD.MM.YYYY HH:mm"
-            />
-          </template>
-          <span v-else class="no-comments">—</span>
-        </div>
-      </div>
+  <DataTable
+    :columns="columns"
+    :data="boardsData"
+    :loading="boardsLoading"
+    empty-text="Нет доступных разделов"
+  >
+    <template #cell-title="{ row }">
+      <Tooltip :text="row.description || undefined">
+        <router-link :to="{ name: 'forum', params: { alias: row.alias } }" class="board-link">
+          {{ row.title }}
+        </router-link>
+      </Tooltip>
     </template>
-  </div>
+
+    <template #cell-moderators="{ row }">
+      <template v-if="row.moderators?.length">
+        <template v-for="(mod, idx) in row.moderators" :key="mod.username">
+          <span v-if="idx > 0">, </span>
+          <UserLink :user="mod" hide-badge />
+        </template>
+      </template>
+      <span v-else class="muted">—</span>
+    </template>
+
+    <template #cell-topics="{ row }">
+      {{ row.topicsCount || 0 }}
+    </template>
+
+    <template #cell-comments="{ row }">
+      {{ row.commentsCount || 0
+      }}<template v-if="row.unreadCommentsCount"
+        ><span class="muted"> (</span
+        ><Tooltip :text="`Непрочитанных комментариев: ${row.unreadCommentsCount}`">
+          <router-link
+            :to="{ name: 'forum', params: { alias: row.alias } }"
+            class="unread"
+          >{{ row.unreadCommentsCount }}</router-link>
+        </Tooltip
+        ><span class="muted">)</span></template
+      >
+    </template>
+
+    <template #cell-lastActivity="{ row }">
+      <!-- Last activity is a comment -->
+      <template v-if="getLastActivityType(row) === 'comment'">
+        <UserLink :user="row.lastComment.author" hide-badge />, <Tooltip :text='`Комментарий в "${row.lastComment.topicTitle}"`'><router-link
+            :to="{ name: 'topic', params: { alias: row.alias, num: row.lastComment.topicNumber }, hash: `#comment-${row.lastComment.id}` }"
+            class="last-activity-link"
+          ><human-date :date="row.lastComment.createdUtc" format="DD.MM.YYYY HH:mm" /></router-link></Tooltip>
+      </template>
+      <!-- Last activity is a new topic -->
+      <template v-else-if="getLastActivityType(row) === 'topic'">
+        <UserLink :user="row.lastTopic.author" hide-badge />, <Tooltip :text='`Новый топик "${row.lastTopic.title}"`'><router-link
+            :to="{ name: 'topic', params: { alias: row.alias, num: row.lastTopic.topicNumber } }"
+            class="last-activity-link"
+          ><human-date :date="row.lastTopic.createdUtc" format="DD.MM.YYYY HH:mm" /></router-link></Tooltip>
+      </template>
+      <!-- No activity -->
+      <span v-else class="muted">—</span>
+    </template>
+  </DataTable>
 </template>
 
-<style lang="sass">
+<style scoped lang="sass">
 @import "@/assets/styles/Themes"
-@import "@/assets/styles/Tables"
 @import "@/assets/styles/Inputs"
 
 .forum-actions
@@ -100,60 +152,19 @@ onMounted(() => store.fetchBoards());
 .mark-all-read-btn
   +button
 
-.boards-table
-  width: 100%
-  +table
+.board-link
+  color: $link
+  &:hover
+    color: $link-hover
 
-.boards-header,
-.boards-row
-  display: grid
-  grid-template-columns: 20% 35% 10% 15% 20%
-  align-items: stretch
-  +table-columns
+.muted
+  color: $text-muted
 
-  & > div
-    display: flex
-    align-items: center
+.last-activity-link
+  color: $link
+  &:hover
+    color: $link-hover
 
-.boards-header
-  +table-header
-
-  .col-description,
-  .col-topics,
-  .col-comments,
-  .col-last
-    justify-content: center
-
-.boards-row
-  +table-row
-
-  &:last-child
-    border-bottom: none
-
-  .col-title a
-    color: $link
-    &:hover
-      color: $link-hover
-
-  .col-description
-    color: $text
-
-  .col-topics,
-  .col-comments,
-  .col-last
-    justify-content: center
-    text-align: center
-
-  .col-comments
-    flex-direction: column
-
-  .col-comments .unread
-    color: $heading
-
-.no-comments
-  color: $heading-alt
-
-.boards-empty
-  padding: $big
-  text-align: center
+.unread
+  color: $link
 </style>

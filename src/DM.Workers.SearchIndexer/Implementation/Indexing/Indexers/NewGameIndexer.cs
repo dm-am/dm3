@@ -37,7 +37,7 @@ internal class NewGameIndexer : BaseIndexer
     {
         var game = await _dbContext.Games
             .Where(g => g.GameId == message.EntityId)
-            .Select(g => new {g.GameId, g.Title, g.Info, g.Status, g.AuthorId})
+            .Select(g => new {g.GameId, g.Title, g.Info, g.Status, g.MasterId})
             .FirstAsync();
         await _repository.Index(new SearchEntity
         {
@@ -46,7 +46,7 @@ internal class NewGameIndexer : BaseIndexer
             Title = game.Title,
             Text = _bbParserProvider.CurrentInfo.Parse(game.Info).ToHtml(),
             AuthorizedUsers = game.Status == ModuleStatus.Draft
-                ? [game.AuthorId]
+                ? [game.MasterId]
                 : []
         });
     }

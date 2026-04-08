@@ -17,6 +17,8 @@ export interface TotalsWithDelta {
   characters: StatValue;
   games: StatValue;
   gamePosts: StatValue;
+  blogs: StatValue;
+  publications: StatValue;
 }
 
 /** Highlighted post information */
@@ -34,8 +36,8 @@ export interface LiveStats {
   online: number;
   /** Total counts with today's changes */
   totals: TotalsWithDelta;
-  /** Most recently reviewed post */
+  /** Most recently rated post (PostReview) */
   lastReviewedPost?: PostHighlight;
-  /** Best post of the week by rating */
+  /** Best post of the week by rating (sum of PostReview ratings) */
   weeklyBestPost?: PostHighlight;
 }

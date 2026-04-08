@@ -8,6 +8,7 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.UnreadCounters;
+using DM.Domain.Core.Users;
 
 namespace DM.Domain.Forum.Features.Boards;
 
@@ -18,6 +19,7 @@ internal class BoardService : IBoardService
     private readonly IAccessPolicyConverter _accessPolicyConverter;
     private readonly IBoardRepository _boardRepository;
     private readonly IBoardModeratorRepository _moderatorRepository;
+    private readonly IUserReadRepository _userRepository;
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly ICache _cache;
 
@@ -27,6 +29,7 @@ internal class BoardService : IBoardService
         IAccessPolicyConverter accessPolicyConverter,
         IBoardRepository boardRepository,
         IBoardModeratorRepository moderatorRepository,
+        IUserReadRepository userRepository,
         IUnreadCountersRepository unreadCountersRepository,
         ICache cache)
     {
@@ -34,6 +37,7 @@ internal class BoardService : IBoardService
         _accessPolicyConverter = accessPolicyConverter;
         _boardRepository = boardRepository;
         _moderatorRepository = moderatorRepository;
+        _userRepository = userRepository;
         _unreadCountersRepository = unreadCountersRepository;
         _cache = cache;
     }
@@ -44,8 +48,14 @@ internal class BoardService : IBoardService
         var boards = await GetBoards();
         var identity = _identityProvider.Current;
 
+        // Anonymous users: show total counts (they can't mark anything as read)
         if (!identity.User.IsAuthenticated)
         {
+            foreach (var board in boards)
+            {
+                board.UnreadTopicsCount = board.TopicsCount;
+                board.UnreadCommentsCount = board.CommentsCount;
+            }
             return boards;
         }
 
@@ -53,6 +63,7 @@ internal class BoardService : IBoardService
         {
             Id = b.Id,
             Title = b.Title,
+            Alias = b.Alias,
             Description = b.Description,
             CreateTopicPolicy = b.CreateTopicPolicy,
             ViewPolicy = b.ViewPolicy,
@@ -90,17 +101,26 @@ internal class BoardService : IBoardService
             board.UnreadTopicsCount = topics[board.Id];
             board.UnreadCommentsCount = comments[board.Id];
         }
+        else
+        {
+            // Anonymous users: show total counts
+            board.UnreadTopicsCount = board.TopicsCount;
+            board.UnreadCommentsCount = board.CommentsCount;
+        }
 
         return board;
     }
 
     /// <inheritdoc />
-    public async Task<Board> GetBoard(string boardTitle, bool onlyAvailable = true)
+    public async Task<Board> GetBoard(string aliasOrTitle, bool onlyAvailable = true)
     {
-        var board = (await GetBoards(onlyAvailable)).FirstOrDefault(b => b.Title == boardTitle);
+        var boards = await GetBoards(onlyAvailable);
+        var board = boards.FirstOrDefault(b =>
+            string.Equals(b.Alias, aliasOrTitle, System.StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(b.Title, aliasOrTitle, System.StringComparison.OrdinalIgnoreCase));
         if (board == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, $"Board {boardTitle} not found");
+            throw new HttpException(HttpStatusCode.Gone, $"Board {aliasOrTitle} not found");
         }
 
         return board;
@@ -116,11 +136,66 @@ internal class BoardService : IBoardService
             CachePolicy.LongLived);
     }
 
+    /// <inheritdoc />
+    public async Task<GeneralUser> AddModerator(string boardTitle, string username)
+    {
+        var board = await GetBoard(boardTitle, onlyAvailable: false);
+        var user = await _userRepository.GetUserAsync(username);
+        if (user == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, $"User {username} not found");
+        }
+
+        var isAlreadyModerator = await _moderatorRepository.IsModerator(board.Id, user.UserId);
+        if (isAlreadyModerator)
+        {
+            throw new HttpException(HttpStatusCode.Conflict, $"User {username} is already a moderator of this board");
+        }
+
+        await _moderatorRepository.Add(board.Id, user.UserId);
+        await _cache.InvalidateAsync($"board_moderators_{board.Id}");
+        return user;
+    }
+
+    /// <inheritdoc />
+    public async Task RemoveModerator(string boardTitle, string username)
+    {
+        var board = await GetBoard(boardTitle, onlyAvailable: false);
+        var user = await _userRepository.GetUserAsync(username);
+        if (user == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, $"User {username} not found");
+        }
+
+        var isModerator = await _moderatorRepository.IsModerator(board.Id, user.UserId);
+        if (!isModerator)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, $"User {username} is not a moderator of this board");
+        }
+
+        await _moderatorRepository.Remove(board.Id, user.UserId);
+        await _cache.InvalidateAsync($"board_moderators_{board.Id}");
+    }
+
     private async Task<Board[]> GetBoards(bool onlyAvailable = true)
     {
         var accessPolicy = onlyAvailable
             ? _accessPolicyConverter.Convert(_identityProvider.Current.User.Role)
             : (BoardAccessPolicy?)null;
         return (await _boardRepository.SelectBoards(accessPolicy)).ToArray();
+    }
+
+    /// <inheritdoc />
+    public async Task<Board> GetBoardByAlias(string alias)
+    {
+        var boards = await GetBoards();
+        var board = boards.FirstOrDefault(b =>
+            string.Equals(b.Alias, alias, System.StringComparison.OrdinalIgnoreCase));
+        if (board == null)
+        {
+            throw new HttpException(HttpStatusCode.Gone, $"Board {alias} not found");
+        }
+
+        return board;
     }
 }

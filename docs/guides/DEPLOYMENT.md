@@ -37,7 +37,7 @@ Internet → Nginx → Frontend (Vue.js)
 
 **Принцип:** Multi-stage build (SDK → Runtime), non-root user `dmuser`
 
-**Оптимизация:** BuildKit NuGet cache mount, .csproj-first restore для кэширования слоёв
+**Оптимизация:** BuildKit NuGet cache mount, .csproj-first restore для кэширования слоев
 
 ---
 

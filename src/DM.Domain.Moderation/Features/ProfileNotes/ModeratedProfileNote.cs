@@ -47,7 +47,7 @@ public class CreateModeratedProfileNoteEntity
     /// <summary>
     /// Note identifier
     /// </summary>
-    public Guid NoteId { get; set; }
+    public Guid Id { get; set; }
 
     /// <summary>
     /// User identifier (who the note is about)
@@ -78,7 +78,7 @@ public class UpdateModeratedProfileNoteEntity
     /// <summary>
     /// Note identifier
     /// </summary>
-    public Guid NoteId { get; set; }
+    public Guid Id { get; set; }
 
     /// <summary>
     /// Note text

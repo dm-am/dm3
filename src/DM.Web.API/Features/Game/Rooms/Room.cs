@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Web.API.Features.Game.Games;
 
 namespace DM.Web.API.Features.Game.Rooms;
 
@@ -14,6 +15,16 @@ public class Room
     /// Room identifier
     /// </summary>
     public Guid Id { get; set; }
+
+    /// <summary>
+    /// Room number within game (for URL, stable)
+    /// </summary>
+    public int RoomNumber { get; set; }
+
+    /// <summary>
+    /// Game reference (for navigation)
+    /// </summary>
+    public GameRef? Game { get; set; }
 
     /// <summary>
     /// Previous room identifier

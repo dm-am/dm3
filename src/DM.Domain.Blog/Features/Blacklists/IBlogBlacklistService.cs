@@ -20,10 +20,15 @@ public interface IBlogBlacklistService : IContentBlacklistService
     /// <summary>
     /// Add user to the blog blacklist
     /// </summary>
-    Task<GeneralUser> Add(Guid blogId, string username, CancellationToken ct = default);
+    /// <param name="dto">DTO with blog ID and username</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Blacklisted user</returns>
+    Task<GeneralUser> Add(OperateBlogBlacklistLink dto, CancellationToken ct = default);
 
     /// <summary>
     /// Remove user from the blog blacklist
     /// </summary>
-    Task Remove(Guid blogId, string username, CancellationToken ct = default);
+    /// <param name="dto">DTO with blog ID and username</param>
+    /// <param name="ct">Cancellation token</param>
+    Task Remove(OperateBlogBlacklistLink dto, CancellationToken ct = default);
 }

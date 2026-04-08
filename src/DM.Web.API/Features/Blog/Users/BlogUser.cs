@@ -1,5 +1,5 @@
 using System;
-using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Blog.Users;
 
@@ -9,9 +9,9 @@ namespace DM.Web.API.Features.Blog.Users;
 public class BlogUser
 {
     /// <summary>
-    /// User information
+    /// User information (lightweight reference)
     /// </summary>
-    public User User { get; set; } = null!;
+    public UserRef User { get; set; } = null!;
 
     /// <summary>
     /// Role in the blog: owner, assistant, mentor, reader

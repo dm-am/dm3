@@ -10,37 +10,46 @@ namespace DM.Web.API.Features.Game.Games;
 public interface IGameApiService
 {
     /// <summary>
-    /// Get list of searched games
+    /// Get list of searched games (full, with players/readers arrays for tooltips)
     /// </summary>
     /// <param name="gamesQuery">Search query</param>
     /// <returns>Envelope for games list</returns>
     Task<ListEnvelope<Game>> Get(GamesQuery gamesQuery);
 
     /// <summary>
-    /// Get user owned games
+    /// Get list of games as lightweight refs (for sidebars/menus)
     /// </summary>
-    /// <returns></returns>
-    Task<ListEnvelope<Game>> GetOwn();
-
-    /// <summary>
-    /// Get most popular games
-    /// </summary>
-    /// <returns></returns>
-    Task<ListEnvelope<Game>> GetPopular();
+    /// <param name="gamesQuery">Search query</param>
+    /// <returns>Envelope for game refs list</returns>
+    Task<ListEnvelope<GameRef>> GetRefs(GamesQuery gamesQuery);
 
     /// <summary>
     /// Get certain game
     /// </summary>
     /// <param name="gameId">Game identifier</param>
-    /// <returns></returns>
+    /// <returns>Envelope containing the game</returns>
     Task<Envelope<Game>> Get(Guid gameId);
+
+    /// <summary>
+    /// Get certain game by public ID
+    /// </summary>
+    /// <param name="publicId">Public identifier (5 letters)</param>
+    /// <returns>Envelope containing the game</returns>
+    Task<Envelope<Game>> GetByPublicId(string publicId);
 
     /// <summary>
     /// Get certain game details
     /// </summary>
     /// <param name="gameId">Game identifier</param>
-    /// <returns></returns>
+    /// <returns>Envelope containing the game details</returns>
     Task<Envelope<GameDetails>> GetDetails(Guid gameId);
+
+    /// <summary>
+    /// Get certain game details by public ID
+    /// </summary>
+    /// <param name="publicId">Public identifier (5 letters)</param>
+    /// <returns>Envelope containing the game details</returns>
+    Task<Envelope<GameDetails>> GetDetailsByPublicId(string publicId);
 
     /// <summary>
     /// Create new game
@@ -61,13 +70,12 @@ public interface IGameApiService
     /// Delete existing game
     /// </summary>
     /// <param name="gameId">Game identifier</param>
-    /// <returns></returns>
     Task Delete(Guid gameId);
 
     /// <summary>
     /// Get all available game tags
     /// </summary>
-    /// <returns></returns>
+    /// <returns>List envelope containing all game tags</returns>
     Task<ListEnvelope<Tag>> GetTags();
 
     /// <summary>
@@ -84,4 +92,5 @@ public interface IGameApiService
     /// <param name="notes">Notes to update</param>
     /// <returns>Envelope with updated game notes</returns>
     Task<Envelope<GameNotes>> UpdateNotes(Guid gameId, GameNotes notes);
+
 }

@@ -18,7 +18,7 @@ public interface IMessageRepository
     /// <param name="messageId">Message identifier</param>
     /// <param name="userId">User identifier</param>
     /// <param name="ct">Cancellation token</param>
-    /// <returns></returns>
+    /// <returns>Message or null</returns>
     Task<Message?> Get(Guid messageId, Guid userId, CancellationToken ct = default);
 
     /// <summary>
@@ -68,14 +68,14 @@ public interface IMessageRepository
     /// <param name="message">Message data</param>
     /// <param name="updateChat">Chat update data for last message</param>
     /// <param name="ct">Cancellation token</param>
-    /// <returns></returns>
+    /// <returns>Created message</returns>
     Task<Message> Create(CreateMessageEntity message, UpdateChatLastMessageEntity updateChat, CancellationToken ct = default);
 
     /// <summary>
     /// Update single message
     /// </summary>
     /// <param name="update">Update data</param>
-    /// <returns></returns>
+    /// <returns>Updated message</returns>
     Task<Message> Update(UpdateMessageEntity update);
 
     /// <summary>
@@ -84,6 +84,5 @@ public interface IMessageRepository
     /// <param name="messageId">Message identifier</param>
     /// <param name="deletedByUserId">User who deleted the message</param>
     /// <param name="ct">Cancellation token</param>
-    /// <returns></returns>
     Task Delete(Guid messageId, Guid deletedByUserId, CancellationToken ct = default);
 }

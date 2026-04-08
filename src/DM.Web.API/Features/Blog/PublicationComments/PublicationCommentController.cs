@@ -1,6 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
+using DM.Domain.Blog.Features.PublicationComments;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
@@ -56,20 +56,26 @@ public class PublicationCommentController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Returns paginated list of comments in the specified publication.
-    /// Comments are sorted by creation date (oldest first).
-    /// Marks comments as read for authenticated users.
+    /// Supports filtering by authors, text search, date range and sorting.
     ///
-    /// Example request:
-    ///     GET /v1/publications/3fa85f64-5717-4562-b3fc-2c963f66afa6/comments?skip=0&amp;number=20
+    /// ## Query Parameters
+    /// - **skip**: Number of items to skip (pagination)
+    /// - **take**: Number of items to return (max 100, default 20)
+    /// - **search**: Text search in comment content (case-insensitive)
+    /// - **authors**: Filter by author usernames (comma-separated, OR logic)
+    /// - **createdFromUtc**: Filter by creation date start (ISO 8601)
+    /// - **createdToUtc**: Filter by creation date end (ISO 8601)
+    /// - **sortBy**: Sort field - "created" (default) or "likes"
+    /// - **sortOrder**: Sort direction - "asc" (default for created) or "desc"
     /// </remarks>
     /// <param name="id">Publication identifier (GUID)</param>
-    /// <param name="q">Pagination parameters (skip, number)</param>
+    /// <param name="q">Query parameters with filtering, sorting and pagination</param>
     /// <response code="200">Paginated list of comments</response>
     /// <response code="404">Publication not found</response>
     [HttpGet("{id}/comments", Name = nameof(GetPublicationComments))]
     [ProducesResponseType(typeof(ListEnvelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetPublicationComments(Guid id, [FromQuery] PagingQuery q) =>
+    public async Task<IActionResult> GetPublicationComments(Guid id, [FromQuery] PublicationCommentsQuery q) =>
         Ok(await _commentApiService.Get(id, q));
 
     /// <summary>

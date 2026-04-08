@@ -81,9 +81,9 @@ internal class ModerationProfileApiService : IModerationProfileApiService
 
         return new Envelope<ModerationProfileDto>(new ModerationProfileDto
         {
-            Login = user.Username,
+            Username = user.Username,
             UserId = user.UserId,
-            RegistrationDateUtc = user.CreatedUtc,
+            RegistrationUtc = user.CreatedUtc,
 
             // Admin-only fields (null for non-admin callers)
             Email = isAdmin ? user.Email : null,
@@ -127,7 +127,7 @@ internal class ModerationProfileApiService : IModerationProfileApiService
             IpAddress = ip.IpAddress,
             FirstSeenUtc = ip.FirstSeenUtc,
             LastSeenUtc = ip.LastSeenUtc,
-            LoginCount = ip.LoginCount
+            LoginsCount = ip.LoginsCount
         }).ToList();
     }
 
@@ -148,8 +148,8 @@ internal class ModerationProfileApiService : IModerationProfileApiService
         return profiles.Select(p => new LinkedProfileDto
         {
             UserId = p.UserId,
-            Login = p.Username,
-            SharedIpCount = p.SharedIpCount,
+            Username = p.Username,
+            SharedIpsCount = p.SharedIpsCount,
             LastSharedLoginUtc = p.LastSharedLoginUtc
         }).ToList();
     }
@@ -161,8 +161,8 @@ internal class ModerationProfileApiService : IModerationProfileApiService
     {
         return notes.Select(n => new ModNoteDto
         {
-            NoteId = n.Id,
-            AuthorLogin = n.Author?.Username ?? string.Empty,
+            Id = n.Id,
+            AuthorUsername = n.Author?.Username ?? string.Empty,
             AuthorId = n.Author?.Id ?? Guid.Empty,
             Text = n.Text,
             CreatedUtc = n.CreatedUtc,

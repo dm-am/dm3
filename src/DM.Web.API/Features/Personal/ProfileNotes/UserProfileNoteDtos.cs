@@ -23,14 +23,14 @@ public class UserProfileNote
     public string Text { get; set; } = string.Empty;
 
     /// <summary>
-    /// Creation date
+    /// Creation date (UTC)
     /// </summary>
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Last update date
+    /// Last update date (UTC)
     /// </summary>
-    public DateTimeOffset? UpdatedAt { get; set; }
+    public DateTimeOffset? UpdatedUtc { get; set; }
 }
 
 /// <summary>

@@ -41,16 +41,16 @@ export function useRegion() {
   });
 
   const currentRegion = computed(
-    () => mirrors.value.find((m) => m.isCurrent) ?? mirrors.value[0]
+    () => mirrors.value.find((m) => m.isCurrent) ?? mirrors.value[0],
   );
 
   const alternateRegion = computed(() =>
-    mirrors.value.find((m) => !m.isCurrent)
+    mirrors.value.find((m) => !m.isCurrent),
   );
 
   // Can only switch if there's an alternate mirror available
   const canSwitch = computed(
-    () => !isLoading.value && alternateRegion.value !== undefined
+    () => !isLoading.value && alternateRegion.value !== undefined,
   );
 
   const switchTooltip = computed(() => {

@@ -30,7 +30,8 @@
           </div>
         </div>
         <p class="status-note">
-          Заявка рассматривается модераторами. После одобрения вы сможете выбрать новое имя.
+          Заявка рассматривается модераторами. После одобрения вы сможете
+          выбрать новое имя.
         </p>
       </div>
 
@@ -53,9 +54,7 @@
             <span>{{ existingRequest.resolvedByUsername }}</span>
           </div>
         </div>
-        <p class="status-note">
-          Вы можете подать новую заявку.
-        </p>
+        <p class="status-note">Вы можете подать новую заявку.</p>
       </div>
 
       <!-- Approved notification -->
@@ -68,7 +67,8 @@
           <span class="status-title">Заявка одобрена</span>
         </div>
         <p class="status-note">
-          Ваша заявка на смену имени одобрена. Проверьте почту для получения ссылки на выбор нового имени.
+          Ваша заявка на смену имени одобрена. Проверьте почту для получения
+          ссылки на выбор нового имени.
         </p>
       </div>
 
@@ -79,8 +79,8 @@
         @submit.prevent="submitRequest"
       >
         <p class="form-description">
-          Для смены имени пользователя необходимо одобрение модератора.
-          После одобрения вы получите ссылку на выбор нового имени.
+          Для смены имени пользователя необходимо одобрение модератора. После
+          одобрения вы получите ссылку на выбор нового имени.
         </p>
 
         <div class="form-group">
@@ -104,13 +104,9 @@
           Заявка будет рассмотрена модераторами. Обычно это занимает 1-3 дня.
         </div>
 
-        <TheButton
-          type="submit"
-          :loading="submitting"
-          :disabled="!canSubmit"
-        >
+        <Button type="submit" :loading="submitting" :disabled="!canSubmit">
           Отправить заявку
-        </TheButton>
+        </Button>
       </form>
     </div>
   </section>
@@ -118,8 +114,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
+import dayjs from "dayjs";
 import { AccountApi } from "@/shared/api";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { User } from "@/shared/api/models/community";
 import type { UsernameChangeRequest } from "@/shared/api/models/account";
@@ -163,12 +160,7 @@ async function loadExistingRequest() {
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric"
-  });
+  return dayjs(dateStr).format("DD.MM.YYYY");
 }
 
 async function submitRequest() {
@@ -178,7 +170,7 @@ async function submitRequest() {
   submitError.value = null;
 
   const { data, error } = await AccountApi.createUsernameChangeRequest({
-    reason: reason.value.trim()
+    reason: reason.value.trim(),
   });
 
   submitting.value = false;

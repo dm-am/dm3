@@ -1,11 +1,12 @@
 <script setup lang="ts">
 /**
- * PenaltyTable - интерактивная таблица нарушений
+ * PenaltyTable - interactive violations table
  *
- * Клик по строке раскрывает детальное описание нарушения.
- * Вся информация в одном месте, не нужно скроллить к тексту ниже.
+ * Click on a row to expand the detailed description.
+ * Uses unified table styling from _Tables.sass.
  */
 
+import { useRouter } from "vue-router";
 import { useExpandable } from "@/shared/lib/composables/useExpandable";
 
 interface Penalty {
@@ -16,9 +17,10 @@ interface Penalty {
   details: string;
 }
 
+const router = useRouter();
 const { toggle, isExpanded } = useExpandable();
 
-// Порядок: от самых серьезных нарушений к менее серьезным
+// Order: from most serious violations to less serious
 const penalties: Penalty[] = [
   {
     id: "hacking",
@@ -34,7 +36,7 @@ const penalties: Penalty[] = [
     points: "6",
     sortValue: 6.2,
     details:
-      "Публичное умышленное унижение личности, действий или убеждений пользователя. Текст скрывается модератором. Исправил сам до модерации — баллы могут снизить.",
+      "Публичное умышленное унижение личности, действий или убеждений пользователя. Исправил сам до модерации — баллы могут снизить.",
   },
   {
     id: "advertising",
@@ -50,7 +52,7 @@ const penalties: Penalty[] = [
     points: "6",
     sortValue: 6,
     details:
-      "Один человек — один аккаунт. Дополнительные аккаунты банятся навсегда, основной получает 6 баллов (0 баллов — если сразу сообщил об ошибке через форму или Discord).",
+      'Один человек — один аккаунт. Дополнительные аккаунты банятся навсегда, основной получает 6 баллов (0 баллов — если сразу сообщил об ошибке через <a href="/support"><strong>форму</strong></a> или <a href="https://discord.gg/dm-roleplay" target="_blank" rel="noopener noreferrer"><strong>Discord</strong></a>).',
   },
   {
     id: "banned-proxy",
@@ -66,7 +68,7 @@ const penalties: Penalty[] = [
     points: "3",
     sortValue: 3,
     details:
-      "Троллинг, провокационные вбросы, подстрекательство, этнические оскорбления и любые обсуждения политики. В играх с политическим сеттингом закройте комнаты и обсуждение от посторонних.",
+      "Троллинг, провокационные вбросы, подстрекательство, этнические оскорбления и любые обсуждения политики. В играх с политическим сеттингом поставьте тег \"Острые темы\" и закройте комнаты от посторонних.",
   },
   {
     id: "shock-content",
@@ -74,7 +76,7 @@ const penalties: Penalty[] = [
     points: "2",
     sortValue: 2,
     details:
-      "Шок-контент и откровенные материалы только в теге [nsfw]. В играх — на усмотрение мастера, кроме страницы Информация. Тег [nsfw] не оправдывает оскорбления и провокации.",
+      "Шок-контент и откровенные материалы без тега [nsfw] запрещены везде. Исключения: посты в играх, личные переписки и контент с закрытым доступом.",
   },
   {
     id: "profanity",
@@ -82,7 +84,7 @@ const penalties: Penalty[] = [
     points: "1",
     sortValue: 1.5,
     details:
-      'Можно: в [nsfw], с цензурой (***), аббревиатуры (ХЗ), в играх без тега "без мата" (кроме страницы Информация). Нельзя: форум, чат, профили, названия.',
+      'Мат без тега [nsfw] или цензуры (***) запрещен везде. Исключения: устоявшиеся аббревиатуры (ХЗ), игровые посты и сообщения, личные переписки и контент с закрытым доступом. Исключение не действует на посты и сообщения в играх с тегом "без мата".',
   },
   {
     id: "flame",
@@ -98,7 +100,7 @@ const penalties: Penalty[] = [
     points: "1",
     sortValue: 0.5,
     details:
-      "Многократные однотипные сообщения, создание пустых тем, уход от темы в служебных разделах.",
+      "Многократные однотипные сообщения и комментарии, создание большого количества бессодержательных топиков, уход от темы в служебных разделах форума.",
   },
 ].sort((a, b) => b.sortValue - a.sortValue);
 
@@ -108,14 +110,34 @@ function handleKeydown(event: KeyboardEvent, id: string) {
     toggle(id);
   }
 }
+
+/**
+ * Handle clicks on links inside v-html details.
+ * Internal links use Vue Router for SPA navigation.
+ */
+function handleDetailsClick(event: MouseEvent) {
+  const target = event.target as HTMLElement;
+  const link = target.closest("a");
+  if (!link) return;
+
+  const href = link.getAttribute("href");
+  if (!href) return;
+
+  // External links (with target="_blank") - let browser handle
+  if (link.target === "_blank") return;
+
+  // Internal links - use Vue Router
+  event.preventDefault();
+  router.push(href);
+}
 </script>
 
 <template>
   <div class="penalty-table-wrapper">
     <div class="penalty-table" role="list">
       <div class="penalty-header" aria-hidden="true">
-        <span>Нарушение</span>
-        <span class="points-column">Баллы</span>
+        <span class="violation-col">Нарушение</span>
+        <span class="points-col">Баллы</span>
       </div>
       <template v-for="penalty in penalties" :key="penalty.id">
         <div
@@ -128,21 +150,21 @@ function handleKeydown(event: KeyboardEvent, id: string) {
           @click="toggle(penalty.id)"
           @keydown="handleKeydown($event, penalty.id)"
         >
-          <span class="violation-name">
+          <span class="violation-col">
             <span class="expand-icon" aria-hidden="true">{{
               isExpanded(penalty.id) ? "▼" : "▶"
             }}</span>
             <span class="violation-text">{{ penalty.violation }}</span>
           </span>
-          <span class="points-column">{{ penalty.points }}</span>
+          <span class="points-col">{{ penalty.points }}</span>
         </div>
         <div
           v-if="isExpanded(penalty.id)"
           :id="`details-${penalty.id}`"
           class="penalty-details"
-        >
-          {{ penalty.details }}
-        </div>
+          v-html="penalty.details"
+          @click="handleDetailsClick"
+        />
       </template>
     </div>
     <p class="penalty-note">
@@ -166,48 +188,26 @@ function handleKeydown(event: KeyboardEvent, id: string) {
 .penalty-header
   display: grid
   grid-template-columns: 1fr 80px
-  padding: $small $medium
   +table-header
 
-  span
-    padding: 0
-    border: none
-
 .penalty-row
-  display: grid
-  grid-template-columns: 1fr 80px
-  padding: $small $medium
-  cursor: pointer
-  +table-row
+  +expandable-row
+  &
+    display: grid
+    grid-template-columns: 1fr 80px
 
-  span
-    padding: 0
-    border: none
-
-  &:hover
-    background-color: $bg-element-hover
-
-  &:focus-visible
-    outline: 2px solid $link
-    outline-offset: -2px
-
-  &.expanded
-    background-color: $bg-element-hover
-    border-bottom: none
-
-.violation-name
+.violation-col
   display: flex
   align-items: center
   gap: $small
 
 .expand-icon
   +expand-icon
-  user-select: none
 
 .violation-text
   user-select: text
 
-.points-column
+.points-col
   text-align: center
   font-weight: 600
   user-select: text
@@ -216,19 +216,33 @@ function handleKeydown(event: KeyboardEvent, id: string) {
   +expandable-details
   user-select: text
 
+  :deep(a)
+    color: $link
+    text-decoration: none
+
+    &:hover
+      color: $link-hover
+      text-decoration: underline
+
+  :deep(strong)
+    font-weight: 600
+
 .penalty-note
   margin-top: $small
   font-size: $secondary-font-size
-  color: $text
-  font-style: italic
+  color: $text-muted
 
 @media (max-width: $mobile-breakpoint)
   .penalty-header
     grid-template-columns: 1fr 60px
 
   .penalty-row
+    +expandable-row-mobile
     grid-template-columns: 1fr 60px
 
-  .points-column
+  .points-col
     font-size: $secondary-font-size
+
+  .penalty-details
+    +expandable-details-mobile
 </style>

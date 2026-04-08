@@ -1,1 +1,1 @@
-export { default as TheUpload } from "./TheUpload.vue";
+export { default as Upload } from "./Upload.vue";

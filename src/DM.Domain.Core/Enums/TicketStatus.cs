@@ -22,12 +22,12 @@ public enum TicketStatus
     /// <summary>
     /// Ticket has been resolved with action taken
     /// </summary>
-    [Description("Решён")]
+    [Description("Решен")]
     Resolved = 2,
 
     /// <summary>
     /// Ticket was closed without action (invalid report, etc.)
     /// </summary>
-    [Description("Отклонён")]
+    [Description("Отклонен")]
     Rejected = 3
 }

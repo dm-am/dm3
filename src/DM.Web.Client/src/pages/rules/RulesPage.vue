@@ -37,7 +37,7 @@ import AdminList from "./AdminList.vue";
   <!-- Как работают баны -->
   <RulesBans />
 
-  <!-- Для мастеров -->
+  <!-- Контент -->
   <RulesMasters />
 
   <!-- Администрация -->

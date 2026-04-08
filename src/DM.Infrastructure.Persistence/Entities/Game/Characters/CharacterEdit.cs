@@ -28,9 +28,9 @@ public class CharacterEdit
     public Guid EditorUserId { get; set; }
 
     /// <summary>
-    /// Edit timestamp
+    /// Edit timestamp (UTC)
     /// </summary>
-    public DateTimeOffset EditedAtUtc { get; set; }
+    public DateTimeOffset EditedUtc { get; set; }
 
     /// <summary>
     /// Parent character

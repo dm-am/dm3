@@ -36,7 +36,7 @@ internal class ChatRepository : IChatRepository
     /// Participation predicate
     /// </summary>
     /// <param name="userId">User identifier</param>
-    /// <returns></returns>
+    /// <returns>Expression checking if user participates in chat</returns>
     public static Expression<Func<DbChat, bool>> UserParticipates(Guid userId) =>
         c => c.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId);
 
@@ -60,7 +60,17 @@ internal class ChatRepository : IChatRepository
     /// <inheritdoc />
     public Task<DtoChat?> Get(Guid chatId, Guid userId) => _dbContext.Chats
         .Where(c => c.ChatId == chatId)
-        .Where(UserParticipates(userId))
+        // Global chats are accessible to everyone, others require participation
+        .Where(c => c.Type == ChatType.Global || c.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId))
+        .ProjectTo<DtoChat>(_mapper.ConfigurationProvider)
+        .FirstOrDefaultAsync();
+
+    /// <inheritdoc />
+    public Task<DtoChat?> GetByPublicId(string publicId, Guid userId) => _dbContext.Chats
+        .TagWith("DM.Messaging.GetChatByPublicId")
+        .Where(c => c.PublicId == publicId)
+        // Global chats are accessible to everyone, others require participation
+        .Where(c => c.Type == ChatType.Global || c.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId))
         .ProjectTo<DtoChat>(_mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();
 
@@ -162,5 +172,49 @@ internal class ChatRepository : IChatRepository
             .Where(c => c.ChatId == update.ChatId)
             .ProjectTo<DtoChat>(_mapper.ConfigurationProvider)
             .FirstAsync();
+    }
+
+    /// <inheritdoc />
+    public async Task<DtoChat> CreateGameRoomChat(CreateChatEntity chat)
+    {
+        var dbChat = new DbChat
+        {
+            ChatId = chat.ChatId,
+            Type = chat.Type,
+            Title = chat.Title,
+            RoomId = chat.RoomId
+        };
+
+        _dbContext.Chats.Add(dbChat);
+        await _dbContext.SaveChangesAsync();
+
+        return await _dbContext.Chats
+            .Where(c => c.ChatId == chat.ChatId)
+            .ProjectTo<DtoChat>(_mapper.ConfigurationProvider)
+            .FirstAsync();
+    }
+
+    /// <inheritdoc />
+    public async Task Delete(Guid chatId)
+    {
+        var chat = await _dbContext.Chats
+            .Include(c => c.UserLinks)
+            .FirstOrDefaultAsync(c => c.ChatId == chatId);
+
+        if (chat == null) return;
+
+        // Remove all user links
+        _dbContext.UserChatLinks.RemoveRange(chat.UserLinks);
+
+        // Remove all messages
+        var messages = await _dbContext.Messages
+            .Where(m => m.ChatId == chatId)
+            .ToArrayAsync();
+        _dbContext.Messages.RemoveRange(messages);
+
+        // Remove the chat itself
+        _dbContext.Chats.Remove(chat);
+
+        await _dbContext.SaveChangesAsync();
     }
 }

@@ -36,7 +36,7 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
                 Status = r.Status,
                 CreatedUtc = r.CreatedUtc,
                 ApprovalToken = r.ApprovalToken,
-                ApprovalTokenExpiresAt = r.ApprovalTokenExpiresAt,
+                ApprovalTokenExpiresUtc = r.ApprovalTokenExpiresUtc,
                 ResolvedUtc = r.ResolvedUtc,
                 ResolvedByUserId = r.ResolvedByUserId,
                 ResolverComment = r.ResolverComment,
@@ -64,7 +64,7 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
                 Status = r.Status,
                 CreatedUtc = r.CreatedUtc,
                 ApprovalToken = r.ApprovalToken,
-                ApprovalTokenExpiresAt = r.ApprovalTokenExpiresAt,
+                ApprovalTokenExpiresUtc = r.ApprovalTokenExpiresUtc,
                 ResolvedUtc = r.ResolvedUtc,
                 ResolvedByUserId = r.ResolvedByUserId,
                 ResolverComment = r.ResolverComment,
@@ -91,7 +91,7 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
                 Status = r.Status,
                 CreatedUtc = r.CreatedUtc,
                 ApprovalToken = r.ApprovalToken,
-                ApprovalTokenExpiresAt = r.ApprovalTokenExpiresAt,
+                ApprovalTokenExpiresUtc = r.ApprovalTokenExpiresUtc,
                 ResolvedUtc = r.ResolvedUtc,
                 ResolvedByUserId = r.ResolvedByUserId,
                 ResolverComment = r.ResolverComment,
@@ -138,7 +138,7 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
                 Status = r.Status,
                 CreatedUtc = r.CreatedUtc,
                 ApprovalToken = r.ApprovalToken,
-                ApprovalTokenExpiresAt = r.ApprovalTokenExpiresAt,
+                ApprovalTokenExpiresUtc = r.ApprovalTokenExpiresUtc,
                 ResolvedUtc = r.ResolvedUtc,
                 ResolvedByUserId = r.ResolvedByUserId,
                 ResolverComment = r.ResolverComment,
@@ -161,7 +161,7 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
             Status = request.Status,
             CreatedUtc = request.CreatedUtc,
             ApprovalToken = request.ApprovalToken,
-            ApprovalTokenExpiresAt = request.ApprovalTokenExpiresAt,
+            ApprovalTokenExpiresUtc = request.ApprovalTokenExpiresUtc,
             ResolvedUtc = request.ResolvedUtc,
             ResolvedByUserId = request.ResolvedByUserId,
             ResolverComment = request.ResolverComment
@@ -182,7 +182,7 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
         entity.Reason = request.Reason;
         entity.Status = request.Status;
         entity.ApprovalToken = request.ApprovalToken;
-        entity.ApprovalTokenExpiresAt = request.ApprovalTokenExpiresAt;
+        entity.ApprovalTokenExpiresUtc = request.ApprovalTokenExpiresUtc;
         entity.ResolvedUtc = request.ResolvedUtc;
         entity.ResolvedByUserId = request.ResolvedByUserId;
         entity.ResolverComment = request.ResolverComment;
@@ -209,7 +209,7 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
         {
             query = query.Where(u => u.UserId != excludeUserId.Value);
         }
-        return !await query.AnyAsync(u => EF.Functions.ILike(u.Username, username), ct);
+        return !await query.AnyAsync(u => u.Username.ToLower() == username.ToLower(), ct);
     }
 
     /// <inheritdoc />

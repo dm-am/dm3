@@ -53,9 +53,9 @@ public class CreateGameRequest
     public Guid? SchemaId { get; set; }
 
     /// <summary>
-    /// Assistant user login (optional)
+    /// Assistant user username (optional)
     /// </summary>
-    public string? AssistantLogin { get; set; }
+    public string? AssistantUsername { get; set; }
 
     /// <summary>
     /// Privacy settings for the game

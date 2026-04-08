@@ -2,7 +2,10 @@
   <page-title>Модерация</page-title>
   <nav class="moderation-nav">
     <router-link :to="{ name: 'moderation' }">Обзор</router-link>
-    <router-link :to="{ name: 'moderation-username-changes' }">Запросы на смену имени пользователя</router-link>
+    <router-link :to="{ name: 'moderation-username-changes' }"
+      >Запросы на смену имени пользователя</router-link
+    >
+    <router-link :to="{ name: 'moderation-tags' }">Теги игр</router-link>
   </nav>
   <router-view />
 </template>

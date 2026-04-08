@@ -19,21 +19,16 @@ public class Poll : IRemovable
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Moment from
+    /// Start moment (UTC)
     /// </summary>
     [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
-    public DateTime StartDate { get; set; }
+    public DateTime StartsUtc { get; set; }
 
     /// <summary>
-    /// Moment to
+    /// End moment (UTC)
     /// </summary>
     [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
-    public DateTime EndDate { get; set; }
-
-    /// <summary>
-    /// Poll is global
-    /// </summary>
-    public bool Global { get; set; }
+    public DateTime EndsUtc { get; set; }
 
     /// <summary>
     /// Question text
@@ -41,9 +36,19 @@ public class Poll : IRemovable
     public string Title { get; set; } = null!;
 
     /// <summary>
+    /// Optional description/details for the poll
+    /// </summary>
+    public string? Details { get; set; }
+
+    /// <summary>
     /// Options
     /// </summary>
     public List<PollOption> Options { get; set; } = [];
+
+    /// <summary>
+    /// Whether poll is anonymous (votes are hidden)
+    /// </summary>
+    public bool IsAnonymous { get; set; } = true;
 
     /// <summary>
     /// Removed flag

@@ -14,7 +14,6 @@ public interface IUserConnectionService
     /// </summary>
     /// <param name="authToken"></param>
     /// <param name="connectionId"></param>
-    /// <returns></returns>
     Task Add(string authToken, string connectionId);
 
     /// <summary>
@@ -22,12 +21,11 @@ public interface IUserConnectionService
     /// </summary>
     /// <param name="authToken"></param>
     /// <param name="connectionId"></param>
-    /// <returns></returns>
     Task Remove(string authToken, string connectionId);
 
     /// <summary>
     /// Get all connected users
     /// </summary>
-    /// <returns></returns>
+    /// <returns>Dictionary mapping user IDs to their connection IDs</returns>
     IReadOnlyDictionary<Guid, IEnumerable<string>> GetConnectedUsers();
 }

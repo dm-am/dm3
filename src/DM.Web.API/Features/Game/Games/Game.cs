@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using DM.Domain.Core.Enums;
-using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.Dto;
 using CommentariesAccessMode = DM.Domain.Core.Enums.CommentsAccessMode;
 
 namespace DM.Web.API.Features.Game.Games;
@@ -49,19 +49,15 @@ public enum GameParticipation
 }
 
 /// <summary>
-/// API DTO model for game (lightweight, for lists)
+/// API DTO model for game (for lists and tables)
 /// </summary>
-public class Game
+/// <remarks>
+/// Extends GameRef with additional fields for display in tables/cards.
+/// Inherits: Id, Title, Status, ClosedReason, ActivatedUtc, Master, Assistants,
+///           Participation, SubscribersCount, Recruitment, UnreadPostsCount, UnreadCommentsCount
+/// </remarks>
+public class Game : GameRef
 {
-    /// <summary>
-    /// Game identifier
-    /// </summary>
-    public Guid Id { get; set; }
-
-    /// <summary>
-    /// Game title
-    /// </summary>
-    public string Title { get; set; } = null!;
 
     /// <summary>
     /// RPG system name
@@ -79,54 +75,34 @@ public class Game
     public Guid? SchemaId { get; set; }
 
     /// <summary>
-    /// Game status
+    /// Game closed date (when status changed to Closed)
     /// </summary>
-    public ModuleStatus? Status { get; set; }
+    public DateTimeOffset? ClosedUtc { get; set; }
 
     /// <summary>
-    /// Game first release date
+    /// Game creation date (UTC)
     /// </summary>
-    public DateTimeOffset? Released { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Game master
+    /// Responsible for premoderation (lightweight reference)
     /// </summary>
-    public User Master { get; set; } = null!;
+    public UserRef? Mentor { get; set; }
 
     /// <summary>
-    /// Game master's assistant
+    /// Game master's pending assistant (lightweight reference)
     /// </summary>
-    public User? Assistant { get; set; }
+    public UserRef? PendingAssistant { get; set; }
 
     /// <summary>
-    /// Responsible for premoderation
+    /// Game tags (full objects - only for single game details, null for lists)
     /// </summary>
-    public User? Mentor { get; set; }
+    public IEnumerable<Tag>? Tags { get; set; }
 
     /// <summary>
-    /// Game master's pending assistant
+    /// Tag IDs only (lightweight - for lists, uses cached tags for description lookup)
     /// </summary>
-    public User? PendingAssistant { get; set; }
-
-    /// <summary>
-    /// Requesting user participates in game
-    /// </summary>
-    public IEnumerable<GameParticipation> Participation { get; set; } = [];
-
-    /// <summary>
-    /// Game tags
-    /// </summary>
-    public IEnumerable<Tag> Tags { get; set; } = [];
-
-    /// <summary>
-    /// Number of unread posts
-    /// </summary>
-    public int UnreadPostsCount { get; set; }
-
-    /// <summary>
-    /// Number of unread commentaries
-    /// </summary>
-    public int UnreadCommentsCount { get; set; }
+    public IEnumerable<int> TagIds { get; set; } = [];
 
     /// <summary>
     /// Number of unread characters
@@ -134,14 +110,9 @@ public class Game
     public int UnreadCharactersCount { get; set; }
 
     /// <summary>
-    /// User IDs of active character owners (for player count in sidebar)
+    /// Unique players (authors of active characters) - for game details page.
     /// </summary>
-    public IEnumerable<Guid> ActiveCharacterUserIds { get; set; } = [];
-
-    /// <summary>
-    /// Recruitment information
-    /// </summary>
-    public GameRecruitment Recruitment { get; set; } = null!;
+    public IEnumerable<UserRef>? Players { get; set; }
 }
 
 /// <summary>
@@ -155,19 +126,24 @@ public class GameRecruitment
     public bool IsOpen { get; set; }
 
     /// <summary>
-    /// Maximum number of players allowed (null = unlimited)
+    /// Maximum number of player characters allowed (null = unlimited)
     /// </summary>
-    public int? PlayerLimit { get; set; }
+    public int? PcLimit { get; set; }
 
     /// <summary>
-    /// Current number of active players
+    /// Current number of active player characters
     /// </summary>
-    public int PlayerCount { get; set; }
+    public int PcCount { get; set; }
 
     /// <summary>
     /// When the recruitment was started
     /// </summary>
     public DateTimeOffset? StartedUtc { get; set; }
+
+    /// <summary>
+    /// Whether this is a subsequent recruitment (донабор, RecruitmentCount >= 2)
+    /// </summary>
+    public bool IsSubsequent { get; set; }
 }
 
 /// <summary>

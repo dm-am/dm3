@@ -22,7 +22,18 @@ public class Blog : ISoftDeletable
     public Guid BlogId { get; set; }
 
     /// <summary>
-    /// Author (Owner) identifier
+    /// Auto-incrementing serial number for PublicId generation
+    /// </summary>
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int SerialNumber { get; set; }
+
+    /// <summary>
+    /// Short public identifier for URLs (5 lowercase letters)
+    /// </summary>
+    public string PublicId { get; set; } = null!;
+
+    /// <summary>
+    /// Blog author identifier
     /// </summary>
     public Guid AuthorId { get; set; }
 
@@ -51,6 +62,16 @@ public class Blog : ISoftDeletable
     /// Blog status
     /// </summary>
     public ModuleStatus Status { get; set; }
+
+    /// <summary>
+    /// When the blog was first activated (changed from Draft to Active)
+    /// </summary>
+    public DateTimeOffset? ActivatedUtc { get; set; }
+
+    /// <summary>
+    /// When the blog was closed (changed from Active to Closed)
+    /// </summary>
+    public DateTimeOffset? ClosedUtc { get; set; }
 
     /// <summary>
     /// Premoderation status for newbie bloggers
@@ -83,6 +104,18 @@ public class Blog : ISoftDeletable
     public int CommentCount { get; set; }
 
     /// <summary>
+    /// Pre-computed popularity score for efficient sorting.
+    /// Score = active subscribers (readers active within last 30 days).
+    /// Updated by PopularityScoreService background job.
+    /// </summary>
+    public int PopularityScore { get; set; }
+
+    /// <summary>
+    /// When the popularity score was last recalculated (UTC)
+    /// </summary>
+    public DateTimeOffset? PopularityScoreUpdatedUtc { get; set; }
+
+    /// <summary>
     /// Last comment identifier (denormalized for navigation)
     /// </summary>
     public Guid? LastCommentId { get; set; }
@@ -99,7 +132,7 @@ public class Blog : ISoftDeletable
     #region Navigation Properties
 
     /// <summary>
-    /// Blog author (Owner)
+    /// Blog author
     /// </summary>
     [ForeignKey(nameof(AuthorId))]
     public virtual User Author { get; set; } = null!;

@@ -4,7 +4,10 @@ import { ref, computed, onMounted } from "vue";
 import type { LoginCredentials } from "@/shared/api/models/account";
 import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
 import { PasswordInput } from "@/shared/ui/PasswordInput";
-import { useValidatedField, validators } from "@/shared/lib/composables/useValidatedField";
+import {
+  useValidatedField,
+  validators,
+} from "@/shared/lib/composables/useValidatedField";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 
 const props = defineProps<{
@@ -36,8 +39,8 @@ const formLoadTime = ref(0);
 const loading = ref(false);
 const rememberMe = ref(true);
 
-const canSubmit = computed(() =>
-  emailField.isReady.value && passwordField.isReady.value
+const canSubmit = computed(
+  () => emailField.isReady.value && passwordField.isReady.value,
 );
 
 onMounted(() => {
@@ -79,7 +82,9 @@ const submit = async () => {
     // Check for pending activation flag
     if (errors["_pendingactivation"]) {
       pendingActivation.value = true;
-      passwordField.setError(getFieldError(errors, "email") || "Регистрация не завершена");
+      passwordField.setError(
+        getFieldError(errors, "email") || "Регистрация не завершена",
+      );
     } else {
       pendingActivation.value = false;
       const emailError = getFieldError(errors, "email");
@@ -124,10 +129,10 @@ const onPasswordInput = () => {
 </script>
 
 <template>
-  <the-lightbox narrow>
+  <Lightbox narrow>
     <lightbox-title>Вход</lightbox-title>
 
-    <the-form
+    <Form
       @submit="submit"
       @cancel="emit('cancel')"
       :valid="canSubmit"
@@ -135,7 +140,11 @@ const onPasswordInput = () => {
       action="Войти"
       cancel="Отмена"
     >
-      <form-field label="Почта" name="email" :errors="emailField.error.value ? [emailField.error.value] : []">
+      <form-field
+        label="Почта"
+        name="email"
+        :errors="emailField.error.value ? [emailField.error.value] : []"
+      >
         <input
           v-model="emailField.value.value"
           id="email"
@@ -146,11 +155,24 @@ const onPasswordInput = () => {
         />
       </form-field>
 
-      <form-field name="password" :errors="passwordField.error.value ? [passwordField.error.value] : []">
+      <form-field
+        name="password"
+        :errors="passwordField.error.value ? [passwordField.error.value] : []"
+      >
         <template #label>
           <label for="password">Пароль</label>
-          <a v-if="pendingActivation" class="field-action" @click="handleResendActivation">Отправить повторное письмо?</a>
-          <a v-else class="field-action" @click="emit('cantSignIn', emailField.value.value.trim())">Не могу войти</a>
+          <a
+            v-if="pendingActivation"
+            class="field-action"
+            @click="handleResendActivation"
+            >Отправить повторное письмо?</a
+          >
+          <a
+            v-else
+            class="field-action"
+            @click="emit('cantSignIn', emailField.value.value.trim())"
+            >Не могу войти</a
+          >
         </template>
         <password-input
           v-model="passwordField.value.value"
@@ -175,8 +197,8 @@ const onPasswordInput = () => {
         tabindex="-1"
         aria-hidden="true"
       />
-    </the-form>
-  </the-lightbox>
+    </Form>
+  </Lightbox>
 </template>
 
 <style scoped lang="sass">

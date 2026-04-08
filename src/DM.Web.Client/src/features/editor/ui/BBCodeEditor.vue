@@ -12,6 +12,7 @@ import {
   type BBCodeContext,
   CONTEXT_TAGS,
 } from "@/shared/lib/utils/bbcode";
+import { Tooltip } from "@/shared/ui/Tooltip";
 import InputDialog, { type InputField } from "./InputDialog.vue";
 
 // BBCode custom extensions (aligned with DM2 server supported tags)
@@ -337,7 +338,7 @@ watch(
       const currentBbcode = htmlToBbcode(editor.value.getHTML());
       if (currentBbcode !== newValue) {
         const html = bbcodeToHtml(newValue);
-        editor.value.commands.setContent(html, false);
+        editor.value.commands.setContent(html, { emitUpdate: false });
       }
     } else if (mode.value === "bbcode") {
       if (bbcodeText.value !== newValue) {
@@ -370,7 +371,7 @@ function switchMode(newMode: "wysiwyg" | "bbcode") {
     // BBCode -> WYSIWYG
     if (editor.value) {
       const html = bbcodeToHtml(bbcodeText.value);
-      editor.value.commands.setContent(html, false);
+      editor.value.commands.setContent(html, { emitUpdate: false });
     }
   }
 
@@ -809,7 +810,7 @@ function restoreDraft() {
     emit("update:modelValue", draft);
     if (mode.value === "wysiwyg" && editor.value) {
       const html = bbcodeToHtml(draft);
-      editor.value.commands.setContent(html, false);
+      editor.value.commands.setContent(html, { emitUpdate: false });
     } else {
       bbcodeText.value = draft;
       nextTick(() => autoResizeTextarea());
@@ -831,7 +832,7 @@ onMounted(() => {
   // Set initial content
   if (props.modelValue && editor.value) {
     const html = bbcodeToHtml(props.modelValue);
-    editor.value.commands.setContent(html, false);
+    editor.value.commands.setContent(html, { emitUpdate: false });
   }
 
   // Auto-resize textarea if in BBCode mode with content
@@ -947,326 +948,341 @@ defineExpose({
       aria-label="Панель форматирования"
     >
       <!-- Text formatting -->
-      <button
-        v-if="availableTags.includes('b')"
-        type="button"
-        class="tag-btn"
-        :class="{ active: mode === 'wysiwyg' && editor?.isActive('bold') }"
-        :aria-pressed="mode === 'wysiwyg' && editor?.isActive('bold')"
-        :disabled="disabled"
-        @click="toggleBold"
-        title="Жирный (Ctrl+B)"
-        aria-label="Жирный"
-      >
-        <b>b</b>
-      </button>
-      <button
-        v-if="availableTags.includes('i')"
-        type="button"
-        class="tag-btn"
-        :class="{ active: mode === 'wysiwyg' && editor?.isActive('italic') }"
-        :aria-pressed="mode === 'wysiwyg' && editor?.isActive('italic')"
-        :disabled="disabled"
-        @click="toggleItalic"
-        title="Курсив (Ctrl+I)"
-        aria-label="Курсив"
-      >
-        <i>i</i>
-      </button>
-      <button
-        v-if="availableTags.includes('u')"
-        type="button"
-        class="tag-btn"
-        :class="{ active: mode === 'wysiwyg' && editor?.isActive('underline') }"
-        :aria-pressed="mode === 'wysiwyg' && editor?.isActive('underline')"
-        :disabled="disabled"
-        @click="toggleUnderline"
-        title="Подчеркнутый (Ctrl+U)"
-        aria-label="Подчеркнутый"
-      >
-        <u>u</u>
-      </button>
-      <button
-        v-if="availableTags.includes('strike')"
-        type="button"
-        class="tag-btn"
-        :class="{ active: mode === 'wysiwyg' && editor?.isActive('strike') }"
-        :aria-pressed="mode === 'wysiwyg' && editor?.isActive('strike')"
-        :disabled="disabled"
-        @click="toggleStrike"
-        title="Зачеркнутый"
-        aria-label="Зачеркнутый"
-      >
-        <s>strike</s>
-      </button>
+      <Tooltip v-if="availableTags.includes('b')" text="Жирный (Ctrl+B)">
+        <button
+          type="button"
+          class="tag-btn"
+          :class="{ active: mode === 'wysiwyg' && editor?.isActive('bold') }"
+          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('bold')"
+          :disabled="disabled"
+          @click="toggleBold"
+          aria-label="Жирный"
+        >
+          <b>b</b>
+        </button>
+      </Tooltip>
+      <Tooltip v-if="availableTags.includes('i')" text="Курсив (Ctrl+I)">
+        <button
+          type="button"
+          class="tag-btn"
+          :class="{ active: mode === 'wysiwyg' && editor?.isActive('italic') }"
+          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('italic')"
+          :disabled="disabled"
+          @click="toggleItalic"
+          aria-label="Курсив"
+        >
+          <i>i</i>
+        </button>
+      </Tooltip>
+      <Tooltip v-if="availableTags.includes('u')" text="Подчеркнутый (Ctrl+U)">
+        <button
+          type="button"
+          class="tag-btn"
+          :class="{ active: mode === 'wysiwyg' && editor?.isActive('underline') }"
+          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('underline')"
+          :disabled="disabled"
+          @click="toggleUnderline"
+          aria-label="Подчеркнутый"
+        >
+          <u>u</u>
+        </button>
+      </Tooltip>
+      <Tooltip v-if="availableTags.includes('strike')" text="Зачеркнутый">
+        <button
+          type="button"
+          class="tag-btn"
+          :class="{ active: mode === 'wysiwyg' && editor?.isActive('strike') }"
+          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('strike')"
+          :disabled="disabled"
+          @click="toggleStrike"
+          aria-label="Зачеркнутый"
+        >
+          <s>strike</s>
+        </button>
+      </Tooltip>
       <span
         class="toolbar-separator"
         role="separator"
         aria-orientation="vertical"
       ></span>
       <!-- Hidden/conditional visibility -->
-      <button
-        v-if="availableTags.includes('spoiler')"
-        type="button"
-        class="tag-btn"
-        :class="{ active: mode === 'wysiwyg' && editor?.isActive('spoiler') }"
-        :aria-pressed="mode === 'wysiwyg' && editor?.isActive('spoiler')"
-        :disabled="disabled"
-        @click="insertSpoiler"
-        title="Спойлер"
-        aria-label="Спойлер"
-      >
-        spoiler
-      </button>
-      <button
-        v-if="availableTags.includes('nsfw')"
-        type="button"
-        class="tag-btn tag-btn-nsfw"
-        :class="{ active: mode === 'wysiwyg' && editor?.isActive('nsfw') }"
-        :aria-pressed="mode === 'wysiwyg' && editor?.isActive('nsfw')"
-        :disabled="disabled"
-        @click="insertNsfw"
-        title="18+ контент"
-        aria-label="NSFW контент"
-      >
-        nsfw
-      </button>
-      <button
+      <Tooltip v-if="availableTags.includes('spoiler')" text="Спойлер">
+        <button
+          type="button"
+          class="tag-btn"
+          :class="{ active: mode === 'wysiwyg' && editor?.isActive('spoiler') }"
+          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('spoiler')"
+          :disabled="disabled"
+          @click="insertSpoiler"
+          aria-label="Спойлер"
+        >
+          spoiler
+        </button>
+      </Tooltip>
+      <Tooltip v-if="availableTags.includes('nsfw')" text="18+ контент">
+        <button
+          type="button"
+          class="tag-btn tag-btn-nsfw"
+          :class="{ active: mode === 'wysiwyg' && editor?.isActive('nsfw') }"
+          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('nsfw')"
+          :disabled="disabled"
+          @click="insertNsfw"
+          aria-label="NSFW контент"
+        >
+          nsfw
+        </button>
+      </Tooltip>
+      <Tooltip
         v-if="availableTags.includes('private')"
-        type="button"
-        class="tag-btn tag-btn-private"
-        :class="{ active: mode === 'wysiwyg' && editor?.isActive('private') }"
-        :aria-pressed="mode === 'wysiwyg' && editor?.isActive('private')"
-        :disabled="disabled"
-        @click="insertPrivate"
-        title="Приватный текст (видно только указанному персонажу)"
-        aria-label="Приватный текст"
+        text="Приватный текст (видно только указанному персонажу)"
       >
-        private
-      </button>
+        <button
+          type="button"
+          class="tag-btn tag-btn-private"
+          :class="{ active: mode === 'wysiwyg' && editor?.isActive('private') }"
+          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('private')"
+          :disabled="disabled"
+          @click="insertPrivate"
+          aria-label="Приватный текст"
+        >
+          private
+        </button>
+      </Tooltip>
       <span
         class="toolbar-separator"
         role="separator"
         aria-orientation="vertical"
       ></span>
       <!-- Lists -->
-      <button
-        v-if="availableTags.includes('ul')"
-        type="button"
-        class="tag-btn"
-        :class="{
-          active: mode === 'wysiwyg' && editor?.isActive('bulletList'),
-        }"
-        :aria-pressed="mode === 'wysiwyg' && editor?.isActive('bulletList')"
-        :disabled="disabled"
-        @click="toggleBulletList"
-        title="Маркированный список"
-        aria-label="Маркированный список"
-      >
-        ul
-      </button>
-      <button
-        v-if="availableTags.includes('ol')"
-        type="button"
-        class="tag-btn"
-        :class="{
-          active: mode === 'wysiwyg' && editor?.isActive('orderedList'),
-        }"
-        :aria-pressed="mode === 'wysiwyg' && editor?.isActive('orderedList')"
-        :disabled="disabled"
-        @click="toggleOrderedList"
-        title="Нумерованный список"
-        aria-label="Нумерованный список"
-      >
-        ol
-      </button>
+      <Tooltip v-if="availableTags.includes('ul')" text="Маркированный список">
+        <button
+          type="button"
+          class="tag-btn"
+          :class="{
+            active: mode === 'wysiwyg' && editor?.isActive('bulletList'),
+          }"
+          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('bulletList')"
+          :disabled="disabled"
+          @click="toggleBulletList"
+          aria-label="Маркированный список"
+        >
+          ul
+        </button>
+      </Tooltip>
+      <Tooltip v-if="availableTags.includes('ol')" text="Нумерованный список">
+        <button
+          type="button"
+          class="tag-btn"
+          :class="{
+            active: mode === 'wysiwyg' && editor?.isActive('orderedList'),
+          }"
+          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('orderedList')"
+          :disabled="disabled"
+          @click="toggleOrderedList"
+          aria-label="Нумерованный список"
+        >
+          ol
+        </button>
+      </Tooltip>
       <span
         class="toolbar-separator"
         role="separator"
         aria-orientation="vertical"
       ></span>
       <!-- Media -->
-      <button
-        v-if="availableTags.includes('img')"
-        type="button"
-        class="tag-btn"
-        :disabled="disabled"
-        @click="insertImage"
-        title="Вставить изображение"
-        aria-label="Вставить изображение"
-      >
-        img
-      </button>
-      <button
-        v-if="availableTags.includes('link')"
-        type="button"
-        class="tag-btn"
-        :class="{ active: mode === 'wysiwyg' && editor?.isActive('bbLink') }"
-        :aria-pressed="mode === 'wysiwyg' && editor?.isActive('bbLink')"
-        :disabled="disabled"
-        @click="insertLink"
-        title="Вставить ссылку"
-        aria-label="Вставить ссылку"
-      >
-        link
-      </button>
+      <Tooltip v-if="availableTags.includes('img')" text="Вставить изображение">
+        <button
+          type="button"
+          class="tag-btn"
+          :disabled="disabled"
+          @click="insertImage"
+          aria-label="Вставить изображение"
+        >
+          img
+        </button>
+      </Tooltip>
+      <Tooltip v-if="availableTags.includes('link')" text="Вставить ссылку">
+        <button
+          type="button"
+          class="tag-btn"
+          :class="{ active: mode === 'wysiwyg' && editor?.isActive('bbLink') }"
+          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('bbLink')"
+          :disabled="disabled"
+          @click="insertLink"
+          aria-label="Вставить ссылку"
+        >
+          link
+        </button>
+      </Tooltip>
       <span
         class="toolbar-separator"
         role="separator"
         aria-orientation="vertical"
       ></span>
       <!-- Blocks -->
-      <button
-        v-if="availableTags.includes('quote')"
-        type="button"
-        class="tag-btn"
-        :class="{ active: mode === 'wysiwyg' && editor?.isActive('bbQuote') }"
-        :aria-pressed="mode === 'wysiwyg' && editor?.isActive('bbQuote')"
-        :disabled="disabled"
-        @click="toggleBlockquote"
-        title="Цитата"
-        aria-label="Цитата"
-      >
-        quote
-      </button>
-      <button
+      <Tooltip v-if="availableTags.includes('quote')" text="Цитата">
+        <button
+          type="button"
+          class="tag-btn"
+          :class="{ active: mode === 'wysiwyg' && editor?.isActive('bbQuote') }"
+          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('bbQuote')"
+          :disabled="disabled"
+          @click="toggleBlockquote"
+          aria-label="Цитата"
+        >
+          quote
+        </button>
+      </Tooltip>
+      <Tooltip
         v-if="availableTags.includes('warning') && isModerator"
-        type="button"
-        class="tag-btn tag-btn-warning"
-        :class="{
-          active: mode === 'wysiwyg' && editor?.isActive('warningBlock'),
-        }"
-        :aria-pressed="mode === 'wysiwyg' && editor?.isActive('warningBlock')"
-        :disabled="disabled"
-        @click="insertWarning"
-        title="Предупреждение"
-        aria-label="Предупреждение"
+        text="Предупреждение"
       >
-        warning
-      </button>
-      <button
+        <button
+          type="button"
+          class="tag-btn tag-btn-warning"
+          :class="{
+            active: mode === 'wysiwyg' && editor?.isActive('warningBlock'),
+          }"
+          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('warningBlock')"
+          :disabled="disabled"
+          @click="insertWarning"
+          aria-label="Предупреждение"
+        >
+          warning
+        </button>
+      </Tooltip>
+      <Tooltip
         v-if="availableTags.includes('mod') && isModerator"
-        type="button"
-        class="tag-btn tag-btn-mod"
-        :class="{ active: mode === 'wysiwyg' && editor?.isActive('modBlock') }"
-        :aria-pressed="mode === 'wysiwyg' && editor?.isActive('modBlock')"
-        :disabled="disabled"
-        @click="insertMod"
-        title="Модераторский блок"
-        aria-label="Модераторский блок"
+        text="Модераторский блок"
       >
-        mod
-      </button>
+        <button
+          type="button"
+          class="tag-btn tag-btn-mod"
+          :class="{ active: mode === 'wysiwyg' && editor?.isActive('modBlock') }"
+          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('modBlock')"
+          :disabled="disabled"
+          @click="insertMod"
+          aria-label="Модераторский блок"
+        >
+          mod
+        </button>
+      </Tooltip>
       <span
         class="toolbar-separator"
         role="separator"
         aria-orientation="vertical"
       ></span>
       <!-- Layout -->
-      <button
-        v-if="availableTags.includes('tab')"
-        type="button"
-        class="tag-btn"
-        :disabled="disabled"
-        @click="insertTab"
-        title="Отступ"
-        aria-label="Вставить отступ"
-      >
-        tab
-      </button>
-      <button
-        v-if="availableTags.includes('cut')"
-        type="button"
-        class="tag-btn"
-        :disabled="disabled"
-        @click="insertCut"
-        title="Разрыв для длинных постов"
-        aria-label="Вставить разрыв"
-      >
-        cut
-      </button>
+      <Tooltip v-if="availableTags.includes('tab')" text="Отступ">
+        <button
+          type="button"
+          class="tag-btn"
+          :disabled="disabled"
+          @click="insertTab"
+          aria-label="Вставить отступ"
+        >
+          tab
+        </button>
+      </Tooltip>
+      <Tooltip v-if="availableTags.includes('cut')" text="Разрыв для длинных постов">
+        <button
+          type="button"
+          class="tag-btn"
+          :disabled="disabled"
+          @click="insertCut"
+          aria-label="Вставить разрыв"
+        >
+          cut
+        </button>
+      </Tooltip>
       <span
         class="toolbar-separator"
         role="separator"
         aria-orientation="vertical"
       ></span>
       <!-- Code/Raw -->
-      <button
-        v-if="availableTags.includes('code')"
-        type="button"
-        class="tag-btn tag-btn-code"
-        :class="{ active: mode === 'wysiwyg' && editor?.isActive('code') }"
-        :aria-pressed="mode === 'wysiwyg' && editor?.isActive('code')"
-        :disabled="disabled"
-        @click="toggleCode"
-        title="Моноширинный код"
-        aria-label="Код"
-      >
-        code
-      </button>
-      <button
-        v-if="availableTags.includes('noparse')"
-        type="button"
-        class="tag-btn"
-        :class="{ active: mode === 'wysiwyg' && editor?.isActive('noparse') }"
-        :aria-pressed="mode === 'wysiwyg' && editor?.isActive('noparse')"
-        :disabled="disabled"
-        @click="insertNoparse"
-        title="Без обработки BBCode"
-        aria-label="Без форматирования"
-      >
-        noparse
-      </button>
+      <Tooltip v-if="availableTags.includes('code')" text="Моноширинный код">
+        <button
+          type="button"
+          class="tag-btn tag-btn-code"
+          :class="{ active: mode === 'wysiwyg' && editor?.isActive('code') }"
+          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('code')"
+          :disabled="disabled"
+          @click="toggleCode"
+          aria-label="Код"
+        >
+          code
+        </button>
+      </Tooltip>
+      <Tooltip v-if="availableTags.includes('noparse')" text="Без обработки BBCode">
+        <button
+          type="button"
+          class="tag-btn"
+          :class="{ active: mode === 'wysiwyg' && editor?.isActive('noparse') }"
+          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('noparse')"
+          :disabled="disabled"
+          @click="insertNoparse"
+          aria-label="Без форматирования"
+        >
+          noparse
+        </button>
+      </Tooltip>
       <span
         class="toolbar-separator"
         role="separator"
         aria-orientation="vertical"
       ></span>
       <!-- Utils -->
-      <button
-        type="button"
-        class="tag-btn"
-        :disabled="disabled"
-        @click="loadDraftManual"
-        title="Загрузить черновик"
-        aria-label="Загрузить черновик"
-      >
-        load
-      </button>
-      <button
-        type="button"
-        class="tag-btn"
-        :class="{ active: showHelp }"
-        :aria-pressed="showHelp"
-        :aria-expanded="showHelp"
-        @click="showHelp = !showHelp"
-        title="Справка"
-        aria-label="Показать справку"
-      >
-        help
-      </button>
+      <Tooltip text="Загрузить черновик">
+        <button
+          type="button"
+          class="tag-btn"
+          :disabled="disabled"
+          @click="loadDraftManual"
+          aria-label="Загрузить черновик"
+        >
+          load
+        </button>
+      </Tooltip>
+      <Tooltip text="Справка">
+        <button
+          type="button"
+          class="tag-btn"
+          :class="{ active: showHelp }"
+          :aria-pressed="showHelp"
+          :aria-expanded="showHelp"
+          @click="showHelp = !showHelp"
+          aria-label="Показать справку"
+        >
+          help
+        </button>
+      </Tooltip>
       <!-- Spacer to push mode toggle to the right -->
       <span class="toolbar-spacer"></span>
       <!-- Mode toggle -->
       <div ref="modeTabsRef" class="mode-tabs">
-        <button
-          type="button"
-          class="mode-tab"
-          :class="{ active: mode === 'bbcode' }"
-          @click="switchMode('bbcode')"
-          title="BBCode"
-        >
-          &lt;/&gt;
-        </button>
-        <button
-          type="button"
-          class="mode-tab"
-          :class="{ active: mode === 'wysiwyg' }"
-          @click="switchMode('wysiwyg')"
-          title="WYSIWYG"
-        >
-          <i>Aa</i>
-        </button>
+        <Tooltip text="Режим BBCode">
+          <button
+            type="button"
+            class="mode-tab"
+            :class="{ active: mode === 'bbcode' }"
+            @click="switchMode('bbcode')"
+            aria-label="Режим BBCode"
+          >
+            &lt;/&gt;
+          </button>
+        </Tooltip>
+        <Tooltip text="Визуальный редактор">
+          <button
+            type="button"
+            class="mode-tab"
+            :class="{ active: mode === 'wysiwyg' }"
+            @click="switchMode('wysiwyg')"
+            aria-label="Визуальный редактор"
+          >
+            <i>Aa</i>
+          </button>
+        </Tooltip>
         <span class="mode-indicator" :style="indicatorStyle"></span>
       </div>
     </div>
@@ -1516,8 +1532,8 @@ defineExpose({
     >
       <div
         class="validation-error"
-        v-for="(error, index) in validationErrors"
-        :key="index"
+        v-for="error in validationErrors"
+        :key="error"
       >
         <span class="error-icon" aria-hidden="true">⚠</span>
         <span class="error-text">{{ error }}</span>
@@ -1530,6 +1546,7 @@ defineExpose({
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
 @import "src/assets/styles/BbcodeContent"
+@import "src/assets/styles/ZIndex"
 
 .bbcode-editor-wrapper
   position: relative
@@ -1786,7 +1803,7 @@ defineExpose({
   top: 50%
   left: 50%
   transform: translate(-50%, -50%)
-  z-index: 1000
+  z-index: $z-modal
   width: 520px
   max-width: calc(100vw - 32px)
   max-height: calc(100vh - 64px)

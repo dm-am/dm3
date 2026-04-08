@@ -389,7 +389,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ApprovalToken")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("ApprovalTokenExpiresAt")
+                    b.Property<DateTimeOffset?>("ApprovalTokenExpiresUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset>("CreatedUtc")
@@ -477,6 +477,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("AuthorId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("ActivatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ClosedUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("CommentCount")
                         .HasColumnType("integer");
 
@@ -508,6 +514,14 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("MentorId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("PopularityScore")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTimeOffset?>("PopularityScoreUpdatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("PremoderationStatus")
                         .HasColumnType("integer");
 
@@ -532,6 +546,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasIndex("DeletedByUserId");
 
                     b.HasIndex("MentorId");
+
+                    b.HasIndex("PopularityScore");
 
                     b.ToTable("Blogs");
                 });
@@ -784,7 +800,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.ToTable("Comments");
                 });
 
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.CommentEditHistory", b =>
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.CommentEdit", b =>
                 {
                     b.Property<Guid>("CommentEditId")
                         .ValueGeneratedOnAdd()
@@ -793,7 +809,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CommentId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("EditedAtUtc")
+                    b.Property<DateTimeOffset>("EditedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("EditorUserId")
@@ -805,7 +821,7 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("EditorUserId");
 
-                    b.ToTable("CommentEditHistory");
+                    b.ToTable("CommentEdits");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Like", b =>
@@ -844,7 +860,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("AggregateId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
+                    b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("EventType")
@@ -863,7 +879,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<string>("Payload")
                         .HasColumnType("text");
 
-                    b.Property<DateTimeOffset?>("ProcessedAt")
+                    b.Property<DateTimeOffset?>("ProcessedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("RetryCount")
@@ -900,9 +916,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("PostAuthorId")
                         .HasColumnType("uuid");
-
-                    b.Property<int?>("ReasonType")
-                        .HasColumnType("integer");
 
                     b.Property<short?>("SignValue")
                         .HasColumnType("smallint");
@@ -945,6 +958,17 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ShortId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<Guid>("TagGroupId")
                         .HasColumnType("uuid");
 
@@ -953,6 +977,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("TagId");
+
+                    b.HasIndex("ShortId")
+                        .IsUnique();
 
                     b.HasIndex("TagGroupId");
 
@@ -964,6 +991,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("TagGroupId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -1066,11 +1099,37 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("LastCommentTopicId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("LastCommentTopicTitle")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("LastCommentTopicNumber")
+                        .HasColumnType("integer");
+
                     b.Property<DateTimeOffset?>("LastCommentUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("LastTopicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("LastTopicNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LastTopicTitle")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("LastTopicAuthorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("LastTopicCreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Order")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Alias")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -1087,6 +1146,13 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasIndex("LastCommentAuthorId");
 
                     b.HasIndex("LastCommentId");
+
+                    b.HasIndex("LastTopicAuthorId");
+
+                    b.HasIndex("LastTopicId");
+
+                    b.HasIndex("Alias")
+                        .IsUnique();
 
                     b.ToTable("Boards");
                 });
@@ -1123,6 +1189,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("BoardId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("TopicNumber")
+                        .HasColumnType("integer");
 
                     b.Property<int>("CommentCount")
                         .HasColumnType("integer");
@@ -1174,6 +1243,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ModifiedByUserId");
 
+                    b.HasIndex("BoardId", "TopicNumber")
+                        .IsUnique();
+
                     b.ToTable("Topics");
                 });
 
@@ -1183,7 +1255,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("EditedAtUtc")
+                    b.Property<DateTimeOffset>("EditedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("EditorUserId")
@@ -1322,7 +1394,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CharacterId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("EditedAtUtc")
+                    b.Property<DateTimeOffset>("EditedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("EditorUserId")
@@ -1346,10 +1418,13 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("AttributeSchemaId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AuthorId")
+                    b.Property<Guid>("MasterId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset?>("ClosedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ClosureWarningUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("CommentCount")
@@ -1385,11 +1460,14 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<string>("Info")
                         .HasColumnType("text");
 
-                    b.Property<bool>("IsFinished")
-                        .HasColumnType("boolean");
+                    b.Property<DateTimeOffset?>("InactivityWarningUtc")
+                        .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IsFrozen")
-                        .HasColumnType("boolean");
+                    b.Property<int>("ClosedReason")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DraftVisibility")
+                        .HasColumnType("integer");
 
                     b.Property<bool>("IsRecruitmentOpen")
                         .HasColumnType("boolean");
@@ -1400,22 +1478,34 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("LastCommentId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("LastPostCreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid?>("MentorId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("NarrativeSetting")
                         .HasColumnType("text");
 
+                    b.Property<int>("PopularityScore")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("PopularityScoreUpdatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("PremoderationStatus")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("RecruitmentPlayerLimit")
+                    b.Property<int?>("RecruitmentPcLimit")
                         .HasColumnType("integer");
 
                     b.Property<DateTimeOffset?>("RecruitmentStartedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("ReleaseDate")
+                    b.Property<int>("RecruitmentCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("ActivatedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("ShowPrivateMessages")
@@ -1433,7 +1523,7 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("GameId");
 
-                    b.HasIndex("AuthorId");
+                    b.HasIndex("MasterId");
 
                     b.HasIndex("MentorId");
 
@@ -1611,23 +1701,14 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("MasterMessage")
-                        .HasColumnType("text");
-
-                    b.Property<Guid?>("ModifiedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("ModifiedUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<Guid>("RoomId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Text")
+                    b.Property<string>("GameText")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("comment")
+                    b.Property<string>("MetagameText")
                         .HasColumnType("text");
 
                     b.HasKey("PostId");
@@ -1637,8 +1718,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasIndex("CharacterId");
 
                     b.HasIndex("DeletedByUserId");
-
-                    b.HasIndex("ModifiedByUserId");
 
                     b.HasIndex("RoomId");
 
@@ -1651,7 +1730,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("EditedAtUtc")
+                    b.Property<DateTimeOffset>("EditedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("EditorUserId")
@@ -1677,6 +1756,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("AccessType")
                         .HasColumnType("integer");
+
+                    b.Property<Guid?>("ChatId")
+                        .HasColumnType("uuid");
 
                     b.Property<bool>("DiceEnabled")
                         .HasColumnType("boolean");
@@ -1729,6 +1811,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("LastMessageId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("RoomId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Title")
                         .HasColumnType("text");
 
@@ -1761,16 +1846,16 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<TimeSpan?>("Duration")
                         .HasColumnType("interval");
 
-                    b.Property<DateTimeOffset?>("EndedAtUtc")
+                    b.Property<DateTimeOffset?>("EndedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsOpen")
                         .HasColumnType("boolean");
 
-                    b.Property<DateTimeOffset?>("StartedAtUtc")
+                    b.Property<DateTimeOffset?>("StartedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset>("StartsAtUtc")
+                    b.Property<DateTimeOffset>("StartsUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Status")
@@ -1799,7 +1884,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsOrganizer")
                         .HasColumnType("boolean");
 
-                    b.Property<DateTimeOffset>("JoinedAtUtc")
+                    b.Property<DateTimeOffset>("JoinedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("UserId")
@@ -1872,7 +1957,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("EditedAtUtc")
+                    b.Property<DateTimeOffset>("EditedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("EditorUserId")
@@ -2554,7 +2639,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Navigation("Topic");
                 });
 
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.CommentEditHistory", b =>
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.CommentEdit", b =>
                 {
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Shared.Comment", "Comment")
                         .WithMany("Edits")
@@ -2669,9 +2754,21 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("LastCommentId");
 
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Forum.Topic", "LastTopic")
+                        .WithMany()
+                        .HasForeignKey("LastTopicId");
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "LastTopicAuthor")
+                        .WithMany()
+                        .HasForeignKey("LastTopicAuthorId");
+
                     b.Navigation("LastComment");
 
                     b.Navigation("LastCommentAuthor");
+
+                    b.Navigation("LastTopic");
+
+                    b.Navigation("LastTopicAuthor");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Forum.BoardModerator", b =>
@@ -2814,9 +2911,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Game", b =>
                 {
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Author")
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Master")
                         .WithMany("GamesAsMaster")
-                        .HasForeignKey("AuthorId")
+                        .HasForeignKey("MasterId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -2824,7 +2921,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .WithMany("GamesAsMentor")
                         .HasForeignKey("MentorId");
 
-                    b.Navigation("Author");
+                    b.Navigation("Master");
 
                     b.Navigation("Mentor");
                 });

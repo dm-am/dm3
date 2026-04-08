@@ -4,6 +4,7 @@ using DomainTopic = DM.Domain.Forum.Features.Topics.Topic;
 using DomainLastComment = DM.Domain.Forum.Features.Topics.LastComment;
 using DomainCreateTopic = DM.Domain.Forum.Features.Topics.CreateTopic;
 using DomainUpdateTopic = DM.Domain.Forum.Features.Topics.UpdateTopic;
+using DomainTopicsQuery = DM.Domain.Forum.Features.Topics.TopicsQuery;
 
 namespace DM.Web.API.Features.Forum.Topics;
 
@@ -16,20 +17,20 @@ internal class TopicMappingProfile : Profile
     public TopicMappingProfile()
     {
         CreateMap<DomainTopic, Topic>()
-            .ForMember(d => d.CreatedUtc, s => s.MapFrom(t => t.CreatedUtc))
-            .ForMember(d => d.EditedUtc, s => s.MapFrom(t => t.ModifiedUtc))
             .ForMember(d => d.CommentsCount, s => s.MapFrom(t => t.TotalCommentsCount))
-            .ForMember(d => d.Description, s => s.MapFrom(t => t.Text))
-            .ForMember(d => d.Board, s => s.MapFrom(t => t.Board));
+            .ForMember(d => d.Description, s => s.MapFrom(t => t.Text));
 
         CreateMap<DomainLastComment, LastTopicComment>()
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(c => c.CreatedUtc));
 
-        CreateMap<CreateTopicRequest, DomainCreateTopic>();
+        CreateMap<CreateTopicRequest, DomainCreateTopic>()
+            .ForMember(d => d.BoardTitle, opt => opt.Ignore());
 
         CreateMap<Topic, DomainUpdateTopic>()
             .ForMember(d => d.Text, s => s.MapFrom(t => t.Description))
             .ForMember(d => d.TopicId, s => s.MapFrom(t => t.Id))
             .ForMember(d => d.BoardTitle, s => s.MapFrom(t => t.Board.Id));
+
+        CreateMap<TopicsQuery, DomainTopicsQuery>();
     }
 }

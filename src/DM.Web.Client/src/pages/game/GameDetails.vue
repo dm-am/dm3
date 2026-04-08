@@ -14,17 +14,16 @@ const { game, rooms, characters } = storeToRefs(gameStore);
 const { user } = storeToRefs(useUserStore());
 
 const canEdit = computed(() => {
-  if (!game.value?.roles) return false;
+  if (!game.value?.participation) return false;
   return (
-    game.value.roles.includes(GameRole.Master) ||
-    game.value.roles.includes(GameRole.Mentor) ||
-    game.value.roles.includes(GameRole.Assistant)
+    game.value.participation.includes(GameRole.Master) ||
+    game.value.participation.includes(GameRole.Mentor) ||
+    game.value.participation.includes(GameRole.Assistant)
   );
 });
 
 const activePlayers = computed(() => {
-  if (!game.value?.activeCharacterUserIds) return [];
-  return game.value.activeCharacterUserIds;
+  return game.value?.players ?? [];
 });
 
 const activeCharacters = computed(() => {
@@ -83,27 +82,39 @@ const tags = computed(() => game.value?.tags ?? []);
       <div class="privacy-list">
         <div class="privacy-item">
           <span class="privacy-label">Показывать характер:</span>
-          <span class="privacy-value">{{ game.privacySettings.viewTemper ? "Да" : "Нет" }}</span>
+          <span class="privacy-value">{{
+            game.privacySettings.viewTemper ? "Да" : "Нет"
+          }}</span>
         </div>
         <div class="privacy-item">
           <span class="privacy-label">Показывать историю:</span>
-          <span class="privacy-value">{{ game.privacySettings.viewStory ? "Да" : "Нет" }}</span>
+          <span class="privacy-value">{{
+            game.privacySettings.viewStory ? "Да" : "Нет"
+          }}</span>
         </div>
         <div class="privacy-item">
           <span class="privacy-label">Показывать навыки:</span>
-          <span class="privacy-value">{{ game.privacySettings.viewSkills ? "Да" : "Нет" }}</span>
+          <span class="privacy-value">{{
+            game.privacySettings.viewSkills ? "Да" : "Нет"
+          }}</span>
         </div>
         <div class="privacy-item">
           <span class="privacy-label">Показывать инвентарь:</span>
-          <span class="privacy-value">{{ game.privacySettings.viewInventory ? "Да" : "Нет" }}</span>
+          <span class="privacy-value">{{
+            game.privacySettings.viewInventory ? "Да" : "Нет"
+          }}</span>
         </div>
         <div class="privacy-item">
           <span class="privacy-label">Показывать приватные сообщения:</span>
-          <span class="privacy-value">{{ game.privacySettings.viewPrivates ? "Да" : "Нет" }}</span>
+          <span class="privacy-value">{{
+            game.privacySettings.viewPrivates ? "Да" : "Нет"
+          }}</span>
         </div>
         <div class="privacy-item">
           <span class="privacy-label">Показывать броски кубиков:</span>
-          <span class="privacy-value">{{ game.privacySettings.viewDice ? "Да" : "Нет" }}</span>
+          <span class="privacy-value">{{
+            game.privacySettings.viewDice ? "Да" : "Нет"
+          }}</span>
         </div>
       </div>
     </section>

@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import notepadApi from "@/shared/api/notepadApi";
-import type { NotepadEntry, CreateNotepadEntryRequest, UpdateNotepadEntryRequest } from "@/shared/api/models/notepads";
+import type {
+  NotepadEntry,
+  CreateNotepadEntryRequest,
+  UpdateNotepadEntryRequest,
+} from "@/shared/api/models/notepads";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import LoadingSpinner from "@/shared/ui/Layout/LoadingSpinner.vue";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
 
@@ -28,8 +31,8 @@ const sortedEntries = computed(() => {
 const fetchEntries = async () => {
   loading.value = true;
   try {
-    const response = await notepadApi.getUserEntries();
-    entries.value = response.resources || [];
+    const { data } = await notepadApi.getUserEntries();
+    entries.value = data?.resources || [];
   } catch (error) {
     toast.error("Не удалось загрузить записи блокнота");
   } finally {
@@ -72,10 +75,15 @@ const saveEntry = async () => {
         title: editorTitle.value,
         content: editorContent.value,
       };
-      const response = await notepadApi.updateUserEntry(editingEntry.value.id, request);
-      const index = entries.value.findIndex((e) => e.id === editingEntry.value!.id);
-      if (index !== -1) {
-        entries.value[index] = response.resource || response;
+      const { data } = await notepadApi.updateUserEntry(
+        editingEntry.value.id,
+        request,
+      );
+      const index = entries.value.findIndex(
+        (e) => e.id === editingEntry.value!.id,
+      );
+      if (index !== -1 && data) {
+        entries.value[index] = data;
       }
       toast.success("Запись обновлена");
     } else {
@@ -84,8 +92,8 @@ const saveEntry = async () => {
         title: editorTitle.value,
         content: editorContent.value,
       };
-      const response = await notepadApi.createUserEntry(request);
-      entries.value.push(response.resource || response);
+      const { data } = await notepadApi.createUserEntry(request);
+      if (data) entries.value.push(data);
       toast.success("Запись создана");
     }
     closeEditor();
@@ -121,13 +129,13 @@ onMounted(() => fetchEntries());
 <template>
   <div class="notepad-page">
     <div class="page-header">
-      <h1>Блокнот</h1>
+      <page-title>Блокнот</page-title>
       <button class="add-btn" @click="openNewEntryEditor">
-        <the-icon icon="plus" /> Новая запись
+        <Icon icon="plus" /> Новая запись
       </button>
     </div>
 
-    <loading-spinner v-if="loading" />
+    <secondary-text v-if="loading">Загрузка...</secondary-text>
 
     <template v-else-if="entries.length === 0 && !showEditor">
       <secondary-text>Нет записей в блокноте</secondary-text>
@@ -156,7 +164,9 @@ onMounted(() => fetchEntries());
         <!-- Editor mode -->
         <div v-if="showEditor" class="editor">
           <div class="editor-header">
-            <h3>{{ editingEntry ? "Редактирование записи" : "Новая запись" }}</h3>
+            <h3>
+              {{ editingEntry ? "Редактирование записи" : "Новая запись" }}
+            </h3>
             <button class="close-btn" @click="closeEditor">&times;</button>
           </div>
 
@@ -183,7 +193,11 @@ onMounted(() => fetchEntries());
             </div>
 
             <div class="editor-actions">
-              <button class="cancel-btn" @click="closeEditor" :disabled="saving">
+              <button
+                class="cancel-btn"
+                @click="closeEditor"
+                :disabled="saving"
+              >
                 Отмена
               </button>
               <button class="save-btn" @click="saveEntry" :disabled="saving">
@@ -198,7 +212,10 @@ onMounted(() => fetchEntries());
           <div class="content-header">
             <h2>{{ selectedEntry.title }}</h2>
             <div class="content-actions">
-              <button class="edit-btn" @click="openEditEntryEditor(selectedEntry)">
+              <button
+                class="edit-btn"
+                @click="openEditEntryEditor(selectedEntry)"
+              >
                 Редактировать
               </button>
               <button class="delete-btn" @click="deleteEntry(selectedEntry)">
@@ -207,7 +224,9 @@ onMounted(() => fetchEntries());
             </div>
           </div>
           <div class="content-meta">
-            <span>Создано: <human-date :date="selectedEntry.createdUtc" /></span>
+            <span
+              >Создано: <human-date :date="selectedEntry.createdUtc"
+            /></span>
             <span v-if="selectedEntry.updatedUtc">
               | Изменено: <human-date :date="selectedEntry.updatedUtc" />
             </span>
@@ -292,7 +311,7 @@ onMounted(() => fetchEntries());
     background: $bg-element-hover
 
   &.selected
-    background: $bg-element-active
+    background: $bg-element-accent
     border-left: 3px solid $accent-green
 
 .entry-title
@@ -371,7 +390,7 @@ onMounted(() => fetchEntries());
     padding: $small
     border: 1px solid $border
     border-radius: $border-radius
-    background: $bg-input
+    background: $input-bg
     color: $text
     font-family: inherit
     font-size: 1rem

@@ -15,6 +15,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Events;
+using GameDto = DM.Domain.Game.Features.Games.Game;
 
 namespace DM.Domain.Game.Features.Invitations;
 
@@ -264,7 +265,7 @@ internal class GameInvitationService : IGameInvitationService
         _intentionManager.ThrowIfForbidden(GameIntention.RemoveUser, game);
 
         // Cannot remove master
-        if (game.Author.UserId == userId)
+        if (game.Master.UserId == userId)
         {
             throw new HttpException(HttpStatusCode.Forbidden, "Cannot remove the game master");
         }
@@ -279,7 +280,7 @@ internal class GameInvitationService : IGameInvitationService
 
     #region Helpers
 
-    private async Task<GameModel> GetGameOrThrow(Guid gameId)
+    private async Task<GameDto> GetGameOrThrow(Guid gameId)
     {
         var currentUserId = _identityProvider.Current?.User?.UserId ?? Guid.Empty;
         var game = await _gameRepository.GetGame(gameId, currentUserId);
@@ -290,7 +291,7 @@ internal class GameInvitationService : IGameInvitationService
         return game;
     }
 
-    private async Task ValidateInvitation(GameModel game, Guid userId, CancellationToken ct = default)
+    private async Task ValidateInvitation(GameDto game, Guid userId, CancellationToken ct = default)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
 

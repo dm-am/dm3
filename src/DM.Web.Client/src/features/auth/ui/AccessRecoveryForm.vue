@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref, nextTick } from "vue";
 import { useRouter } from "vue-router";
-import TheLightbox from "@/shared/ui/Layout/TheLightbox.vue";
+import Lightbox from "@/shared/ui/Layout/Lightbox.vue";
 import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
 import { AccountApi } from "@/shared/api";
-import { useValidatedField, validators } from "@/shared/lib/composables/useValidatedField";
+import {
+  useValidatedField,
+  validators,
+} from "@/shared/lib/composables/useValidatedField";
 
 const router = useRouter();
 
@@ -25,10 +28,7 @@ const serverError = ref("");
 // Email field with validation
 const emailField = useValidatedField({
   initialValue: props.prefillEmail || "",
-  validate: validators.combine(
-    validators.required(),
-    validators.email()
-  ),
+  validate: validators.combine(validators.required(), validators.email()),
 });
 
 const goToSupport = () => {
@@ -45,7 +45,9 @@ const submit = async () => {
   serverError.value = "";
 
   try {
-    const { data, error } = await AccountApi.recover(emailField.value.value.trim());
+    const { data, error } = await AccountApi.recover(
+      emailField.value.value.trim(),
+    );
 
     if (error || !data) {
       serverError.value = "Произошла ошибка. Попробуйте позже.";
@@ -79,13 +81,15 @@ const onEmailInput = () => {
 </script>
 
 <template>
-  <the-lightbox :narrow="!result">
+  <Lightbox :narrow="!result">
     <!-- Result: Password reset sent -->
     <template v-if="result === 'password'">
       <div class="success-content">
         <lightbox-title>Проверьте почту</lightbox-title>
         <p class="main-text">
-          Мы отправили письмо на <strong>{{ emailField.value.value }}</strong> со ссылкой для сброса пароля.
+          Мы отправили письмо на
+          <strong>{{ emailField.value.value }}</strong> со ссылкой для сброса
+          пароля.
         </p>
         <p class="expiry-note">Ссылка действительна 48 часов</p>
       </div>
@@ -96,7 +100,9 @@ const onEmailInput = () => {
       <div class="success-content">
         <lightbox-title>Проверьте почту</lightbox-title>
         <p class="main-text">
-          Мы отправили повторное письмо на <strong>{{ emailField.value.value }}</strong> со ссылкой для активации.
+          Мы отправили повторное письмо на
+          <strong>{{ emailField.value.value }}</strong> со ссылкой для
+          активации.
         </p>
         <p class="expiry-note">Ссылка действительна 48 часов</p>
       </div>
@@ -107,7 +113,8 @@ const onEmailInput = () => {
       <div class="success-content">
         <lightbox-title>Аккаунт не найден</lightbox-title>
         <p class="main-text">
-          Аккаунта с почтой <strong>{{ emailField.value.value }}</strong> не существует.
+          Аккаунта с почтой <strong>{{ emailField.value.value }}</strong> не
+          существует.
         </p>
         <p class="expiry-note">
           <a href="#" @click.prevent="tryAgain">Попробовать другую почту?</a>
@@ -119,7 +126,7 @@ const onEmailInput = () => {
     <template v-else>
       <lightbox-title>Восстановление доступа</lightbox-title>
 
-      <the-form
+      <Form
         @submit="submit"
         @cancel="emit('cancel')"
         :valid="emailField.isReady.value"
@@ -127,10 +134,21 @@ const onEmailInput = () => {
         action="Отправить"
         cancel="Отмена"
       >
-        <form-field name="email" :errors="emailField.error.value ? [emailField.error.value] : serverError ? [serverError] : []">
+        <form-field
+          name="email"
+          :errors="
+            emailField.error.value
+              ? [emailField.error.value]
+              : serverError
+                ? [serverError]
+                : []
+          "
+        >
           <template #label>
             <label for="recovery-email">Почта</label>
-            <a class="field-action" @click.prevent="goToSupport">Нет доступа к почте?</a>
+            <a class="field-action" @click.prevent="goToSupport"
+              >Нет доступа к почте?</a
+            >
           </template>
           <input
             v-model="emailField.value.value"
@@ -141,9 +159,9 @@ const onEmailInput = () => {
             @input="onEmailInput"
           />
         </form-field>
-      </the-form>
+      </Form>
     </template>
-  </the-lightbox>
+  </Lightbox>
 </template>
 
 <style scoped lang="sass">

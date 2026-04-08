@@ -12,7 +12,7 @@ public static class AddressObfuscationExtensions
     /// Obfuscate email address for logs
     /// </summary>
     /// <param name="emailAddress"></param>
-    /// <returns></returns>
+    /// <returns>Obfuscated email address</returns>
     public static string Obfuscate(this string emailAddress) =>
         string.Join('@',
             emailAddress.Split("@")

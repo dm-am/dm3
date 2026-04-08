@@ -15,7 +15,7 @@ namespace DM.Infrastructure.Persistence.Entities.Shared;
 /// DAL model for comment
 /// </summary>
 [Table("Comments")]
-public class Comment : ISoftDeletable, IEditable, IHasEditHistory<CommentEditHistory>
+public class Comment : ISoftDeletable, IHasEditHistory<CommentEdit>
 {
     /// <summary>
     /// comment identifier
@@ -37,16 +37,6 @@ public class Comment : ISoftDeletable, IEditable, IHasEditHistory<CommentEditHis
     /// Creation moment (UTC)
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
-
-    /// <summary>
-    /// Last modification moment (UTC)
-    /// </summary>
-    public DateTimeOffset? ModifiedUtc { get; set; }
-
-    /// <summary>
-    /// Last editor user identifier
-    /// </summary>
-    public Guid? ModifiedByUserId { get; set; }
 
     /// <summary>
     /// comment content
@@ -96,12 +86,6 @@ public class Comment : ISoftDeletable, IEditable, IHasEditHistory<CommentEditHis
     public virtual User Author { get; set; } = null!;
 
     /// <summary>
-    /// Last editor
-    /// </summary>
-    [ForeignKey(nameof(ModifiedByUserId))]
-    public virtual User? ModifiedBy { get; set; }
-
-    /// <summary>
     /// User who deleted the comment
     /// </summary>
     [ForeignKey(nameof(DeletedByUserId))]
@@ -110,7 +94,7 @@ public class Comment : ISoftDeletable, IEditable, IHasEditHistory<CommentEditHis
     /// <summary>
     /// Edit history
     /// </summary>
-    [InverseProperty(nameof(CommentEditHistory.Comment))]
-    public virtual ICollection<CommentEditHistory> Edits { get; set; } = [];
+    [InverseProperty(nameof(CommentEdit.Comment))]
+    public virtual ICollection<CommentEdit> Edits { get; set; } = [];
 
 }

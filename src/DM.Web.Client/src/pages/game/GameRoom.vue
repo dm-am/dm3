@@ -4,43 +4,41 @@ import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
 import { useUserStore } from "@/entities/user";
-import { extractNumberParam } from "@/app/providers/router";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useScrollToElement } from "@/shared/lib/composables/useScrollToElement";
 import { gameApi } from "@/entities/game";
-import ThePaging from "@/shared/ui/Paging/ThePaging.vue";
+import Paging from "@/shared/ui/Paging/Paging.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
-import TheIcon from "@/shared/ui/Icon/TheIcon.vue";
+import Icon from "@/shared/ui/Icon/Icon.vue";
 import { IconType } from "@/shared/ui/Icon/iconType";
 import GamePost from "./GamePost.vue";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
 const userStore = useUserStore();
-const {
-  game,
-  currentRoom,
-  posts,
-  postsPaging,
-  postsLoading,
-  postsError,
-} = storeToRefs(gameStore);
+const { game, currentRoom, posts, postsPaging, postsLoading, postsError } =
+  storeToRefs(gameStore);
 
-const roomId = computed(() => route.params.roomId as string);
-const currentPage = computed(() => extractNumberParam(route.params.n));
+const roomNum = computed(() => parseInt(route.params.num as string));
+function getPage(): number {
+  const page = route.query.page;
+  return page ? parseInt(page as string) || 1 : 1;
+}
 
 // Scroll to target element when posts are loaded
-const postsLoaded = computed(() => posts.value.length > 0 && !postsLoading.value);
+const postsLoaded = computed(
+  () => posts.value.length > 0 && !postsLoading.value,
+);
 useScrollToElement(postsLoaded);
 
 // Mark room as read when posts are loaded (for authenticated users)
 watch(
   postsLoaded,
   async (loaded) => {
-    if (loaded && userStore.user && roomId.value) {
+    if (loaded && userStore.user && currentRoom.value?.id) {
       try {
-        await gameApi.markRoomAsRead(roomId.value);
+        await gameApi.markRoomAsRead(currentRoom.value.id as string);
       } catch {
         // Silently ignore - non-critical operation
       }
@@ -50,15 +48,17 @@ watch(
 );
 
 useFetchData(
-  () => gameStore.loadPosts(roomId.value, currentPage.value),
+  () => gameStore.loadPostsByRoomNumber(roomNum.value, getPage()),
   [
     {
-      param: (p) => p.roomId,
-      callback: (id) => gameStore.loadPosts(id as string, 1),
+      param: (p) => p.num,
+      callback: () => gameStore.loadPostsByRoomNumber(roomNum.value, 1),
     },
+  ],
+  [
     {
-      param: (p) => p.n,
-      callback: (n) => gameStore.loadPosts(roomId.value, extractNumberParam(n)),
+      query: (q) => q.page,
+      callback: () => gameStore.loadPostsByRoomNumber(roomNum.value, getPage()),
     },
   ],
 );
@@ -71,7 +71,7 @@ useFetchData(
       :to="{ name: 'game-rooms', params: { id: game?.id } }"
       class="back-link"
     >
-      <the-icon :font="IconType.ArrowLeft" />
+      <Icon :font="IconType.ArrowLeft" />
       Назад к комнатам
     </router-link>
 
@@ -101,10 +101,12 @@ useFetchData(
     </div>
 
     <!-- Paging -->
-    <the-paging
-      v-if="postsPaging && postsPaging.pages > 1"
+    <Paging
+      v-if="postsPaging"
       :paging="postsPaging"
-      :to="{ name: 'game-room', params: { id: game?.id, roomId: roomId } }"
+      :to="{ name: 'game-room', params: { id: game?.publicId || game?.id, num: roomNum } }"
+      :use-query="true"
+      query-key="number"
     />
   </div>
 </template>
@@ -138,5 +140,5 @@ useFetchData(
 .posts-list
   display: flex
   flex-direction: column
-  gap: $medium
+  gap: $small
 </style>

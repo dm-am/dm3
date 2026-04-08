@@ -83,5 +83,10 @@ public enum ModerationIntention
     /// <summary>
     /// Moderate user profile (edit Info field)
     /// </summary>
-    ModerateUserProfile
+    ModerateUserProfile,
+
+    /// <summary>
+    /// Manage tags (create, edit, delete)
+    /// </summary>
+    ManageTags
 }

@@ -192,10 +192,10 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
-      interval: 15s
+      interval: 5s
       timeout: 10s
-      retries: 5
-      start_period: 30s
+      retries: 20
+      start_period: 60s
     restart: unless-stopped
     deploy:
       resources:

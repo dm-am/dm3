@@ -90,16 +90,16 @@ internal class GameCommentService : IGameCommentService
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid gameId, PagingQuery query,
+    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid gameId, GameCommentsQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
         var game = await _gameService.GetAsync(gameId);
         _intentionManager.ThrowIfForbidden(GameIntention.ReadComments, game);
 
-        var totalCount = await _repository.Count(gameId, excludeUserIds);
+        var totalCount = await _repository.Count(gameId, query, excludeUserIds);
         var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.CommentsPerPage, totalCount);
 
-        var comments = await _repository.Get(gameId, paging, excludeUserIds);
+        var comments = await _repository.Get(gameId, query, paging, excludeUserIds);
 
         return (comments, paging.Result);
     }

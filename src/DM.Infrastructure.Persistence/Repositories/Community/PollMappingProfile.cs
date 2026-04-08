@@ -13,8 +13,8 @@ internal class PollMappingProfile : Profile
     public PollMappingProfile()
     {
         CreateMap<DbPoll, Poll>()
-            .ForMember(d => d.StartDate, s => s.MapFrom(p => new DateTimeOffset(p.StartDate, TimeSpan.Zero)))
-            .ForMember(d => d.EndDate, s => s.MapFrom(p => new DateTimeOffset(p.EndDate, TimeSpan.Zero)));
+            .ForMember(d => d.StartsUtc, s => s.MapFrom(p => new DateTimeOffset(p.StartsUtc, TimeSpan.Zero)))
+            .ForMember(d => d.EndsUtc, s => s.MapFrom(p => new DateTimeOffset(p.EndsUtc, TimeSpan.Zero)));
 
         CreateMap<DbPollOption, PollOption>();
     }

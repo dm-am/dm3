@@ -1,12 +1,15 @@
+using System;
 using System.Linq;
 using AutoMapper;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.Posts;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
 using DbGameTag = DM.Infrastructure.Persistence.Entities.Shared.Tag;
 using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
 using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
+using DbPostEdit = DM.Infrastructure.Persistence.Entities.Game.Posts.PostEdit;
 using DbPostPendency = DM.Infrastructure.Persistence.Entities.Game.Links.PostPendency;
 using DbRoomAccess = DM.Infrastructure.Persistence.Entities.Game.Links.RoomAccess;
 using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Character;
@@ -15,6 +18,8 @@ using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 using DtoGameTag = DM.Domain.Game.Features.Games.GameTag;
 using DtoRoomAccess = DM.Domain.Game.Features.Games.RoomAccess;
 using DtoPostPendency = DM.Domain.Game.Features.Games.PostPendency;
+using DtoPostEdit = DM.Domain.Game.Features.Posts.PostEdit;
+using GameDto = DM.Domain.Game.Features.Games.Game;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
@@ -34,27 +39,31 @@ internal class GameMappingProfile : Profile
 
     private void ConfigureRoomMappings()
     {
-        CreateMap<DbRoom, RoomToUpdate>();
+        CreateMap<DbRoom, RoomToUpdate>()
+            .ForMember(d => d.UnreadPostsCount, opt => opt.Ignore());
 
         CreateMap<DbRoom, Room>()
             .Include<DbRoom, RoomToUpdate>()
             .ForMember(d => d.Id, s => s.MapFrom(r => r.RoomId))
+            .ForMember(d => d.RoomNumber, s => s.MapFrom(r => r.RoomNumber))
             .ForMember(d => d.Accesses, s => s.MapFrom(r => r.RoomAccesses))
             .ForMember(d => d.Pendencies, s => s.MapFrom(r => r.PostPendencies
                 .Where(p =>
                     p.WaitingForUserId != null &&
                     (
-                        p.Room.Game.AuthorId == p.CreatedById ||
+                        p.Room.Game.MasterId == p.CreatedById ||
                         p.Room.Game.Assistants.Any(a => a.UserId == p.CreatedById) ||
                         p.Room.RoomAccesses.Any(a => a.Character != null && a.Character.AuthorId == p.CreatedById)
                     ) &&
                     (
-                        p.Room.Game.AuthorId == p.WaitingForUserId ||
+                        p.Room.Game.MasterId == p.WaitingForUserId ||
                         p.Room.Game.Assistants.Any(a => a.UserId == p.WaitingForUserId) ||
                         p.Room.RoomAccesses.Any(a => a.Character != null && a.Character.AuthorId == p.WaitingForUserId)
                     ))))
             .ForMember(d => d.TotalPostsCount, s => s.MapFrom(r => r.Posts
                 .Count(p => !p.IsRemoved)))
+            .ForMember(d => d.UnreadPostsCount, opt => opt.Ignore())
+            .ForMember(d => d.Description, opt => opt.Ignore()) // Set in repository
             .ForMember(d => d.Settings, s => s.MapFrom(r => new RoomSettings
             {
                 ViewPrivateText = r.ViewPrivateText,
@@ -77,7 +86,9 @@ internal class GameMappingProfile : Profile
                     ? RoomAccessTargetType.Character
                     : RoomAccessTargetType.Reader))
             .ForMember(d => d.User, s => s.MapFrom(l =>
-                l.CharacterId.HasValue ? l.Character!.Author : l.ReaderUser));
+                l.CharacterId.HasValue ? l.Character!.Author : l.ReaderUser))
+            .ForMember(d => d.GrantedUtc, opt => opt.Ignore())
+            .ForMember(d => d.GrantedBy, opt => opt.Ignore());
 
         CreateMap<DbPostPendency, DtoPostPendency>()
             .ForMember(d => d.Id, s => s.MapFrom(p => p.PendencyId))
@@ -93,7 +104,15 @@ internal class GameMappingProfile : Profile
     {
         CreateMap<DbPost, Post>()
             .ForMember(d => d.Id, s => s.MapFrom(p => p.PostId))
-            .ForMember(d => d.Comment, s => s.MapFrom(p => p.Comment));
+            .ForMember(d => d.GameText, s => s.MapFrom(p => p.GameText))
+            .ForMember(d => d.MetagameText, s => s.MapFrom(p => p.MetagameText))
+            .ForMember(d => d.Edits, s => s.MapFrom(p => p.Edits.OrderByDescending(e => e.EditedUtc)))
+            .ForMember(d => d.Rating, opt => opt.Ignore())
+            .ForMember(d => d.ReviewCount, opt => opt.Ignore())
+            .ForMember(d => d.Room, opt => opt.Ignore());
+
+        CreateMap<DbPostEdit, DtoPostEdit>()
+            .ForMember(d => d.Id, s => s.MapFrom(e => e.PostEditId));
 
         CreateMap<DbPost, LastPost>()
             .ForMember(d => d.Id, s => s.MapFrom(p => p.PostId))
@@ -105,25 +124,28 @@ internal class GameMappingProfile : Profile
     {
         CreateMap<DbCharacter, Character>()
             .ForMember(d => d.Id, s => s.MapFrom(c => c.CharacterId))
-            .ForMember(d => d.PictureUrl, s => s.MapFrom(c => c.Pictures
-                .Select(p => p.FilePath)
-                .FirstOrDefault()))
+            // NOTE: Pictures navigation removed - PictureUrl is now set via resolver or ignored
+            .ForMember(d => d.PictureUrl, opt => opt.Ignore())
             .ForMember(d => d.TotalPostsCount, s => s.MapFrom(c => c.Posts.Count()));
 
         CreateMap<DbCharacterAttribute, CharacterAttribute>()
-            .ForMember(d => d.Id, s => s.MapFrom(a => a.AttributeId));
+            .ForMember(d => d.Id, s => s.MapFrom(a => a.AttributeId))
+            .ForMember(d => d.Title, opt => opt.Ignore())
+            .ForMember(d => d.Description, opt => opt.Ignore())
+            .ForMember(d => d.Modifier, opt => opt.Ignore())
+            .ForMember(d => d.Inconsistent, opt => opt.Ignore());
 
         CreateMap<DbCharacter, CharacterToUpdate>()
             .ForMember(d => d.Id, s => s.MapFrom(c => c.CharacterId))
-            .ForMember(d => d.GameMasterId, s => s.MapFrom(c => c.Game.AuthorId))
-            .ForMember(d => d.GameAssistantIds, s => s.MapFrom(c => c.Game.Assistants.Select(a => a.UserId)));
+            .ForMember(d => d.GameMasterId, s => s.MapFrom(c => c.Game.MasterId))
+            .ForMember(d => d.GameAssistantIds, s => s.MapFrom(c => c.Game.Assistants.Select(a => a.UserId)))
+            .ForMember(d => d.IsModified, opt => opt.Ignore());
 
         CreateMap<DbCharacter, CharacterShort>()
             .Include<DbCharacter, CharacterShortInfo>()
             .ForMember(d => d.Id, s => s.MapFrom(c => c.CharacterId))
-            .ForMember(d => d.PictureUrl, s => s.MapFrom(c => c.Pictures
-                .Select(p => p.FilePath)
-                .FirstOrDefault()));
+            // NOTE: Pictures navigation removed - PictureUrl is now set via resolver or ignored
+            .ForMember(d => d.PictureUrl, opt => opt.Ignore());
 
         CreateMap<DbCharacter, CharacterShortInfo>()
             .ForMember(d => d.LastPost, s => s.MapFrom(c => c.Posts
@@ -140,7 +162,10 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.Id, s => s.MapFrom(c => c.CommentId))
             .ForMember(d => d.EntityId, s => s.MapFrom(c => c.EntityId))
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(c => c.CreatedUtc))
-            .ForMember(d => d.ModifiedUtc, s => s.MapFrom(c => c.ModifiedUtc))
+            .ForMember(d => d.ModifiedUtc, s => s.MapFrom(c => c.Edits
+                .OrderByDescending(e => e.EditedUtc)
+                .Select(e => (DateTimeOffset?)e.EditedUtc)
+                .FirstOrDefault()))
             .ForMember(d => d.Text, s => s.MapFrom(c => c.Text))
             .ForMember(d => d.Author, s => s.MapFrom(c => c.Author))
             .ForMember(d => d.Likes, s => s.Ignore()) // Not needed for delete operations
@@ -151,48 +176,67 @@ internal class GameMappingProfile : Profile
 
     private void ConfigureGameMappings()
     {
-        CreateMap<DbGame, GameModel>()
-            .Include<DbGame, GameExtended>()
+        // GameAssistant -> GameAssistantInfo (lightweight, for lists and tooltips)
+        CreateMap<GameAssistant, GameAssistantInfo>()
+            .ForMember(d => d.UserId, s => s.MapFrom(a => a.UserId))
+            .ForMember(d => d.Username, s => s.MapFrom(a => a.User.Username))
+            .ForMember(d => d.JoinedUtc, s => s.MapFrom(a => a.JoinedUtc))
+            .ForMember(d => d.LastActivityUtc, s => s.MapFrom(a => a.User.LastActivityUtc))
+            .ForMember(d => d.Role, s => s.MapFrom(a => a.User.Role))
+            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.User.QuantityRating < 100))
+            .ForMember(d => d.IsHonorary, s => s.MapFrom(a => a.User.IsHonorary));
+
+        CreateMap<DbGame, GameDto>()
+            .Include<DbGame, GameDetails>()
             .ForMember(d => d.Id, s => s.MapFrom(g => g.GameId))
+            .ForMember(d => d.PublicId, s => s.MapFrom(g => g.PublicId))
             .ForMember(d => d.Tags, s => s.MapFrom(g => g.GameTags.Select(t => t.Tag)))
-            .ForMember(d => d.Assistants, s => s.MapFrom(g => g.Assistants.Select(a => a.User)))
-            .ForMember(d => d.PendingAssistant, s => s.MapFrom(g => g.Tokens
-                .Where(t => t.Type == TokenType.GameAssistantInvitation)
-                .Select(t => t.User)
-                .FirstOrDefault()))
-            .ForMember(d => d.ActiveCharacterUserIds, s => s.MapFrom(g => g.Characters
-                .Where(c => c.Status == CharacterStatus.Active && c.AuthorId.HasValue)
-                .Select(c => c.AuthorId!.Value)))
-            .ForMember(d => d.ReaderUserIds, s => s.Ignore())
-            .ForMember(d => d.PendingInvitedUserIds, s => s.MapFrom(g => g.Tokens
-                .Where(t => t.Type == TokenType.GamePlayerInvitation || t.Type == TokenType.GameReaderInvitation)
-                .Select(t => t.UserId)))
-            .ForMember(d => d.PendingPlayerInvitedUserIds, s => s.MapFrom(g => g.Tokens
-                .Where(t => t.Type == TokenType.GamePlayerInvitation)
-                .Select(t => t.UserId)))
+            .ForMember(d => d.TagIds, s => s.MapFrom(g => g.GameTags.Select(t => t.Tag.ShortId)))
+            .ForMember(d => d.Assistants, s => s.MapFrom(g => g.Assistants))
+            .ForMember(d => d.PendingAssistant, s => s.Ignore()) // Populated via batch query in repository
+            .ForMember(d => d.Players, s => s.Ignore()) // Populated in repository for efficiency
+            .ForMember(d => d.SubscriberIds, s => s.Ignore())
+            .ForMember(d => d.PendingInvitedUserIds, s => s.Ignore()) // Populated via batch query in repository
+            .ForMember(d => d.PendingPlayerInvitedUserIds, s => s.Ignore()) // Populated via batch query in repository
             .ForMember(d => d.BlacklistedUsers, s => s.MapFrom(g => g.BlackList))
+            .ForMember(d => d.Pendencies, opt => opt.Ignore())
+            .ForMember(d => d.UnreadPostsCount, opt => opt.Ignore())
+            .ForMember(d => d.UnreadCommentsCount, opt => opt.Ignore())
+            .ForMember(d => d.UnreadCharactersCount, opt => opt.Ignore())
+            .ForMember(d => d.Description, opt => opt.Ignore()) // Alias for NarrativeSetting, set in repository
+            .ForMember(d => d.GameReviewsCount, opt => opt.Ignore()) // Set in repository
+            .ForMember(d => d.PostReviewsCount, opt => opt.Ignore()) // Set in repository
+            .ForMember(d => d.SubscriberUsernames, opt => opt.Ignore()) // Set in repository
+            .ForMember(d => d.ActiveCharacters, opt => opt.Ignore()) // Set in repository
             .ForMember(d => d.Recruitment, s => s.MapFrom(g => new GameRecruitment
             {
                 IsOpen = g.IsRecruitmentOpen,
-                PlayerLimit = g.RecruitmentPlayerLimit,
-                PlayerCount = g.Characters
-                    .Where(c => c.Status == CharacterStatus.Active && c.AuthorId.HasValue)
-                    .Select(c => c.AuthorId!.Value)
-                    .Distinct()
-                    .Count(),
-                StartedUtc = g.RecruitmentStartedUtc
+                PcLimit = g.RecruitmentPcLimit,
+                PcCount = 0, // Populated via batch query in repository
+                StartedUtc = g.RecruitmentStartedUtc,
+                IsSubsequent = g.RecruitmentCount >= 2
             }));
 
         CreateMap<GameBlacklist, BlacklistedUser>()
             .ForMember(u => u.UserId, s => s.MapFrom(l => l.BlockedUserId))
             .ForMember(u => u.LinkId, s => s.MapFrom(l => l.EntryId));
 
-        CreateMap<DbGame, GameExtended>()
-            .ForMember(d => d.Readers, s => s.Ignore())
-            .ForMember(d => d.Characters, s => s.MapFrom(g => g.Characters));
+        CreateMap<DbGame, GameDetails>()
+            .ForMember(d => d.Subscribers, s => s.Ignore())
+            .ForMember(d => d.FullAssistants, s => s.MapFrom(g => g.Assistants.Select(a => a.User)))
+            .ForMember(d => d.Characters, s => s.MapFrom(g => g.Characters))
+            .ForMember(d => d.Notepad, opt => opt.Ignore())
+            .ForMember(d => d.AttributeSchema, opt => opt.Ignore())
+            .ForMember(d => d.Pendencies, opt => opt.Ignore())
+            .ForMember(d => d.UnreadPostsCount, opt => opt.Ignore())
+            .ForMember(d => d.UnreadCommentsCount, opt => opt.Ignore());
 
         CreateMap<DbGameTag, DtoGameTag>()
             .ForMember(d => d.Id, s => s.MapFrom(g => g.TagId))
-            .ForMember(d => d.GroupTitle, s => s.MapFrom(g => g.TagGroup.Title));
+            .ForMember(d => d.GroupTitle, s => s.MapFrom(g => g.TagGroup.Title))
+            .ForMember(d => d.GroupDescription, s => s.MapFrom(g => g.TagGroup.Description))
+            .ForMember(d => d.GroupSortOrder, s => s.MapFrom(g => g.TagGroup.SortOrder))
+            .ForMember(d => d.Description, s => s.MapFrom(g => g.Description))
+            .ForMember(d => d.GamesCount, opt => opt.Ignore()); // Computed at runtime
     }
 }

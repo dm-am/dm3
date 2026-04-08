@@ -6,7 +6,7 @@ import type { BadRequestError } from "@/shared/api/models/common";
  * Keys are lowercased for consistent access.
  */
 export function parseApiErrors(
-  error: BadRequestError | null | undefined
+  error: BadRequestError | null | undefined,
 ): Record<string, string[]> {
   if (!error) return {};
 
@@ -25,7 +25,7 @@ export function parseApiErrors(
  */
 export function getFieldError(
   errors: Record<string, string[]>,
-  field: string
+  field: string,
 ): string | undefined {
   return errors[field.toLowerCase()]?.[0];
 }

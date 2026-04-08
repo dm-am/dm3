@@ -106,7 +106,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
         {
             profile.PersonalNote = new PersonalNote
             {
-                Id = personalNote.NoteId,
+                Id = personalNote.Id,
                 Text = personalNote.Text,
                 CreatedUtc = personalNote.CreatedUtc,
                 UpdatedUtc = personalNote.UpdatedUtc
@@ -162,7 +162,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
             IpAddress = ip.IpAddress,
             FirstSeenUtc = ip.FirstSeenUtc,
             LastSeenUtc = ip.LastSeenUtc,
-            LoginCount = ip.LoginCount
+            LoginsCount = ip.LoginsCount
         }).ToList();
     }
 
@@ -184,7 +184,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
         {
             UserId = p.UserId,
             Username = p.Username,
-            SharedIpCount = p.SharedIpCount,
+            SharedIpsCount = p.SharedIpsCount,
             LastSharedLoginUtc = p.LastSharedLoginUtc
         }).ToList();
     }
@@ -196,7 +196,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
     {
         return notes.Select(n => new ModNote
         {
-            NoteId = n.Id,
+            Id = n.Id,
             AuthorUsername = n.Author?.Username ?? string.Empty,
             AuthorId = n.Author?.Id ?? Guid.Empty,
             Text = n.Text,

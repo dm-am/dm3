@@ -11,8 +11,8 @@ internal class UpdatePostValidator : AbstractValidator<UpdatePost>
     {
         RuleFor(p => p.PostId)
             .NotEmpty().WithMessage(ValidationError.Empty);
-        When(p => p.Text != default, () =>
-            RuleFor(p => p.Text)
+        When(p => p.GameText != default, () =>
+            RuleFor(p => p.GameText)
                 .NotEmpty().WithMessage(ValidationError.Empty));
     }
 }

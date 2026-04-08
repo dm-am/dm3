@@ -5,7 +5,7 @@ html.theme_Light {
   --text: #333;
   --text-muted: #999;
   --text-meta: #7b532b;
-  --accent-green: #696;
+  --accent-green: #393;
   --accent-red: #b22222;
   --accent-yellow: #d4a000;
   --text-on-green: #363;
@@ -13,9 +13,9 @@ html.theme_Light {
   --text-on-yellow: #654;
   --heading: #630;
   --heading-alt: #666;
-  --link: #3c6078;
-  --link-hover: #3f78a8;
-  --accent-green-hover: #7b7;
+  --link: #304060;
+  --link-hover: #5090c0;
+  --accent-green-hover: #65c265;
   --accent-red-hover: #d33;
   --accent-green-muted: #8a9a8a;
   --accent-red-muted: #c08080;
@@ -52,6 +52,9 @@ html.theme_Light {
   --input-bg-disabled: #ddd;
   --shade-bg: rgba(0, 0, 0, 0.6);
   --shade-text: #fff;
+  --tooltip-bg: #333;
+  --tooltip-text: #fff;
+  --tooltip-border: transparent;
   --overlay-bg: rgba(0, 0, 0, 0.25);
   --overlay-subtle: rgba(0, 0, 0, 0.05);
   --overlay-emphasis: rgba(0, 0, 0, 0.1);
@@ -69,6 +72,23 @@ html.theme_Light {
   --active-brightness: 0.5;
   --partner-glow: transparent;
   --partner-brightness: 1.05;
+
+  /* Search highlight - marker pen effect (preserves text color) */
+  --search-highlight-bg: rgba(255, 176, 32, 0.38);
+
+  /* Toast notifications - semantic colors with guaranteed contrast */
+  --toast-success-bg: #2e7d32;
+  --toast-success-text: #fff;
+  --toast-success-border: #1b5e20;
+  --toast-error-bg: #c62828;
+  --toast-error-text: #fff;
+  --toast-error-border: #b71c1c;
+  --toast-warning-bg: #f9a825;
+  --toast-warning-text: #1a1a1a;
+  --toast-warning-border: #f57f17;
+  --toast-info-bg: #1565c0;
+  --toast-info-text: #fff;
+  --toast-info-border: #0d47a1;
 }
 
 html.theme_Dark {
@@ -84,7 +104,7 @@ html.theme_Dark {
   --heading: #d4956a;
   --heading-alt: #a0a0a0;
   --link: #7cb0e0;
-  --link-hover: #8bb8e8;
+  --link-hover: #9cc8f0;
   --accent-green-hover: #a8d4a8;
   --accent-red-hover: #e07070;
   --accent-green-muted: #7a9a7a;
@@ -122,6 +142,9 @@ html.theme_Dark {
   --input-bg-disabled: #444;
   --shade-bg: rgba(0, 0, 0, 0.7);
   --shade-text: #fff;
+  --tooltip-bg: #444;
+  --tooltip-text: #e8e8e8;
+  --tooltip-border: #555;
   --overlay-bg: rgba(0, 0, 0, 0.4);
   --overlay-subtle: rgba(255, 255, 255, 0.05);
   --overlay-emphasis: rgba(255, 255, 255, 0.1);
@@ -139,6 +162,23 @@ html.theme_Dark {
   --active-brightness: 1.6;
   --partner-glow: rgba(255, 255, 255, 0.25);
   --partner-brightness: 1;
+
+  /* Search highlight - marker pen effect (brighter for dark backgrounds) */
+  --search-highlight-bg: rgba(255, 193, 7, 0.32);
+
+  /* Toast notifications - dark theme: slightly lighter backgrounds for better visibility */
+  --toast-success-bg: #388e3c;
+  --toast-success-text: #fff;
+  --toast-success-border: #2e7d32;
+  --toast-error-bg: #d32f2f;
+  --toast-error-text: #fff;
+  --toast-error-border: #c62828;
+  --toast-warning-bg: #fbc02d;
+  --toast-warning-text: #1a1a1a;
+  --toast-warning-border: #f9a825;
+  --toast-info-bg: #1976d2;
+  --toast-info-text: #fff;
+  --toast-info-border: #1565c0;
 }
 
 /* vue-final-modal overlay override - loaded after vfm styles */

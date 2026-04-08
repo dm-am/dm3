@@ -18,7 +18,7 @@ export type GlobalChatEventStatus = "Scheduled" | "Live" | "Ended";
 export type GlobalChatEventSummary = {
   id: string;
   title: string;
-  startsAt: string;
+  startsUtc: string;
   status: GlobalChatEventStatus;
   isOpen: boolean;
 };
@@ -30,7 +30,7 @@ export type GlobalChatEventParticipant = {
   id: string;
   user: User;
   isOrganizer: boolean;
-  joinedAt: string;
+  joinedUtc: string;
 };
 
 /**
@@ -40,7 +40,7 @@ export type GlobalChatEvent = {
   id: string;
   title: string;
   description: string;
-  startsAt: string;
+  startsUtc: string;
   duration: string | null;
   isOpen: boolean;
   status: GlobalChatEventStatus;
@@ -54,7 +54,7 @@ export type GlobalChatEvent = {
 export type CreateGlobalChatEventInput = {
   title: string;
   description?: string;
-  startsAt: string;
+  startsUtc: string;
   duration?: string;
   isOpen: boolean;
 };
@@ -65,7 +65,7 @@ export type CreateGlobalChatEventInput = {
 export type UpdateGlobalChatEventInput = {
   title?: string;
   description?: string;
-  startsAt?: string;
+  startsUtc?: string;
   duration?: string;
   isOpen?: boolean;
 };

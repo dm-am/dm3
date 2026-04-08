@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import TheLightbox from "@/shared/ui/Layout/TheLightbox.vue";
+import Lightbox from "@/shared/ui/Layout/Lightbox.vue";
 import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 
 const emit = defineEmits<{
   (e: "accept"): void;
@@ -10,7 +10,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <the-lightbox>
+  <Lightbox>
     <lightbox-title>Правила сайта</lightbox-title>
 
     <p class="intro">
@@ -32,9 +32,9 @@ const emit = defineEmits<{
     </p>
 
     <div class="controls">
-      <the-button @click="emit('accept')">Понятно</the-button>
+      <Button @click="emit('accept')">Понятно</Button>
     </div>
-  </the-lightbox>
+  </Lightbox>
 </template>
 
 <style scoped lang="sass">

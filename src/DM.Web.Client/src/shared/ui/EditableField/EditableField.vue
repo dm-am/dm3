@@ -3,7 +3,7 @@ import { computed } from "vue";
 
 const props = withDefaults(
   defineProps<{
-    modelValue: string;
+    modelValue?: string;
     label?: string;
     placeholder?: string;
     type?: "text" | "textarea";
@@ -38,7 +38,12 @@ const isEmpty = computed(() => !props.modelValue);
         :placeholder="placeholder || label"
         :rows="rows"
         class="field-input field-textarea"
-        @input="emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
+        @input="
+          emit(
+            'update:modelValue',
+            ($event.target as HTMLTextAreaElement).value,
+          )
+        "
       />
       <input
         v-else
@@ -46,7 +51,9 @@ const isEmpty = computed(() => !props.modelValue);
         :value="modelValue"
         :placeholder="placeholder || label"
         class="field-input"
-        @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
+        @input="
+          emit('update:modelValue', ($event.target as HTMLInputElement).value)
+        "
       />
     </template>
 
@@ -59,6 +66,7 @@ const isEmpty = computed(() => !props.modelValue);
 <style scoped lang="sass">
 @import "@/assets/styles/Variables"
 @import "@/assets/styles/Themes"
+@import "@/assets/styles/Inputs"
 
 .editable-field
   margin-bottom: $small
@@ -79,19 +87,10 @@ const isEmpty = computed(() => !props.modelValue);
     font-style: italic
 
 .field-input
-  width: 100%
-  padding: $small
-  border: 1px solid $border
-  border-radius: $border-radius
-  background: $bg-element
-  color: $text
-  font-size: inherit
-  font-family: inherit
-  transition: border-color 0.2s
-
-  &:focus
-    outline: none
-    border-color: $link
+  +input()
+  &
+    width: 100%
+    box-sizing: border-box
 
   &::placeholder
     color: $text-meta

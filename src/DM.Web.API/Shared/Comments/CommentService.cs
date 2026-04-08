@@ -104,25 +104,29 @@ internal class CommentService : ICommentService
 
     private async Task<(IEnumerable<Comment> Comments, PagingData Paging)> GetGameComments(Guid gameId, PagingQuery paging)
     {
-        var (comments, pagingResult) = await _gameCommentService.GetAsync(gameId, paging);
+        var query = new GameCommentsQuery { Skip = paging.Skip, Take = paging.Take };
+        var (comments, pagingResult) = await _gameCommentService.GetAsync(gameId, query);
         return (comments, ToPagingData(paging, pagingResult));
     }
 
     private async Task<(IEnumerable<Comment> Comments, PagingData Paging)> GetBlogComments(Guid blogId, PagingQuery paging)
     {
-        var (comments, pagingResult) = await _blogCommentService.GetAsync(blogId, paging);
+        var query = new BlogCommentsQuery { Skip = paging.Skip, Take = paging.Take };
+        var (comments, pagingResult) = await _blogCommentService.GetAsync(blogId, query);
         return (comments, ToPagingData(paging, pagingResult));
     }
 
     private async Task<(IEnumerable<Comment> Comments, PagingData Paging)> GetPublicationComments(Guid publicationId, PagingQuery paging)
     {
-        var (comments, pagingResult) = await _publicationCommentService.GetAsync(publicationId, paging);
+        var query = new PublicationCommentsQuery { Skip = paging.Skip, Take = paging.Take };
+        var (comments, pagingResult) = await _publicationCommentService.GetAsync(publicationId, query);
         return (comments, ToPagingData(paging, pagingResult));
     }
 
     private async Task<(IEnumerable<Comment> Comments, PagingData Paging)> GetTopicComments(Guid topicId, PagingQuery paging)
     {
-        var (comments, pagingResult) = await _topicCommentService.GetAsync(topicId, paging);
+        var query = new CommentsQuery { Skip = paging.Skip, Take = paging.Take };
+        var (comments, pagingResult) = await _topicCommentService.GetAsync(topicId, query);
         return (comments, ToPagingData(paging, pagingResult));
     }
 

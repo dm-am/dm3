@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Core.Enums;
-using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Blog.Users;
 
@@ -30,13 +30,13 @@ internal class BlogUserApiService : IBlogUserApiService
     {
         var users = new List<BlogUser>();
 
-        // Get owner from blog
-        var blog = await _blogService.Get(blogId);
-        var owner = new BlogUser
+        // Get author from blog
+        var blog = await _blogService.GetAsync(blogId);
+        var author = new BlogUser
         {
-            User = _mapper.Map<User>(blog.Author),
-            Role = nameof(BlogRole.Owner),
-            JoinedUtc = blog.CreatedAt
+            User = _mapper.Map<UserRef>(blog.Author),
+            Role = nameof(BlogRole.Author),
+            JoinedUtc = blog.CreatedUtc
         };
 
         // Get mentor if assigned
@@ -45,7 +45,7 @@ internal class BlogUserApiService : IBlogUserApiService
         {
             mentor = new BlogUser
             {
-                User = _mapper.Map<User>(blog.Mentor),
+                User = _mapper.Map<UserRef>(blog.Mentor),
                 Role = nameof(BlogRole.Mentor),
                 JoinedUtc = null // Mentor assignment date not tracked in model
             };
@@ -55,7 +55,7 @@ internal class BlogUserApiService : IBlogUserApiService
         var assistants = await _blogService.GetAssistants(blogId);
         var assistantDtos = assistants.Select(a => new BlogUser
         {
-            User = _mapper.Map<User>(a.User),
+            User = _mapper.Map<UserRef>(a.User),
             Role = nameof(BlogRole.Assistant),
             JoinedUtc = a.JoinedUtc
         }).ToList();
@@ -64,7 +64,7 @@ internal class BlogUserApiService : IBlogUserApiService
         var readers = await _blogService.GetReaders(blogId);
         var readerDtos = readers.Select(r => new BlogUser
         {
-            User = _mapper.Map<User>(r),
+            User = _mapper.Map<UserRef>(r),
             Role = nameof(BlogRole.Reader),
             JoinedUtc = null // Subscription date not included in GeneralUser
         }).ToList();
@@ -72,7 +72,7 @@ internal class BlogUserApiService : IBlogUserApiService
         // Apply role filter or return all
         if (string.IsNullOrEmpty(role))
         {
-            users.Add(owner);
+            users.Add(author);
             if (mentor != null) users.Add(mentor);
             users.AddRange(assistantDtos);
             users.AddRange(readerDtos);
@@ -81,8 +81,8 @@ internal class BlogUserApiService : IBlogUserApiService
         {
             switch (role.ToLowerInvariant())
             {
-                case "owner":
-                    users.Add(owner);
+                case "author":
+                    users.Add(author);
                     break;
                 case "mentor":
                     if (mentor != null) users.Add(mentor);
@@ -95,7 +95,7 @@ internal class BlogUserApiService : IBlogUserApiService
                     break;
                 default:
                     // Unknown role - return all
-                    users.Add(owner);
+                    users.Add(author);
                     if (mentor != null) users.Add(mentor);
                     users.AddRange(assistantDtos);
                     users.AddRange(readerDtos);
@@ -129,7 +129,7 @@ internal class BlogUserApiService : IBlogUserApiService
         var readers = await _blogService.GetReaders(blogId);
         return readers.Select(r => new BlogUser
         {
-            User = _mapper.Map<User>(r),
+            User = _mapper.Map<UserRef>(r),
             Role = nameof(BlogRole.Reader),
             JoinedUtc = null // Subscription date not included in GeneralUser
         });
@@ -141,7 +141,7 @@ internal class BlogUserApiService : IBlogUserApiService
         var user = await _blogService.Subscribe(blogId);
         return new BlogUser
         {
-            User = _mapper.Map<User>(user),
+            User = _mapper.Map<UserRef>(user),
             Role = nameof(BlogRole.Reader),
             JoinedUtc = DateTimeOffset.UtcNow
         };
@@ -165,7 +165,7 @@ internal class BlogUserApiService : IBlogUserApiService
         var assistants = await _blogService.GetAssistants(blogId);
         return assistants.Select(a => new BlogUser
         {
-            User = _mapper.Map<User>(a.User),
+            User = _mapper.Map<UserRef>(a.User),
             Role = nameof(BlogRole.Assistant),
             JoinedUtc = a.JoinedUtc
         });

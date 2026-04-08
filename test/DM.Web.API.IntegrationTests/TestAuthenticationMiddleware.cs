@@ -65,7 +65,7 @@ public class TestAuthenticationMiddleware
                 Id = Guid.NewGuid(),
                 Persistent = false,
                 Invisible = false,
-                ExpirationDate = DateTimeOffset.UtcNow.AddHours(2)
+                ExpirationUtc = DateTimeOffset.UtcNow.AddHours(2)
             };
 
             // Create and set identity

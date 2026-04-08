@@ -8,10 +8,10 @@
                          ┌─────────────────────────────────────────────────────────────┐
                          │                    Main Server (db.dm.am)                   │
                          │                                                             │
-Users ─────────┬────────>│  nginx → dm-api ─────┬───> PostgreSQL (dm3)               │
-(dm.am)        │         │                      ├───> MongoDB (dm3)                   │
-               │         │                      ├───> RabbitMQ                        │
-               │         │                      └───> MinIO (dm-uploads)              │
+Users ─────────┬────────>│  nginx → dm-api ─────┬───> PostgreSQL (dm3)                 │
+(dm.am)        │         │                      ├───> MongoDB (dm3)                    │
+               │         │                      ├───> RabbitMQ                         │
+               │         │                      └───> MinIO (dm-uploads)               │
                │         │                                                             │
                │         │  Consumers: mail, search, notifications                     │
                │         └─────────────────────────────────────────────────────────────┘
@@ -21,7 +21,7 @@ Users ─────────┬────────>│  nginx → dm-a
                │         ┌──────────────────────────┴──────────────────────────────────┐
                │         │                    Mirror Server (dm.ru)                    │
                └────────>│                                                             │
-Users ────────────────────>│  nginx → dm-api ──────────────────────────────────────────┤
+Users ──────────────────>│  nginx → dm-api ────────────────────────────────────────────┤
 (dm.ru)                  │                    (connects to Main Server DBs)            │
                          │                                                             │
                          │  Watchtower (auto-updates from GHCR)                        │

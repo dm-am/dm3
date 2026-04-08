@@ -25,14 +25,14 @@ public class UpdateGame
     public PremoderationStatus? PremoderationStatus { get; set; }
 
     /// <summary>
-    /// Game was completed successfully (only when closing)
+    /// Reason why the game was closed (only when closing)
     /// </summary>
-    public bool? IsFinished { get; set; }
+    public ClosedReason? ClosedReason { get; set; }
 
     /// <summary>
-    /// Game was frozen due to inactivity (only when closing)
+    /// Visibility of draft content (when Status = Draft)
     /// </summary>
-    public bool? IsFrozen { get; set; }
+    public DraftVisibility? DraftVisibility { get; set; }
 
     /// <summary>
     /// Recruitment is open for new players
@@ -40,9 +40,9 @@ public class UpdateGame
     public bool? IsRecruitmentOpen { get; set; }
 
     /// <summary>
-    /// Maximum number of players allowed (null = unlimited)
+    /// Maximum number of player characters allowed (null = unlimited)
     /// </summary>
-    public int? RecruitmentPlayerLimit { get; set; }
+    public int? RecruitmentPcLimit { get; set; }
 
     /// <summary>
     /// Game title
@@ -55,7 +55,7 @@ public class UpdateGame
     public string SystemName { get; set; } = null!;
 
     /// <summary>
-    /// Narrative setting (e.g. Mass Effect, WarHammer, Our world)
+    /// Narrative setting (e.g. Mass Effect, Warhammer, Our world)
     /// </summary>
     public string NarrativeSetting { get; set; } = null!;
 
@@ -122,9 +122,9 @@ public class UpdateGame
     #region Internal fields (set by service)
 
     /// <summary>
-    /// Release date (set on first activation, internal)
+    /// Activation date (set on first activation, internal, UTC)
     /// </summary>
-    public DateTimeOffset? ReleaseDate { get; set; }
+    public DateTimeOffset? ActivatedUtc { get; set; }
 
     /// <summary>
     /// Closed date (set when closing, internal)

@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Users;
 
 namespace DM.Domain.Core.Dto;
 
@@ -101,6 +103,56 @@ public class GeneralUser : IUser
     /// Number of post reviews received by this user (on their posts)
     /// </summary>
     public int PostReviewsReceivedCount { get; set; }
+
+    /// <summary>
+    /// Registration date (UTC)
+    /// </summary>
+    public DateTimeOffset? RegisteredUtc { get; set; }
+
+    /// <summary>
+    /// Number of games where user is master or assistant
+    /// </summary>
+    public int GamesHosting { get; set; }
+
+    /// <summary>
+    /// Games hosting breakdown by status (for tooltips)
+    /// </summary>
+    public ModuleStatusCounts? GamesHostingByStatus { get; set; }
+
+    /// <summary>
+    /// Number of games where user is a player (has active character)
+    /// </summary>
+    public int GamesPlaying { get; set; }
+
+    /// <summary>
+    /// Games playing breakdown by status (for tooltips)
+    /// </summary>
+    public ModuleStatusCounts? GamesPlayingByStatus { get; set; }
+
+    /// <summary>
+    /// Number of blogs where user is owner or assistant
+    /// </summary>
+    public int BlogsHosting { get; set; }
+
+    /// <summary>
+    /// Blogs hosting breakdown by status (for tooltips)
+    /// </summary>
+    public ModuleStatusCounts? BlogsHostingByStatus { get; set; }
+
+    /// <summary>
+    /// Number of subscribers following this user
+    /// </summary>
+    public int SubscribersCount { get; set; }
+
+    /// <summary>
+    /// Subscriber usernames for tooltip display (limited to first 20)
+    /// </summary>
+    public IReadOnlyCollection<string> SubscriberUsernames { get; set; } = [];
+
+    /// <summary>
+    /// Username change history (for tooltip display)
+    /// </summary>
+    public IReadOnlyCollection<UsernameHistoryEntry> UsernameHistory { get; set; } = Array.Empty<UsernameHistoryEntry>();
 
     /// <summary>
     /// Whether user is authenticated or not

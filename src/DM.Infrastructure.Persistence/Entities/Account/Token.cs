@@ -11,7 +11,7 @@ namespace DM.Infrastructure.Persistence.Entities.Account;
 /// <summary>
 /// DAL model for authorization token
 /// </summary>
-public class Token : IRemovable
+public class Token : ISoftDeletable
 {
     /// <summary>
     /// Token identifier
@@ -42,6 +42,12 @@ public class Token : IRemovable
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
 
+    /// <inheritdoc />
+    public Guid? DeletedByUserId { get; set; }
+
+    /// <inheritdoc />
+    public DateTimeOffset? DeletedUtc { get; set; }
+
     /// <summary>
     /// User who created this token (for invitations)
     /// </summary>
@@ -58,6 +64,12 @@ public class Token : IRemovable
     /// </summary>
     [ForeignKey(nameof(CreatorId))]
     public virtual User? Creator { get; set; }
+
+    /// <summary>
+    /// User who deleted this token
+    /// </summary>
+    [ForeignKey(nameof(DeletedByUserId))]
+    public virtual User? DeletedBy { get; set; }
 
     /// <summary>
     /// Related game

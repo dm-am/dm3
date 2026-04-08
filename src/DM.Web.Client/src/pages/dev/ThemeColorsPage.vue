@@ -49,7 +49,7 @@ const sizeGroups = [
         value: "8px",
         usage: "скругление (диалоги, карточки)",
       },
-      { sass: "$animation-time", value: "0.3s", usage: "анимации" },
+      { sass: "$animation-time", value: "0.4s", usage: "анимации" },
       { sass: "$input-padding", value: "5px 8px", usage: "отступы в полях" },
     ],
   },
@@ -762,7 +762,7 @@ function confirmNsfw() {
             <button class="demo-btn">Действие</button>
           </div>
           <p class="demo-hint">
-            TheLightbox.vue: $bg-page, $border-radius, без границы
+            Lightbox.vue: $bg-page, $border-radius, без границы
           </p>
         </div>
       </div>
@@ -1522,7 +1522,7 @@ function confirmNsfw() {
   td
     background-color: $bg-element
 
-// Paging - matches ThePaging.vue
+// Paging - matches Paging.vue
 .demo-paging
   text-align: center
 
@@ -1692,7 +1692,7 @@ function confirmNsfw() {
   li
     margin: 2px 0
 
-// Review card - matches WebsiteReviewItem.vue
+// Review card - matches Testimonial component
 .demo-review
   max-width: 400px
 
@@ -1759,7 +1759,7 @@ function confirmNsfw() {
 .demo-active-box
   background-color: $active-overlay
 
-// Lightbox - matches TheLightbox.vue (no border!)
+// Lightbox - matches Lightbox.vue (no border!)
 .demo-lightbox
   max-width: 300px
   padding: $medium

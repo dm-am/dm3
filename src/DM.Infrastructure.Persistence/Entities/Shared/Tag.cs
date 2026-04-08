@@ -19,6 +19,11 @@ public class Tag
     public Guid TagId { get; set; }
 
     /// <summary>
+    /// Short numeric identifier for URLs (1, 2, 3...)
+    /// </summary>
+    public int ShortId { get; set; }
+
+    /// <summary>
     /// Tag group identifier
     /// </summary>
     public Guid TagGroupId { get; set; }
@@ -27,6 +32,16 @@ public class Tag
     /// Title
     /// </summary>
     public string Title { get; set; } = null!;
+
+    /// <summary>
+    /// Description explaining what this tag means
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// Sort order within the group (lower values appear first)
+    /// </summary>
+    public int SortOrder { get; set; }
 
     /// <summary>
     /// Tag group

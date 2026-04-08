@@ -8,10 +8,10 @@ export { default as BlockUserLightbox } from "./BlockUserLightbox.vue";
 export { default as RulesSummaryModal } from "./RulesSummaryModal.vue";
 
 // Auth forms (re-exported from features/auth for backward compatibility)
-export { default as LoginForm } from "./LoginForm.vue";
-export { default as RegistrationForm } from "./RegistrationForm.vue";
-export { default as AccessRecoveryForm } from "./AccessRecoveryForm.vue";
-export { default as RegistrationSuccess } from "./RegistrationSuccess.vue";
+export { default as LoginForm } from "@/features/auth/ui/LoginForm.vue";
+export { default as RegistrationForm } from "@/features/auth/ui/RegistrationForm.vue";
+export { default as AccessRecoveryForm } from "@/features/auth/ui/AccessRecoveryForm.vue";
+export { default as RegistrationSuccess } from "@/features/auth/ui/RegistrationSuccess.vue";
 
 // Account sections
 export { default as AccountBlacklistSection } from "./sections/AccountBlacklistSection.vue";

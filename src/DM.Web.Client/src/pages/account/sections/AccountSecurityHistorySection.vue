@@ -5,9 +5,10 @@
     <div class="security-history-content">
       <div v-if="loading" class="loading-state">Загрузка...</div>
 
-      <div v-else-if="events.length === 0" class="empty-state">
-        Нет событий безопасности
-      </div>
+      <EmptyState
+        v-else-if="events.length === 0"
+        title="Нет событий безопасности"
+      />
 
       <div v-else class="events-list">
         <div
@@ -26,7 +27,9 @@
               <span v-if="event.ipAddress" class="event-ip">
                 {{ event.ipAddress }}
               </span>
-              <span class="event-time">{{ formatDate(event.timestamp) }}</span>
+              <span class="event-time">{{
+                formatDate(event.timestampUtc)
+              }}</span>
             </div>
             <div v-if="event.details" class="event-extra">
               {{ event.details }}
@@ -44,8 +47,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
+import dayjs from "dayjs";
 import { AccountApi } from "@/shared/api";
-import type { SecurityEvent, SecurityEventType } from "@/shared/api/models/account";
+import { EmptyState } from "@/shared/ui";
+import type {
+  SecurityEvent,
+  SecurityEventType,
+} from "@/shared/api/models/account";
 
 const events = ref<SecurityEvent[]>([]);
 const loading = ref(true);
@@ -142,14 +150,7 @@ function eventClass(type: SecurityEventType): string {
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  return dayjs(dateStr).format("DD.MM.YYYY HH:mm");
 }
 </script>
 
@@ -163,8 +164,7 @@ function formatDate(dateStr: string): string {
   background-color: $bg-element
   border-radius: $border-radius
 
-.loading-state,
-.empty-state
+.loading-state
   color: $text-muted
   text-align: center
   padding: $medium

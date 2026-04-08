@@ -3,43 +3,28 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Blog.Blogs;
 
 /// <summary>
-/// Blog information
+/// Blog information (for lists and cards)
 /// </summary>
-public class Blog
+/// <remarks>
+/// Extends BlogRef with additional fields.
+/// Inherits: Id, Title, Author, Assistants, Status, CreatedUtc, ActivatedUtc, ClosedUtc,
+///           SubscribersCount, ActiveSubscribersCount, UnreadPublicationsCount, UnreadCommentsCount
+/// </remarks>
+public class Blog : BlogRef
 {
-    /// <summary>
-    /// Blog unique identifier
-    /// </summary>
-    public Guid Id { get; set; }
-
-    /// <summary>
-    /// Blog owner
-    /// </summary>
-    public User Owner { get; set; } = null!;
-
-    /// <summary>
-    /// Blog title
-    /// </summary>
-    public string Title { get; set; } = string.Empty;
+    // Inherited from BlogRef:
+    // Id, Title, Author, Assistants, Status, CreatedUtc, ActivatedUtc, ClosedUtc,
+    // SubscribersCount, ActiveSubscribersCount, UnreadPublicationsCount, UnreadCommentsCount
 
     /// <summary>
     /// Blog description
     /// </summary>
     public string Description { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Creation date
-    /// </summary>
-    public DateTimeOffset CreatedAt { get; set; }
-
-    /// <summary>
-    /// Last update date
-    /// </summary>
-    public DateTimeOffset? UpdatedAt { get; set; }
 
     /// <summary>
     /// Draft visibility (Private = only roles, Public = visible to all)
@@ -62,14 +47,25 @@ public class Blog
     public int CommentsCount { get; set; }
 
     /// <summary>
-    /// Number of blog subscribers
-    /// </summary>
-    public int SubscribersCount { get; set; }
-
-    /// <summary>
     /// Blog rubrics (categories)
     /// </summary>
     public IEnumerable<Rubric> Rubrics { get; set; } = [];
+}
+
+/// <summary>
+/// Blog detailed information (for blog page)
+/// </summary>
+public class BlogDetails : Blog
+{
+    /// <summary>
+    /// Blog subscribers (lightweight references)
+    /// </summary>
+    public IEnumerable<UserRef> Subscribers { get; set; } = [];
+
+    /// <summary>
+    /// Blog assistants (lightweight references)
+    /// </summary>
+    public IEnumerable<UserRef> FullAssistants { get; set; } = [];
 }
 
 /// <summary>

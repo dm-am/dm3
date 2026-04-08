@@ -21,6 +21,11 @@ public class Board
     public string Title { get; set; } = null!;
 
     /// <summary>
+    /// URL-friendly alias (ASCII, lowercase, hyphens)
+    /// </summary>
+    public string Alias { get; set; } = null!;
+
+    /// <summary>
     /// Short description
     /// </summary>
     public string Description { get; set; } = null!;
@@ -39,6 +44,11 @@ public class Board
     /// Moderator identifiers
     /// </summary>
     public IEnumerable<Guid> ModeratorIds { get; set; } = [];
+
+    /// <summary>
+    /// Board moderators
+    /// </summary>
+    public IEnumerable<GeneralUser> Moderators { get; set; } = [];
 
     /// <summary>
     /// Total number of topics in the forum
@@ -63,7 +73,12 @@ public class Board
     /// <summary>
     /// Last comment in the board
     /// </summary>
-    public BoardLastComment LastComment { get; set; } = null!;
+    public BoardLastComment? LastComment { get; set; }
+
+    /// <summary>
+    /// Last created topic in the board
+    /// </summary>
+    public BoardLastTopic? LastTopic { get; set; }
 }
 
 /// <summary>
@@ -80,6 +95,47 @@ public class BoardLastComment
     /// Topic identifier
     /// </summary>
     public Guid TopicId { get; set; }
+
+    /// <summary>
+    /// Topic title
+    /// </summary>
+    public string TopicTitle { get; set; } = null!;
+
+    /// <summary>
+    /// Topic number (for URL)
+    /// </summary>
+    public int TopicNumber { get; set; }
+
+    /// <summary>
+    /// Author (may be null for deleted users)
+    /// </summary>
+    public GeneralUser? Author { get; set; }
+
+    /// <summary>
+    /// Creation moment (UTC)
+    /// </summary>
+    public DateTimeOffset CreatedUtc { get; set; }
+}
+
+/// <summary>
+/// Last created topic in board DTO model
+/// </summary>
+public class BoardLastTopic
+{
+    /// <summary>
+    /// Topic identifier
+    /// </summary>
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// Topic number (for URL)
+    /// </summary>
+    public int TopicNumber { get; set; }
+
+    /// <summary>
+    /// Topic title
+    /// </summary>
+    public string Title { get; set; } = null!;
 
     /// <summary>
     /// Author (may be null for deleted users)

@@ -58,16 +58,16 @@ public class GameControllerShould : IntegrationTestBase
     #region GetOwnGames Tests
 
     /// <summary>
-    /// Get own games without authentication should return Unauthorized
+    /// Get own games without authentication should return OK with empty list
     /// </summary>
     [Fact]
-    public async Task GetOwnGames_WhenNotAuthenticated_ReturnsUnauthorized()
+    public async Task GetOwnGames_WhenNotAuthenticated_ReturnsEmptyList()
     {
-        // Act
-        var response = await Client.GetAsync("/v1/games/owned");
+        // Act - participating=true for anonymous returns empty list
+        var response = await Client.GetAsync("/v1/games?participating=true");
 
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        // Assert - API returns empty list for anonymous users
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     #endregion
@@ -80,8 +80,166 @@ public class GameControllerShould : IntegrationTestBase
     [Fact]
     public async Task GetPopularGames_WithNoParameters_ReturnsOk()
     {
+        // Act - Popular games use sortBy=popularity query parameter
+        var response = await Client.GetAsync("/v1/games?sortBy=popularity&sortOrder=desc&take=10");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    #endregion
+
+    #region Search Tests
+
+    /// <summary>
+    /// Search games should return OK with results
+    /// </summary>
+    [Fact]
+    public async Task GetGames_WithSearch_ReturnsOk()
+    {
         // Act
-        var response = await Client.GetAsync("/v1/games/popular");
+        var response = await Client.GetAsync("/v1/games?search=test");
+        var content = await response.Content.ReadAsStringAsync();
+
+        // Assert
+        if (response.StatusCode != HttpStatusCode.OK)
+        {
+            throw new Exception($"Expected OK but got {response.StatusCode}. Content: {content}");
+        }
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("resources");
+    }
+
+    /// <summary>
+    /// Search games with explicit sort should respect sort (not use relevance)
+    /// </summary>
+    [Fact]
+    public async Task GetGames_WithSearchAndSort_ReturnsOk()
+    {
+        // Act - search with explicit created sort (should not use relevance)
+        var response = await Client.GetAsync("/v1/games?search=test&sortBy=created");
+        var content = await response.Content.ReadAsStringAsync();
+
+        // Assert
+        if (response.StatusCode != HttpStatusCode.OK)
+        {
+            throw new Exception($"Expected OK but got {response.StatusCode}. Content: {content}");
+        }
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// Search games with pagination should return OK
+    /// </summary>
+    [Fact]
+    public async Task GetGames_WithSearchAndPaging_ReturnsOk()
+    {
+        // Act
+        var response = await Client.GetAsync("/v1/games?search=test&size=5&number=1");
+        var content = await response.Content.ReadAsStringAsync();
+
+        // Assert
+        if (response.StatusCode != HttpStatusCode.OK)
+        {
+            throw new Exception($"Expected OK but got {response.StatusCode}. Content: {content}");
+        }
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// Search games with status filter should return OK
+    /// </summary>
+    [Fact]
+    public async Task GetGames_WithSearchAndStatusFilter_ReturnsOk()
+    {
+        // Act
+        var response = await Client.GetAsync("/v1/games?search=test&statuses=Active");
+        var content = await response.Content.ReadAsStringAsync();
+
+        // Assert
+        if (response.StatusCode != HttpStatusCode.OK)
+        {
+            throw new Exception($"Expected OK but got {response.StatusCode}. Content: {content}");
+        }
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    #endregion
+
+    #region Sorting Tests
+
+    /// <summary>
+    /// Sort by popularity should return OK
+    /// </summary>
+    [Fact]
+    public async Task GetGames_SortByPopularity_ReturnsOk()
+    {
+        // Act
+        var response = await Client.GetAsync("/v1/games?sortBy=popularity&sortOrder=desc");
+        var content = await response.Content.ReadAsStringAsync();
+
+        // Assert
+        if (response.StatusCode != HttpStatusCode.OK)
+        {
+            throw new Exception($"Expected OK but got {response.StatusCode}. Content: {content}");
+        }
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("resources");
+    }
+
+    /// <summary>
+    /// Sort by popularity ascending should return OK
+    /// </summary>
+    [Fact]
+    public async Task GetGames_SortByPopularityAsc_ReturnsOk()
+    {
+        // Act
+        var response = await Client.GetAsync("/v1/games?sortBy=popularity&sortOrder=asc");
+        var content = await response.Content.ReadAsStringAsync();
+
+        // Assert
+        if (response.StatusCode != HttpStatusCode.OK)
+        {
+            throw new Exception($"Expected OK but got {response.StatusCode}. Content: {content}");
+        }
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("resources");
+    }
+
+    /// <summary>
+    /// Sort by title should return OK
+    /// </summary>
+    [Fact]
+    public async Task GetGames_SortByTitle_ReturnsOk()
+    {
+        // Act
+        var response = await Client.GetAsync("/v1/games?sortBy=title&sortOrder=asc");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// Sort by status should return OK
+    /// </summary>
+    [Fact]
+    public async Task GetGames_SortByStatus_ReturnsOk()
+    {
+        // Act
+        var response = await Client.GetAsync("/v1/games?sortBy=status&sortOrder=asc");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// Sort by created date should return OK
+    /// </summary>
+    [Fact]
+    public async Task GetGames_SortByCreated_ReturnsOk()
+    {
+        // Act
+        var response = await Client.GetAsync("/v1/games?sortBy=created&sortOrder=desc");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);

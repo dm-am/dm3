@@ -2,7 +2,7 @@ export type UserIpInfo = {
   ipAddress: string;
   firstSeenUtc: string;
   lastSeenUtc: string;
-  loginCount: number;
+  loginsCount: number;
 };
 
 export type LoginRecord = {
@@ -15,17 +15,17 @@ export type LoginRecord = {
 export type LinkedProfile = {
   userId: string;
   username: string;
-  sharedIpCount: number;
+  sharedIpsCount: number;
   lastSharedLoginUtc: string;
 };
 
 export type ModNote = {
-  noteId: string;
+  id: string;
   authorUsername: string;
   authorId: string;
   text: string;
   createdUtc: string;
-  updatedUtc?: string;
+  modifiedUtc?: string;
   canEdit: boolean;
   canDelete: boolean;
 };
@@ -70,10 +70,18 @@ export type ModeratedProfile = {
   name?: string;
   location?: string;
   contacts?: { contactType: string; value: string }[];
-  registeredAtUtc: string;
+  registeredUtc: string;
   isHonorary?: boolean;
   isNewbie?: boolean;
-  featuredPost?: { id: string; gameId: string; roomId: string; gameTitle: string; roomTitle: string; text: string; rating: number };
+  featuredPost?: {
+    id: string;
+    gameId: string;
+    roomId: string;
+    gameTitle: string;
+    roomTitle: string;
+    text: string;
+    rating: number;
+  };
   postReviewsGiven?: number;
   postReviewsReceived?: number;
 

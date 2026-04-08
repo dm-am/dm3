@@ -6,7 +6,6 @@ using AutoMapper;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Comments;
-using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Comments;
 using DM.Web.API.Shared.Dto;
@@ -38,7 +37,7 @@ internal class GameCommentApiService : IGameCommentApiService
     }
 
     /// <inheritdoc />
-    public async Task<DiscussionResponse> GetDiscussion(Guid gameId, PagingQuery query)
+    public async Task<DiscussionResponse> GetDiscussion(Guid gameId, GameCommentsQuery query)
     {
         var identity = _identityProvider.Current;
         var currentUserId = identity.User?.UserId ?? Guid.Empty;
@@ -80,7 +79,7 @@ internal class GameCommentApiService : IGameCommentApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Comment>> Get(Guid gameId, PagingQuery query)
+    public async Task<ListEnvelope<Comment>> Get(Guid gameId, GameCommentsQuery query)
     {
         var identity = _identityProvider.Current;
         IReadOnlyCollection<Guid>? excludeUserIds = null;

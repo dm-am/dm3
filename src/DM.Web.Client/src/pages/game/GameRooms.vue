@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import TheIcon from "@/shared/ui/Icon/TheIcon.vue";
+import Icon from "@/shared/ui/Icon/Icon.vue";
 import { IconType } from "@/shared/ui/Icon/iconType";
 import { RoomType, RoomAccessType } from "@/entities/game";
 
@@ -42,11 +42,11 @@ const accessTypeLabels: Record<RoomAccessType, string> = {
       <router-link
         v-for="room in rooms"
         :key="room.id"
-        :to="{ name: 'game-room', params: { id: game?.id, roomId: room.id } }"
+        :to="`/game/${game?.id}/rooms/${room.roomNumber}`"
         class="room-card"
       >
         <div class="room-header">
-          <the-icon
+          <Icon
             v-if="room.type"
             :font="roomTypeIcons[room.type]"
             class="room-icon"
@@ -66,7 +66,8 @@ const accessTypeLabels: Record<RoomAccessType, string> = {
         </div>
         <div v-if="room.pendings?.length" class="room-pendings">
           <secondary-text>
-            Ожидают ответа: {{ room.pendings.map(p => p.characterName).join(', ') }}
+            Ожидают ответа:
+            {{ room.pendings.map((p) => p.characterName).join(", ") }}
           </secondary-text>
         </div>
       </router-link>

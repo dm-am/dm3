@@ -10,10 +10,6 @@
 export * from "./model";
 export { useCommunityStore } from "./model/communityStore";
 
-// API
-export { userApi } from "./api";
-export type { BestPost } from "./api";
-
 // UI Components
 export { UserLink, UserOnline, UserRating } from "./ui";
 

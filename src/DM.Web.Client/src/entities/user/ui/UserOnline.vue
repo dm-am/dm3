@@ -15,7 +15,10 @@ const online = computed(() => {
 <template>
   <span :class="{ online }">
     <template v-if="online">online</template>
-    <human-timespan v-else-if="detailed" :date="user.lastActivityUtc" />
+    <human-timespan
+      v-else-if="detailed && user.lastActivityUtc"
+      :date="user.lastActivityUtc"
+    />
     <span v-else class="offline">offline</span>
   </span>
 </template>

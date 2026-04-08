@@ -1,0 +1,46 @@
+// =============================================================================
+// PAGINATION COMPONENT STYLES
+// =============================================================================
+// Unified styles for pagination component.
+// =============================================================================
+
+@import "Themes"
+@import "Variables"
+
+// -----------------------------------------------------------------------------
+// Paging Mixin
+// -----------------------------------------------------------------------------
+
+=paging
+  .paging
+    display: flex
+    flex-wrap: wrap
+    gap: $small
+    justify-content: center
+    margin: 0
+
+    a
+      padding: $minor $small
+      font-size: $secondary-font-size
+      color: $link
+      text-decoration: none
+
+      &:hover
+        color: $link-hover
+        text-decoration: underline
+
+    .page-number
+      &.active
+        font-weight: 600
+        color: $text
+        cursor: default
+
+        &:hover
+          color: $text
+          text-decoration: none
+
+    .nav-button
+      color: $text-muted
+
+      &:hover
+        color: $link-hover

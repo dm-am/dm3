@@ -1,5 +1,5 @@
 using System;
-using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Game.Users;
 
@@ -9,9 +9,9 @@ namespace DM.Web.API.Features.Game.Users;
 public class GameUser
 {
     /// <summary>
-    /// User information
+    /// User information (lightweight reference)
     /// </summary>
-    public User User { get; set; } = null!;
+    public UserRef User { get; set; } = null!;
 
     /// <summary>
     /// Role in the game: master, assistant, player, reader

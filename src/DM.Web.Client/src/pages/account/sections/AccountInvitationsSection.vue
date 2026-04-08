@@ -13,7 +13,9 @@
         >
           <div class="invitation-info">
             <div class="invitation-header">
-              <span class="invitation-icon">{{ typeIcon(invitation.type) }}</span>
+              <span class="invitation-icon">{{
+                typeIcon(invitation.type)
+              }}</span>
               <RouterLink
                 :to="`/games/${invitation.gameId}`"
                 class="invitation-game-link"
@@ -31,8 +33,12 @@
                   {{ invitation.inviterUsername }}
                 </RouterLink>
               </span>
-              <span class="invitation-role">{{ typeLabel(invitation.type) }}</span>
-              <span class="invitation-date">{{ formatDate(invitation.createdUtc) }}</span>
+              <span class="invitation-role">{{
+                typeLabel(invitation.type)
+              }}</span>
+              <span class="invitation-date">{{
+                formatDate(invitation.createdUtc)
+              }}</span>
             </div>
           </div>
 
@@ -60,6 +66,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
+import dayjs from "dayjs";
 import { RouterLink } from "vue-router";
 import { AccountApi } from "@/shared/api";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -87,27 +94,28 @@ async function loadInvitations() {
 
 function typeIcon(type: InvitationType): string {
   switch (type) {
-    case "player": return "\uD83C\uDFAE";
-    case "assistant": return "\uD83D\uDCDD";
-    case "reader": return "\uD83D\uDCD6";
+    case "player":
+      return "\uD83C\uDFAE";
+    case "assistant":
+      return "\uD83D\uDCDD";
+    case "reader":
+      return "\uD83D\uDCD6";
   }
 }
 
 function typeLabel(type: InvitationType): string {
   switch (type) {
-    case "player": return "Игрок";
-    case "assistant": return "Помощник";
-    case "reader": return "Читатель";
+    case "player":
+      return "Игрок";
+    case "assistant":
+      return "Помощник";
+    case "reader":
+      return "Читатель";
   }
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  });
+  return dayjs(dateStr).format("DD.MM.YYYY");
 }
 
 async function accept(invitationId: string) {
@@ -118,7 +126,7 @@ async function accept(invitationId: string) {
   if (error) {
     toast.error("Не удалось принять приглашение");
   } else {
-    invitations.value = invitations.value.filter(i => i.id !== invitationId);
+    invitations.value = invitations.value.filter((i) => i.id !== invitationId);
     toast.success("Приглашение принято");
   }
 }
@@ -131,7 +139,7 @@ async function reject(invitationId: string) {
   if (error) {
     toast.error("Не удалось отклонить приглашение");
   } else {
-    invitations.value = invitations.value.filter(i => i.id !== invitationId);
+    invitations.value = invitations.value.filter((i) => i.id !== invitationId);
     toast.success("Приглашение отклонено");
   }
 }

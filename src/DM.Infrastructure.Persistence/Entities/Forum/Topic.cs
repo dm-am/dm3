@@ -12,7 +12,7 @@ namespace DM.Infrastructure.Persistence.Entities.Forum;
 /// DAL model for forum topic
 /// </summary>
 [Table("Topics")]
-public class Topic : ISoftDeletable, IEditable, IHasEditHistory<TopicEdit>
+public class Topic : ISoftDeletable, IHasEditHistory<TopicEdit>
 {
     /// <summary>
     /// Topic identifier
@@ -26,6 +26,11 @@ public class Topic : ISoftDeletable, IEditable, IHasEditHistory<TopicEdit>
     public Guid BoardId { get; set; }
 
     /// <summary>
+    /// Sequential topic number within the board (for URL)
+    /// </summary>
+    public int TopicNumber { get; set; }
+
+    /// <summary>
     /// Author identifier
     /// </summary>
     public Guid AuthorId { get; set; }
@@ -34,16 +39,6 @@ public class Topic : ISoftDeletable, IEditable, IHasEditHistory<TopicEdit>
     /// Creation moment (UTC)
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
-
-    /// <summary>
-    /// Last modification moment (UTC)
-    /// </summary>
-    public DateTimeOffset? ModifiedUtc { get; set; }
-
-    /// <summary>
-    /// Last editor user identifier
-    /// </summary>
-    public Guid? ModifiedByUserId { get; set; }
 
     /// <summary>
     /// Title
@@ -59,6 +54,11 @@ public class Topic : ISoftDeletable, IEditable, IHasEditHistory<TopicEdit>
     /// If true, the topic will always appear on top of the forum topics list
     /// </summary>
     public bool IsAttached { get; set; }
+
+    /// <summary>
+    /// Sort order for attached topics (0 = first, null = default order by creation date)
+    /// </summary>
+    public int? AttachOrder { get; set; }
 
     /// <summary>
     /// Closed topics are available in read-only mode
@@ -95,12 +95,6 @@ public class Topic : ISoftDeletable, IEditable, IHasEditHistory<TopicEdit>
     /// </summary>
     [ForeignKey(nameof(AuthorId))]
     public virtual User Author { get; set; } = null!;
-
-    /// <summary>
-    /// Last editor
-    /// </summary>
-    [ForeignKey(nameof(ModifiedByUserId))]
-    public virtual User? ModifiedBy { get; set; }
 
     /// <summary>
     /// User who deleted the topic

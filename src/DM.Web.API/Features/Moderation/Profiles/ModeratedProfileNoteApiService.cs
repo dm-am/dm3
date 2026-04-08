@@ -52,7 +52,7 @@ internal class ModeratedProfileNoteApiService : IModeratedProfileNoteApiService
     {
         var updateNote = new UpdateModeratedProfileNote
         {
-            NoteId = noteId,
+            Id = noteId,
             Text = request.Text
         };
 

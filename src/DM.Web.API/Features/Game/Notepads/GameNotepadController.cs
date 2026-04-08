@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Personal.Notepads;
+using DM.Web.API.Features.Game.Games;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -23,17 +24,24 @@ namespace DM.Web.API.Features.Game.Notepads;
 public class GameNotepadController : ControllerBase
 {
     private readonly IGameNotepadApiService _notepadApiService;
+    private readonly IGameApiService _gameApiService;
 
     /// <inheritdoc />
-    public GameNotepadController(IGameNotepadApiService notepadApiService)
+    public GameNotepadController(
+        IGameNotepadApiService notepadApiService,
+        IGameApiService gameApiService)
     {
         _notepadApiService = notepadApiService;
+        _gameApiService = gameApiService;
     }
+
+    private async Task<Guid> ResolveGameId(string id) =>
+        Guid.TryParse(id, out var guid) ? guid : (await _gameApiService.GetByPublicId(id)).Resource.Id;
 
     /// <summary>
     /// Get game master notepad entries
     /// </summary>
-    /// <param name="gameId">Game identifier</param>
+    /// <param name="gameId">Game public ID (5 letters) or GUID</param>
     /// <response code="200">List of notepad entries</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User must be master or assistant</response>
@@ -41,13 +49,16 @@ public class GameNotepadController : ControllerBase
     [ProducesResponseType(typeof(ListEnvelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetGameMasterNotepad(Guid gameId) =>
-        Ok(await _notepadApiService.GetMasterEntries(gameId));
+    public async Task<IActionResult> GetGameMasterNotepad(string gameId)
+    {
+        var resolvedId = await ResolveGameId(gameId);
+        return Ok(await _notepadApiService.GetMasterEntries(resolvedId));
+    }
 
     /// <summary>
     /// Create entry in game master notepad
     /// </summary>
-    /// <param name="gameId">Game identifier</param>
+    /// <param name="gameId">Game public ID (5 letters) or GUID</param>
     /// <param name="request">Entry creation request</param>
     /// <response code="201">Entry created</response>
     /// <response code="401">User must be authenticated</response>
@@ -56,16 +67,17 @@ public class GameNotepadController : ControllerBase
     [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> CreateGameMasterNotepadEntry(Guid gameId, [FromBody] CreateNotepadEntryRequest request)
+    public async Task<IActionResult> CreateGameMasterNotepadEntry(string gameId, [FromBody] CreateNotepadEntryRequest request)
     {
-        var result = await _notepadApiService.CreateMasterEntry(gameId, request);
+        var resolvedId = await ResolveGameId(gameId);
+        var result = await _notepadApiService.CreateMasterEntry(resolvedId, request);
         return CreatedAtRoute(nameof(GetGameMasterNotepadEntry), new { gameId, entryId = result.Resource.Id }, result);
     }
 
     /// <summary>
     /// Get game master notepad entry by ID
     /// </summary>
-    /// <param name="gameId">Game identifier</param>
+    /// <param name="gameId">Game public ID (5 letters) or GUID</param>
     /// <param name="entryId">Entry identifier</param>
     /// <response code="200">Entry details</response>
     /// <response code="401">User must be authenticated</response>
@@ -76,13 +88,13 @@ public class GameNotepadController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetGameMasterNotepadEntry(Guid gameId, Guid entryId) =>
+    public async Task<IActionResult> GetGameMasterNotepadEntry(string gameId, Guid entryId) =>
         Ok(await _notepadApiService.GetEntry(entryId));
 
     /// <summary>
     /// Update game master notepad entry
     /// </summary>
-    /// <param name="gameId">Game identifier</param>
+    /// <param name="gameId">Game public ID (5 letters) or GUID</param>
     /// <param name="entryId">Entry identifier</param>
     /// <param name="request">Update request</param>
     /// <response code="200">Entry updated</response>
@@ -94,22 +106,24 @@ public class GameNotepadController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UpdateGameMasterNotepadEntry(Guid gameId, Guid entryId, [FromBody] UpdateNotepadEntryRequest request) =>
+    public async Task<IActionResult> UpdateGameMasterNotepadEntry(string gameId, Guid entryId, [FromBody] UpdateNotepadEntryRequest request) =>
         Ok(await _notepadApiService.UpdateEntry(entryId, request));
 
     /// <summary>
     /// Delete game master notepad entry
     /// </summary>
-    /// <param name="gameId">Game identifier</param>
+    /// <param name="gameId">Game public ID (5 letters) or GUID</param>
     /// <param name="entryId">Entry identifier</param>
     /// <response code="204">Entry deleted</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User must be master or assistant</response>
+    /// <response code="404">Entry not found</response>
     [HttpDelete("{entryId:guid}", Name = nameof(DeleteGameMasterNotepadEntry))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> DeleteGameMasterNotepadEntry(Guid gameId, Guid entryId)
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteGameMasterNotepadEntry(string gameId, Guid entryId)
     {
         await _notepadApiService.DeleteEntry(entryId);
         return NoContent();

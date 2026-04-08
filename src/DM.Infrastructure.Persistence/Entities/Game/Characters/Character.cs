@@ -60,16 +60,6 @@ public class Character : ISoftDeletable, IHasEditHistory<CharacterEdit>
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Last modification moment (UTC)
-    /// </summary>
-    public DateTimeOffset? ModifiedUtc { get; set; }
-
-    /// <summary>
-    /// Last editor user identifier
-    /// </summary>
-    public Guid? ModifiedByUserId { get; set; }
-
-    /// <summary>
     /// Name
     /// </summary>
     public string Name { get; set; } = null!;
@@ -146,12 +136,6 @@ public class Character : ISoftDeletable, IHasEditHistory<CharacterEdit>
     public virtual User? Author { get; set; }
 
     /// <summary>
-    /// Last editor
-    /// </summary>
-    [ForeignKey(nameof(ModifiedByUserId))]
-    public virtual User? ModifiedBy { get; set; }
-
-    /// <summary>
     /// User who deleted the character
     /// </summary>
     [ForeignKey(nameof(DeletedByUserId))]
@@ -163,11 +147,7 @@ public class Character : ISoftDeletable, IHasEditHistory<CharacterEdit>
     [InverseProperty(nameof(CharacterEdit.Character))]
     public virtual ICollection<CharacterEdit> Edits { get; set; } = [];
 
-    /// <summary>
-    /// Portrait
-    /// </summary>
-    [InverseProperty(nameof(Upload.Character))]
-    public virtual ICollection<Upload> Pictures { get; set; } = [];
+    // NOTE: Pictures navigation removed - Upload.EntityId is polymorphic without FK constraints
 
     /// <summary>
     /// Attribute values

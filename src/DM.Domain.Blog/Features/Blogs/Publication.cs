@@ -50,14 +50,14 @@ public class Publication : ILikable
     public string Preview { get; set; } = null!;
 
     /// <summary>
-    /// Creation date
+    /// Creation date (UTC)
     /// </summary>
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Last modification date
+    /// Last modification date (UTC)
     /// </summary>
-    public DateTimeOffset? ModifiedAt { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
     /// Whether the publication is published (visible)
@@ -65,9 +65,9 @@ public class Publication : ILikable
     public bool IsPublished { get; set; }
 
     /// <summary>
-    /// Publication date
+    /// Publication date (UTC)
     /// </summary>
-    public DateTimeOffset? PublishedAt { get; set; }
+    public DateTimeOffset? PublishedUtc { get; set; }
 
     /// <summary>
     /// Whether comments are enabled
@@ -83,6 +83,11 @@ public class Publication : ILikable
     /// Comment count
     /// </summary>
     public int CommentCount { get; set; }
+
+    /// <summary>
+    /// Unread comments count
+    /// </summary>
+    public int UnreadCommentsCount { get; set; }
 
     /// <summary>
     /// Last comment identifier for navigation

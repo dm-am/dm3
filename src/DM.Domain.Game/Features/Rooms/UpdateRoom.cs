@@ -56,5 +56,10 @@ public class UpdateRoom
     /// </summary>
     public bool? IsRemoved { get; set; }
 
+    /// <summary>
+    /// Linked chat identifier (for RoomType.Chat rooms)
+    /// </summary>
+    public Guid? ChatId { get; set; }
+
     #endregion
 }

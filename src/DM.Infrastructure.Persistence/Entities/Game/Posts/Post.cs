@@ -6,6 +6,7 @@ using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.Entities.Game.Characters;
 using DM.Infrastructure.Persistence.Entities.Account;
+using GameEntities = DM.Infrastructure.Persistence.Entities.Game;
 
 namespace DM.Infrastructure.Persistence.Entities.Game.Posts;
 
@@ -13,7 +14,7 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Posts;
 /// DAL model for game post
 /// </summary>
 [Table("Posts")]
-public class Post : ISoftDeletable, IEditable, IHasEditHistory<PostEdit>
+public class Post : ISoftDeletable, IHasEditHistory<PostEdit>
 {
     /// <summary>
     /// Post identifier
@@ -42,29 +43,14 @@ public class Post : ISoftDeletable, IEditable, IHasEditHistory<PostEdit>
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Last update author identifier
+    /// Game text (in-character content)
     /// </summary>
-    public Guid? ModifiedByUserId { get; set; }
+    public string GameText { get; set; } = null!;
 
     /// <summary>
-    /// Last modification moment (UTC)
+    /// Metagame text (OOC commentary)
     /// </summary>
-    public DateTimeOffset? ModifiedUtc { get; set; }
-
-    /// <summary>
-    /// Post text
-    /// </summary>
-    public string Text { get; set; } = null!;
-
-    /// <summary>
-    /// Additional text
-    /// </summary>
-    public string? Comment { get; set; }
-
-    /// <summary>
-    /// Private message to master
-    /// </summary>
-    public string? MasterMessage { get; set; }
+    public string? MetagameText { get; set; }
 
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
@@ -94,12 +80,6 @@ public class Post : ISoftDeletable, IEditable, IHasEditHistory<PostEdit>
     public virtual User Author { get; set; } = null!;
 
     /// <summary>
-    /// Last update author
-    /// </summary>
-    [ForeignKey(nameof(ModifiedByUserId))]
-    public virtual User? ModifiedBy { get; set; }
-
-    /// <summary>
     /// User who deleted the post
     /// </summary>
     [ForeignKey(nameof(DeletedByUserId))]
@@ -111,9 +91,11 @@ public class Post : ISoftDeletable, IEditable, IHasEditHistory<PostEdit>
     [InverseProperty(nameof(PostEdit.Post))]
     public virtual ICollection<PostEdit> Edits { get; set; } = [];
 
+    // NOTE: Attachments navigation removed - Upload.EntityId is polymorphic without FK constraints
+
     /// <summary>
-    /// Files attached to post
+    /// Reviews for this post
     /// </summary>
-    [InverseProperty(nameof(Upload.Post))]
-    public virtual ICollection<Upload> Attachments { get; set; } = [];
+    [InverseProperty(nameof(GameEntities.PostReview.Post))]
+    public virtual ICollection<GameEntities.PostReview> Reviews { get; set; } = [];
 }

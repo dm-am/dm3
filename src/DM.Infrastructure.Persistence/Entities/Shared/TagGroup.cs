@@ -23,6 +23,16 @@ public class TagGroup
     public string Title { get; set; } = null!;
 
     /// <summary>
+    /// Description explaining the purpose of tags in this group
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// Sort order for display (lower values appear first)
+    /// </summary>
+    public int SortOrder { get; set; }
+
+    /// <summary>
     /// Tags under the group
     /// </summary>
     [InverseProperty(nameof(Tag.TagGroup))]

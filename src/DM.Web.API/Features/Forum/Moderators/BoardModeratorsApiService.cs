@@ -28,4 +28,17 @@ internal class BoardModeratorsApiService : IBoardModeratorsApiService
         var moderators = await _boardService.GetModerators(id);
         return new ListEnvelope<User>(moderators.Select(_mapper.Map<User>));
     }
+
+    /// <inheritdoc />
+    public async Task<Envelope<User>> AddModerator(string id, string username)
+    {
+        var user = await _boardService.AddModerator(id, username);
+        return new Envelope<User>(_mapper.Map<User>(user));
+    }
+
+    /// <inheritdoc />
+    public async Task RemoveModerator(string id, string username)
+    {
+        await _boardService.RemoveModerator(id, username);
+    }
 }

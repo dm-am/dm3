@@ -74,7 +74,7 @@ internal class SessionCleanupService : BackgroundService
             var pullFilter = Builders<UserSession>.Filter.Empty;
             var pullUpdate = Builders<UserSession>.Update.PullFilter(
                 s => s.Sessions,
-                session => session.ExpirationDate < now);
+                session => session.ExpirationUtc < now);
 
             var pullResult = await collection.UpdateManyAsync(
                 pullFilter,

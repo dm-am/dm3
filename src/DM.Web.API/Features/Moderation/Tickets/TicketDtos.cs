@@ -9,19 +9,19 @@ namespace DM.Web.API.Features.Moderation.Tickets;
 public class Ticket
 {
     /// <summary>
-    /// Ticket ID
+    /// Ticket identifier
     /// </summary>
-    public Guid TicketId { get; set; }
+    public Guid Id { get; set; }
 
     /// <summary>
-    /// Reporter login
+    /// Reporter username
     /// </summary>
-    public string ReporterLogin { get; set; } = "";
+    public string ReporterUsername { get; set; } = "";
 
     /// <summary>
-    /// Target user login
+    /// Target user username
     /// </summary>
-    public string TargetLogin { get; set; } = "";
+    public string TargetUsername { get; set; } = "";
 
     /// <summary>
     /// Entity ID that was reported
@@ -56,7 +56,7 @@ public class Ticket
     /// <summary>
     /// Assigned moderator
     /// </summary>
-    public string? AssignedModeratorLogin { get; set; }
+    public string? AssignedModeratorUsername { get; set; }
 
     /// <summary>
     /// Resolution time
@@ -85,10 +85,10 @@ public class Ticket
 public class CreateTicketRequest
 {
     /// <summary>
-    /// Target user login
+    /// Target user username
     /// </summary>
     /// <example>problemuser</example>
-    public string TargetLogin { get; set; } = "";
+    public string TargetUsername { get; set; } = "";
 
     /// <summary>
     /// Entity ID that caused the report

@@ -11,12 +11,16 @@ namespace DM.Infrastructure.Persistence.Entities.Shared;
 /// DAL model for like
 /// </summary>
 [Table("Likes")]
-public class Like : IRemovable
+public class Like : ISoftDeletable
 {
-    /// <summary>
-    /// Removed flag
-    /// </summary>
+    /// <inheritdoc />
     public bool IsRemoved { get; set; }
+
+    /// <inheritdoc />
+    public Guid? DeletedByUserId { get; set; }
+
+    /// <inheritdoc />
+    public DateTimeOffset? DeletedUtc { get; set; }
 
     /// <summary>
     /// Like identifier
@@ -44,4 +48,10 @@ public class Like : IRemovable
     /// </summary>
     [ForeignKey(nameof(UserId))]
     public virtual User User { get; set; } = null!;
+
+    /// <summary>
+    /// User who removed the like
+    /// </summary>
+    [ForeignKey(nameof(DeletedByUserId))]
+    public virtual User? DeletedBy { get; set; }
 }

@@ -38,12 +38,12 @@ internal class InvokedEventProducer(IProducerBuilder producerBuilder) : IEventPr
     private static string GetRoutingKey(EventType eventType)
     {
         var name = Enum.GetName(eventType.GetType(), eventType) ??
-                   throw new InvokedEventException($"??????????? ??? ???????????? {eventType}");
+                   throw new InvokedEventException($"Unknown enum name for {eventType}");
         var field = eventType.GetType().GetField(name) ??
-                    throw new InvokedEventException($"?? ??????? ???? ???????????? {eventType}");
+                    throw new InvokedEventException($"Field not found for enum {eventType}");
         var attribute = Attribute.GetCustomAttribute(field, typeof(EventRoutingKeyAttribute));
         return attribute is EventRoutingKeyAttribute eventRoutingKeyAttribute
             ? eventRoutingKeyAttribute.RoutingKey
-            : throw new InvokedEventException($"??????????? ???????? {nameof(EventRoutingKeyAttribute)}");
+            : throw new InvokedEventException($"Missing {nameof(EventRoutingKeyAttribute)} attribute");
     }
 }

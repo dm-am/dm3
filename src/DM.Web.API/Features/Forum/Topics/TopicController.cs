@@ -120,6 +120,23 @@ public class TopicController : ControllerBase
     public async Task<IActionResult> GetTopic(Guid id) => Ok(await _topicApiService.Get(id));
 
     /// <summary>
+    /// Get topic by board alias and topic number
+    /// </summary>
+    /// <remarks>
+    /// Alternative way to get a topic using human-readable URL path.
+    /// The topic number is stable within a board (assigned at creation time).
+    /// </remarks>
+    /// <param name="alias">Board URL alias (lowercase, e.g. "general")</param>
+    /// <param name="num">Topic number within the board</param>
+    /// <response code="200">Topic details</response>
+    /// <response code="404">Board or topic not found</response>
+    [HttpGet("~/v1/forum/{alias}/{num:int}", Name = nameof(GetTopicByNumber))]
+    [ProducesResponseType(typeof(Envelope<Topic>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetTopicByNumber(string alias, int num) =>
+        Ok(await _topicApiService.GetByBoardAndNumber(alias, num));
+
+    /// <summary>
     /// Get topic discussion with comments and permission flags
     /// </summary>
     /// <remarks>
@@ -263,6 +280,34 @@ public class TopicController : ControllerBase
     public async Task<IActionResult> ReadTopicComments(Guid id)
     {
         await _commentApiService.MarkAsRead(id);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Reorder pinned topics in board
+    /// </summary>
+    /// <remarks>
+    /// Updates the display order of pinned topics.
+    /// The first topic ID in the array will appear first (top).
+    /// Only board moderators and administrators can perform this action.
+    /// </remarks>
+    /// <param name="id">Board identifier (GUID or URL slug)</param>
+    /// <param name="request">Reorder request with topic IDs in desired order</param>
+    /// <response code="204">Topics reordered successfully</response>
+    /// <response code="400">Invalid request (empty array, invalid IDs)</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User is not a board moderator</response>
+    /// <response code="404">Board not found</response>
+    [HttpPatch("~/v1/boards/{id}/topics/pinned/order", Name = nameof(ReorderPinnedTopics))]
+    [AuthenticationRequired]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ReorderPinnedTopics(string id, [FromBody] ReorderPinnedRequest request)
+    {
+        await _topicApiService.ReorderPinned(id, request);
         return NoContent();
     }
 }

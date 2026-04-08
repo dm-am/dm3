@@ -13,9 +13,14 @@ namespace DM.Domain.Game.Features.Games;
 public class GameTag
 {
     /// <summary>
-    /// Identifier
+    /// Internal identifier
     /// </summary>
     public Guid Id { get; set; }
+
+    /// <summary>
+    /// Short numeric identifier for URL filtering (1, 2, 3...)
+    /// </summary>
+    public int ShortId { get; set; }
 
     /// <summary>
     /// Tag group title
@@ -23,9 +28,29 @@ public class GameTag
     public string GroupTitle { get; set; } = null!;
 
     /// <summary>
+    /// Tag group description
+    /// </summary>
+    public string? GroupDescription { get; set; }
+
+    /// <summary>
+    /// Tag group sort order
+    /// </summary>
+    public int GroupSortOrder { get; set; }
+
+    /// <summary>
     /// Tag title
     /// </summary>
     public string Title { get; set; } = null!;
+
+    /// <summary>
+    /// Tag description (may contain [tipimg:URL]text[/tipimg] for inline image tooltips)
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// Tag sort order within group
+    /// </summary>
+    public int SortOrder { get; set; }
 
     /// <summary>
     /// Number of active games with this tag
@@ -44,19 +69,65 @@ public class GameRecruitment
     public bool IsOpen { get; set; }
 
     /// <summary>
-    /// Maximum number of players allowed (null = unlimited)
+    /// Maximum number of player characters allowed (null = unlimited)
     /// </summary>
-    public int? PlayerLimit { get; set; }
+    public int? PcLimit { get; set; }
 
     /// <summary>
-    /// Current number of active players
+    /// Current number of active player characters
     /// </summary>
-    public int PlayerCount { get; set; }
+    public int PcCount { get; set; }
 
     /// <summary>
     /// When the recruitment was started
     /// </summary>
     public DateTimeOffset? StartedUtc { get; set; }
+
+    /// <summary>
+    /// Whether this is a subsequent recruitment (донабор, RecruitmentCount >= 2)
+    /// </summary>
+    public bool IsSubsequent { get; set; }
+}
+
+/// <summary>
+/// Lightweight assistant info for game lists and tooltips
+/// </summary>
+public class GameAssistantInfo
+{
+    /// <summary>
+    /// User identifier
+    /// </summary>
+    public Guid UserId { get; set; }
+
+    /// <summary>
+    /// Username for display
+    /// </summary>
+    public string Username { get; set; } = string.Empty;
+
+    /// <summary>
+    /// When the assistant joined the game
+    /// </summary>
+    public DateTimeOffset JoinedUtc { get; set; }
+
+    /// <summary>
+    /// Last activity moment (UTC) - for online indicators
+    /// </summary>
+    public DateTimeOffset? LastActivityUtc { get; set; }
+
+    /// <summary>
+    /// User role (for displaying role badges [А], [С], [М], [Н], [Р])
+    /// </summary>
+    public UserRole Role { get; set; }
+
+    /// <summary>
+    /// Whether user is a newbie (less than 100 posts) - affects name color
+    /// </summary>
+    public bool IsNewbie { get; set; }
+
+    /// <summary>
+    /// Honorary status (visual badge [П] for former staff)
+    /// </summary>
+    public bool IsHonorary { get; set; }
 }
 
 /// <summary>
@@ -117,14 +188,19 @@ public class PostPendency
 }
 
 /// <summary>
-/// DTO model for game
+/// DTO model for game (lightweight, for lists)
 /// </summary>
-public class GameModel
+public class Game
 {
     /// <summary>
     /// Game identifier
     /// </summary>
     public Guid Id { get; set; }
+
+    /// <summary>
+    /// Public identifier for URLs (5 lowercase letters)
+    /// </summary>
+    public string PublicId { get; set; } = null!;
 
     /// <summary>
     /// Created date (UTC)
@@ -142,14 +218,14 @@ public class GameModel
     public PremoderationStatus PremoderationStatus { get; set; }
 
     /// <summary>
-    /// Game was completed successfully (only when Status = Closed)
+    /// Reason why the game was closed (only applicable when Status = Closed)
     /// </summary>
-    public bool IsFinished { get; set; }
+    public ClosedReason ClosedReason { get; set; }
 
     /// <summary>
-    /// Game was frozen due to inactivity (only when Status = Closed)
+    /// Visibility of draft content (when Status = Draft)
     /// </summary>
-    public bool IsFrozen { get; set; }
+    public DraftVisibility DraftVisibility { get; set; }
 
     /// <summary>
     /// Recruitment information
@@ -162,14 +238,19 @@ public class GameModel
     public DateTimeOffset? ClosedUtc { get; set; }
 
     /// <summary>
-    /// Game tags
+    /// Game tags (full objects - only for single game details, null for lists)
     /// </summary>
-    public IEnumerable<GameTag> Tags { get; set; } = [];
+    public IEnumerable<GameTag>? Tags { get; set; }
 
     /// <summary>
-    /// Date the game was first released
+    /// Tag IDs only (lightweight - for lists, sidebar lookup)
     /// </summary>
-    public DateTimeOffset? ReleaseDate { get; set; }
+    public IEnumerable<int> TagIds { get; set; } = [];
+
+    /// <summary>
+    /// Date the game was first activated (UTC)
+    /// </summary>
+    public DateTimeOffset? ActivatedUtc { get; set; }
 
     /// <summary>
     /// Attribute schema identifier
@@ -177,14 +258,14 @@ public class GameModel
     public Guid? AttributeSchemaId { get; set; }
 
     /// <summary>
-    /// Game author (Master/GM)
+    /// Game master (GM)
     /// </summary>
-    public GeneralUser Author { get; set; } = null!;
+    public GeneralUser Master { get; set; } = null!;
 
     /// <summary>
-    /// Game master's assistants
+    /// Game master's assistants (lightweight info for lists and tooltips)
     /// </summary>
-    public IEnumerable<GeneralUser> Assistants { get; set; } = [];
+    public IEnumerable<GameAssistantInfo> Assistants { get; set; } = [];
 
     /// <summary>
     /// Game premoderation moderator (null if not in moderation)
@@ -197,14 +278,14 @@ public class GameModel
     public GeneralUser? PendingAssistant { get; set; }
 
     /// <summary>
-    /// Active game character author ids
+    /// Unique players (authors of active characters) - for game details page
     /// </summary>
-    public IEnumerable<Guid> ActiveCharacterUserIds { get; set; } = [];
+    public IEnumerable<GeneralUser> Players { get; set; } = [];
 
     /// <summary>
-    /// Game reader ids
+    /// Game subscriber ids
     /// </summary>
-    public IEnumerable<Guid> ReaderUserIds { get; set; } = [];
+    public IEnumerable<Guid> SubscriberIds { get; set; } = [];
 
     /// <summary>
     /// User ids with pending invitations (player or reader)
@@ -232,12 +313,17 @@ public class GameModel
     public string Title { get; set; } = null!;
 
     /// <summary>
+    /// Tag description
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
     /// Game RPG system
     /// </summary>
     public string SystemName { get; set; } = null!;
 
     /// <summary>
-    /// Narrative setting (e.g. Mass Effect, WarHammer, Our world)
+    /// Narrative setting (e.g. Mass Effect, Warhammer, Our world)
     /// </summary>
     public string NarrativeSetting { get; set; } = null!;
 
@@ -270,6 +356,42 @@ public class GameModel
     /// Number of unread characters in game
     /// </summary>
     public int UnreadCharactersCount { get; set; }
+
+    /// <summary>
+    /// Number of reviews about the game itself
+    /// </summary>
+    public int GameReviewsCount { get; set; }
+
+    /// <summary>
+    /// Number of reviews about posts in the game
+    /// </summary>
+    public int PostReviewsCount { get; set; }
+
+    /// <summary>
+    /// Subscriber usernames for tooltip display (limited to first 20)
+    /// </summary>
+    public IEnumerable<string> SubscriberUsernames { get; set; } = [];
+
+    /// <summary>
+    /// Active characters info for [X/Y] tooltip display
+    /// </summary>
+    public IEnumerable<ActiveCharacterInfo> ActiveCharacters { get; set; } = [];
+}
+
+/// <summary>
+/// Active character info for tooltip display
+/// </summary>
+public class ActiveCharacterInfo
+{
+    /// <summary>
+    /// Character name
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Owner's username
+    /// </summary>
+    public string OwnerUsername { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -345,14 +467,29 @@ public class Room
     public Guid Id { get; set; }
 
     /// <summary>
+    /// Room number within game (for URL, stable)
+    /// </summary>
+    public int RoomNumber { get; set; }
+
+    /// <summary>
     /// Game identifier
     /// </summary>
     public Guid GameId { get; set; }
 
     /// <summary>
+    /// Linked chat identifier (for RoomType.Chat rooms)
+    /// </summary>
+    public Guid? ChatId { get; set; }
+
+    /// <summary>
     /// Room title
     /// </summary>
     public string Title { get; set; } = null!;
+
+    /// <summary>
+    /// Tag description
+    /// </summary>
+    public string? Description { get; set; }
 
     /// <summary>
     /// Room content type
@@ -403,6 +540,42 @@ public class Room
     /// Default room name
     /// </summary>
     public const string DefaultRoomName = "Игровая комната";
+}
+
+/// <summary>
+/// Room reference with game info (for post listings)
+/// </summary>
+public class RoomRef
+{
+    /// <summary>
+    /// Room identifier
+    /// </summary>
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// Room number within game (for URL)
+    /// </summary>
+    public int RoomNumber { get; set; }
+
+    /// <summary>
+    /// Room title
+    /// </summary>
+    public string Title { get; set; } = null!;
+
+    /// <summary>
+    /// Game identifier
+    /// </summary>
+    public Guid GameId { get; set; }
+
+    /// <summary>
+    /// Game public ID for URL
+    /// </summary>
+    public string GamePublicId { get; set; } = null!;
+
+    /// <summary>
+    /// Game title
+    /// </summary>
+    public string GameTitle { get; set; } = null!;
 }
 
 /// <summary>
@@ -475,6 +648,11 @@ public class CharacterAttribute
     /// Attribute title
     /// </summary>
     public string Title { get; set; } = null!;
+
+    /// <summary>
+    /// Tag description
+    /// </summary>
+    public string? Description { get; set; }
 
     /// <summary>
     /// Attribute value
@@ -669,7 +847,7 @@ public class ListValue
 /// <summary>
 /// DTO model for game post
 /// </summary>
-public class Post : ILikable
+public class Post
 {
     /// <summary>
     /// Identifier
@@ -687,11 +865,6 @@ public class Post : ILikable
     public GeneralUser Author { get; set; } = null!;
 
     /// <summary>
-    /// Post last update author
-    /// </summary>
-    public GeneralUser ModifiedBy { get; set; } = null!;
-
-    /// <summary>
     /// Short character information
     /// </summary>
     public CharacterShort Character { get; set; } = null!;
@@ -702,39 +875,44 @@ public class Post : ILikable
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Last modification moment (UTC)
+    /// Game text (in-character content)
     /// </summary>
-    public DateTimeOffset? ModifiedUtc { get; set; }
+    public string GameText { get; set; } = null!;
 
     /// <summary>
-    /// Text
+    /// Metagame text (OOC commentary)
     /// </summary>
-    public string Text { get; set; } = null!;
+    public string MetagameText { get; set; } = null!;
 
     /// <summary>
-    /// Comment
+    /// Sum of review scores
     /// </summary>
-    public string Comment { get; set; } = null!;
+    public int Rating { get; set; }
 
     /// <summary>
-    /// Message to master or master note
+    /// Number of reviews
     /// </summary>
-    public string MasterMessage { get; set; } = null!;
+    public int ReviewCount { get; set; }
 
     /// <summary>
-    /// Likes count
+    /// Author role in game context (DungeonMaster/Assistant/null for player)
     /// </summary>
-    public int LikesCount { get; set; }
+    public string? AuthorGameRole { get; set; }
 
     /// <summary>
-    /// Users who liked this post
+    /// Room reference (for rated posts listing)
     /// </summary>
-    public IEnumerable<GeneralUser> Likes { get; set; } = [];
+    public RoomRef? Room { get; set; }
 
     /// <summary>
-    /// Like entity type
+    /// Dice rolls associated with this post
     /// </summary>
-    public LikeEntityType LikeEntityType => LikeEntityType.Post;
+    public IEnumerable<Posts.DiceRoll> DiceRolls { get; set; } = [];
+
+    /// <summary>
+    /// Edit history (most recent first)
+    /// </summary>
+    public IEnumerable<Posts.PostEdit> Edits { get; set; } = [];
 }
 
 /// <summary>
@@ -748,9 +926,9 @@ public class BestPostResult
     public Guid PostId { get; set; }
 
     /// <summary>
-    /// Post text
+    /// Post game text (in-character content)
     /// </summary>
-    public string Text { get; set; } = null!;
+    public string GameText { get; set; } = null!;
 
     /// <summary>
     /// Game title
@@ -807,6 +985,11 @@ public class AttributeSpecification
     /// Title
     /// </summary>
     public string Title { get; set; } = null!;
+
+    /// <summary>
+    /// Tag description
+    /// </summary>
+    public string? Description { get; set; }
 
     /// <summary>
     /// Order number
@@ -870,6 +1053,11 @@ public class AttributeSchema
     public string Title { get; set; } = null!;
 
     /// <summary>
+    /// Tag description
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
     /// Type
     /// </summary>
     public SchemaType Type { get; set; }
@@ -886,9 +1074,9 @@ public class AttributeSchema
 }
 
 /// <summary>
-/// Extended DTO model for game
+/// Extended DTO model for game (full details, for detail pages)
 /// </summary>
-public class GameExtended : GameModel
+public class GameDetails : Game
 {
     /// <summary>
     /// Game rooms
@@ -896,9 +1084,14 @@ public class GameExtended : GameModel
     public IEnumerable<Room> Rooms { get; set; } = [];
 
     /// <summary>
-    /// Game readers
+    /// Game subscribers
     /// </summary>
-    public IEnumerable<GeneralUser> Readers { get; set; } = [];
+    public IEnumerable<GeneralUser> Subscribers { get; set; } = [];
+
+    /// <summary>
+    /// Full assistant information for detail page
+    /// </summary>
+    public IEnumerable<GeneralUser> FullAssistants { get; set; } = [];
 
     /// <summary>
     /// Game characters
@@ -1056,67 +1249,6 @@ public class GameComment : ILikable
     /// Like entity type
     /// </summary>
     public LikeEntityType LikeEntityType => LikeEntityType.Comment;
-}
-
-/// <summary>
-/// Featured post (best of week / last with plus)
-/// </summary>
-public class FeaturedPost
-{
-    /// <summary>
-    /// Post identifier
-    /// </summary>
-    public Guid Id { get; set; }
-
-    /// <summary>
-    /// Text preview
-    /// </summary>
-    public string TextPreview { get; set; } = null!;
-
-    /// <summary>
-    /// Post author
-    /// </summary>
-    public GeneralUser Author { get; set; } = null!;
-
-    /// <summary>
-    /// Character name
-    /// </summary>
-    public string? CharacterName { get; set; }
-
-    /// <summary>
-    /// Created date
-    /// </summary>
-    public DateTimeOffset CreatedUtc { get; set; }
-
-    /// <summary>
-    /// Game identifier
-    /// </summary>
-    public Guid GameId { get; set; }
-
-    /// <summary>
-    /// Game title
-    /// </summary>
-    public string GameTitle { get; set; } = null!;
-
-    /// <summary>
-    /// Room identifier
-    /// </summary>
-    public Guid RoomId { get; set; }
-
-    /// <summary>
-    /// Room title
-    /// </summary>
-    public string RoomTitle { get; set; } = null!;
-
-    /// <summary>
-    /// Post rating
-    /// </summary>
-    public int Rating { get; set; }
-
-    /// <summary>
-    /// Review count
-    /// </summary>
-    public int ReviewCount { get; set; }
 }
 
 /// <summary>
@@ -1282,7 +1414,7 @@ public class RoomToUpdate : Room
     /// <summary>
     /// Parent game (for authorization checks)
     /// </summary>
-    public GameModel Game { get; set; } = null!;
+    public Game Game { get; set; } = null!;
 }
 
 /// <summary>

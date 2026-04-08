@@ -4,9 +4,15 @@ import { useRouter } from "vue-router";
 import type { RegisterCredentials } from "@/shared/api/models/account";
 import { useUserStore } from "@/entities/user";
 import { useNewPasswordField } from "@/shared/lib/composables/useNewPasswordField";
-import { useValidatedField, validators } from "@/shared/lib/composables/useValidatedField";
+import {
+  useValidatedField,
+  validators,
+} from "@/shared/lib/composables/useValidatedField";
 import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
-import { PasswordInput, PasswordStrengthIndicator } from "@/shared/ui/PasswordInput";
+import {
+  PasswordInput,
+  PasswordStrengthIndicator,
+} from "@/shared/ui/PasswordInput";
 import { AccountApi } from "@/shared/api";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 
@@ -35,10 +41,7 @@ const emailPending = ref(false);
 
 // Email field with async availability check
 const emailField = useValidatedField({
-  validate: validators.combine(
-    validators.required(),
-    validators.email()
-  ),
+  validate: validators.combine(validators.required(), validators.email()),
   asyncValidate: async (value) => {
     const { data, error } = await AccountApi.checkEmail(value);
     if (error || !data) return null; // Silent fail
@@ -67,17 +70,17 @@ const {
   isChecking: hibpChecking,
   onInput: onPasswordInput,
   onBlur: onPasswordBlur,
-  reset: resetPassword
+  reset: resetPassword,
 } = useNewPasswordField();
 
 // Can proceed to next step
-const canSubmitEmail = computed(() =>
-  emailField.isReady.value && !emailTaken.value && !emailPending.value
+const canSubmitEmail = computed(
+  () => emailField.isReady.value && !emailTaken.value && !emailPending.value,
 );
 
 // Can register (HIBP must pass)
-const canSubmitPassword = computed(() =>
-  isPasswordValid.value && acceptedRules.value
+const canSubmitPassword = computed(
+  () => isPasswordValid.value && acceptedRules.value,
 );
 
 onMounted(() => {
@@ -155,7 +158,6 @@ const onEmailInput = () => {
   }
 };
 
-
 const clearForm = () => {
   emailField.reset();
   resetPassword();
@@ -186,7 +188,7 @@ const handleRecovery = () => {
 </script>
 
 <template>
-  <the-lightbox narrow @before-close="clearForm">
+  <Lightbox narrow @before-close="clearForm">
     <lightbox-title>Регистрация</lightbox-title>
 
     <!-- Step 1: Email -->
@@ -195,12 +197,19 @@ const handleRecovery = () => {
         <p><strong>Создание дополнительных аккаунтов запрещено.</strong></p>
         <p>
           Если вы утратили доступ к аккаунту, воспользуйтесь
-          <a href="#" @click.prevent="emit('openRecovery', emailField.value.value.trim() || undefined)">восстановлением доступа</a>
-          или обратитесь в <a href="#" @click.prevent="goToSupport">поддержку</a>.
+          <a
+            href="#"
+            @click.prevent="
+              emit('openRecovery', emailField.value.value.trim() || undefined)
+            "
+            >восстановлением доступа</a
+          >
+          или обратитесь в
+          <a href="#" @click.prevent="goToSupport">поддержку</a>.
         </p>
       </div>
 
-      <the-form
+      <Form
         @submit="submitEmail"
         @cancel="cancel"
         :valid="canSubmitEmail"
@@ -208,11 +217,26 @@ const handleRecovery = () => {
         action="Продолжить"
         cancel="Отмена"
       >
-        <form-field name="email" :errors="emailField.error.value ? [emailField.error.value] : []">
+        <form-field
+          name="email"
+          :errors="emailField.error.value ? [emailField.error.value] : []"
+        >
           <template #label>
             <label for="email">Почта</label>
-            <a v-if="emailTaken" href="#" @click.prevent="handleLogin" class="field-action">Войти?</a>
-            <a v-else-if="emailPending" href="#" @click.prevent="handleRecovery" class="field-action">Отправить повторное письмо?</a>
+            <a
+              v-if="emailTaken"
+              href="#"
+              @click.prevent="handleLogin"
+              class="field-action"
+              >Войти?</a
+            >
+            <a
+              v-else-if="emailPending"
+              href="#"
+              @click.prevent="handleRecovery"
+              class="field-action"
+              >Отправить повторное письмо?</a
+            >
           </template>
           <input
             ref="emailInputRef"
@@ -235,7 +259,7 @@ const handleRecovery = () => {
           tabindex="-1"
           aria-hidden="true"
         />
-      </the-form>
+      </Form>
     </template>
 
     <!-- Step 2: Password -->
@@ -248,7 +272,7 @@ const handleRecovery = () => {
         <div class="email-display__value">{{ emailField.value.value }}</div>
       </div>
 
-      <the-form
+      <Form
         @submit="submitPassword"
         @cancel="cancel"
         :valid="canSubmitPassword"
@@ -256,7 +280,12 @@ const handleRecovery = () => {
         action="Зарегистрироваться"
         cancel="Отмена"
       >
-        <form-field label="Пароль" name="password" :errors="passwordError ? [passwordError] : []">
+        <form-field
+          label="Пароль"
+          name="password"
+          :errors="passwordError ? [passwordError] : []"
+        >
+          <template #hint>Минимум 8 символов</template>
           <password-input
             ref="passwordInputRef"
             v-model="newPassword"
@@ -279,7 +308,16 @@ const handleRecovery = () => {
             :disabled="!rulesViewed"
             id="acceptedRules"
           />
-          <span>Я принимаю <a href="/rules" target="_blank" rel="noopener" @click="rulesViewed = true">правила сайта</a></span>
+          <span
+            >Я принимаю
+            <a
+              href="/rules"
+              target="_blank"
+              rel="noopener"
+              @click="rulesViewed = true"
+              >правила сайта</a
+            ></span
+          >
         </div>
 
         <input
@@ -290,9 +328,9 @@ const handleRecovery = () => {
           tabindex="-1"
           aria-hidden="true"
         />
-      </the-form>
+      </Form>
     </template>
-  </the-lightbox>
+  </Lightbox>
 </template>
 
 <style scoped lang="sass">
@@ -365,5 +403,4 @@ a
       inset: 0
       background-color: $border
       mask-image: url("data:image/svg+xml,%3Csvg width='6' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 6L6 0M-1 1L1 -1M5 7L7 5' stroke='white' stroke-width='1'/%3E%3C/svg%3E")
-
 </style>

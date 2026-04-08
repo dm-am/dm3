@@ -24,7 +24,7 @@ internal class ReadableGuidConverter : JsonConverter<Guid>
 
     /// <inheritdoc />
     public override void Write(Utf8JsonWriter writer, Guid value, JsonSerializerOptions options) =>
-        writer.WriteStringValue(value.EncodeToReadable());
+        writer.WriteStringValue(value.ToString());
 }
 
 /// <summary>
@@ -49,7 +49,7 @@ internal class ReadableNullableGuidConverter : JsonConverter<Guid?>
     {
         if (value.HasValue)
         {
-            writer.WriteStringValue(value.Value.EncodeToReadable());
+            writer.WriteStringValue(value.Value.ToString());
         }
         else
         {

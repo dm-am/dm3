@@ -29,7 +29,7 @@ internal class EmailChangeRepository : IEmailChangeRepository
 
     /// <inheritdoc />
     public Task<AuthenticatedUser?> FindUser(string username) => _dbContext.Users
-        .Where(u => EF.Functions.ILike(u.Username, username))
+        .Where(u => u.Username.ToLower() == username.ToLower())
         .ProjectTo<AuthenticatedUser>(_mapper.ConfigurationProvider)
         .FirstOrDefaultAsync();
 

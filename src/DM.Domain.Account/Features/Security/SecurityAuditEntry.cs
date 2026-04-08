@@ -25,7 +25,7 @@ public class SecurityAuditEntry
     /// <summary>
     /// When the event occurred (UTC)
     /// </summary>
-    public DateTimeOffset Timestamp { get; set; }
+    public DateTimeOffset TimestampUtc { get; set; }
 
     /// <summary>
     /// IP address of the client

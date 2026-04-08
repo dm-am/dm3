@@ -2,14 +2,15 @@ using System.Linq;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Core.Enums;
+using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 
 namespace DM.Domain.Blog.Authorization;
 
 /// <inheritdoc />
-internal class BlogIntentionResolver : IIntentionResolver<BlogIntention, BlogModel>
+internal class BlogIntentionResolver : IIntentionResolver<BlogIntention, BlogDto>
 {
     /// <inheritdoc />
-    public bool IsAllowed(IAuthorizationSubject user, BlogIntention intention, BlogModel target)
+    public bool IsAllowed(IAuthorizationSubject user, BlogIntention intention, BlogDto target)
     {
         var isOwner = user.UserId == target.Author.UserId;
         var isMentor = target.Mentor?.UserId == user.UserId;

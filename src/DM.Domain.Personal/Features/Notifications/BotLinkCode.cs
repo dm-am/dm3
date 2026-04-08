@@ -13,7 +13,7 @@ public class BotLinkCode
     public string Code { get; set; } = null!;
 
     /// <summary>
-    /// When the code expires
+    /// When the code expires (UTC)
     /// </summary>
-    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset ExpiresUtc { get; set; }
 }

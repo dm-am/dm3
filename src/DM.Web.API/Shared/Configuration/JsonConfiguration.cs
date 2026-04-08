@@ -31,5 +31,7 @@ public static class JsonConfiguration
         config.JsonSerializerOptions.Converters.Insert(0, new JsonStringEnumConverter());
         config.JsonSerializerOptions.Converters.Insert(0, new OptionalConverterFactory());
         config.JsonSerializerOptions.Converters.Insert(0, new BbConverterFactory(httpContextAccessor, bbParserProvider));
+        config.JsonSerializerOptions.Converters.Insert(0, new ReadableGuidConverter());
+        config.JsonSerializerOptions.Converters.Insert(0, new ReadableNullableGuidConverter());
     }
 }

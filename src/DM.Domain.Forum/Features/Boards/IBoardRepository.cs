@@ -13,6 +13,6 @@ public interface IBoardRepository
     /// Get list of available boards by access policy
     /// </summary>
     /// <param name="accessPolicy">Board access policy</param>
-    /// <returns></returns>
+    /// <returns>List of boards matching the access policy</returns>
     Task<IEnumerable<Board>> SelectBoards(BoardAccessPolicy? accessPolicy);
 }

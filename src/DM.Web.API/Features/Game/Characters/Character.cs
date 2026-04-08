@@ -1,6 +1,6 @@
 using System;
 using DM.Domain.Core.Enums;
-using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Game.Characters;
 
@@ -15,9 +15,9 @@ public class Character
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Character author
+    /// Character author (lightweight reference)
     /// </summary>
-    public User Author { get; set; } = null!;
+    public UserRef Author { get; set; } = null!;
 
     /// <summary>
     /// Character status
@@ -48,6 +48,11 @@ public class Character
     /// Character picture URL
     /// </summary>
     public string PictureUrl { get; set; } = null!;
+
+    /// <summary>
+    /// Character is NPC (controlled by game master)
+    /// </summary>
+    public bool IsNpc { get; set; }
 }
 
 /// <summary>

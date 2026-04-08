@@ -1,26 +1,38 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import type { Poll, PollId, PollOptionId } from "./types";
+import type { Poll, PollId, PollOptionId, PollsSearchParams } from "./types";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import type { Patch, Post } from "@/shared/api/models";
 import pollApi from "../api/pollApi";
+import { useApiList } from "@/shared/lib/composables/useApiResource";
 
 export const usePollsStore = defineStore("polls", () => {
-  const activePolls = ref<Poll[] | null>(null);
-  async function fetchActivePolls() {
-    const { data } = await pollApi.getPolls({ size: 3, skip: 0 }, true);
-    activePolls.value = data?.resources ?? null;
-  }
+  // Sidebar active polls with caching (60s TTL)
+  const active = useApiList<Poll>(
+    () => pollApi.getActivePolls(),
+    { cacheMs: 60_000 },
+  );
+
+  // Paginated polls list (no caching - always fresh for polls page)
   const polls = ref<ListEnvelope<Poll> | null>(null);
-  async function fetchPolls(number: number, onlyActive: boolean) {
-    const { data } = await pollApi.getPolls({ number }, onlyActive);
+  const loading = ref(false);
+  const error = ref<string | null>(null);
+
+  async function fetchPolls(params: PollsSearchParams) {
+    loading.value = true;
+    error.value = null;
+    const { data, error: apiError } = await pollApi.getPolls(params);
     polls.value = data ?? null;
+    if (apiError) error.value = "Не удалось загрузить опросы";
+    loading.value = false;
   }
 
   function updatePoll(poll: Poll) {
-    const matchingActivePoll = activePolls.value?.find((p) => p.id === poll.id);
+    // Update in active polls cache
+    const matchingActivePoll = active.data.value?.find((p) => p.id === poll.id);
     if (matchingActivePoll) Object.assign(matchingActivePoll, poll);
 
+    // Update in paginated polls
     const matchingPoll = polls.value?.resources.find((p) => p.id === poll.id);
     if (matchingPoll) Object.assign(matchingPoll, poll);
   }
@@ -49,5 +61,23 @@ export const usePollsStore = defineStore("polls", () => {
     if (data) updatePoll(data);
   }
 
-  return { fetchActivePolls, activePolls, fetchPolls, polls, createPoll, editPoll, vote, unvote };
+  return {
+    // Active polls (sidebar)
+    activePolls: active.data,
+    activePollsLoading: active.loading,
+    activePollsError: active.error,
+    fetchActivePolls: active.fetch,
+
+    // Paginated polls (polls page)
+    polls,
+    pollsLoading: loading,
+    pollsError: error,
+    fetchPolls,
+
+    // Mutations
+    createPoll,
+    editPoll,
+    vote,
+    unvote,
+  };
 });

@@ -75,9 +75,12 @@ field
   color: $selection-text
 
 // Menu decorations (separators and bullet prefixes)
-.separator,
-.muted
+.separator
+  color: $text-muted
   user-select: none
+
+.muted
+  color: $text-muted
 
 // Highlight animation for unread content navigation
 .highlight-unread
@@ -90,3 +93,13 @@ field
   100%
     background-color: transparent
     box-shadow: none
+
+// Search highlight - global marker pen effect
+// Used by highlightMatch() utility - preserves original text color
+.search-highlight
+  background-color: $search-highlight-bg
+  padding: 0.05em 0.15em
+  margin: 0 -0.05em
+  border-radius: 3px
+  box-decoration-break: clone
+  -webkit-box-decoration-break: clone

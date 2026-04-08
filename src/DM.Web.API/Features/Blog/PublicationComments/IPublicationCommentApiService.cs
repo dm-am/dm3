@@ -1,6 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
+using DM.Domain.Blog.Features.PublicationComments;
 using DM.Web.API.Shared.Dto;
 using Comment = DM.Web.API.Shared.Dto.Comment;
 using DiscussionResponse = DM.Web.API.Shared.Dto.DiscussionResponse;
@@ -17,17 +17,17 @@ public interface IPublicationCommentApiService
     /// Get publication discussion with permission flags
     /// </summary>
     /// <param name="publicationId">Publication identifier</param>
-    /// <param name="query">Paging query</param>
+    /// <param name="query">Query with filtering, sorting and paging</param>
     /// <returns>Discussion response with comments and metadata</returns>
-    Task<DiscussionResponse> GetDiscussion(Guid publicationId, PagingQuery query);
+    Task<DiscussionResponse> GetDiscussion(Guid publicationId, PublicationCommentsQuery query);
 
     /// <summary>
     /// Get publication commentaries
     /// </summary>
     /// <param name="publicationId">Publication identifier</param>
-    /// <param name="query">Paging query</param>
+    /// <param name="query">Query with filtering, sorting and paging</param>
     /// <returns>Envelope of commentaries list</returns>
-    Task<ListEnvelope<Comment>> Get(Guid publicationId, PagingQuery query);
+    Task<ListEnvelope<Comment>> Get(Guid publicationId, PublicationCommentsQuery query);
 
     /// <summary>
     /// Create new comment
@@ -41,7 +41,7 @@ public interface IPublicationCommentApiService
     /// Get comment by identifier
     /// </summary>
     /// <param name="commentId">Comment identifier</param>
-    /// <returns></returns>
+    /// <returns>Envelope of comment</returns>
     Task<Envelope<Comment>> Get(Guid commentId);
 
     /// <summary>
@@ -49,20 +49,18 @@ public interface IPublicationCommentApiService
     /// </summary>
     /// <param name="commentId">Comment identifier</param>
     /// <param name="comment">Comment DTO model</param>
-    /// <returns></returns>
+    /// <returns>Envelope of updated comment</returns>
     Task<Envelope<Comment>> Update(Guid commentId, Comment comment);
 
     /// <summary>
     /// Delete comment
     /// </summary>
     /// <param name="commentId">Comment identifier</param>
-    /// <returns></returns>
     Task Delete(Guid commentId);
 
     /// <summary>
     /// Mark all publication comments as read
     /// </summary>
     /// <param name="publicationId">Publication identifier</param>
-    /// <returns></returns>
     Task MarkAsRead(Guid publicationId);
 }

@@ -24,7 +24,7 @@ export type Comment = {
   id: Served<CommentId>;
   author: Served<User>;
   createdUtc: Served<string>;
-  updatedUtc: Served<string | null>;
+  modifiedUtc: Served<string | null>;
   text: string;
   isRemoved: Served<boolean>;
   likes: Served<User[]>;

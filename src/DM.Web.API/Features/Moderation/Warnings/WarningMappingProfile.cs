@@ -1,7 +1,7 @@
 using AutoMapper;
 using DM.Web.API.Features.Moderation.Bans;
-using DbWarning = DM.Infrastructure.Persistence.Entities.Moderation.Warning;
-using DbBan = DM.Infrastructure.Persistence.Entities.Moderation.Ban;
+using DomainWarning = DM.Domain.Moderation.Features.Warnings.Warning;
+using DomainBan = DM.Domain.Moderation.Features.Warnings.Ban;
 
 namespace DM.Web.API.Features.Moderation.Warnings;
 
@@ -13,18 +13,18 @@ internal class WarningMappingProfile : Profile
     /// <inheritdoc />
     public WarningMappingProfile()
     {
-        CreateMap<DbWarning, Warning>()
+        CreateMap<DomainWarning, Warning>()
             .ForMember(d => d.Id, s => s.MapFrom(w => w.WarningId))
             .ForMember(d => d.User, s => s.MapFrom(w => w.TargetUser))
             .ForMember(d => d.Moderator, s => s.MapFrom(w => w.Author))
             .ForMember(d => d.EntityId, s => s.MapFrom(w => w.EntityId != System.Guid.Empty ? w.EntityId : (System.Guid?)null))
-            .ForMember(d => d.EntityType, s => s.Ignore()) // EntityType not stored in DB
+            .ForMember(d => d.EntityType, s => s.MapFrom(w => w.EntityType.ToString()))
             .ForMember(d => d.Points, s => s.MapFrom(w => w.Points))
             .ForMember(d => d.Reason, s => s.MapFrom(w => w.Text))
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(w => w.CreatedUtc))
             .ForMember(d => d.IsActive, s => s.MapFrom(w => !w.IsRemoved));
 
-        CreateMap<DbBan, Ban>()
+        CreateMap<DomainBan, Ban>()
             .ForMember(d => d.Id, s => s.MapFrom(b => b.BanId))
             .ForMember(d => d.User, s => s.MapFrom(b => b.TargetUser))
             .ForMember(d => d.Moderator, s => s.MapFrom(b => b.Author))
@@ -34,11 +34,11 @@ internal class WarningMappingProfile : Profile
             .ForMember(d => d.Comment, s => s.MapFrom(b => b.Comment))
             .ForMember(d => d.IsActive, s => s.MapFrom(b => !b.IsRemoved && b.EndedUtc > System.DateTimeOffset.UtcNow))
             .ForMember(d => d.IsVoluntary, s => s.MapFrom(b => b.IsVoluntary))
-            .ForMember(d => d.LiftedUtc, s => s.Ignore()) // Not in current schema
-            .ForMember(d => d.LiftedBy, s => s.Ignore()); // Not in current schema
+            .ForMember(d => d.LiftedUtc, s => s.Ignore())
+            .ForMember(d => d.LiftedBy, s => s.Ignore());
     }
 
-    private static BanType MapBanType(DbBan ban)
+    private static BanType MapBanType(DomainBan ban)
     {
         if (ban.IsVoluntary)
         {

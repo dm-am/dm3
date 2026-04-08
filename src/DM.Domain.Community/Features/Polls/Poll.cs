@@ -14,19 +14,29 @@ public class Poll
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Start moment
+    /// Start moment (UTC)
     /// </summary>
-    public DateTimeOffset StartDate { get; set; }
+    public DateTimeOffset StartsUtc { get; set; }
 
     /// <summary>
-    /// End moment
+    /// End moment (UTC)
     /// </summary>
-    public DateTimeOffset EndDate { get; set; }
+    public DateTimeOffset EndsUtc { get; set; }
 
     /// <summary>
     /// Question text
     /// </summary>
     public string Title { get; set; } = null!;
+
+    /// <summary>
+    /// Optional description/details for the poll
+    /// </summary>
+    public string? Details { get; set; }
+
+    /// <summary>
+    /// Whether poll is anonymous (votes are hidden)
+    /// </summary>
+    public bool IsAnonymous { get; set; } = true;
 
     /// <summary>
     /// Answers list

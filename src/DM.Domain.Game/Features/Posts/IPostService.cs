@@ -49,6 +49,11 @@ public interface IPostService
     /// <returns>Best post result or null if no posts with positive rating found</returns>
     Task<BestPostResult?> GetBestPostAsync(Guid userId);
 
+    /// <summary>
+    /// Get posts with rating info (global search with filters and sorting)
+    /// </summary>
+    Task<(IEnumerable<Post> Posts, PagingResult Paging)> GetRatedAsync(PostsQuery query);
+
     #endregion
 
     #region Update

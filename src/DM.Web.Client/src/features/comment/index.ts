@@ -1,1 +1,1 @@
-export { TheComment } from "./ui";
+export { Comment } from "./ui";

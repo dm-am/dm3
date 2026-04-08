@@ -3,11 +3,56 @@ import type { Username } from "./models/community";
 import type { ListEnvelope, Envelope } from "./models/common";
 import Api from "./client";
 
+// ==================== Tag Management Types ====================
+
+export type ModerationTagGroup = {
+  id: string;
+  title: string;
+  description?: string;
+  sortOrder: number;
+  tagsCount: number;
+};
+
+export type ModerationTag = {
+  id: string;
+  shortId: number;
+  groupId: string;
+  groupTitle: string;
+  title: string;
+  description?: string;
+  sortOrder: number;
+  gamesCount: number;
+};
+
+export type CreateTagGroupRequest = {
+  title: string;
+  description?: string;
+  sortOrder: number;
+};
+
+export type UpdateTagGroupRequest = {
+  title: string;
+  description?: string;
+  sortOrder: number;
+};
+
+export type CreateTagRequest = {
+  groupId: string;
+  title: string;
+  description?: string;
+  sortOrder: number;
+};
+
+export type UpdateTagRequest = {
+  groupId: string;
+  title: string;
+  description?: string;
+  sortOrder: number;
+};
+
 export default new (class ModerationApi {
   public getModeratedProfile(username: Username) {
-    return Api.get<ModeratedProfile>(
-      `moderation/users/${username}/profile`,
-    );
+    return Api.get<ModeratedProfile>(`moderation/users/${username}/profile`);
   }
 
   // ==================== Username Change Requests ====================
@@ -51,10 +96,9 @@ export default new (class ModerationApi {
   }
 
   public updateModNote(noteId: string, text: string) {
-    return Api.put<ModeratedProfileNote>(
-      `moderation/notes/${noteId}`,
-      { text },
-    );
+    return Api.put<ModeratedProfileNote>(`moderation/notes/${noteId}`, {
+      text,
+    });
   }
 
   public deleteModNote(noteId: string) {
@@ -84,14 +128,98 @@ export default new (class ModerationApi {
   public liftBan(banId: string) {
     return Api.delete(`bans/${banId}`);
   }
+
+  // ==================== Tag Management ====================
+
+  /**
+   * Get all tag groups
+   */
+  public getTagGroups() {
+    return Api.get<ListEnvelope<ModerationTagGroup>>("moderation/tags/groups");
+  }
+
+  /**
+   * Get a tag group by ID
+   */
+  public getTagGroup(groupId: string) {
+    return Api.get<ModerationTagGroup>(`moderation/tags/groups/${groupId}`);
+  }
+
+  /**
+   * Create a new tag group
+   */
+  public createTagGroup(request: CreateTagGroupRequest) {
+    return Api.post<ModerationTagGroup>("moderation/tags/groups", request);
+  }
+
+  /**
+   * Update a tag group
+   */
+  public updateTagGroup(groupId: string, request: UpdateTagGroupRequest) {
+    return Api.put<ModerationTagGroup>(
+      `moderation/tags/groups/${groupId}`,
+      request,
+    );
+  }
+
+  /**
+   * Delete a tag group
+   */
+  public deleteTagGroup(groupId: string) {
+    return Api.delete(`moderation/tags/groups/${groupId}`);
+  }
+
+  /**
+   * Get all tags
+   */
+  public getTags() {
+    return Api.get<ListEnvelope<ModerationTag>>("moderation/tags");
+  }
+
+  /**
+   * Get tags by group ID
+   */
+  public getTagsByGroup(groupId: string) {
+    return Api.get<ListEnvelope<ModerationTag>>(
+      `moderation/tags/groups/${groupId}/tags`,
+    );
+  }
+
+  /**
+   * Get a tag by ID
+   */
+  public getTag(tagId: string) {
+    return Api.get<ModerationTag>(`moderation/tags/${tagId}`);
+  }
+
+  /**
+   * Create a new tag
+   */
+  public createTag(request: CreateTagRequest) {
+    return Api.post<ModerationTag>("moderation/tags", request);
+  }
+
+  /**
+   * Update a tag
+   */
+  public updateTag(tagId: string, request: UpdateTagRequest) {
+    return Api.put<ModerationTag>(`moderation/tags/${tagId}`, request);
+  }
+
+  /**
+   * Delete a tag
+   */
+  public deleteTag(tagId: string) {
+    return Api.delete(`moderation/tags/${tagId}`);
+  }
 })();
 
 export type ModeratedProfileNote = {
   id: string;
   text: string;
   author?: { id: string; username: string };
-  createdAtUtc: string;
-  modifiedAtUtc?: string;
+  createdUtc: string;
+  modifiedUtc?: string;
 };
 
 export type Warning = {
@@ -172,9 +300,9 @@ export type UsernameChangeRequest = {
   requestedUsername?: string | null;
   reason: string;
   status: UsernameChangeRequestStatus;
-  createdAtUtc: string;
-  approvalExpiresAtUtc?: string | null;
-  resolvedAtUtc?: string | null;
+  createdUtc: string;
+  approvalExpiresUtc?: string | null;
+  resolvedUtc?: string | null;
   resolvedBy?: string | null;
   comment?: string | null;
 };

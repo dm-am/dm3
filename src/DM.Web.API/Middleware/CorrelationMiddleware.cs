@@ -28,7 +28,6 @@ public class CorrelationMiddleware
     /// <param name="httpContext"></param>
     /// <param name="setter"></param>
     /// <param name="guidFactory"></param>
-    /// <returns></returns>
     public async Task InvokeAsync(HttpContext httpContext,
         ICorrelationTokenSetter setter,
         IGuidFactory guidFactory)

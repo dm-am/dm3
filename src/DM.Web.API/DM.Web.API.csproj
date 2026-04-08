@@ -56,4 +56,8 @@
         </Content>
     </ItemGroup>
 
+    <ItemGroup>
+        <EmbeddedResource Include="Assets\Seed\diopside.jpg" />
+    </ItemGroup>
+
 </Project>

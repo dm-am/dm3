@@ -53,9 +53,9 @@ internal class UsernameChangeMailSender : IUsernameChangeMailSender
         var body = $@"
 <html>
 <body style='font-family: Arial, sans-serif; color: #333;'>
-    <h2>Запрос на смену имени отклонён</h2>
+    <h2>Запрос на смену имени отклонен</h2>
     <p>Здравствуйте, {username}!</p>
-    <p>К сожалению, ваш запрос на смену имени пользователя был <strong>отклонён</strong> модератором.</p>
+    <p>К сожалению, ваш запрос на смену имени пользователя был <strong>отклонен</strong> модератором.</p>
     <p>{reasonText}</p>
     <p>Вы можете подать новый запрос, предоставив более подробную причину для смены имени.</p>
     <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'>
@@ -66,7 +66,7 @@ internal class UsernameChangeMailSender : IUsernameChangeMailSender
         await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
-            Subject = "Запрос на смену имени отклонён — DM.AM",
+            Subject = "Запрос на смену имени отклонен — DM.AM",
             Body = body,
             LinkedResources = [_emailAssetsProvider.GetLogo()]
         });

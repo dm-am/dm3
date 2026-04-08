@@ -2,7 +2,7 @@
 import { computed, toRef } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
-import { useCommunityStore, type Username } from "@/entities/user";
+import { useCommunityStore, UserRole, type Username } from "@/entities/user";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useModeratedProfile } from "@/shared/lib/composables/useModeratedProfile";
 import { useProfileEdit } from "@/shared/lib/composables/useProfileEdit";
@@ -16,6 +16,7 @@ import ProfileAbout from "./ProfileAbout.vue";
 import ProfileGames from "./ProfileGames.vue";
 import ProfileBlogs from "./ProfileBlogs.vue";
 import ProfileBestPost from "./ProfileBestPost.vue";
+import { ProfileSkeleton } from "@/shared/ui/Skeleton";
 
 const route = useRoute();
 const communityStore = useCommunityStore();
@@ -24,6 +25,9 @@ const { trySelectProfile, fetchEditableUser } = communityStore;
 
 // Profile not found state
 const profileNotFound = computed(() => !loadingProfile.value && !user.value);
+
+// System user (Robot Administrator) - special profile
+const isSystemUser = computed(() => user.value?.role === UserRole.System);
 
 // Username ref for composables
 const username = computed(() => route.params.username as string);
@@ -47,25 +51,22 @@ const {
 } = useProfileEdit(toRef(() => route.params.username as string));
 
 // Fetch profile data
-useFetchData(
-  async () => {
-    const success = await trySelectProfile(route.params.username as Username);
-    if (success && canEdit.value) {
-      await fetchEditableUser(route.params.username as Username);
-    }
-  },
-  [
-    {
-      param: (p) => p.username,
-      callback: async (usernameParam) => {
-        const success = await trySelectProfile(usernameParam as Username);
-        if (success && canEdit.value) {
-          await fetchEditableUser(usernameParam as Username);
-        }
-      },
+useFetchData(async () => {
+  const success = await trySelectProfile(route.params.username as Username);
+  if (success && canEdit.value) {
+    await fetchEditableUser(route.params.username as Username);
+  }
+}, [
+  {
+    param: (p) => p.username,
+    callback: async (usernameParam) => {
+      const success = await trySelectProfile(usernameParam as Username);
+      if (success && canEdit.value) {
+        await fetchEditableUser(usernameParam as Username);
+      }
     },
-  ],
-);
+  },
+]);
 
 // Handle field updates from child components
 const handleFieldUpdate = (field: string, value: string) => {
@@ -80,15 +81,38 @@ const handleSave = async () => {
 
 <template>
   <!-- Loading state -->
-  <div v-if="loadingProfile" class="profile-loading">
-    <p>Загрузка профиля...</p>
+  <div v-if="loadingProfile" class="profile-page">
+    <ProfileSkeleton />
   </div>
 
   <!-- Not found state -->
   <div v-else-if="profileNotFound" class="profile-not-found">
     <h2>Пользователь не найден</h2>
-    <p>Пользователь <strong>{{ route.params.username }}</strong> не существует или был удален.</p>
+    <p>
+      Пользователь <strong>{{ route.params.username }}</strong> не существует
+      или был удален.
+    </p>
     <router-link to="/">На главную</router-link>
+  </div>
+
+  <!-- System user profile (Robot Administrator) -->
+  <div v-else-if="isSystemUser && user" class="profile-page system-profile">
+    <div class="system-profile-content">
+      <div class="system-avatar">
+        <span class="system-icon">🤖</span>
+      </div>
+      <h1 class="system-title">
+        {{ user.username }}
+        <span class="role-badge"><span class="bracket">[</span><span class="letter">Р</span><span class="bracket">]</span></span>
+      </h1>
+      <p class="system-description">
+        Системный пользователь для автоматических действий.
+        Автоматически выдает баны за нарушения и выполняет служебные операции.
+      </p>
+      <div class="system-info">
+        <p>Этот профиль не принадлежит реальному человеку.</p>
+      </div>
+    </div>
   </div>
 
   <!-- Profile content -->
@@ -112,7 +136,7 @@ const handleSave = async () => {
     />
 
     <!-- Violations (public bans/warnings) -->
-    <profile-violations :username="(username as Username)" />
+    <profile-violations :username="username as Username" />
 
     <!-- Moderation block (for moderators only) -->
     <moderation-block
@@ -139,7 +163,7 @@ const handleSave = async () => {
         <profile-blogs :username="username" />
 
         <!-- Best post section -->
-        <profile-best-post :username="(username as Username)" />
+        <profile-best-post :username="username as Username" />
       </div>
 
       <div class="content-sidebar">
@@ -151,13 +175,10 @@ const handleSave = async () => {
         />
 
         <!-- Contacts -->
-        <profile-contacts
-          :user="user"
-          :isEditMode="isEditMode"
-        />
+        <profile-contacts :user="user" :isEditMode="isEditMode" />
 
         <!-- Personal note (only for authenticated users) -->
-        <profile-personal-note :username="(username as Username)" />
+        <user-profile-note :username="username as Username" />
       </div>
     </div>
   </div>
@@ -190,11 +211,6 @@ const handleSave = async () => {
 .content-sidebar
   min-width: 0
 
-.profile-loading
-  text-align: center
-  padding: $big
-  color: $text-muted
-
 .profile-not-found
   text-align: center
   padding: $big
@@ -212,6 +228,50 @@ const handleSave = async () => {
 
   a
     font-weight: bold
+
+// System user (Robot Administrator) profile
+.system-profile
+  .system-profile-content
+    text-align: center
+    padding: $big * 2
+    max-width: 500px
+    margin: 0 auto
+
+  .system-avatar
+    margin-bottom: $medium
+
+  .system-icon
+    font-size: 4rem
+
+  .system-title
+    margin: 0 0 $medium
+    color: $text
+    display: flex
+    align-items: center
+    justify-content: center
+    gap: $small
+
+  .role-badge
+    .bracket
+      color: $text-muted
+    .letter
+      font-weight: bold
+      color: $accent-green
+
+  .system-description
+    color: $text-muted
+    line-height: 1.6
+    margin-bottom: $medium
+
+  .system-info
+    background: $bg-element-accent
+    padding: $medium
+    border-radius: $border-radius
+    color: $text-muted
+    font-size: 0.9em
+
+    p
+      margin: 0
 
 @media (max-width: 768px)
   .profile-content

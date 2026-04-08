@@ -26,6 +26,11 @@ public class Publication : ISoftDeletable, IEditable
     public Guid BlogId { get; set; }
 
     /// <summary>
+    /// Sequential publication number within the blog (for URL)
+    /// </summary>
+    public int PublicationNumber { get; set; }
+
+    /// <summary>
     /// Rubric identifier (optional)
     /// </summary>
     public Guid? RubricId { get; set; }

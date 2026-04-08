@@ -38,7 +38,7 @@ public class PagingResult
     /// <param name="totalEntitiesCount">Total entities count</param>
     /// <param name="entityNumber">Selected entity number</param>
     /// <param name="pageSize">Page size</param>
-    /// <returns></returns>
+    /// <returns>New paging result instance</returns>
     public static PagingResult Create(int totalEntitiesCount, int entityNumber, int pageSize)
     {
         return new PagingResult

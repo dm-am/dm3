@@ -1,15 +1,21 @@
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
+using DM.Web.API.Features.Game.Games;
 using DM.Web.API.Features.Game.Posts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DM.Web.API.Features.Game.Rooms;
 
-/// <inheritdoc />
+/// <summary>
+/// Room management endpoints
+/// </summary>
+/// <remarks>
+/// Provides CRUD operations for game rooms (locations/scenes).
+/// Rooms contain posts, support access control, and post pendencies for turn-based gameplay.
+/// </remarks>
 [ApiController]
 [Route("v1/rooms")]
 [ApiExplorerSettings(GroupName = "Game")]
@@ -20,51 +26,47 @@ public class RoomController : ControllerBase
     private readonly IRoomAccessApiService _accessApiService;
     private readonly IPostPendencyApiService _postPendencyApiService;
     private readonly IPostApiService _postApiService;
+    private readonly IGameApiService _gameApiService;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Creates a new instance of RoomController
+    /// </summary>
     public RoomController(
         IRoomApiService roomApiService,
         IRoomAccessApiService accessApiService,
         IPostPendencyApiService postPendencyApiService,
-        IPostApiService postApiService)
+        IPostApiService postApiService,
+        IGameApiService gameApiService)
     {
         _roomApiService = roomApiService;
         _accessApiService = accessApiService;
         _postPendencyApiService = postPendencyApiService;
         _postApiService = postApiService;
+        _gameApiService = gameApiService;
     }
+
+    private async Task<Guid> ResolveGameId(string id) =>
+        Guid.TryParse(id, out var guid) ? guid : (await _gameApiService.GetByPublicId(id)).Resource.Id;
 
     /// <summary>
     /// Get list of rooms in game
     /// </summary>
-    /// <param name="id">Game identifier</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <response code="200">Returns the list of rooms in the game</response>
     /// <response code="404">Game not found</response>
     [HttpGet("~/v1/games/{id}/rooms", Name = nameof(GetRooms))]
     [ProducesResponseType(typeof(ListEnvelope<Room>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetRooms(Guid id) => Ok(await _roomApiService.GetAll(id));
-
-    /// <summary>
-    /// Get list of chat rooms in game
-    /// </summary>
-    /// <remarks>
-    /// Returns only rooms with type=Chat. These rooms are used for out-of-character
-    /// communication between players.
-    /// </remarks>
-    /// <param name="id">Game identifier</param>
-    /// <response code="200">List of chat rooms</response>
-    /// <response code="404">Game not found</response>
-    [HttpGet("~/v1/games/{id}/chat-rooms", Name = nameof(GetChatRooms))]
-    [ProducesResponseType(typeof(ListEnvelope<Room>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetChatRooms(Guid id) =>
-        Ok(await _roomApiService.GetByType(id, RoomType.Chat));
+    public async Task<IActionResult> GetRooms(string id)
+    {
+        var gameId = await ResolveGameId(id);
+        return Ok(await _roomApiService.GetAll(gameId));
+    }
 
     /// <summary>
     /// Create new room in game
     /// </summary>
-    /// <param name="id">Game identifier</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <param name="room">Room details</param>
     /// <response code="201">Resource created successfully</response>
     /// <response code="400">Some of room properties were invalid</response>
@@ -78,9 +80,10 @@ public class RoomController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PostRoom(Guid id, [FromBody] CreateRoomRequest room)
+    public async Task<IActionResult> PostRoom(string id, [FromBody] CreateRoomRequest room)
     {
-        var result = await _roomApiService.Create(id, room);
+        var gameId = await ResolveGameId(id);
+        var result = await _roomApiService.Create(gameId, room);
         return CreatedAtRoute(nameof(GetRoom),
             new {id = result.Resource.Id}, result);
     }
@@ -210,11 +213,16 @@ public class RoomController : ControllerBase
     /// <response code="400">Some of claim parameters were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to create post pendencies in this room</response>
-    /// <response code="409">Post pendency already exists</response>
     /// <response code="404">Room not found</response>
+    /// <response code="409">Post pendency already exists</response>
     [HttpPost("{id}/pendencies", Name = nameof(CreatePostPendency))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<PostPendency>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreatePostPendency(Guid id, [FromBody] PostPendency postPendency)
     {
         var result = await _postPendencyApiService.Create(id, postPendency);

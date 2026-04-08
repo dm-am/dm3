@@ -74,10 +74,10 @@ internal class GameBlacklistService : IGameBlacklistService
             throw new HttpException(HttpStatusCode.Conflict, "User already blacklisted");
         }
 
-        if (game.Author.UserId == userId || game.Mentor?.UserId == userId)
+        if (game.Master.UserId == userId || game.Mentor?.UserId == userId)
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "Game owner and game moderator cannot be blacklisted");
+                "Game master and game moderator cannot be blacklisted");
         }
 
         // Cannot blacklist a member (they must be removed first)

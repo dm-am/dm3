@@ -49,9 +49,9 @@ internal class GameStatusChangedNotificationGenerator : INotificationGenerator
                 g.GameId,
                 g.Title,
                 g.Status,
-                g.AuthorId,
+                g.MasterId,
                 AssistantIds = g.Assistants.Select(a => a.UserId).ToList(),
-                MasterUsername = g.Author!.Username,
+                MasterUsername = g.Master!.Username,
                 // Get all active players (users who own active characters)
                 PlayerIds = g.Characters
                     .Where(c => !c.IsRemoved && c.Status == CharacterStatus.Active)
@@ -74,7 +74,7 @@ internal class GameStatusChangedNotificationGenerator : INotificationGenerator
         var readerIds = readerSubscriptions.Select(s => s.SubscriberId);
 
         // Combine all recipients: Master, Assistants, Players (always), Readers (with StatusChanges)
-        var usersInterested = new HashSet<Guid> { data.AuthorId };
+        var usersInterested = new HashSet<Guid> { data.MasterId };
         usersInterested.UnionWith(data.AssistantIds);
         usersInterested.UnionWith(data.PlayerIds);
         usersInterested.UnionWith(readerIds);

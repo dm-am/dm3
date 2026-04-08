@@ -1,4 +1,13 @@
-import type { Id, Served, Username, TopicId, BoardId, GameId, BlogId, PublicationId } from "../common";
+import type {
+  Id,
+  Served,
+  Username,
+  TopicId,
+  BoardId,
+  GameId,
+  BlogId,
+  PublicationId,
+} from "../common";
 
 export enum NotificationType {
   // Blog notifications (41-52)

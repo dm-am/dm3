@@ -4,14 +4,14 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 namespace DM.Infrastructure.Core.Extensions;
 
 /// <summary>
-/// ?????????? ??????????? ???-??????????
+/// Web application builder extensions
 /// </summary>
 public static class WebBuilderExtensions
 {
     private const int DefaultPort = 5000;
 
     /// <summary>
-    /// ????????? grpc-?????? ??-?????????
+    /// Configures the web host with default gRPC settings
     /// </summary>
     public static IWebHostBuilder UseDefaultGrpc<TStartup>(this IWebHostBuilder builder)
         where TStartup : class => builder
@@ -23,7 +23,7 @@ public static class WebBuilderExtensions
         });
 
     /// <summary>
-    /// ????????? ???-?????? ??-?????????
+    /// Configures the web host with default HTTP settings
     /// </summary>
     public static IWebHostBuilder UseDefault<TStartup>(this IWebHostBuilder builder)
         where TStartup : class => builder

@@ -27,7 +27,7 @@
 
 ### Clean Architecture
 
-**Зачем:** Testability — Domain тестируется без БД/HTTP. Flexibility — можно заменить PostgreSQL без изменения бизнес-логики. Чёткие границы ответственности.
+**Зачем:** Testability — Domain тестируется без БД/HTTP. Flexibility — можно заменить PostgreSQL без изменения бизнес-логики. Четкие границы ответственности.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -63,7 +63,7 @@
 | Domain.Core | Только .NET BCL | Ничего из проекта |
 | Domain.* | Domain.Core | Других Domain.*, Infrastructure.* |
 | Infrastructure.* | Domain.Core, Domain.* | Web.API, Workers.* |
-| Web.API, Workers.* | Всё | — |
+| Web.API, Workers.* | Все | — |
 | Web.Client | Только HTTP API | Backend напрямую |
 
 **Важно:** Domain.Game НЕ может зависеть от Domain.Blog. Модули общаются только через Domain Events.

@@ -14,16 +14,10 @@ function formatDate(dateStr: string): string {
 
 <template>
   <div class="mod-section">
-    <h4 class="mod-section_title">
-      Связанные профили ({{ profiles.length }})
-    </h4>
+    <h4 class="mod-section_title">Связанные профили ({{ profiles.length }})</h4>
 
     <div v-if="profiles.length" class="mod-linked-list">
-      <div
-        v-for="p in profiles"
-        :key="p.userId"
-        class="mod-linked-item"
-      >
+      <div v-for="p in profiles" :key="p.userId" class="mod-linked-item">
         <router-link
           :to="{ name: 'profile', params: { username: p.username } }"
           class="mod-linked-username"
@@ -31,7 +25,7 @@ function formatDate(dateStr: string): string {
           {{ p.username }}
         </router-link>
         <secondary-text>
-          {{ p.sharedIpCount }} общих IP · последний
+          {{ p.sharedIpsCount }} общих IP · последний
           {{ formatDate(p.lastSharedLoginUtc) }}
         </secondary-text>
       </div>

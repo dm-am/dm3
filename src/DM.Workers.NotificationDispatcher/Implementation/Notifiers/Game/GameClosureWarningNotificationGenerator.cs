@@ -36,8 +36,8 @@ internal class GameClosureWarningNotificationGenerator : BaseNotificationGenerat
             {
                 g.GameId,
                 g.Title,
-                g.AuthorId,
-                MasterUsername = g.Author!.Username,
+                g.MasterId,
+                MasterUsername = g.Master!.Username,
                 AssistantIds = g.Assistants.Select(a => a.UserId).ToList()
             })
             .FirstOrDefaultAsync();
@@ -48,7 +48,7 @@ internal class GameClosureWarningNotificationGenerator : BaseNotificationGenerat
         }
 
         // Notify Master and Assistants
-        var usersInterested = new HashSet<Guid> { data.AuthorId };
+        var usersInterested = new HashSet<Guid> { data.MasterId };
         usersInterested.UnionWith(data.AssistantIds);
 
         yield return new CreateNotification

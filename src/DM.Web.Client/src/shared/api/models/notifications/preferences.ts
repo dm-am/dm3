@@ -7,7 +7,10 @@ export enum NotificationCategory {
   Moderation = 6,
 }
 
-export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, string> = {
+export const NOTIFICATION_CATEGORY_LABELS: Record<
+  NotificationCategory,
+  string
+> = {
   [NotificationCategory.Messages]: "Личные сообщения",
   [NotificationCategory.Forum]: "Форум",
   [NotificationCategory.Games]: "Игры",
@@ -29,7 +32,7 @@ export interface NotificationSettings {
 
 export interface BotLinkResult {
   code: string;
-  expiresAt: string;
+  expiresUtc: string;
 }
 
 export interface UpdateBotConnection {

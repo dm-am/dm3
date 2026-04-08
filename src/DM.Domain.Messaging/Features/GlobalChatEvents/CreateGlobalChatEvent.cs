@@ -13,14 +13,14 @@ public class CreateGlobalChatEvent
     public string Title { get; set; } = null!;
 
     /// <summary>
-    /// Event description (BBCode)
+    /// Event description (BBCode, optional)
     /// </summary>
-    public string Description { get; set; } = null!;
+    public string? Description { get; set; }
 
     /// <summary>
     /// Scheduled start time (UTC)
     /// </summary>
-    public DateTimeOffset StartsAt { get; set; }
+    public DateTimeOffset StartsUtc { get; set; }
 
     /// <summary>
     /// Planned duration. Null means no time limit.

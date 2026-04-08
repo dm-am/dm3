@@ -4,14 +4,14 @@ import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
 import { useUserStore } from "@/entities/user";
-import { extractNumberParam } from "@/app/providers/router";
+import { useUiStore } from "@/shared/stores/ui";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useScrollToElement } from "@/shared/lib/composables/useScrollToElement";
-import ThePaging from "@/shared/ui/Paging/ThePaging.vue";
+import Paging from "@/shared/ui/Paging/Paging.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { TheComment } from "@/features/comment";
+import { Comment } from "@/features/comment";
 import { BBCodeEditor } from "@/features/editor";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 import { gameApi } from "@/entities/game";
 import { AccessPolicy, UserRole } from "@/shared/api/models/community";
 import { CommentariesAccessMode, GameRole } from "@/entities/game";
@@ -19,16 +19,22 @@ import { CommentariesAccessMode, GameRole } from "@/entities/game";
 const route = useRoute();
 const gameStore = useGameDetailsStore();
 const { user } = storeToRefs(useUserStore());
-const {
-  game,
-  comments,
-  commentsPaging,
-  commentsLoading,
-  commentsError,
-} = storeToRefs(gameStore);
+const { isCompactMode } = storeToRefs(useUiStore());
+const { game, comments, commentsPaging, commentsLoading, commentsError } =
+  storeToRefs(gameStore);
 
 const gameId = computed(() => route.params.id as string);
-const currentPage = computed(() => extractNumberParam(route.params.n));
+function getPage(): number {
+  const page = route.query.page;
+  return page ? parseInt(page as string) || 1 : 1;
+}
+
+// Calculate comment number based on paging
+function getCommentNumber(index: number): number {
+  if (!commentsPaging.value) return index + 1;
+  const offset = (commentsPaging.value.current - 1) * commentsPaging.value.size;
+  return offset + index + 1;
+}
 
 // Comment creation state
 const newComment = ref("");
@@ -47,39 +53,51 @@ const isModerator = computed(() => {
   if (!user.value) return false;
   return (
     user.value.roles?.some((r: UserRole) =>
-      [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(r),
+      [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(
+        r,
+      ),
     ) ?? false
   );
 });
 
 const isParticipant = computed(() => {
-  if (!game.value?.roles) return false;
+  if (!game.value?.participation) return false;
   return (
-    game.value.roles.includes(GameRole.Player) ||
-    game.value.roles.includes(GameRole.Mentor) ||
-    game.value.roles.includes(GameRole.Master) ||
-    game.value.roles.includes(GameRole.Reader)
+    game.value.participation.includes(GameRole.Player) ||
+    game.value.participation.includes(GameRole.Mentor) ||
+    game.value.participation.includes(GameRole.Master) ||
+    game.value.participation.includes(GameRole.Reader)
   );
 });
 
-const commentsAccessMode = computed(() => game.value?.privacySettings?.commentariesAccess);
+const commentsAccessMode = computed(
+  () => game.value?.privacySettings?.commentariesAccess,
+);
 
 const canComment = computed(() => {
   if (!user.value || isBanned.value) return false;
-  if (commentsAccessMode.value === CommentariesAccessMode.Readonly) return false;
-  if (commentsAccessMode.value === CommentariesAccessMode.Private && !isParticipant.value) return false;
+  if (commentsAccessMode.value === CommentariesAccessMode.Readonly)
+    return false;
+  if (
+    commentsAccessMode.value === CommentariesAccessMode.Private &&
+    !isParticipant.value
+  )
+    return false;
   return true;
 });
 
 const canViewComments = computed(() => {
   if (commentsAccessMode.value === CommentariesAccessMode.Public) return true;
   if (commentsAccessMode.value === CommentariesAccessMode.Readonly) return true;
-  if (commentsAccessMode.value === CommentariesAccessMode.Private) return isParticipant.value;
+  if (commentsAccessMode.value === CommentariesAccessMode.Private)
+    return isParticipant.value;
   return true;
 });
 
 // Scroll to target element when comments are loaded
-const commentsLoaded = computed(() => comments.value.length > 0 && !commentsLoading.value);
+const commentsLoaded = computed(
+  () => comments.value.length > 0 && !commentsLoading.value,
+);
 useScrollToElement(commentsLoaded);
 
 // Mark comments as read when loaded (for authenticated users)
@@ -108,22 +126,24 @@ async function handleSend() {
   try {
     await gameApi.createGameComment(game.value.id, { text });
     // Reload comments
-    await gameStore.loadComments(game.value.id, currentPage.value);
+    await gameStore.loadComments(game.value.id, getPage());
   } finally {
     sending.value = false;
   }
 }
 
 useFetchData(
-  () => gameStore.loadComments(gameId.value, currentPage.value),
+  () => gameStore.loadComments(gameId.value, getPage()),
   [
     {
       param: (p) => p.id,
       callback: (id) => gameStore.loadComments(id as string, 1),
     },
+  ],
+  [
     {
-      param: (p) => p.n,
-      callback: (n) => gameStore.loadComments(gameId.value, extractNumberParam(n)),
+      query: (q) => q.page,
+      callback: () => gameStore.loadComments(gameId.value, getPage()),
     },
   ],
 );
@@ -133,7 +153,9 @@ useFetchData(
   <div class="game-comments">
     <!-- Access denied -->
     <div v-if="!canViewComments" class="comments-private">
-      <secondary-text>Комментарии доступны только участникам игры</secondary-text>
+      <secondary-text
+        >Комментарии доступны только участникам игры</secondary-text
+      >
     </div>
 
     <!-- Error -->
@@ -147,20 +169,26 @@ useFetchData(
         <secondary-text>Пока нет комментариев</secondary-text>
       </div>
 
-      <div v-else class="comments-list">
-        <the-comment
-          v-for="comment in comments"
-          :key="comment.id"
-          :comment="comment"
-          :data-id="comment.id"
-        />
+      <div v-else class="comments-section">
+        <div class="comments-list">
+          <Comment
+            v-for="(comment, index) in comments"
+            :key="comment.id"
+            :comment="comment"
+            :compact="isCompactMode"
+            :number="getCommentNumber(index)"
+            :data-id="comment.id"
+          />
+        </div>
       </div>
 
       <!-- Paging -->
-      <the-paging
-        v-if="commentsPaging && commentsPaging.pages > 1"
+      <Paging
+        v-if="commentsPaging"
         :paging="commentsPaging"
-        :to="{ name: 'game-comments', params: { id: game?.id } }"
+        :to="{ name: 'game-comments', params: { id: game?.publicId || game?.id } }"
+        :use-query="true"
+        query-key="number"
       />
 
       <!-- Comment input -->
@@ -180,22 +208,26 @@ useFetchData(
               :is-moderator="isModerator"
               @submit="handleSend"
             />
-            <the-button
+            <Button
               :loading="sending"
               :disabled="!newComment.trim()"
               @click="handleSend"
             >
               Отправить
-            </the-button>
+            </Button>
           </template>
           <secondary-text v-else-if="isBanned" class="comment-hint">
             Вы не можете отправлять комментарии из-за ограничений аккаунта
           </secondary-text>
-          <secondary-text v-else-if="commentsAccessMode === 'Readonly'" class="comment-hint">
+          <secondary-text
+            v-else-if="commentsAccessMode === 'Readonly'"
+            class="comment-hint"
+          >
             Комментарии в этой игре доступны только для чтения
           </secondary-text>
           <secondary-text v-else-if="!user" class="comment-hint">
-            <router-link to="/login">Войдите</router-link>, чтобы оставить комментарий
+            <router-link to="/?action=login">Войдите</router-link>, чтобы оставить
+            комментарий
           </secondary-text>
         </div>
       </div>
@@ -219,13 +251,17 @@ useFetchData(
 .comments-error
   color: $accent-red
 
+.comments-section
+  display: flex
+  flex-direction: column
+  gap: $small
+
 .comments-list
   display: flex
   flex-direction: column
-  gap: $medium
 
 .comment-input-wrapper
-  margin-top: $large
+  margin-top: $medium
 
 .comment-input-container
   display: flex

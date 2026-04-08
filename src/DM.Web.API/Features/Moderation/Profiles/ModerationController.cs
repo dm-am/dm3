@@ -163,4 +163,41 @@ public class ModerationController : ControllerBase
         var result = await _moderationApiService.SeedTestUsers();
         return Ok(result);
     }
+
+    /// <summary>
+    /// Seed comprehensive test data (DEVELOPMENT ONLY)
+    /// </summary>
+    /// <remarks>
+    /// Creates comprehensive test data including:
+    /// - User profiles with filled data
+    /// - Forum topics and comments in all boards
+    /// - Games with all statuses (Draft, Active, Closed)
+    /// - Characters with all statuses
+    /// - Rooms, posts, and game comments
+    /// - Blogs with rubrics and publications
+    /// - Global chat messages
+    /// - Reviews (website, user, game, post)
+    /// - Polls (active)
+    /// - Subscriptions and ratings
+    ///
+    /// **This endpoint is only available in development environment.**
+    ///
+    /// Must run SeedTestUsers first to create base users.
+    /// </remarks>
+    /// <response code="200">Comprehensive seed completed with results</response>
+    /// <response code="404">Endpoint not available in production</response>
+    [HttpPost("seed/comprehensive", Name = nameof(SeedComprehensiveData))]
+    [ProducesResponseType(typeof(ComprehensiveSeedResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SeedComprehensiveData()
+    {
+        // Security: This endpoint is only available in development
+        if (!_environment.IsDevelopment())
+        {
+            return NotFound();
+        }
+
+        var result = await _moderationApiService.SeedComprehensiveData();
+        return Ok(result);
+    }
 }

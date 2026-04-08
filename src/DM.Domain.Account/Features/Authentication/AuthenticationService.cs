@@ -191,7 +191,7 @@ internal class AuthenticationService : IAuthenticationService
             return Identity.Fail(AuthenticationError.SessionExpired);
         }
 
-        if (session.ExpirationDate < _dateTimeProvider.Now)
+        if (session.ExpirationUtc < _dateTimeProvider.Now)
         {
             await _repository.RemoveSession(userId, sessionId);
             _logger.LogDebug("Token authentication failed: session expired. UserId={UserId}, SessionId={SessionId}", userId, sessionId);
@@ -200,9 +200,9 @@ internal class AuthenticationService : IAuthenticationService
 
         // Sliding window: refresh session when approaching expiration
         var sessionRefreshDelta = TimeSpan.FromMinutes(_config.SessionRefreshMinutes);
-        if (session.ExpirationDate < _dateTimeProvider.Now + sessionRefreshDelta)
+        if (session.ExpirationUtc < _dateTimeProvider.Now + sessionRefreshDelta)
         {
-            await _repository.RefreshSession(userId, sessionId, session.ExpirationDate + sessionRefreshDelta);
+            await _repository.RefreshSession(userId, sessionId, session.ExpirationUtc + sessionRefreshDelta);
         }
 
         var activityTrackingInterval = TimeSpan.FromMinutes(_config.ActivityTrackingMinutes);
@@ -389,7 +389,7 @@ internal class AuthenticationService : IAuthenticationService
                 return Identity.Fail(AuthenticationError.Banned);
             }
 
-            if (session == null || session.ExpirationDate < _dateTimeProvider.Now)
+            if (session == null || session.ExpirationUtc < _dateTimeProvider.Now)
             {
                 _logger.LogWarning("Transfer token authentication failed: session expired. UserId={UserId}", userId);
                 return Identity.Fail(AuthenticationError.SessionExpired);

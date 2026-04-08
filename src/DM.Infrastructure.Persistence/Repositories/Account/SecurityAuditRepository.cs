@@ -41,7 +41,7 @@ internal class SecurityAuditRepository : ISecurityAuditService
             Id = _guidFactory.Create(),
             UserId = userId,
             EventType = (int)eventType,
-            Timestamp = DateTime.UtcNow,
+            TimestampUtc = DateTime.UtcNow,
             IpAddress = ipAddress,
             UserAgent = userAgent,
             DeviceInfo = Parse(userAgent),
@@ -59,7 +59,7 @@ internal class SecurityAuditRepository : ISecurityAuditService
 
         var entries = await collection
             .Find(e => e.UserId == userId)
-            .SortByDescending(e => e.Timestamp)
+            .SortByDescending(e => e.TimestampUtc)
             .Limit(limit)
             .ToListAsync();
 
@@ -84,7 +84,7 @@ internal class SecurityAuditRepository : ISecurityAuditService
 
         var entries = await collection
             .Find(filter)
-            .SortByDescending(e => e.Timestamp)
+            .SortByDescending(e => e.TimestampUtc)
             .Limit(limit)
             .ToListAsync();
 
@@ -109,7 +109,7 @@ internal class SecurityAuditRepository : ISecurityAuditService
 
         var entries = await collection
             .Find(filter)
-            .SortByDescending(e => e.Timestamp)
+            .SortByDescending(e => e.TimestampUtc)
             .Limit(limit)
             .ToListAsync();
 
@@ -134,7 +134,7 @@ internal class SecurityAuditRepository : ISecurityAuditService
 
         var entries = await collection
             .Find(filter)
-            .SortByDescending(e => e.Timestamp)
+            .SortByDescending(e => e.TimestampUtc)
             .Limit(limit)
             .ToListAsync();
 
@@ -146,7 +146,7 @@ internal class SecurityAuditRepository : ISecurityAuditService
         Id = entry.Id,
         UserId = entry.UserId,
         EventType = (SecurityEventType)entry.EventType,
-        Timestamp = new DateTimeOffset(entry.Timestamp, TimeSpan.Zero),
+        TimestampUtc = new DateTimeOffset(entry.TimestampUtc, TimeSpan.Zero),
         IpAddress = entry.IpAddress,
         DeviceInfo = entry.DeviceInfo,
         Details = entry.Details

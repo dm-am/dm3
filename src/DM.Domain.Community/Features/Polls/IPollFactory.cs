@@ -9,7 +9,7 @@ internal interface IPollFactory
     /// <summary>
     /// Create new poll data
     /// </summary>
-    /// <param name="createPoll"></param>
-    /// <returns></returns>
+    /// <param name="createPoll">Poll creation data</param>
+    /// <returns>Poll entity DTO</returns>
     CreatePollEntity Create(CreatePoll createPoll);
 }

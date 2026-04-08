@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace DM.Web.API.Features.General.Search;
 
 /// <summary>
-/// Full-text search across platform content
+/// Full-text search across website content
 /// </summary>
 /// <remarks>
 /// Searches across users, games, and posts using Elasticsearch-powered backend.

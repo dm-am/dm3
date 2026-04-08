@@ -19,6 +19,17 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   const prevCursor = ref<string | null>(null);
   const nextCursor = ref<string | null>(null);
 
+  // Internal Map for O(1) message lookup by ID
+  const messagesById = new Map<string, GlobalChatMessage>();
+
+  // Sync Map when messages array changes
+  function syncMessagesMap() {
+    messagesById.clear();
+    for (const msg of messages.value) {
+      messagesById.set(msg.id, msg);
+    }
+  }
+
   // Initial load - fetches the latest messages
   async function fetchMessages() {
     loading.value = true;
@@ -29,6 +40,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
       nextCursor.value = data?.paging?.nextCursor ?? null;
       hasMoreBefore.value = data?.paging?.hasPrev ?? false;
       hasMoreAfter.value = data?.paging?.hasNext ?? false;
+      syncMessagesMap();
     } finally {
       loading.value = false;
     }
@@ -36,19 +48,19 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
 
   // Load older messages (scroll up)
   async function fetchMoreBefore() {
-    if (
-      loadingBefore.value ||
-      !hasMoreBefore.value ||
-      !prevCursor.value
-    )
+    if (loadingBefore.value || !hasMoreBefore.value || !prevCursor.value)
       return;
     loadingBefore.value = true;
     try {
-      const { data } = await globalChatApi.getMessagesBefore(prevCursor.value, 50);
+      const { data } = await globalChatApi.getMessagesBefore(
+        prevCursor.value,
+        50,
+      );
       if (data && data.resources.length > 0) {
         messages.value = [...data.resources, ...messages.value];
         prevCursor.value = data.paging?.prevCursor ?? null;
         hasMoreBefore.value = data.paging?.hasPrev ?? false;
+        syncMessagesMap();
       } else {
         hasMoreBefore.value = false;
       }
@@ -59,19 +71,18 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
 
   // Load newer messages (scroll down)
   async function fetchMoreAfter() {
-    if (
-      loadingAfter.value ||
-      !hasMoreAfter.value ||
-      !nextCursor.value
-    )
-      return;
+    if (loadingAfter.value || !hasMoreAfter.value || !nextCursor.value) return;
     loadingAfter.value = true;
     try {
-      const { data } = await globalChatApi.getMessagesAfter(nextCursor.value, 50);
+      const { data } = await globalChatApi.getMessagesAfter(
+        nextCursor.value,
+        50,
+      );
       if (data && data.resources.length > 0) {
         messages.value = [...messages.value, ...data.resources];
         nextCursor.value = data.paging?.nextCursor ?? null;
         hasMoreAfter.value = data.paging?.hasNext ?? false;
+        syncMessagesMap();
       } else {
         hasMoreAfter.value = false;
       }
@@ -92,6 +103,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
         hasMoreBefore.value = data.paging?.hasPrev ?? false;
         hasMoreAfter.value = data.paging?.hasNext ?? false;
         highlightedMessageId.value = messageId;
+        syncMessagesMap();
       }
     } finally {
       loading.value = false;
@@ -104,7 +116,10 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     try {
       // Convert date to ISO 8601 UTC timestamp (start of day)
       const timestampUtc = new Date(date + "T00:00:00Z").toISOString();
-      const { data } = await globalChatApi.getMessagesNearDate(timestampUtc, 50);
+      const { data } = await globalChatApi.getMessagesNearDate(
+        timestampUtc,
+        50,
+      );
       if (data && data.resources.length > 0) {
         messages.value = data.resources;
         prevCursor.value = data.paging?.prevCursor ?? null;
@@ -113,6 +128,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
         hasMoreAfter.value = data.paging?.hasNext ?? false;
         // Highlight the first message in the result
         highlightedMessageId.value = data.resources[0]?.id ?? null;
+        syncMessagesMap();
       } else {
         // No messages found near the date, load latest
         await fetchMessages();
@@ -131,7 +147,9 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     highlightedMessageId.value = null;
   }
 
-  async function fetchMessageById(id: string): Promise<GlobalChatMessage | null> {
+  async function fetchMessageById(
+    id: string,
+  ): Promise<GlobalChatMessage | null> {
     try {
       const { data } = await globalChatApi.getMessage(id);
       return data || null;
@@ -141,7 +159,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   }
 
   function findMessageInLoaded(id: string): GlobalChatMessage | null {
-    return messages.value.find((m) => m.id === id) || null;
+    return messagesById.get(id) ?? null;
   }
 
   function clearHighlight() {
@@ -159,6 +177,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
           await jumpToLatest();
         }
         messages.value.push(data);
+        messagesById.set(data.id, data);
       }
     } finally {
       sending.value = false;
@@ -166,11 +185,10 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   }
 
   function addMessage(message: GlobalChatMessage) {
-    const exists = messages.value.some((m) => m.id === message.id);
-    if (!exists && !hasMoreAfter.value) {
-      // Only add if we're viewing the latest messages
-      messages.value.push(message);
-    }
+    if (messagesById.has(message.id) || hasMoreAfter.value) return;
+    // Only add if we're viewing the latest messages
+    messages.value.push(message);
+    messagesById.set(message.id, message);
   }
 
   async function updateMessage(id: string, text: string) {
@@ -179,6 +197,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
       const index = messages.value.findIndex((m) => m.id === id);
       if (index !== -1) {
         messages.value[index] = data;
+        messagesById.set(id, data);
       }
     }
   }
@@ -187,12 +206,14 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     await globalChatApi.deleteMessage(id);
     const index = messages.value.findIndex((m) => m.id === id);
     if (index !== -1) {
-      messages.value[index] = {
+      const updated = {
         ...messages.value[index],
         isRemoved: true,
         deletedBy: currentUser.value ?? null,
-        deletedAtUtc: new Date().toISOString(),
+        deletedUtc: new Date().toISOString(),
       };
+      messages.value[index] = updated;
+      messagesById.set(id, updated);
     }
   }
 
@@ -202,6 +223,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
       const index = messages.value.findIndex((m) => m.id === id);
       if (index !== -1) {
         messages.value[index] = data;
+        messagesById.set(id, data);
       }
     }
   }
@@ -213,10 +235,14 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
       const index = messages.value.findIndex((m) => m.id === id);
       if (index !== -1) {
         const msg = messages.value[index];
-        messages.value[index] = {
+        const updated = {
           ...msg,
-          likes: msg.likes.filter((u) => u.username !== currentUser.value?.username),
+          likes: msg.likes.filter(
+            (u) => u.username !== currentUser.value?.username,
+          ),
         };
+        messages.value[index] = updated;
+        messagesById.set(id, updated);
       }
     }
   }

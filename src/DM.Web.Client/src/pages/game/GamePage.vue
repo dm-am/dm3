@@ -8,7 +8,7 @@ import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { UserLink } from "@/entities/user";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 import { GameRole, GameStatus } from "@/entities/game";
 
 const route = useRoute();
@@ -37,16 +37,16 @@ const statusClass = computed(() => {
 });
 
 const isSubscribed = computed(() => {
-  if (!game.value?.roles) return false;
-  return game.value.roles.includes(GameRole.Reader);
+  if (!game.value?.participation) return false;
+  return game.value.participation.includes(GameRole.Reader);
 });
 
 const isPlayer = computed(() => {
-  if (!game.value?.roles) return false;
+  if (!game.value?.participation) return false;
   return (
-    game.value.roles.includes(GameRole.Player) ||
-    game.value.roles.includes(GameRole.Mentor) ||
-    game.value.roles.includes(GameRole.Master)
+    game.value.participation.includes(GameRole.Player) ||
+    game.value.participation.includes(GameRole.Mentor) ||
+    game.value.participation.includes(GameRole.Master)
   );
 });
 
@@ -60,22 +60,19 @@ async function handleSubscribe() {
   }
 }
 
-useFetchData(
-  async () => {
-    await gameStore.loadGame(gameId.value);
-    // Also preload rooms for navigation
-    await gameStore.loadRooms(gameId.value);
-  },
-  [
-    {
-      param: (p) => p.id,
-      callback: async (id) => {
-        await gameStore.loadGame(id as string);
-        await gameStore.loadRooms(id as string);
-      },
+useFetchData(async () => {
+  await gameStore.loadGame(gameId.value);
+  // Also preload rooms for navigation
+  await gameStore.loadRooms(gameId.value);
+}, [
+  {
+    param: (p) => p.id,
+    callback: async (id) => {
+      await gameStore.loadGame(id as string);
+      await gameStore.loadRooms(id as string);
     },
-  ],
-);
+  },
+]);
 
 onUnmounted(() => {
   gameStore.reset();
@@ -98,32 +95,50 @@ onUnmounted(() => {
         <span class="game-master">
           Мастер: <user-link :user="game.master" />
         </span>
-        <span v-if="game.assistants?.length" class="game-assistant">
-          {{ game.assistants.length === 1 ? 'Ассистент' : 'Ассистенты' }}:
-          <template v-for="(assistant, index) in game.assistants" :key="assistant.login">
-            <user-link :user="assistant" /><span v-if="index < game.assistants.length - 1">, </span>
+        <span v-if="game.fullAssistants?.length" class="game-assistant">
+          {{ game.fullAssistants.length === 1 ? "Ассистент" : "Ассистенты" }}:
+          <template
+            v-for="(assistant, index) in game.fullAssistants"
+            :key="assistant.id"
+          >
+            <user-link :user="assistant" /><span
+              v-if="index < game.fullAssistants.length - 1"
+              >,
+            </span>
           </template>
         </span>
       </secondary-text>
     </div>
 
     <nav class="game-tabs">
-      <router-link :to="{ name: 'game', params: { id: game.id } }" class="tabs-link">
+      <router-link
+        :to="{ name: 'game', params: { id: game.publicId || game.id } }"
+        class="tabs-link"
+      >
         Информация
       </router-link>
-      <router-link :to="{ name: 'game-rooms', params: { id: game.id } }" class="tabs-link">
+      <router-link
+        :to="{ name: 'game-rooms', params: { id: game.publicId || game.id } }"
+        class="tabs-link"
+      >
         Комнаты
         <span v-if="game.unreadPostsCount" class="unread-badge">
           {{ game.unreadPostsCount }}
         </span>
       </router-link>
-      <router-link :to="{ name: 'game-characters', params: { id: game.id } }" class="tabs-link">
+      <router-link
+        :to="{ name: 'game-characters', params: { id: game.publicId || game.id } }"
+        class="tabs-link"
+      >
         Персонажи
         <span v-if="game.unreadCharactersCount" class="unread-badge">
           {{ game.unreadCharactersCount }}
         </span>
       </router-link>
-      <router-link :to="{ name: 'game-comments', params: { id: game.id } }" class="tabs-link">
+      <router-link
+        :to="{ name: 'game-comments', params: { id: game.publicId || game.id } }"
+        class="tabs-link"
+      >
         Комментарии
         <span v-if="game.unreadCommentsCount" class="unread-badge">
           {{ game.unreadCommentsCount }}
@@ -132,9 +147,9 @@ onUnmounted(() => {
     </nav>
 
     <div class="game-actions" v-if="canSubscribe">
-      <the-button @click="handleSubscribe">
+      <Button @click="handleSubscribe">
         {{ isSubscribed ? "Отписаться" : "Подписаться" }}
-      </the-button>
+      </Button>
     </div>
 
     <router-view />

@@ -11,7 +11,7 @@ internal class CreatePostValidator : AbstractValidator<CreatePost>
     {
         RuleFor(p => p.RoomId)
             .NotEmpty().WithMessage(ValidationError.Empty);
-        RuleFor(p => p.Text)
+        RuleFor(p => p.GameText)
             .NotEmpty().WithMessage(ValidationError.Empty);
     }
 }

@@ -7,9 +7,6 @@ using Chat = DM.Web.API.Features.Messaging.Chats.Chat;
 using CreateChat = DM.Web.API.Features.Messaging.Chats.CreateChat;
 using UpdateChat = DM.Web.API.Features.Messaging.Chats.UpdateChat;
 using ChatAvailability = DM.Web.API.Features.Messaging.Chats.ChatAvailability;
-using Conversation = DM.Web.API.Features.Messaging.Conversations.Conversation;
-using CreateConversation = DM.Web.API.Features.Messaging.Conversations.CreateConversation;
-using UpdateConversation = DM.Web.API.Features.Messaging.Conversations.UpdateConversation;
 using Message = DM.Web.API.Features.Messaging.Messages.Message;
 
 namespace DM.Web.API.Features.Messaging;
@@ -20,75 +17,59 @@ namespace DM.Web.API.Features.Messaging;
 public interface IMessagingApiService
 {
     /// <summary>
-    /// Get list of user conversations
+    /// Get list of user chats
     /// </summary>
-    /// <param name="query">Paging query</param>
-    /// <returns></returns>
-    Task<ListEnvelope<Conversation>> GetConversations(PagingQuery query);
-
-    /// <summary>
-    /// Get list of user chats (alias for GetConversations)
-    /// </summary>
-    Task<(IEnumerable<Chat> Chats, PagingInfo Paging)> GetChats(PagingQuery query);
+    Task<(IEnumerable<Chat> Chats, PagingInfo Paging)> GetChatsAsync(PagingQuery query);
 
     /// <summary>
     /// Get or create direct chat with user by username
     /// </summary>
-    Task<Chat> GetDirectChat(string username);
+    Task<Chat> GetDirectChatAsync(string username);
 
     /// <summary>
     /// Get single chat by ID
     /// </summary>
-    Task<Chat> GetChat(Guid id);
+    Task<Chat> GetChatAsync(Guid id);
+
+    /// <summary>
+    /// Get single chat by public ID (5 letters)
+    /// </summary>
+    Task<Chat> GetChatByPublicIdAsync(string publicId);
 
     /// <summary>
     /// Create a new group chat
     /// </summary>
-    Task<Chat> CreateChat(CreateChat createChat);
+    Task<Chat> CreateChatAsync(CreateChat createChat);
 
     /// <summary>
     /// Update an existing chat
     /// </summary>
-    Task<Chat> UpdateChat(Guid id, UpdateChat updateChat);
+    Task<Chat> UpdateChatAsync(Guid id, UpdateChat updateChat);
 
     /// <summary>
     /// Check if chat can be started with user
     /// </summary>
-    Task<ChatAvailability> CanStartChat(string username);
+    Task<ChatAvailability> CanStartChatAsync(string username);
 
     /// <summary>
-    /// Get single conversation
+    /// Get list of chat messages with offset-based paging (legacy)
     /// </summary>
-    /// <param name="id">Conversation identifier</param>
-    /// <returns></returns>
-    Task<Envelope<Conversation>> GetConversation(Guid id);
-
-    /// <summary>
-    /// Get or create direct conversation with user by login
-    /// </summary>
-    /// <param name="login">User login</param>
-    /// <returns></returns>
-    Task<Envelope<Conversation>> GetDirectConversation(string login);
-
-    /// <summary>
-    /// Get list of conversation messages with offset-based paging (legacy)
-    /// </summary>
-    /// <param name="conversationId">Conversation identifier</param>
+    /// <param name="chatId">Chat identifier</param>
     /// <param name="query">Paging query</param>
-    /// <returns></returns>
-    Task<ListEnvelope<Message>> GetMessages(Guid conversationId, PagingQuery query);
+    /// <returns>List of messages with paging metadata</returns>
+    Task<ListEnvelope<Message>> GetMessagesAsync(Guid chatId, PagingQuery query);
 
     /// <summary>
-    /// Get list of conversation messages with cursor-based pagination
+    /// Get list of chat messages with cursor-based pagination
     /// </summary>
-    /// <param name="conversationId">Conversation identifier</param>
+    /// <param name="chatId">Chat identifier</param>
     /// <param name="cursor">Opaque cursor for pagination</param>
     /// <param name="aroundMessageId">Get messages around this message ID</param>
     /// <param name="nearTimestampUtc">Get messages near this UTC timestamp</param>
     /// <param name="limit">Maximum number of messages to return</param>
-    /// <returns></returns>
-    Task<CursorEnvelope<Message>> GetMessagesWithCursor(
-        Guid conversationId,
+    /// <returns>List of messages with cursor-based pagination metadata</returns>
+    Task<CursorEnvelope<Message>> GetMessagesWithCursorAsync(
+        Guid chatId,
         string? cursor = null,
         Guid? aroundMessageId = null,
         DateTimeOffset? nearTimestampUtc = null,
@@ -97,66 +78,74 @@ public interface IMessagingApiService
     /// <summary>
     /// Create new message
     /// </summary>
-    /// <param name="conversationId">Conversation identifier</param>
+    /// <param name="chatId">Chat identifier</param>
     /// <param name="message">Message</param>
-    /// <returns></returns>
-    Task<Envelope<Message>> CreateMessage(Guid conversationId, Message message);
+    /// <returns>Created message wrapped in envelope</returns>
+    Task<Envelope<Message>> CreateMessageAsync(Guid chatId, Message message);
 
     /// <summary>
     /// Get single message
     /// </summary>
     /// <param name="messageId">Message identifier</param>
-    /// <returns></returns>
-    Task<Envelope<Message>> GetMessage(Guid messageId);
+    /// <returns>Message details wrapped in envelope</returns>
+    Task<Envelope<Message>> GetMessageAsync(Guid messageId);
 
     /// <summary>
     /// Update existing message
     /// </summary>
     /// <param name="messageId">Message identifier</param>
     /// <param name="message">Message data</param>
-    /// <returns></returns>
-    Task<Envelope<Message>> UpdateMessage(Guid messageId, Message message);
+    /// <returns>Updated message wrapped in envelope</returns>
+    Task<Envelope<Message>> UpdateMessageAsync(Guid messageId, Message message);
 
     /// <summary>
     /// Delete single message
     /// </summary>
     /// <param name="messageId">Message identifier</param>
-    /// <returns></returns>
-    Task DeleteMessage(Guid messageId);
+    Task DeleteMessageAsync(Guid messageId);
 
     /// <summary>
-    /// Mark all conversation messages as read
+    /// Mark all chat messages as read
     /// </summary>
-    /// <param name="conversationId">Conversation identifier</param>
-    /// <returns></returns>
-    Task MarkAsRead(Guid conversationId);
+    /// <param name="chatId">Chat identifier</param>
+    Task MarkAsReadAsync(Guid chatId);
 
     /// <summary>
     /// Like a message
     /// </summary>
     /// <param name="messageId">Message identifier</param>
-    /// <returns></returns>
-    Task<Envelope<Message>> LikeMessage(Guid messageId);
+    /// <returns>Updated message with like information wrapped in envelope</returns>
+    Task<Envelope<Message>> LikeMessageAsync(Guid messageId);
 
     /// <summary>
     /// Unlike a message
     /// </summary>
     /// <param name="messageId">Message identifier</param>
-    /// <returns></returns>
-    Task UnlikeMessage(Guid messageId);
+    Task UnlikeMessageAsync(Guid messageId);
+
+    // ═══ GLOBAL CHAT ═══
 
     /// <summary>
-    /// Create a new group conversation
+    /// Get global chat messages with cursor-based pagination
     /// </summary>
-    /// <param name="createConversation">Conversation data</param>
-    /// <returns></returns>
-    Task<Envelope<Conversation>> CreateConversation(CreateConversation createConversation);
+    Task<CursorEnvelope<Message>> GetGlobalChatMessagesAsync(
+        string? cursor = null,
+        Guid? aroundMessageId = null,
+        DateTimeOffset? nearTimestampUtc = null,
+        int limit = 50);
 
     /// <summary>
-    /// Update an existing conversation
+    /// Create a message in global chat
     /// </summary>
-    /// <param name="conversationId">Conversation identifier</param>
-    /// <param name="updateConversation">Update data</param>
-    /// <returns></returns>
-    Task<Envelope<Conversation>> UpdateConversation(Guid conversationId, UpdateConversation updateConversation);
+    Task<Envelope<Message>> CreateGlobalChatMessageAsync(Message message);
+
+    /// <summary>
+    /// Mark global chat messages as read
+    /// </summary>
+    Task MarkGlobalChatAsReadAsync();
+
+    /// <summary>
+    /// Get total unread message count in global chat
+    /// </summary>
+    Task<int> GetGlobalChatUnreadCountAsync();
 }

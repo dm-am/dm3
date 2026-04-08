@@ -129,7 +129,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         {
             // Generate approval token (user will use this to complete the change)
             request.ApprovalToken = Guid.NewGuid();
-            request.ApprovalTokenExpiresAt = now.AddHours(48); // Token valid for 48 hours
+            request.ApprovalTokenExpiresUtc = now.AddHours(48); // Token valid for 48 hours
         }
 
         request.Status = resolve.Status;
@@ -170,7 +170,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
 
         // Check if token is expired
         var now = _dateTimeProvider.Now;
-        if (entity.ApprovalTokenExpiresAt < now)
+        if (entity.ApprovalTokenExpiresUtc < now)
             return null;
 
         return MapToEntry(entity);
@@ -186,7 +186,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         var now = _dateTimeProvider.Now;
 
         // Check if token is expired
-        if (request.ApprovalTokenExpiresAt < now)
+        if (request.ApprovalTokenExpiresUtc < now)
             throw new HttpException(HttpStatusCode.NotFound, "Approval token has expired");
 
         // Check if request is in approved state (not yet completed)
@@ -299,7 +299,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         Reason = request.Reason,
         Status = request.Status,
         CreatedUtc = request.CreatedUtc,
-        ApprovalTokenExpiresAt = request.ApprovalTokenExpiresAt,
+        ApprovalTokenExpiresUtc = request.ApprovalTokenExpiresUtc,
         ResolvedUtc = request.ResolvedUtc,
         ResolvedByUsername = request.ResolverUsername,
         ResolverComment = request.ResolverComment

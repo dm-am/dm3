@@ -12,7 +12,7 @@ public static class BlogRoleExtensions
     /// </summary>
     public static string ToApiString(this BlogRole role) => role switch
     {
-        BlogRole.Owner => "owner",
+        BlogRole.Author => "author",
         BlogRole.Mentor => "mentor",
         BlogRole.Assistant => "assistant",
         BlogRole.Reader => "reader",

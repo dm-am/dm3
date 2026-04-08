@@ -18,5 +18,10 @@ public enum ChatType
     /// <summary>
     /// Global chat (accessible to all authenticated users)
     /// </summary>
-    Global = 2
+    Global = 2,
+
+    /// <summary>
+    /// Game room chat (linked to a game room for player communication)
+    /// </summary>
+    GameRoom = 3
 }

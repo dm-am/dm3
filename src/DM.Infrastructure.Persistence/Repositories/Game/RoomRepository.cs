@@ -48,6 +48,15 @@ internal class RoomRepository : IRoomRepository
             .FirstOrDefaultAsync()!;
     }
 
+    public Task<Room?> GetByGameAndNumber(Guid gameId, int roomNumber, Guid userId)
+    {
+        return _dbContext.Rooms
+            .Where(r => r.GameId == gameId && r.RoomNumber == roomNumber)
+            .Where(GameAccessibilityFilters.RoomAvailable(userId))
+            .ProjectTo<Room>(_mapper.ConfigurationProvider)
+            .FirstOrDefaultAsync()!;
+    }
+
     public Task<RoomToUpdate?> GetForUpdate(Guid roomId, Guid userId)
     {
         return _dbContext.Rooms
@@ -152,6 +161,9 @@ internal class RoomRepository : IRoomRepository
 
         if (updateRoom.DiceEnabled.HasValue)
             room.DiceEnabled = updateRoom.DiceEnabled.Value;
+
+        if (updateRoom.ShouldSetChatId)
+            room.ChatId = updateRoom.ChatId;
 
         // Handle room reordering if requested
         if (updateRoom.ShouldReorder)

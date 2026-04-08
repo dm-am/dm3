@@ -38,6 +38,9 @@ internal class ModerationIntentionResolver : IIntentionResolver<ModerationIntent
             // Moderate user profile (SeniorModerator+)
             ModerationIntention.ModerateUserProfile => user.Role >= UserRole.SeniorModerator,
 
+            // Tag management (SeniorModerator+)
+            ModerationIntention.ManageTags => user.Role >= UserRole.SeniorModerator,
+
             _ => false
         };
 }

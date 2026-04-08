@@ -6,7 +6,7 @@ namespace DM.Domain.Game.Authorization;
 public enum PostIntention
 {
     /// <summary>
-    /// Change post text
+    /// Change post text (GameText and MetagameText)
     /// </summary>
     EditText = 1,
 
@@ -14,11 +14,6 @@ public enum PostIntention
     /// Change post character
     /// </summary>
     EditCharacter = 2,
-
-    /// <summary>
-    /// Change post master message
-    /// </summary>
-    EditMasterMessage = 3,
 
     /// <summary>
     /// Delete post

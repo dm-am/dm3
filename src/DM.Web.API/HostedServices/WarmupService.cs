@@ -10,7 +10,7 @@ using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.RelationalStorage;
-using DomainGame = DM.Domain.Game.Features.Games.GameModel;
+using DomainGame = DM.Domain.Game.Features.Games.Game;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -114,7 +114,7 @@ internal class WarmupService : IHostedService
                             s.TargetType == SubscriptionTargetType.Game &&
                             s.TargetId == g.GameId &&
                             s.SubscriberId == dummyUserId) ||
-                        g.AuthorId == dummyUserId || g.Assistants.Any(a => a.UserId == dummyUserId) || g.MentorId == dummyUserId)
+                        g.MasterId == dummyUserId || g.Assistants.Any(a => a.UserId == dummyUserId) || g.MentorId == dummyUserId)
             .ProjectTo<DomainGame>(mapper.ConfigurationProvider)
             .Take(1)
             .ToListAsync(ct);

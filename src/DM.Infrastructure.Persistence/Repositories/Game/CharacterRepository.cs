@@ -155,10 +155,38 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
         _dbContext.CharacterAttributes.AddRange(attributes);
         await _dbContext.SaveChangesAsync();
 
+        // Adjust PcLimit if non-NPC character is created as Active
+        if (!createCharacter.IsNpc && createCharacter.InitialStatus == CharacterStatus.Active)
+        {
+            await AdjustPcLimitOnActivationAsync(createCharacter.GameId);
+        }
+
         return await _dbContext.Characters
             .Where(c => c.CharacterId == createCharacter.CharacterId)
             .ProjectTo<Character>(_mapper.ConfigurationProvider)
             .FirstAsync();
+    }
+
+    /// <summary>
+    /// Increases RecruitmentPcLimit if active players exceed it
+    /// </summary>
+    private async Task AdjustPcLimitOnActivationAsync(Guid gameId)
+    {
+        var game = await _dbContext.Games.FindAsync(gameId);
+        if (game?.RecruitmentPcLimit == null)
+            return;
+
+        var activeCount = await _dbContext.Characters
+            .CountAsync(c => c.GameId == gameId &&
+                             !c.IsRemoved &&
+                             !c.IsNpc &&
+                             c.Status == CharacterStatus.Active);
+
+        if (activeCount > game.RecruitmentPcLimit.Value)
+        {
+            game.RecruitmentPcLimit = activeCount;
+            await _dbContext.SaveChangesAsync();
+        }
     }
 
     public new async Task<Character> Update(UpdateCharacterEntity updateCharacter)
@@ -168,6 +196,11 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
         {
             throw new InvalidOperationException($"Character {updateCharacter.CharacterId} not found");
         }
+
+        // Track status change for PcLimit adjustment
+        var oldStatus = character.Status;
+        var newStatus = updateCharacter.Status ?? oldStatus;
+        var isNpc = updateCharacter.IsNpc ?? character.IsNpc;
 
         // Update fields if provided
         if (updateCharacter.Status.HasValue)
@@ -215,7 +248,7 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
         if (updateCharacter.AccessPolicy.HasValue)
             character.AccessPolicy = updateCharacter.AccessPolicy.Value;
 
-        character.ModifiedUtc = updateCharacter.ModifiedUtc;
+        // Modification tracking is handled via Edit history, not inline ModifiedUtc
 
         // Update attributes
         if (updateCharacter.Attributes != null && updateCharacter.Attributes.Any())
@@ -244,10 +277,31 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
 
         await _dbContext.SaveChangesAsync();
 
+        // Adjust RecruitmentPcLimit when non-NPC character status changes
+        if (!isNpc && oldStatus != newStatus)
+        {
+            await AdjustPcLimitAsync(character.GameId, oldStatus, newStatus);
+        }
+
         return await _dbContext.Characters
             .Where(c => c.CharacterId == updateCharacter.CharacterId)
             .ProjectTo<Character>(_mapper.ConfigurationProvider)
             .FirstAsync();
+    }
+
+    /// <summary>
+    /// Adjusts RecruitmentPcLimit when character status changes
+    /// </summary>
+    private async Task AdjustPcLimitAsync(Guid gameId, CharacterStatus oldStatus, CharacterStatus newStatus)
+    {
+        if (newStatus == CharacterStatus.Active && oldStatus != CharacterStatus.Active)
+        {
+            await AdjustPcLimitOnActivationAsync(gameId);
+        }
+        else if (oldStatus == CharacterStatus.Active && newStatus != CharacterStatus.Active)
+        {
+            await AdjustPcLimitOnDeactivationAsync(gameId);
+        }
     }
 
     public async Task Delete(Guid characterId)
@@ -255,7 +309,39 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
         var character = await _dbContext.Characters.FindAsync(characterId);
         if (character != null)
         {
+            var wasActive = !character.IsNpc && character.Status == CharacterStatus.Active;
+            var gameId = character.GameId;
+
             character.IsRemoved = true;
+            await _dbContext.SaveChangesAsync();
+
+            // Adjust PcLimit if active non-NPC character was deleted
+            if (wasActive)
+            {
+                await AdjustPcLimitOnDeactivationAsync(gameId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Decreases RecruitmentPcLimit when a player becomes inactive (but not below current count)
+    /// </summary>
+    private async Task AdjustPcLimitOnDeactivationAsync(Guid gameId)
+    {
+        var game = await _dbContext.Games.FindAsync(gameId);
+        if (game?.RecruitmentPcLimit == null)
+            return;
+
+        var activeCount = await _dbContext.Characters
+            .CountAsync(c => c.GameId == gameId &&
+                             !c.IsRemoved &&
+                             !c.IsNpc &&
+                             c.Status == CharacterStatus.Active);
+
+        var newLimit = Math.Max(activeCount, game.RecruitmentPcLimit.Value - 1);
+        if (newLimit != game.RecruitmentPcLimit.Value)
+        {
+            game.RecruitmentPcLimit = newLimit;
             await _dbContext.SaveChangesAsync();
         }
     }

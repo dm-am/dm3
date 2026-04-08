@@ -1,7 +1,9 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 /**
- * AdminList - Таблица администрации
- * Классический табличный формат с колонками
+ * AdminList - Staff/administration table
+ *
+ * Displays site administration with their roles and responsibilities.
+ * Uses unified table styling from _Tables.sass.
  */
 
 import { ref, onMounted } from "vue";
@@ -45,28 +47,33 @@ onMounted(() => {
 
     <div class="admin-table">
       <div class="admin-header">
-        <span>Роль</span>
-        <span>Функции</span>
-        <span></span>
+        <span class="role-col">Роль</span>
+        <span class="desc-col">Функции</span>
+        <span class="users-col"></span>
       </div>
       <div v-for="group in roleGroups" :key="group.role" class="admin-row">
-        <span class="role-cell">
-          <span class="role-title">{{ ROLE_INFO[group.role].title }}</span>
+        <span class="role-col">
+          <router-link
+            :to="{ name: 'community', query: { role: group.role } }"
+            class="role-title"
+          >
+            {{ ROLE_INFO[group.role].title }}
+          </router-link>
           <span v-if="ROLE_INFO[group.role].nickname" class="role-nickname">
             ({{ ROLE_INFO[group.role].nickname }})
           </span>
         </span>
-        <span class="desc-cell">{{ ROLE_INFO[group.role].description }}</span>
-        <span class="users-cell">
+        <span class="desc-col">{{ ROLE_INFO[group.role].description }}</span>
+        <span class="users-col">
           <template v-if="group.loading">...</template>
           <template v-else-if="group.users.length">
-            <div
+            <span
               v-for="user in group.users"
               :key="user.username"
               class="user-item"
             >
-              <UserLink :user="user" />
-            </div>
+              <UserLink :user="user" hide-badge />
+            </span>
           </template>
           <span v-else class="no-users">—</span>
         </span>
@@ -76,9 +83,13 @@ onMounted(() => {
     <p class="useful-links">
       <span class="links-label">Полезные ссылки:</span>
       <template v-for="(link, idx) in ADMIN_LINKS" :key="link.title">
-        <a :href="link.url" target="_blank" rel="noopener noreferrer">{{
-          link.title
-        }}</a
+        <a
+          v-if="link.external"
+          :href="link.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          >{{ link.title }}</a
+        ><router-link v-else :to="link.url">{{ link.title }}</router-link
         ><template v-if="idx < ADMIN_LINKS.length - 1">, </template
         ><template v-else>.</template>
       </template>
@@ -100,40 +111,38 @@ onMounted(() => {
 .admin-header
   display: grid
   grid-template-columns: 180px 1fr 220px
-  padding: $small $medium
   +table-header
-
-  span
-    padding: 0
 
 .admin-row
   display: grid
   grid-template-columns: 180px 1fr 220px
-  padding: $small $medium
   align-items: start
   +table-row
 
-  span
-    padding: $tiny 0
-
-.role-cell
+.role-col
   display: flex
   flex-direction: column
   gap: 2px
 
 .role-title
   font-weight: 600
+  color: $link
+  text-decoration: none
+
+  &:hover
+    color: $link-hover
+    text-decoration: underline
 
 .role-nickname
   color: $text-muted
   font-size: $secondary-font-size
 
-.desc-cell
+.desc-col
   color: $text
   font-size: $secondary-font-size
   line-height: 1.4
 
-.users-cell
+.users-col
   display: flex
   flex-direction: column
   gap: 2px
@@ -164,7 +173,7 @@ onMounted(() => {
       outline: 2px solid $link
       outline-offset: 2px
 
-@media (max-width: 768px)
+@media (max-width: $mobile-breakpoint)
   .admin-header
     display: none
 
@@ -173,15 +182,15 @@ onMounted(() => {
     flex-direction: column
     gap: $tiny
 
-  .role-cell
+  .role-col
     flex-direction: row
     align-items: baseline
     gap: $tiny
 
-  .desc-cell
+  .desc-col
     color: $text-muted
 
-  .users-cell
+  .users-col
     flex-direction: row
     flex-wrap: wrap
     gap: $small

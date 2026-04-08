@@ -11,7 +11,7 @@ internal interface INameGenerator
     /// <summary>
     /// Generate upload name and extension
     /// </summary>
-    /// <param name="createUpload"></param>
-    /// <returns></returns>
+    /// <param name="createUpload">Upload data</param>
+    /// <returns>Generated name and extension</returns>
     Task<(string name, string extension)> Generate(CreateUpload createUpload);
 }

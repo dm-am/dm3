@@ -14,7 +14,7 @@
             <span class="upload-label">{{
               uploadingAvatar ? "Загрузка..." : "Изменить"
             }}</span>
-            <the-upload
+            <Upload
               v-if="!uploadingAvatar"
               accept="image/jpeg,image/png,image/webp,image/gif"
               @uploading="handleAvatarUpload"
@@ -60,7 +60,11 @@
         <div class="form-row">
           <div class="form-group">
             <label for="gender" class="form-label">Пол</label>
-            <select id="gender" v-model="profileForm.gender" class="form-select">
+            <select
+              id="gender"
+              v-model="profileForm.gender"
+              class="form-select"
+            >
               <option value="Unknown">Не указан</option>
               <option value="Male">Мужской</option>
               <option value="Female">Женский</option>
@@ -93,8 +97,8 @@
           <label class="form-label">Контакты</label>
           <div class="contacts-list">
             <div
-              v-for="(contact, index) in profileForm.contacts"
-              :key="index"
+              v-for="contact in profileForm.contacts"
+              :key="contact.id"
               class="contact-item"
             >
               <input
@@ -111,14 +115,16 @@
                 placeholder="Значение"
                 maxlength="200"
               />
-              <button
-                type="button"
-                class="remove-contact"
-                @click="removeContact(index)"
-                title="Удалить"
-              >
-                ×
-              </button>
+              <Tooltip text="Удалить">
+                <button
+                  type="button"
+                  class="remove-contact"
+                  @click="removeContact(contact.id)"
+                  aria-label="Удалить контакт"
+                >
+                  ×
+                </button>
+              </Tooltip>
             </div>
           </div>
           <button
@@ -134,13 +140,13 @@
         <span v-if="saveProfileAction.error.value" class="error-text">
           {{ saveProfileAction.error.value }}
         </span>
-        <TheButton
+        <Button
           :loading="saveProfileAction.loading.value"
           @click="saveProfile"
           class="save-button"
         >
           Сохранить профиль
-        </TheButton>
+        </Button>
       </div>
     </div>
   </section>
@@ -151,8 +157,9 @@ import { ref, watch } from "vue";
 import { useUserStore } from "@/entities/user";
 import { UploadApi, PersonalApi } from "@/shared/api";
 import type { UpdateProfilePayload } from "@/shared/api";
-import TheButton from "@/shared/ui/Button/TheButton.vue";
-import { TheUpload } from "@/features/upload";
+import Button from "@/shared/ui/Button/Button.vue";
+import { Upload } from "@/features/upload";
+import { Tooltip } from "@/shared/ui/Tooltip";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { Gender, type User } from "@/shared/api/models/community/users";
@@ -165,9 +172,17 @@ const userStore = useUserStore();
 const toast = useToast();
 
 interface ContactForm {
+  id: number; // Unique ID for stable v-for keys (PERFORMANCE.md)
   contactType: string;
   value: string;
 }
+
+let contactIdCounter = 0;
+const createContact = (contactType = "", value = ""): ContactForm => ({
+  id: ++contactIdCounter,
+  contactType,
+  value,
+});
 
 const profileForm = ref({
   status: "",
@@ -176,7 +191,7 @@ const profileForm = ref({
   gender: Gender.Unknown,
   birthdayDate: "",
   info: "",
-  contacts: [] as ContactForm[]
+  contacts: [] as ContactForm[],
 });
 
 const uploadingAvatar = ref(false);
@@ -192,26 +207,26 @@ watch(
         location: currentUser.location || "",
         gender: currentUser.gender || Gender.Unknown,
         birthdayDate: currentUser.birthdayDate || "",
-        info: currentUser.info || "",
-        contacts: currentUser.contacts.map((c) => ({
-          contactType: c.contactType,
-          value: c.value
-        }))
+        info: currentUser.info?.source || "",
+        contacts: (currentUser.contacts ?? []).map((c) =>
+          createContact(c.contactType, c.value)
+        ),
       };
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 // Contacts management
 const addContact = () => {
   if (profileForm.value.contacts.length < 10) {
-    profileForm.value.contacts.push({ contactType: "", value: "" });
+    profileForm.value.contacts.push(createContact());
   }
 };
 
-const removeContact = (index: number) => {
-  profileForm.value.contacts.splice(index, 1);
+const removeContact = (id: number) => {
+  const index = profileForm.value.contacts.findIndex((c) => c.id === id);
+  if (index !== -1) profileForm.value.contacts.splice(index, 1);
 };
 
 // Avatar upload
@@ -221,14 +236,15 @@ const handleAvatarUpload = async (formData: FormData) => {
 
   uploadingAvatar.value = true;
   try {
-    const { data: uploadData, error: uploadError } = await UploadApi.directUpload(file, "UserAvatar");
+    const { data: uploadData, error: uploadError } =
+      await UploadApi.directUpload(file, "UserAvatar");
     if (uploadError || !uploadData) {
       toast.error("Не удалось загрузить аватар");
       return;
     }
 
     const { error: profileError } = await PersonalApi.updateMyProfile({
-      avatarUploadId: uploadData.id
+      avatarUploadId: uploadData.id,
     });
     if (profileError) {
       toast.error("Не удалось обновить профиль");
@@ -258,8 +274,8 @@ const saveProfile = () => {
         .filter((c) => c.contactType.trim() && c.value.trim())
         .map((c) => ({
           contactType: c.contactType,
-          value: c.value
-        }))
+          value: c.value,
+        })),
     };
 
     const { error } = await PersonalApi.updateMyProfile(payload);

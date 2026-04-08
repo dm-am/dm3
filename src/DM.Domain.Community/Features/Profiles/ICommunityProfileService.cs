@@ -31,7 +31,21 @@ public interface ICommunityProfileService
         UserActivityFilter filter,
         string? search = null,
         UserRole? role = null,
-        UserSort sort = UserSort.Name);
+        UserSort sort = UserSort.Name,
+        bool sortAscending = true,
+        bool? isHonorary = null,
+        bool? isNewbie = null,
+        bool? isOnline = null,
+        int? minRating = null,
+        int? maxRating = null,
+        int? minGamesHosting = null,
+        int? maxGamesHosting = null,
+        int? minGamesPlaying = null,
+        int? maxGamesPlaying = null,
+        int? minBlogsHosting = null,
+        int? maxBlogsHosting = null,
+        DateTimeOffset? registeredFromUtc = null,
+        DateTimeOffset? registeredToUtc = null);
 
     /// <summary>
     /// Get users by role (e.g., moderators, administrators)

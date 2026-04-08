@@ -7,9 +7,11 @@ import type {
   BoardId,
   Topic,
   TopicId,
+  TopicsQuery,
+  CommentsQuery,
 } from "./types";
 import type { User } from "@/shared/api/models/common";
-import type { ListEnvelope, PagingQuery } from "@/shared/api/models/common";
+import type { ListEnvelope } from "@/shared/api/models/common";
 import forumApi from "../api/forumApi";
 import { useAuthStore } from "@/shared/stores";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
@@ -17,15 +19,20 @@ import { useApiList } from "@/shared/lib/composables/useApiResource";
 export const useBoardsStore = defineStore("boards", () => {
   const { user: currentUser } = storeToRefs(useAuthStore());
 
-  const boardsResource = useApiList<Board>(() => forumApi.getBoards());
+  // Boards are static - 5 minute cache
+  const boardsResource = useApiList<Board>(() => forumApi.getBoards(), {
+    cacheMs: 300_000,
+  });
   const boards = boardsResource.data;
+  const boardsLoading = boardsResource.loading;
   const fetchBoards = boardsResource.fetch;
 
-  const news = ref<Topic[] | null>(null);
-  async function fetchNews() {
-    const { data } = await forumApi.getNews();
-    news.value = data?.resources ?? [];
-  }
+  // News rarely changes - 5 minute cache
+  const newsResource = useApiList<Topic>(() => forumApi.getNews(), {
+    cacheMs: 300_000,
+  });
+  const news = newsResource.data;
+  const fetchNews = newsResource.fetch;
 
   const selectedBoard = ref<Board | null>(null);
   async function trySelectBoard(id: BoardId) {
@@ -35,7 +42,18 @@ export const useBoardsStore = defineStore("boards", () => {
     const { error, data } = await forumApi.getBoard(id);
     if (error) return false;
 
-    selectedBoard.value = data ?? null;
+    selectedBoard.value = data?.resource ?? null;
+    return true;
+  }
+
+  async function trySelectBoardByAlias(alias: string) {
+    const localBoard = boards.value?.find((f) => f.alias === alias);
+    if (localBoard) selectedBoard.value = localBoard;
+
+    const { error, data } = await forumApi.getBoard(alias as BoardId);
+    if (error) return false;
+
+    selectedBoard.value = data?.resource ?? null;
     return true;
   }
 
@@ -49,41 +67,143 @@ export const useBoardsStore = defineStore("boards", () => {
 
   const attachedTopics = ref<Topic[] | null>(null);
   const topics = ref<ListEnvelope<Topic> | null>(null);
-  async function fetchTopics(number: number) {
+  const topicsLoading = ref(false);
+
+  /**
+   * Search topics with filters. Single source of truth for loading topics.
+   * Called by TopicsList via paramsKey watcher.
+   */
+  async function searchTopics(query: TopicsQuery) {
     if (!selectedBoard.value) return;
 
-    const size = currentUser.value?.settings?.paging?.topicsPerPage;
-    const query: PagingQuery = { number, size };
-    const [fetchedAttachedTopics, fetchedTopics] = await Promise.all([
-      forumApi.getTopics(selectedBoard.value!.id, query, true),
-      forumApi.getTopics(selectedBoard.value!.id, query, false),
+    topicsLoading.value = true;
+    try {
+      // Apply user's page size preference
+      const size = query.size ?? currentUser.value?.settings?.paging?.topicsPerPage ?? 20;
+      const fullQuery = { ...query, size };
+
+      const effectiveSortBy = query.sortBy ?? "lastActivity";
+      const effectiveSortOrder = query.sortOrder ?? "desc";
+      const hasFilters =
+        !!query.search ||
+        (query.authors && query.authors.length > 0) ||
+        !!query.createdFromUtc ||
+        !!query.createdToUtc ||
+        effectiveSortBy !== "lastActivity" ||
+        effectiveSortOrder !== "desc";
+
+      if (hasFilters) {
+        // With filters: single unified query (attached mixed with regular)
+        const { data } = await forumApi.getTopics(selectedBoard.value!.alias as BoardId, fullQuery);
+        attachedTopics.value = null; // No separate attached section when filtering
+        topics.value = data ?? null;
+      } else {
+        // No filters: fetch attached separately, show at top
+        const [fetchedAttached, fetchedRegular] = await Promise.all([
+          forumApi.getTopics(selectedBoard.value!.alias as BoardId, { isAttached: true }),
+          forumApi.getTopics(selectedBoard.value!.alias as BoardId, { ...fullQuery, isAttached: false }),
+        ]);
+        attachedTopics.value = fetchedAttached.data?.resources ?? null;
+        topics.value = fetchedRegular.data ?? null;
+      }
+    } finally {
+      topicsLoading.value = false;
+    }
+  }
+
+  /**
+   * Reorder pinned topics (moderator action)
+   */
+  async function reorderPinnedTopics(topicIds: string[]) {
+    if (!selectedBoard.value) return { error: new Error("No board selected") };
+
+    const { error } = await forumApi.reorderPinnedTopics(selectedBoard.value.alias as BoardId, topicIds);
+    if (error) return { error };
+
+    // Refresh attached topics to reflect new order
+    const { data } = await forumApi.getTopics(selectedBoard.value.alias as BoardId, { isAttached: true });
+    attachedTopics.value = data?.resources ?? null;
+
+    return { data: true };
+  }
+
+  /**
+   * Toggle topic pin status (moderator action)
+   */
+  async function togglePinTopic(topicId: string) {
+    if (!selectedBoard.value) return { error: new Error("No board selected") };
+
+    // Find topic to get current pin status
+    const topic = [...(attachedTopics.value ?? []), ...(topics.value?.resources ?? [])]
+      .find(t => t.id === topicId);
+
+    if (!topic) return { error: new Error("Topic not found") };
+
+    const newStatus = !topic.isAttached;
+    const { error } = await forumApi.updateTopic(topicId as TopicId, { isAttached: newStatus } as any);
+    if (error) return { error };
+
+    // Refresh topics list
+    const [fetchedAttached, fetchedRegular] = await Promise.all([
+      forumApi.getTopics(selectedBoard.value.alias as BoardId, { isAttached: true }),
+      forumApi.getTopics(selectedBoard.value.alias as BoardId, { isAttached: false }),
     ]);
 
-    attachedTopics.value = fetchedAttachedTopics.data?.resources ?? null;
-    topics.value = fetchedTopics.data ?? null;
+    attachedTopics.value = fetchedAttached.data?.resources ?? null;
+    topics.value = fetchedRegular.data ?? null;
+
+    return { data: newStatus };
   }
 
   const selectedTopic = ref<Topic | null>(null);
   async function trySelectTopic(id: TopicId) {
     if (selectedTopic.value?.id !== id) selectedTopic.value = null;
-    const { data: topic } = await forumApi.getTopic(id);
+    const { data } = await forumApi.getTopic(id);
+    const topic = data?.resource;
     if (!topic) return;
 
     selectedTopic.value = topic;
     await trySelectBoard(topic.board.id);
   }
 
+  async function trySelectTopicByNumber(boardAlias: string, topicNumber: number) {
+    selectedTopic.value = null;
+    const { data } = await forumApi.getTopicByNumber(boardAlias, topicNumber);
+    const topic = data?.resource;
+    if (!topic) return false;
+
+    selectedTopic.value = topic;
+    selectedBoard.value = topic.board;
+    return true;
+  }
+
   const comments = ref<ListEnvelope<Comment> | null>(null);
-  async function fetchComments(number: number) {
-    comments.value = null;
+  const commentsLoading = ref(false);
+
+  /**
+   * Search comments with filters. Single source of truth for loading comments.
+   * Called by CommentsList via watcher.
+   */
+  async function searchComments(query: CommentsQuery) {
     if (!selectedTopic.value) return;
 
-    const size = currentUser.value?.settings?.paging?.commentsPerPage;
-    const { data } = await forumApi.getComments(selectedTopic.value.id!, {
-      number,
-      size,
-    });
-    comments.value = data;
+    commentsLoading.value = true;
+    comments.value = null;
+    try {
+      // Apply user's page size preference
+      const size = query.size ?? currentUser.value?.settings?.paging?.commentsPerPage ?? 20;
+      const fullQuery: CommentsQuery = { ...query, size };
+
+      const { data } = await forumApi.getComments(selectedTopic.value.id!, fullQuery);
+      comments.value = data ?? null;
+    } finally {
+      commentsLoading.value = false;
+    }
+  }
+
+  // Legacy method for backwards compatibility
+  async function fetchComments(number: number) {
+    await searchComments({ number });
   }
 
   async function createComment(text: string) {
@@ -201,20 +321,28 @@ export const useBoardsStore = defineStore("boards", () => {
 
   return {
     boards,
+    boardsLoading,
     fetchBoards,
     selectedBoard,
     trySelectBoard,
+    trySelectBoardByAlias,
     moderators,
     fetchModerators,
     attachedTopics,
     topics,
-    fetchTopics,
+    topicsLoading,
+    searchTopics,
+    reorderPinnedTopics,
+    togglePinTopic,
     news,
     fetchNews,
     trySelectTopic,
+    trySelectTopicByNumber,
     selectedTopic,
     fetchComments,
+    searchComments,
     comments,
+    commentsLoading,
     createComment,
     updateComment,
     deleteComment,

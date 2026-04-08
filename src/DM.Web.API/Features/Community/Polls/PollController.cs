@@ -54,7 +54,7 @@ public class PollController : ControllerBase
     /// <response code="400">Some poll properties were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to create polls</response>
-    [HttpPost("global", Name = nameof(PostPoll))]
+    [HttpPost(Name = nameof(PostPoll))]
     [RequireRole(UserRole.SeniorModerator)]
     [ProducesResponseType(typeof(Envelope<Poll>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]

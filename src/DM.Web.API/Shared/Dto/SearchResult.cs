@@ -45,9 +45,9 @@ public class GameSummary
     public string Title { get; set; } = string.Empty;
 
     /// <summary>
-    /// Game master login
+    /// Game master username
     /// </summary>
-    public string MasterLogin { get; set; } = string.Empty;
+    public string MasterUsername { get; set; } = string.Empty;
 
     /// <summary>
     /// Game system name (e.g., DnD 5e, Pathfinder)
@@ -91,9 +91,9 @@ public class PostSummary
     public string RoomTitle { get; set; } = string.Empty;
 
     /// <summary>
-    /// Author login
+    /// Author username
     /// </summary>
-    public string AuthorLogin { get; set; } = string.Empty;
+    public string AuthorUsername { get; set; } = string.Empty;
 
     /// <summary>
     /// Post text preview (truncated)

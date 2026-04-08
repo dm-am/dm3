@@ -43,7 +43,6 @@ public interface IAuthenticationRepository
     /// </summary>
     /// <param name="userId">Authenticated user id</param>
     /// <param name="sessionId">Authentication session id</param>
-    /// <returns></returns>
     Task RemoveSession(Guid userId, Guid sessionId);
 
     /// <summary>
@@ -52,7 +51,6 @@ public interface IAuthenticationRepository
     /// <param name="userId">Authenticated user id</param>
     /// <param name="sessionId">Authentication session id</param>
     /// <param name="expirationDate">New expiration date</param>
-    /// <returns></returns>
     Task RefreshSession(Guid userId, Guid sessionId, DateTimeOffset expirationDate);
 
     /// <summary>
@@ -68,7 +66,6 @@ public interface IAuthenticationRepository
     /// </summary>
     /// <param name="userId">Authenticated user id</param>
     /// <param name="sessionId">Session id</param>
-    /// <returns></returns>
     Task RemoveSessionsExcept(Guid userId, Guid sessionId);
 
     /// <summary>
@@ -76,7 +73,6 @@ public interface IAuthenticationRepository
     /// </summary>
     /// <param name="userId">User id</param>
     /// <param name="lastActivityUtc">Last activity timestamp</param>
-    /// <returns></returns>
     Task UpdateActivity(Guid userId, DateTimeOffset lastActivityUtc);
 
     /// <summary>
@@ -98,6 +94,5 @@ public interface IAuthenticationRepository
     /// Remove all sessions for a user
     /// </summary>
     /// <param name="userId">User identifier</param>
-    /// <returns></returns>
     Task RemoveAllSessions(Guid userId);
 }

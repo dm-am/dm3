@@ -20,7 +20,6 @@ public interface ITopicLikeService
     /// Remove existing like from current user to selected topic
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
-    /// <returns></returns>
     Task UnlikeTopicAsync(Guid topicId);
 
     /// <summary>
@@ -34,6 +33,5 @@ public interface ITopicLikeService
     /// Remove existing like from current user to selected comment
     /// </summary>
     /// <param name="commentId">Comment identifier</param>
-    /// <returns></returns>
     Task UnlikeCommentAsync(Guid commentId);
 }

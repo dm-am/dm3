@@ -3,13 +3,20 @@ using System.Threading.Tasks;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Personal.Notepads;
+using DM.Web.API.Features.Game.Games;
 using DM.Web.API.Features.Game.Notepads;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DM.Web.API.Features.Game.Characters;
 
-/// <inheritdoc />
+/// <summary>
+/// Character management endpoints
+/// </summary>
+/// <remarks>
+/// Provides CRUD operations for game characters.
+/// Characters have customizable attributes, notepads, and can participate in room posts.
+/// </remarks>
 [ApiController]
 [Route("v1/characters")]
 [ApiExplorerSettings(GroupName = "Game")]
@@ -18,31 +25,43 @@ public class CharacterController : ControllerBase
 {
     private readonly ICharacterApiService _characterApiService;
     private readonly IGameNotepadApiService _notepadApiService;
+    private readonly IGameApiService _gameApiService;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Creates a new instance of CharacterController
+    /// </summary>
     public CharacterController(
         ICharacterApiService characterApiService,
-        IGameNotepadApiService notepadApiService)
+        IGameNotepadApiService notepadApiService,
+        IGameApiService gameApiService)
     {
         _characterApiService = characterApiService;
         _notepadApiService = notepadApiService;
+        _gameApiService = gameApiService;
     }
+
+    private async Task<Guid> ResolveGameId(string id) =>
+        Guid.TryParse(id, out var guid) ? guid : (await _gameApiService.GetByPublicId(id)).Resource.Id;
 
     /// <summary>
     /// Get list of characters in game
     /// </summary>
-    /// <param name="id">Game identifier</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <response code="200">Returns the character list</response>
     /// <response code="404">Game not found</response>
     [HttpGet("~/v1/games/{id}/characters", Name = nameof(GetCharacters))]
     [ProducesResponseType(typeof(ListEnvelope<Character>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetCharacters(Guid id) => Ok(await _characterApiService.GetAll(id));
+    public async Task<IActionResult> GetCharacters(string id)
+    {
+        var gameId = await ResolveGameId(id);
+        return Ok(await _characterApiService.GetAll(gameId));
+    }
 
     /// <summary>
     /// Mark all characters in game as read
     /// </summary>
-    /// <param name="id">Game identifier</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <response code="204">Operation completed successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="404">Game not found</response>
@@ -51,16 +70,17 @@ public class CharacterController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> MarkCharactersAsRead(Guid id)
+    public async Task<IActionResult> MarkCharactersAsRead(string id)
     {
-        await _characterApiService.MarkAsRead(id);
+        var gameId = await ResolveGameId(id);
+        await _characterApiService.MarkAsRead(gameId);
         return NoContent();
     }
 
     /// <summary>
     /// Create new character
     /// </summary>
-    /// <param name="id">Game identifier</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <param name="character">Character details</param>
     /// <response code="201">Resource created successfully</response>
     /// <response code="400">Some of character properties were invalid</response>
@@ -74,9 +94,10 @@ public class CharacterController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PostCharacter(Guid id, [FromBody] CharacterDetails character)
+    public async Task<IActionResult> PostCharacter(string id, [FromBody] CharacterDetails character)
     {
-        var result = await _characterApiService.Create(id, character);
+        var gameId = await ResolveGameId(id);
+        var result = await _characterApiService.Create(gameId, character);
         return CreatedAtRoute(nameof(GetCharacter),
             new {id = result.Resource.Id}, result);
     }
@@ -217,11 +238,13 @@ public class CharacterController : ControllerBase
     /// <response code="204">Entry deleted</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User must own the character or be master/assistant</response>
+    /// <response code="404">Entry not found</response>
     [HttpDelete("{id}/notepad/{entryId:guid}", Name = nameof(DeleteCharacterNotepadEntry))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteCharacterNotepadEntry(Guid id, Guid entryId)
     {
         await _notepadApiService.DeleteEntry(entryId);

@@ -79,7 +79,7 @@ public class UserIpInfo
     /// <summary>
     /// Total number of logins from this IP
     /// </summary>
-    public int LoginCount { get; set; }
+    public int LoginsCount { get; set; }
 }
 
 /// <summary>
@@ -126,7 +126,7 @@ public class LinkedProfile
     /// <summary>
     /// Number of shared IP addresses
     /// </summary>
-    public int SharedIpCount { get; set; }
+    public int SharedIpsCount { get; set; }
 
     /// <summary>
     /// Most recent shared login timestamp (UTC)
@@ -142,7 +142,7 @@ public class ModNote
     /// <summary>
     /// Note identifier
     /// </summary>
-    public Guid NoteId { get; set; }
+    public Guid Id { get; set; }
 
     /// <summary>
     /// Username of the moderator who created the note
@@ -347,9 +347,9 @@ public class UpdateModeratedProfileNoteRequest
 public class ModerationProfileDto
 {
     /// <summary>
-    /// User login
+    /// User username
     /// </summary>
-    public string Login { get; set; } = string.Empty;
+    public string Username { get; set; } = string.Empty;
 
     /// <summary>
     /// User identifier
@@ -364,7 +364,7 @@ public class ModerationProfileDto
     /// <summary>
     /// User registration date (UTC)
     /// </summary>
-    public DateTimeOffset RegistrationDateUtc { get; set; }
+    public DateTimeOffset RegistrationUtc { get; set; }
 
     /// <summary>
     /// IP addresses used for login (last 365 days, unique, with stats).
@@ -423,7 +423,7 @@ public class UserIpInfoDto
     /// <summary>
     /// Total number of logins from this IP
     /// </summary>
-    public int LoginCount { get; set; }
+    public int LoginsCount { get; set; }
 }
 
 /// <summary>
@@ -463,14 +463,14 @@ public class LinkedProfileDto
     public Guid UserId { get; set; }
 
     /// <summary>
-    /// User login
+    /// User username
     /// </summary>
-    public string Login { get; set; } = string.Empty;
+    public string Username { get; set; } = string.Empty;
 
     /// <summary>
     /// Number of shared IP addresses
     /// </summary>
-    public int SharedIpCount { get; set; }
+    public int SharedIpsCount { get; set; }
 
     /// <summary>
     /// Most recent shared login timestamp (UTC)
@@ -486,12 +486,12 @@ public class ModNoteDto
     /// <summary>
     /// Note identifier
     /// </summary>
-    public Guid NoteId { get; set; }
+    public Guid Id { get; set; }
 
     /// <summary>
-    /// Login of the moderator who created the note
+    /// Username of the moderator who created the note
     /// </summary>
-    public string AuthorLogin { get; set; } = string.Empty;
+    public string AuthorUsername { get; set; } = string.Empty;
 
     /// <summary>
     /// Identifier of the moderator who created the note

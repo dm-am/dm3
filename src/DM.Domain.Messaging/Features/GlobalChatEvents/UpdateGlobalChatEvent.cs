@@ -25,7 +25,7 @@ public class UpdateGlobalChatEvent
     /// <summary>
     /// Planned start time (UTC)
     /// </summary>
-    public DateTimeOffset? StartsAt { get; set; }
+    public DateTimeOffset? StartsUtc { get; set; }
 
     /// <summary>
     /// Event duration (null = no limit)

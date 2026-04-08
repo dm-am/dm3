@@ -1,6 +1,6 @@
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Reviews;
+using DM.Domain.Game.Features.PostReviews;
 
 namespace DM.Domain.Game.Authorization;
 
@@ -11,7 +11,7 @@ namespace DM.Domain.Game.Authorization;
 /// </remarks>
 internal class PostReviewIntentionResolver :
     IIntentionResolver<PostReviewIntention>,
-    IIntentionResolver<PostReviewIntention, Review>
+    IIntentionResolver<PostReviewIntention, PostReview>
 {
     /// <inheritdoc />
     public bool IsAllowed(IAuthorizationSubject user, PostReviewIntention intention) => intention switch
@@ -22,7 +22,7 @@ internal class PostReviewIntentionResolver :
     };
 
     /// <inheritdoc />
-    public bool IsAllowed(IAuthorizationSubject user, PostReviewIntention intention, Review target) => intention switch
+    public bool IsAllowed(IAuthorizationSubject user, PostReviewIntention intention, PostReview target) => intention switch
     {
         // Edit is allowed for the author
         PostReviewIntention.Edit => user.UserId == target.Author.UserId,

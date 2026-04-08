@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Invitations;
-using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.Dto;
 using DomainGameInvitation = DM.Domain.Game.Features.Games.GameInvitation;
 
 namespace DM.Web.API.Features.Game.Invitations;
@@ -61,10 +61,11 @@ internal class GameInvitationApiService : IGameInvitationApiService
             Id = info.TokenId,
             GameId = info.GameId,
             GameTitle = info.GameTitle,
-            InvitedUser = new User
+            InvitedUser = new UserRef
             {
                 Id = info.InvitedUser.UserId,
-                Username = info.InvitedUser.Username
+                Username = info.InvitedUser.Username,
+                LastActivityUtc = info.InvitedUser.LastActivityUtc
             },
             InviterUsername = info.InvitedBy.Username,
             Type = info.TargetRole.ToApiString(),

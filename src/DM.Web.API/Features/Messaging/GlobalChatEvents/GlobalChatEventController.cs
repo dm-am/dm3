@@ -18,7 +18,7 @@ namespace DM.Web.API.Features.Messaging.GlobalChatEvents;
 /// During a closed event, only participants can send messages to the global chat.
 /// </remarks>
 [ApiController]
-[Route("v1/globalchat/events")]
+[Route("v1/global-chat/events")]
 [ApiExplorerSettings(GroupName = "Messaging")]
 [Tags("Global Chat")]
 public class GlobalChatEventController : ControllerBase
