@@ -8,7 +8,7 @@ import type {
 } from "axios";
 import { HubConnection, HubConnectionBuilder } from "@microsoft/signalr";
 import type { ApiResult } from "./models/common";
-import { BbRenderMode } from "./bbRenderMode";
+import { RENDER_AUDIENCE, X_DM_AUDIENCE, type RenderAudience } from "./audience";
 import { useToast } from "@/shared/lib/composables/useToast";
 
 type QueryParams = Record<
@@ -17,13 +17,11 @@ type QueryParams = Record<
 >;
 type RequestBody = object | FormData;
 
-const renderKey = "x-dm-bb-render-mode";
-
 const defaultHeaders: { [key: string]: string } = {
   "Cache-Control": "no-cache",
   "Content-Type": "application/json",
   "X-Requested-With": "XMLHttpRequest", // CSRF protection - identifies AJAX requests
-  [renderKey]: "html",
+  [X_DM_AUDIENCE]: RENDER_AUDIENCE.Display,
 };
 
 const apiHost = import.meta.env.VITE_API_HOST ?? "http://localhost:5000"; // Config - use ?? to allow empty string
@@ -93,10 +91,10 @@ class Api {
   public get<T>(
     url: string,
     params?: QueryParams,
-    bbRenderMode: BbRenderMode = BbRenderMode.Html,
+    audience: RenderAudience = RENDER_AUDIENCE.Display,
     options?: { skipAuth?: boolean },
   ): Promise<ApiResult<T>> {
-    const headers: Record<string, string> = { [renderKey]: bbRenderMode };
+    const headers: Record<string, string> = { [X_DM_AUDIENCE]: audience };
 
     // For public endpoints, explicitly remove credentials
     // This prevents activity tracking from background polling

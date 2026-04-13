@@ -1,6 +1,6 @@
 <template>
-  <page-title>Модерация</page-title>
-  <nav class="moderation-nav">
+  <page-title v-once>Модерация</page-title>
+  <nav class="moderation-nav" v-once>
     <router-link :to="{ name: 'moderation' }">Обзор</router-link>
     <router-link :to="{ name: 'moderation-username-changes' }"
       >Запросы на смену имени пользователя</router-link

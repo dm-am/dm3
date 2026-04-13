@@ -22,11 +22,24 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   // Internal Map for O(1) message lookup by ID
   const messagesById = new Map<string, GlobalChatMessage>();
 
+  /** Max messages in memory to prevent unbounded growth during long scrolling sessions */
+  const MAX_MESSAGES = 500;
+
   // Sync Map when messages array changes
   function syncMessagesMap() {
     messagesById.clear();
     for (const msg of messages.value) {
       messagesById.set(msg.id, msg);
+    }
+  }
+
+  /** Trim messages to MAX_MESSAGES, keeping the most recent. Adjusts cursors accordingly. */
+  function trimOldMessages() {
+    if (messages.value.length > MAX_MESSAGES) {
+      messages.value = messages.value.slice(-MAX_MESSAGES);
+      hasMoreBefore.value = true; // There are definitely older messages now
+      prevCursor.value = messages.value[0]?.id ?? null;
+      syncMessagesMap();
     }
   }
 
@@ -83,6 +96,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
         nextCursor.value = data.paging?.nextCursor ?? null;
         hasMoreAfter.value = data.paging?.hasNext ?? false;
         syncMessagesMap();
+        trimOldMessages();
       } else {
         hasMoreAfter.value = false;
       }

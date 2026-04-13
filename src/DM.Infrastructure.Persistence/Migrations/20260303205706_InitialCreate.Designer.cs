@@ -1711,6 +1711,17 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<string>("MetagameText")
                         .HasColumnType("text");
 
+                    b.Property<bool>("SharePrivateWithAll")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("PrivateAddresseeSnapshotJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
                     b.HasKey("PostId");
 
                     b.HasIndex("AuthorId");

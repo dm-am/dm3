@@ -141,11 +141,11 @@ export const HOST_API_PARAM = "hostUsernames";
  * - API: ISO 8601 с временем (YYYY-MM-DDTHH:mm:ssZ)
  *   - From: T00:00:00Z (начало дня)
  *   - To: T23:59:59Z (конец дня)
- * - Display: DD.MM.YYYY или DD.MM.YYYY HH:mm
+ * - Display: DD.MM.YYYY или DD.MM.YYYY [в] HH:mm
  */
 export const DATE_URL_FORMAT = "YYYY-MM-DD";
 export const DATE_DISPLAY_FORMAT = "DD.MM.YYYY";
-export const DATETIME_DISPLAY_FORMAT = "DD.MM.YYYY HH:mm";
+export const DATETIME_DISPLAY_FORMAT = "DD.MM.YYYY [в] HH:mm";
 
 // =============================================================================
 // PAGINATION CONSTANTS

@@ -633,8 +633,19 @@ test/
 
 ---
 
+## Рендеринг BBCode
+
+Пользовательский контент в формате BBCode **рендерится на сервере до сериализации JSON**, всегда. Клиент на display-путях биндит `v-html` на уже отрендеренную строку — никогда не вызывает BBCode-renderer. Это инвариант конфиденциальности: privacy-sensitive теги (`[private]`, `[mod]`) не могут быть отфильтрованы на клиенте безопасно.
+
+Исключение — внутренняя работа редактора: BBCodeEditor поддерживает два режима (WYSIWYG превью и raw BBCode source); переключение между ними — не display-путь, и клиентский BBCode↔HTML конвертер используется **только внутри модуля редактора**. Source of truth на фронте — всегда BBCode, он и отправляется на сохранение.
+
+Полный контракт — правила surface, audience-модель, матрица видимости privacy-тегов, permission-бакеты кэша, асимметричный контракт редактора — в [BBCODE_RENDERING.md](../architecture/BBCODE_RENDERING.md).
+
+---
+
 ## Ссылки
 
 - [SYSTEM.md](../architecture/SYSTEM.md) — архитектура системы
+- [BBCODE_RENDERING.md](../architecture/BBCODE_RENDERING.md) — рендеринг BBCode (SSOT)
 - [CODE_STYLE.md](./CODE_STYLE.md) — стиль кода
 - [API_DESIGN.md](./API_DESIGN.md) — проектирование API

@@ -4,6 +4,6 @@ import { GamesDataTable } from "@/widgets/games-table";
 </script>
 
 <template>
-  <page-title>Игры</page-title>
+  <page-title v-once>Игры</page-title>
   <GamesDataTable />
 </template>

@@ -324,33 +324,24 @@ describe("BBCode Tab and Cut", () => {
     });
   });
 
-  describe("[cut] - DM3 extension (standalone only)", () => {
-    it("standalone [cut] converts to HR marker", () => {
-      const html = bbcodeToHtml("[cut]");
-      expect(html).toContain('data-bb-tag="cut"');
-      expect(html).toContain("<hr");
-      expect(html).toContain("bb-cut-marker");
+  describe("[cut] - legacy stripper", () => {
+    // [cut] was an author-driven truncation marker. It has been removed in
+    // favour of the unified <TruncatedContent> height-based truncation.
+    // Existing content is rendered with the marker silently dropped.
+    it("standalone [cut] is silently stripped from rendered HTML", () => {
+      const html = bbcodeToHtml("before[cut]after");
+      expect(html).not.toContain("[cut]");
+      expect(html).not.toContain("data-bb-tag=\"cut\"");
+      expect(html).toContain("before");
+      expect(html).toContain("after");
     });
 
-    it("standalone [cut] survives round-trip", () => {
-      expectRoundTrip("[cut]");
-    });
-
-    it("[cut] is a truncation marker, not a block", () => {
-      // [cut] does NOT have a closing tag
-      // Text after [cut] is regular content, not hidden
-      const bbcode = "[cut]some text after";
-      const html = bbcodeToHtml(bbcode);
-      expect(html).toContain("<hr");
-      expect(html).toContain("some text after");
-      // Should NOT create a block - content is NOT wrapped
-      expect(html).not.toContain("</div>");
-    });
-
-    it("multiple [cut] markers work", () => {
-      const bbcode = "part1[cut]part2[cut]part3";
-      const html = bbcodeToHtml(bbcode);
-      expect(html.match(/<hr[^>]*>/g)?.length).toBe(2);
+    it("multiple [cut] markers are all stripped", () => {
+      const html = bbcodeToHtml("part1[cut]part2[cut]part3");
+      expect(html).not.toContain("[cut]");
+      expect(html).toContain("part1");
+      expect(html).toContain("part2");
+      expect(html).toContain("part3");
     });
   });
 });
@@ -784,11 +775,14 @@ describe("CONTEXT_TAGS structure", () => {
     });
   });
 
-  it("all contexts have cut (DM3 extension)", () => {
-    expect(CONTEXT_TAGS.common).toContain("cut");
-    expect(CONTEXT_TAGS.post).toContain("cut");
-    expect(CONTEXT_TAGS.message).toContain("cut");
-    expect(CONTEXT_TAGS.info).toContain("cut");
+  it("no context exposes the removed [cut] tag", () => {
+    // [cut] was removed in favour of unified height-based truncation
+    // via <TruncatedContent>. It is silently stripped from legacy content
+    // by the parser, and no context should advertise it as available.
+    expect(CONTEXT_TAGS.common).not.toContain("cut");
+    expect(CONTEXT_TAGS.post).not.toContain("cut");
+    expect(CONTEXT_TAGS.message).not.toContain("cut");
+    expect(CONTEXT_TAGS.info).not.toContain("cut");
   });
 
   it("info does not have mod or private", () => {
@@ -904,20 +898,13 @@ describe("Regression Tests", () => {
     expectRoundTrip(original);
   });
 
-  it("standalone [cut] should stay standalone", () => {
-    const original = "[cut]";
-    const html = bbcodeToHtml(original);
+  it("[cut] is silently stripped on round-trip", () => {
+    // Legacy marker — see "[cut] - legacy stripper" describe block above.
+    const html = bbcodeToHtml("before[cut]after");
     const result = htmlToBbcode(html);
-    expect(result).toBe("[cut]");
-  });
-
-  it("[cut] is standalone only - no closing tag needed", () => {
-    // [cut] does NOT have a closing tag
-    // If someone types [cut]text[/cut], only [cut] is processed
-    const input = "before[cut]after";
-    const html = bbcodeToHtml(input);
-    const result = htmlToBbcode(html);
-    expect(result).toBe("before[cut]after");
+    expect(result).not.toContain("[cut]");
+    expect(result).toContain("before");
+    expect(result).toContain("after");
   });
 });
 

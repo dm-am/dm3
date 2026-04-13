@@ -7,6 +7,7 @@ import messagingApi from "../api/messagingApi";
 import { useAuthStore } from "@/shared/stores";
 
 const PAGE_SIZE = 50;
+const MAX_MESSAGES = 500;
 
 export const useMessagingStore = defineStore("messaging", () => {
   const { user: currentUser } = storeToRefs(useAuthStore());
@@ -138,6 +139,11 @@ export const useMessagingStore = defineStore("messaging", () => {
           hasPrev: data.paging.hasPrev,
         };
         hasMoreBefore.value = data.paging.hasPrev;
+        // Trim excess messages from the end to prevent unbounded growth
+        if (messagesList.value.length > MAX_MESSAGES) {
+          messagesList.value = messagesList.value.slice(0, MAX_MESSAGES);
+          hasMoreAfter.value = true;
+        }
       } else {
         hasMoreBefore.value = false;
       }

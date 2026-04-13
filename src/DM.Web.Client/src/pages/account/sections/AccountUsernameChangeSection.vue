@@ -16,7 +16,7 @@
         class="status-card status-card--pending"
       >
         <div class="status-header">
-          <span class="status-icon">&#9200;</span>
+          <span class="status-icon">{{ symbols.clock }}</span>
           <span class="status-title">Заявка на рассмотрении</span>
         </div>
         <div class="status-details">
@@ -41,7 +41,7 @@
         class="status-card status-card--rejected"
       >
         <div class="status-header">
-          <span class="status-icon">&#10007;</span>
+          <span class="status-icon">{{ symbols.cross }}</span>
           <span class="status-title">Заявка отклонена</span>
         </div>
         <div class="status-details">
@@ -63,7 +63,7 @@
         class="status-card status-card--approved"
       >
         <div class="status-header">
-          <span class="status-icon">&#10003;</span>
+          <span class="status-icon">{{ symbols.checkmark }}</span>
           <span class="status-title">Заявка одобрена</span>
         </div>
         <p class="status-note">
@@ -114,6 +114,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
+import { symbols } from "@/shared/lib/utils/icons";
 import dayjs from "dayjs";
 import { AccountApi } from "@/shared/api";
 import Button from "@/shared/ui/Button/Button.vue";

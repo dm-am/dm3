@@ -14,7 +14,7 @@ import type {
   CommentsQuery,
 } from "../model/types";
 import { Api } from "@/shared/api";
-import { BbRenderMode } from "@/shared/api";
+import { RENDER_AUDIENCE } from "@/shared/api";
 import type { Patch, Post } from "@/shared/api/models";
 
 // Well-known board aliases
@@ -165,7 +165,7 @@ export default new (class ForumApi {
     return Api.get<Comment>(
       `topics/comments/${id}`,
       undefined,
-      BbRenderMode.Bb,
+      RENDER_AUDIENCE.AuthorEdit,
     );
   }
 

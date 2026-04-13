@@ -3,6 +3,6 @@ import { BlogsDataTable } from "@/widgets/blogs-table";
 </script>
 
 <template>
-  <page-title>Блоги</page-title>
+  <page-title v-once>Блоги</page-title>
   <BlogsDataTable />
 </template>

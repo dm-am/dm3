@@ -40,7 +40,7 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
     <div class="user-info">
       <router-link class="logo" :to="{ name: 'home' }" />
       <div class="user-actions">
-        <template v-if="user">
+        <template v-if="user && user.username">
           Здравствуй,
           <router-link
             :to="{ name: 'profile', params: { username: user.username } }"
@@ -64,12 +64,6 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
               >0</router-link
             ></Tooltip
           ><span class="muted">)</span>
-          |
-          <Tooltip text="Настройки аккаунта"
-            ><router-link :to="{ name: 'account' }" class="settings-link"
-              >⚙</router-link
-            ></Tooltip
-          >
           |
           <a @click="signOut" data-testid="logout-button">Выйти</a>
         </template>
@@ -135,7 +129,7 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
   margin-left: -5px
   height: $header-row-height
   width: 275px
-  background: transparent url('@/assets/images/logo.svg') no-repeat
+  background: transparent url('@/assets/images/logos/logo.svg') no-repeat
   background-size: contain
 
 .user-actions
@@ -151,10 +145,6 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
     &:hover
       color: $accent-green-hover
 
-  .settings-link
-    text-decoration: none
-    &:hover
-      color: $link-hover
 
 .top-menu
   flex-grow: 1
@@ -168,7 +158,6 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
   margin-right: $big
   font-size: $menu-font-size
   font-weight: normal
-  transition: color $animation-time ease
   color: $link-nav
 
   &:hover
@@ -178,7 +167,6 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
   &.create
     padding: $minor $small
     border-radius: $border-radius
-    transition: background $animation-time ease, border-color $animation-time ease, color $animation-time ease
     background: $bg-element
     border: 1px solid $border
     &:hover

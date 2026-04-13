@@ -1,5 +1,135 @@
 /* Global Theme CSS Custom Properties - this file must be imported directly in main.ts */
 
+/* =============================================================================
+   @property Registrations — Animatable Theme Transitions
+   =============================================================================
+   Registering custom properties with explicit syntax makes them interpolatable.
+   This allows transitioning ALL theme variables on <html> in a single
+   coordinated transition, eliminating desync between elements.
+
+   Browser support: Chrome 85+, Safari 15.4+, Firefox 128+, Edge 85+.
+   Unregistered properties fall back to discrete (snap) transitions.
+   ============================================================================= */
+
+/* Text */
+@property --text { syntax: '<color>'; inherits: true; initial-value: #333; }
+@property --text-muted { syntax: '<color>'; inherits: true; initial-value: #999; }
+@property --text-meta { syntax: '<color>'; inherits: true; initial-value: #7b532b; }
+@property --text-on-green { syntax: '<color>'; inherits: true; initial-value: #363; }
+@property --text-on-red { syntax: '<color>'; inherits: true; initial-value: #633; }
+@property --text-on-yellow { syntax: '<color>'; inherits: true; initial-value: #654; }
+
+/* Headings */
+@property --heading { syntax: '<color>'; inherits: true; initial-value: #630; }
+@property --heading-alt { syntax: '<color>'; inherits: true; initial-value: #666; }
+
+/* Links */
+@property --link { syntax: '<color>'; inherits: true; initial-value: #304060; }
+@property --link-hover { syntax: '<color>'; inherits: true; initial-value: #5090c0; }
+@property --link-nav { syntax: '<color>'; inherits: true; initial-value: #999; }
+@property --link-nav-hover { syntax: '<color>'; inherits: true; initial-value: #444; }
+
+/* Accents */
+@property --accent-green { syntax: '<color>'; inherits: true; initial-value: #393; }
+@property --accent-red { syntax: '<color>'; inherits: true; initial-value: #b22222; }
+@property --accent-yellow { syntax: '<color>'; inherits: true; initial-value: #d4a000; }
+@property --accent-green-hover { syntax: '<color>'; inherits: true; initial-value: #65c265; }
+@property --accent-red-hover { syntax: '<color>'; inherits: true; initial-value: #d33; }
+@property --accent-green-muted { syntax: '<color>'; inherits: true; initial-value: #8a9a8a; }
+@property --accent-red-muted { syntax: '<color>'; inherits: true; initial-value: #c08080; }
+
+/* Backgrounds */
+@property --bg-page { syntax: '<color>'; inherits: true; initial-value: #fff; }
+@property --bg-element { syntax: '<color>'; inherits: true; initial-value: #f9f9f9; }
+@property --bg-element-overlay { syntax: '<color>'; inherits: true; initial-value: rgba(0, 0, 0, 0.024); }
+@property --bg-element-hover { syntax: '<color>'; inherits: true; initial-value: #f2f2f2; }
+@property --bg-element-accent { syntax: '<color>'; inherits: true; initial-value: #eaeaea; }
+@property --bg-highlight-yellow { syntax: '<color>'; inherits: true; initial-value: #f5f5dc; }
+@property --bg-highlight-green { syntax: '<color>'; inherits: true; initial-value: #ebe9da; }
+@property --bg-highlight-red { syntax: '<color>'; inherits: true; initial-value: #f2d8c9; }
+@property --bg-highlight-blue { syntax: '<color>'; inherits: true; initial-value: #e9f0f9; }
+@property --selection-bg { syntax: '<color>'; inherits: true; initial-value: #3266d0; }
+@property --selection-text { syntax: '<color>'; inherits: true; initial-value: #fff; }
+
+/* Buttons */
+@property --button-bg { syntax: '<color>'; inherits: true; initial-value: #eaeaea; }
+@property --button-bg-hover { syntax: '<color>'; inherits: true; initial-value: #ddd; }
+@property --button-bg-disabled { syntax: '<color>'; inherits: true; initial-value: #f5f5f5; }
+@property --button-text { syntax: '<color>'; inherits: true; initial-value: #333; }
+@property --button-text-hover { syntax: '<color>'; inherits: true; initial-value: #000; }
+@property --button-text-disabled { syntax: '<color>'; inherits: true; initial-value: #aaa; }
+@property --button-border { syntax: '<color>'; inherits: true; initial-value: #ccc; }
+@property --button-border-hover { syntax: '<color>'; inherits: true; initial-value: #999; }
+@property --button-border-disabled { syntax: '<color>'; inherits: true; initial-value: #ddd; }
+
+/* Borders */
+@property --border { syntax: '<color>'; inherits: true; initial-value: #ccc; }
+@property --border-accent-blue { syntax: '<color>'; inherits: true; initial-value: #b0c4de; }
+@property --border-accent-green { syntax: '<color>'; inherits: true; initial-value: #696; }
+@property --border-accent-red { syntax: '<color>'; inherits: true; initial-value: #b33; }
+
+/* Progress */
+@property --progress-bg { syntax: '<color>'; inherits: true; initial-value: #f9f9f9; }
+@property --progress-fill { syntax: '<color>'; inherits: true; initial-value: #e9f0f9; }
+@property --progress-bg-overlay { syntax: '<color>'; inherits: true; initial-value: rgba(0, 0, 0, 0.024); }
+@property --progress-fill-overlay { syntax: '<color>'; inherits: true; initial-value: rgba(35, 105, 195, 0.1); }
+
+/* Inputs */
+@property --input-bg { syntax: '<color>'; inherits: true; initial-value: #f9f9f9; }
+@property --input-bg-overlay { syntax: '<color>'; inherits: true; initial-value: rgba(0, 0, 0, 0.024); }
+@property --input-bg-disabled { syntax: '<color>'; inherits: true; initial-value: #ddd; }
+
+/* Overlays & Shades */
+@property --shade-bg { syntax: '<color>'; inherits: true; initial-value: rgba(0, 0, 0, 0.6); }
+@property --shade-text { syntax: '<color>'; inherits: true; initial-value: #fff; }
+@property --tooltip-bg { syntax: '<color>'; inherits: true; initial-value: #333; }
+@property --tooltip-text { syntax: '<color>'; inherits: true; initial-value: #fff; }
+@property --tooltip-border { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --overlay-bg { syntax: '<color>'; inherits: true; initial-value: rgba(0, 0, 0, 0.25); }
+@property --overlay-subtle { syntax: '<color>'; inherits: true; initial-value: rgba(0, 0, 0, 0.05); }
+@property --overlay-emphasis { syntax: '<color>'; inherits: true; initial-value: rgba(0, 0, 0, 0.1); }
+@property --hover-overlay { syntax: '<color>'; inherits: true; initial-value: rgba(0, 0, 0, 0.04); }
+@property --active-overlay { syntax: '<color>'; inherits: true; initial-value: rgba(0, 0, 0, 0.08); }
+@property --shadow-color { syntax: '<color>'; inherits: true; initial-value: rgba(0, 0, 0, 0.12); }
+@property --nsfw-overlay { syntax: '<color>'; inherits: true; initial-value: rgba(230, 98, 126, 0.2); }
+@property --highlight-overlay-green { syntax: '<color>'; inherits: true; initial-value: rgba(122, 108, 8, 0.15); }
+@property --highlight-overlay-red { syntax: '<color>'; inherits: true; initial-value: rgba(178, 34, 34, 0.12); }
+@property --highlight-overlay-blue { syntax: '<color>'; inherits: true; initial-value: rgba(48, 64, 96, 0.1); }
+
+/* Decoration */
+@property --decoration-color { syntax: '<color>'; inherits: true; initial-value: #d8d8d8; }
+@property --partner-glow { syntax: '<color>'; inherits: true; initial-value: transparent; }
+
+/* Search */
+@property --search-highlight-bg { syntax: '<color>'; inherits: true; initial-value: rgba(255, 176, 32, 0.38); }
+
+/* Toast notifications */
+@property --toast-success-bg { syntax: '<color>'; inherits: true; initial-value: #2e7d32; }
+@property --toast-success-text { syntax: '<color>'; inherits: true; initial-value: #fff; }
+@property --toast-success-border { syntax: '<color>'; inherits: true; initial-value: #1b5e20; }
+@property --toast-error-bg { syntax: '<color>'; inherits: true; initial-value: #c62828; }
+@property --toast-error-text { syntax: '<color>'; inherits: true; initial-value: #fff; }
+@property --toast-error-border { syntax: '<color>'; inherits: true; initial-value: #b71c1c; }
+@property --toast-warning-bg { syntax: '<color>'; inherits: true; initial-value: #f9a825; }
+@property --toast-warning-text { syntax: '<color>'; inherits: true; initial-value: #1a1a1a; }
+@property --toast-warning-border { syntax: '<color>'; inherits: true; initial-value: #f57f17; }
+@property --toast-info-bg { syntax: '<color>'; inherits: true; initial-value: #1565c0; }
+@property --toast-info-text { syntax: '<color>'; inherits: true; initial-value: #fff; }
+@property --toast-info-border { syntax: '<color>'; inherits: true; initial-value: #0d47a1; }
+
+/* Numeric — brightness multipliers */
+@property --hover-brightness { syntax: '<number>'; inherits: true; initial-value: 0.7; }
+@property --active-brightness { syntax: '<number>'; inherits: true; initial-value: 0.5; }
+@property --partner-brightness { syntax: '<number>'; inherits: true; initial-value: 1.05; }
+
+/* Percentage — filter invert amount (replaces --filter-invert function value) */
+@property --invert-amount { syntax: '<percentage>'; inherits: true; initial-value: 0%; }
+
+
+/* =============================================================================
+   Light Theme
+   ============================================================================= */
+
 :root,
 html.theme_Light {
   --text: #333;
@@ -67,7 +197,8 @@ html.theme_Light {
   --highlight-overlay-blue: rgba(48, 64, 96, 0.1);
   --progress-bg-overlay: rgba(0, 0, 0, 0.024);
   --progress-fill-overlay: rgba(35, 105, 195, 0.1);
-  --filter-invert: none;
+  --invert-amount: 0%;
+  --decoration-color: #d8d8d8;
   --hover-brightness: 0.7;
   --active-brightness: 0.5;
   --partner-glow: transparent;
@@ -90,6 +221,10 @@ html.theme_Light {
   --toast-info-text: #fff;
   --toast-info-border: #0d47a1;
 }
+
+/* =============================================================================
+   Dark Theme
+   ============================================================================= */
 
 html.theme_Dark {
   --text: #e0e0e0;
@@ -157,7 +292,8 @@ html.theme_Dark {
   --highlight-overlay-blue: rgba(106, 159, 212, 0.15);
   --progress-bg-overlay: rgba(255, 255, 255, 0.07);
   --progress-fill-overlay: rgba(106, 134, 161, 0.4);
-  --filter-invert: invert(87%);
+  --invert-amount: 87%;
+  --decoration-color: #3a3a3a;
   --hover-brightness: 1.4;
   --active-brightness: 1.6;
   --partner-glow: rgba(255, 255, 255, 0.25);
@@ -179,6 +315,27 @@ html.theme_Dark {
   --toast-info-bg: #1976d2;
   --toast-info-text: #fff;
   --toast-info-border: #1565c0;
+}
+
+/* =============================================================================
+   Theme Transition
+   =============================================================================
+   All @property-registered custom properties are animatable. Transitioning
+   them on <html> means every element reading var(--xxx) sees smoothly
+   interpolated values — regardless of element-level transition overrides.
+
+   The .theme-ready class is added by App.vue after the initial theme is
+   applied, preventing a visible transition flash on page load.
+   ============================================================================= */
+
+html.theme-ready {
+  transition: all 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-ready {
+    transition: none !important;
+  }
 }
 
 /* vue-final-modal overlay override - loaded after vfm styles */

@@ -16,7 +16,7 @@ import { SubscriptionTargetType } from "@/shared/api/models/subscriptions";
 import { communityApi } from "@/shared/api";
 import { blacklistApi } from "@/shared/api";
 import { ROLE_INFO, STAFF_ROLES } from "@/shared/config/roles";
-import defaultPicture from "@/assets/images/userpic.png";
+import { defaultAvatarUrl as defaultPicture } from "@/shared/lib/utils/icons";
 import ProfilePicture from "./ProfilePicture.vue";
 import Button from "@/shared/ui/Button/Button.vue";
 import { EditableField } from "@/shared/ui/EditableField";
@@ -146,7 +146,7 @@ const registrationDate = computed(() => {
 
 const lastOnline = computed(() => {
   if (!props.user.lastActivityUtc) return "";
-  return dayjs(props.user.lastActivityUtc).format("DD.MM.YYYY HH:mm");
+  return dayjs(props.user.lastActivityUtc).format("DD.MM.YYYY [в] HH:mm");
 });
 
 const isOwnProfile = computed(

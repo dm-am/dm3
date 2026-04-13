@@ -5,15 +5,25 @@ import {
   useGlobalChatStore,
   type GlobalChatMessage,
 } from "@/entities/global-chat";
-import { useUserStore, UserRole } from "@/entities/user";
+import { useUserStore } from "@/entities/user";
 import { useUiStore } from "@/shared/stores/ui";
 import { AccessPolicy } from "@/shared/api/models/community";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import dayjs from "dayjs";
-import defaultAvatar from "@/assets/images/userpic.png";
+import { defaultAvatarUrl as defaultAvatar, symbols } from "@/shared/lib/utils/icons";
+import { SvgIcon } from "@/shared/ui/Icon";
 import { BBCodeEditor } from "@/features/editor";
 import { globalChatApi } from "@/entities/global-chat";
+import { ChatMessage } from "@/widgets/chat-message";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
+import {
+  groupMessagesWithSeparators,
+  isDateSeparator,
+  getLikesTooltip,
+  isUserOnline,
+  type MessageOrSeparator,
+} from "@/shared/lib/utils/chat";
+import { useMessagePermissions, useVirtualScroll } from "@/shared/lib/composables";
 
 const globalChatStore = useGlobalChatStore();
 const userStore = useUserStore();
@@ -28,11 +38,12 @@ const {
   highlightedMessageId,
 } = storeToRefs(globalChatStore);
 const { user } = storeToRefs(userStore);
-const { isCompactMode } = storeToRefs(useUiStore());
+const { isCompactLayout } = storeToRefs(useUiStore());
 
-const ONLINE_THRESHOLD_MINUTES = 5;
-const EDIT_TIME_LIMIT_MINUTES = 15;
 const MAX_MESSAGE_HEIGHT = 500;
+
+// Message permissions (shared composable)
+const { isModerator, canEdit: canEditMsg, canDelete: canDeleteMsg, canLike: canLikeMsg } = useMessagePermissions(user);
 
 const isBanned = computed(() => {
   if (!user.value?.accessPolicy) return false;
@@ -42,16 +53,7 @@ const isBanned = computed(() => {
   );
 });
 
-const isModerator = computed(() => {
-  if (!user.value) return false;
-  return (
-    user.value.roles?.some((r: UserRole) =>
-      [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(
-        r,
-      ),
-    ) ?? false
-  );
-});
+// isModerator provided by useMessagePermissions above
 
 const canSendMessages = computed(() => user.value && !isBanned.value);
 
@@ -271,77 +273,23 @@ function handleScroll() {
 }
 
 // Expanded messages
-const expandedMessages = ref<Set<string>>(new Set());
-const truncatedMessages = ref<Set<string>>(new Set());
 const expandedDeletedMessages = ref<Set<string>>(new Set());
 
-// Group messages with date separators
-type MessageOrSeparator =
-  | (GlobalChatMessage & { isContinuation?: boolean })
-  | { type: "date-separator"; date: string; formattedDate: string };
+// Group messages with date separators (uses shared utility)
+const messagesWithSeparators = computed((): MessageOrSeparator[] =>
+  groupMessagesWithSeparators(messages.value ?? []),
+);
 
-const CONTINUATION_TIME_LIMIT_MINUTES = 5;
+// isDateSeparator imported from shared/lib/utils/chat
 
-const messagesWithSeparators = computed((): MessageOrSeparator[] => {
-  if (!messages.value?.length) return [];
-
-  const result: MessageOrSeparator[] = [];
-  let lastDate: string | null = null;
-  let lastAuthor: string | null = null;
-  let lastMessageTime: dayjs.Dayjs | null = null;
-
-  for (const msg of messages.value) {
-    const msgDate = dayjs(msg.createdUtc).format("YYYY-MM-DD");
-    const msgTime = dayjs(msg.createdUtc);
-
-    if (lastDate !== msgDate) {
-      result.push({
-        type: "date-separator",
-        date: msgDate,
-        formattedDate: formatSeparatorDate(msgDate),
-      });
-      lastDate = msgDate;
-      lastAuthor = null;
-      lastMessageTime = null;
-    }
-
-    const isContinuation = !!(
-      !msg.isRemoved &&
-      lastAuthor === msg.author?.username &&
-      lastMessageTime &&
-      msgTime.diff(lastMessageTime, "minute") < CONTINUATION_TIME_LIMIT_MINUTES
-    );
-
-    result.push({ ...msg, isContinuation });
-
-    if (!msg.isRemoved) {
-      lastAuthor = msg.author?.username || null;
-      lastMessageTime = msgTime;
-    }
-  }
-
-  return result;
+// Virtual scroll for message list
+const itemCount = computed(() => messagesWithSeparators.value.length);
+const { virtualItems, totalSize, measureElement, scrollToIndex } = useVirtualScroll({
+  count: itemCount,
+  container: messagesContainer,
+  estimateSize: 80,
+  overscan: 15,
 });
-
-function formatSeparatorDate(dateStr: string): string {
-  const date = dayjs(dateStr);
-  const today = dayjs().startOf("day");
-  const yesterday = today.subtract(1, "day");
-
-  if (date.isSame(today, "day")) {
-    return "Сегодня";
-  }
-  if (date.isSame(yesterday, "day")) {
-    return "Вчера";
-  }
-  return date.format("D MMMM YYYY");
-}
-
-function isDateSeparator(
-  item: MessageOrSeparator,
-): item is { type: "date-separator"; date: string; formattedDate: string } {
-  return "type" in item && item.type === "date-separator";
-}
 
 // Generate recent dates for archive links
 const recentDates = computed(() => {
@@ -356,9 +304,9 @@ const recentDates = computed(() => {
   return dates;
 });
 
-// Replace images with links in compact mode
+// Replace images with links in compact layout
 function replaceImagesWithLinks(container: HTMLElement | null) {
-  if (!container || !isCompactMode.value) return;
+  if (!container || !isCompactLayout.value) return;
 
   const images = container.querySelectorAll(".msg-text img");
   images.forEach((img) => {
@@ -380,7 +328,7 @@ function replaceImagesWithLinks(container: HTMLElement | null) {
   });
 }
 
-// Restore images when leaving compact mode
+// Restore images when leaving compact layout
 function restoreImages(container: HTMLElement | null) {
   if (!container) return;
 
@@ -395,8 +343,8 @@ function restoreImages(container: HTMLElement | null) {
   });
 }
 
-// Watch compact mode changes
-watch(isCompactMode, (newValue) => {
+// Watch compact layout changes
+watch(isCompactLayout, (newValue) => {
   nextTick(() => {
     if (newValue) {
       replaceImagesWithLinks(messagesContainer.value);
@@ -413,7 +361,7 @@ watch(
   () => {
     nextTick(() => {
       initBbcodeInteractive(messagesContainer.value);
-      if (isCompactMode.value) {
+      if (isCompactLayout.value) {
         replaceImagesWithLinks(messagesContainer.value);
       }
     });
@@ -444,8 +392,8 @@ onMounted(async () => {
     });
   }
 
-  // Apply image replacement if in compact mode
-  if (isCompactMode.value) {
+  // Apply image replacement if in compact layout
+  if (isCompactLayout.value) {
     replaceImagesWithLinks(messagesContainer.value);
   }
 });
@@ -465,13 +413,14 @@ watch(highlightedMessageId, (newId) => {
   }
 });
 
-// Formatting
+// formatTime — use shared formatChatTime
 function formatTime(dateStr: string) {
   return dayjs(dateStr).format("HH:mm");
 }
+// TODO: replace formatTime calls with formatChatTime import
 
 function formatFullDate(msg: GlobalChatMessage) {
-  let result = `Отправлено: ${dayjs(msg.createdUtc).format("DD.MM.YYYY HH:mm")}`;
+  let result = `Отправлено: ${dayjs(msg.createdUtc).format("DD.MM.YYYY [в] HH:mm")}`;
   if (msg.edits?.length) {
     for (const edit of msg.edits) {
       const isSelf =
@@ -479,14 +428,14 @@ function formatFullDate(msg: GlobalChatMessage) {
       const editorName = isSelf
         ? "вами"
         : edit.editor?.username || "неизвестно";
-      result += `\nРедактирование: ${dayjs(edit.editedUtc).format("DD.MM.YYYY HH:mm")} (${editorName})`;
+      result += `\nРедактирование: ${dayjs(edit.editedUtc).format("DD.MM.YYYY [в] HH:mm")} (${editorName})`;
     }
   }
   return result;
 }
 
 function formatDeletedDate(msg: GlobalChatMessage) {
-  let result = `Отправлено: ${dayjs(msg.createdUtc).format("DD.MM.YYYY HH:mm")}`;
+  let result = `Отправлено: ${dayjs(msg.createdUtc).format("DD.MM.YYYY [в] HH:mm")}`;
   if (msg.edits?.length) {
     for (const edit of msg.edits) {
       const isSelf =
@@ -494,14 +443,14 @@ function formatDeletedDate(msg: GlobalChatMessage) {
       const editorName = isSelf
         ? "вами"
         : edit.editor?.username || "неизвестно";
-      result += `\nРедактирование: ${dayjs(edit.editedUtc).format("DD.MM.YYYY HH:mm")} (${editorName})`;
+      result += `\nРедактирование: ${dayjs(edit.editedUtc).format("DD.MM.YYYY [в] HH:mm")} (${editorName})`;
     }
   }
   const deleterUsername = msg.deletedBy?.username;
   const isSelfDelete = user.value && deleterUsername === user.value.username;
   const deleterName = isSelfDelete ? "вами" : deleterUsername || "неизвестно";
   const deletedUtcStr = msg.deletedUtc
-    ? dayjs(msg.deletedUtc).format("DD.MM.YYYY HH:mm")
+    ? dayjs(msg.deletedUtc).format("DD.MM.YYYY [в] HH:mm")
     : "";
   result += deletedUtcStr
     ? `\nУдалено: ${deletedUtcStr} (${deleterName})`
@@ -528,35 +477,21 @@ const latestActivityByUsername = computed(() => {
 function isOnline(author: any) {
   if (!author?.username) return false;
   const lastActivityUtc = latestActivityByUsername.value.get(author.username);
-  if (!lastActivityUtc) return false;
-  const minutesSinceOnline = dayjs().diff(
-    dayjs(lastActivityUtc),
-    "minute",
-    true,
-  );
-  return minutesSinceOnline <= ONLINE_THRESHOLD_MINUTES;
+  return isUserOnline(lastActivityUtc);
 }
 
-// Permissions
+// Permissions — canEditMsg, canDeleteMsg, canLikeMsg from useMessagePermissions above
+
 function canEditMessage(msg: GlobalChatMessage) {
-  if (!user.value || msg.isRemoved) return false;
-  if (isModerator.value) return true;
-  if (msg.author?.username !== user.value.username) return false;
-  const minutesSinceCreation = dayjs().diff(
-    dayjs(msg.createdUtc),
-    "minute",
-    true,
-  );
-  return minutesSinceCreation <= EDIT_TIME_LIMIT_MINUTES;
+  return canEditMsg(msg);
 }
 
 function canDeleteMessage(msg: GlobalChatMessage) {
-  return canEditMessage(msg);
+  return canDeleteMsg(msg);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function canLikeMessage(_msg: GlobalChatMessage) {
-  return !!user.value;
+function canLikeMessage(msg: GlobalChatMessage) {
+  return canLikeMsg(msg);
 }
 
 function isLikedByMe(msg: GlobalChatMessage) {
@@ -566,19 +501,9 @@ function isLikedByMe(msg: GlobalChatMessage) {
   );
 }
 
-function getLikesTooltip(msg: GlobalChatMessage) {
-  if (!msg.likes?.length) return "Нравится";
-  const names = msg.likes.map((u: any) => u.username);
-  const count = names.length;
-  if (count === 1) return `${names[0]} оценил(а) это`;
-  if (count === 2) return `${names[0]} и ${names[1]} оценили это`;
-  if (count <= 5) {
-    const last = names.pop();
-    return `${names.join(", ")} и ${last} оценили это`;
-  }
-  const shown = names.slice(0, 3);
-  const remaining = count - 3;
-  return `${shown.join(", ")} и еще ${remaining} оценили это`;
+// getLikesTooltip — delegated to shared utility
+function getMsgLikesTooltip(msg: GlobalChatMessage) {
+  return getLikesTooltip(msg.likes ?? []);
 }
 
 // Edit
@@ -606,7 +531,7 @@ function cancelEdit() {
   // Reinitialize interactive elements after DOM update
   nextTick(() => {
     initBbcodeInteractive(messagesContainer.value);
-    if (isCompactMode.value) {
+    if (isCompactLayout.value) {
       replaceImagesWithLinks(messagesContainer.value);
     }
   });
@@ -625,52 +550,9 @@ function handleEditSubmit() {
   }
 }
 
-// Message truncation (long messages)
-function needsTruncation(msg: GlobalChatMessage) {
-  // Check for [cut] marker in HTML (rendered as bb-cut-marker class)
-  return (
-    msg.text?.includes("bb-cut-marker") || truncatedMessages.value.has(msg.id)
-  );
-}
-
-function checkMessageHeight(msgId: string, el: HTMLElement | null) {
-  if (!el || truncatedMessages.value.has(msgId)) return;
-  requestAnimationFrame(() => {
-    if (el.scrollHeight > MAX_MESSAGE_HEIGHT) {
-      truncatedMessages.value.add(msgId);
-    }
-  });
-}
-
-function isExpanded(msgId: string) {
-  return expandedMessages.value.has(msgId);
-}
-
-function isTruncated(msg: GlobalChatMessage) {
-  return needsTruncation(msg) && !isExpanded(msg.id);
-}
-
-function toggleExpand(msgId: string) {
-  if (expandedMessages.value.has(msgId)) {
-    expandedMessages.value.delete(msgId);
-  } else {
-    expandedMessages.value.add(msgId);
-  }
-  if (hoveredMessageId.value === msgId && globalChatContainer.value) {
-    nextTick(() => {
-      const msgElement = document.getElementById(`msg-${msgId}`);
-      const container = globalChatContainer.value;
-      if (msgElement && container) {
-        const rect = msgElement.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
-        toolbarPosition.value = {
-          top: rect.top - containerRect.top - 16,
-          right: containerRect.right - rect.right + 8,
-        };
-      }
-    });
-  }
-}
+// Message truncation (long messages, [cut] markers, expand state) is now
+// fully owned by ChatMessage via <TruncatedContent>. The page only forwards
+// MAX_MESSAGE_HEIGHT to ChatMessage as the per-message collapse budget.
 
 // Deleted messages expand
 function isDeletedExpanded(msgId: string) {
@@ -703,19 +585,25 @@ function copyAnchor(msgId: string) {
 }
 
 function scrollToMessage(msgId: string) {
+  // With virtual scroll, element may not be in DOM yet — scroll virtualizer first
+  const index = messagesWithSeparators.value.findIndex(
+    (item) => !isDateSeparator(item) && (item as any).id === msgId,
+  );
+  if (index >= 0) {
+    scrollToIndex(index, { align: "center" });
+  }
+  // After virtualizer scrolls and renders, find DOM element for highlight
   nextTick(() => {
-    const element = document.getElementById(`msg-${msgId}`);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
-      // Delay highlight until after scroll animation (~500ms)
-      setTimeout(() => {
+    setTimeout(() => {
+      const element = document.getElementById(`msg-${msgId}`);
+      if (element) {
         element.classList.add("highlighted");
         setTimeout(() => {
           element.classList.remove("highlighted");
           globalChatStore.clearHighlight();
         }, 1500);
-      }, 400);
-    }
+      }
+    }, 100);
   });
 }
 
@@ -730,6 +618,10 @@ function getHashMessageId(): string | null {
 // Archive date navigation
 async function loadLogsForDate(date: string) {
   await globalChatStore.navigateToDate(date);
+  // Scroll to top of loaded messages
+  nextTick(() => {
+    scrollToIndex(0, { align: "start" });
+  });
 }
 
 // Jump to latest
@@ -772,7 +664,7 @@ async function confirmDelete() {
 </script>
 
 <template>
-  <page-title>Глобальный чат</page-title>
+  <page-title v-once>Глобальный чат</page-title>
 
   <!-- Archive links -->
   <div class="globalChat-archive">
@@ -794,7 +686,7 @@ async function confirmDelete() {
   <div
     ref="globalChatContainer"
     class="globalChat-container"
-    :class="{ 'compact-mode': isCompactMode }"
+    :class="{ 'layout-compact': isCompactLayout }"
   >
     <div
       ref="messagesContainer"
@@ -820,547 +712,66 @@ async function confirmDelete() {
           class="scroll-sentinel top-sentinel"
         ></div>
 
-        <template
-          v-for="item in messagesWithSeparators"
-          :key="isDateSeparator(item) ? `sep-${item.date}` : item.id"
-        >
-          <!-- Date Separator -->
-          <div v-if="isDateSeparator(item)" class="date-separator">
+        <!-- Virtual scroll container -->
+        <div :style="{ height: `${totalSize}px`, width: '100%', position: 'relative' }">
+          <div
+            v-for="vRow in virtualItems"
+            :key="vRow.key"
+            :ref="(el) => { if (el) measureElement(el as HTMLElement) }"
+            :data-index="vRow.index"
+            :style="{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              transform: `translateY(${vRow.start}px)`,
+            }"
+          >
+          <div v-if="isDateSeparator(messagesWithSeparators[vRow.index])" class="date-separator">
             <div class="separator-line"></div>
-            <span class="separator-text">{{ item.formattedDate }}</span>
+            <span class="separator-text">{{ (messagesWithSeparators[vRow.index] as any).formattedDate }}</span>
             <div class="separator-line"></div>
           </div>
 
-          <!-- Message -->
           <div
             v-else
-            :id="`msg-${item.id}`"
-            :data-id="item.id"
+            :id="`msg-${(messagesWithSeparators[vRow.index] as any).id}`"
+            :data-id="(messagesWithSeparators[vRow.index] as any).id"
             class="globalChat-message"
             :class="{
-              removed: item.isRemoved,
-              hovered: hoveredMessageId === item.id,
-              continuation: item.isContinuation,
+              removed: (messagesWithSeparators[vRow.index] as any).isRemoved,
+              hovered: hoveredMessageId === (messagesWithSeparators[vRow.index] as any).id,
+              continuation: (messagesWithSeparators[vRow.index] as any).isContinuation,
               'deleted-collapsed':
-                item.isRemoved && !isDeletedExpanded(item.id),
+                (messagesWithSeparators[vRow.index] as any).isRemoved && !isDeletedExpanded((messagesWithSeparators[vRow.index] as any).id),
             }"
-            @mouseenter="handleMessageMouseEnter($event, item.id)"
+            @mouseenter="handleMessageMouseEnter($event, (messagesWithSeparators[vRow.index] as any).id)"
             @mouseleave="handleMessageMouseLeave"
           >
-            <!-- Deleted message -->
-            <template v-if="item.isRemoved">
-              <!-- Compact mode: time + "Сообщение удалено" (clickable for moderators) -->
-              <div
-                v-if="isCompactMode && !isDeletedExpanded(item.id)"
-                class="msg-layout msg-layout-compact"
-              >
-                <div class="msg-body">
-                  <div class="msg-header msg-header-compact">
-                    <Tooltip :text="formatDeletedDate(item)">
-                      <span class="msg-time-group">
-                        <span class="msg-icon-placeholder"></span
-                        ><span class="msg-time">{{
-                          formatTime(item.createdUtc)
-                        }}</span>
-                      </span>
-                    </Tooltip>
-                    <span
-                      class="msg-deleted-inline"
-                      :class="{ clickable: isModerator }"
-                      @click="isModerator && toggleDeletedExpand(item.id)"
-                      >Сообщение удалено</span
-                    >
-                  </div>
-                </div>
-              </div>
-              <!-- Normal mode: circle + text -->
-              <div v-else-if="!isDeletedExpanded(item.id)" class="msg-layout">
-                <div class="msg-avatar-placeholder">
-                  <svg
-                    viewBox="0 0 64 64"
-                    width="64"
-                    height="64"
-                    class="deleted-avatar"
-                  >
-                    <circle
-                      cx="32"
-                      cy="32"
-                      r="30"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1"
-                      stroke-dasharray="4 2"
-                    />
-                    <path
-                      d="M20 20l24 24M44 20l-24 24"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                    />
-                  </svg>
-                </div>
-                <div
-                  class="msg-deleted"
-                  :class="{ clickable: isModerator }"
-                  @click="toggleDeletedExpand(item.id)"
-                >
-                  <span class="msg-deleted-label">Сообщение удалено</span>
-                </div>
-              </div>
-              <div
-                v-else
-                class="msg-layout"
-                :class="{ 'msg-layout-compact': isCompactMode }"
-              >
-                <router-link
-                  v-if="!isCompactMode"
-                  :to="{
-                    name: 'profile',
-                    params: { username: item.author.username },
-                  }"
-                  class="msg-avatar-link"
-                >
-                  <img
-                    :src="item.author.smallPictureUrl || defaultAvatar"
-                    :alt="item.author.username"
-                    class="msg-avatar"
-                  />
-                </router-link>
-                <div class="msg-body">
-                  <div
-                    class="msg-header"
-                    :class="{ 'msg-header-compact': isCompactMode }"
-                  >
-                    <!-- Compact mode: trash + time | name + Скрыть -->
-                    <template v-if="isCompactMode">
-                      <Tooltip :text="formatDeletedDate(item)">
-                        <span class="msg-time-group">
-                          <svg
-                            class="msg-deleted-icon"
-                            viewBox="-2.27 -3.0 28.54 28.54"
-                            fill="none"
-                          >
-                            <path
-                              d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                            /></svg
-                          ><span class="msg-time">{{
-                            formatTime(item.createdUtc)
-                          }}</span>
-                        </span>
-                      </Tooltip>
-                      <router-link
-                        :to="{
-                          name: 'profile',
-                          params: { username: item.author.username },
-                        }"
-                        class="msg-author"
-                        :class="{ online: isOnline(item.author) }"
-                        >{{ item.author.username }}</router-link
-                      ><a
-                        class="msg-hide-link msg-hide-link-inline"
-                        href="#"
-                        @click.prevent="toggleDeletedExpand(item.id)"
-                        >(скрыть)</a
-                      >
-                    </template>
-                    <!-- Normal mode: name, time, "Скрыть" link -->
-                    <template v-else>
-                      <router-link
-                        :to="{
-                          name: 'profile',
-                          params: { username: item.author.username },
-                        }"
-                        class="msg-author"
-                        :class="{ online: isOnline(item.author) }"
-                        >{{ item.author.username }}</router-link
-                      >
-                      <Tooltip :text="formatDeletedDate(item)">
-                        <span class="msg-time-group">
-                          <span class="msg-time">{{
-                            formatTime(item.createdUtc)
-                          }}</span>
-                          <svg
-                            class="msg-deleted-icon"
-                            viewBox="-2.27 -3.0 28.54 28.54"
-                            fill="none"
-                          >
-                            <path
-                              d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                            />
-                          </svg>
-                        </span>
-                      </Tooltip>
-                      <a
-                        class="msg-hide-link"
-                        href="#"
-                        @click.prevent="toggleDeletedExpand(item.id)"
-                        >(скрыть)</a
-                      >
-                    </template>
-                  </div>
-                  <div class="msg-content">
-                    <div class="msg-text bbcode-content" v-html="item.text" />
-                  </div>
-                </div>
-              </div>
-            </template>
-
-            <!-- Normal message -->
-            <template v-else>
-              <!-- Continuation message (only in normal mode, not compact) -->
-              <div
-                v-if="item.isContinuation && !isCompactMode"
-                class="msg-layout msg-continuation"
-              >
-                <div class="msg-time-gutter">
-                  <Tooltip :text="formatFullDate(item)">
-                    <span class="msg-time-group msg-time-hover"
-                      ><span class="msg-time">{{
-                        formatTime(item.createdUtc)
-                      }}</span
-                      ><svg
-                        v-if="item.edits?.length"
-                        class="msg-edited-icon"
-                        viewBox="-0.7 -1.2 25.4 25.4"
-                        fill="none"
-                      >
-                        <path
-                          d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        /></svg
-                      ><span v-else class="msg-icon-placeholder"></span
-                    ></span>
-                  </Tooltip>
-                </div>
-                <div class="msg-body">
-                  <template v-if="!isEditing(item.id)">
-                    <div
-                      :ref="
-                        (el) => checkMessageHeight(item.id, el as HTMLElement)
-                      "
-                      class="msg-content"
-                      :class="{ collapsed: isTruncated(item) }"
-                    >
-                      <div class="msg-text bbcode-content" v-html="item.text" />
-                    </div>
-                    <div
-                      v-if="needsTruncation(item)"
-                      class="msg-expand-row msg-expand-row-compact"
-                    >
-                      <button
-                        class="expand-toggle"
-                        @click="toggleExpand(item.id)"
-                      >
-                        <svg
-                          v-if="isExpanded(item.id)"
-                          viewBox="0 0 12 12"
-                          width="16"
-                          height="16"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <path d="M2 8L6 4L10 8" />
-                        </svg>
-                        <svg
-                          v-else
-                          viewBox="0 0 12 12"
-                          width="16"
-                          height="16"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <path d="M2 4L6 8L10 4" />
-                        </svg>
-                      </button>
-                    </div>
-                    <div
-                      v-if="!isCompactMode && item.likes?.length > 0"
-                      class="msg-reactions"
-                    >
-                      <Tooltip :text="getLikesTooltip(item)">
-                        <button
-                          class="reaction-badge"
-                          :class="{ 'my-reaction': isLikedByMe(item) }"
-                          @click="toggleLike(item)"
-                        >
-                          <svg
-                            viewBox="-1.2 -0.75 26.4 26.4"
-                            class="reaction-heart"
-                            fill="none"
-                          >
-                            <path
-                              d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                              stroke="currentColor"
-                              stroke-width="2"
-                            />
-                          </svg>
-                          <span class="reaction-count">{{
-                            item.likes.length
-                          }}</span>
-                        </button>
-                      </Tooltip>
-                    </div>
-                  </template>
-                  <div v-else class="msg-edit">
-                    <BBCodeEditor
-                      ref="editEditorRef"
-                      v-model="editText"
-                      context="message"
-                      placeholder="Редактирование сообщения..."
-                      :min-height="60"
-                      :max-height="200"
-                      @submit="handleEditSubmit"
-                    />
-                    <div class="msg-edit-actions">
-                      <button
-                        type="button"
-                        class="msg-edit-btn"
-                        @click="cancelEdit"
-                      >
-                        Отмена
-                      </button>
-                      <button
-                        type="button"
-                        class="msg-edit-btn"
-                        @click="saveEdit(item.id)"
-                      >
-                        Сохранить
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Full message (with avatar and header) -->
-              <div
-                v-else
-                class="msg-layout"
-                :class="{ 'msg-layout-compact': isCompactMode }"
-              >
-                <!-- Avatar (only in normal mode) -->
-                <router-link
-                  v-if="!isCompactMode"
-                  :to="{
-                    name: 'profile',
-                    params: { username: item.author.username },
-                  }"
-                  class="msg-avatar-link"
-                >
-                  <img
-                    :src="item.author.smallPictureUrl || defaultAvatar"
-                    :alt="item.author.username"
-                    class="msg-avatar"
-                  />
-                </router-link>
-
-                <div class="msg-body">
-                  <div
-                    class="msg-header"
-                    :class="{ 'msg-header-compact': isCompactMode }"
-                  >
-                    <!-- Compact mode: icon + time | name + likes -->
-                    <template v-if="isCompactMode">
-                      <Tooltip :text="formatFullDate(item)">
-                        <span class="msg-time-group">
-                          <svg
-                            v-if="item.edits?.length"
-                            class="msg-edited-icon"
-                            viewBox="-0.7 -1.2 25.4 25.4"
-                            fill="none"
-                          >
-                            <path
-                              d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            /></svg
-                          ><span v-else class="msg-icon-placeholder"></span
-                          ><span class="msg-time">{{
-                            formatTime(item.createdUtc)
-                          }}</span>
-                        </span>
-                      </Tooltip>
-                      <router-link
-                        :to="{
-                          name: 'profile',
-                          params: { username: item.author.username },
-                        }"
-                        class="msg-author"
-                        :class="{ online: isOnline(item.author) }"
-                        >{{ item.author.username }}</router-link
-                      ><Tooltip
-                        v-if="item.likes?.length > 0"
-                        :text="getLikesTooltip(item)"
-                      >
-                        <button
-                          class="msg-likes-inline"
-                          :class="{ 'my-like': isLikedByMe(item) }"
-                          @click="toggleLike(item)"
-                        >
-                          <svg viewBox="-1.2 -0.75 26.4 26.4" fill="none">
-                            <path
-                              d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                              stroke="currentColor"
-                              stroke-width="2"
-                            /></svg
-                          >{{ item.likes.length }}
-                        </button>
-                      </Tooltip>
-                    </template>
-                    <!-- Normal mode: name first, then time -->
-                    <template v-else>
-                      <router-link
-                        :to="{
-                          name: 'profile',
-                          params: { username: item.author.username },
-                        }"
-                        class="msg-author"
-                        :class="{ online: isOnline(item.author) }"
-                        >{{ item.author.username }}</router-link
-                      >
-                      <Tooltip :text="formatFullDate(item)">
-                        <span class="msg-time-group">
-                          <span class="msg-time">{{
-                            formatTime(item.createdUtc)
-                          }}</span
-                          ><svg
-                            v-if="item.edits?.length"
-                            class="msg-edited-icon"
-                            viewBox="-0.7 -1.2 25.4 25.4"
-                            fill="none"
-                          >
-                            <path
-                              d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            /></svg
-                          ><span v-else class="msg-icon-placeholder"></span>
-                        </span>
-                      </Tooltip>
-                    </template>
-                  </div>
-
-                  <template v-if="!isEditing(item.id)">
-                    <div
-                      :ref="
-                        (el) => checkMessageHeight(item.id, el as HTMLElement)
-                      "
-                      class="msg-content"
-                      :class="{ collapsed: isTruncated(item) }"
-                    >
-                      <div class="msg-text bbcode-content" v-html="item.text" />
-                    </div>
-                    <div v-if="needsTruncation(item)" class="msg-expand-row">
-                      <button
-                        class="expand-toggle"
-                        @click="toggleExpand(item.id)"
-                      >
-                        <svg
-                          v-if="isExpanded(item.id)"
-                          viewBox="0 0 12 12"
-                          width="16"
-                          height="16"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <path d="M2 8L6 4L10 8" />
-                        </svg>
-                        <svg
-                          v-else
-                          viewBox="0 0 12 12"
-                          width="16"
-                          height="16"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <path d="M2 4L6 8L10 4" />
-                        </svg>
-                      </button>
-                    </div>
-                    <div
-                      v-if="!isCompactMode && item.likes?.length > 0"
-                      class="msg-reactions"
-                    >
-                      <Tooltip :text="getLikesTooltip(item)">
-                        <button
-                          class="reaction-badge"
-                          :class="{ 'my-reaction': isLikedByMe(item) }"
-                          @click="toggleLike(item)"
-                        >
-                          <svg
-                            viewBox="-1.2 -0.75 26.4 26.4"
-                            class="reaction-heart"
-                            fill="none"
-                          >
-                            <path
-                              d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                              stroke="currentColor"
-                              stroke-width="2"
-                            />
-                          </svg>
-                          <span class="reaction-count">{{
-                            item.likes.length
-                          }}</span>
-                        </button>
-                      </Tooltip>
-                    </div>
-                  </template>
-
-                  <div v-else class="msg-edit">
-                    <BBCodeEditor
-                      ref="editEditorRef"
-                      v-model="editText"
-                      context="message"
-                      placeholder="Редактирование сообщения..."
-                      :min-height="60"
-                      :max-height="200"
-                      @submit="handleEditSubmit"
-                    />
-                    <div class="msg-edit-actions">
-                      <button
-                        type="button"
-                        class="msg-edit-btn"
-                        @click="cancelEdit"
-                      >
-                        Отмена
-                      </button>
-                      <button
-                        type="button"
-                        class="msg-edit-btn"
-                        @click="saveEdit(item.id)"
-                      >
-                        Сохранить
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </template>
+            <ChatMessage
+              :message="(messagesWithSeparators[vRow.index] as any)"
+              :compact="isCompactLayout"
+              :hovered="hoveredMessageId === (messagesWithSeparators[vRow.index] as any).id"
+              :is-online="isOnline((messagesWithSeparators[vRow.index] as any).author)"
+              :is-liked-by-me="isLikedByMe(messagesWithSeparators[vRow.index] as any)"
+              :can-edit="canEditMessage(messagesWithSeparators[vRow.index] as any)"
+              :can-delete="canDeleteMessage(messagesWithSeparators[vRow.index] as any)"
+              :can-like="canLikeMessage(messagesWithSeparators[vRow.index] as any)"
+              :is-moderator="isModerator"
+              :is-editing="isEditing((messagesWithSeparators[vRow.index] as any).id)"
+              :edit-text="editText"
+              :is-deleted-expanded="isDeletedExpanded((messagesWithSeparators[vRow.index] as any).id)"
+              :max-height="MAX_MESSAGE_HEIGHT"
+              @like="toggleLike(messagesWithSeparators[vRow.index] as any)"
+              @toggle-deleted="toggleDeletedExpand((messagesWithSeparators[vRow.index] as any).id)"
+              @start-edit="startEdit(messagesWithSeparators[vRow.index] as any)"
+              @save-edit="saveEdit((messagesWithSeparators[vRow.index] as any).id)"
+              @cancel-edit="cancelEdit"
+              @update:edit-text="editText = $event"
+            />
           </div>
-        </template>
+          </div>
+        </div>
 
         <!-- Bottom sentinel for loading newer messages -->
         <div
@@ -1394,31 +805,12 @@ async function confirmDelete() {
             class="toolbar-btn toolbar-btn-delete-confirm"
             @click="confirmDelete"
           >
-            <svg
-              viewBox="-2.27 -3.0 28.54 28.54"
-              width="20"
-              height="20"
-              fill="none"
-            >
-              <path
-                d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              />
-            </svg>
+            <SvgIcon name="trash" />
           </button>
         </Tooltip>
         <Tooltip text="Отмена">
           <button class="toolbar-btn toolbar-btn-cancel" @click="cancelDelete">
-            <svg viewBox="3.1 3.1 17.8 17.8" width="20" height="20" fill="none">
-              <path
-                d="M18 6L6 18M6 6l12 12"
-                stroke="currentColor"
-                stroke-width="1.48"
-                stroke-linecap="round"
-              />
-            </svg>
+            {{ symbols.close }}
           </button>
         </Tooltip>
       </template>
@@ -1433,53 +825,17 @@ async function confirmDelete() {
             :class="{ active: isLikedByMe(hoveredMessage) }"
             @click="toggleLike(hoveredMessage)"
           >
-            <svg
-              viewBox="-1.2 -0.75 26.4 26.4"
-              width="20"
-              height="20"
-              fill="none"
-            >
-              <path
-                d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                stroke="currentColor"
-                stroke-width="2"
-              />
-            </svg>
+            <SvgIcon name="heartEmpty" />
           </button>
         </Tooltip>
         <Tooltip v-if="canEditMessage(hoveredMessage)" text="Редактировать">
           <button class="toolbar-btn" @click="startEdit(hoveredMessage)">
-            <svg
-              viewBox="-0.7 -1.2 25.4 25.4"
-              width="20"
-              height="20"
-              fill="none"
-            >
-              <path
-                d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            <SvgIcon name="pencil" />
           </button>
         </Tooltip>
         <Tooltip v-if="canDeleteMessage(hoveredMessage)" text="Удалить">
           <button class="toolbar-btn" @click="requestDelete(hoveredMessage.id)">
-            <svg
-              viewBox="-2.27 -3.0 28.54 28.54"
-              width="20"
-              height="20"
-              fill="none"
-            >
-              <path
-                d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              />
-            </svg>
+            <SvgIcon name="trash" />
           </button>
         </Tooltip>
         <Tooltip text="Ссылка на сообщение">
@@ -1488,22 +844,7 @@ async function confirmDelete() {
             :href="`#msg-${hoveredMessage.id}`"
             @click.prevent="copyAnchor(hoveredMessage.id)"
           >
-            <svg viewBox="-2 -2 28 28" width="20" height="20" fill="none">
-              <path
-                d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-              <path
-                d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            <SvgIcon name="anchor" />
           </a>
         </Tooltip>
       </template>
@@ -1511,18 +852,7 @@ async function confirmDelete() {
 
     <!-- Scroll to latest button (centered over globalChat) -->
     <button v-if="hasMoreAfter" class="scroll-to-latest" @click="jumpToLatest">
-      <svg
-        viewBox="0 0 24 24"
-        width="24"
-        height="24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
-      </svg>
+      <SvgIcon name="chevronDown" />
     </button>
   </div>
 
@@ -1604,106 +934,15 @@ async function confirmDelete() {
   border-color: $border
   overflow: hidden  // Clips toolbar when outside bounds
 
-  // Compact mode overrides
-  &.compact-mode
+  // Compact display — wrapper overrides (own element, no :deep needed)
+  &.layout-compact
     .globalChat-message
       padding: $tiny $small $tiny $small
       margin-bottom: $small
-
-      // Deleted collapsed messages - less margin since no content
       &.deleted-collapsed
         margin-bottom: $tiny
-
-      // No continuation difference in compact mode
       &.continuation
         margin-top: 0
-
-    .msg-layout-compact
-      display: block
-
-    .msg-body
-      display: block
-
-    .msg-header-compact
-      display: inline-flex
-      align-items: center
-      gap: $small
-      margin-bottom: 0
-      line-height: 1
-
-    // Time group with fixed width for alignment
-    .msg-time-group
-      display: inline-flex
-      align-items: center
-      gap: 6px
-      margin-right: 0
-      min-width: 62px  // icon 16px + gap 6px + time ~40px
-
-    .msg-author
-      display: inline-flex
-      align-items: center
-
-    // Content on new line, aligned with author name
-    .msg-content
-      display: block
-      margin-left: calc(62px + #{$small})  // time-group width + gap
-      margin-top: 0
-
-    // Edit form also aligned with content
-    .msg-edit
-      margin-left: calc(62px + #{$small})
-
-    .msg-text
-      display: block
-
-    // Block elements - force new line in compact mode
-    // (spoiler-head and nsfw-head are now block globally in _BbcodeContent.sass)
-    .msg-text :deep(.bb-quote),
-    .msg-text :deep(.bb-mod),
-    .msg-text :deep(.bb-warning),
-    .msg-text :deep(.bb-private),
-    .msg-text :deep(.bb-cut-marker)
-      display: block !important
-      margin: 0 !important
-      padding: 0
-      line-height: 1.4
-
-    .msg-text :deep(ul),
-    .msg-text :deep(ol)
-      display: block !important
-      margin: 0 !important
-      padding-left: $big
-      line-height: 1.4
-
-    // Image link styling
-    .compact-image-link
-      color: $link
-      &:hover
-        color: $link-hover
-
-    // Reactions on new line
-    .msg-reactions
-      display: block
-      margin-top: $tiny
-
-    .msg-expand-row
-      display: flex
-      margin-top: $tiny
-      margin-left: 0
-      width: 100%
-
-    // Deleted messages - same position as author name, same height as eye button
-    .msg-deleted-inline
-      display: inline-flex
-      align-items: center
-      min-height: 16px
-      color: $text-muted
-      font-style: italic
-
-      &.clickable
-        cursor: pointer
-        &:hover
-          text-decoration: underline
 
 .globalChat-messages
   height: calc(100vh - 350px)
@@ -1783,7 +1022,6 @@ async function confirmDelete() {
   position: relative
   overflow: visible
   background-color: $bg-page
-  // Force GPU compositing to prevent subpixel layout jitter
   transform: translateZ(0)
   backface-visibility: hidden
 
@@ -1796,22 +1034,9 @@ async function confirmDelete() {
     background-color: $bg-element
     border-radius: 0 $border-radius $border-radius 0
 
-.msg-continuation
-  align-items: baseline
-  .msg-time-gutter
-    width: 64px
-    flex-shrink: 0
-    display: flex
-    justify-content: center
-    line-height: 1
-    .msg-time-hover
-      opacity: 0
-      transition: opacity 0.1s ease
 
-.globalChat-message:hover .msg-time-gutter .msg-time-hover,
-.globalChat-message.hovered .msg-time-gutter .msg-time-hover
-  opacity: 1
 
+// Parent states (own elements, no :deep needed)
 .globalChat-message.highlighted
   animation: highlight-fade 2s ease-out forwards
 
@@ -1826,186 +1051,7 @@ async function confirmDelete() {
   100%
     background-color: transparent
 
-.msg-layout
-  display: flex
-  gap: $medium
 
-.msg-layout-compact
-  gap: 0
-
-.msg-body
-  flex: 1
-  min-width: 0
-  position: relative
-
-.msg-header
-  display: flex
-  align-items: center
-  gap: $small
-  margin-bottom: $tiny
-  line-height: 1
-
-.msg-avatar-link
-  flex-shrink: 0
-  align-self: flex-start
-
-.msg-avatar
-  width: 64px
-  height: 64px
-  border-radius: 50%
-  object-fit: cover
-  display: block
-
-.msg-avatar-placeholder
-  flex-shrink: 0
-  width: 64px
-  height: 64px
-
-.deleted-avatar
-  border-radius: 50%
-  color: $border
-
-.msg-author
-  text-decoration: none
-  font-weight: 500
-  color: $text-muted
-  &:hover
-    color: $link-nav-hover
-    text-decoration: underline
-  &.online
-    color: $accent-green
-    &:hover
-      color: $accent-green-hover
-      text-decoration: underline
-
-.msg-time-group
-  display: inline-flex
-  align-items: center
-  gap: 6px
-  color: $text-muted
-  cursor: help
-
-// Иконки inline (карандаш, мусорка)
-.msg-edited-icon,
-.msg-deleted-icon
-  width: 16px
-  height: 16px
-  flex-shrink: 0
-  color: $text-muted
-
-// Placeholder для иконки (когда ее нет)
-.msg-icon-placeholder
-  display: inline-block
-  width: 16px
-  height: 16px
-  flex-shrink: 0
-
-// Иконки в кнопках (якорь) - центрируются flexbox-ом кнопки
-.msg-anchor-btn svg
-  width: 16px
-  height: 16px
-  flex-shrink: 0
-
-.msg-header-btn,
-.msg-anchor-btn
-  display: inline-flex
-  align-items: center
-  justify-content: center
-  width: 16px
-  height: 16px
-  min-width: 16px
-  margin: 0
-  padding: 0
-  border: none
-  background: transparent
-  cursor: pointer
-  color: $text-muted
-  text-decoration: none
-  font: inherit
-  line-height: inherit
-  box-sizing: border-box
-  -webkit-appearance: none
-  appearance: none
-  &:hover svg
-    filter: brightness($hover-brightness)
-
-.msg-content
-  color: $text
-  line-height: 1.5
-  position: relative
-
-  &.collapsed
-    max-height: 500px
-    overflow: hidden
-    &::after
-      content: ""
-      position: absolute
-      bottom: 0
-      left: 0
-      right: 0
-      height: 3em
-      background: linear-gradient(to bottom, transparent, var(--bg-page))
-      pointer-events: none
-
-.globalChat-message:hover .msg-content.collapsed::after,
-.globalChat-message.hovered .msg-content.collapsed::after
-  background: linear-gradient(to bottom, transparent, var(--bg-element))
-
-// .msg-text uses global .bbcode-content class
-.msg-text
-  // Images should align to top so time aligns with first "line"
-  :deep(img), :deep(.image)
-    vertical-align: top
-
-.msg-edit
-  margin-top: 0
-
-.msg-edit-actions
-  display: flex
-  justify-content: flex-start
-  gap: $small
-  margin-top: $small
-
-.msg-edit-btn
-  font-size: $secondary-font-size
-  +secondary-button
-
-.msg-expand-row
-  display: flex
-  align-items: center
-  gap: $small
-  margin-top: $small
-  // Extend to full width (beyond msg-body, covering avatar area)
-  margin-left: calc(-64px - #{$medium})
-  width: calc(100% + 64px + #{$medium})
-
-  &::before, &::after
-    content: ''
-    flex: 1
-    height: 0
-    border-top: 1px dashed $border
-
-.expand-toggle
-  flex-shrink: 0
-  display: inline-flex
-  align-items: center
-  justify-content: center
-  padding: 2px 6px
-  border: none
-  background: transparent
-  color: $text-muted
-  cursor: pointer
-  &:hover
-    filter: brightness($hover-brightness)
-
-.msg-reactions
-  display: flex
-  align-items: center
-  gap: $tiny
-  margin-top: $small
-
-.msg-expand-row + .msg-reactions
-  margin-top: $small
 
 .msg-toolbar
   position: absolute
@@ -2041,7 +1087,6 @@ async function confirmDelete() {
   background: transparent
   cursor: pointer
   color: $text-muted
-  transition: background-color 0.1s ease, color 0.1s ease
 
   svg
     transition: transform 0.15s ease
@@ -2075,7 +1120,7 @@ async function confirmDelete() {
   background-color: $hover-overlay
   color: $text-muted
   cursor: pointer
-  transition: background-color 0.1s ease, color 0.1s ease, transform 0.1s ease
+  transition: transform 0.1s ease
   border-radius: $border-radius
   svg
     width: 22px
@@ -2141,7 +1186,7 @@ async function confirmDelete() {
   margin-right: 6px
   vertical-align: middle
 
-// Inline likes in compact mode (with background like reaction-badge)
+// Inline likes in compact layout (with background like reaction-badge)
 .msg-likes-inline
   display: inline-flex
   align-items: center
@@ -2155,7 +1200,6 @@ async function confirmDelete() {
   line-height: 1
   cursor: pointer
   vertical-align: baseline
-  transition: background-color 0.1s ease
   svg
     width: 16px
     height: 16px
@@ -2243,7 +1287,7 @@ async function confirmDelete() {
   background-color: $bg-element
   color: $text-muted
   cursor: pointer
-  transition: all 0.15s ease
+  transition: transform 0.15s ease
   box-shadow: 0 2px 8px $shadow-color
   z-index: 10
   &:hover

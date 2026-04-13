@@ -10,8 +10,7 @@ import { gameApi } from "@/entities/game";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
-import Icon from "@/shared/ui/Icon/Icon.vue";
-import { IconType } from "@/shared/ui/Icon/iconType";
+import { SvgIcon } from "@/shared/ui/Icon";
 import GamePost from "./GamePost.vue";
 
 const route = useRoute();
@@ -71,7 +70,7 @@ useFetchData(
       :to="{ name: 'game-rooms', params: { id: game?.id } }"
       class="back-link"
     >
-      <Icon :font="IconType.ArrowLeft" />
+      <SvgIcon name="chevronLeft" />
       Назад к комнатам
     </router-link>
 

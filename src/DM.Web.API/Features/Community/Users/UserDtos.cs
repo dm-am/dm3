@@ -159,15 +159,6 @@ public class UserProfile : User
     // Note: RegisteredUtc is now in base User class
 
     /// <summary>
-    /// User's best post (highest rated)
-    /// </summary>
-    /// <remarks>
-    /// Automatically selected post with highest rating.
-    /// Null if user has no posts with positive rating.
-    /// </remarks>
-    public BestPostResult? BestPost { get; set; }
-
-    /// <summary>
     /// Number of post reviews given to other users
     /// </summary>
     public int PostReviewsGiven { get; set; }

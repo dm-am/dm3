@@ -12,7 +12,6 @@ import type {
   Username,
   UserRole,
   UsernameHistoryEntry,
-  BestPost,
   LiveStats,
   UserProfileNote,
   PublicWarning,
@@ -20,7 +19,7 @@ import type {
 } from "./models/community";
 import { UserActivityFilter } from "./models/community";
 import Api from "./client";
-import { BbRenderMode } from "./bbRenderMode";
+import { RENDER_AUDIENCE } from "./audience";
 
 export default new (class CommunityApi {
   // Note: Poll methods moved to @/entities/poll/api/pollApi.ts
@@ -59,7 +58,7 @@ export default new (class CommunityApi {
     return Api.get<UserProfile>(`users/${username}/profile`);
   }
   public getUserForUpdate(username: Username) {
-    return Api.get<User>(`users/${username}`, undefined, BbRenderMode.Bb);
+    return Api.get<User>(`users/${username}`, undefined, RENDER_AUDIENCE.AuthorEdit);
   }
 
   /**
@@ -132,9 +131,6 @@ export default new (class CommunityApi {
     return Api.get<ListEnvelope<UsernameHistoryEntry>>(
       `users/${username}/username-history`,
     );
-  }
-  public getBestPost(username: Username) {
-    return Api.get<BestPost>(`users/${username}/best-post`);
   }
 
   /** Get live community statistics (public endpoint, no auth needed) */

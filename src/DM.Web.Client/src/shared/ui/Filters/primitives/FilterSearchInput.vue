@@ -5,6 +5,7 @@
  * Simple input component - debouncing is handled by parent (useFilterSearch).
  */
 import { SvgIcon } from "@/shared/ui/Icon";
+import { symbols } from "@/shared/lib/utils/icons";
 
 defineOptions({ name: "FilterSearchInput" });
 
@@ -46,7 +47,7 @@ function clearInput() {
 
 <template>
   <div class="search-container">
-    <SvgIcon name="searchFilled" class="search-icon" />
+    <SvgIcon name="search" class="search-icon" />
     <input
       :value="modelValue"
       type="text"
@@ -63,7 +64,7 @@ function clearInput() {
       class="clear-input-btn"
       @click.stop="clearInput"
     >
-      <SvgIcon name="closeThin" />
+      {{ symbols.close }}
     </button>
   </div>
 </template>

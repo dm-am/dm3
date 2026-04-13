@@ -67,148 +67,162 @@ internal class GameRepository : IGameRepository
             .ProjectTo<GameDto>(_mapper.ConfigurationProvider)
             .ToArrayAsync(ct);
 
-        // Batch populate PcCount, Players, SubscriberIds, and invitation tokens
-        if (games.Length > 0)
+        await EnrichGamesAsync(games, ct);
+        return games;
+    }
+
+    /// <summary>
+    /// Populate computed / aggregated fields on Game DTOs that cannot
+    /// be produced by the ProjectTo mapping (ActiveCharacters, Players,
+    /// SubscriberIds, Recruitment.PcCount, GameReviewsCount,
+    /// PostReviewsCount, SubscriberUsernames, Pending* invitations).
+    ///
+    /// This is the single source of truth for "full game DTO hydration"
+    /// and MUST be called by every read path that returns a Game or
+    /// GameDetails (list, by-ids, details). Previously the inline
+    /// duplicated block lived in three places; details-reads skipped
+    /// it entirely, which is why the game tooltip on featured posts
+    /// silently showed no characters. Works uniformly for Game and
+    /// GameDetails (GameDetails : Game) — the type parameter is
+    /// constrained so callers can pass paged lists, ad-hoc arrays, or
+    /// a single-element array from a details fetch, all for the same
+    /// code path.
+    ///
+    /// All queries are batched (GROUP BY / IN(...)) so the cost is
+    /// O(1) per table regardless of how many games are in the input.
+    /// </summary>
+    private async Task EnrichGamesAsync<T>(
+        IReadOnlyList<T> games,
+        CancellationToken ct) where T : GameDto
+    {
+        if (games.Count == 0) return;
+        var gameIds = games.Select(g => g.Id).ToHashSet();
+
+        // PcCount — active non-NPC characters per game, single GROUP BY.
+        var pcCounts = await _dbContext.Characters
+            .Where(c => gameIds.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc)
+            .GroupBy(c => c.GameId)
+            .Select(g => new { GameId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.GameId, x => x.Count, ct);
+
+        foreach (var game in games)
         {
-            var gameIds = games.Select(g => g.Id).ToHashSet();
+            game.Recruitment.PcCount = pcCounts.GetValueOrDefault(game.Id, 0);
+        }
 
-            // Batch load PcCount (active non-NPC characters) - single GROUP BY query
-            var pcCounts = await _dbContext.Characters
-                .Where(c => gameIds.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc)
-                .GroupBy(c => c.GameId)
-                .Select(g => new { GameId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.GameId, x => x.Count, ct);
+        // Players — unique authors of active non-NPC characters.
+        var playerData = await _dbContext.Characters
+            .Where(c => gameIds.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc && c.AuthorId.HasValue)
+            .Select(c => new { c.GameId, c.Author })
+            .Where(c => c.Author != null)
+            .ToListAsync(ct);
 
-            foreach (var game in games)
+        var playersMap = playerData
+            .GroupBy(c => c.GameId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(c => c.Author!).DistinctBy(u => u.UserId).ToList());
+
+        // Subscriber ids for participation detection.
+        var subscriptionMap = await _dbContext.Subscriptions
+            .Where(s => s.TargetType == SubscriptionTargetType.Game && gameIds.Contains(s.TargetId))
+            .GroupBy(s => s.TargetId)
+            .ToDictionaryAsync(g => g.Key, g => g.Select(s => s.SubscriberId).ToHashSet(), ct);
+
+        foreach (var game in games)
+        {
+            game.Players = playersMap.TryGetValue(game.Id, out var players)
+                ? players.Select(u => _mapper.Map<GeneralUser>(u)).ToList()
+                : [];
+            game.SubscriberIds = subscriptionMap.GetValueOrDefault(game.Id, []);
+        }
+
+        // Invitation tokens — single query instead of N subqueries.
+        var tokens = await _dbContext.Tokens
+            .Include(t => t.User)
+            .Where(t => !t.IsRemoved &&
+                        t.EntityId.HasValue &&
+                        gameIds.Contains(t.EntityId.Value) &&
+                        (t.Type == TokenType.GameAssistantInvitation ||
+                         t.Type == TokenType.GamePlayerInvitation ||
+                         t.Type == TokenType.GameReaderInvitation))
+            .ToListAsync(ct);
+
+        var tokensByGame = tokens.GroupBy(t => t.EntityId!.Value).ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var game in games)
+        {
+            if (tokensByGame.TryGetValue(game.Id, out var gameTokens))
             {
-                game.Recruitment.PcCount = pcCounts.GetValueOrDefault(game.Id, 0);
+                var assistantToken = gameTokens.FirstOrDefault(t => t.Type == TokenType.GameAssistantInvitation);
+                game.PendingAssistant = assistantToken != null
+                    ? _mapper.Map<GeneralUser>(assistantToken.User)
+                    : null;
+                game.PendingInvitedUserIds = gameTokens
+                    .Where(t => t.Type == TokenType.GamePlayerInvitation || t.Type == TokenType.GameReaderInvitation)
+                    .Select(t => t.UserId)
+                    .ToHashSet();
+                game.PendingPlayerInvitedUserIds = gameTokens
+                    .Where(t => t.Type == TokenType.GamePlayerInvitation)
+                    .Select(t => t.UserId)
+                    .ToHashSet();
             }
-
-            // Load players (unique users with active non-NPC characters) - single efficient query
-            var playerData = await _dbContext.Characters
-                .Where(c => gameIds.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc && c.AuthorId.HasValue)
-                .Select(c => new { c.GameId, c.Author })
-                .Where(c => c.Author != null)
-                .ToListAsync(ct);
-
-            var playersMap = playerData
-                .GroupBy(c => c.GameId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Select(c => c.Author!).DistinctBy(u => u.UserId).ToList());
-
-            // Load subscriber ids (for participation detection)
-            var subscriptionMap = await _dbContext.Subscriptions
-                .Where(s => s.TargetType == SubscriptionTargetType.Game && gameIds.Contains(s.TargetId))
-                .GroupBy(s => s.TargetId)
-                .ToDictionaryAsync(g => g.Key, g => g.Select(s => s.SubscriberId).ToHashSet(), ct);
-
-            foreach (var game in games)
+            else
             {
-                // Players (for participation detection and game details page)
-                game.Players = playersMap.TryGetValue(game.Id, out var players)
-                    ? players.Select(u => _mapper.Map<GeneralUser>(u)).ToList()
-                    : [];
-
-                // Subscriber ids (for participation detection)
-                game.SubscriberIds = subscriptionMap.GetValueOrDefault(game.Id, []);
-            }
-
-            // Batch load token data (invitations) - single query instead of N subqueries
-            var tokens = await _dbContext.Tokens
-                .Include(t => t.User)
-                .Where(t => !t.IsRemoved &&
-                            t.EntityId.HasValue &&
-                            gameIds.Contains(t.EntityId.Value) &&
-                            (t.Type == TokenType.GameAssistantInvitation ||
-                             t.Type == TokenType.GamePlayerInvitation ||
-                             t.Type == TokenType.GameReaderInvitation))
-                .ToListAsync(ct);
-
-            var tokensByGame = tokens.GroupBy(t => t.EntityId!.Value).ToDictionary(g => g.Key, g => g.ToList());
-
-            foreach (var game in games)
-            {
-                if (tokensByGame.TryGetValue(game.Id, out var gameTokens))
-                {
-                    // PendingAssistant: first user with assistant invitation
-                    var assistantToken = gameTokens.FirstOrDefault(t => t.Type == TokenType.GameAssistantInvitation);
-                    game.PendingAssistant = assistantToken != null
-                        ? _mapper.Map<GeneralUser>(assistantToken.User)
-                        : null;
-
-                    // PendingInvitedUserIds: all users with player OR reader invitation
-                    game.PendingInvitedUserIds = gameTokens
-                        .Where(t => t.Type == TokenType.GamePlayerInvitation || t.Type == TokenType.GameReaderInvitation)
-                        .Select(t => t.UserId)
-                        .ToHashSet();
-
-                    // PendingPlayerInvitedUserIds: only users with player invitation
-                    game.PendingPlayerInvitedUserIds = gameTokens
-                        .Where(t => t.Type == TokenType.GamePlayerInvitation)
-                        .Select(t => t.UserId)
-                        .ToHashSet();
-                }
-                else
-                {
-                    game.PendingAssistant = null;
-                    game.PendingInvitedUserIds = new HashSet<Guid>();
-                    game.PendingPlayerInvitedUserIds = new HashSet<Guid>();
-                }
-            }
-
-            // Batch load review counts - single efficient query for game reviews
-            var gameReviewCounts = await _dbContext.GameReviews
-                .Where(r => !r.IsRemoved && gameIds.Contains(r.GameId))
-                .GroupBy(r => r.GameId)
-                .Select(g => new { GameId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.GameId, x => x.Count, ct);
-
-            // Batch load review counts - single efficient query for post reviews (using denormalized GameId)
-            var postReviewCounts = await _dbContext.PostReviews
-                .Where(r => !r.IsRemoved && gameIds.Contains(r.GameId))
-                .GroupBy(r => r.GameId)
-                .Select(g => new { GameId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.GameId, x => x.Count, ct);
-
-            // Batch load subscriber usernames for tooltip (limit to first 20)
-            var subscriberData = await _dbContext.Subscriptions
-                .Where(s => s.TargetType == SubscriptionTargetType.Game && gameIds.Contains(s.TargetId))
-                .Select(s => new { s.TargetId, Username = s.Subscriber.Username })
-                .ToListAsync(ct);
-
-            var subscriberUsernamesMap = subscriberData
-                .GroupBy(s => s.TargetId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Select(s => s.Username).Take(20).ToList());
-
-            // Batch load active characters for [X/Y] tooltip
-            var activeCharacterData = await _dbContext.Characters
-                .Where(c => gameIds.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc)
-                .Select(c => new { c.GameId, c.Name, OwnerUsername = c.Author!.Username })
-                .ToListAsync(ct);
-
-            var activeCharactersMap = activeCharacterData
-                .GroupBy(c => c.GameId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Select(c => new ActiveCharacterInfo
-                    {
-                        Name = c.Name,
-                        OwnerUsername = c.OwnerUsername
-                    }).ToList());
-
-            foreach (var game in games)
-            {
-                game.GameReviewsCount = gameReviewCounts.GetValueOrDefault(game.Id, 0);
-                game.PostReviewsCount = postReviewCounts.GetValueOrDefault(game.Id, 0);
-                game.SubscriberUsernames = subscriberUsernamesMap.GetValueOrDefault(game.Id, []);
-                game.ActiveCharacters = activeCharactersMap.GetValueOrDefault(game.Id, []);
+                game.PendingAssistant = null;
+                game.PendingInvitedUserIds = new HashSet<Guid>();
+                game.PendingPlayerInvitedUserIds = new HashSet<Guid>();
             }
         }
 
-        return games;
+        // Game / post review counts — both batched by GameId.
+        var gameReviewCounts = await _dbContext.GameReviews
+            .Where(r => !r.IsRemoved && gameIds.Contains(r.GameId))
+            .GroupBy(r => r.GameId)
+            .Select(g => new { GameId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.GameId, x => x.Count, ct);
+
+        var postReviewCounts = await _dbContext.PostReviews
+            .Where(r => !r.IsRemoved && gameIds.Contains(r.GameId))
+            .GroupBy(r => r.GameId)
+            .Select(g => new { GameId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.GameId, x => x.Count, ct);
+
+        // Subscriber usernames for tooltip (cap at 20 per game).
+        var subscriberData = await _dbContext.Subscriptions
+            .Where(s => s.TargetType == SubscriptionTargetType.Game && gameIds.Contains(s.TargetId))
+            .Select(s => new { s.TargetId, Username = s.Subscriber.Username })
+            .ToListAsync(ct);
+
+        var subscriberUsernamesMap = subscriberData
+            .GroupBy(s => s.TargetId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(s => s.Username).Take(20).ToList());
+
+        // Active characters for [X/Y] tooltip — feeds game/room tooltips.
+        var activeCharacterData = await _dbContext.Characters
+            .Where(c => gameIds.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc)
+            .Select(c => new { c.GameId, c.Name, OwnerUsername = c.Author!.Username })
+            .ToListAsync(ct);
+
+        var activeCharactersMap = activeCharacterData
+            .GroupBy(c => c.GameId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(c => new ActiveCharacterInfo
+                {
+                    Name = c.Name,
+                    OwnerUsername = c.OwnerUsername
+                }).ToList());
+
+        foreach (var game in games)
+        {
+            game.GameReviewsCount = gameReviewCounts.GetValueOrDefault(game.Id, 0);
+            game.PostReviewsCount = postReviewCounts.GetValueOrDefault(game.Id, 0);
+            game.SubscriberUsernames = subscriberUsernamesMap.GetValueOrDefault(game.Id, []);
+            game.ActiveCharacters = activeCharactersMap.GetValueOrDefault(game.Id, []);
+        }
     }
 
     private IQueryable<DbGame> ApplyFilters(IQueryable<DbGame> games, GamesQuery query, Guid userId)
@@ -606,13 +620,25 @@ internal class GameRepository : IGameRepository
         return counts.ToDictionary(x => x.GameId, x => x.Count);
     }
 
-    public Task<GameDetails?> GetGameDetails(Guid gameId, Guid userId, CancellationToken ct = default)
+    public async Task<GameDetails?> GetGameDetails(Guid gameId, Guid userId, CancellationToken ct = default)
     {
-        return _dbContext.Games
+        var game = await _dbContext.Games
             .Where(GameAccessibilityFilters.GameAvailable(userId))
             .Where(g => g.GameId == gameId)
             .ProjectTo<GameDetails>(_mapper.ConfigurationProvider)
-            .FirstOrDefaultAsync(ct)!;
+            .FirstOrDefaultAsync(ct);
+
+        if (game is not null)
+        {
+            // Single-element enrichment — reuses the same batched helper
+            // as the list / by-ids paths so the details endpoint returns
+            // ActiveCharacters, Players, SubscriberUsernames, review
+            // counts, etc. Previously these were silently empty on the
+            // details path, which is why game tooltips on featured
+            // posts showed no characters.
+            await EnrichGamesAsync(new[] { game }, ct);
+        }
+        return game;
     }
 
     public Task<GameDto?> GetGame(Guid gameId, Guid userId, CancellationToken ct = default)
@@ -633,13 +659,19 @@ internal class GameRepository : IGameRepository
             .FirstOrDefaultAsync(ct)!;
     }
 
-    public Task<GameDetails?> GetGameDetailsByPublicId(string publicId, Guid userId, CancellationToken ct = default)
+    public async Task<GameDetails?> GetGameDetailsByPublicId(string publicId, Guid userId, CancellationToken ct = default)
     {
-        return _dbContext.Games
+        var game = await _dbContext.Games
             .Where(GameAccessibilityFilters.GameAvailable(userId))
             .Where(g => g.PublicId == publicId)
             .ProjectTo<GameDetails>(_mapper.ConfigurationProvider)
-            .FirstOrDefaultAsync(ct)!;
+            .FirstOrDefaultAsync(ct);
+
+        if (game is not null)
+        {
+            await EnrichGamesAsync(new[] { game }, ct);
+        }
+        return game;
     }
 
     public async Task<IEnumerable<GameTag>> GetTags(CancellationToken ct = default)
@@ -674,144 +706,7 @@ internal class GameRepository : IGameRepository
             .ProjectTo<GameDto>(_mapper.ConfigurationProvider)
             .ToArrayAsync(ct);
 
-        // Batch populate PcCount, Players, SubscriberIds, and invitation tokens
-        if (games.Length > 0)
-        {
-            var ids = games.Select(g => g.Id).ToHashSet();
-
-            // Batch load PcCount (active non-NPC characters)
-            var pcCounts = await _dbContext.Characters
-                .Where(c => ids.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc)
-                .GroupBy(c => c.GameId)
-                .Select(g => new { GameId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.GameId, x => x.Count, ct);
-
-            foreach (var game in games)
-            {
-                game.Recruitment.PcCount = pcCounts.GetValueOrDefault(game.Id, 0);
-            }
-
-            // Load players (unique users with active non-NPC characters)
-            var playerData = await _dbContext.Characters
-                .Where(c => ids.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc && c.AuthorId.HasValue)
-                .Select(c => new { c.GameId, c.Author })
-                .Where(c => c.Author != null)
-                .ToListAsync(ct);
-
-            var playersMap = playerData
-                .GroupBy(c => c.GameId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Select(c => c.Author!).DistinctBy(u => u.UserId).ToList());
-
-            // Load subscriber ids (for participation detection)
-            var subscriptionMap = await _dbContext.Subscriptions
-                .Where(s => s.TargetType == SubscriptionTargetType.Game && ids.Contains(s.TargetId))
-                .GroupBy(s => s.TargetId)
-                .ToDictionaryAsync(g => g.Key, g => g.Select(s => s.SubscriberId).ToHashSet(), ct);
-
-            foreach (var game in games)
-            {
-                // Players (for participation detection and game details page)
-                game.Players = playersMap.TryGetValue(game.Id, out var players)
-                    ? players.Select(u => _mapper.Map<GeneralUser>(u)).ToList()
-                    : [];
-
-                // Subscriber ids (for participation detection)
-                game.SubscriberIds = subscriptionMap.GetValueOrDefault(game.Id, []);
-            }
-
-            // Batch load token data (invitations)
-            var tokens = await _dbContext.Tokens
-                .Include(t => t.User)
-                .Where(t => !t.IsRemoved &&
-                            t.EntityId.HasValue &&
-                            ids.Contains(t.EntityId.Value) &&
-                            (t.Type == TokenType.GameAssistantInvitation ||
-                             t.Type == TokenType.GamePlayerInvitation ||
-                             t.Type == TokenType.GameReaderInvitation))
-                .ToListAsync(ct);
-
-            var tokensByGame = tokens.GroupBy(t => t.EntityId!.Value).ToDictionary(g => g.Key, g => g.ToList());
-
-            foreach (var game in games)
-            {
-                if (tokensByGame.TryGetValue(game.Id, out var gameTokens))
-                {
-                    var assistantToken = gameTokens.FirstOrDefault(t => t.Type == TokenType.GameAssistantInvitation);
-                    game.PendingAssistant = assistantToken != null
-                        ? _mapper.Map<GeneralUser>(assistantToken.User)
-                        : null;
-
-                    game.PendingInvitedUserIds = gameTokens
-                        .Where(t => t.Type == TokenType.GamePlayerInvitation || t.Type == TokenType.GameReaderInvitation)
-                        .Select(t => t.UserId)
-                        .ToHashSet();
-
-                    game.PendingPlayerInvitedUserIds = gameTokens
-                        .Where(t => t.Type == TokenType.GamePlayerInvitation)
-                        .Select(t => t.UserId)
-                        .ToHashSet();
-                }
-                else
-                {
-                    game.PendingAssistant = null;
-                    game.PendingInvitedUserIds = new HashSet<Guid>();
-                    game.PendingPlayerInvitedUserIds = new HashSet<Guid>();
-                }
-            }
-
-            // Batch load review counts for game reviews
-            var gameReviewCounts = await _dbContext.GameReviews
-                .Where(r => !r.IsRemoved && ids.Contains(r.GameId))
-                .GroupBy(r => r.GameId)
-                .Select(g => new { GameId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.GameId, x => x.Count, ct);
-
-            // Batch load review counts for post reviews (using denormalized GameId)
-            var postReviewCounts = await _dbContext.PostReviews
-                .Where(r => !r.IsRemoved && ids.Contains(r.GameId))
-                .GroupBy(r => r.GameId)
-                .Select(g => new { GameId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.GameId, x => x.Count, ct);
-
-            // Batch load subscriber usernames for tooltip (limit to first 20)
-            var subscriberData = await _dbContext.Subscriptions
-                .Where(s => s.TargetType == SubscriptionTargetType.Game && ids.Contains(s.TargetId))
-                .Select(s => new { s.TargetId, Username = s.Subscriber.Username })
-                .ToListAsync(ct);
-
-            var subscriberUsernamesMap = subscriberData
-                .GroupBy(s => s.TargetId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Select(s => s.Username).Take(20).ToList());
-
-            // Batch load active characters for [X/Y] tooltip
-            var activeCharacterData = await _dbContext.Characters
-                .Where(c => ids.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc)
-                .Select(c => new { c.GameId, c.Name, OwnerUsername = c.Author!.Username })
-                .ToListAsync(ct);
-
-            var activeCharactersMap = activeCharacterData
-                .GroupBy(c => c.GameId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Select(c => new ActiveCharacterInfo
-                    {
-                        Name = c.Name,
-                        OwnerUsername = c.OwnerUsername
-                    }).ToList());
-
-            foreach (var game in games)
-            {
-                game.GameReviewsCount = gameReviewCounts.GetValueOrDefault(game.Id, 0);
-                game.PostReviewsCount = postReviewCounts.GetValueOrDefault(game.Id, 0);
-                game.SubscriberUsernames = subscriberUsernamesMap.GetValueOrDefault(game.Id, []);
-                game.ActiveCharacters = activeCharactersMap.GetValueOrDefault(game.Id, []);
-            }
-        }
-
+        await EnrichGamesAsync(games, ct);
         return games;
     }
 

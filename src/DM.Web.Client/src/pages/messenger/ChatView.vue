@@ -5,11 +5,21 @@ import { storeToRefs } from "pinia";
 import { useMessagingStore } from "@/entities/message";
 import { useUserStore } from "@/entities/user";
 import { useUiStore } from "@/shared/stores/ui";
-import { UserRole, AccessPolicy } from "@/shared/api/models/community";
+import { AccessPolicy } from "@/shared/api/models/community";
+import {
+  groupMessagesWithSeparators,
+  isDateSeparator,
+  getLikesTooltip as getLikesTooltipUtil,
+  isUserOnline,
+  type MessageOrSeparator,
+} from "@/shared/lib/utils/chat";
+import { useMessagePermissions, useVirtualScroll } from "@/shared/lib/composables";
+import { ChatMessage } from "@/widgets/chat-message";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import type { ChatId, Message } from "@/entities/message";
 import dayjs from "dayjs";
-import defaultAvatar from "@/assets/images/userpic.png";
+import { defaultAvatarUrl as defaultAvatar, symbols } from "@/shared/lib/utils/icons";
+import { SvgIcon } from "@/shared/ui/Icon";
 import { BBCodeEditor } from "@/features/editor";
 import { messagingApi } from "@/entities/message";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
@@ -18,7 +28,7 @@ const route = useRoute();
 const router = useRouter();
 const messagingStore = useMessagingStore();
 const { user: currentUser } = storeToRefs(useUserStore());
-const { isCompactMode } = storeToRefs(useUiStore());
+const { isCompactLayout } = storeToRefs(useUiStore());
 const {
   selectedChat,
   messagesList,
@@ -31,10 +41,7 @@ const {
   hasMoreAfter,
 } = storeToRefs(messagingStore);
 
-const ONLINE_THRESHOLD_MINUTES = 5;
-const EDIT_TIME_LIMIT_MINUTES = 15;
 const MAX_MESSAGE_HEIGHT = 200;
-const CONTINUATION_TIME_LIMIT_MINUTES = 5;
 
 const isBanned = computed(() => {
   if (!currentUser.value?.accessPolicy) return false;
@@ -44,16 +51,8 @@ const isBanned = computed(() => {
   );
 });
 
-const isModerator = computed(() => {
-  if (!currentUser.value) return false;
-  return (
-    currentUser.value.roles?.some((r: UserRole) =>
-      [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(
-        r,
-      ),
-    ) ?? false
-  );
-});
+// Message permissions (shared composable)
+const { isModerator, canEdit: canEditMsg, canDelete: canDeleteMsg, canLike: canLikeMsg } = useMessagePermissions(currentUser);
 
 const canSendMessages = computed(() => currentUser.value && !isBanned.value);
 
@@ -73,71 +72,20 @@ const interlocutorPicture = computed(
   () => interlocutor.value?.smallPictureUrl || defaultAvatar,
 );
 
-// Group messages with date separators
-type MessageOrSeparator =
-  | (Message & { isContinuation?: boolean })
-  | { type: "date-separator"; date: string; formattedDate: string };
+// Group messages with date separators (shared utility)
+const messagesWithSeparators = computed((): MessageOrSeparator[] =>
+  groupMessagesWithSeparators(messagesList.value ?? []),
+);
+// isDateSeparator imported from shared/lib/utils/chat
 
-const messagesWithSeparators = computed((): MessageOrSeparator[] => {
-  if (!messagesList.value?.length) return [];
-
-  const result: MessageOrSeparator[] = [];
-  let lastDate: string | null = null;
-  let lastAuthor: string | null = null;
-  let lastMessageTime: dayjs.Dayjs | null = null;
-
-  for (const msg of messagesList.value) {
-    const msgDate = dayjs(msg.createdUtc).format("YYYY-MM-DD");
-    const msgTime = dayjs(msg.createdUtc);
-
-    if (lastDate !== msgDate) {
-      result.push({
-        type: "date-separator",
-        date: msgDate,
-        formattedDate: formatSeparatorDate(msgDate),
-      });
-      lastDate = msgDate;
-      lastAuthor = null;
-      lastMessageTime = null;
-    }
-
-    const isContinuation = !!(
-      !msg.isRemoved &&
-      lastAuthor === msg.author?.username &&
-      lastMessageTime &&
-      msgTime.diff(lastMessageTime, "minute") < CONTINUATION_TIME_LIMIT_MINUTES
-    );
-
-    result.push({ ...msg, isContinuation });
-
-    if (!msg.isRemoved) {
-      lastAuthor = msg.author?.username || null;
-      lastMessageTime = msgTime;
-    }
-  }
-
-  return result;
+// Virtual scroll
+const itemCount = computed(() => messagesWithSeparators.value.length);
+const { virtualItems, totalSize, measureElement } = useVirtualScroll({
+  count: itemCount,
+  container: messagesContainer,
+  estimateSize: 80,
+  overscan: 15,
 });
-
-function formatSeparatorDate(dateStr: string): string {
-  const date = dayjs(dateStr);
-  const today = dayjs().startOf("day");
-  const yesterday = today.subtract(1, "day");
-
-  if (date.isSame(today, "day")) {
-    return "Сегодня";
-  }
-  if (date.isSame(yesterday, "day")) {
-    return "Вчера";
-  }
-  return date.format("D MMMM YYYY");
-}
-
-function isDateSeparator(
-  item: MessageOrSeparator,
-): item is { type: "date-separator"; date: string; formattedDate: string } {
-  return "type" in item && item.type === "date-separator";
-}
 
 // Edit state
 const editingId = ref<string | null>(null);
@@ -160,8 +108,6 @@ const hoveredMessage = computed(() => {
 });
 
 // Expanded messages
-const expandedMessages = ref<Set<string>>(new Set());
-const truncatedMessages = ref<Set<string>>(new Set());
 const expandedDeletedMessages = ref<Set<string>>(new Set());
 
 function setupInfiniteScroll() {
@@ -320,16 +266,16 @@ function formatTime(dateStr: string) {
 }
 
 function formatFullDate(msg: Message) {
-  let result = `Отправлено: ${dayjs(msg.createdUtc).format("DD.MM.YYYY HH:mm")}`;
+  let result = `Отправлено: ${dayjs(msg.createdUtc).format("DD.MM.YYYY [в] HH:mm")}`;
   if (msg.modifiedUtc) {
-    result += `\nОтредактировано: ${dayjs(msg.modifiedUtc).format("DD.MM.YYYY HH:mm")}`;
+    result += `\nОтредактировано: ${dayjs(msg.modifiedUtc).format("DD.MM.YYYY [в] HH:mm")}`;
   }
   return result;
 }
 
 function formatDeletedDate(msg: Message) {
-  let result = `Отправлено: ${dayjs(msg.createdUtc).format("DD.MM.YYYY HH:mm")}`;
-  result += `\nУдалено: ${msg.modifiedUtc ? dayjs(msg.modifiedUtc).format("DD.MM.YYYY HH:mm") : "неизвестно"}`;
+  let result = `Отправлено: ${dayjs(msg.createdUtc).format("DD.MM.YYYY [в] HH:mm")}`;
+  result += `\nУдалено: ${msg.modifiedUtc ? dayjs(msg.modifiedUtc).format("DD.MM.YYYY [в] HH:mm") : "неизвестно"}`;
   return result;
 }
 
@@ -353,36 +299,13 @@ const latestActivityByUsername = computed(() => {
 function isOnline(author: any) {
   if (!author?.username) return false;
   const lastActivityUtc = latestActivityByUsername.value.get(author.username);
-  if (!lastActivityUtc) return false;
-  const minutesSinceOnline = dayjs().diff(
-    dayjs(lastActivityUtc),
-    "minute",
-    true,
-  );
-  return minutesSinceOnline <= ONLINE_THRESHOLD_MINUTES;
+  return isUserOnline(lastActivityUtc);
 }
 
-// Permissions
-function canEditMessage(msg: Message) {
-  if (!currentUser.value || msg.isRemoved) return false;
-  if (isModerator.value) return true;
-  if (msg.author?.username !== currentUser.value.username) return false;
-  const minutesSinceCreation = dayjs().diff(
-    dayjs(msg.createdUtc),
-    "minute",
-    true,
-  );
-  return minutesSinceCreation <= EDIT_TIME_LIMIT_MINUTES;
-}
-
-function canDeleteMessage(msg: Message) {
-  return canEditMessage(msg);
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function canLikeMessage(_msg: Message) {
-  return !!currentUser.value;
-}
+// Permissions — delegated to shared composable
+function canEditMessage(msg: Message) { return canEditMsg(msg); }
+function canDeleteMessage(msg: Message) { return canDeleteMsg(msg); }
+function canLikeMessage(msg: Message) { return canLikeMsg(msg); }
 
 function isLikedByMe(msg: Message) {
   if (!currentUser.value) return false;
@@ -392,19 +315,8 @@ function isLikedByMe(msg: Message) {
   );
 }
 
-function getLikesTooltip(msg: Message) {
-  if (!msg.likes?.length) return "Нравится";
-  const names = msg.likes.map((u: any) => u.username);
-  const count = names.length;
-  if (count === 1) return `${names[0]} оценил(а) это`;
-  if (count === 2) return `${names[0]} и ${names[1]} оценили это`;
-  if (count <= 5) {
-    const last = names.pop();
-    return `${names.join(", ")} и ${last} оценили это`;
-  }
-  const shown = names.slice(0, 3);
-  const remaining = count - 3;
-  return `${shown.join(", ")} и еще ${remaining} оценили это`;
+function getMsgLikesTooltip(msg: Message) {
+  return getLikesTooltipUtil(msg.likes ?? []);
 }
 
 // Edit
@@ -444,47 +356,9 @@ function handleEditSubmit() {
   }
 }
 
-// Message truncation (long messages)
-function needsTruncation(msg: Message) {
-  return msg.text?.includes("[cut]") || truncatedMessages.value.has(msg.id);
-}
-
-function checkMessageHeight(msgId: string, el: HTMLElement | null) {
-  if (!el || truncatedMessages.value.has(msgId)) return;
-  requestAnimationFrame(() => {
-    if (el.scrollHeight > MAX_MESSAGE_HEIGHT) {
-      truncatedMessages.value.add(msgId);
-    }
-  });
-}
-
-function isExpanded(msgId: string) {
-  return expandedMessages.value.has(msgId);
-}
-
-function isTruncated(msg: Message) {
-  return needsTruncation(msg) && !isExpanded(msg.id);
-}
-
-function toggleExpand(msgId: string) {
-  if (expandedMessages.value.has(msgId)) {
-    expandedMessages.value.delete(msgId);
-  } else {
-    expandedMessages.value.add(msgId);
-  }
-  if (hoveredMessageId.value === msgId) {
-    nextTick(() => {
-      const msgElement = document.getElementById(`msg-${msgId}`);
-      if (msgElement) {
-        const rect = msgElement.getBoundingClientRect();
-        toolbarPosition.value = {
-          top: rect.top - 16,
-          right: window.innerWidth - rect.right + 8,
-        };
-      }
-    });
-  }
-}
+// Message truncation (long messages, [cut] markers, expand state) is now
+// fully owned by ChatMessage via <TruncatedContent>. The page only forwards
+// MAX_MESSAGE_HEIGHT to ChatMessage as the per-message collapse budget.
 
 // Deleted messages expand
 function isDeletedExpanded(msgId: string) {
@@ -592,7 +466,7 @@ onUnmounted(() => {
       <page-title v-else>Переписка</page-title>
 
       <div class="chat-header">
-        <button class="back-button" @click="goBack">&larr; Назад</button>
+        <button class="back-button" @click="goBack">{{ symbols.arrowLeft }} Назад</button>
         <router-link
           v-if="interlocutor"
           :to="{ name: 'profile', params: { username: interlocutor.username } }"
@@ -608,7 +482,7 @@ onUnmounted(() => {
         <span v-else class="username">Загрузка...</span>
       </div>
 
-      <div class="messages-wrapper" :class="{ 'compact-mode': isCompactMode }">
+      <div class="messages-wrapper" :class="{ 'layout-compact': isCompactLayout }">
         <div ref="messagesContainer" class="messages-container">
           <template v-if="!messagesList?.length">
             <secondary-text class="empty-messages">
@@ -624,471 +498,65 @@ onUnmounted(() => {
               class="scroll-sentinel top-sentinel"
             ></div>
 
-            <template
-              v-for="item in messagesWithSeparators"
-              :key="isDateSeparator(item) ? `sep-${item.date}` : item.id"
-            >
-              <!-- Date Separator -->
-              <div v-if="isDateSeparator(item)" class="date-separator">
-                <div class="separator-line"></div>
-                <span class="separator-text">{{ item.formattedDate }}</span>
-                <div class="separator-line"></div>
-              </div>
-
-              <!-- Message -->
+            <!-- Virtual scroll container -->
+            <div :style="{ height: `${totalSize}px`, width: '100%', position: 'relative' }">
               <div
-                v-else
-                :id="`msg-${item.id}`"
-                class="pm-message"
-                :class="{
-                  removed: item.isRemoved,
-                  hovered: hoveredMessageId === item.id,
-                  continuation: item.isContinuation,
+                v-for="virtualRow in virtualItems"
+                :key="virtualRow.key"
+                :ref="(el) => { if (el) measureElement(el as HTMLElement) }"
+                :data-index="virtualRow.index"
+                :style="{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualRow.start}px)`,
                 }"
-                @mouseenter="handleMessageMouseEnter($event, item.id)"
-                @mouseleave="handleMessageMouseLeave"
               >
-                <!-- Deleted message -->
-                <template v-if="item.isRemoved">
-                  <div v-if="!isDeletedExpanded(item.id)" class="msg-layout">
-                    <div class="msg-avatar-placeholder">
-                      <svg
-                        viewBox="0 0 56 56"
-                        width="56"
-                        height="56"
-                        class="deleted-avatar"
-                      >
-                        <circle
-                          cx="28"
-                          cy="28"
-                          r="26"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1"
-                          stroke-dasharray="4 2"
-                        />
-                        <path
-                          d="M18 18l20 20M38 18l-20 20"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                        />
-                      </svg>
-                    </div>
-                    <div
-                      class="msg-deleted"
-                      :class="{ clickable: isModerator }"
-                      @click="toggleDeletedExpand(item.id)"
-                    >
-                      <span class="msg-deleted-label">Сообщение удалено</span>
-                    </div>
-                  </div>
-                  <div v-else class="msg-layout">
-                    <router-link
-                      :to="{
-                        name: 'profile',
-                        params: { username: item.author.username },
-                      }"
-                      class="msg-avatar-link"
-                    >
-                      <img
-                        :src="item.author.smallPictureUrl || defaultAvatar"
-                        :alt="item.author.username"
-                        class="msg-avatar"
-                      />
-                    </router-link>
-                    <div class="msg-body">
-                      <div class="msg-header">
-                        <router-link
-                          :to="{
-                            name: 'profile',
-                            params: { username: item.author.username },
-                          }"
-                          class="msg-author"
-                          :class="{ online: isOnline(item.author) }"
-                          >{{ item.author.username }}</router-link
-                        >
-                        <Tooltip :text="formatDeletedDate(item)">
-                          <span class="msg-time-group">
-                            <span class="msg-time">{{
-                              formatTime(item.createdUtc)
-                            }}</span>
-                            <svg
-                              class="msg-deleted-icon"
-                              viewBox="-2.27 -3.0 28.54 28.54"
-                              fill="none"
-                            >
-                              <path
-                                d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                              />
-                            </svg>
-                          </span>
-                        </Tooltip>
-                        <Tooltip text="Скрыть">
-                          <button
-                            class="msg-eye-btn"
-                            @click="toggleDeletedExpand(item.id)"
-                          >
-                            <svg
-                              class="eye-open"
-                              viewBox="0.3 0.57 23.35 23.35"
-                              width="14"
-                              height="14"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            >
-                              <path
-                                d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
-                              />
-                              <circle cx="12" cy="12" r="3" />
-                            </svg>
-                            <svg
-                              class="eye-closed"
-                              viewBox="0.3 0.57 23.35 23.35"
-                              width="14"
-                              height="14"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                            >
-                              <path d="M3 12c0 0 4 5 9 5s9-5 9-5" />
-                            </svg>
-                          </button>
-                        </Tooltip>
-                      </div>
-                      <div class="msg-content">
-                        <div class="msg-text bbcode-content" v-html="item.text" />
-                      </div>
-                    </div>
+                <template v-if="isDateSeparator(messagesWithSeparators[virtualRow.index])">
+                  <div class="date-separator">
+                    <div class="separator-line"></div>
+                    <span class="separator-text">{{ (messagesWithSeparators[virtualRow.index] as any).formattedDate }}</span>
+                    <div class="separator-line"></div>
                   </div>
                 </template>
-
-                <!-- Normal message -->
                 <template v-else>
-                  <!-- Continuation message (compact) -->
                   <div
-                    v-if="item.isContinuation"
-                    class="msg-layout msg-continuation"
+                    :id="`msg-${(messagesWithSeparators[virtualRow.index] as any).id}`"
+                    class="pm-message"
+                    :class="{
+                      removed: (messagesWithSeparators[virtualRow.index] as any).isRemoved,
+                      hovered: hoveredMessageId === (messagesWithSeparators[virtualRow.index] as any).id,
+                      continuation: (messagesWithSeparators[virtualRow.index] as any).isContinuation,
+                    }"
+                    @mouseenter="handleMessageMouseEnter($event, (messagesWithSeparators[virtualRow.index] as any).id)"
+                    @mouseleave="handleMessageMouseLeave"
                   >
-                    <div class="msg-time-gutter">
-                      <Tooltip :text="formatFullDate(item)">
-                        <span class="msg-time-hover"
-                          >{{ formatTime(item.createdUtc)
-                          }}<svg
-                            v-if="item.modifiedUtc"
-                            class="msg-edited-icon"
-                            viewBox="-0.7 -1.2 25.4 25.4"
-                            fill="none"
-                          >
-                            <path
-                              d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            /></svg
-                        ></span>
-                      </Tooltip>
-                    </div>
-                    <div class="msg-body">
-                      <template v-if="!isEditing(item.id)">
-                        <div
-                          :ref="
-                            (el) =>
-                              checkMessageHeight(item.id, el as HTMLElement)
-                          "
-                          class="msg-content"
-                          :class="{ collapsed: isTruncated(item) }"
-                        >
-                          <div class="msg-text bbcode-content" v-html="item.text" />
-                        </div>
-                        <div
-                          v-if="needsTruncation(item)"
-                          class="msg-expand-row msg-expand-row-compact"
-                        >
-                          <button
-                            class="expand-toggle"
-                            @click="toggleExpand(item.id)"
-                          >
-                            <svg
-                              v-if="isExpanded(item.id)"
-                              viewBox="0 0 12 12"
-                              width="16"
-                              height="16"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="1.5"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            >
-                              <path d="M2 8L6 4L10 8" />
-                            </svg>
-                            <svg
-                              v-else
-                              viewBox="0 0 12 12"
-                              width="16"
-                              height="16"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="1.5"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            >
-                              <path d="M2 4L6 8L10 4" />
-                            </svg>
-                          </button>
-                        </div>
-                        <div
-                          v-if="item.likes?.length > 0"
-                          class="msg-reactions"
-                        >
-                          <Tooltip :text="getLikesTooltip(item)">
-                            <button
-                              class="reaction-badge"
-                              :class="{ 'my-reaction': isLikedByMe(item) }"
-                              @click="toggleLike(item)"
-                            >
-                              <svg
-                                viewBox="-1.2 -0.75 26.4 26.4"
-                                width="14"
-                                height="14"
-                                class="reaction-heart"
-                                fill="none"
-                              >
-                                <path
-                                  d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                                  stroke="currentColor"
-                                  stroke-width="2"
-                                />
-                              </svg>
-                              <span class="reaction-count">{{
-                                item.likes.length
-                              }}</span>
-                            </button>
-                          </Tooltip>
-                        </div>
-                      </template>
-                      <div v-else class="msg-edit">
-                        <BBCodeEditor
-                          ref="editEditorRef"
-                          v-model="editText"
-                          context="message"
-                          placeholder="Редактирование сообщения..."
-                          :min-height="60"
-                          :max-height="200"
-                          @submit="handleEditSubmit"
-                        />
-                        <div class="msg-edit-actions">
-                          <button
-                            type="button"
-                            class="msg-edit-btn"
-                            @click="cancelEdit"
-                          >
-                            Отмена
-                          </button>
-                          <button
-                            type="button"
-                            class="msg-edit-btn"
-                            @click="saveEdit(item.id)"
-                          >
-                            Сохранить
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Full message (with avatar and header) -->
-                  <div v-else class="msg-layout">
-                    <router-link
-                      :to="{
-                        name: 'profile',
-                        params: { username: item.author.username },
-                      }"
-                      class="msg-avatar-link"
-                    >
-                      <img
-                        :src="item.author.smallPictureUrl || defaultAvatar"
-                        :alt="item.author.username"
-                        class="msg-avatar"
-                      />
-                    </router-link>
-
-                    <div class="msg-body">
-                      <div class="msg-header">
-                        <router-link
-                          :to="{
-                            name: 'profile',
-                            params: { username: item.author.username },
-                          }"
-                          class="msg-author"
-                          :class="{ online: isOnline(item.author) }"
-                          >{{ item.author.username }}</router-link
-                        >
-                        <Tooltip :text="formatFullDate(item)">
-                          <span class="msg-time-group">
-                            <span class="msg-time">{{
-                              formatTime(item.createdUtc)
-                            }}</span
-                            ><svg
-                              v-if="item.modifiedUtc"
-                              class="msg-edited-icon"
-                              viewBox="-0.7 -1.2 25.4 25.4"
-                              fill="none"
-                            >
-                              <path
-                                d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                              />
-                            </svg>
-                          </span>
-                        </Tooltip>
-                        <Tooltip text="Ссылка на сообщение">
-                          <a
-                            class="msg-anchor-btn"
-                            :href="`#msg-${item.id}`"
-                            @click.prevent="copyAnchor(item.id)"
-                          >
-                            <svg
-                              viewBox="-2 -2 28 28"
-                              width="12"
-                              height="12"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            >
-                              <path
-                                d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
-                              />
-                              <path
-                                d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
-                              />
-                            </svg>
-                          </a>
-                        </Tooltip>
-                      </div>
-
-                      <template v-if="!isEditing(item.id)">
-                        <div
-                          :ref="
-                            (el) =>
-                              checkMessageHeight(item.id, el as HTMLElement)
-                          "
-                          class="msg-content"
-                          :class="{ collapsed: isTruncated(item) }"
-                        >
-                          <div class="msg-text bbcode-content" v-html="item.text" />
-                        </div>
-                        <div
-                          v-if="needsTruncation(item)"
-                          class="msg-expand-row"
-                        >
-                          <button
-                            class="expand-toggle"
-                            @click="toggleExpand(item.id)"
-                          >
-                            <svg
-                              v-if="isExpanded(item.id)"
-                              viewBox="0 0 12 12"
-                              width="16"
-                              height="16"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="1.5"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            >
-                              <path d="M2 8L6 4L10 8" />
-                            </svg>
-                            <svg
-                              v-else
-                              viewBox="0 0 12 12"
-                              width="16"
-                              height="16"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="1.5"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            >
-                              <path d="M2 4L6 8L10 4" />
-                            </svg>
-                          </button>
-                        </div>
-                        <div
-                          v-if="item.likes?.length > 0"
-                          class="msg-reactions"
-                        >
-                          <Tooltip :text="getLikesTooltip(item)">
-                            <button
-                              class="reaction-badge"
-                              :class="{ 'my-reaction': isLikedByMe(item) }"
-                              @click="toggleLike(item)"
-                            >
-                              <svg
-                                viewBox="-1.2 -0.75 26.4 26.4"
-                                width="14"
-                                height="14"
-                                class="reaction-heart"
-                                fill="none"
-                              >
-                                <path
-                                  d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                                  stroke="currentColor"
-                                  stroke-width="2"
-                                />
-                              </svg>
-                              <span class="reaction-count">{{
-                                item.likes.length
-                              }}</span>
-                            </button>
-                          </Tooltip>
-                        </div>
-                      </template>
-
-                      <div v-else class="msg-edit">
-                        <BBCodeEditor
-                          ref="editEditorRef"
-                          v-model="editText"
-                          context="message"
-                          placeholder="Редактирование сообщения..."
-                          :min-height="60"
-                          :max-height="200"
-                          @submit="handleEditSubmit"
-                        />
-                        <div class="msg-edit-actions">
-                          <button
-                            type="button"
-                            class="msg-edit-btn"
-                            @click="cancelEdit"
-                          >
-                            Отмена
-                          </button>
-                          <button
-                            type="button"
-                            class="msg-edit-btn"
-                            @click="saveEdit(item.id)"
-                          >
-                            Сохранить
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                    <ChatMessage
+                      :message="messagesWithSeparators[virtualRow.index] as any"
+                      :compact="isCompactLayout"
+                      :hovered="hoveredMessageId === (messagesWithSeparators[virtualRow.index] as any).id"
+                      :is-online="isOnline((messagesWithSeparators[virtualRow.index] as any).author)"
+                      :is-liked-by-me="isLikedByMe(messagesWithSeparators[virtualRow.index] as any)"
+                      :can-edit="canEditMessage(messagesWithSeparators[virtualRow.index] as any)"
+                      :can-delete="canDeleteMessage(messagesWithSeparators[virtualRow.index] as any)"
+                      :can-like="canLikeMessage(messagesWithSeparators[virtualRow.index] as any)"
+                      :is-moderator="isModerator"
+                      :is-editing="isEditing((messagesWithSeparators[virtualRow.index] as any).id)"
+                      :edit-text="editText"
+                      :is-deleted-expanded="isDeletedExpanded((messagesWithSeparators[virtualRow.index] as any).id)"
+                      :max-height="MAX_MESSAGE_HEIGHT"
+                      @like="toggleLike(messagesWithSeparators[virtualRow.index] as any)"
+                      @toggle-deleted="toggleDeletedExpand((messagesWithSeparators[virtualRow.index] as any).id)"
+                      @start-edit="startEdit(messagesWithSeparators[virtualRow.index] as any)"
+                      @save-edit="saveEdit((messagesWithSeparators[virtualRow.index] as any).id)"
+                      @cancel-edit="cancelEdit"
+                      @update:edit-text="editText = $event"
+                    />
                   </div>
                 </template>
               </div>
-            </template>
+            </div>
           </template>
         </div>
 
@@ -1098,18 +566,7 @@ onUnmounted(() => {
           class="scroll-to-latest"
           @click="jumpToLatest"
         >
-          <svg
-            viewBox="0 0 24 24"
-            width="24"
-            height="24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
-          </svg>
+          <SvgIcon name="chevronDown" />
         </button>
       </div>
 
@@ -1167,19 +624,7 @@ onUnmounted(() => {
                 class="toolbar-btn toolbar-btn-delete-confirm"
                 @click="confirmDelete"
               >
-                <svg
-                  viewBox="-2.27 -3.0 28.54 28.54"
-                  width="20"
-                  height="20"
-                  fill="none"
-                >
-                  <path
-                    d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                  />
-                </svg>
+                <SvgIcon name="trash" />
               </button>
             </Tooltip>
             <Tooltip text="Отмена">
@@ -1187,19 +632,7 @@ onUnmounted(() => {
                 class="toolbar-btn toolbar-btn-cancel"
                 @click="cancelDelete"
               >
-                <svg
-                  viewBox="3.1 3.1 17.8 17.8"
-                  width="20"
-                  height="20"
-                  fill="none"
-                >
-                  <path
-                    d="M18 6L6 18M6 6l12 12"
-                    stroke="currentColor"
-                    stroke-width="1.48"
-                    stroke-linecap="round"
-                  />
-                </svg>
+                {{ symbols.close }}
               </button>
             </Tooltip>
           </template>
@@ -1214,36 +647,12 @@ onUnmounted(() => {
                 :class="{ active: isLikedByMe(hoveredMessage) }"
                 @click="toggleLike(hoveredMessage)"
               >
-                <svg
-                  viewBox="-1.2 -0.75 26.4 26.4"
-                  width="20"
-                  height="20"
-                  fill="none"
-                >
-                  <path
-                    d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  />
-                </svg>
+                <SvgIcon name="heartEmpty" />
               </button>
             </Tooltip>
             <Tooltip v-if="canEditMessage(hoveredMessage)" text="Редактировать">
               <button class="toolbar-btn" @click="startEdit(hoveredMessage)">
-                <svg
-                  viewBox="-0.7 -1.2 25.4 25.4"
-                  width="20"
-                  height="20"
-                  fill="none"
-                >
-                  <path
-                    d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
+                <SvgIcon name="pencil" />
               </button>
             </Tooltip>
             <Tooltip v-if="canDeleteMessage(hoveredMessage)" text="Удалить">
@@ -1251,19 +660,7 @@ onUnmounted(() => {
                 class="toolbar-btn"
                 @click="requestDelete(hoveredMessage.id)"
               >
-                <svg
-                  viewBox="-2.27 -3.0 28.54 28.54"
-                  width="20"
-                  height="20"
-                  fill="none"
-                >
-                  <path
-                    d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                  />
-                </svg>
+                <SvgIcon name="trash" />
               </button>
             </Tooltip>
           </template>
@@ -1448,259 +845,13 @@ onUnmounted(() => {
   100%
     box-shadow: inset 3px 0 0 0 transparent
 
-.msg-layout
-  display: flex
-  gap: $medium
 
-.msg-body
-  flex: 1
-  min-width: 0
-  position: relative
-
-.msg-header
-  display: flex
-  align-items: center
-  gap: $medium
-  margin-bottom: $tiny
-  min-height: 20px
-
-.msg-avatar-link
-  flex-shrink: 0
-  align-self: flex-start
-
-.msg-avatar
-  width: 56px
-  height: 56px
-  border-radius: 50%
-  object-fit: cover
-  display: block
-
-.msg-avatar-placeholder
-  flex-shrink: 0
-  width: 56px
-  height: 56px
-
-.deleted-avatar
-  border-radius: 50%
-  color: $border
-
-.msg-author
-  text-decoration: none
-  font-weight: 500
-  color: $text-muted
-  &:hover
-    color: $link-nav-hover
-    text-decoration: underline
-  &.online
-    color: $accent-green
-    &:hover
-      color: $accent-green-hover
-      text-decoration: underline
-
-.msg-time-group
-  display: inline-flex
-  align-items: baseline
-  gap: 6px
-  color: $text-muted
-  cursor: help
-
-.msg-edited-icon
-  width: 14px
-  height: 14px
-  margin-left: -3px
-  flex-shrink: 0
-  position: relative
-  top: 2px
-
-.msg-header-btn,
-.msg-eye-btn,
-.msg-anchor-btn
-  display: inline-flex
-  align-items: center
-  justify-content: center
-  padding: 0
-  border: none
-  background: transparent
-  cursor: pointer
-  color: $text-muted
-  svg
-    flex-shrink: 0
-  &:hover
-    filter: brightness($hover-brightness)
-
-.msg-anchor-btn
-  align-self: flex-end
-  margin-bottom: 4px
-
-.msg-eye-btn
-  position: relative
-  top: 2px
-  .eye-open
-    display: block
-  .eye-closed
-    display: none
-  &:hover
-    filter: none
-    .eye-open
-      display: none
-    .eye-closed
-      display: block
-
-.msg-content
-  color: $text
-  line-height: 1.5
-  position: relative
-
-  &.collapsed
-    display: -webkit-box
-    -webkit-line-clamp: 10
-    -webkit-box-orient: vertical
-    overflow: hidden
-    &::after
-      content: ""
-      position: absolute
-      bottom: 0
-      left: 0
-      right: 0
-      height: 1.5em
-      background: linear-gradient(to bottom, transparent, var(--bg-page))
-      pointer-events: none
+// msg-* standalone styles moved to ChatMessage.vue
 
 .pm-message:hover .msg-content.collapsed::after,
 .pm-message.hovered .msg-content.collapsed::after
   background: linear-gradient(to bottom, transparent, var(--bg-element))
 
-// .msg-text uses global .bbcode-content class - no scoped styles needed
-
-.msg-edit
-  margin-top: 0
-
-.msg-edit-actions
-  display: flex
-  justify-content: flex-start
-  gap: $small
-  margin-top: $small
-
-.msg-edit-btn
-  font-size: $secondary-font-size
-  +button
-
-.msg-expand-row
-  display: flex
-  justify-content: center
-  margin-top: $small
-  margin-left: calc(-40px - #{$small})
-  width: calc(100% + 40px + #{$small})
-
-.expand-toggle
-  display: inline-flex
-  align-items: center
-  justify-content: center
-  padding: 2px 6px
-  border: none
-  background: transparent
-  color: $text-muted
-  cursor: pointer
-  &:hover
-    filter: brightness($hover-brightness)
-
-.msg-reactions
-  display: flex
-  align-items: center
-  gap: $tiny
-  margin-top: $small
-
-.msg-expand-row + .msg-reactions
-  margin-top: -8px
-
-:global(.msg-toolbar-fixed)
-  position: fixed
-  display: flex
-  align-items: center
-  gap: 0
-  padding: 0
-  background-color: $bg-element
-  box-shadow: 0 0 0 1px var(--hover-overlay), 0 2px 8px var(--shadow-color)
-  border-radius: $border-radius
-  z-index: $z-toast
-
-:global(.toolbar-btn-delete-confirm)
-  color: var(--accent-red) !important
-  &:hover
-    color: var(--accent-red-hover) !important
-
-:global(.toolbar-btn-cancel)
-  color: var(--text-muted) !important
-  &:hover
-    color: var(--heading-alt) !important
-
-:global(.toolbar-btn)
-  display: flex
-  align-items: center
-  justify-content: center
-  width: 36px
-  height: 32px
-  padding: 0
-  border: none
-  border-radius: 0
-  background: transparent
-  cursor: pointer
-  color: $text-muted
-  transition: background-color 0.1s ease, color 0.1s ease
-
-:global(.toolbar-btn svg)
-  transition: transform 0.15s ease
-
-:global(.toolbar-btn:hover)
-  background-color: $bg-element-accent
-  color: $text
-
-:global(.toolbar-btn:hover svg)
-  transform: scale(1.15)
-
-:global(.toolbar-btn:active)
-  background-color: var(--hover-overlay)
-
-:global(.toolbar-btn:active svg)
-  transform: scale(0.9)
-
-:global(.toolbar-btn.active)
-  color: $text-muted
-
-:global(.toolbar-btn.active svg)
-  fill: currentColor
-
-:global(.toolbar-btn.active:hover)
-  color: $text
-  background-color: $bg-element-accent
-
-.reaction-badge
-  display: inline-flex
-  align-items: center
-  gap: 6px
-  padding: 6px 10px
-  border: none
-  background-color: $hover-overlay
-  color: $text-muted
-  cursor: pointer
-  transition: background-color 0.1s ease, color 0.1s ease, transform 0.1s ease
-  border-radius: $border-radius
-  svg
-    width: 18px
-    height: 18px
-    fill: none
-    transition: transform 0.15s ease
-  &:hover
-    background-color: $active-overlay
-    color: $text
-    svg
-      transform: scale(1.15)
-  &:active
-    background-color: $hover-overlay
-    transform: scale(0.95)
-  &.my-reaction
-    svg
-      fill: currentColor
 
 .pm-message:hover .reaction-badge,
 .pm-message.hovered .reaction-badge
@@ -1774,7 +925,7 @@ onUnmounted(() => {
   background-color: $bg-element
   color: $text-muted
   cursor: pointer
-  transition: all 0.15s ease
+  transition: transform 0.15s ease
   box-shadow: 0 2px 8px $shadow-color
   z-index: 10
   &:hover
@@ -1801,8 +952,8 @@ onUnmounted(() => {
   padding: $small
   color: $accent-red
 
-// Compact mode styles
-.messages-wrapper.compact-mode
+// Compact display styles
+.messages-wrapper.layout-compact
   .pm-message
     padding: $tiny $small $tiny $small
     margin-bottom: $small
@@ -1810,7 +961,7 @@ onUnmounted(() => {
     &.continuation
       margin-top: 0
 
-  // Hide avatars in compact mode
+  // Hide avatars in compact layout
   .msg-avatar-link,
   .msg-avatar-placeholder
     display: none
@@ -1866,7 +1017,7 @@ onUnmounted(() => {
     margin-left: 0
     width: 100%
 
-  // Continuation messages in compact mode
+  // Continuation messages in compact layout
   .msg-continuation
     display: block
 

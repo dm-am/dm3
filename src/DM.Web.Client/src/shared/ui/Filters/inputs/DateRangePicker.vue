@@ -23,8 +23,8 @@ const props = withDefaults(
     showClearButton?: boolean;
   }>(),
   {
-    fromLabel: "От:",
-    toLabel: "До:",
+    fromLabel: "От",
+    toLabel: "До",
     showClearButton: true,
   },
 );

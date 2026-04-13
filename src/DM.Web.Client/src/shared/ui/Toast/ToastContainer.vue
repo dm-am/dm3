@@ -18,7 +18,7 @@
             @click="dismiss(toast.id)"
             aria-label="Закрыть"
           >
-            &times;
+            {{ symbols.close }}
           </button>
           <div
             v-if="toast.duration > 0"
@@ -33,6 +33,7 @@
 
 <script setup lang="ts">
 import { useToast } from "@/shared/lib/composables/useToast";
+import { symbols } from "@/shared/lib/utils/icons";
 
 const { toasts, dismiss, pause, resume } = useToast();
 </script>
@@ -111,7 +112,7 @@ const { toasts, dismiss, pause, resume } = useToast();
 
 .toast-enter-active,
 .toast-leave-active
-  transition: all $animation-time ease
+  transition: opacity 0.3s ease, transform 0.3s ease
   @media (prefers-reduced-motion: reduce)
     transition: none
 

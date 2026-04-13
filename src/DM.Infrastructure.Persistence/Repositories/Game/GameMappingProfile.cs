@@ -106,9 +106,26 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.Id, s => s.MapFrom(p => p.PostId))
             .ForMember(d => d.GameText, s => s.MapFrom(p => p.GameText))
             .ForMember(d => d.MetagameText, s => s.MapFrom(p => p.MetagameText))
+            .ForMember(d => d.AuthorUserId, s => s.MapFrom(p => p.AuthorId))
+            .ForMember(d => d.GameId, s => s.MapFrom(p => p.Room.GameId))
+            .ForMember(d => d.RoomId, s => s.MapFrom(p => p.RoomId))
+            .ForMember(d => d.SharePrivateWithAll, s => s.MapFrom(p => p.SharePrivateWithAll))
+            .ForMember(d => d.RoomViewPrivateText, s => s.MapFrom(p => p.Room.ViewPrivateText))
+            // Game leads = master + all assistants, projected directly
+            // (mentors are NOT leads and are intentionally excluded).
+            .ForMember(d => d.GameLeadUserIds, s => s.MapFrom(p =>
+                new[] { p.Room.Game.MasterId }
+                    .Concat(p.Room.Game.Assistants.Select(a => a.UserId))
+                    .ToList()))
+            // PrivateAddressee snapshot comes from the JSONB column on the
+            // post. ProjectTo carries it over as raw JSON; API-layer
+            // mapping profile parses it into a Dictionary at render time.
+            .ForMember(d => d.PrivateAddresseeSnapshotJson, s => s.MapFrom(p => p.PrivateAddresseeSnapshotJson))
             .ForMember(d => d.Edits, s => s.MapFrom(p => p.Edits.OrderByDescending(e => e.EditedUtc)))
             .ForMember(d => d.Rating, opt => opt.Ignore())
             .ForMember(d => d.ReviewCount, opt => opt.Ignore())
+            .ForMember(d => d.AuthorGameRole, opt => opt.Ignore())
+            .ForMember(d => d.DiceRolls, opt => opt.Ignore())
             .ForMember(d => d.Room, opt => opt.Ignore());
 
         CreateMap<DbPostEdit, DtoPostEdit>()
@@ -126,6 +143,7 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.Id, s => s.MapFrom(c => c.CharacterId))
             // NOTE: Pictures navigation removed - PictureUrl is now set via resolver or ignored
             .ForMember(d => d.PictureUrl, opt => opt.Ignore())
+            .ForMember(d => d.ModifiedUtc, opt => opt.Ignore()) // Not stored on the DB entity yet
             .ForMember(d => d.TotalPostsCount, s => s.MapFrom(c => c.Posts.Count()));
 
         CreateMap<DbCharacterAttribute, CharacterAttribute>()

@@ -80,20 +80,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <p class="useful-links">
-      <span class="links-label">Полезные ссылки:</span>
-      <template v-for="(link, idx) in ADMIN_LINKS" :key="link.title">
-        <a
-          v-if="link.external"
-          :href="link.url"
-          target="_blank"
-          rel="noopener noreferrer"
-          >{{ link.title }}</a
-        ><router-link v-else :to="link.url">{{ link.title }}</router-link
-        ><template v-if="idx < ADMIN_LINKS.length - 1">, </template
-        ><template v-else>.</template>
-      </template>
-    </p>
+    <p class="useful-links"><span class="links-label">Полезные ссылки:</span>{{ " " }}<template v-for="(link, idx) in ADMIN_LINKS" :key="link.title"><a v-if="link.external" :href="link.url" target="_blank" rel="noopener noreferrer">{{ link.title }}</a><router-link v-else :to="link.url">{{ link.title }}</router-link><template v-if="idx < ADMIN_LINKS.length - 1">, </template></template></p>
   </section>
 </template>
 
@@ -160,12 +147,10 @@ onMounted(() => {
 
   .links-label
     font-weight: 500
-    margin-right: $small
 
   a
     color: $text-muted
     text-decoration: none
-    transition: color 0.15s ease
     &:hover
       color: $link
       text-decoration: underline

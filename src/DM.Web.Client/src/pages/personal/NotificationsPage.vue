@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { symbols } from "@/shared/lib/utils/icons";
 import notificationApi from "@/shared/api/notificationApi";
 import {
   NotificationType,
@@ -68,18 +69,6 @@ const getNotificationTypeLabel = (type: NotificationType): string => {
     default:
       return "Уведомление";
   }
-};
-
-const getNotificationIcon = (type: NotificationType): string => {
-  // Blog notifications
-  if (type >= 41 && type <= 55) return "blog";
-  // Subscription notifications
-  if (type >= 71 && type <= 79) return "bell";
-  // Forum notifications
-  if (type >= 101 && type <= 114) return "comment";
-  // Game notifications
-  if (type >= 301) return "dice";
-  return "bell";
 };
 
 const getNotificationLink = (notification: UserNotification): string | null => {
@@ -236,13 +225,6 @@ onMounted(() => fetchNotifications());
         :key="notification.id"
         class="notification-item"
       >
-        <div
-          class="notification-icon"
-          :class="getNotificationIcon(notification.eventType)"
-        >
-          <Icon :icon="getNotificationIcon(notification.eventType)" />
-        </div>
-
         <div class="notification-content">
           <span class="notification-type">
             {{ getNotificationTypeLabel(notification.eventType) }}
@@ -266,7 +248,7 @@ onMounted(() => fetchNotifications());
               @click="markAsRead(notification.id)"
               aria-label="Отметить прочитанным"
             >
-              &times;
+              {{ symbols.close }}
             </button>
           </Tooltip>
         </div>

@@ -120,34 +120,70 @@ internal class TopicRepository : ITopicRepository
             dbQuery = dbQuery.Where(t => t.CreatedUtc <= query.CreatedToUtc.Value);
         }
 
-        var projected = dbQuery.ProjectTo<Topic>(_mapper.ConfigurationProvider);
-
-        // Determine sort parameters
+        // Sort by LastActivityUtc needs the raw LastComment relation so
+        // we sort in SQL BEFORE the Topic DTO projection. AutoMapper's
+        // projected query would otherwise generate an extra subquery per
+        // row to compute the same value.
         var sortBy = (query.SortBy ?? "lastActivity").ToLowerInvariant();
-        var sortDesc = string.IsNullOrEmpty(query.SortOrder) || query.SortOrder.Equals("desc", StringComparison.OrdinalIgnoreCase);
+        var sortDesc = string.IsNullOrEmpty(query.SortOrder) ||
+                       query.SortOrder.Equals("desc", StringComparison.OrdinalIgnoreCase);
 
-        // Apply sorting
-        IOrderedQueryable<Topic> orderedQuery = (sortBy, sortDesc) switch
+        IOrderedQueryable<Entities.Forum.Topic> sortedDbQuery = (sortBy, sortDesc) switch
         {
-            ("created", true) => projected.OrderByDescending(t => t.CreatedUtc),
-            ("created", false) => projected.OrderBy(t => t.CreatedUtc),
-            ("comments", true) => projected.OrderByDescending(t => t.TotalCommentsCount),
-            ("comments", false) => projected.OrderBy(t => t.TotalCommentsCount),
-            ("title", true) => projected.OrderByDescending(t => t.Title),
-            ("title", false) => projected.OrderBy(t => t.Title),
-            (_, true) => projected.OrderByDescending(t => t.LastActivityUtc),
-            (_, false) => projected.OrderBy(t => t.LastActivityUtc),
+            ("created", true) => dbQuery.OrderByDescending(t => t.CreatedUtc),
+            ("created", false) => dbQuery.OrderBy(t => t.CreatedUtc),
+            ("title", true) => dbQuery.OrderByDescending(t => t.Title),
+            ("title", false) => dbQuery.OrderBy(t => t.Title),
+            // Sort by LastActivityUtc = LastComment?.CreatedUtc ?? CreatedUtc.
+            // EF translates the coalesce into a single ORDER BY expression.
+            (_, true) => dbQuery.OrderByDescending(t =>
+                t.LastComment != null ? t.LastComment.CreatedUtc : t.CreatedUtc),
+            (_, false) => dbQuery.OrderBy(t =>
+                t.LastComment != null ? t.LastComment.CreatedUtc : t.CreatedUtc),
         };
 
-        // For attached topics without custom sort, use AttachOrder then CreatedUtc
+        // For attached topics without custom sort, use AttachOrder then CreatedUtc.
         if (query.IsAttached == true && string.IsNullOrEmpty(query.SortBy))
         {
-            orderedQuery = projected
+            sortedDbQuery = dbQuery
                 .OrderBy(t => t.AttachOrder ?? int.MaxValue)
                 .ThenByDescending(t => t.CreatedUtc);
         }
 
-        return await orderedQuery.Page(pagingData).ToArrayAsync(ct);
+        // Read-only projection: AsNoTracking avoids EF Core's change
+        // tracker overhead. See PERFORMANCE.md → "AsNoTracking".
+        var topics = await sortedDbQuery
+            .Page(pagingData)
+            .AsNoTracking()
+            .ProjectTo<Topic>(_mapper.ConfigurationProvider)
+            .ToArrayAsync(ct);
+
+        // Fill TotalCommentsCount in a single batched GROUP BY instead of
+        // a correlated subquery per row (PERFORMANCE.md → "Avoid inline
+        // aggregations"). For a page of N topics we trade N subqueries
+        // for 1 indexed lookup.
+        //
+        // topicIds is a List<Guid>, NOT Guid[] — EF Core's LINQ
+        // translator has a Guid[] edge case that throws TypeLoadException
+        // on the ReadOnlySpan<Guid> interpreter path. List<Guid> avoids it.
+        if (topics.Length > 0)
+        {
+            var topicIds = topics.Select(t => t.Id).ToList();
+            var commentCounts = await _dbContext.Comments
+                .AsNoTracking()
+                .Where(c => topicIds.Contains(c.EntityId) && !c.IsRemoved)
+                .GroupBy(c => c.EntityId)
+                .Select(g => new { EntityId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.EntityId, x => x.Count, ct);
+
+            foreach (var topic in topics)
+            {
+                commentCounts.TryGetValue(topic.Id, out var count);
+                topic.TotalCommentsCount = count;
+            }
+        }
+
+        return topics;
     }
 
     /// <inheritdoc />

@@ -20,6 +20,7 @@ import {
   NSFW_HIDE_TEXT,
   NSFW_WARNING_TEXT,
 } from "./bbcodeConstants";
+import { registerExpandable } from "@/shared/lib/composables/useExpandableRegistry";
 
 // ============================================================================
 // CLEANUP TRACKING
@@ -71,6 +72,94 @@ export function cleanupBbcodeInteractive(container: HTMLElement | null): void {
 // ============================================================================
 
 /**
+ * Shared predicate: is an element node empty whitespace for trimming purposes?
+ * Empty means: <br>, or an empty <p>/<div> without any media children.
+ */
+function isTrimmableEmptyElement(elem: Element): boolean {
+  const tagName = elem.tagName.toUpperCase();
+  if (tagName === "BR") return true;
+  if (tagName === "P" || tagName === "DIV") {
+    return (
+      elem.textContent?.trim() === "" &&
+      !elem.querySelector("img, iframe, video, audio, svg")
+    );
+  }
+  return false;
+}
+
+/**
+ * Pure HTML string transform: strips leading and trailing "empty" content
+ * (<br>, empty <p>/<div>, whitespace-only text nodes) symmetrically from
+ * either end of an HTML fragment. Mid-content empty lines are preserved
+ * (author intent).
+ *
+ * Uses a detached <template> element for parsing — no interaction with
+ * the live DOM, no Vue reactivity side-effects. Callers pre-transform
+ * their HTML in a computed before passing to v-html.
+ *
+ * This is the preferred entry point. The lower-level DOM mutators
+ * trimLeadingWhitespace/trimTrailingWhitespace remain exported for
+ * advanced callers that already hold a live element reference, but
+ * new code should reach for trimHtmlWhitespace instead.
+ */
+export function trimHtmlWhitespace(html: string | null | undefined): string {
+  if (!html) return "";
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  trimLeadingInFragment(template.content);
+  trimTrailingInFragment(template.content);
+  return template.innerHTML;
+}
+
+function trimLeadingInFragment(root: DocumentFragment | Element): void {
+  while (root.firstChild) {
+    const first = root.firstChild;
+    if (first.nodeType === Node.TEXT_NODE) {
+      if ((first.textContent || "").trim() === "") {
+        first.remove();
+        continue;
+      }
+      first.textContent = (first.textContent || "").trimStart();
+      break;
+    }
+    if (first.nodeType === Node.ELEMENT_NODE) {
+      const elem = first as Element;
+      if (isTrimmableEmptyElement(elem)) {
+        elem.remove();
+        continue;
+      }
+      trimLeadingInFragment(elem);
+      break;
+    }
+    break;
+  }
+}
+
+function trimTrailingInFragment(root: DocumentFragment | Element): void {
+  while (root.lastChild) {
+    const last = root.lastChild;
+    if (last.nodeType === Node.TEXT_NODE) {
+      if ((last.textContent || "").trim() === "") {
+        last.remove();
+        continue;
+      }
+      last.textContent = (last.textContent || "").trimEnd();
+      break;
+    }
+    if (last.nodeType === Node.ELEMENT_NODE) {
+      const elem = last as Element;
+      if (isTrimmableEmptyElement(elem)) {
+        elem.remove();
+        continue;
+      }
+      trimTrailingInFragment(elem);
+      break;
+    }
+    break;
+  }
+}
+
+/**
  * Remove trailing empty elements (br, empty p/div, whitespace-only text nodes)
  * from the end of a container. This prevents empty space at the bottom of
  * truncated content.
@@ -95,26 +184,57 @@ export function trimTrailingWhitespace(container: HTMLElement | null): void {
     // Element node
     if (last.nodeType === Node.ELEMENT_NODE) {
       const elem = last as Element;
-      const tagName = elem.tagName.toUpperCase();
 
-      // BR tag - always remove from end
-      if (tagName === "BR") {
-        elem.remove();
-        continue;
-      }
-
-      // Empty block elements (P, DIV) with no meaningful content - remove
-      if (
-        (tagName === "P" || tagName === "DIV") &&
-        elem.textContent?.trim() === "" &&
-        !elem.querySelector("img, iframe, video, audio, svg")
-      ) {
+      if (isTrimmableEmptyElement(elem)) {
         elem.remove();
         continue;
       }
 
       // Non-empty element - recursively trim its contents, then stop
       trimTrailingWhitespace(elem as HTMLElement);
+      break;
+    }
+
+    // Other node types - stop
+    break;
+  }
+}
+
+/**
+ * Mirror of trimTrailingWhitespace for the start of a container. Prevents
+ * phantom leading empty lines (author-inserted blank lines at the top of a
+ * post or topic) from eating into the truncation budget — without them,
+ * scrollHeight no longer over-reports and the collapsed view shows real
+ * content from the first line.
+ */
+export function trimLeadingWhitespace(container: HTMLElement | null): void {
+  if (!container) return;
+
+  while (container.firstChild) {
+    const first = container.firstChild;
+
+    // Text node with only whitespace - remove
+    if (first.nodeType === Node.TEXT_NODE) {
+      if ((first.textContent || "").trim() === "") {
+        first.remove();
+        continue;
+      }
+      // Non-empty text, trim leading whitespace and stop
+      first.textContent = (first.textContent || "").trimStart();
+      break;
+    }
+
+    // Element node
+    if (first.nodeType === Node.ELEMENT_NODE) {
+      const elem = first as Element;
+
+      if (isTrimmableEmptyElement(elem)) {
+        elem.remove();
+        continue;
+      }
+
+      // Non-empty element - recursively trim its contents, then stop
+      trimLeadingWhitespace(elem as HTMLElement);
       break;
     }
 
@@ -263,10 +383,24 @@ export function initSpoilers(container: HTMLElement | null): void {
     head.addEventListener("click", clickHandler);
     head.addEventListener("keydown", keydownHandler);
 
+    // Register with the global expand/collapse-all registry so the
+    // ScrollNav toggle button can drive every spoiler on the page at once.
+    const unregister = registerExpandable({
+      id: Symbol("spoiler"),
+      isExpanded: () => !spoiler.classList.contains("hidden"),
+      expand: () => {
+        if (spoiler.classList.contains("hidden")) toggleSpoiler();
+      },
+      collapse: () => {
+        if (!spoiler.classList.contains("hidden")) toggleSpoiler();
+      },
+    });
+
     // Store cleanup function
     cleanupFunctions.push(() => {
       head.removeEventListener("click", clickHandler);
       head.removeEventListener("keydown", keydownHandler);
+      unregister();
     });
   });
 
@@ -383,12 +517,31 @@ export function initNsfw(container: HTMLElement | null): void {
     head.addEventListener("click", headClickHandler);
     head.addEventListener("keydown", headKeydownHandler);
 
+    // Register with the global expand/collapse-all registry. Expansion
+    // also auto-confirms the 18+ overlay — the user has explicitly asked
+    // to see everything via the ScrollNav toggle, so gating each block
+    // behind a separate click would defeat the affordance.
+    const unregister = registerExpandable({
+      id: Symbol("nsfw"),
+      isExpanded: () => wrapper.style.display !== "none",
+      expand: () => {
+        if (wrapper.style.display === "none") {
+          isConfirmed = true;
+          toggleNsfw();
+        }
+      },
+      collapse: () => {
+        if (wrapper.style.display !== "none") toggleNsfw();
+      },
+    });
+
     // Store cleanup function
     cleanupFunctions.push(() => {
       overlay.removeEventListener("click", overlayClickHandler);
       overlay.removeEventListener("keydown", overlayKeydownHandler);
       head.removeEventListener("click", headClickHandler);
       head.removeEventListener("keydown", headKeydownHandler);
+      unregister();
     });
   });
 

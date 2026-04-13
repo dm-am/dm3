@@ -65,7 +65,7 @@ onMounted(() => store.fetchBoards());
 </script>
 
 <template>
-  <page-title>Форум</page-title>
+  <page-title v-once>Форум</page-title>
 
   <div v-if="user && boards" class="forum-actions">
     <button
@@ -125,14 +125,14 @@ onMounted(() => store.fetchBoards());
         <UserLink :user="row.lastComment.author" hide-badge />, <Tooltip :text='`Комментарий в "${row.lastComment.topicTitle}"`'><router-link
             :to="{ name: 'topic', params: { alias: row.alias, num: row.lastComment.topicNumber }, hash: `#comment-${row.lastComment.id}` }"
             class="last-activity-link"
-          ><human-date :date="row.lastComment.createdUtc" format="DD.MM.YYYY HH:mm" /></router-link></Tooltip>
+          ><human-date :date="row.lastComment.createdUtc" format="DD.MM.YYYY [в] HH:mm" /></router-link></Tooltip>
       </template>
       <!-- Last activity is a new topic -->
       <template v-else-if="getLastActivityType(row) === 'topic'">
         <UserLink :user="row.lastTopic.author" hide-badge />, <Tooltip :text='`Новый топик "${row.lastTopic.title}"`'><router-link
             :to="{ name: 'topic', params: { alias: row.alias, num: row.lastTopic.topicNumber } }"
             class="last-activity-link"
-          ><human-date :date="row.lastTopic.createdUtc" format="DD.MM.YYYY HH:mm" /></router-link></Tooltip>
+          ><human-date :date="row.lastTopic.createdUtc" format="DD.MM.YYYY [в] HH:mm" /></router-link></Tooltip>
       </template>
       <!-- No activity -->
       <span v-else class="muted">—</span>

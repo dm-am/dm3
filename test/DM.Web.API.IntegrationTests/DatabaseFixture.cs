@@ -4,6 +4,7 @@ using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Infrastructure.Persistence.Entities.Blog;
 using DM.Infrastructure.Persistence.Entities.Forum;
 using DM.Infrastructure.Persistence.Entities.Game;
+using DM.Infrastructure.Persistence.Entities.Game.Characters;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
 using DM.Infrastructure.Persistence.Entities.Game.Posts;
 using DM.Infrastructure.Persistence.Entities.Messaging;
@@ -102,6 +103,8 @@ public class DatabaseFixture : IAsyncLifetime
         SeedTags(db);
         SeedBlogs(db);
         SeedRooms(db);
+        SeedCharacters(db);
+        SeedGamePosts(db);
         SeedChats(db);
         SeedTestimonials(db);
         SeedBoardModerators(db);
@@ -381,6 +384,86 @@ public class DatabaseFixture : IAsyncLifetime
             DiceEnabled = true,
             IsRemoved = false
         });
+    }
+
+    /// <summary>
+    /// Seed one post + one positive review in TestGame's main room so
+    /// the <c>/v1/posts</c> rated-listing has at least one row to
+    /// return. The rated endpoint projects <c>post.room.game</c> as a
+    /// full sidebar-tier GameRef (master, assistants, activeCharacters,
+    /// recruitment, subscribersCount), and integration tests assert
+    /// the JSON shape — without this seed the endpoint would return
+    /// an empty list and the assertions couldn't distinguish "mapping
+    /// drops the field" from "no posts in DB".
+    /// </summary>
+    private static void SeedGamePosts(DmDbContext db)
+    {
+        if (db.Set<Post>().Any()) return;
+
+        db.Set<Post>().Add(new Post
+        {
+            PostId = TestConstants.TestGamePostId,
+            RoomId = TestConstants.TestRoomId,
+            CharacterId = TestConstants.TestCharacterId,
+            AuthorId = TestConstants.TestUserId,
+            CreatedUtc = DateTimeOffset.UtcNow.AddHours(-12),
+            GameText = "Test post body (in-character content)",
+            MetagameText = null,
+            PrivateAddresseeSnapshotJson = "{}",
+            IsRemoved = false
+        });
+
+        db.Set<PostReview>().Add(new PostReview
+        {
+            PostReviewId = TestConstants.TestGamePostReviewId,
+            AuthorId = TestConstants.SecondUserId,
+            PostId = TestConstants.TestGamePostId,
+            PostAuthorId = TestConstants.TestUserId,
+            GameId = TestConstants.TestGameId,
+            CreatedUtc = DateTimeOffset.UtcNow.AddHours(-6),
+            Text = null,
+            SignValue = 1, // Positive: makes the post appear in the rated listing
+            IsRemoved = false
+        });
+    }
+
+    /// <summary>
+    /// Seed two active player characters into TestGame so tooltips
+    /// exercising game.ActiveCharacters / room participants have real
+    /// data to render. Without this, EnrichGamesAsync returns an empty
+    /// list and tests can't distinguish "mapping drops the field"
+    /// from "no characters in DB", which is exactly the ambiguity
+    /// that let the original mapping bug go unnoticed.
+    /// </summary>
+    private static void SeedCharacters(DmDbContext db)
+    {
+        if (db.Set<Character>().Any()) return;
+
+        db.Set<Character>().AddRange(
+            new Character
+            {
+                CharacterId = TestConstants.TestCharacterId,
+                GameId = TestConstants.TestGameId,
+                AuthorId = TestConstants.TestUserId,
+                Name = TestConstants.TestCharacterName,
+                Status = CharacterStatus.Active,
+                IsNpc = false,
+                AccessPolicy = CharacterAccessPolicy.NoAccess,
+                CreatedUtc = DateTimeOffset.UtcNow.AddDays(-5),
+                IsRemoved = false
+            },
+            new Character
+            {
+                CharacterId = TestConstants.SecondCharacterId,
+                GameId = TestConstants.TestGameId,
+                AuthorId = TestConstants.SecondUserId,
+                Name = TestConstants.SecondCharacterName,
+                Status = CharacterStatus.Active,
+                IsNpc = false,
+                AccessPolicy = CharacterAccessPolicy.NoAccess,
+                CreatedUtc = DateTimeOffset.UtcNow.AddDays(-4),
+                IsRemoved = false
+            });
     }
 
     private static void SeedChats(DmDbContext db)

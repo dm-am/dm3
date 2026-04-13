@@ -93,7 +93,7 @@
     </div>
     <div>
       <span class="muted">- </span>
-      <router-link class="forward" :to="{ name: 'createGame' }"
+      <router-link class="forward" :to="{ name: 'create-game' }"
         >Создать игру</router-link
       >
     </div>
@@ -108,6 +108,8 @@ import GameLink from "./GameLink.vue";
 import { useUserStore } from "@/entities/user";
 import { useGamesStore, GameRole, type GameRef } from "@/entities/game";
 import { computed, watch } from "vue";
+
+import { onMounted } from "vue";
 
 const userStore = useUserStore();
 const store = useGamesStore();
@@ -153,17 +155,29 @@ const readingGames = computed(
     ) ?? [],
 );
 
-// Watch only for user login/logout, not data refresh
+// Initial fetch on mount only runs for logged-in users (the component
+// template is gated by `v-if="userStore.user"` in LeftSidebar). Using
+// onMounted instead of a watch with `immediate: true` avoids firing
+// the fetch before the user store is fully hydrated, and matches the
+// pattern used by the other sidebar widgets. Subsequent login/logout
+// transitions are handled by the watch below.
+onMounted(() => {
+  if (userStore.user?.username) {
+    store.fetchParticipatingGames();
+  }
+});
+
 watch(
   () => userStore.user?.username,
   (newUsername, oldUsername) => {
-    if (newUsername && newUsername !== oldUsername) {
+    if (!oldUsername && newUsername) {
+      // User just logged in (already handled on mount if hydrated,
+      // but this covers the login-without-reload path).
       store.fetchParticipatingGames();
-    } else if (!newUsername && oldUsername) {
+    } else if (oldUsername && !newUsername) {
       store.resetParticipatingGames();
     }
   },
-  { immediate: true },
 );
 </script>
 

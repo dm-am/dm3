@@ -20,15 +20,18 @@ $transition-slow: 0.3s ease
 // Use this instead of raw "transition:" to respect user preferences.
 // Automatically disables transition when user prefers reduced motion.
 //
+// Theme transitions are handled by @property registrations on <html>
+// (see ThemeVariables.css). Component-level transitions no longer need
+// to include theme properties — the variables themselves transition.
+//
 // Usage:
 //   .my-element
-//     +transition-safe(background-color)
-//     +transition-safe(opacity, $transition-slow)
-//     +transition-safe((background-color, transform))
+//     +transition-safe(opacity)
+//     +transition-safe(transform, $transition-slow)
 //
 // For multiple properties:
 //   .my-element
-//     +transition-safe-multi((background-color, color, transform))
+//     +transition-safe-multi((opacity, transform))
 
 =transition-safe($property, $duration: $transition-normal)
   transition: $property $duration
@@ -55,19 +58,17 @@ $transition-slow: 0.3s ease
 // -----------------------------------------------------------------------------
 // Common Transitions
 // -----------------------------------------------------------------------------
-// Pre-built classes for common use cases
+// Pre-built mixins for non-theme properties.
+// NOTE: Do NOT use these for theme-dependent properties (background-color,
+// color, border-color) in base state — the global rule in Reset.sass
+// already covers them. Use these only for opacity, transform, etc.
 
 =fade-transition
   +transition-safe(opacity)
 
-=hover-transition
-  +transition-safe(background-color, $transition-fast)
-
 =scale-transition
   +transition-safe(transform)
 
-=color-transition
-  +transition-safe(color)
-
-=all-transition
-  +transition-safe(all)
+// =all-transition REMOVED — `transition: all` is banned (UI_STANDARDS.md).
+// Theme-dependent properties are covered by the global rule in Reset.sass.
+// Enumerate explicit properties with +transition-safe-multi instead.

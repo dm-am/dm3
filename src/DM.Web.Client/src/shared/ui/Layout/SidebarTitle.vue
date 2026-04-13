@@ -14,5 +14,4 @@ h4
   text-transform: uppercase
   letter-spacing: 0.5px
   color: $heading-alt
-  transition: color 0.15s ease
 </style>

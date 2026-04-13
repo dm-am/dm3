@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { Poll, PollOptionId } from "@/entities/poll";
 import ProgressBar from "@/shared/ui/ProgressBar/ProgressBar.vue";
-import { Icon, IconType } from "@/shared/ui/Icon";
+import { SvgIcon } from "@/shared/ui/Icon";
+import { symbols } from "@/shared/lib/utils/icons";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { computed, ref } from "vue";
 import dayjs from "dayjs";
@@ -29,10 +30,10 @@ const isPending = computed(() => props.poll.status === "Pending");
 const isClosed = computed(() => props.poll.status === "Closed");
 
 const startsFormatted = computed(() =>
-  dayjs(props.poll.startsUtc).format("DD.MM.YYYY HH:mm"),
+  dayjs(props.poll.startsUtc).format("DD.MM.YYYY [в] HH:mm"),
 );
 const endsFormatted = computed(() =>
-  dayjs(props.poll.endsUtc).format("DD.MM.YYYY HH:mm"),
+  dayjs(props.poll.endsUtc).format("DD.MM.YYYY [в] HH:mm"),
 );
 const totalVotes = computed(() =>
   props.poll.options.reduce((sum, option) => sum + option.votesCount, 0),
@@ -182,7 +183,7 @@ async function cancelVote() {
         {{ poll.title }}
         <Tooltip v-if="canEdit" text="Редактировать">
           <a class="poll-edit-link" @click="startEditing">
-            <Icon :font="IconType.Edit" />
+            <SvgIcon name="pencil" />
           </a>
         </Tooltip>
       </div>
@@ -205,7 +206,7 @@ async function cancelVote() {
               :goal="totalVotes || 1"
               :class="{ 'poll-option-voted': option.voted }"
             >
-              <Icon v-if="option.voted" :font="IconType.Tick" />
+              <span v-if="option.voted">{{ symbols.checkmark }}</span>
               {{ option.text }}&nbsp;&ndash;&nbsp;{{ option.votesCount }}
               <Tooltip v-if="isActive && user && !voted" text="Проголосовать">
                 <a @click="voteForOption(option.id)" class="poll-option-vote" />
@@ -239,7 +240,7 @@ async function cancelVote() {
           :goal="totalVotes || 1"
           :class="{ 'poll-option-voted': option.voted }"
         >
-          <Icon v-if="option.voted" :font="IconType.Tick" />
+          <span v-if="option.voted">{{ symbols.checkmark }}</span>
           {{ option.text }}&nbsp;&ndash;&nbsp;{{ option.votesCount }}
           <Tooltip v-if="isActive && user && !voted" text="Проголосовать">
             <a @click="voteForOption(option.id)" class="poll-option-vote" />

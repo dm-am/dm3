@@ -5,9 +5,8 @@ import { CharacterStatus, Alignment } from "@/entities/game";
 import { UserLink } from "@/entities/user";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ContentText } from "@/shared/ui";
-import Icon from "@/shared/ui/Icon/Icon.vue";
-import { IconType } from "@/shared/ui/Icon/iconType";
-import defaultPicture from "@/assets/images/userpic.png";
+import { SvgIcon } from "@/shared/ui/Icon";
+import { defaultAvatarUrl as defaultPicture } from "@/shared/lib/utils/icons";
 
 const props = defineProps<{
   character: Character;
@@ -66,8 +65,8 @@ function toggleExpand() {
           Игрок: <user-link :user="character.author" />
         </secondary-text>
       </div>
-      <Icon
-        :font="isExpanded ? IconType.ArrowUp : IconType.ArrowDown"
+      <SvgIcon
+        :name="isExpanded ? 'chevronUp' : 'chevronDown'"
         class="expand-icon"
       />
     </header>
@@ -154,7 +153,6 @@ function toggleExpand() {
   gap: $small
   padding: $small
   cursor: pointer
-  transition: background-color 0.2s
 
   &:hover
     background-color: $bg-element-accent

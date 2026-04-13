@@ -54,7 +54,7 @@ export type ModerationPermissions = {
 /**
  * Moderated profile extends UserProfile with moderation-specific data.
  * Inherits: id, username, role, rating, picture, status, info, gender,
- * birthday, name, location, contacts, registeredAtUtc, featuredPost, etc.
+ * birthday, name, location, contacts, registeredAtUtc, etc.
  */
 export type ModeratedProfile = {
   // Inherited from UserProfile
@@ -73,15 +73,6 @@ export type ModeratedProfile = {
   registeredUtc: string;
   isHonorary?: boolean;
   isNewbie?: boolean;
-  featuredPost?: {
-    id: string;
-    gameId: string;
-    roomId: string;
-    gameTitle: string;
-    roomTitle: string;
-    text: string;
-    rating: number;
-  };
   postReviewsGiven?: number;
   postReviewsReceived?: number;
 

@@ -7,13 +7,14 @@
  * 2. Expanded + not confirmed - yellow box with red blur overlay and 18+ warning
  * 3. Expanded + confirmed - yellow box (like regular spoiler)
  */
-import { ref, computed } from "vue";
+import { ref, computed, onBeforeUnmount } from "vue";
 import { NodeViewWrapper, NodeViewContent, nodeViewProps } from "@tiptap/vue-3";
 import {
   NSFW_SHOW_TEXT,
   NSFW_HIDE_TEXT,
   NSFW_WARNING_TEXT,
 } from "@/shared/lib/utils/bbcodeConstants";
+import { registerExpandable } from "@/shared/lib/composables";
 
 const props = defineProps(nodeViewProps);
 
@@ -27,6 +28,23 @@ function toggleCollapsed() {
 function confirmAge() {
   isConfirmed.value = true;
 }
+
+// Bulk expand auto-confirms the 18+ overlay — user made an explicit
+// page-wide gesture via the ScrollNav toggle button.
+const unregister = registerExpandable({
+  id: Symbol("NsfwView"),
+  isExpanded: () => !isCollapsed.value,
+  expand: () => {
+    if (isCollapsed.value) {
+      isConfirmed.value = true;
+      props.updateAttributes({ collapsed: false });
+    }
+  },
+  collapse: () => {
+    if (!isCollapsed.value) props.updateAttributes({ collapsed: true });
+  },
+});
+onBeforeUnmount(unregister);
 </script>
 
 <template>

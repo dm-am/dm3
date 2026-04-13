@@ -13,6 +13,19 @@ export type { AsyncActionState } from "./useAsyncAction";
 export { useExpandable } from "./useExpandable";
 export { useScrollToElement } from "./useScrollToElement";
 
+// Global registry coordinating "expand/collapse all" across the page.
+// Participants: ExpandableList rows, TruncatedContent, BBCode spoiler/nsfw.
+export {
+  registerExpandable,
+  notifyExpandableChanged,
+  clearRegistry,
+  hasAny as hasAnyExpandable,
+  allExpanded as allExpandablesExpanded,
+  expandAll as expandAllExpandables,
+  collapseAll as collapseAllExpandables,
+} from "./useExpandableRegistry";
+export type { ExpandableHandle } from "./useExpandableRegistry";
+
 // Data fetching patterns
 export { useFetchData } from "./useFetchData";
 
@@ -75,3 +88,11 @@ export type {
   ContentTruncationOptions,
   ContentTruncationReturn,
 } from "./useContentTruncation";
+
+// Message permissions (edit/delete/like)
+export { useMessagePermissions } from "./useMessagePermissions";
+export type { MessagePermissions } from "./useMessagePermissions";
+
+// Virtual scroll (@tanstack/vue-virtual wrapper)
+export { useVirtualScroll } from "./useVirtualScroll";
+export type { VirtualScrollOptions, VirtualScrollReturn } from "./useVirtualScroll";

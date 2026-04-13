@@ -49,13 +49,12 @@ export function useContentAuthor<T extends ContentData>(content: Ref<T>) {
 
   const formattedDate = computed(() => {
     if (!content.value.createdUtc) return "";
-    return dayjs(content.value.createdUtc).format("DD.MM.YYYY HH:mm");
+    return dayjs(content.value.createdUtc).format("DD.MM.YYYY [в] HH:mm");
   });
 
   const formattedEditDate = computed(() => {
     if (!content.value.modifiedUtc) return null;
-    const d = dayjs(content.value.modifiedUtc);
-    return `${d.format("DD.MM.YYYY")} в ${d.format("HH:mm")}`;
+    return dayjs(content.value.modifiedUtc).format("DD.MM.YYYY [в] HH:mm");
   });
 
   const isEdited = computed(() => !!content.value.modifiedUtc);

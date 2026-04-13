@@ -16,6 +16,7 @@
 // Note: For full-featured data tables with sorting/pagination, use DataTable component
 
 @import "Themes"
+@import "Animations"
 
 // Shared spacing/sizing
 $table-cell-padding-v: $small
@@ -39,9 +40,10 @@ $table-gap: 1px
   padding: $table-cell-padding-v $table-cell-padding-h
   background-color: $bg-element
 
-// Row hover effect (for interactive tables)
+// Row hover effect (for interactive tables).
+// No local transition: the global theme rule in Reset.sass animates
+// background-color changes, including hover. See UI_STANDARDS.md.
 =table-row-hover
-  transition: background-color 0.15s ease
   &:hover
     background-color: $bg-element-hover
 
@@ -70,12 +72,8 @@ $details-offset: 20px
   background-color: $bg-element
   cursor: pointer
   user-select: none
-  transition: background-color 0.15s ease
 
   &:hover
-    background-color: $bg-element-hover
-
-  &.expanded
     background-color: $bg-element-hover
 
   &:focus-visible
@@ -87,7 +85,7 @@ $details-offset: 20px
   color: $text-muted
   width: $expand-icon-width
   flex-shrink: 0
-  transition: transform 0.15s ease
+  +transition-safe(transform)
 
 =expandable-details
   padding: $table-cell-padding-v $table-cell-padding-h $table-cell-padding-v ($table-cell-padding-h + $details-offset)

@@ -1,6 +1,5 @@
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
-using DM.Domain.Game.Features.Games;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -81,15 +80,4 @@ public class UserController : ControllerBase
     [ProducesResponseType(typeof(ListEnvelope<LoginHistoryDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetLoginHistory(string username) => Ok(await _userApiService.GetLoginHistory(username));
-
-    /// <summary>
-    /// Get user's best post (highest rated)
-    /// </summary>
-    /// <param name="username">User username</param>
-    /// <response code="200">Best post retrieved successfully</response>
-    /// <response code="404">User not found</response>
-    [HttpGet("{username}/best-post", Name = nameof(GetBestPost))]
-    [ProducesResponseType(typeof(Envelope<BestPostResult?>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetBestPost(string username) => Ok(await _userApiService.GetBestPost(username));
 }

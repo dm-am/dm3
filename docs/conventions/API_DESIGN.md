@@ -192,6 +192,21 @@ connection.on("Send", (notification) => {
 
 ---
 
+## Rendering audience header (`X-Dm-Audience`)
+
+Поля ответов, содержащие пользовательский BBCode, рендерятся сервером под запрошенный **audience**. Клиент передаёт желаемое намерение в HTTP-заголовке `X-Dm-Audience`; при отсутствии заголовка используется `display`.
+
+| Значение | Назначение |
+|---|---|
+| `display` | Обычное чтение. Privacy-теги фильтруются по правам текущего пользователя. Default. |
+| `author_edit` | Автор загружает свой контент в редактор. Сервер отдаёт HTML с `data-bb-*` round-trip атрибутами. Endpoint-уровень обязан подтвердить авторство. |
+| `plain_text` | Plain-text пайплайны. Privacy-теги вырезаются безусловно. |
+| `embed_safe` | Link preview / cross-post embed. NSFW-safe tag set, privacy-теги вырезаются. |
+
+Неизвестное значение заголовка трактуется как `display`. Контракт audience, правила видимости тегов, модель surface и permission-бакеты кэша — в [BBCODE_RENDERING.md](../architecture/BBCODE_RENDERING.md).
+
+---
+
 ## Swagger Groups
 
 API организован в 9 групп по доменам:
@@ -215,5 +230,6 @@ API организован в 9 групп по доменам:
 ## Ссылки
 
 - [CODE_STYLE.md](./CODE_STYLE.md) — стандарты кода
+- [BBCODE_RENDERING.md](../architecture/BBCODE_RENDERING.md) — контракт рендеринга BBCode
 - [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) — как работает вход
 - [AUTHORIZATION.md](../architecture/AUTHORIZATION.md) — роли и права

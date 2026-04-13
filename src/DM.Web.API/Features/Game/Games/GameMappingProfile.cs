@@ -53,13 +53,24 @@ internal class GameMappingProfile : Profile
         // Note: GameAssistantInfo → UserRef mapping is in UserRefMappingProfile
 
         // GameRef mapping (lightweight, counts only - for sidebars/menus)
-        // This is the BASE mapping that Game and GameDetails inherit from
+        // This is the BASE mapping that Game and GameDetails inherit from.
+        // Tooltip-feeding collections (ActiveCharacters, SubscriberUsernames)
+        // are EXPLICITLY mapped — relying on AutoMapper's convention walker
+        // for nested IEnumerable properties across three-tier `IncludeBase`
+        // chains is fragile (silent data loss when the submap is resolved
+        // late or the element type check fails), and tooltips are part of
+        // the critical UX surface that the user directly cares about.
         CreateMap<DtoGame, GameRef>()
             .ForMember(d => d.ActivatedUtc, s => s.MapFrom(g => g.ActivatedUtc))
             .ForMember(d => d.Participation, s => s.MapFrom<GameParticipationResolver>())
             .ForMember(d => d.Master, s => s.MapFrom(g => g.Master))
             .ForMember(d => d.Assistants, s => s.MapFrom(g => g.Assistants))
-            .ForMember(d => d.SubscribersCount, s => s.MapFrom(g => g.SubscriberIds.Count()));
+            .ForMember(d => d.SubscribersCount, s => s.MapFrom(g => g.SubscriberIds.Count()))
+            .ForMember(d => d.ActiveCharacters, s => s.MapFrom(g => g.ActiveCharacters))
+            .ForMember(d => d.SubscriberUsernames, s => s.MapFrom(g => g.SubscriberUsernames))
+            .ForMember(d => d.Recruitment, s => s.MapFrom(g => g.Recruitment))
+            .ForMember(d => d.GameReviewsCount, s => s.MapFrom(g => g.GameReviewsCount))
+            .ForMember(d => d.PostReviewsCount, s => s.MapFrom(g => g.PostReviewsCount));
 
         // Game mapping (extends GameRef with additional fields)
         CreateMap<DtoGame, Game>()

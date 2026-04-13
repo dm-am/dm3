@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
+import { symbols } from "@/shared/lib/utils/icons";
 import { useToast } from "@/shared/lib/composables/useToast";
 import moderationApi, {
   UsernameChangeRequestStatus,
@@ -207,7 +208,7 @@ onMounted(() => fetchRequests());
       <div class="modal">
         <div class="modal-header">
           <h4>Отклонение запроса</h4>
-          <button class="close-btn" @click="closeRejectModal">&times;</button>
+          <button class="close-btn" @click="closeRejectModal">{{ symbols.close }}</button>
         </div>
         <div class="modal-body">
           <p>

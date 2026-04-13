@@ -4,6 +4,8 @@
  *
  * Displays a clickable item with optional avatar, label, hint, and navigation arrow.
  */
+import { SvgIcon } from "@/shared/ui/Icon";
+
 defineOptions({ name: "FilterDropdownItem" });
 
 withDefaults(
@@ -57,18 +59,11 @@ function handleMouseEnter() {
       <span class="item-label">{{ label }}</span>
       <span v-if="hint" class="item-hint">{{ hint }}</span>
     </span>
-    <svg
+    <SvgIcon
       v-if="hasSubOptions"
+      name="chevronRight"
       class="item-arrow"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-    >
-      <path d="M9 18l6-6-6-6" />
-    </svg>
+    />
   </button>
 </template>
 
@@ -88,7 +83,6 @@ function handleMouseEnter() {
   border: none
   background: none
   color: $text
-  transition: background-color 0.1s
 
   &.indented
     padding-left: $large

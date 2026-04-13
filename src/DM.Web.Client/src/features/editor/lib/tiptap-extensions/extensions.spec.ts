@@ -19,7 +19,6 @@ import {
   Nsfw,
   ModBlock,
   BbTab,
-  CutMarker,
   BbQuote,
   Private,
   Noparse,
@@ -157,31 +156,6 @@ describe("BbTab Extension", () => {
   });
 });
 
-describe("CutMarker Extension", () => {
-  it("should have correct name", () => {
-    expect(CutMarker.name).toBe("cutMarker");
-  });
-
-  it("should be an atom node", () => {
-    const editor = createTestEditor([CutMarker]);
-    const schema = editor.schema;
-    expect(schema.nodes.cutMarker).toBeDefined();
-    expect(schema.nodes.cutMarker.spec.atom).toBe(true);
-  });
-
-  it('should have data-bb-tag="cut" attribute', () => {
-    const editor = createTestEditor([CutMarker]);
-    editor.commands.setContent('<hr data-bb-tag="cut" />');
-    const html = editor.getHTML();
-    expect(html).toContain('data-bb-tag="cut"');
-  });
-
-  it("should provide insert command", () => {
-    const editor = createTestEditor([CutMarker]);
-    expect(editor.commands.insertCut).toBeDefined();
-  });
-});
-
 describe("BbQuote Extension", () => {
   it("should have correct name", () => {
     expect(BbQuote.name).toBe("bbQuote");
@@ -289,7 +263,6 @@ describe("All BBCode Extensions Integration", () => {
       Nsfw,
       ModBlock,
       BbTab,
-      CutMarker,
       BbQuote,
       Private,
       Noparse,
@@ -300,7 +273,6 @@ describe("All BBCode Extensions Integration", () => {
     expect(editor.schema.nodes.nsfw).toBeDefined();
     expect(editor.schema.nodes.modBlock).toBeDefined();
     expect(editor.schema.nodes.bbTab).toBeDefined();
-    expect(editor.schema.nodes.cutMarker).toBeDefined();
     expect(editor.schema.nodes.bbQuote).toBeDefined();
     expect(editor.schema.marks.private).toBeDefined();
     expect(editor.schema.marks.noparse).toBeDefined();

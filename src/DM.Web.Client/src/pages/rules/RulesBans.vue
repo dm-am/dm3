@@ -48,10 +48,6 @@ const sections: ExpandableItem[] = [
   {
     id: "appeal",
     title: "Обжалование",
-    content: [
-      "Не согласны — напишите администратору с сутью претензии и аргументами.",
-      "Решения принимаются коллегиально. Хамство = дополнительные баллы.",
-    ],
   },
 ];
 </script>
@@ -59,7 +55,18 @@ const sections: ExpandableItem[] = [
 <template>
   <section class="rules-bans">
     <BlockTitle>Как работают баны</BlockTitle>
-    <ExpandableList :items="sections" />
+    <ExpandableList :items="sections" :allow-multiple="true">
+      <template #item-appeal>
+        <ul>
+          <li>
+            Если не согласны с решением конкретного модератора — его можно
+            обжаловать, заполнив соответствующую
+            <router-link to="/complaint"><strong>форму обращения</strong></router-link>.
+          </li>
+          <li>Решения по обжалованию принимаются коллегиально. Хамство = дополнительные баллы.</li>
+        </ul>
+      </template>
+    </ExpandableList>
   </section>
 </template>
 

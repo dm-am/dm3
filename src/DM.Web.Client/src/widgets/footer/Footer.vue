@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="footer">
     <!-- Static content - render once (currentYear computed once at component creation) -->
     <div class="credits" v-once>
@@ -82,9 +82,9 @@ function rickroll(event: MouseEvent) {
     left: 0
     right: 0
     bottom: 0
-    background: url('@/assets/images/footer_bg.gif') left bottom repeat-x
+    background: url('@/assets/images/decorations/footer-decoration.png') left bottom repeat-x
     background-size: auto $footer-height
-    filter: $filter-invert
+    filter: invert($invert-amount)
 
 .credits
   position: relative
@@ -140,7 +140,6 @@ function rickroll(event: MouseEvent) {
 
   a
     color: $link
-    transition: color $animation-time ease
     &:hover
       color: $link-hover
 

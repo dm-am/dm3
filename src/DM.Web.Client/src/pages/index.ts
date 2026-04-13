@@ -36,6 +36,3 @@ export * from "./global-chat";
 
 // Personal
 export * from "./personal";
-
-// Dev
-export * from "./dev";

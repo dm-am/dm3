@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, toRef } from "vue";
 import { Tooltip } from "@/shared/ui/Tooltip";
+import { SvgIcon } from "@/shared/ui/Icon";
 import { useContentAuthor } from "@/shared/lib/composables/useContentAuthor";
 import type { UserRole } from "@/shared/api/models/community";
 
@@ -133,7 +134,7 @@ function copyAnchorLink() {
           :disabled="!canLike"
           @click="toggleLike"
         >
-          <span class="like-icon">♥</span>
+          <SvgIcon name="heartFilled" class="like-icon" />
           <span v-if="likesCount > 0" class="likes-count">{{ likesCount }}</span>
         </button>
 

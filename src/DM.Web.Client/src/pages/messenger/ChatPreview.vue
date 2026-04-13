@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import type { Chat } from "@/entities/message";
 import type { User } from "@/shared/api/models/community";
-import defaultPicture from "@/assets/images/userpic.png";
+import { defaultAvatarUrl as defaultPicture } from "@/shared/lib/utils/icons";
 import dayjs from "dayjs";
 
 const props = defineProps<{
@@ -35,7 +35,7 @@ const lastMessagePreview = computed(() => {
 const lastMessageDate = computed(() => {
   const msg = props.chat.lastMessage;
   if (!msg?.createdUtc) return "";
-  return dayjs(msg.createdUtc).format("DD.MM.YYYY HH:mm");
+  return dayjs(msg.createdUtc).format("DD.MM.YYYY [в] HH:mm");
 });
 
 const hasUnread = computed(() => (props.chat.unreadMessagesCount ?? 0) > 0);
@@ -81,7 +81,6 @@ const hasUnread = computed(() => (props.chat.unreadMessagesCount ?? 0) > 0);
   background-color: $bg-element
   color: $text
   cursor: pointer
-  transition: background-color $animation-time
 
   &:hover
     background-color: $bg-highlight-blue

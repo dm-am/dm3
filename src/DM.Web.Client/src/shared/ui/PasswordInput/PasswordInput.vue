@@ -17,18 +17,14 @@
       tabindex="-1"
       aria-label="Показать/скрыть пароль"
     >
-      <svg
-        :viewBox="visible ? icons.eyeOpen.viewBox : icons.eyeClosed.viewBox"
-        fill="none"
-        v-html="visible ? icons.eyeOpen.path : icons.eyeClosed.path"
-      />
+      <SvgIcon :name="visible ? 'eyeOpen' : 'eyeClosed'" />
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from "vue";
-import { icons } from "@/shared/lib/utils/icons";
+import { SvgIcon } from "@/shared/ui/Icon";
 
 defineProps<{
   modelValue: string;

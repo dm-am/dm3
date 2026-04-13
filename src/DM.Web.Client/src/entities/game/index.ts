@@ -22,6 +22,7 @@ export type {
   Room,
   RoomId,
   RoomClaim,
+  RoomAccess,
   RoomSettings,
   PendingPost,
   Post,
@@ -45,12 +46,13 @@ export {
   Alignment,
   RoomType,
   RoomAccessType,
+  RoomAccessPolicy,
   ReviewSign,
 } from "./model/types";
 
 // Store
 export { useGamesStore, useGameDetailsStore } from "./model/store";
-export { useFeaturedPostsStore } from "./model/featuredPostsStore";
+export { useRatedPostsStore } from "./model/ratedPostsStore";
 export { usePulseStore, getWeekStartUtc } from "./model/pulseStore";
 export type { PulseSearchParams } from "./model/pulseStore";
 
@@ -62,4 +64,11 @@ export { gameApi } from "./api";
 export { default as gameApiDefault } from "./api";
 
 // UI Components
-export { GameStatusBadge, UnreadCounters, PostRating, PostReviewItem } from "./ui";
+export {
+  GameStatusBadge,
+  UnreadCounters,
+  PostRating,
+  PostReviewItem,
+  GameLink,
+  RoomLink,
+} from "./ui";

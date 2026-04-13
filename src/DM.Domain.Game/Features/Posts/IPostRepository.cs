@@ -29,12 +29,9 @@ public interface IPostRepository
     Task<Post?> Get(Guid postId, Guid userId);
 
     /// <summary>
-    /// Get user's best post
-    /// </summary>
-    Task<BestPostResult?> GetBestPost(Guid userId);
-
-    /// <summary>
-    /// Get posts with rating info (global search with filters)
+    /// Get posts with rating info (global search with filters).
+    /// To fetch a single user's best post, filter via <see cref="PostsQuery"/>
+    /// (author username + rating sort + take=1).
     /// </summary>
     Task<(IEnumerable<Post> Posts, int TotalCount)> GetRated(PostsQuery query);
 

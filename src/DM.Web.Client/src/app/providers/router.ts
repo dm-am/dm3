@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 
 import { LeftSidebar, RightSidebar } from "@/widgets/sidebar";
+import { clearRegistry as clearExpandableRegistry } from "@/shared/lib/composables";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -61,6 +62,7 @@ const router = createRouter({
     },
     {
       path: "/messenger",
+      meta: { requiresAuth: true },
       components: {
         left: LeftSidebar,
         right: RightSidebar,
@@ -217,6 +219,7 @@ const router = createRouter({
     {
       name: "create-game",
       path: "/create-game",
+      meta: { requiresAuth: true },
       components: {
         left: LeftSidebar,
         right: RightSidebar,
@@ -341,16 +344,6 @@ const router = createRouter({
         page: () => import("@/pages/account/PasswordResetPage.vue"),
       },
     },
-    // Dev tools
-    {
-      name: "theme-colors",
-      path: "/dev/theme-colors",
-      components: {
-        left: LeftSidebar,
-        right: RightSidebar,
-        page: () => import("@/pages/dev/ThemeColorsPage.vue"),
-      },
-    },
     {
       name: "support",
       path: "/support",
@@ -416,6 +409,15 @@ router.beforeEach((to) => {
       return { name: "home" };
     }
   }
+});
+
+// Belt-and-suspenders cleanup: wipe the expandable registry on every
+// navigation so stale handles from the previous page never appear in
+// ScrollNav's "Развернуть все" count. Individual components still
+// unregister via onBeforeUnmount; this is defence-in-depth for detached
+// DOM and hmr edge cases.
+router.afterEach(() => {
+  clearExpandableRegistry();
 });
 
 export default router;

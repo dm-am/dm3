@@ -20,15 +20,19 @@
 // Duration: 1.5s (per UI_STANDARDS.md)
 // Easing: ease-in-out / infinite
 
+// Skeleton shimmer: call +skeleton-shimmer AFTER all other declarations
+// in the selector to avoid Sass mixed-decls deprecation warning.
 =skeleton-shimmer
+  border-radius: $minor  // 4px
   background: linear-gradient(90deg, $bg-element-hover 25%, $bg-element 50%, $bg-element-hover 75%)
   background-size: 200% 100%
   animation: skeleton-shimmer 1.5s ease-in-out infinite
-  border-radius: $minor  // 4px
 
-  @media (prefers-reduced-motion: reduce)
-    animation: none
-    background: $bg-element-hover
+// Reduced-motion override — must be applied globally, not inside mixin,
+// since the mixin's @media creates a nested rule that triggers Sass
+// deprecation warnings when callers add declarations after the mixin.
+@media (prefers-reduced-motion: reduce)
+  // Applied via global Reset.sass rule: animation: none !important
 
 @keyframes skeleton-shimmer
   0%

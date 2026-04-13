@@ -2,10 +2,24 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useUiStore } from "@/shared/stores/ui";
 import { useRegion } from "@/shared/lib/composables/useRegion";
+import {
+  hasAnyExpandable,
+  allExpandablesExpanded,
+  expandAllExpandables,
+  collapseAllExpandables,
+} from "@/shared/lib/composables";
 import { Theme } from "@/shared/api/models/personal";
 import { storeToRefs } from "pinia";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { Tooltip } from "@/shared/ui/Tooltip";
+
+function toggleAllExpandables() {
+  if (allExpandablesExpanded.value) {
+    collapseAllExpandables();
+  } else {
+    expandAllExpandables();
+  }
+}
 
 function getScrollContainer(): HTMLElement | null {
   return document.querySelector(".main");
@@ -48,7 +62,7 @@ function closeSettings(e: MouseEvent) {
 
 onMounted(() => {
   document.addEventListener("click", closeSettings);
-  nextTick(updateViewIndicator);
+  nextTick(updateLayoutIndicator);
 });
 
 onUnmounted(() => {
@@ -57,28 +71,28 @@ onUnmounted(() => {
 
 // Theme toggle
 const uiStore = useUiStore();
-const { theme, isCompactMode } = storeToRefs(uiStore);
-const { toggleTheme, toggleCompactMode } = uiStore;
+const { theme, messageLayout, isCompactLayout } = storeToRefs(uiStore);
+const { toggleTheme, setMessageLayout } = uiStore;
 const isDarkTheme = computed(() => theme.value === Theme.Dark);
 
-// View toggle indicator
-const viewToggleRef = ref<HTMLElement | null>(null);
-const viewIndicatorStyle = ref({ left: "0px", width: "50%" });
+// Layout toggle indicator
+const layoutToggleRef = ref<HTMLElement | null>(null);
+const layoutIndicatorStyle = ref({ left: "0px", width: "50%" });
 
-function updateViewIndicator() {
-  if (!viewToggleRef.value) return;
-  const btns = viewToggleRef.value.querySelectorAll(".view-toggle-btn");
-  const activeIndex = isCompactMode.value ? 0 : 1;
+function updateLayoutIndicator() {
+  if (!layoutToggleRef.value) return;
+  const btns = layoutToggleRef.value.querySelectorAll(".layout-toggle-btn");
+  const activeIndex = isCompactLayout.value ? 0 : 1;
   const activeBtn = btns[activeIndex] as HTMLElement;
   if (!activeBtn) return;
-  viewIndicatorStyle.value = {
+  layoutIndicatorStyle.value = {
     left: `${activeBtn.offsetLeft}px`,
     width: `${activeBtn.offsetWidth}px`,
   };
 }
 
-watch(isCompactMode, () => {
-  nextTick(updateViewIndicator);
+watch(messageLayout, () => {
+  nextTick(updateLayoutIndicator);
 });
 
 // Region switcher
@@ -94,34 +108,58 @@ const {
 
 <template>
   <div class="scroll-nav">
-    <div class="scroll-buttons">
-      <button
-        type="button"
-        class="scroll-nav-btn"
-        aria-label="Прокрутить наверх"
-        @click="scrollToTop"
-      >
-        <SvgIcon name="scrollUpMaterial" />
-      </button>
-      <button
-        type="button"
-        class="scroll-nav-btn"
-        aria-label="Прокрутить вниз"
-        @click="scrollToBottom"
-      >
-        <SvgIcon name="scrollDownMaterial" />
-      </button>
-    </div>
-    <button
-      ref="settingsBtn"
-      type="button"
-      class="scroll-nav-btn settings-btn"
-      :class="{ active: isSettingsOpen }"
-      aria-label="Тема и зеркало"
-      @click="toggleSettings"
+    <!-- Toggle all expandables (accordion rows, TruncatedContent, BBCode spoiler/nsfw) -->
+    <Tooltip
+      v-if="hasAnyExpandable"
+      :text="allExpandablesExpanded ? 'Свернуть все' : 'Развернуть все'"
     >
-      <SvgIcon name="settingsGear" />
-    </button>
+      <button
+        type="button"
+        class="scroll-nav-btn toggle-all-btn"
+        :aria-label="
+          allExpandablesExpanded ? 'Свернуть все' : 'Развернуть все'
+        "
+        @click="toggleAllExpandables"
+      >
+        <SvgIcon
+          :name="allExpandablesExpanded ? 'collapseAll' : 'expandAll'"
+        />
+      </button>
+    </Tooltip>
+    <div class="scroll-buttons">
+      <Tooltip text="Наверх">
+        <button
+          type="button"
+          class="scroll-nav-btn"
+          aria-label="Прокрутить наверх"
+          @click="scrollToTop"
+        >
+          <SvgIcon name="chevronUp" />
+        </button>
+      </Tooltip>
+      <Tooltip text="Вниз">
+        <button
+          type="button"
+          class="scroll-nav-btn"
+          aria-label="Прокрутить вниз"
+          @click="scrollToBottom"
+        >
+          <SvgIcon name="chevronDown" />
+        </button>
+      </Tooltip>
+    </div>
+    <Tooltip text="Настройки сайта" :disabled="isSettingsOpen">
+      <button
+        ref="settingsBtn"
+        type="button"
+        class="scroll-nav-btn settings-btn"
+        :class="{ active: isSettingsOpen }"
+        aria-label="Настройки сайта"
+        @click="toggleSettings"
+      >
+        <SvgIcon name="settings" />
+      </button>
+    </Tooltip>
 
     <!-- Settings bubble -->
     <div
@@ -131,43 +169,31 @@ const {
     >
       <div class="bubble-tail" />
       <div class="bubble-content">
-        <!-- View mode toggle -->
+        <!-- Message layout toggle -->
         <div class="settings-row">
-          <span class="settings-label">Режим</span>
-          <div ref="viewToggleRef" class="view-toggle">
-            <Tooltip text="Компактный режим">
+          <span class="settings-label">Верстка</span>
+          <div ref="layoutToggleRef" class="layout-toggle">
+            <Tooltip text="Компактная">
               <button
                 type="button"
-                class="view-toggle-btn"
-                :class="{ active: isCompactMode }"
-                @click="!isCompactMode && toggleCompactMode()"
+                class="layout-toggle-btn"
+                :class="{ active: isCompactLayout }"
+                @click="setMessageLayout('compact')"
               >
-                <svg viewBox="0 0 16 12" width="16" height="12" fill="currentColor">
-                  <rect x="0" y="0" width="16" height="2" />
-                  <rect x="0" y="3.33" width="16" height="2" />
-                  <rect x="0" y="6.67" width="16" height="2" />
-                  <rect x="0" y="10" width="16" height="2" />
-                </svg>
+                <SvgIcon name="layoutCompact" />
               </button>
             </Tooltip>
-            <Tooltip text="Обычный режим">
+            <Tooltip text="Полная">
               <button
                 type="button"
-                class="view-toggle-btn"
-                :class="{ active: !isCompactMode }"
-                @click="isCompactMode && toggleCompactMode()"
+                class="layout-toggle-btn"
+                :class="{ active: !isCompactLayout }"
+                @click="setMessageLayout('full')"
               >
-                <svg viewBox="0 0 16 12" width="16" height="12" fill="currentColor">
-                  <circle cx="1.5" cy="1.5" r="1.5" />
-                  <rect x="5" y="0" width="11" height="2.5" />
-                  <circle cx="1.5" cy="6" r="1.5" />
-                  <rect x="5" y="4.75" width="11" height="2.5" />
-                  <circle cx="1.5" cy="10.5" r="1.5" />
-                  <rect x="5" y="9.25" width="11" height="2.5" />
-                </svg>
+                <SvgIcon name="layoutList" />
               </button>
             </Tooltip>
-            <span class="view-indicator" :style="viewIndicatorStyle"></span>
+            <span class="layout-indicator" :style="layoutIndicatorStyle"></span>
           </div>
         </div>
 
@@ -217,6 +243,9 @@ const {
   gap: 0
   z-index: $z-sticky
 
+.toggle-all-btn
+  margin-bottom: $small
+
 .scroll-buttons
   display: flex
   flex-direction: column
@@ -254,7 +283,17 @@ const {
   right: calc(100% + $small)
   z-index: 101
 
+// The bubble uses a two-column grid on .bubble-content. Each
+// .settings-row inherits those shared column tracks via CSS subgrid,
+// so the second column is ALWAYS sized by the widest control across
+// ALL rows (the layout toggle, ~64px). The theme switch and mirror
+// button center within that exact same column width via
+// justify-self: center. No magic numbers — the layout toggle is the
+// single source of truth for the controls column width.
 .bubble-content
+  display: grid
+  grid-template-columns: auto auto
+  column-gap: $medium
   background: $bg-element
   border: 1px solid $border
   border-radius: $border-radius
@@ -274,9 +313,12 @@ const {
   transform: rotate(45deg)
 
 .settings-row
-  display: flex
+  // Span both parent columns and inherit their track sizing via subgrid.
+  // This is what makes all rows share the same column widths.
+  grid-column: 1 / -1
+  display: grid
+  grid-template-columns: subgrid
   align-items: center
-  gap: $small
   padding: $tiny 0
 
   &:not(:last-child)
@@ -287,14 +329,15 @@ const {
 .settings-label
   color: $text-muted
   font-size: $secondary-font-size
-  min-width: 55px
+  white-space: nowrap
 
-// Control wrapper for centering relative to view-toggle
+// Theme switch and mirror button: centered within the shared controls
+// column (whose width is defined by the layout toggle in the first row).
+// justify-self + align-self center the element itself in the grid cell
+// without stretching it to fill the cell width.
 .settings-control
-  display: flex
-  justify-content: center
-  // Match view-toggle width (2 buttons × ~32px each)
-  min-width: 64px
+  justify-self: center
+  align-self: center
 
 // Theme switch
 .theme-switch
@@ -319,7 +362,7 @@ const {
     border-radius: 18px
     background-color: $bg-page
     border: 1px solid $link-nav
-    transition: background-color 0.3s ease
+    transition: background-color 0.3s ease, border-color 0.3s ease
 
     &:before
       content: ''
@@ -330,7 +373,7 @@ const {
       bottom: 2px
       border-radius: 50%
       background: $link-nav
-      transition: transform 0.3s ease-in-out, background 0.3s ease
+      transition: transform 0.3s ease-in-out, background-color 0.3s ease
 
     &:after
       content: ''
@@ -343,7 +386,7 @@ const {
       background: $bg-page
       z-index: 1
       opacity: 0
-      transition: transform 0.3s ease-in-out
+      transition: transform 0.3s ease-in-out, background-color 0.3s ease
 
   input:checked + .slider:before,
   input:checked + .slider:after
@@ -398,13 +441,13 @@ const {
   50%
     opacity: 0.3
 
-// View toggle
-.view-toggle
+// Layout toggle
+.layout-toggle
   display: flex
   border-bottom: 2px solid $border
   position: relative
 
-.view-toggle-btn
+.layout-toggle-btn
   display: flex
   align-items: center
   justify-content: center
@@ -414,6 +457,9 @@ const {
   color: $text-muted
   cursor: pointer
   transition: filter 0.2s ease
+  svg
+    width: 16px
+    height: 12px
 
   &:hover:not(.active)
     filter: brightness($hover-brightness)
@@ -422,7 +468,7 @@ const {
     filter: brightness($hover-brightness)
     cursor: default
 
-.view-indicator
+.layout-indicator
   position: absolute
   bottom: -2px
   height: 2px

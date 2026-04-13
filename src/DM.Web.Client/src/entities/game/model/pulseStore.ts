@@ -22,10 +22,14 @@ export function getWeekStartUtc(): Date {
 }
 
 export interface PulseSearchParams {
-  sortBy?: "rating" | "lastreview" | "created";
+  sortBy?: "rating" | "lastreview" | "reviewcount" | "created";
   sortOrder?: "asc" | "desc";
   search?: string;
   minRating?: number;
+  maxRating?: number;
+  authorUsernames?: string;
+  createdFrom?: string;
+  createdTo?: string;
   gameId?: string;
   number?: number;
   size?: number;
@@ -51,11 +55,15 @@ export const usePulseStore = defineStore("pulse", () => {
       sortBy: params.sortBy || "lastreview",
       sortOrder: params.sortOrder || "desc",
       hasReviews: true,
-      reviewedAfter: weekStart.toISOString(),
+      lastReviewedAfter: weekStart.toISOString(),
     };
 
     if (params.search) apiParams.search = params.search;
-    if (params.minRating) apiParams.minRating = params.minRating;
+    if (params.minRating !== undefined && params.minRating !== null) apiParams.minRating = params.minRating;
+    if (params.maxRating !== undefined && params.maxRating !== null) apiParams.maxRating = params.maxRating;
+    if (params.authorUsernames) apiParams.authorUsernames = params.authorUsernames;
+    if (params.createdFrom) apiParams.createdAfter = new Date(params.createdFrom + "T00:00:00Z").toISOString();
+    if (params.createdTo) apiParams.createdBefore = new Date(params.createdTo + "T23:59:59.999Z").toISOString();
     if (params.gameId) apiParams.gameId = params.gameId;
 
     // Pagination

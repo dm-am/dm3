@@ -1452,12 +1452,48 @@ internal class ModerationApiService : IModerationApiService
                 }
             }
 
+            // Room names derived from the game setting so the seed reads as
+            // a real tabletop session, not a messenger app. Generic names
+            // like "Общий чат" / "Главная локация" were explicitly rejected
+            // — they break immersion when browsing the seeded game list.
+            // Falls back to the TRPG-neutral "За ширмой" pool when the
+            // setting has no bespoke entry.
+            var (mainRoomTitle, chatRoomTitle, secretRoomTitle) = template.Setting switch
+            {
+                "Forgotten Realms" => ("Таверна 'Полумесяц'", "Кулуары авантюристов", "Тайный алтарь"),
+                "Golarion" => ("Постоялый двор", "Беседка мастера", "Тайная библиотека"),
+                "Ravenloft" => ("Замок Равенлофт", "Кабинет у камина", "Крипта"),
+                "Deadlands" => ("Салун 'Кровавая Мэри'", "Крыльцо салуна", "Заброшенная шахта"),
+                "Rokugan" => ("Чайная комната", "Сад камней", "Тайная келья"),
+                "1920s Arkham" => ("Гостиная профессора", "Читальный зал", "Запретный архив"),
+                "Dark Millennium" => ("Рубка 'Справедливости'", "Казарма экипажа", "Криптекс"),
+                "Night City 2077" => ("Бар 'Афтерлайф'", "Переулок NC", "Тёмная клиника"),
+                "Mythic Scandinavia" => ("Длинный дом", "Костёр йотунов", "Руны предков"),
+                "Theah" => ("Капитанская каюта", "Нижняя палуба", "Тайник капитана"),
+                "The Witcher" => ("Трактир 'Серебряный медведь'", "Лагерь у костра", "Подземелье знахаря"),
+                "Fallout" => ("Убежище", "Радиорубка", "Тайный склад"),
+                "Post-Apocalypse Moscow" => ("Станция 'ВДНХ'", "Костёр в туннеле", "Забытый бункер"),
+                "Modern Nights" => ("Клуб 'Эль Дорадо'", "Задний двор", "Тайное убежище"),
+                "Modern Gothic" => ("Особняк у кладбища", "Галерея портретов", "Подвал хозяина"),
+                "Camelot" => ("Большой зал Камелота", "Часовня Грааля", "Тайная палата короля"),
+                "Arthurian" => ("Скрипторий", "Дубрава друидов", "Обитель отшельника"),
+                "Ancient Egypt" => ("Храм Ра", "Двор пирамиды", "Саркофаг"),
+                "Dark Sun" => ("Оазис Балик", "Тень скалы", "Пещера джинна"),
+                "Al-Qadim" => ("Базар Хуззузы", "Сад визиря", "Потайной проход"),
+                "Solar System 2350" => ("Рубка 'Ареса'", "Кают-компания", "Грузовой трюм"),
+                "Far Future" => ("Мостик крейсера", "Обсервационная палуба", "Трюм"),
+                "Military Sci-Fi" => ("Рубка десантного бота", "Кают-компания", "Оружейная"),
+                "Cyberpunk Future" => ("Бар 'Неон'", "Задворки сети", "Серверная комната"),
+                "Ravnica" => ("Зал гильдии", "Уличный рынок", "Подвалы Ордрувьяра"),
+                _ => ("Главная сцена", "За ширмой", "Тайная комната"),
+            };
+
             // Create rooms (without linking - links will be set after SaveChanges)
             var mainRoom = new Room
             {
                 RoomId = _guidFactory.Create(),
                 GameId = game.GameId,
-                Title = "Главная локация",
+                Title = mainRoomTitle,
                 AccessType = RoomAccessType.Open,
                 Type = RoomType.Default,
                 RoomNumber = 1,
@@ -1473,7 +1509,7 @@ internal class ModerationApiService : IModerationApiService
             {
                 RoomId = _guidFactory.Create(),
                 GameId = game.GameId,
-                Title = "Общий чат",
+                Title = chatRoomTitle,
                 AccessType = RoomAccessType.Open,
                 Type = RoomType.Chat,
                 RoomNumber = 2,
@@ -1490,7 +1526,7 @@ internal class ModerationApiService : IModerationApiService
             {
                 RoomId = _guidFactory.Create(),
                 GameId = game.GameId,
-                Title = "Секретная комната",
+                Title = secretRoomTitle,
                 AccessType = RoomAccessType.Private,
                 Type = RoomType.Default,
                 RoomNumber = 3,
@@ -1925,8 +1961,11 @@ internal class ModerationApiService : IModerationApiService
                 _dbContext.Set<Room>().Add(room);
             }
 
-            // Exclude "OnlyReader" from playing games (for testing 0 gamesPlaying tooltip)
-            var playersForGame = users.Where(u => u.UserId != game.MasterId && u.Username != "OnlyReader").OrderBy(_ => Random.Shared.Next()).Take(3).ToList();
+            // Exclude "OnlyReader" from playing games (for testing 0 gamesPlaying tooltip).
+            // Take(2) player characters + the single NPC below = 3 active characters per
+            // game/room. Keeps demo tooltips (game.activeCharacters, room participants)
+            // concise — earlier Take(3) + NPC = 4 characters felt overloaded in UI.
+            var playersForGame = users.Where(u => u.UserId != game.MasterId && u.Username != "OnlyReader").OrderBy(_ => Random.Shared.Next()).Take(2).ToList();
             var createdCharacters = new List<Character>();
 
             // Create characters
@@ -2587,8 +2626,19 @@ internal class ModerationApiService : IModerationApiService
         // This will be "Latest rated" - the most recently reviewed post
         var diopsidePost = posts.FirstOrDefault(p => p.GameText.Contains("Диопсид"));
 
-        // Find a different short post for "Best of week" (highest rating this week)
-        var bestOfWeekPost = posts.FirstOrDefault(p => p != diopsidePost && p.GameText.Length < 500);
+        // Find a master post for "Best of week" (highest rating this week)
+        // Master posts: NPC character posts or characterless posts where AuthorId = MasterId
+        var gameMasterIds = _dbContext.ChangeTracker.Entries<DbGame>()
+            .Where(e => finishedGameIds.Contains(e.Entity.GameId))
+            .ToDictionary(e => e.Entity.GameId, e => e.Entity.MasterId);
+        var bestOfWeekPost = posts.FirstOrDefault(p => p != diopsidePost
+            && roomToGameId.TryGetValue(p.RoomId, out var gId)
+            && gameMasterIds.TryGetValue(gId, out var masterId)
+            && p.AuthorId == masterId
+            && p.GameText.Length < 500);
+        // Remove character link so frontend shows "DungeonMaster" role instead of NPC name
+        if (bestOfWeekPost != null)
+            bestOfWeekPost.CharacterId = null;
 
         // Create "Latest rated" - Diopside post with multiple reviews (most recent 1 hour ago)
         if (diopsidePost != null)
@@ -2607,7 +2657,7 @@ internal class ModerationApiService : IModerationApiService
 Отличное начало! Чувствуется проработка мира и внимание к деталям окружения. Персонаж сразу вызывает интерес.
 
 [spoiler]Особенно понравилось: описание руин и первая встреча с драконом. [b]Атмосфера загадочности[/b] передана очень удачно![/spoiler]
-""", -1), // 1 hour ago (most recent)
+""", 0), // just now (most recent — guarantees "Latest rated" on homepage)
                     (ReviewSign.Positive, "Люблю такие детальные описания! [b]Атмосфера на высоте.[/b]", -3), // 3 hours ago
                     (ReviewSign.Neutral, "Нормальный пост. Стиль интересный, но не для всех.", -5), // 5 hours ago
                     (ReviewSign.Negative, """
@@ -2653,14 +2703,14 @@ internal class ModerationApiService : IModerationApiService
                 var reviewCount = Math.Min(5, experiencedUsers.Count(u => u.UserId != bestOfWeekPost.AuthorId));
                 var reviewersForBest = experiencedUsers.Where(u => u.UserId != bestOfWeekPost.AuthorId).Take(reviewCount).ToList();
 
-                // Varied reviews: 3 positive, 1 neutral, 1 negative (net +2)
+                // All positive reviews (net +5) — master's post should clearly be best of the week
                 var reviewData = new[]
                 {
-                    (ReviewSign.Positive, "Отличный пост! Замечательный отыгрыш персонажа."),
-                    (ReviewSign.Positive, "Очень атмосферно, браво!"),
-                    (ReviewSign.Positive, "Красивое описание, мне понравилось."),
-                    (ReviewSign.Neutral, "Неплохо, но без изюминки."),
-                    (ReviewSign.Negative, "Слишком затянуто."),
+                    (ReviewSign.Positive, "Отличный пост! Замечательный отыгрыш мастера, атмосфера на высоте."),
+                    (ReviewSign.Positive, "Очень атмосферно, браво! Мастер задал отличный тон сцене."),
+                    (ReviewSign.Positive, "Красивое описание, мне понравилось. Сразу чувствуется мастерство."),
+                    (ReviewSign.Positive, "Прекрасная подача! Мир оживает в каждой строчке."),
+                    (ReviewSign.Positive, "Лучший мастерский пост за последнее время, однозначно!"),
                 };
 
                 var qualityDelta = 0;
@@ -2689,10 +2739,170 @@ internal class ModerationApiService : IModerationApiService
             }
         }
 
+        // Create "Assistant post" - a long post from an assistant with reviews
+        // Pick a finished game with a master, assign an experienced user as assistant, create a post
+        var assistantUser = experiencedUsers.FirstOrDefault(u =>
+            u.UserId != (bestOfWeekPost?.AuthorId ?? Guid.Empty) &&
+            u.UserId != (diopsidePost?.AuthorId ?? Guid.Empty));
+        Post? assistantPost = null;
+        if (assistantUser != null && finishedGameIds.Count > 0)
+        {
+            var assistantGameId = finishedGameIds[0];
+
+            // Register user as assistant for this game
+            _dbContext.Set<GameAssistant>().Add(new GameAssistant
+            {
+                GameAssistantId = _guidFactory.Create(),
+                GameId = assistantGameId,
+                UserId = assistantUser.UserId,
+                JoinedUtc = now.AddDays(-30)
+            });
+
+            // Find an open room in that game
+            var assistantRoom = rooms.FirstOrDefault(r => roomToGameId.GetValueOrDefault(r.RoomId) == assistantGameId);
+            if (assistantRoom != null)
+            {
+                // Create a long assistant post (no character → shows "Assistant" role)
+                assistantPost = new Post
+                {
+                    PostId = _guidFactory.Create(),
+                    RoomId = assistantRoom.RoomId,
+                    CharacterId = null,
+                    AuthorId = assistantUser.UserId,
+                    CreatedUtc = now.AddHours(-4),
+                    GameText = """
+                        Группа выходит на открытое пространство, и первое, что бросается в глаза — масштаб. Потолок пещеры здесь поднимается на добрых двадцать метров, и по стенам стекают тонкие ручейки воды, которые собираются внизу в неглубокое озерцо с кристально чистой водой. Биолюминесцентные грибы, растущие на выступах скал, отбрасывают мягкий голубоватый свет, создавая иллюзию звёздного неба.
+
+                        В центре зала стоит каменная платформа, явно рукотворная — слишком правильная форма, слишком ровные грани. На платформе выбиты руны, большинство из которых стёрлись временем, но несколько ещё можно разобрать. Кто владеет Древним языком — может попробовать прочитать.
+
+                        Справа от входа, частично скрытый за обломком колонны, виднеется скелет в ржавых доспехах. Рядом с ним — потрёпанный кожаный мешок. Судя по состоянию, этому бедняге не повезло лет двести назад, а может и больше.
+
+                        Слева — проход дальше, но он частично завален обломками. Пролезть можно, но придётся потрудиться. Из-за завала тянет сквозняком, и в этом сквозняке — слабый, но отчётливый запах серы.
+
+                        У дальней стены зала, за озерцом, вы замечаете ещё один проход — широкий, с арочным сводом. Оттуда доносится тихий, ритмичный звук. Может быть, капли воды. А может быть, шаги.
+
+                        Что будете делать? Можете осмотреть руны, обыскать скелет, попробовать разобрать завал слева или пойти через арку. Время на вашей стороне — пока что ничто не указывает на непосредственную опасность. Но в подобных местах это ощущение обманчиво.
+                        """,
+                    MetagameText = "Кидайте Восприятие (DC 14), если хотите заметить что-то ещё. Проверка Древнего языка для рун — DC 16.",
+                    IsRemoved = false
+                };
+                _dbContext.Set<Post>().Add(assistantPost);
+                result.PostsCreated++;
+
+                // Add 3 reviews for the assistant post (net +2)
+                var assistantReviewers = experiencedUsers
+                    .Where(u => u.UserId != assistantUser.UserId)
+                    .Take(3)
+                    .ToList();
+                var assistantReviewData = new[]
+                {
+                    (ReviewSign.Positive, "Классное описание локации! Чувствуется, что ассистент знает мир не хуже мастера."),
+                    (ReviewSign.Positive, "Отличная подача, несколько путей — всегда приятно иметь выбор."),
+                    (ReviewSign.Neutral, "Хорошо, но запах серы слишком очевидный хинт."),
+                };
+                var assistantQualityDelta = 0;
+                for (var i = 0; i < assistantReviewers.Count && i < assistantReviewData.Length; i++)
+                {
+                    var reviewer = assistantReviewers[i];
+                    var (sign, text) = assistantReviewData[i];
+                    _dbContext.PostReviews.Add(new DM.Infrastructure.Persistence.Entities.Game.PostReview
+                    {
+                        PostReviewId = _guidFactory.Create(),
+                        AuthorId = reviewer.UserId,
+                        PostId = assistantPost.PostId,
+                        PostAuthorId = assistantUser.UserId,
+                        GameId = assistantGameId,
+                        CreatedUtc = now.AddHours(-Random.Shared.Next(1, 4)),
+                        Text = text,
+                        SignValue = (short)sign,
+                        IsRemoved = false
+                    });
+                    result.ReviewsCreated++;
+                    assistantQualityDelta += (int)sign;
+                }
+                assistantUser.QualityRating += assistantQualityDelta;
+            }
+        }
+
+        // Create a rated post from LongestLoginPossible (tests long username + long character name)
+        var longestUser = users.FirstOrDefault(u => u.Username == "LongestLoginPossible");
+        Post? longestUserPost = null;
+        if (longestUser != null && finishedGameIds.Count > 0)
+        {
+            var longestGameId = finishedGameIds[0];
+            var longestRoom = rooms.FirstOrDefault(r => roomToGameId.GetValueOrDefault(r.RoomId) == longestGameId);
+            if (longestRoom != null)
+            {
+                // Create a character with a long multi-word name
+                var longestChar = new Character
+                {
+                    CharacterId = _guidFactory.Create(),
+                    GameId = longestGameId,
+                    AuthorId = longestUser.UserId,
+                    Status = CharacterStatus.Active,
+                    CreatedUtc = now.AddDays(-20),
+                    Name = "Сэр Максимилиан фон Штернберг",
+                    Race = "Человек",
+                    Class = "Паладин",
+                    Appearance = "Высокий светловолосый мужчина в сияющих доспехах.",
+                    IsNpc = false,
+                    AccessPolicy = CharacterAccessPolicy.NoAccess,
+                    IsRemoved = false
+                };
+                _dbContext.Set<Character>().Add(longestChar);
+                result.CharactersCreated++;
+
+                longestUserPost = new Post
+                {
+                    PostId = _guidFactory.Create(),
+                    RoomId = longestRoom.RoomId,
+                    CharacterId = longestChar.CharacterId,
+                    AuthorId = longestUser.UserId,
+                    CreatedUtc = now.AddHours(-6),
+                    GameText = "Максимилиан поднял забрало и оглядел зал. Руны на платформе мерцали, и в их свете его доспехи отбрасывали мягкие блики на стены. Он покачал головой — за годы странствий он научился не доверять местам, которые выглядят слишком спокойно.",
+                    IsRemoved = false
+                };
+                _dbContext.Set<Post>().Add(longestUserPost);
+                result.PostsCreated++;
+                longestUser.QuantityRating++;
+
+                // 2 reviews (net +1)
+                var longestReviewers = experiencedUsers.Where(u => u.UserId != longestUser.UserId).Take(2).ToList();
+                var longestReviewData = new[]
+                {
+                    (ReviewSign.Positive, "Хороший отыгрыш, чувствуется характер персонажа."),
+                    (ReviewSign.Neutral, "Коротковато, но по делу."),
+                };
+                var longestQualityDelta = 0;
+                for (var i = 0; i < longestReviewers.Count && i < longestReviewData.Length; i++)
+                {
+                    var reviewer = longestReviewers[i];
+                    var (sign, text) = longestReviewData[i];
+                    _dbContext.PostReviews.Add(new DM.Infrastructure.Persistence.Entities.Game.PostReview
+                    {
+                        PostReviewId = _guidFactory.Create(),
+                        AuthorId = reviewer.UserId,
+                        PostId = longestUserPost.PostId,
+                        PostAuthorId = longestUser.UserId,
+                        GameId = longestGameId,
+                        CreatedUtc = now.AddHours(-Random.Shared.Next(1, 5)),
+                        Text = text,
+                        SignValue = (short)sign,
+                        IsRemoved = false
+                    });
+                    result.ReviewsCreated++;
+                    longestQualityDelta += (int)sign;
+                }
+                longestUser.QualityRating += longestQualityDelta;
+            }
+        }
+
         // Remaining posts - random reviews (excluding already processed)
         var processedPostIds = new HashSet<Guid>();
         if (diopsidePost != null) processedPostIds.Add(diopsidePost.PostId);
         if (bestOfWeekPost != null) processedPostIds.Add(bestOfWeekPost.PostId);
+        if (assistantPost != null) processedPostIds.Add(assistantPost.PostId);
+        if (longestUserPost != null) processedPostIds.Add(longestUserPost.PostId);
 
         // Review texts for variety (some with BBCode for testing)
         var positiveTexts = new[]
@@ -2728,16 +2938,17 @@ internal class ModerationApiService : IModerationApiService
             "[spoiler]Критика: текст сыроват, стоит поработать над стилем.[/spoiler]",
         };
 
-        // This week posts - 15 posts with 1-3 reviews each (within last 6 days)
-        var thisWeekPosts = posts.Where(p => !processedPostIds.Contains(p.PostId)).Take(15).ToList();
+        // This week posts - 30 posts with 2-4 reviews each (within last 6 days)
+        // Enough for 2+ pages of pagination at 20/page
+        var thisWeekPosts = posts.Where(p => !processedPostIds.Contains(p.PostId)).Take(30).ToList();
         foreach (var post in thisWeekPosts)
         {
             processedPostIds.Add(post.PostId);
             var gameId = roomToGameId.GetValueOrDefault(post.RoomId);
             if (gameId == Guid.Empty) continue;
 
-            // 1-3 reviews per post
-            var reviewCount = Random.Shared.Next(1, 4);
+            // 2-4 reviews per post
+            var reviewCount = Random.Shared.Next(2, 5);
             var availableReviewers = experiencedUsers.Where(u => u.UserId != post.AuthorId).ToList();
 
             for (var r = 0; r < reviewCount && r < availableReviewers.Count; r++)

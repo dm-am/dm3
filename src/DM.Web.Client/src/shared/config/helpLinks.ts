@@ -3,7 +3,7 @@
  * Used in: HelpLinksSection.vue, AdminList.vue
  */
 
-export type HelpIconType = "question" | "warning" | "bug" | "idea";
+export type HelpIconType = "question" | "complaint" | "bug" | "idea";
 
 export interface HelpLink {
   key: string;
@@ -34,7 +34,7 @@ export const HELP_LINKS: HelpLink[] = [
   },
   {
     key: "warning",
-    icon: "warning",
+    icon: "complaint",
     problem: "Кто-то нарушает правила",
     solution: "форма жалоб",
     url: "/complaint",

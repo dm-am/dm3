@@ -11,7 +11,7 @@ namespace DM.Web.API.Features.Moderation.Profiles;
 /// </summary>
 /// <remarks>
 /// Inherits from UserProfile: Id, Username, Role, Rating, Picture,
-/// Status, Info, Gender, Birthday, Name, Location, Contacts, RegisteredAtUtc, FeaturedPost, etc.
+/// Status, Info, Gender, Birthday, Name, Location, Contacts, RegisteredAtUtc, etc.
 /// Adds moderation-specific fields: Email (admin only), IpAddresses, LoginHistory,
 /// LinkedProfiles, ModeratorNotes, Violations, Permissions.
 /// </remarks>

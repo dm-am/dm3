@@ -29,6 +29,7 @@ internal class MessagingMappingProfile : Profile
             .ForMember(d => d.ChatId, s => s.MapFrom(m => m.ChatId))
             .ForMember(d => d.ChatType, s => s.MapFrom(m => m.Chat.Type))
             .ForMember(d => d.Likes, s => s.Ignore()) // Likes fetched via EntityType+EntityId pattern
+            .ForMember(d => d.ModifiedUtc, opt => opt.Ignore()) // Not stored on the DB entity yet
             .ForMember(d => d.Edits, s => s.MapFrom(m => m.Edits.OrderBy(e => e.EditedUtc)));
 
         CreateMap<DbMessageEdit, MessageEdit>()

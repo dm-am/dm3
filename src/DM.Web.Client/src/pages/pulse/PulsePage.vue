@@ -1,17 +1,12 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import dayjs from "dayjs";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import { PulseDataTable } from "@/widgets/pulse-table";
-import { getWeekStartUtc } from "@/entities/game";
-
-const weekStart = computed(() => dayjs(getWeekStartUtc()).format("DD.MM.YYYY"));
 </script>
 
 <template>
   <div class="pulse-page">
-    <PageTitle>Пульс</PageTitle>
-    <p class="description">Оцененные посты за неделю с {{ weekStart }}</p>
+    <PageTitle v-once>Пульс</PageTitle>
+    <p class="description">Посты из открытых комнат получившие оценки за текущую неделю</p>
 
     <PulseDataTable />
   </div>

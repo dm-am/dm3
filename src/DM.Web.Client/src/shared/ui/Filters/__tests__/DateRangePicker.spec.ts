@@ -42,18 +42,18 @@ describe("DateRangePicker", () => {
     it("renders default labels", () => {
       const wrapper = mountComponent();
       const labels = wrapper.findAll(".date-label");
-      expect(labels[0].text()).toBe("От:");
-      expect(labels[1].text()).toBe("До:");
+      expect(labels[0].text()).toBe("От");
+      expect(labels[1].text()).toBe("До");
     });
 
     it("uses custom labels", () => {
       const wrapper = mountComponent({
-        fromLabel: "С:",
-        toLabel: "По:",
+        fromLabel: "Начало",
+        toLabel: "Конец",
       });
       const labels = wrapper.findAll(".date-label");
-      expect(labels[0].text()).toBe("С:");
-      expect(labels[1].text()).toBe("По:");
+      expect(labels[0].text()).toBe("Начало");
+      expect(labels[1].text()).toBe("Конец");
     });
 
     it("renders apply button", () => {

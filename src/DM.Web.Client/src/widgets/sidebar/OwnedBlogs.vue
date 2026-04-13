@@ -36,22 +36,30 @@ import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlogLink from "./BlogLink.vue";
 import { useBlogsStore } from "@/entities/blog";
 import { useUserStore } from "@/entities/user";
-import { watch } from "vue";
+import { onMounted, watch } from "vue";
 
 const userStore = useUserStore();
 const store = useBlogsStore();
 
-// Watch for user login/logout
+// Initial fetch on mount. Gated by `v-if="userStore.user"` in
+// LeftSidebar so this only runs when the user is authenticated.
+// Avoids the race between watch { immediate: true } and user store
+// hydration that can otherwise fire a fetch with a null user.
+onMounted(() => {
+  if (userStore.user?.username) {
+    store.fetchParticipatingBlogs();
+  }
+});
+
 watch(
   () => userStore.user?.username,
   (newUsername, oldUsername) => {
-    if (newUsername && newUsername !== oldUsername) {
+    if (!oldUsername && newUsername) {
       store.fetchParticipatingBlogs();
-    } else if (!newUsername && oldUsername) {
+    } else if (oldUsername && !newUsername) {
       store.resetParticipatingBlogs();
     }
   },
-  { immediate: true },
 );
 </script>
 

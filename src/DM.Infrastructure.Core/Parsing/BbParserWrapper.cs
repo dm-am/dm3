@@ -292,13 +292,44 @@ public partial class BbParserWrapper : IBbParser
         }
 
         /// <summary>
+        /// Convert to HTML with permission filter + transform applied during
+        /// tree walk. Shares placeholder restoration with <see cref="ToHtml()"/>.
+        /// </summary>
+        public string ToHtmlFiltered(
+            System.Func<Node, bool> filter,
+            System.Func<Node, string, string> transform)
+            => ToHtmlCore(_inner.ToHtml(filter, transform));
+
+        /// <summary>
+        /// Convert to plain text with permission filter + transform applied.
+        /// </summary>
+        public string ToTextFiltered(
+            System.Func<Node, bool> filter,
+            System.Func<Node, string, string> transform)
+            => ToTextCore(_inner.ToText(filter, transform));
+
+        /// <summary>
         /// Convert to HTML, restoring [img] and [link] as HTML elements
         /// </summary>
-        public string ToHtml()
-        {
-            var html = _inner.ToHtml();
+        public string ToHtml() => ToHtmlCore(_inner.ToHtml());
 
-            // Restore images as HTML
+        private string ToHtmlCore(string html)
+        {
+
+            // Restore images as HTML — unified emission shared with frontend
+            // bbcode.ts (see renderBbImage there). Sizing flows through CSS
+            // custom properties on a wrapper <span class="bb-image-frame"> so
+            // ancestor classes (TruncatedContent, etc.) can override image
+            // sizes via normal cascade without !important. The <img> itself
+            // carries NO inline style — only the wrapper span does, and only
+            // when a custom size is explicitly set.
+            //
+            // Shapes:
+            //   - Default: <img class="bb-image" data-bb-tag="img" ...>
+            //   - Sized:   <span class="bb-image-frame" data-bb-width="W" data-bb-height="H"
+            //                   style="--bb-image-max-width:Wpx;--bb-image-max-height:Hpx">
+            //                <img class="bb-image" data-bb-tag="img" ...>
+            //              </span>
             html = ImgPlaceholder.Replace(html, match =>
             {
                 var index = int.Parse(match.Groups[1].Value);
@@ -309,33 +340,38 @@ public partial class BbParserWrapper : IBbParser
                     if (safeUrl == "#") return ""; // Remove dangerous image entirely
                     var encodedUrl = System.Web.HttpUtility.HtmlAttributeEncode(safeUrl);
 
-                    // Build style attribute for dimensions
-                    var styleAttr = "";
-                    if (width.HasValue || height.HasValue)
-                    {
-                        // Explicit size specified
-                        var styles = new List<string>();
-                        if (width.HasValue)
-                            styles.Add($"max-width:{width.Value}px");
-                        if (height.HasValue)
-                            styles.Add($"max-height:{height.Value}px");
-                        styleAttr = $" style=\"{string.Join(";", styles)}\"";
-                    }
-                    else
-                    {
-                        // Default max dimensions
-                        styleAttr = $" style=\"max-width:{DefaultMaxWidth}px;max-height:{DefaultMaxHeight}px\"";
-                    }
-
                     // Build alt attribute (also add data-alt for frontend JS access)
-                    var altAttr = "";
+                    var altAttr = " alt=\"\"";
                     if (!string.IsNullOrEmpty(alt))
                     {
                         var encodedAlt = System.Web.HttpUtility.HtmlAttributeEncode(alt);
                         altAttr = $" alt=\"{encodedAlt}\" data-alt=\"{encodedAlt}\"";
                     }
 
-                    return $"<img src=\"{encodedUrl}\" class=\"image\" referrerpolicy=\"no-referrer\"{styleAttr}{altAttr} />";
+                    var imgTag = $"<img src=\"{encodedUrl}\" class=\"bb-image\" " +
+                                 $"data-bb-tag=\"img\" referrerpolicy=\"no-referrer\"{altAttr} />";
+
+                    if (!width.HasValue && !height.HasValue)
+                    {
+                        // Default size — no wrapper, CSS defaults on .bb-image take over
+                        return imgTag;
+                    }
+
+                    // Custom size — wrap in .bb-image-frame span carrying the CSS vars
+                    var cssVars = new List<string>();
+                    var dataAttrs = new List<string>();
+                    if (width.HasValue)
+                    {
+                        cssVars.Add($"--bb-image-max-width:{width.Value}px");
+                        dataAttrs.Add($"data-bb-width=\"{width.Value}\"");
+                    }
+                    if (height.HasValue)
+                    {
+                        cssVars.Add($"--bb-image-max-height:{height.Value}px");
+                        dataAttrs.Add($"data-bb-height=\"{height.Value}\"");
+                    }
+                    return $"<span class=\"bb-image-frame\" {string.Join(" ", dataAttrs)} " +
+                           $"style=\"{string.Join(";", cssVars)}\">{imgTag}</span>";
                 }
                 return match.Value;
             });
@@ -383,10 +419,10 @@ public partial class BbParserWrapper : IBbParser
         /// <summary>
         /// Convert to plain text
         /// </summary>
-        public string ToText()
-        {
-            var text = _inner.ToText();
+        public string ToText() => ToTextCore(_inner.ToText());
 
+        private string ToTextCore(string text)
+        {
             // Restore images as alt text (if available) or URL
             text = ImgPlaceholder.Replace(text, match =>
             {

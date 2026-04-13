@@ -27,7 +27,7 @@ function getSignText(sign?: ReviewSign | string): string {
 
 const formattedDate = computed(() => {
   if (!props.review.createdUtc) return "";
-  return dayjs(props.review.createdUtc).format("DD.MM.YYYY HH:mm");
+  return dayjs(props.review.createdUtc).format("DD.MM.YYYY [в] HH:mm");
 });
 </script>
 

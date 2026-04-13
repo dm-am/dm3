@@ -13,6 +13,7 @@ internal class CommentMappingProfile : Profile
     {
         CreateMap<Entities.Shared.Comment, Comment>()
             .ForMember(d => d.Id, s => s.MapFrom(c => c.CommentId))
-            .ForMember(d => d.Likes, s => s.Ignore()); // Likes fetched via EntityType+EntityId pattern
+            .ForMember(d => d.Likes, s => s.Ignore()) // Likes fetched via EntityType+EntityId pattern
+            .ForMember(d => d.ModifiedUtc, s => s.Ignore()); // Not stored on the DB entity yet
     }
 }

@@ -51,7 +51,6 @@ const emit = defineEmits<{
   cursor: pointer
   border: 1px solid $border
   border-radius: $border-radius
-  transition: background-color 0.1s
 
   &--primary
     background-color: $bg-element

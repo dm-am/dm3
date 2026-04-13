@@ -17,7 +17,6 @@
           class="event-item"
           :class="eventClass(event.eventType)"
         >
-          <div class="event-icon">{{ eventIcon(event.eventType) }}</div>
           <div class="event-info">
             <div class="event-title">{{ eventTitle(event.eventType) }}</div>
             <div class="event-details">
@@ -72,34 +71,6 @@ async function loadEvents() {
   }
 }
 
-function eventIcon(type: SecurityEventType): string {
-  switch (type) {
-    case "LoginSuccess":
-      return "\u2713";
-    case "LoginFailure":
-      return "\u2717";
-    case "Logout":
-      return "\u2190";
-    case "PasswordChange":
-      return "\uD83D\uDD11";
-    case "EmailChange":
-      return "\u2709";
-    case "SessionTerminated":
-      return "\u2716";
-    case "LogoutElsewhere":
-      return "\u2192";
-    case "PasswordResetRequest":
-      return "\uD83D\uDD04";
-    case "PasswordResetComplete":
-      return "\uD83D\uDD13";
-    case "AccountLocked":
-      return "\uD83D\uDD12";
-    case "SuspiciousLogin":
-      return "\u26A0";
-    default:
-      return "\u2022";
-  }
-}
 
 function eventTitle(type: SecurityEventType): string {
   switch (type) {
@@ -150,7 +121,7 @@ function eventClass(type: SecurityEventType): string {
 }
 
 function formatDate(dateStr: string): string {
-  return dayjs(dateStr).format("DD.MM.YYYY HH:mm");
+  return dayjs(dateStr).format("DD.MM.YYYY [в] HH:mm");
 }
 </script>
 

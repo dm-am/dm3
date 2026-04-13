@@ -4,12 +4,11 @@ import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { Tooltip } from "@/shared/ui/Tooltip";
-import { Icon, SvgIcon } from "@/shared/ui/Icon";
+import { SvgIcon } from "@/shared/ui/Icon";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import { useBoardsStore, type Topic } from "@/entities/forum";
 import { UserLink } from "@/entities/user";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
-import { IconType } from "@/shared/ui/Icon/iconType";
 import { TopicsFilter, useTopicsFilter } from "@/features/topic-filter";
 import BoardNavigation from "./BoardNavigation.vue";
 import PinnedTopicsManager from "./PinnedTopicsManager.vue";
@@ -197,8 +196,8 @@ async function handleSavePinnedOrder(topicIds: string[]) {
             :to="topicLink(row)"
             :class="['topic-link', { pinned: row.isPinned, closed: row.isClosed }]"
           >
-            <Icon v-if="row.isPinned" :font="IconType.Attached" class="topic-icon" />
-            <Icon v-if="row.isClosed" :font="IconType.Closed" class="topic-icon" />
+            <SvgIcon v-if="row.isPinned" name="pin" class="topic-icon" />
+            <SvgIcon v-if="row.isClosed" name="locked" class="topic-icon" />
             {{ row.title }}
           </router-link>
         </Tooltip>
@@ -207,8 +206,8 @@ async function handleSavePinnedOrder(topicIds: string[]) {
           :to="topicLink(row)"
           :class="['topic-link', { pinned: row.isPinned, closed: row.isClosed }]"
         >
-          <Icon v-if="row.isPinned" :font="IconType.Attached" class="topic-icon" />
-          <Icon v-if="row.isClosed" :font="IconType.Closed" class="topic-icon" />
+          <SvgIcon v-if="row.isPinned" name="pin" class="topic-icon" />
+          <SvgIcon v-if="row.isClosed" name="locked" class="topic-icon" />
           {{ row.title }}
         </router-link>
       </template>
@@ -235,7 +234,7 @@ async function handleSavePinnedOrder(topicIds: string[]) {
       </template>
 
       <template #cell-created="{ row }">
-        <HumanDate :date="row.createdUtc" format="DD.MM.YYYY HH:mm" />
+        <HumanDate :date="row.createdUtc" format="DD.MM.YYYY [в] HH:mm" />
       </template>
 
       <template #cell-lastActivity="{ row }">
@@ -245,7 +244,7 @@ async function handleSavePinnedOrder(topicIds: string[]) {
               :to="`${topicLink(row)}#comment-${row.lastComment.id}`"
               class="last-activity-link"
             >
-              <HumanDate :date="row.lastComment.createdUtc" format="DD.MM.YYYY HH:mm" />
+              <HumanDate :date="row.lastComment.createdUtc" format="DD.MM.YYYY [в] HH:mm" />
             </router-link>
           </Tooltip>
         </template>
@@ -260,7 +259,7 @@ async function handleSavePinnedOrder(topicIds: string[]) {
             :disabled="pinningTopicId !== null"
             @click="handleTogglePin(row)"
           >
-            <SvgIcon :name="row.isPinned ? 'pin-off' : 'pin'" />
+            <SvgIcon :name="'pin'" />
           </button>
         </Tooltip>
       </template>
@@ -338,7 +337,7 @@ async function handleSavePinnedOrder(topicIds: string[]) {
   padding: 4px 8px
   cursor: pointer
   color: $text-muted
-  transition: all 0.2s ease
+  transition: opacity 0.2s ease
 
   &:hover:not(:disabled)
     color: $link
@@ -372,7 +371,6 @@ async function handleSavePinnedOrder(topicIds: string[]) {
   color: $link
   font-size: 14px
   cursor: pointer
-  transition: all 0.2s ease
 
   &:hover
     background: $link

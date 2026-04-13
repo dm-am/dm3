@@ -153,9 +153,16 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
     /// <inheritdoc />
     public async Task<Envelope<LiveStats>> GetLiveStats()
     {
+        // Longer TTL than the frontend poll interval (60s) so the vast
+        // majority of SiteStatistics requests hit a warm cache. The
+        // stats are approximate by design — "Users: 12,345, online: 42"
+        // is a vibe number, not a real-time metric — so a two-minute
+        // staleness window is well within acceptable drift. The heavy
+        // 15-query CalculateLiveStats path only runs on genuine cache
+        // misses (~once every two minutes per instance).
         var liveStats = await _cache.GetOrCreateAsync("LiveStats", async entry =>
         {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1);
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2);
             return await CalculateLiveStats();
         });
 

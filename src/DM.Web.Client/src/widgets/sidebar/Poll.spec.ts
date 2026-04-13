@@ -186,7 +186,7 @@ describe("Poll", () => {
       expect(wrapper.find(".poll-option-voted").exists()).toBe(true);
     });
 
-    it("shows tick icon for voted option", () => {
+    it("shows checkmark symbol for voted option", () => {
       const poll = createMockPoll({
         options: [
           createPollOption("1", "A", 5, true),
@@ -197,9 +197,8 @@ describe("Poll", () => {
         props: { poll },
       });
 
-      // Icon component should be rendered for voted option
-      const icons = wrapper.findAllComponents({ name: "Icon" });
-      expect(icons.length).toBeGreaterThan(0);
+      // Checkmark symbol should be rendered for voted option
+      expect(wrapper.text()).toContain("\u2713");
     });
   });
 

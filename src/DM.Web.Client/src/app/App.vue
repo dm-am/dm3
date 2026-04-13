@@ -59,6 +59,10 @@ watch(
       html.classList.remove(`theme_${themeToClass(oldValue)}`);
     }
     html.classList.add(`theme_${themeToClass(value)}`);
+    // Enable theme transitions after first application (prevent flash on load)
+    if (!html.classList.contains("theme-ready")) {
+      requestAnimationFrame(() => html.classList.add("theme-ready"));
+    }
   },
   { immediate: true },
 );
@@ -128,9 +132,9 @@ onMounted(async () => {
     right: 0
     top: 0
     height: $header-height
-    background: url('@/assets/images/header_bg.gif') left top repeat-x
+    background: url('@/assets/images/decorations/header-decoration.png') left top repeat-x
     background-size: auto $header-height
-    filter: $filter-invert
+    filter: invert($invert-amount)
 
 .content-wrapper
   position: relative

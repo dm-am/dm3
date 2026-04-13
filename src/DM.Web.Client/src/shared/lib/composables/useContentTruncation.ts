@@ -1,32 +1,24 @@
 /**
- * Composable for content truncation with expand/collapse
+ * Composable for content truncation with expand/collapse.
  *
- * Features:
- * - Overflow detection
- * - Smooth expand/collapse animation
- * - Trims trailing whitespace (empty lines, br tags)
- * - Reusable across posts, topics, and other content blocks
+ * Scope (what this composable does):
+ *   - Track whether the referenced content element overflows a given
+ *     max-height budget (reactive to content changes via watchContent).
+ *   - Expose `needsTruncation` + `isExpanded` state and `contentStyle`
+ *     for the content container.
+ *   - NO DOM mutation. Callers are responsible for pre-trimming leading/
+ *     trailing whitespace from their HTML via `trimHtmlWhitespace` in a
+ *     computed before passing to v-html. Pushing that responsibility up
+ *     keeps this composable side-effect-free and keeps Vue reactivity
+ *     the single source of truth over the slot DOM.
  *
- * @example
- * ```vue
- * <script setup>
- * const { setContentRef, contentStyle, needsTruncation, isExpanded, toggleExpand } =
- *   useContentTruncation({ maxHeight: 150, enabled: true });
- * </script>
- *
- * <template>
- *   <div :ref="setContentRef" :class="{ truncatable: needsTruncation }" :style="contentStyle">
- *     <slot />
- *   </div>
- *   <a v-if="needsTruncation && !isExpanded" @click="toggleExpand">
- *     ... показать полностью
- *   </a>
- * </template>
- * ```
+ * Typical usage is indirect — prefer the <TruncatedContent> shared
+ * component in @/shared/ui/TruncatedContent, which wires this up for
+ * the common "show more" pattern with accessibility, media shrinkage,
+ * and hard-cut visual contract baked in.
  */
 
 import { ref, computed, watch, nextTick, type Ref, type ComputedRef } from "vue";
-import { trimTrailingWhitespace } from "../utils/bbcodeInteractive";
 
 export interface ContentTruncationOptions {
   /** Maximum height in px before truncation (default: 150) */
@@ -86,11 +78,7 @@ export function useContentTruncation(
 
   const contentStyle = computed(() => {
     if (!needsTruncation.value) return {};
-    if (isExpanded.value) {
-      return {
-        maxHeight: contentRef.value ? `${contentRef.value.scrollHeight}px` : "none",
-      };
-    }
+    if (isExpanded.value) return { maxHeight: "none" };
     return { maxHeight: `${maxHeight.value}px` };
   });
 
@@ -110,22 +98,17 @@ export function useContentTruncation(
     if (htmlEl && contentRef.value !== htmlEl) {
       contentRef.value = htmlEl;
       nextTick(() => {
-        // Trim trailing whitespace to hide empty lines before "показать полностью"
-        trimTrailingWhitespace(htmlEl);
-        // Check overflow after trimming
         checkOverflow();
-        // Call custom callback if provided
         onContentMounted?.(htmlEl);
       });
     }
   }
 
-  // Watch for content changes
+  // Watch for content changes — re-measure only, no DOM mutation.
   if (watchContent) {
     watch(watchContent, () => {
       nextTick(() => {
         if (contentRef.value) {
-          trimTrailingWhitespace(contentRef.value);
           checkOverflow();
         }
       });

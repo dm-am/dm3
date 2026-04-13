@@ -62,7 +62,6 @@ $icon-size: 48px
   width: $icon-size
   height: $icon-size
   color: $link-nav
-  transition: color $animation-time ease
 
   &:hover
     color: $link-nav-hover

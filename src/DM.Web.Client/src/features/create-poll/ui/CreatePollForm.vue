@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { symbols } from "@/shared/lib/utils/icons";
 import { useUserStore, userIsSeniorModerator } from "@/entities/user";
 import { useCreatePoll } from "../model";
 import Button from "@/shared/ui/Button/Button.vue";
@@ -100,7 +101,7 @@ const {
               class="remove-option-btn"
               @click="removeOption(option.id)"
             >
-              &times;
+              {{ symbols.close }}
             </button>
           </div>
           <button type="button" class="add-option-btn" @click="addOption">

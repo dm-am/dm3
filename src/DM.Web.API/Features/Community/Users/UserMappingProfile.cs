@@ -58,7 +58,6 @@ internal class UserMappingProfile : Profile
             .ForMember(d => d.PostReviewsReceived, o => o.MapFrom(s => s.PostReviewsReceivedCount))
             .ForMember(d => d.UsernameHistory, o => o.Ignore())
             .ForMember(d => d.PersonalNote, o => o.Ignore())
-            .ForMember(d => d.BestPost, o => o.Ignore())
             .ForMember(d => d.Contacts, o => o.Ignore())
             .ForMember(d => d.Info, o => o.Ignore())
             // Statistics for community list (inherited from User)

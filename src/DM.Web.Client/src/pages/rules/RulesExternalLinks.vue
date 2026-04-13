@@ -48,7 +48,7 @@ const sections: ExpandableItem[] = [
 <template>
   <section class="rules-external-links">
     <BlockTitle>Ссылки на сторонние ресурсы</BlockTitle>
-    <ExpandableList :items="sections" />
+    <ExpandableList :items="sections" :allow-multiple="true" />
   </section>
 </template>
 

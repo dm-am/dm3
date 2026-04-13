@@ -27,7 +27,7 @@ const editingNoteId = ref<string | null>(null);
 const editText = ref("");
 
 function formatDateTime(dateStr: string): string {
-  return dayjs(dateStr).format("DD.MM.YYYY HH:mm");
+  return dayjs(dateStr).format("DD.MM.YYYY [в] HH:mm");
 }
 
 async function createNote() {

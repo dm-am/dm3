@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { Tooltip } from "@/shared/ui/Tooltip";
-import { SvgIcon } from "@/shared/ui/Icon";
+import { symbols } from "@/shared/lib/utils/icons";
 import type { Topic } from "@/entities/forum";
 
 const props = defineProps<{
@@ -108,7 +108,7 @@ function handleClose() {
         <h3>Порядок закрепленных топиков</h3>
         <Tooltip text="Закрыть">
           <button class="close-button" @click="handleClose">
-            <SvgIcon name="close" />
+            {{ symbols.close }}
           </button>
         </Tooltip>
       </div>
@@ -141,7 +141,7 @@ function handleClose() {
                   :disabled="index === 0"
                   @click="moveUp(index)"
                 >
-                  ↑
+                  {{ symbols.arrowUp }}
                 </button>
               </Tooltip>
               <Tooltip text="Переместить вниз">
@@ -150,7 +150,7 @@ function handleClose() {
                   :disabled="index === localTopics.length - 1"
                   @click="moveDown(index)"
                 >
-                  ↓
+                  {{ symbols.arrowDown }}
                 </button>
               </Tooltip>
             </div>
@@ -246,7 +246,7 @@ function handleClose() {
   border-radius: 4px
   margin-bottom: $small
   cursor: grab
-  transition: all 0.2s ease
+  transition: opacity 0.2s ease
 
   &:hover
     border-color: $link

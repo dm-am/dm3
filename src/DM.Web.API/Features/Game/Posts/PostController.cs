@@ -129,12 +129,16 @@ public class PostController : ControllerBase
     /// Sort options (sortBy):
     /// - rating: Sort by sum of reviews (default)
     /// - lastreview: Sort by most recent review
+    /// - reviewcount: Sort by number of reviews
     /// - created: Sort by post creation date
     ///
     /// Filters:
     /// - hasReviews: Only posts with at least one review
-    /// - reviewedAfter: Posts reviewed after this date (ISO 8601)
+    /// - lastReviewedAfter: Posts with last review after this date (ISO 8601)
     /// - gameId: Filter by specific game
+    /// - minRating / maxRating: Rating range (can be negative)
+    /// - authorUsernames: Comma-separated post author usernames
+    /// - createdAfter / createdBefore: Post creation date range (ISO 8601)
     /// </remarks>
     /// <param name="query">Filter and sorting parameters</param>
     /// <response code="200">Returns the list of rated posts</response>

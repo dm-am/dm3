@@ -9,7 +9,6 @@
         <!-- Telegram Channel -->
         <div class="channel-card">
           <div class="channel-header">
-            <span class="channel-icon">&#128172;</span>
             <span class="channel-name">Telegram</span>
             <span
               v-if="preferences.telegram?.connected"
@@ -77,7 +76,6 @@
         <!-- Discord Channel -->
         <div class="channel-card">
           <div class="channel-header">
-            <span class="channel-icon">&#128483;</span>
             <span class="channel-name">Discord</span>
             <span
               v-if="preferences.discord?.connected"
@@ -435,7 +433,7 @@ defineExpose({ loadPreferences });
   border-radius: $border-radius
   cursor: pointer
   font-size: $secondary-font-size
-  transition: background-color 0.15s
+  transition: opacity 0.15s ease
 
   &:disabled
     opacity: 0.5

@@ -13,7 +13,6 @@
 //   .code                         - code blocks (uses <pre>)
 //   .noparse                      - unparsed content
 //   .image                        - images
-//   .cut-marker                   - cut/truncation marker
 //   .mod-block                    - moderator blocks
 //   .private-message, .private-message-header - private text
 //
@@ -24,7 +23,6 @@
 //   .bb-code                      - code (uses <code>)
 //   .bb-noparse                   - unparsed content
 //   .bb-image                     - images
-//   .bb-cut-marker                - cut marker
 //   .bb-mod                       - moderator blocks
 //   .bb-warning                   - warning blocks (red)
 //   .bb-private                   - private text
@@ -96,11 +94,39 @@
   // Backend: .image | Frontend: .bb-image | Plain: img
   // ──────────────────────────────────────────────────────────────────────────
 
-  img, .image, .bb-image
-    max-width: 100%
+  // ──────────────────────────────────────────────────────────────────────────
+  // Image contract
+  // ──────────────────────────────────────────────────────────────────────────
+  // Every BBCode image (from both frontend and backend parsers) renders as:
+  //
+  //   - Default size:
+  //       <img class="bb-image" data-bb-tag="img" ...>
+  //
+  //   - Custom size (via [img=WxH]URL[/img] or width/height attributes):
+  //       <span class="bb-image-frame"
+  //             data-bb-width="W" data-bb-height="H"
+  //             style="--bb-image-max-width:Wpx; --bb-image-max-height:Hpx">
+  //         <img class="bb-image" data-bb-tag="img" ...>
+  //       </span>
+  //
+  // The wrapper span carries size as CSS custom properties. The img reads
+  // them via var() — which makes it trivial for TruncatedContent (or any
+  // other ancestor) to override image sizing by redeclaring the custom
+  // properties via a normal class rule. No inline style on the img means
+  // no !important needed anywhere.
+  img, .bb-image
+    max-width: var(--bb-image-max-width, 100%)
+    max-height: var(--bb-image-max-height, 500px)
+    width: auto
     height: auto
     display: inline-block
     vertical-align: middle
+
+  .bb-image-frame
+    display: inline-block
+    // Transparent wrapper — pure vehicle for the CSS custom properties
+    // declared in its inline style attribute.
+    max-width: 100%
 
   // ──────────────────────────────────────────────────────────────────────────
   // Lists
@@ -121,9 +147,10 @@
 
   // Base quote styling - works for both div.quote and blockquote.bb-quote
   // Uses overlay approach: bg-element + semi-transparent blue tint
+  // DM2: .quote { padding: 5px 5px; margin: 1px 0; display: inline-block; width: calc(100% - 20px) }
   blockquote, .quote, .bb-quote
-    margin: $tiny 0
-    padding: 2px 6px
+    margin: 1px 0
+    padding: 5px 5px
     border-left: 10px solid $border-accent-blue
     background-color: $bg-element
     color: $text
@@ -279,16 +306,6 @@
   .bb-tab
     display: inline-block
     width: 2em
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Cut Marker
-  // Backend: hr.cut-marker | Frontend: hr.bb-cut-marker
-  // ──────────────────────────────────────────────────────────────────────────
-
-  .cut-marker, .bb-cut-marker
-    border: none
-    border-top: 1px dashed $border
-    margin: $small 0
 
   // ──────────────────────────────────────────────────────────────────────────
   // Noparse

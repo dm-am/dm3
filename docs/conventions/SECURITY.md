@@ -129,6 +129,21 @@
 
 ---
 
+## Конфиденциальность пользовательского контента (BBCode)
+
+Privacy-sensitive теги (`[private]`, `[mod]`) фильтруются **на сервере до сериализации JSON**. Отфильтрованный контент никогда не попадает на клиент к неавторизованному зрителю — это неотъемлемый инвариант, а не optimisation.
+
+**Правила:**
+- Клиентский рендеринг пользовательского BBCode на display-путях запрещён. Клиент биндит `v-html` на уже отрендеренную строку.
+- Фильтрация не оставляет следов: вырезание — zero-information erase (нет placeholder'а, нет комментария, нет whitespace-gap'а).
+- Moderator+ **не** имеет backdoor-доступа к `[private]` — никакого audit audience.
+- Per-post и per-room override'ы действуют только внутри множества тех, кто уже имеет room read access; расширения никогда не обходят внешний гейт query-слоя.
+- `author_edit` audience требует, чтобы endpoint-уровень авторизации предварительно подтвердил авторство зрителя — ответственность за проверку лежит на endpoint, не на рендерере.
+
+Полный контракт — в [BBCODE_RENDERING.md](../architecture/BBCODE_RENDERING.md).
+
+---
+
 ## Чеклист перед релизом
 
 - [ ] Все auth endpoints имеют rate limiting
@@ -144,4 +159,5 @@
 
 - [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) — как реализовано
 - [AUTHORIZATION.md](../architecture/AUTHORIZATION.md) — роли и права
+- [BBCODE_RENDERING.md](../architecture/BBCODE_RENDERING.md) — фильтрация privacy-тегов
 - [CODE_STYLE.md](./CODE_STYLE.md) — валидация

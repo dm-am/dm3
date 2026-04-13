@@ -21,7 +21,7 @@ const emit = defineEmits<{
 <template>
   <div class="dropdown-nav-header">
     <button type="button" class="nav-back-btn" @click="emit('back')">
-      <SvgIcon name="arrowLeft" />
+      <SvgIcon name="chevronLeft" />
     </button>
     <span class="nav-title">{{ title }}</span>
     <span class="nav-spacer" />

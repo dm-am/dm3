@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconType } from "@/shared/ui/Icon/iconType";
+import { SvgIcon } from "@/shared/ui/Icon";
 import { useUserStore } from "@/entities/user";
 
 const userStore = useUserStore();
@@ -8,12 +8,12 @@ const { signOut } = userStore;
 
 <template>
   <router-link :to="{ name: 'messenger' }" data-testid="messages-link">
-    <Icon :font="IconType.MessagesNoUnread" />
+    <SvgIcon name="envelope" />
     Сообщения
   </router-link>
   |
   <a @click="signOut" data-testid="logout-button"
-    ><Icon :font="IconType.Logout" /> Выйти</a
+    >Выйти</a
   >
 </template>
 

@@ -4,8 +4,8 @@ import Api from "./client";
 export { Api };
 export default Api;
 
-// BB Code render mode
-export { BbRenderMode } from "./bbRenderMode";
+// BBCode render audience — semantic intent for server-rendered content
+export { RENDER_AUDIENCE, X_DM_AUDIENCE, type RenderAudience } from "./audience";
 
 // API Services (PascalCase)
 export { default as AccountApi } from "./accountApi";

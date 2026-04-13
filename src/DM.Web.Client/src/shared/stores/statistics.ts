@@ -3,8 +3,17 @@ import { ref, computed, onUnmounted } from "vue";
 import type { LiveStats } from "@/shared/api/models/community";
 import { CommunityApi } from "@/shared/api";
 
-/** Default polling interval: 30 seconds */
-const DEFAULT_POLL_INTERVAL = 30_000;
+/**
+ * Default polling interval: 60 seconds.
+ *
+ * SiteStatistics shows approximate community counters (total users,
+ * online, games, posts, etc.). There is no functional benefit to
+ * sub-minute precision — the backend caches the aggregated result for
+ * two minutes, so faster polling just produces redundant round-trips.
+ * 60s keeps the header numbers fresh enough while halving the bandwidth
+ * budget compared to the previous 30s default.
+ */
+const DEFAULT_POLL_INTERVAL = 60_000;
 
 export const useStatisticsStore = defineStore("statistics", () => {
   const stats = ref<LiveStats | null>(null);

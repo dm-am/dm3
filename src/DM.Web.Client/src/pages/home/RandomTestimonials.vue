@@ -19,6 +19,23 @@
   <secondary-text v-else-if="loaded && testimonials.length === 0">
     Нет отзывов о проекте
   </secondary-text>
+
+  <!-- Skeleton reserves space equal to one collapsed testimonial bubble
+       (3 lines of text @ 16px × 1.5 line-height = 72px of content +
+       24px padding × 2 + ~24px for the author/date footer ≈ 150px).
+       Prevents the "reviews-links" paragraph + separator below from
+       jumping up when the testimonials array arrives. -->
+  <div v-else class="testimonial-skeleton" aria-hidden="true">
+    <div class="skeleton-bubble">
+      <div class="skeleton-text-line wide" />
+      <div class="skeleton-text-line" />
+      <div class="skeleton-text-line short" />
+    </div>
+    <div class="skeleton-footer">
+      <div class="skeleton-author" />
+      <div class="skeleton-date" />
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -167,10 +184,73 @@ function onTestimonialEntered() {
 
 <style scoped lang="sass">
 @import "src/assets/styles/Variables"
+@import "src/assets/styles/Themes"
+@import "src/assets/styles/Skeleton"
 
 .testimonials-gallery
   position: relative
   margin: 0 0 $small
+
+// Placeholder while the first page of testimonials loads. Matches the
+// real bubble's padding/shape (speech bubble without the arrow tail to
+// avoid a shimmering pseudo-element).
+.testimonial-skeleton
+  margin: 0 0 $small
+
+.skeleton-bubble
+  display: flex
+  flex-direction: column
+  justify-content: center
+  // Tight gap between shimmer lines — matches the compact look of the
+  // real bubble after removing its bottom padding void.
+  gap: 8px
+  padding: $medium + $tiny $medium + $small
+  margin-bottom: $small
+  border-radius: 20px
+  background-color: $bg-highlight-green
+  // Match the real .testimonial-text min-height so the skeleton
+  // reserves exactly the same pixel budget — 3 lines of content
+  // (72px at line-height 1.5 × 16px) + top padding (18px) + the
+  // 22px reserved strip for the chevron toggle. Without this the
+  // skeleton bubble was ~18px shorter than the real one and the
+  // entire home page below shifted down when the first testimonial
+  // arrived.
+  min-height: calc(1.5 * 3 * 1em + ($medium + $tiny) + 22px)
+
+.skeleton-text-line
+  height: 14px
+  width: 100%
+  border-radius: 3px
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.25) 25%, rgba(255, 255, 255, 0.5) 50%, rgba(255, 255, 255, 0.25) 75%)
+  background-size: 200% 100%
+  animation: skeleton-shimmer 1.5s ease-in-out infinite
+
+  &.wide
+    width: 95%
+
+  &.short
+    width: 60%
+
+  @media (prefers-reduced-motion: reduce)
+    animation: none
+    background: rgba(255, 255, 255, 0.35)
+
+.skeleton-footer
+  display: flex
+  align-items: center
+  justify-content: space-between
+  gap: $small
+  margin-top: 18px  // Clear the real bubble's tail position
+
+.skeleton-author
+  +skeleton-shimmer
+  width: 120px
+  height: 14px
+
+.skeleton-date
+  +skeleton-shimmer
+  width: 70px
+  height: 12px
 
 // Testimonial transition animation - entire component as one unit
 .testimonial-fade-enter-active,

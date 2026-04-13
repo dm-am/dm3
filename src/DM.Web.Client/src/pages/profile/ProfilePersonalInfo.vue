@@ -26,7 +26,10 @@ const displayGender = computed(() =>
 
 const displayBirthday = computed(() => {
   if (!props.user.birthdayDate) return "";
-  return dayjs(props.user.birthdayDate).format("DD.MM");
+  // "День рождения" намеренно без года (privacy — скрываем возраст)
+  // и с месяцем прописью по-русски, как определено в
+  // docs/conventions/CODE_STYLE.md → "Формат отображения дат".
+  return dayjs(props.user.birthdayDate).format("D MMMM");
 });
 </script>
 

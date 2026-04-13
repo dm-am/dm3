@@ -28,8 +28,10 @@ const progress = computed(() => (props.current / props.goal) * 100);
   top: 0
   left: 0
   bottom: 0
-  transition: width $animation-time
   background-color: $progress-fill-overlay
+  transition: width 0.4s ease
+  @media (prefers-reduced-motion: reduce)
+    transition: none
 
 .progress-text
   position: relative

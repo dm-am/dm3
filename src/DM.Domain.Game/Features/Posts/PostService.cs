@@ -145,11 +145,6 @@ internal class PostService : IPostService
             UnreadEntryType.Message, roomId);
     }
 
-    public Task<BestPostResult?> GetBestPostAsync(Guid userId)
-    {
-        return _repository.GetBestPost(userId);
-    }
-
     public async Task<(IEnumerable<Post> Posts, PagingResult Paging)> GetRatedAsync(PostsQuery query)
     {
         var (posts, totalCount) = await _repository.GetRated(query);

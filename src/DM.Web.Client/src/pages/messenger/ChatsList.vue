@@ -9,7 +9,7 @@ import ChatPreview from "./ChatPreview.vue";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import communityApi from "@/shared/api/communityApi";
 import type { User } from "@/shared/api/models/community";
-import defaultAvatar from "@/assets/images/userpic.png";
+import { defaultAvatarUrl as defaultAvatar, symbols } from "@/shared/lib/utils/icons";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { EmptyState } from "@/shared/ui";
 
@@ -66,7 +66,7 @@ function onSearchInput() {
   if (searchTimeout) clearTimeout(searchTimeout);
   if (searchQuery.value.length > 0) {
     showResults.value = true;
-    searchTimeout = setTimeout(() => searchUsers(searchQuery.value), 150);
+    searchTimeout = setTimeout(() => searchUsers(searchQuery.value), 300);
   } else {
     searchResults.value = [];
     showResults.value = false;
@@ -103,7 +103,7 @@ function clearSearch() {
   <div class="messenger-list">
     <div class="search-section">
       <div class="search-container">
-        <SvgIcon name="searchFilled" class="search-icon" />
+        <SvgIcon name="search" class="search-icon" />
         <input
           v-model="searchQuery"
           type="text"
@@ -119,7 +119,7 @@ function clearSearch() {
           class="clear-input-btn"
           @click.stop="clearSearch"
         >
-          <SvgIcon name="closeThin" />
+          {{ symbols.close }}
         </button>
       </div>
 
@@ -171,7 +171,7 @@ function clearSearch() {
 
     <EmptyState
       v-else
-      icon="emptyEnvelope"
+      icon="envelope"
       title="Нет переписок"
       hint="Найдите собеседника через поиск выше"
     />
@@ -278,7 +278,6 @@ $filter-control-height: 38px
   gap: $small
   padding: $small $medium
   cursor: pointer
-  transition: background-color 0.1s ease
 
   &:hover
     background-color: $bg-element-accent

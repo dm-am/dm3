@@ -4,6 +4,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Caching;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
@@ -82,6 +83,18 @@ public class TopicServiceShould : UnitTestBase
         _eventProducer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>()))
             .Returns(Task.CompletedTask);
 
+        // Pass-through cache: always delegates to the factory so the
+        // service's cacheable fast path still calls the repository in
+        // tests. We don't want to test the cache here, only the
+        // underlying read logic.
+        var cache = Mock<ICache>();
+        cache
+            .Setup(c => c.GetOrCreateAsync(
+                It.IsAny<object>(),
+                It.IsAny<Func<Task<Topic[]>>>(),
+                It.IsAny<TimeSpan>()))
+            .Returns<object, Func<Task<Topic[]>>, TimeSpan>((_, factory, _) => factory());
+
         _service = new TopicService(
             createValidator.Object,
             updateValidator.Object,
@@ -91,7 +104,8 @@ public class TopicServiceShould : UnitTestBase
             _identityProvider.Object,
             _repository.Object,
             _unreadCountersRepository.Object,
-            _eventProducer.Object);
+            _eventProducer.Object,
+            cache.Object);
     }
 
     [Fact]

@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted } from "vue";
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import type { WebsiteTestimonial } from "@/shared/api/models/community";
-import { IconType } from "@/shared/ui/Icon/iconType";
 import { Tooltip } from "@/shared/ui";
 import SvgIcon from "@/shared/ui/Icon/SvgIcon.vue";
+import { symbols } from "@/shared/lib/utils/icons";
 import { useTestimonialStore } from "@/shared/stores/testimonials";
 import { useUserStore } from "@/entities/user";
 import { userIsAdmin } from "@/entities/user";
+import { registerExpandable } from "@/shared/lib/composables";
 import dayjs from "dayjs";
 
 const props = withDefaults(
@@ -34,7 +35,9 @@ const canAdministrate = computed(
 );
 const loading = ref(false);
 
-// Single source of truth for collapsed height calculation
+// Single source of truth for the collapsed-state budget. These values
+// are shared between the JS measurement and the CSS variables so the
+// visual clip and the overflow detection can never drift.
 const MAX_COLLAPSED_LINES = 3;
 const LINE_HEIGHT = 1.5;
 
@@ -42,55 +45,107 @@ const LINE_HEIGHT = 1.5;
 const isExpanded = ref(false);
 const isOverflowing = ref(false);
 const contentRef = ref<HTMLElement | null>(null);
-const actualHeight = ref(0);
-const enableTransition = ref(false);
 
-// Normalize consecutive newlines for collapsed display
-// Preserves single newlines, collapses 2+ newlines to single
-const displayText = computed(() => {
-  if (!props.expandable || isExpanded.value) {
-    return props.testimonial.text;
-  }
-  // Collapse 2+ consecutive newlines to single newline
-  return props.testimonial.text.replace(/\n{2,}/g, "\n");
-});
+// Inline max-height applied during transitions. null = no inline override
+// (the declarative CSS max-height via .collapsed class takes over).
+const overrideMaxHeight = ref<string | null>(null);
 
-// Date formatting
+// Trimmed original text — removes accidental leading/trailing blank lines
+// so they never eat into the 3-line truncation budget.
+const displayText = computed(() => props.testimonial.text.trim());
+
 function formatDate(dateStr: string): string {
   return dayjs(dateStr).format("DD.MM.YYYY");
 }
 
 function formatFullDate(dateStr: string): string {
-  return dayjs(dateStr).format("DD.MM.YYYY HH:mm");
+  return dayjs(dateStr).format("DD.MM.YYYY [в] HH:mm");
 }
 
-// Measure overflow by comparing natural height to collapsed height
-function measureContent() {
-  if (!props.expandable) return;
+function collapsedMaxHeightPx(): number {
+  if (!contentRef.value) return 0;
+  const fontSize = parseFloat(getComputedStyle(contentRef.value).fontSize);
+  // Use floor to guarantee the value is strictly less than or equal to
+  // MAX_COLLAPSED_LINES lines — browsers sometimes round line box metrics
+  // upward, and we want to match what scrollHeight reports.
+  return Math.floor(fontSize * LINE_HEIGHT * MAX_COLLAPSED_LINES);
+}
 
+function measureOverflow() {
+  if (!props.expandable) {
+    isOverflowing.value = false;
+    return;
+  }
   const el = contentRef.value;
   if (!el) {
     isOverflowing.value = false;
-    actualHeight.value = 0;
     return;
   }
-
-  nextTick(() => {
-    actualHeight.value = el.scrollHeight;
-
-    // Collapsed max-height = fontSize * lineHeight * maxLines (matches CSS calc)
-    const fontSize = parseFloat(getComputedStyle(el).fontSize);
-    const collapsedMaxHeight = fontSize * LINE_HEIGHT * MAX_COLLAPSED_LINES;
-
-    // Add 1px buffer for floating-point precision issues
-    isOverflowing.value = el.scrollHeight > collapsedMaxHeight + 1;
-  });
+  // Temporarily release the clamp so scrollHeight reflects the natural
+  // content height, measure, then restore. `display` is always `block`
+  // now that the pseudo-element ellipsis replaced `-webkit-line-clamp`,
+  // so no display-mode override is needed.
+  const prevMaxHeight = el.style.maxHeight;
+  el.style.maxHeight = "none";
+  void el.offsetHeight;
+  const natural = el.scrollHeight;
+  el.style.maxHeight = prevMaxHeight;
+  isOverflowing.value = natural > collapsedMaxHeightPx() + 1;
 }
 
-function toggleExpand() {
-  if (!isOverflowing.value) return;
-  enableTransition.value = true;
-  isExpanded.value = !isExpanded.value;
+// Smooth expand/collapse. See TruncatedContent.vue for the full pattern
+// rationale — same scrollHeight pin-and-animate approach with a mandatory
+// `await nextTick()` between the start-state and target-state writes so
+// Vue commits the start value to the DOM before the target value goes in.
+// Without the nextTick pause, Vue coalesces the two writes into one render
+// and the browser never sees the transition starting point.
+async function toggleExpand() {
+  const el = contentRef.value;
+  if (!isOverflowing.value || !el) return;
+
+  const collapsedPx = collapsedMaxHeightPx();
+
+  if (!isExpanded.value) {
+    // Collapsed → expanded: pin the current clamped height as the
+    // transition start, let Vue render it, force reflow so the
+    // pinned value becomes the browser's committed "before" state
+    // for the max-height transition, then flip state and pin the
+    // target (natural scrollHeight). The ellipsis pseudo-element on
+    // `.testimonial-content::after` fades out in parallel via a CSS
+    // `opacity` transition with the SAME 0.55s / cubic-bezier curve
+    // — both animations start on the same Vue render and finish on
+    // the same frame, so there is no pop and no delay.
+    overrideMaxHeight.value = `${collapsedPx}px`;
+    await nextTick();
+    void el.offsetHeight;
+    isExpanded.value = true;
+    overrideMaxHeight.value = `${el.scrollHeight}px`;
+  } else {
+    // Expanded → collapsed: mirror sequence. Pin start to natural
+    // height, flip state (adding `.collapsed`, which simultaneously
+    // triggers the max-height transition toward the clamped budget
+    // AND the opacity transition that fades the ellipsis pseudo-
+    // element from 0 to 1). Both finish on the same frame.
+    overrideMaxHeight.value = `${el.scrollHeight}px`;
+    await nextTick();
+    void el.offsetHeight;
+    isExpanded.value = false;
+    overrideMaxHeight.value = `${collapsedPx}px`;
+  }
+}
+
+function onTransitionEnd(e: TransitionEvent) {
+  if (e.propertyName !== "max-height") return;
+  if (!contentRef.value) return;
+  if (isExpanded.value) {
+    // Post-expand: release the constraint so late-loading content (e.g.
+    // link preview unfurls) can freely reflow.
+    overrideMaxHeight.value = "none";
+  } else {
+    // Post-collapse: drop the inline override so the .collapsed class
+    // drives max-height via its declarative calc().
+    overrideMaxHeight.value = null;
+  }
 }
 
 async function remove() {
@@ -99,27 +154,43 @@ async function remove() {
   loading.value = false;
 }
 
-// Measure on mount for expandable mode
 onMounted(() => {
   if (props.expandable) {
-    measureContent();
+    nextTick(measureOverflow);
   }
 });
 
-// Re-measure when testimonial changes (for gallery rotation)
+// Re-measure when the displayed testimonial changes (gallery rotation).
 watch(
   () => props.testimonial.id,
   () => {
-    if (props.expandable) {
-      enableTransition.value = false;
-      isExpanded.value = false;
-      nextTick(() => measureContent());
-    }
+    if (!props.expandable) return;
+    isExpanded.value = false;
+    overrideMaxHeight.value = null;
+    nextTick(measureOverflow);
   },
 );
 
-// Expose for parent transition callback
-defineExpose({ measureContent });
+// Expose for parent transition callback (RandomTestimonials gallery).
+defineExpose({ measureContent: measureOverflow });
+
+// Register with the global expand/collapse-all registry. Only overflowing
+// testimonials participate — short ones don't have anything to expand.
+const unregister = registerExpandable({
+  id: Symbol("Testimonial"),
+  isExpanded: () => !isOverflowing.value || isExpanded.value,
+  expand: () => {
+    if (props.expandable && isOverflowing.value && !isExpanded.value) {
+      toggleExpand();
+    }
+  },
+  collapse: () => {
+    if (props.expandable && isOverflowing.value && isExpanded.value) {
+      toggleExpand();
+    }
+  },
+});
+onBeforeUnmount(unregister);
 </script>
 
 <template>
@@ -127,26 +198,40 @@ defineExpose({ measureContent });
     <div
       class="testimonial-text"
       :class="{
+        expandable,
         collapsed: expandable && !isExpanded && isOverflowing,
-        animating: enableTransition,
+        'has-toggle': expandable && isOverflowing,
       }"
       :style="expandable ? {
-        '--actual-height': actualHeight + 'px',
         '--line-height': LINE_HEIGHT,
         '--max-lines': MAX_COLLAPSED_LINES,
       } : undefined"
     >
-      <!-- Plain text only, NO BBCode -->
-      <div ref="contentRef" class="testimonial-content">
-        {{ displayText }}
-      </div>
-      <SvgIcon
+      <!-- Plain text only, NO BBCode. The collapsed clamp is applied via
+           CSS max-height (calc based on line-height × lines × em), driven
+           by the .collapsed class. During transitions the JS handler pins
+           an inline max-height override so the animation has concrete
+           start and end values. -->
+      <div
+        ref="contentRef"
+        class="testimonial-content"
+        :style="overrideMaxHeight !== null ? { maxHeight: overrideMaxHeight } : undefined"
+        @transitionend="onTransitionEnd"
+      >{{ displayText }}</div>
+      <button
         v-if="expandable && isOverflowing"
-        name="chevronDown"
-        class="expand-icon"
-        :class="{ expanded: isExpanded }"
+        type="button"
+        class="testimonial-toggle"
+        :aria-expanded="isExpanded"
+        :aria-label="isExpanded ? 'Свернуть' : 'Показать полностью'"
         @click="toggleExpand"
-      />
+      >
+        <SvgIcon
+          name="chevronDown"
+          class="toggle-icon"
+          :class="{ expanded: isExpanded }"
+        />
+      </button>
     </div>
     <div class="testimonial-footer">
       <user-link
@@ -162,8 +247,7 @@ defineExpose({ measureContent });
         </Tooltip>
         <secondary-text v-if="canAdministrate" class="testimonial-controls">
           <a v-if="!loading" @click="remove">
-            <Icon :font="IconType.Close" />
-            Удалить
+            {{ symbols.close }} Удалить
           </a>
           <span v-else>...</span>
         </secondary-text>
@@ -179,6 +263,27 @@ defineExpose({ measureContent });
 .testimonial
   margin: 0
 
+// Speech bubble. `position: relative` is REQUIRED for the tail
+// pseudo-element (`::after`) AND the absolutely-positioned toggle
+// button — without it both fall through to an unrelated ancestor.
+//
+// Size-invariant layout:
+//   The min-height reserves enough space for 3 lines of content,
+//   the full top/bottom padding, AND the toggle strip (20px button
+//   + 2px breath = 22px). Every testimonial — 1-line short, 3-line
+//   short, 10-line collapsed — renders at exactly the same height,
+//   so testimonial rotation in the gallery never causes the author
+//   row or the surrounding page blocks to shift. The toggle, when
+//   present, is absolutely positioned inside the reserved bottom
+//   strip so its height cost is already budgeted into min-height
+//   and does NOT grow the bubble.
+//
+// Short-case flex alignment: `justify-content: center` keeps
+// short content centered in the taller min-height box. For the
+// has-toggle (long collapsed) case we switch to `flex-start` so
+// the content pins to the top and the absolutely-positioned
+// toggle sits in the reserved bottom strip without overlapping
+// the last line of text.
 .testimonial-text
   position: relative
   display: flex
@@ -190,16 +295,46 @@ defineExpose({ measureContent });
   border-radius: 20px
   background-color: $bg-highlight-green
   color: $text-on-green
-  // Min-height for consistent visual appearance (3 lines + padding)
-  min-height: calc(var(--line-height, 1.5) * var(--max-lines, 3) * 1em + $medium + $tiny + $medium + $tiny)
+  // Budget: 3 lines of content + full top padding + reserved
+  // bottom strip (20px button + 2px breath below the chevron).
+  // Concrete numbers resolve to 72 + 18 + 22 = 112px at default
+  // font-size, which is both short-case and long-collapsed size.
+  min-height: calc(var(--line-height, 1.5) * var(--max-lines, 3) * 1em + ($medium + $tiny) + 22px)
+
+  // Long collapsed testimonial — content pinned to top so the
+  // absolute toggle in the reserved bottom strip does not collide
+  // with the last line of text, and `padding-bottom: 0` because the
+  // toggle's `bottom: $tiny` already provides the small breathing
+  // gap under the chevron.
+  //
+  // IMPORTANT: these overrides must ONLY apply in the collapsed
+  // state. The `.has-toggle` class (gated on `isOverflowing`) stays
+  // on after the user clicks expand — `.collapsed` is what actually
+  // toggles. Scoping to `&.collapsed.has-toggle` restores full
+  // symmetric padding + centering the moment the bubble opens, so
+  // the expanded text breathes with the same 18px top/bottom buffer
+  // as every other bubble instead of hugging the rounded edge.
+  &.collapsed.has-toggle
+    justify-content: flex-start
+    padding-bottom: 0
 
   .testimonial-content
-    max-height: var(--actual-height, 1000px)
+    position: relative
     overflow: hidden
+    white-space: pre-wrap
+    word-wrap: break-word
+    line-height: var(--line-height, 1.5)
+    // Smooth max-height transition on expand/collapse. The JS handler
+    // pins concrete start/end pixel values so CSS can animate between
+    // them (it cannot transition from px to `none`). Curve and duration
+    // match TruncatedContent.vue — a single site-wide "reveal" feel.
+    transition: max-height 0.55s cubic-bezier(0.22, 1, 0.36, 1)
 
-  &.animating .testimonial-content
-    transition: max-height 0.4s ease
-
+  // Declarative collapsed max-height — hard clip at 3 lines via
+  // `overflow: hidden`. The JS handler overlays an inline max-height
+  // during the expand/collapse transition so the animation has
+  // concrete start/end pixel values (CSS cannot transition from a
+  // fixed length to `none`).
   &.collapsed .testimonial-content
     max-height: calc(var(--line-height) * var(--max-lines) * 1em)
 
@@ -213,26 +348,55 @@ defineExpose({ measureContent });
     border-top-color: $bg-highlight-green
     border-left-color: $bg-highlight-green
 
-.testimonial-content
-  white-space: pre-wrap
-  word-wrap: break-word
-  line-height: var(--line-height, 1.5)
-
-.expand-icon
+// Expand toggle — a real <button> absolutely positioned inside the
+// bubble's reserved bottom strip (the `+ 22px` in `.testimonial-text`
+// min-height). Absolute positioning keeps the bubble's outer height
+// identical between the "short testimonial" and "long collapsed"
+// cases, so gallery rotation never causes the surrounding layout to
+// shift by the toggle's height.
+//
+// `bottom: $tiny` gives a 2px breathing gap between the chevron and
+// the rounded bubble bottom edge. `left: 50% + translateX(-50%)` is
+// the classic pixel-perfect horizontal centering pattern. Using a
+// real <button> preserves native keyboard focus, ARIA state, and a
+// 24px+ tap target (WCAG 2.5.5).
+.testimonial-toggle
   position: absolute
-  bottom: $minor + 2px
   left: 50%
+  bottom: $tiny
   transform: translateX(-50%)
-  font-size: 12px
+  display: inline-flex
+  align-items: center
+  justify-content: center
+  min-width: 28px
+  min-height: 20px
+  padding: 0 $small
+  border: none
+  border-radius: $small
+  background: transparent
   color: $text-on-green
-  opacity: 0.7
   cursor: pointer
+  opacity: 0.65
+  transition: opacity 0.2s ease, background-color 0.2s ease
 
   &:hover
     opacity: 1
+    background-color: rgba(0, 0, 0, 0.06)
+
+  &:focus-visible
+    outline: 2px solid $text-on-green
+    outline-offset: 2px
+    opacity: 1
+
+.toggle-icon
+  display: block
+  font-size: 14px
+  // Chevron rotation matches the content expand curve/duration exactly —
+  // a single synchronized motion instead of two competing tempos.
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1)
 
   &.expanded
-    transform: translateX(-50%) rotate(180deg)
+    transform: rotate(180deg)
 
 .testimonial-footer
   display: flex

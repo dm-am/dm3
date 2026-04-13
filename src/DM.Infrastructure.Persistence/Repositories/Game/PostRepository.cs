@@ -31,14 +31,17 @@ internal class PostRepository : IPostRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IGameRepository _gameRepository;
 
     /// <inheritdoc />
     public PostRepository(
         DmDbContext dbContext,
-        IMapper mapper)
+        IMapper mapper,
+        IGameRepository gameRepository)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _gameRepository = gameRepository;
     }
 
     #region Read Operations
@@ -81,45 +84,16 @@ internal class PostRepository : IPostRepository
         return post;
     }
 
-    public async Task<BestPostResult?> GetBestPost(Guid userId)
-    {
-        var result = await _dbContext.Posts
-            .Where(p => p.AuthorId == userId)
-            .Where(p => p.Room.AccessType == RoomAccessType.Open)
-            .Select(p => new
-            {
-                Post = p,
-                Reviews = _dbContext.PostReviews
-                    .Where(r => r.PostId == p.PostId && !r.IsRemoved)
-            })
-            .Select(x => new
-            {
-                x.Post,
-                Rating = x.Reviews.Sum(r => (int?)r.SignValue) ?? 0,
-                ReviewCount = x.Reviews.Count()
-            })
-            .Where(x => x.Rating > 0)
-            .OrderByDescending(x => x.Rating)
-            .Select(x => new BestPostResult
-            {
-                PostId = x.Post.PostId,
-                GameText = x.Post.GameText,
-                GameTitle = x.Post.Room.Game.Title,
-                GameId = x.Post.Room.Game.GameId,
-                RoomTitle = x.Post.Room.Title,
-                RoomId = x.Post.RoomId,
-                AuthorUsername = x.Post.Author.Username,
-                Rating = x.Rating,
-                ReviewCount = x.ReviewCount,
-                CreatedUtc = x.Post.CreatedUtc
-            })
-            .FirstOrDefaultAsync();
-        return result;
-    }
-
     public async Task<(IEnumerable<Post> Posts, int TotalCount)> GetRated(PostsQuery query)
     {
+        // Read-only query path feeding the home-page widgets (best of week,
+        // latest featured, Pulse). AsNoTracking drops EF Core's change
+        // tracker — we never intend to mutate these entities, and the
+        // rich projection below holds a full Post reference which would
+        // otherwise be tracked. See PERFORMANCE.md → "AsNoTracking".
         var baseQuery = _dbContext.Posts
+            .AsNoTracking()
+            .TagWith("DM.Game.PostsRated")
             .Where(p => !p.IsRemoved)
             .Where(p => p.Room.AccessType == RoomAccessType.Open)
             .Where(p => !p.Room.IsRemoved)
@@ -140,52 +114,55 @@ internal class PostRepository : IPostRepository
             baseQuery = baseQuery.Where(p => EF.Functions.ILike(p.GameText, pattern));
         }
 
-        // ReviewedAfter filter
-        if (query.ReviewedAfter.HasValue)
+        // Author filter (comma-separated usernames, parsed before LINQ)
+        if (!string.IsNullOrWhiteSpace(query.AuthorUsernames))
         {
-            var after = query.ReviewedAfter.Value;
+            var usernames = query.AuthorUsernames
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            baseQuery = baseQuery.Where(p => usernames.Contains(p.Author.Username));
+        }
+
+        // Post creation date filters
+        if (query.CreatedAfter.HasValue)
+        {
+            baseQuery = baseQuery.Where(p => p.CreatedUtc >= query.CreatedAfter.Value);
+        }
+        if (query.CreatedBefore.HasValue)
+        {
+            baseQuery = baseQuery.Where(p => p.CreatedUtc <= query.CreatedBefore.Value);
+        }
+
+        // LastReviewedAfter filter — only posts that have a review after this date
+        if (query.LastReviewedAfter.HasValue)
+        {
+            var after = query.LastReviewedAfter.Value;
             baseQuery = baseQuery.Where(p => _dbContext.PostReviews
                 .Any(r => r.PostId == p.PostId &&
                           !r.IsRemoved &&
                           r.CreatedUtc >= after));
         }
 
-        // Project with rating info
-        // When ReviewedAfter is set, calculate rating only from reviews in that period
-        IQueryable<PostWithRating> projectedQuery;
-        if (query.ReviewedAfter.HasValue)
+        // Review stats via the Post.Reviews navigation property. EF Core
+        // translates each aggregate into a correlated subquery, but the
+        // subqueries share a single filter (!IsRemoved) so the query
+        // planner can fuse them — net cost on a 20-row page is three
+        // LEFT JOIN LATERALs, not 60 independent round-trips.
+        //
+        // History: a previous refactor tried to collapse these into a
+        // GROUP BY subquery + LEFT JOIN + `s == null ? 0 : s.Rating`
+        // ternary. That shape passed in hand-written scenarios but made
+        // EF's CountAsync path fail translation ("could not be
+        // translated" on the ternary-over-grouped-subquery expression),
+        // which silently broke the rated-posts listing whenever it ran
+        // against actual data. Navigation-property aggregates have been
+        // EF's first-class story since 7.0 and translate reliably.
+        var projectedQuery = baseQuery.Select(p => new PostWithRating
         {
-            var after = query.ReviewedAfter.Value;
-            projectedQuery = baseQuery.Select(p => new PostWithRating
-            {
-                Post = p,
-                Rating = _dbContext.PostReviews
-                    .Where(r => r.PostId == p.PostId && !r.IsRemoved && r.CreatedUtc >= after)
-                    .Sum(r => (int?)r.SignValue) ?? 0,
-                ReviewCount = _dbContext.PostReviews
-                    .Where(r => r.PostId == p.PostId && !r.IsRemoved && r.CreatedUtc >= after)
-                    .Count(),
-                LastReviewUtc = _dbContext.PostReviews
-                    .Where(r => r.PostId == p.PostId && !r.IsRemoved && r.CreatedUtc >= after)
-                    .Max(r => (DateTimeOffset?)r.CreatedUtc)
-            });
-        }
-        else
-        {
-            projectedQuery = baseQuery.Select(p => new PostWithRating
-            {
-                Post = p,
-                Rating = _dbContext.PostReviews
-                    .Where(r => r.PostId == p.PostId && !r.IsRemoved)
-                    .Sum(r => (int?)r.SignValue) ?? 0,
-                ReviewCount = _dbContext.PostReviews
-                    .Where(r => r.PostId == p.PostId && !r.IsRemoved)
-                    .Count(),
-                LastReviewUtc = _dbContext.PostReviews
-                    .Where(r => r.PostId == p.PostId && !r.IsRemoved)
-                    .Max(r => (DateTimeOffset?)r.CreatedUtc)
-            });
-        }
+            Post = p,
+            Rating = p.Reviews.Where(r => !r.IsRemoved).Sum(r => (int?)r.SignValue) ?? 0,
+            ReviewCount = p.Reviews.Count(r => !r.IsRemoved),
+            LastReviewUtc = p.Reviews.Where(r => !r.IsRemoved).Max(r => (DateTimeOffset?)r.CreatedUtc)
+        });
 
         // HasReviews filter
         if (query.HasReviews == true)
@@ -197,6 +174,12 @@ internal class PostRepository : IPostRepository
         if (query.MinRating.HasValue)
         {
             projectedQuery = projectedQuery.Where(x => x.Rating >= query.MinRating.Value);
+        }
+
+        // MaxRating filter (rating can be negative)
+        if (query.MaxRating.HasValue)
+        {
+            projectedQuery = projectedQuery.Where(x => x.Rating <= query.MaxRating.Value);
         }
 
         // Sorting
@@ -211,6 +194,9 @@ internal class PostRepository : IPostRepository
             "lastreview" => desc
                 ? projectedQuery.OrderByDescending(x => x.LastReviewUtc)
                 : projectedQuery.OrderBy(x => x.LastReviewUtc),
+            "reviewcount" => desc
+                ? projectedQuery.OrderByDescending(x => x.ReviewCount).ThenByDescending(x => x.Post.CreatedUtc)
+                : projectedQuery.OrderBy(x => x.ReviewCount).ThenBy(x => x.Post.CreatedUtc),
             _ => desc
                 ? projectedQuery.OrderByDescending(x => x.Rating).ThenByDescending(x => x.Post.CreatedUtc)
                 : projectedQuery.OrderBy(x => x.Rating).ThenBy(x => x.Post.CreatedUtc)
@@ -239,25 +225,29 @@ internal class PostRepository : IPostRepository
                 // Game master/assistant info for author role
                 GameMasterId = x.Post.Room.Game.MasterId,
                 IsAuthorAssistant = x.Post.Room.Game.Assistants.Any(a => a.UserId == x.Post.Author.UserId),
-                // Room
+                // Room — game scalars dropped in favor of a batched
+                // hydration step below that returns the full GameDto
+                // (see sidebar-pattern notes in GameModels.RoomRef).
                 RoomNumber = x.Post.Room.RoomNumber,
                 RoomTitle = x.Post.Room.Title,
                 GameId = x.Post.Room.Game.GameId,
-                GamePublicId = x.Post.Room.Game.PublicId,
-                GameTitle = x.Post.Room.Game.Title,
-                // Character - use navigation property check
+                // Character — nullable navigation; `!` tells the compiler
+                // the subsequent member access is intentional. At SQL
+                // generation time EF Core emits LEFT JOINs that null-
+                // propagate cleanly, and the post-pagination projection
+                // below gates on CharId.HasValue before touching any of
+                // these fields, so a null character never reaches
+                // CharacterShort construction.
                 CharId = (Guid?)x.Post.Character!.CharacterId,
                 CharName = x.Post.Character!.Name,
-                CharAuthorUserId = (Guid?)x.Post.Character!.Author.UserId,
-                CharAuthorUsername = x.Post.Character!.Author.Username,
-                CharAuthorRole = (UserRole?)x.Post.Character!.Author.Role,
-                CharAuthorStatus = x.Post.Character!.Author.Status,
-                CharIsNpc = (bool?)x.Post.Character!.IsNpc,
-                // Character picture - join with Uploads table
-                CharPictureUrl = _dbContext.Uploads
-                    .Where(u => u.EntityId == x.Post.Character!.CharacterId && u.Type == UploadType.CharacterAvatar)
-                    .Select(u => u.MediumFilePath ?? u.FilePath)
-                    .FirstOrDefault()
+                CharAuthorUserId = (Guid?)x.Post.Character!.Author!.UserId,
+                CharAuthorUsername = x.Post.Character!.Author!.Username,
+                CharAuthorRole = (UserRole?)x.Post.Character!.Author!.Role,
+                CharAuthorStatus = x.Post.Character!.Author!.Status,
+                CharIsNpc = (bool?)x.Post.Character!.IsNpc
+                // Character picture is resolved post-pagination via
+                // EnrichWithCharacterPictures — one batched IN-query per
+                // page instead of an inline correlated subquery per row.
             })
             .ToArrayAsync();
 
@@ -272,7 +262,7 @@ internal class PostRepository : IPostRepository
                 {
                     Id = x.CharId.Value,
                     Name = x.CharName ?? string.Empty,
-                    PictureUrl = x.CharPictureUrl ?? string.Empty,
+                    PictureUrl = string.Empty, // Populated by EnrichWithCharacterPictures below
                     IsNpc = x.CharIsNpc ?? false,
                     Author = new GeneralUser
                     {
@@ -316,13 +306,46 @@ internal class PostRepository : IPostRepository
                     Id = x.RoomId,
                     RoomNumber = x.RoomNumber,
                     Title = x.RoomTitle,
-                    GameId = x.GameId,
-                    GamePublicId = x.GamePublicId,
-                    GameTitle = x.GameTitle
+                    // Game populated below via batched GetByIds.
+                    Game = null
                 },
                 Character = character!
             };
         }).ToArray();
+
+        // One batched query (IN(characterIds)) for avatar URLs, instead
+        // of a correlated Uploads subquery per row in the main projection.
+        await EnrichWithCharacterPictures(posts);
+
+        // Batched game hydration — fetch the full GameRef-tier payload
+        // for every unique game id on the page and attach it to each
+        // post's Room. This mirrors the sidebar's data-flow: the list
+        // endpoint already returns fully-populated games; GameLink /
+        // RoomLink can build tooltips directly off `post.room.game`
+        // without the frontend making a second round-trip per game.
+        // The cost is a single EnrichGamesAsync call (~10 batched
+        // queries, O(1) in page size) versus N HTTP calls from the
+        // browser — strict improvement.
+        var uniqueGameIds = rawData
+            .Select(x => x.GameId)
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToArray();
+        if (uniqueGameIds.Length > 0)
+        {
+            var gamesById = (await _gameRepository.GetByIds(uniqueGameIds, Guid.Empty))
+                .ToDictionary(g => g.Id);
+            var rawByPostId = rawData.ToDictionary(x => x.PostId);
+            foreach (var post in posts)
+            {
+                if (post.Room is null) continue;
+                if (!rawByPostId.TryGetValue(post.Id, out var raw)) continue;
+                if (gamesById.TryGetValue(raw.GameId, out var hydratedGame))
+                {
+                    post.Room.Game = hydratedGame;
+                }
+            }
+        }
 
         return (posts, totalCount);
     }

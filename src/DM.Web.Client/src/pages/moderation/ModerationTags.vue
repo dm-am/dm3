@@ -263,7 +263,7 @@ onMounted(() => {
                   aria-label="Редактировать группу"
                   @click.stop="openEditGroupModal(group)"
                 >
-                  <SvgIcon name="pencilFilled" />
+                  <SvgIcon name="pencil" />
                 </button>
               </Tooltip>
               <Tooltip text="Удалить">
@@ -274,7 +274,7 @@ onMounted(() => {
                   :disabled="group.tagsCount > 0"
                   @click.stop="deleteGroup(group)"
                 >
-                  <SvgIcon name="trashFilled" />
+                  <SvgIcon name="trash" />
                 </button>
               </Tooltip>
             </div>
@@ -318,7 +318,7 @@ onMounted(() => {
                   aria-label="Редактировать тег"
                   @click="openEditTagModal(tag)"
                 >
-                  <SvgIcon name="pencilFilled" />
+                  <SvgIcon name="pencil" />
                 </button>
               </Tooltip>
               <Tooltip text="Удалить">
@@ -329,7 +329,7 @@ onMounted(() => {
                   :disabled="tag.gamesCount > 0"
                   @click="deleteTag(tag)"
                 >
-                  <SvgIcon name="trashFilled" />
+                  <SvgIcon name="trash" />
                 </button>
               </Tooltip>
             </div>

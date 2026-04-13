@@ -16,8 +16,8 @@
         class="status-icon"
         :class="statusClass"
       >
-        <span v-if="isAvailable === true">&#10003;</span>
-        <span v-else-if="isAvailable === false">&#10007;</span>
+        <span v-if="isAvailable === true">{{ symbols.checkmark }}</span>
+        <span v-else-if="isAvailable === false">{{ symbols.cross }}</span>
       </span>
     </div>
     <div class="username-status">
@@ -39,6 +39,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
+import { symbols } from "@/shared/lib/utils/icons";
 import { AccountApi } from "@/shared/api";
 
 const props = withDefaults(

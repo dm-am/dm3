@@ -32,7 +32,7 @@ export function useAuthorMeta(options: AuthorMetaOptions): AuthorMetaResult {
   const formattedDate = computed(() => {
     const date = createdUtc.value;
     if (!date) return "";
-    return dayjs(date).format("DD.MM.YYYY HH:mm");
+    return dayjs(date).format("DD.MM.YYYY [в] HH:mm");
   });
 
   const formattedTime = computed(() => {
@@ -46,7 +46,7 @@ export function useAuthorMeta(options: AuthorMetaOptions): AuthorMetaResult {
   const formattedEditDate = computed(() => {
     const date = modifiedUtc?.value;
     if (!date) return "";
-    return dayjs(date).format("DD.MM.YYYY в HH:mm");
+    return dayjs(date).format("DD.MM.YYYY [в] HH:mm");
   });
 
   const isAuthorOnline = computed(() => {
@@ -77,7 +77,7 @@ export function useAuthorMeta(options: AuthorMetaOptions): AuthorMetaResult {
   const tooltipText = computed(() => {
     const date = createdUtc.value;
     if (!date) return "";
-    return `Создано: ${dayjs(date).format("DD.MM.YYYY HH:mm")}`;
+    return `Создано: ${dayjs(date).format("DD.MM.YYYY [в] HH:mm")}`;
   });
 
   return {

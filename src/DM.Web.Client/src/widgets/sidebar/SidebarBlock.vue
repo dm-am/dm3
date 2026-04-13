@@ -76,7 +76,6 @@ const toggle = () => {
   text-transform: uppercase
   letter-spacing: 0.5px
   color: $heading-alt
-  transition: color 0.15s ease
 
 .toggle
   cursor: pointer
@@ -115,9 +114,11 @@ const toggle = () => {
 
 .list
   overflow: hidden
-  transition: height $animation-time, padding $animation-time, margin $animation-time
   padding: 6px
   margin: -6px
+  transition: height 0.3s ease, padding 0.3s ease, margin 0.3s ease
+  @media (prefers-reduced-motion: reduce)
+    transition: none
 
   &.collapsed
     height: 0

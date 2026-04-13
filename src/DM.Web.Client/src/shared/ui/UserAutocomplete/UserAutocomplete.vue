@@ -55,7 +55,7 @@
         aria-label="Очистить выбор"
         @click="clearSelection"
       >
-        &times;
+        {{ symbols.close }}
       </button>
     </div>
   </div>
@@ -66,7 +66,7 @@ import { ref, watch, onMounted, onUnmounted, nextTick } from "vue";
 import type { User } from "@/shared/api/models/community";
 import { CommunityApi } from "@/shared/api";
 import { vClickOutside } from "@/shared/directives";
-import defaultAvatar from "@/assets/images/userpic.png";
+import { defaultAvatarUrl as defaultAvatar, symbols } from "@/shared/lib/utils/icons";
 
 const props = defineProps<{
   modelValue: string;
@@ -224,7 +224,6 @@ watch(
   padding: $small $medium
   cursor: pointer
   border-bottom: 1px solid $border
-  transition: background-color 0.1s
 
   &:hover,
   &.highlighted

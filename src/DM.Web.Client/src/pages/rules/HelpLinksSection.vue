@@ -7,6 +7,7 @@
  */
 
 import { computed } from "vue";
+import { symbols } from "@/shared/lib/utils/icons";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import HelpIcon from "@/shared/ui/Icon/HelpIcon.vue";
 import { HELP_LINKS, type HelpLink } from "@/shared/config/helpLinks";
@@ -43,7 +44,7 @@ const linksWithSplit = computed(() =>
           <HelpIcon :type="link.icon" />
         </span>
         <span class="help-problem-col">{{ link.problem }}</span>
-        <span class="help-arrow-col">→</span>
+        <span class="help-arrow-col">{{ symbols.arrowRight }}</span>
         <span class="help-solution-col">
           <!-- Partial link: only linkText is linked -->
           <template v-if="split">
@@ -101,7 +102,7 @@ const linksWithSplit = computed(() =>
 
 .help-row
   display: grid
-  grid-template-columns: 28px auto max-content 1fr
+  grid-template-columns: 32px auto max-content 1fr
   align-items: center
   gap: $small
   +table-row

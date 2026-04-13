@@ -4,7 +4,7 @@
  *
  * Displays a filter value with optional prefix and remove button.
  */
-import { SvgIcon } from "@/shared/ui/Icon";
+import { symbols } from "@/shared/lib/utils/icons";
 
 defineOptions({ name: "FilterBubble" });
 
@@ -30,7 +30,7 @@ const emit = defineEmits<{
     <span v-if="prefix" class="bubble-prefix">{{ prefix }} </span>
     <span class="bubble-value-text">{{ value }}</span>
     <button type="button" class="bubble-remove-btn" @click.stop="emit('remove')">
-      <SvgIcon name="closeThin" />
+      {{ symbols.close }}
     </button>
   </div>
 </template>

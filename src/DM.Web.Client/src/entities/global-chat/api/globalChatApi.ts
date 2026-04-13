@@ -5,7 +5,7 @@ import type {
   GlobalChatEventSummary,
 } from "../model/types";
 import { Api } from "@/shared/api";
-import { BbRenderMode } from "@/shared/api";
+import { RENDER_AUDIENCE } from "@/shared/api";
 
 /**
  * Query parameters for cursor-based pagination
@@ -104,7 +104,7 @@ export default new (class GlobalChatApi {
     return Api.get<GlobalChatMessage>(
       `messages/${id}`,
       undefined,
-      BbRenderMode.Bb,
+      RENDER_AUDIENCE.AuthorEdit,
     );
   }
 

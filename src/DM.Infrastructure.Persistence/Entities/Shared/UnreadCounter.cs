@@ -52,6 +52,5 @@ public class UnreadCounter : ISoftDeletable
     public Guid? DeletedByUserId { get; set; }
 
     /// <inheritdoc />
-    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
     public DateTimeOffset? DeletedUtc { get; set; }
 }

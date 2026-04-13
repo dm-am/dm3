@@ -8,14 +8,17 @@ import type { PulseSearchParams } from "@/entities/game";
 // TYPES
 // =============================================================================
 
-export type PulseSortBy = "lastreview" | "rating";
-export type MinRatingFilter = null | 1 | 3;
+export type PulseSortBy = "lastreview" | "rating" | "reviewcount";
 
 export interface PulseFilterState {
   search: string;
   sortBy: PulseSortBy;
   sortOrder: "asc" | "desc";
-  minRating: MinRatingFilter;
+  minRating: number | null;
+  maxRating: number | null;
+  authorUsernames: Set<string>;
+  createdFrom: string | null;
+  createdTo: string | null;
   gameId: string | null;
 }
 
@@ -26,7 +29,10 @@ export interface PulseFilterComposable {
 
   setSearch: (search: string) => void;
   setSort: (sortBy: PulseSortBy, sortOrder?: "asc" | "desc") => void;
-  setMinRating: (minRating: MinRatingFilter) => void;
+  setRatingRange: (min: number | null, max: number | null) => void;
+  addAuthor: (username: string) => void;
+  removeAuthor: (username: string) => void;
+  setCreatedRange: (from: string | null, to: string | null) => void;
   setGameId: (gameId: string | null) => void;
   clearFilters: () => void;
 }
@@ -38,7 +44,10 @@ export interface PulseFilterComposable {
 type PulseFilterAction =
   | { type: "SET_SEARCH"; search: string }
   | { type: "SET_SORT"; sortBy: PulseSortBy; sortOrder?: "asc" | "desc" }
-  | { type: "SET_MIN_RATING"; minRating: MinRatingFilter }
+  | { type: "SET_RATING_RANGE"; min: number | null; max: number | null }
+  | { type: "ADD_AUTHOR"; username: string }
+  | { type: "REMOVE_AUTHOR"; username: string }
+  | { type: "SET_CREATED_RANGE"; from: string | null; to: string | null }
   | { type: "SET_GAME_ID"; gameId: string | null }
   | { type: "CLEAR_FILTERS" };
 
@@ -52,12 +61,16 @@ function createDefaultState(): PulseFilterState {
     sortBy: "lastreview",
     sortOrder: "desc",
     minRating: null,
+    maxRating: null,
+    authorUsernames: new Set(),
+    createdFrom: null,
+    createdTo: null,
     gameId: null,
   };
 }
 
 function reducer(state: PulseFilterState, action: PulseFilterAction): PulseFilterState {
-  const newState = { ...state };
+  const newState = { ...state, authorUsernames: new Set(state.authorUsernames) };
 
   switch (action.type) {
     case "SET_SEARCH":
@@ -66,16 +79,25 @@ function reducer(state: PulseFilterState, action: PulseFilterAction): PulseFilte
 
     case "SET_SORT":
       newState.sortBy = action.sortBy;
-      if (action.sortOrder) {
-        newState.sortOrder = action.sortOrder;
-      } else {
-        // Default: lastreview=desc, rating=desc
-        newState.sortOrder = "desc";
-      }
+      newState.sortOrder = action.sortOrder ?? "desc";
       return newState;
 
-    case "SET_MIN_RATING":
-      newState.minRating = action.minRating;
+    case "SET_RATING_RANGE":
+      newState.minRating = action.min;
+      newState.maxRating = action.max;
+      return newState;
+
+    case "ADD_AUTHOR":
+      newState.authorUsernames.add(action.username);
+      return newState;
+
+    case "REMOVE_AUTHOR":
+      newState.authorUsernames.delete(action.username);
+      return newState;
+
+    case "SET_CREATED_RANGE":
+      newState.createdFrom = action.from;
+      newState.createdTo = action.to;
       return newState;
 
     case "SET_GAME_ID":
@@ -96,7 +118,7 @@ function reducer(state: PulseFilterState, action: PulseFilterAction): PulseFilte
 // PARSING & BUILDING
 // =============================================================================
 
-const validSortByValues = new Set<string>(["lastreview", "rating"]);
+const validSortByValues = new Set<string>(["lastreview", "rating", "reviewcount"]);
 
 function parseQueryToState(query: LocationQuery): PulseFilterState {
   const state = createDefaultState();
@@ -121,9 +143,29 @@ function parseQueryToState(query: LocationQuery): PulseFilterState {
 
   if (query.minRating) {
     const rating = parseInt(String(query.minRating), 10);
-    if (rating === 1 || rating === 3) {
+    if (!isNaN(rating)) {
       state.minRating = rating;
     }
+  }
+
+  if (query.maxRating) {
+    const rating = parseInt(String(query.maxRating), 10);
+    if (!isNaN(rating)) {
+      state.maxRating = rating;
+    }
+  }
+
+  if (query.authors) {
+    const authors = String(query.authors).split(",").map((s) => s.trim()).filter(Boolean);
+    state.authorUsernames = new Set(authors);
+  }
+
+  if (query.createdFrom) {
+    state.createdFrom = String(query.createdFrom);
+  }
+
+  if (query.createdTo) {
+    state.createdTo = String(query.createdTo);
   }
 
   if (query.game) {
@@ -140,6 +182,10 @@ function buildQueryFromState(state: PulseFilterState): Record<string, string> {
   if (state.sortBy !== "lastreview") query.sort = state.sortBy;
   if (state.sortOrder !== "desc") query.order = state.sortOrder;
   if (state.minRating !== null) query.minRating = String(state.minRating);
+  if (state.maxRating !== null) query.maxRating = String(state.maxRating);
+  if (state.authorUsernames.size > 0) query.authors = [...state.authorUsernames].join(",");
+  if (state.createdFrom) query.createdFrom = state.createdFrom;
+  if (state.createdTo) query.createdTo = state.createdTo;
   if (state.gameId) query.game = state.gameId;
 
   return query;
@@ -178,6 +224,10 @@ export function usePulseFilter(): PulseFilterComposable {
     params.sortBy = state.sortBy;
     params.sortOrder = state.sortOrder;
     if (state.minRating !== null) params.minRating = state.minRating;
+    if (state.maxRating !== null) params.maxRating = state.maxRating;
+    if (state.authorUsernames.size > 0) params.authorUsernames = [...state.authorUsernames].join(",");
+    if (state.createdFrom) params.createdFrom = state.createdFrom;
+    if (state.createdTo) params.createdTo = state.createdTo;
     if (state.gameId) params.gameId = state.gameId;
 
     const numberParam = route.query.number;
@@ -194,7 +244,13 @@ export function usePulseFilter(): PulseFilterComposable {
     const state = filterState.value;
     return (
       state.search !== "" ||
+      state.sortBy !== "lastreview" ||
+      state.sortOrder !== "desc" ||
       state.minRating !== null ||
+      state.maxRating !== null ||
+      state.authorUsernames.size > 0 ||
+      state.createdFrom !== null ||
+      state.createdTo !== null ||
       state.gameId !== null
     );
   });
@@ -202,8 +258,14 @@ export function usePulseFilter(): PulseFilterComposable {
   const setSearch = (search: string) => dispatch({ type: "SET_SEARCH", search });
   const setSort = (sortBy: PulseSortBy, sortOrder?: "asc" | "desc") =>
     dispatch({ type: "SET_SORT", sortBy, sortOrder });
-  const setMinRating = (minRating: MinRatingFilter) =>
-    dispatch({ type: "SET_MIN_RATING", minRating });
+  const setRatingRange = (min: number | null, max: number | null) =>
+    dispatch({ type: "SET_RATING_RANGE", min, max });
+  const addAuthor = (username: string) =>
+    dispatch({ type: "ADD_AUTHOR", username });
+  const removeAuthor = (username: string) =>
+    dispatch({ type: "REMOVE_AUTHOR", username });
+  const setCreatedRange = (from: string | null, to: string | null) =>
+    dispatch({ type: "SET_CREATED_RANGE", from, to });
   const setGameId = (gameId: string | null) =>
     dispatch({ type: "SET_GAME_ID", gameId });
   const clearFilters = () => dispatch({ type: "CLEAR_FILTERS" });
@@ -214,7 +276,10 @@ export function usePulseFilter(): PulseFilterComposable {
     hasActiveFilters,
     setSearch,
     setSort,
-    setMinRating,
+    setRatingRange,
+    addAuthor,
+    removeAuthor,
+    setCreatedRange,
     setGameId,
     clearFilters,
   };

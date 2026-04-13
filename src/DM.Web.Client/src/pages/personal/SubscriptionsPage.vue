@@ -150,7 +150,6 @@ const handleUnsubscribe = async (subscription: Subscription) => {
     border-radius: $border-radius
     background: transparent
     cursor: pointer
-    transition: all 0.2s
 
     &:hover
       background: $bg-element-hover

@@ -58,10 +58,10 @@ describe("FilterBubble", () => {
       expect(wrapper.find(".bubble-remove-btn").exists()).toBe(true);
     });
 
-    it("renders remove icon inside button", () => {
+    it("renders close symbol inside button", () => {
       const wrapper = mountComponent();
       const btn = wrapper.find(".bubble-remove-btn");
-      expect(btn.find(".svg-icon-stub").exists()).toBe(true);
+      expect(btn.text()).toContain("\u00D7");
     });
   });
 

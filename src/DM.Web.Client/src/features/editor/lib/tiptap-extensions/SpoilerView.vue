@@ -5,12 +5,13 @@
  * Matches the backend appearance: simple toggle link + content block.
  * Backend renders: <a class="spoiler-head">[toggle text]</a><div class="spoiler">...</div>
  */
-import { computed } from "vue";
+import { computed, onBeforeUnmount } from "vue";
 import { NodeViewWrapper, NodeViewContent, nodeViewProps } from "@tiptap/vue-3";
 import {
   SPOILER_SHOW_TEXT,
   SPOILER_HIDE_TEXT,
 } from "@/shared/lib/utils/bbcodeConstants";
+import { registerExpandable } from "@/shared/lib/composables";
 
 const props = defineProps(nodeViewProps);
 
@@ -19,6 +20,18 @@ const isCollapsed = computed(() => props.node?.attrs?.collapsed !== false);
 function toggleCollapsed() {
   props.updateAttributes({ collapsed: !isCollapsed.value });
 }
+
+const unregister = registerExpandable({
+  id: Symbol("SpoilerView"),
+  isExpanded: () => !isCollapsed.value,
+  expand: () => {
+    if (isCollapsed.value) props.updateAttributes({ collapsed: false });
+  },
+  collapse: () => {
+    if (!isCollapsed.value) props.updateAttributes({ collapsed: true });
+  },
+});
+onBeforeUnmount(unregister);
 </script>
 
 <template>

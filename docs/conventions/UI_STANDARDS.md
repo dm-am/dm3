@@ -92,6 +92,38 @@
 
 ---
 
+## Переключение темы (View Transition API)
+
+Переключение темы использует **View Transition API** (`document.startViewTransition()`) в `App.vue`. API захватывает скриншот текущего состояния страницы, применяет class swap на `<html>`, захватывает новое состояние, и cross-fade'ит между двумя bitmap'ами за 0.3s. Всё — цвета, картинки, `filter:invert()` на хэдере/футере — переходит синхронно как единое целое.
+
+**Почему не CSS transitions:** хэдер и футер переключают тему через `filter: $filter-invert` (CSS custom property). Нерегистрированные custom properties — строки, их нельзя интерполировать. `filter: invert()` при transition проходит через уродливые промежуточные состояния (серая каша). View Transition API решает это на уровне рендеринга: оба состояния — bitmap'ы, cross-fade между ними всегда чистый.
+
+**Fallback:** если View Transition API недоступен — мгновенный swap (graceful degradation).
+
+**CSS (Reset.sass):**
+```sass
+::view-transition-old(root),
+::view-transition-new(root)
+  animation-duration: 0.3s
+
+@media (prefers-reduced-motion: reduce)
+  ::view-transition-old(root),
+  ::view-transition-new(root)
+    animation-duration: 0s
+```
+
+**Два механизма, дополняющих друг друга:**
+
+1. **View Transition API** (`document.startViewTransition()` в App.vue) — bitmap cross-fade всей страницы при смене темы. Всё (цвета, картинки, filter:invert) переходит атомарно.
+2. **Глобальное правило** `*, *::before, *::after { transition: background-color, color, border-color, fill, stroke, box-shadow 0.3s }` в `Reset.sass` — плавные hover/focus/active цветовые переходы на интерактивных элементах (кнопки, строки таблиц, dropdown items). Не для темы, а для UX.
+
+**Правила:**
+1. **`transition: all` запрещён.** Всегда перечислять свойства явно (performance, predictability).
+2. **Не ставить `transition` на theme-dependent цветовые свойства в base state** — глобальное правило уже покрывает их для hover/state переходов.
+3. Для non-theme свойств (`opacity`, `transform`, `width`, `height`, `max-height`) — `+transition-safe()` / `+transition-safe-multi()` из `_Animations.sass`.
+
+---
+
 ## Avatar Sizes
 
 | Контекст | Размер |

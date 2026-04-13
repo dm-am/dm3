@@ -14,9 +14,9 @@ public class PostsQuery : PagingQuery
     public Guid? GameId { get; set; }
 
     /// <summary>
-    /// Filter posts that received reviews after this date
+    /// Filter posts whose last review was after this date
     /// </summary>
-    public DateTimeOffset? ReviewedAfter { get; set; }
+    public DateTimeOffset? LastReviewedAfter { get; set; }
 
     /// <summary>
     /// Only include posts with at least one review
@@ -39,7 +39,27 @@ public class PostsQuery : PagingQuery
     public string? Search { get; set; }
 
     /// <summary>
-    /// Minimum rating filter (inclusive)
+    /// Minimum rating filter (inclusive, can be negative)
     /// </summary>
     public int? MinRating { get; set; }
+
+    /// <summary>
+    /// Maximum rating filter (inclusive, can be negative)
+    /// </summary>
+    public int? MaxRating { get; set; }
+
+    /// <summary>
+    /// Filter by post author usernames (comma-separated)
+    /// </summary>
+    public string? AuthorUsernames { get; set; }
+
+    /// <summary>
+    /// Filter posts created after this date
+    /// </summary>
+    public DateTimeOffset? CreatedAfter { get; set; }
+
+    /// <summary>
+    /// Filter posts created before this date
+    /// </summary>
+    public DateTimeOffset? CreatedBefore { get; set; }
 }

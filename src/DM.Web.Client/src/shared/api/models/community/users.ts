@@ -59,29 +59,6 @@ export type Contact = {
 };
 
 /**
- * Featured/highlighted post for display in various contexts
- * Backend returns this as 'bestPost' in UserProfile
- * @see src/DM.Web.API/Dto/Shared/FeaturedPost.cs
- */
-export type FeaturedPost = {
-  id: string;
-  /** Sum of PostReview ratings */
-  rating: number;
-  gameId: string;
-  gameTitle: string;
-  roomId?: string;
-  roomTitle?: string;
-  authorUsername?: string;
-  text?: string;
-  /** Number of PostReviews this post has received */
-  reviewCount?: number;
-  createdUtc?: string;
-};
-
-// Alias for backwards compatibility
-export type BestPost = FeaturedPost;
-
-/**
  * BB-code rendered text
  */
 export type BbText = {
@@ -101,9 +78,6 @@ export type UserProfile = BaseUser & {
   location?: string;
   contacts: Contact[];
   registeredUtc: string;
-  featuredPost?: FeaturedPost;
-  /** Alias for featuredPost (backend compatibility) */
-  bestPost?: FeaturedPost;
   /** Number of PostReviews given by this user */
   postReviewsGiven: number;
   /** Number of PostReviews received by this user */

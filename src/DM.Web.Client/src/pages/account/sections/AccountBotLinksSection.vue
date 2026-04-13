@@ -6,7 +6,6 @@
       <!-- Telegram linking -->
       <div class="bot-card">
         <div class="bot-header">
-          <span class="bot-icon">&#128172;</span>
           <span class="bot-name">Telegram</span>
         </div>
 
@@ -26,7 +25,7 @@
                 @click="copyToClipboard(`/connect ${telegramCode}`)"
                 aria-label="Скопировать код"
               >
-                {{ copied === "telegram" ? "\u2713" : "\uD83D\uDCCB" }}
+                {{ copied === "telegram" ? "Скопировано" : "Копировать" }}
               </button>
             </Tooltip>
           </div>
@@ -63,7 +62,6 @@
       <!-- Discord linking -->
       <div class="bot-card">
         <div class="bot-header">
-          <span class="bot-icon">&#128483;</span>
           <span class="bot-name">Discord</span>
         </div>
 
@@ -83,7 +81,7 @@
                 @click="copyToClipboard(`/connect ${discordCode}`)"
                 aria-label="Скопировать код"
               >
-                {{ copied === "discord" ? "\u2713" : "\uD83D\uDCCB" }}
+                {{ copied === "discord" ? "Скопировано" : "Копировать" }}
               </button>
             </Tooltip>
           </div>

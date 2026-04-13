@@ -543,7 +543,13 @@ public class Room
 }
 
 /// <summary>
-/// Room reference with game info (for post listings)
+/// Room reference embedded in post listings. Carries a nested
+/// <see cref="Game"/> instead of scalar game id/title fields so
+/// downstream tooltips (GameLink / RoomLink) receive the same full
+/// <c>GameRef</c>-tier payload the sidebar already uses — master,
+/// assistants, active characters, recruitment, subscriber counts —
+/// without a second HTTP round-trip per post. Populated by
+/// <c>PostRepository.GetRated</c>'s batch game-hydration step.
 /// </summary>
 public class RoomRef
 {
@@ -563,19 +569,11 @@ public class RoomRef
     public string Title { get; set; } = null!;
 
     /// <summary>
-    /// Game identifier
+    /// Parent game — full GameRef-tier payload populated after
+    /// pagination via a batched hydration call. Null only for
+    /// orphaned posts or posts whose parent game has been removed.
     /// </summary>
-    public Guid GameId { get; set; }
-
-    /// <summary>
-    /// Game public ID for URL
-    /// </summary>
-    public string GamePublicId { get; set; } = null!;
-
-    /// <summary>
-    /// Game title
-    /// </summary>
-    public string GameTitle { get; set; } = null!;
+    public Game? Game { get; set; }
 }
 
 /// <summary>
@@ -913,62 +911,41 @@ public class Post
     /// Edit history (most recent first)
     /// </summary>
     public IEnumerable<Posts.PostEdit> Edits { get; set; } = [];
-}
 
-/// <summary>
-/// Best post result
-/// </summary>
-public class BestPostResult
-{
     /// <summary>
-    /// Post identifier
+    /// Author user id (for render-context envelope: author-forever rule).
     /// </summary>
-    public Guid PostId { get; set; }
+    public Guid AuthorUserId { get; set; }
 
     /// <summary>
-    /// Post game text (in-character content)
-    /// </summary>
-    public string GameText { get; set; } = null!;
-
-    /// <summary>
-    /// Game title
-    /// </summary>
-    public string GameTitle { get; set; } = null!;
-
-    /// <summary>
-    /// Game identifier
+    /// Game identifier the post belongs to.
     /// </summary>
     public Guid GameId { get; set; }
 
     /// <summary>
-    /// Room title
+    /// Per-post override opening [private] to every room reader.
     /// </summary>
-    public string RoomTitle { get; set; } = null!;
+    public bool SharePrivateWithAll { get; set; }
 
     /// <summary>
-    /// Room identifier
+    /// Per-room override opening [private] to every room reader.
+    /// Populated from Room.ViewPrivateText at read time.
     /// </summary>
-    public Guid RoomId { get; set; }
+    public bool RoomViewPrivateText { get; set; }
 
     /// <summary>
-    /// Author username
+    /// Game leads (master + assistants) at read time. Mentors are NOT
+    /// included — a mentor is not a lead.
     /// </summary>
-    public string AuthorUsername { get; set; } = null!;
+    public IReadOnlyCollection<Guid> GameLeadUserIds { get; set; } = [];
 
     /// <summary>
-    /// Post rating (sum of review signs)
+    /// Raw JSONB snapshot of owner user ids for every [private] block in
+    /// <see cref="GameText"/>. Parsed by the API layer (ProjectTo cannot
+    /// deserialize JSON server-side). Shape: <c>{ "AddresseeAttrValue":
+    /// ["guid", "guid", ...], ... }</c>.
     /// </summary>
-    public int Rating { get; set; }
-
-    /// <summary>
-    /// Number of reviews
-    /// </summary>
-    public int ReviewCount { get; set; }
-
-    /// <summary>
-    /// Created timestamp
-    /// </summary>
-    public DateTimeOffset CreatedUtc { get; set; }
+    public string PrivateAddresseeSnapshotJson { get; set; } = "{}";
 }
 
 /// <summary>

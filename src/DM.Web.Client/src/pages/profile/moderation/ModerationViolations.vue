@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import { ref } from "vue";
+import { symbols } from "@/shared/lib/utils/icons";
 import type {
   ViolationSummary,
   ModerationPermissions,
@@ -66,7 +67,7 @@ function formatDate(dateStr: string): string {
 }
 
 function formatDateTime(dateStr: string): string {
-  return dayjs(dateStr).format("DD.MM.YYYY HH:mm");
+  return dayjs(dateStr).format("DD.MM.YYYY [в] HH:mm");
 }
 
 async function toggleWarnings() {
@@ -191,7 +192,7 @@ async function liftBan(banId: string) {
         >
           ({{ violations.activeWarningPoints }} активных баллов)
         </span>
-        <span class="mod-expand-icon">{{ showWarnings ? "▼" : "▶" }}</span>
+        <span class="mod-expand-icon">{{ showWarnings ? symbols.triangleDown : symbols.triangleRight }}</span>
       </div>
 
       <div v-if="showWarnings" class="mod-violations_list">
@@ -239,7 +240,7 @@ async function liftBan(banId: string) {
               : " — перманентный"
           }})
         </span>
-        <span class="mod-expand-icon">{{ showBans ? "▼" : "▶" }}</span>
+        <span class="mod-expand-icon">{{ showBans ? symbols.triangleDown : symbols.triangleRight }}</span>
       </div>
 
       <div v-if="showBans" class="mod-violations_list">

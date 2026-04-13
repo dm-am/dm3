@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { symbols } from "@/shared/lib/utils/icons";
 import type { UserIpInfo, LoginRecord } from "@/shared/api/models/moderation";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import dayjs from "dayjs";
@@ -17,7 +18,7 @@ function formatDate(dateStr: string): string {
 }
 
 function formatDateTime(dateStr: string): string {
-  return dayjs(dateStr).format("DD.MM.YYYY HH:mm");
+  return dayjs(dateStr).format("DD.MM.YYYY [в] HH:mm");
 }
 </script>
 
@@ -61,7 +62,7 @@ function formatDateTime(dateStr: string): string {
         @click="showLoginHistory = !showLoginHistory"
       >
         История входов ({{ loginHistory?.length ?? 0 }})
-        <span class="mod-expand-icon">{{ showLoginHistory ? "▼" : "▶" }}</span>
+        <span class="mod-expand-icon">{{ showLoginHistory ? symbols.triangleDown : symbols.triangleRight }}</span>
       </h5>
       <table v-if="showLoginHistory && loginHistory?.length" class="mod-table">
         <thead>
@@ -80,8 +81,8 @@ function formatDateTime(dateStr: string): string {
             <td>{{ formatDateTime(record.loginUtc) }}</td>
             <td class="mod-ip">{{ record.ipAddress }}</td>
             <td>
-              <span v-if="record.isSuccessful" class="mod-success">✓</span>
-              <span v-else class="mod-fail">✗</span>
+              <span v-if="record.isSuccessful" class="mod-success">{{ symbols.checkmark }}</span>
+              <span v-else class="mod-fail">{{ symbols.cross }}</span>
             </td>
           </tr>
         </tbody>

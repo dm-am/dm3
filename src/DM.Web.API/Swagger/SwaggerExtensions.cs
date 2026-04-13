@@ -52,7 +52,7 @@ public static class SwaggerExtensions
         });
 
         options.OperationFilter<AuthenticationSwaggerFilter>();
-        options.OperationFilter<BbRenderModeSwaggerFilter>();
+        options.OperationFilter<BbAudienceSwaggerFilter>();
 
         var apiAssemblyName = Assembly.GetExecutingAssembly().GetName().Name;
         options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, $"{apiAssemblyName}.xml"));

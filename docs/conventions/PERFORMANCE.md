@@ -132,6 +132,42 @@ var games = await context.Games
 
 **Важно:** Response Caching НЕ подходит для user-specific данных (unread counts). Используй `Cache-Control: private, no-store` для таких endpoints.
 
+### Fast-path caching для hot read endpoints
+
+Endpoint, который читается на каждой загрузке home page (news, tags, site statistics, popular lists) — кандидат на сервисный кэш в `ICache` с коротким TTL. Правила:
+
+1. **Кэшировать только cache-friendly shape запроса**. Если клиент передал search, фильтры по дате или автора — обойти кэш, не плодить ключи. Ключ шаблон: `{entity}:list:{scope}:{шаблон-параметров}:{accessPolicy}`.
+2. **Не кэшировать user-specific поля**. Кэш хранит «общедоступный» слепок; per-user данные (unread counts, own flags) заполняются поверх кэша в каждом запросе.
+3. **Полагаться на TTL, не на явную инвалидацию**, когда данные меняются редко и допустима задержка в минуту-две. Phone-book-scale enumeration инвалидации (все take × все accessPolicy) — обычно ошибка; короткий TTL проще и предсказуемее.
+4. **accessPolicy — часть ключа**: гости и привилегированные пользователи никогда не разделяют одну запись кэша (правильность).
+5. **Fast path должен пропускать дорогие шаги**, которые не нужны для compact read (например, отдельный `SELECT COUNT(*)` для paging metadata, когда клиент рендерит единственный список без номеров страниц).
+
+### Perceived-performance tuning для polling endpoints
+
+Polling-эндпойнты (SiteStatistics, unread counters) — **средство, а не цель**. Правила:
+
+- **Серверный TTL кэша должен превышать интервал polling клиента** — иначе половина запросов идёт в БД впустую. Если клиент опрашивает раз в 60 секунд, кэшируй хотя бы на 90 секунд.
+- **Интервал polling выводится из UX-требования**, а не удобства. «Статистика сайта» — приблизительные числа, 60s достаточно; unread counter в чате — другое дело.
+- **Polling прерывается когда вкладка скрыта** (`document.visibilitychange` → `stopPolling`). Обязательная энергосберегающая практика.
+
+### Decoupling enrichment from critical path
+
+Если UI может отрендериться с compact payload, а extra info (tooltip, advanced stats) доступен через отдельный endpoint — enrichment НЕ должен блокировать first paint. Паттерн:
+
+```ts
+// ПЛОХО: критический путь ждёт второй запрос
+bestOfWeek.value = (await fetchRatedPosts()).resources[0];
+bestOfWeekGame.value = await enrichGame(bestOfWeek.value); // +1 roundtrip
+loaded.value = true; // Only fires after both complete
+
+// ХОРОШО: compact виден сразу, enrichment догоняет в фоне
+bestOfWeek.value = (await fetchRatedPosts()).resources[0];
+loaded.value = true; // First paint unblocked
+void enrichGame(bestOfWeek.value).then(g => { bestOfWeekGame.value = g; });
+```
+
+Ключевое свойство: UI **корректно отрисовывается БЕЗ** enriched-поля, оно только дополняет tooltip/additional details. Если enrichment обязателен для корректности — это не fire-and-forget кейс, а serial dependency.
+
 ### API Design
 
 | Практика | Описание |
@@ -516,6 +552,20 @@ export const i18n = createI18n({
 
 ---
 
+## BBCode render caching
+
+Результаты серверного рендеринга BBCode кэшируются по композитному ключу **`(sourceHash, audience, permissionBucket)`**. Permission bucket — это класс эквивалентности зрителей: все, кто попадает в один бакет для одного исходного текста, получают байт-в-байт идентичный HTML и разделяют одну запись кэша.
+
+**Принципы:**
+- Контент без privacy-sensitive тегов бакетируется грубо (`anon` / `user`) — максимальный hit-rate.
+- Контент с `[private]` / `[mod]` получает бакет, отражающий **причину** видимости (автор, адресат, lead, per-room, per-post). Идентичные причины → одна запись кэша на многих зрителей.
+- Инвалидация — по `sourceHash` при редактировании источника (вторичный индекс `sourceHash → keys`).
+- Защита от cache-stampede — per-source-hash семафор: конкурентные миссы на один источник сериализуются в один rendering call.
+
+Конкретные TTL и бюджеты памяти — это параметры, не конвенции; они настраиваются по метрикам. Контракт ключей и правил фильтрации — в [BBCODE_RENDERING.md](../architecture/BBCODE_RENDERING.md).
+
+---
+
 ## Checklist перед релизом
 
 - [ ] Профилирование ключевых страниц (Lighthouse)
@@ -524,6 +574,12 @@ export const i18n = createI18n({
 - [ ] Проверка database query plans
 - [ ] Load testing (целевая нагрузка × 2)
 - [ ] Memory leak testing (long session)
+
+---
+
+## CSS Transitions и тема
+
+Переключение темы анимируется через **View Transition API** (`document.startViewTransition()` в `App.vue`), а не через CSS transitions. Подробности — в [UI_STANDARDS.md](./UI_STANDARDS.md) → «Переключение темы». `transition: all` запрещен (performance overhead и непредсказуемость).
 
 ---
 

@@ -31,12 +31,11 @@ function handleSortOrderChange(order: "asc" | "desc") {
   }
 }
 
-// Show bubbles when any filter or sort is non-default
+// Show bubbles when sort is non-default (search visible in input, no separate bubble)
 const hasBubbles = computed(() => {
   const state = filterState.value;
   const def = DEFAULT_FILTER_STATE;
   return (
-    state.search !== "" ||
     state.sortBy !== def.sortBy ||
     state.sortOrder !== def.sortOrder
   );
@@ -72,12 +71,6 @@ function clearAll() {
 
     <!-- Active filter bubbles -->
     <BubblesRow v-if="hasBubbles" @clear-all="clearAll">
-      <FilterBubble
-        v-if="filterState.search"
-        prefix="Поиск:"
-        :value="filterState.search"
-        @remove="setSearch('')"
-      />
     </BubblesRow>
   </div>
 </template>

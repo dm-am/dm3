@@ -378,7 +378,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .UseMiddleware<ErrorHandlingMiddleware>()
             .UseCors(b => b
                 .WithOrigins(integrationOptions.Value.CorsUrls)
-                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-Dm-Correlation-Token", "X-Bot-Api-Key", "Cache-Control", "x-dm-bb-render-mode", "x-signalr-user-agent")
+                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-Dm-Correlation-Token", "X-Bot-Api-Key", "Cache-Control", "X-Dm-Audience", "x-signalr-user-agent")
                 .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .AllowCredentials()
                 .SetPreflightMaxAge(TimeSpan.FromHours(1)))

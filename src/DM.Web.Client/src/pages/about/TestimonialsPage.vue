@@ -26,7 +26,7 @@ useFetchData(
 </script>
 
 <template>
-  <page-title>Отзывы о сайте</page-title>
+  <page-title v-once>Отзывы о сайте</page-title>
 
   <p class="intro">
     Здесь собраны отзывы пользователей о DM.AM. Вы можете оставить свой отзыв ниже

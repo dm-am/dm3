@@ -13,9 +13,6 @@
         >
           <div class="invitation-info">
             <div class="invitation-header">
-              <span class="invitation-icon">{{
-                typeIcon(invitation.type)
-              }}</span>
               <RouterLink
                 :to="`/games/${invitation.gameId}`"
                 class="invitation-game-link"
@@ -92,16 +89,6 @@ async function loadInvitations() {
   }
 }
 
-function typeIcon(type: InvitationType): string {
-  switch (type) {
-    case "player":
-      return "\uD83C\uDFAE";
-    case "assistant":
-      return "\uD83D\uDCDD";
-    case "reader":
-      return "\uD83D\uDCD6";
-  }
-}
 
 function typeLabel(type: InvitationType): string {
   switch (type) {
@@ -248,7 +235,7 @@ async function reject(invitationId: string) {
   border-radius: $border-radius
   cursor: pointer
   font-size: $secondary-font-size
-  transition: background-color 0.15s
+  transition: opacity 0.15s ease
 
   &:disabled
     opacity: 0.5

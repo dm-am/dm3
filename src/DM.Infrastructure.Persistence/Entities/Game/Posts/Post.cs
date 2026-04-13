@@ -52,6 +52,23 @@ public class Post : ISoftDeletable, IHasEditHistory<PostEdit>
     /// </summary>
     public string? MetagameText { get; set; }
 
+    /// <summary>
+    /// Per-post override for [private] visibility. When true, every viewer
+    /// who can read the post's room sees all [private] blocks in the post
+    /// regardless of tag addressees. Still gated by room read access.
+    /// </summary>
+    public bool SharePrivateWithAll { get; set; }
+
+    /// <summary>
+    /// Snapshot of owner-user ids allowed to see each [private] block in
+    /// GameText, keyed by the raw tag attribute string the author wrote
+    /// (character names). Resolved at save time and immutable thereafter;
+    /// preserves addressee visibility even if a character later leaves the
+    /// game. Stored as JSONB (PostgreSQL) — a dictionary &lt;string, Guid[]&gt;.
+    /// </summary>
+    [Column(TypeName = "jsonb")]
+    public string PrivateAddresseeSnapshotJson { get; set; } = "{}";
+
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
 

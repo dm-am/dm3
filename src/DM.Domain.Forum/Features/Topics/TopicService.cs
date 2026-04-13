@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Caching;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Dto;
@@ -29,6 +30,7 @@ internal class TopicService : ITopicService
     private readonly ITopicRepository _repository;
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly IEventProducer _invokedEventProducer;
+    private readonly ICache _cache;
 
     public TopicService(
         IValidator<CreateTopic> createValidator,
@@ -39,7 +41,8 @@ internal class TopicService : ITopicService
         IIdentityProvider identityProvider,
         ITopicRepository repository,
         IUnreadCountersRepository unreadCountersRepository,
-        IEventProducer invokedEventProducer)
+        IEventProducer invokedEventProducer,
+        ICache cache)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -50,7 +53,17 @@ internal class TopicService : ITopicService
         _repository = repository;
         _unreadCountersRepository = unreadCountersRepository;
         _invokedEventProducer = invokedEventProducer;
+        _cache = cache;
     }
+
+    // Aliases of boards whose listings are cheap to cache at the service
+    // layer: they are hit from the home page on every cold load, the
+    // content changes at most a few times a day, and a 30–60 second
+    // staleness window is acceptable. Keep this set tiny — the cache is
+    // per-board-alias per-query-shape, so adding boards blindly inflates
+    // the cache surface.
+    private static readonly HashSet<string> CacheableListBoards = new(
+        StringComparer.OrdinalIgnoreCase) { "news" };
 
     /// <inheritdoc />
     public async Task<Topic> CreateAsync(CreateTopic createTopic, CancellationToken ct = default)
@@ -75,6 +88,12 @@ internal class TopicService : ITopicService
             _invokedEventProducer.SendAsync(EventType.NewTopic, topic.Id),
             _unreadCountersRepository.CreateAsync(topic.Id, board.Id, UnreadEntryType.Message));
 
+        // The cacheable-boards listing fast path uses a short TTL
+        // (CachePolicy.Medium = 1 min) so a fresh topic becomes visible
+        // within 60 seconds with no explicit invalidation. This is
+        // acceptable for the news board — topics are rare, staleness
+        // bounded, and explicit invalidation would require iterating
+        // every (take, accessPolicy) cache key combination.
         return topic;
     }
 
@@ -136,18 +155,49 @@ internal class TopicService : ITopicService
         var board = await _boardService.GetBoard(boardTitle);
         var identity = _identityProvider.Current;
 
-        // For attached-only queries, no paging needed
-        PagingData? pagingData = null;
-        if (query.IsAttached != true)
-        {
-            var totalCount = await _repository.Count(board.Id, query, ct);
-            pagingData = new PagingData(query, identity.Settings.Paging.TopicsPerPage, totalCount);
-        }
+        // Fast path for cacheable boards (home page widgets). When the
+        // query has no filters / search / author / date filters and uses
+        // default paging, we can cache the raw board-wide result for a
+        // short window and still give the caller correct per-user unread
+        // counts by filling them after the cache read.
+        var isCacheableShape =
+            CacheableListBoards.Contains(boardTitle) &&
+            IsCacheableListingQuery(query);
 
-        var topics = (await _repository.Get(board.Id, pagingData, query, ct)).ToArray();
+        PagingData? pagingData = null;
+        Topic[] topics;
+
+        if (isCacheableShape)
+        {
+            // Cache key includes board alias + take to keep per-widget
+            // variants (e.g. take=5 for the home page, take=20 for the
+            // news board page) on separate entries, and access policy so
+            // guests and mentors never share a cache entry with more
+            // privileged viewers.
+            var accessPolicy = _accessPolicyConverter.Convert(identity.User.Role);
+            var cacheKey = $"topics:list:{board.Id:N}:take={query.Take}:ap={(int)accessPolicy}";
+            topics = await _cache.GetOrCreateAsync(
+                cacheKey,
+                async () => await LoadListingAsync(board.Id, query, ct),
+                CachePolicy.Medium);
+        }
+        else
+        {
+            // Regular path: count + fetch with full paging data. For
+            // attached-only queries we skip the count (there is no paging UI).
+            if (query.IsAttached != true)
+            {
+                var totalCount = await _repository.Count(board.Id, query, ct);
+                pagingData = new PagingData(query, identity.Settings.Paging.TopicsPerPage, totalCount);
+            }
+
+            topics = (await _repository.Get(board.Id, pagingData, query, ct)).ToArray();
+        }
 
         if (identity.User.IsAuthenticated)
         {
+            // Unread counts are always filled per-request, never cached:
+            // they depend on the specific viewer's read state.
             await _unreadCountersRepository.FillEntityCounters(topics, identity.User.UserId,
                 t => t.Id, t => t.UnreadCommentsCount);
         }
@@ -162,6 +212,32 @@ internal class TopicService : ITopicService
 
         return (topics, pagingData?.Result);
     }
+
+    /// <summary>
+    /// Deterministic loader for the cacheable-listing fast path. Skips
+    /// the <c>SELECT COUNT(*)</c> round-trip entirely — cached listings
+    /// are small (take &lt;= 20), and the home-page widgets do not need
+    /// pagination metadata.
+    /// </summary>
+    private async Task<Topic[]> LoadListingAsync(Guid boardId, TopicsQuery query, CancellationToken ct) =>
+        (await _repository.Get(boardId, pagingData: null, query, ct)).ToArray();
+
+    /// <summary>
+    /// A listing query is cache-friendly when it has no dynamic filters
+    /// and uses the default page size (or smaller). Search, author filters,
+    /// and date ranges would blow up the cache key space; attached-only
+    /// queries skip the normal paging path anyway.
+    /// </summary>
+    private static bool IsCacheableListingQuery(TopicsQuery query) =>
+        query.IsAttached != true &&
+        string.IsNullOrEmpty(query.Search) &&
+        (query.Authors == null || query.Authors.Count == 0) &&
+        !query.CreatedFromUtc.HasValue &&
+        !query.CreatedToUtc.HasValue &&
+        string.IsNullOrEmpty(query.SortBy) &&
+        string.IsNullOrEmpty(query.SortOrder) &&
+        query.Skip == 0 &&
+        query.Take is > 0 and <= 20;
 
     /// <inheritdoc />
     public async Task<Topic> UpdateAsync(UpdateTopic updateTopic, CancellationToken ct = default)

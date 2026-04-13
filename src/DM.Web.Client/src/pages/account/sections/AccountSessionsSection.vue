@@ -95,7 +95,7 @@ async function loadSessions() {
 }
 
 function formatDate(dateStr: string): string {
-  return dayjs(dateStr).format("DD.MM.YYYY HH:mm");
+  return dayjs(dateStr).format("DD.MM.YYYY [в] HH:mm");
 }
 
 async function terminateSession(sessionId: string) {

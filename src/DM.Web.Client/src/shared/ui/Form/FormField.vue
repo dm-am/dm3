@@ -75,7 +75,7 @@ const translateError = (error: string): string => {
 
   &.error input
     animation-name: shake-error
-    animation-duration: $animation-time
+    animation-duration: 0.4s
     animation-timing-function: ease-in-out
     border-color: $border-accent-red
 

@@ -10,7 +10,7 @@
  * - Lists: [ul], [ol], [li]
  * - Media: [img]URL[/img]
  * - Links: [link]URL[/link] (displays "ссылка"), [link=text]URL[/link] (displays custom text)
- * - Special: [tab], [private], [cut]
+ * - Special: [tab], [private]
  *
  * @module bbcode
  * @version 3.2.0 - Precompiled regex, pattern validation, performance metrics
@@ -112,7 +112,6 @@ const BASE_TAGS = [
   "quote",
   "tab",
   "noparse",
-  "cut",
   "mention",
 ];
 
@@ -177,8 +176,9 @@ const BB_TO_HTML = {
   linkWithText: /\[link=([^\]]+)\]([\s\S]*?)\[\/link\]/gi,
   link: /\[link\]([\s\S]*?)\[\/link\]/gi,
 
-  // Image (with size MUST be before simple img)
+  // Image (more specific patterns MUST be before simple img)
   imgWithSize: /\[img=(\d+)(?:x(\d+))?\]([\s\S]*?)\[\/img\]/gi,
+  imgWithAttrs: /\[img\s+([^\]]*)\]([\s\S]*?)\[\/img\]/gi,
   img: /\[img\]([\s\S]*?)\[\/img\]/gi,
 
   // Private
@@ -186,7 +186,10 @@ const BB_TO_HTML = {
 
   // Standalone
   tab: /\[tab\]/gi,
-  cut: /\[cut\]/gi,
+  // Legacy stripper: [cut] was an author-driven truncation marker, now
+  // removed in favour of the unified <TruncatedContent> height-based
+  // truncation. Existing content is rendered with the marker silently dropped.
+  cutLegacy: /\[cut\]/gi,
   mention: /\[mention="([^"]+)"\]/gi,
 } as const;
 
@@ -230,11 +233,20 @@ const HTML_TO_BB_MARKED = {
     /<a[^>]*href="([^"]*)"[^>]*data-bb-tag="link"[^>]*data-bb-text="([^"]*)"[^>]*>[^<]*<\/a>/gi,
   link: /<a[^>]*href="([^"]*)"[^>]*data-bb-tag="link"[^>]*>([\s\S]*?)<\/a>/gi,
 
+  // Wrapped image (custom size) — full <span class="bb-image-frame">...<img></span>.
+  // MUST be matched BEFORE `img` below, otherwise the inner img gets replaced
+  // first and the span is left as orphan markup.
+  imgWrapped:
+    /<span[^>]*class="[^"]*bb-image-frame[^"]*"[^>]*>\s*<img[^>]*\/?>\s*<\/span>/gi,
+  // Plain image (default size) — bare <img class="bb-image" data-bb-tag="img" ...>
   img: /<img[^>]*data-bb-tag="img"[^>]*\/?>/gi,
 
   private:
     /<span[^>]*data-bb-tag="private"[^>]*data-bb-character="([^"]*)"[^>]*>([\s\S]*?)<\/span>/gi,
-  cut: /<hr[^>]*data-bb-tag="cut"[^>]*\/?>/gi,
+  // Legacy stripper: same reason as BB_TO_HTML.cutLegacy above. Removes any
+  // lingering <hr data-bb-tag="cut"> elements from historical content when
+  // converting rendered HTML back to BBCode.
+  cutLegacy: /<hr[^>]*data-bb-tag="cut"[^>]*\/?>/gi,
   mention:
     /<a[^>]*class="bb-mention"[^>]*data-bb-tag="mention"[^>]*data-bb-user="([^"]*)"[^>]*>[^<]*<\/a>/gi,
 } as const;
@@ -331,7 +343,8 @@ const PATTERN_ORDER_RULES: Array<{
     reason: "[quote=X] before [quote] (author ignored)",
   },
   { first: "linkWithText", then: "link", reason: "[link=text] before [link]" },
-  { first: "imgWithSize", then: "img", reason: "[img=WxH] before [img]" },
+  { first: "imgWithSize", then: "imgWithAttrs", reason: "[img=WxH] before [img attrs]" },
+  { first: "imgWithAttrs", then: "img", reason: "[img attrs] before [img]" },
 ];
 
 /**
@@ -540,6 +553,56 @@ export function sanitizeImageUrl(url: string): string {
   return sanitizeUrl(url, SAFE_IMAGE_PROTOCOLS);
 }
 
+/**
+ * Render a single BBCode image node to the unified HTML shape that the
+ * frontend parser, backend BbParserWrapper, Tiptap BbImage extension,
+ * and every TruncatedContent consumer all agree on.
+ *
+ * Default size (width === null && height === null):
+ *     <img class="bb-image" data-bb-tag="img" src="..." alt="..." ...>
+ *
+ * Custom size:
+ *     <span class="bb-image-frame" data-bb-width="W" data-bb-height="H"
+ *           style="--bb-image-max-width:Wpx;--bb-image-max-height:Hpx">
+ *       <img class="bb-image" data-bb-tag="img" src="..." alt="..." ...>
+ *     </span>
+ *
+ * The wrapper exists ONLY when size is explicit — default images skip it
+ * for a smaller DOM. Sizing flows through CSS custom properties so any
+ * ancestor can override via a normal class rule (no !important needed).
+ */
+export function renderBbImage(
+  url: string,
+  alt: string,
+  size: { width: number | null; height: number | null },
+): string {
+  const escapedSrc = escapeAttr(url);
+  const escapedAlt = escapeAttr(alt);
+  const imgTag =
+    `<img src="${escapedSrc}" alt="${escapedAlt}" class="bb-image" ` +
+    `data-bb-tag="img" referrerpolicy="no-referrer" />`;
+
+  const { width, height } = size;
+  if (width == null && height == null) {
+    return imgTag;
+  }
+
+  const cssVars: string[] = [];
+  const dataAttrs: string[] = [];
+  if (width != null) {
+    cssVars.push(`--bb-image-max-width:${width}px`);
+    dataAttrs.push(`data-bb-width="${width}"`);
+  }
+  if (height != null) {
+    cssVars.push(`--bb-image-max-height:${height}px`);
+    dataAttrs.push(`data-bb-height="${height}"`);
+  }
+  return (
+    `<span class="bb-image-frame" ${dataAttrs.join(" ")} ` +
+    `style="${cssVars.join(";")}">${imgTag}</span>`
+  );
+}
+
 // ============================================================================
 // PIPELINE EXECUTOR
 // ============================================================================
@@ -661,24 +724,37 @@ function phase3_convertBbcodeTags(state: BbcodeToHtmlState): BbcodeToHtmlState {
     return `<a href="${escapedUrl}" data-bb-tag="link" data-bb-selfref="true" target="_blank" rel="noopener">${DEFAULT_LINK_TEXT}</a>`;
   });
 
-  // Images (with size FIRST - more specific pattern)
+  // Images — unified contract (shared with backend BbParserWrapper.cs):
+  //   - Default size: <img class="bb-image" data-bb-tag="img" src="..." alt="">
+  //   - Custom size:  <span class="bb-image-frame" data-bb-width=".." data-bb-height=".."
+  //                         style="--bb-image-max-width:Wpx;--bb-image-max-height:Hpx">
+  //                     <img class="bb-image" data-bb-tag="img" src="..." alt="">
+  //                   </span>
+  // No inline max-width/max-height on <img> — sizing flows through CSS
+  // custom properties so ancestor rules (TruncatedContent etc.) can
+  // override without !important. See _BbcodeContent.sass image contract.
+
+  // With explicit size — e.g. [img=800x600]URL[/img]
   html = html.replace(BB_TO_HTML.imgWithSize, (_, width, height, src) => {
     const safeSrc = sanitizeImageUrl(src.trim());
-    const escapedSrc = escapeAttr(safeSrc);
-    const w = parseInt(width, 10);
-    const h = height ? parseInt(height, 10) : null;
-    const styleAttr = h
-      ? `style="max-width:${w}px;max-height:${h}px"`
-      : `style="max-width:${w}px"`;
-    const dataAttr = h
-      ? `data-bb-width="${w}" data-bb-height="${h}"`
-      : `data-bb-width="${w}"`;
-    return `<img src="${escapedSrc}" alt="" class="bb-image" data-bb-tag="img" ${dataAttr} ${styleAttr} referrerpolicy="no-referrer" />`;
+    return renderBbImage(safeSrc, "", {
+      width: parseInt(width, 10),
+      height: height ? parseInt(height, 10) : null,
+    });
   });
+
+  // With attributes — e.g. [img alt="text"]URL[/img]
+  html = html.replace(BB_TO_HTML.imgWithAttrs, (_, attrs, src) => {
+    const safeSrc = sanitizeImageUrl(src.trim());
+    const altMatch = attrs.match(/alt\s*=\s*"([^"]*)"/i) || attrs.match(/alt\s*=\s*'([^']*)'/i);
+    const altText = altMatch ? altMatch[1] : "";
+    return renderBbImage(safeSrc, altText, { width: null, height: null });
+  });
+
+  // Plain — [img]URL[/img]
   html = html.replace(BB_TO_HTML.img, (_, src) => {
     const safeSrc = sanitizeImageUrl(src.trim());
-    const escapedSrc = escapeAttr(safeSrc);
-    return `<img src="${escapedSrc}" alt="" class="bb-image" data-bb-tag="img" style="max-width:${DEFAULT_IMG_MAX_WIDTH}px;max-height:${DEFAULT_IMG_MAX_HEIGHT}px" referrerpolicy="no-referrer" />`;
+    return renderBbImage(safeSrc, "", { width: null, height: null });
   });
 
   // Private message
@@ -692,10 +768,8 @@ function phase3_convertBbcodeTags(state: BbcodeToHtmlState): BbcodeToHtmlState {
     BB_TO_HTML.tab,
     '<span class="bb-tab" data-bb-tag="tab">\u00A0\u00A0\u00A0\u00A0</span>',
   );
-  html = html.replace(
-    BB_TO_HTML.cut,
-    '<hr class="bb-cut-marker" data-bb-tag="cut" />',
-  );
+  // Silently strip legacy [cut] markers — see note on BB_TO_HTML.cutLegacy.
+  html = html.replace(BB_TO_HTML.cutLegacy, "");
   html = html.replace(BB_TO_HTML.mention, (_, username) => {
     const escapedUser = escapeAttr(username);
     const encodedUser = encodeURIComponent(username);
@@ -894,24 +968,50 @@ function phase2_convertMarkedHtml(state: HtmlToBbcodeState): HtmlToBbcodeState {
     return safeHref === "#" ? text : `[link=${text}]${safeHref}[/link]`;
   });
 
-  // Images
-  bbcode = bbcode.replace(HTML_TO_BB_MARKED.img, (match) => {
+  // Images — wrapped form FIRST (otherwise the plain img pattern below would
+  // replace the inner <img> and leave the <span class="bb-image-frame">
+  // empty). Custom size comes from the wrapper span's data-bb-width /
+  // data-bb-height attributes (kept alongside the CSS vars as a parser-
+  // friendly mirror of the sizing info).
+  bbcode = bbcode.replace(HTML_TO_BB_MARKED.imgWrapped, (match) => {
     const srcMatch = match.match(/src="([^"]*)"/i);
-    if (!srcMatch) return match;
-
-    const src = srcMatch[1];
-    const safeSrc = sanitizeImageUrl(src);
+    if (!srcMatch) return "";
+    const safeSrc = sanitizeImageUrl(srcMatch[1]);
     if (safeSrc === "#") return "";
 
     const widthMatch = match.match(/data-bb-width="(\d+)"/i);
     const heightMatch = match.match(/data-bb-height="(\d+)"/i);
+    // alt lives on the inner <img>, so we look for it after the opening span
+    const altMatch = match.match(/<img[^>]*\balt="([^"]*)"/i);
+    const alt = altMatch ? altMatch[1] : "";
+    const altPart = alt ? ` alt="${alt}"` : "";
 
     if (widthMatch && heightMatch) {
-      return `[img=${widthMatch[1]}x${heightMatch[1]}]${safeSrc}[/img]`;
-    } else if (widthMatch) {
-      return `[img=${widthMatch[1]}]${safeSrc}[/img]`;
+      return `[img=${widthMatch[1]}x${heightMatch[1]}${altPart}]${safeSrc}[/img]`;
     }
+    if (widthMatch) {
+      return `[img=${widthMatch[1]}${altPart}]${safeSrc}[/img]`;
+    }
+    // Wrapper with only height — rare, fall back to alt-only form
+    if (alt) {
+      return `[img alt="${alt}"]${safeSrc}[/img]`;
+    }
+    return `[img]${safeSrc}[/img]`;
+  });
 
+  // Plain (default-size) image — bare <img class="bb-image" data-bb-tag="img">.
+  bbcode = bbcode.replace(HTML_TO_BB_MARKED.img, (match) => {
+    const srcMatch = match.match(/src="([^"]*)"/i);
+    if (!srcMatch) return match;
+
+    const safeSrc = sanitizeImageUrl(srcMatch[1]);
+    if (safeSrc === "#") return "";
+
+    // Preserve alt attribute if present
+    const altMatch = match.match(/alt="([^"]*)"/i);
+    if (altMatch && altMatch[1]) {
+      return `[img alt="${altMatch[1]}"]${safeSrc}[/img]`;
+    }
     return `[img]${safeSrc}[/img]`;
   });
 
@@ -922,7 +1022,8 @@ function phase2_convertMarkedHtml(state: HtmlToBbcodeState): HtmlToBbcodeState {
       return `[private=${unescapeHtml(character)}]${content}[/private]`;
     },
   );
-  bbcode = bbcode.replace(HTML_TO_BB_MARKED.cut, "[cut]");
+  // Silently strip any stray legacy cut markers — see HTML_TO_BB_MARKED.cutLegacy note.
+  bbcode = bbcode.replace(HTML_TO_BB_MARKED.cutLegacy, "");
 
   // Mentions - unescape username to prevent entity accumulation
   bbcode = bbcode.replace(HTML_TO_BB_MARKED.mention, (_, username) => {
@@ -1393,7 +1494,7 @@ export function validateBBCode(bbcode: string): string[] {
     "mod",
     "warning",
   ];
-  const standaloneTags = ["tab", "cut"];
+  const standaloneTags = ["tab"];
 
   const tagPattern = /\[(\/?)(\w+)(=[^\]]+)?\]/g;
   let match;

@@ -11,7 +11,7 @@ import { useCommentsFilter } from "@/features/comment-filter";
 const route = useRoute();
 const boardsStore = useBoardsStore();
 const { comments, commentsLoading } = storeToRefs(boardsStore);
-const { isCompactMode } = storeToRefs(useUiStore());
+const { isCompactLayout } = storeToRefs(useUiStore());
 
 // Filter setup
 const { searchParams, hasActiveFilters } = useCommentsFilter();
@@ -70,9 +70,7 @@ function handleWarn(_id: string) {
     />
 
     <!-- Loading state -->
-    <secondary-text v-if="commentsLoading" class="comments-loading">
-      Загрузка...
-    </secondary-text>
+    <secondary-text v-if="commentsLoading" class="comments-loading">Загрузка...</secondary-text>
 
     <!-- Empty state -->
     <secondary-text
@@ -87,8 +85,9 @@ function handleWarn(_id: string) {
       <Comment
         v-for="(comment, index) in comments.resources"
         :key="comment.id"
+        v-memo="[comment.id, comment.text, comment.likesCount]"
         :comment="comment"
-        :compact="isCompactMode"
+        :compact="isCompactLayout"
         :number="getCommentNumber(index)"
         @edit="handleEdit"
         @delete="handleDelete"

@@ -1,20 +1,28 @@
+#nullable enable
 using System;
-using System.Linq;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using DM.Domain.Core.Authorization;
 using DM.Infrastructure.Core.Parsing;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DM.Web.API.Shared.BbRendering;
 
-/// <inheritdoc />
+/// <summary>
+/// JSON converter factory that turns every <see cref="BbText"/>-derived DTO
+/// into permission-aware rendered output at serialization time. The factory
+/// itself is a singleton (owned by <see cref="JsonSerializerOptions"/>);
+/// per-request scoped services (authorization context, render cache) are
+/// resolved through <see cref="HttpContext.RequestServices"/> at Write time.
+/// </summary>
 internal class BbConverterFactory : JsonConverterFactory
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IBbParserProvider _bbParserProvider;
 
-    /// <inheritdoc />
     public BbConverterFactory(
         IHttpContextAccessor httpContextAccessor,
         IBbParserProvider bbParserProvider)
@@ -23,16 +31,16 @@ internal class BbConverterFactory : JsonConverterFactory
         _bbParserProvider = bbParserProvider;
     }
 
-    /// <inheritdoc />
     public override bool CanConvert(Type typeToConvert) => typeToConvert.IsSubclassOf(typeof(BbText));
 
-    /// <inheritdoc />
     public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
     {
-        var converter = (JsonConverter) Activator.CreateInstance(
+        var converter = (JsonConverter)Activator.CreateInstance(
             typeof(BbConverter<>).MakeGenericType(typeToConvert),
             BindingFlags.Instance | BindingFlags.Public,
-            null, new object[] {_httpContextAccessor, _bbParserProvider}, null)!;
+            null,
+            new object?[] { _httpContextAccessor, _bbParserProvider },
+            null)!;
         return converter;
     }
 
@@ -42,54 +50,140 @@ internal class BbConverterFactory : JsonConverterFactory
         : JsonConverter<TBbText>
         where TBbText : BbText, new()
     {
-        public override TBbText Read(ref Utf8JsonReader reader, Type typeToConvert,
-            JsonSerializerOptions options) => new() {Value = reader.GetString() ?? string.Empty};
 
-        public override void Write(Utf8JsonWriter writer, TBbText bbText, JsonSerializerOptions options)
+        public override TBbText Read(
+            ref Utf8JsonReader reader,
+            Type typeToConvert,
+            JsonSerializerOptions options) => new() { Value = reader.GetString() ?? string.Empty };
+
+        public override void Write(
+            Utf8JsonWriter writer,
+            TBbText bbText,
+            JsonSerializerOptions options)
         {
-            var httpContext = httpContextAccessor.HttpContext!;
-            var renderMode = httpContext.Request.Headers.TryGetValue("X-Dm-Bb-Render-Mode", out var headerValues) &&
-                             headerValues.Any() && Enum.TryParse<BbRenderMode>(headerValues.First(), out var requiredRenderMode)
-                ? requiredRenderMode
-                : BbRenderMode.Html;
-            var value = bbText.Value;
-                
-            if (renderMode == BbRenderMode.SafeHtml)
+            var raw = bbText.Value ?? string.Empty;
+            var audience = ReadAudienceHeader();
+            var viewer = ResolveViewerFromRequest();
+            var renderContext = BuildRenderContext(bbText, audience, viewer);
+
+            // Fast path for a missing or empty input.
+            if (raw.Length == 0)
             {
-                var safeParsedTree = bbParserProvider.CurrentSafePost.Parse(value);
-                var safeHtml = safeParsedTree is BbParserWrapper.WrappedNodeTree safeWrappedTree
-                    ? safeWrappedTree.ToHtml()
-                    : safeParsedTree.ToHtml();
-                writer.WriteStringValue(safeHtml);
+                writer.WriteStringValue(string.Empty);
                 return;
             }
-                
-            var parsedTree = bbText.ParseMode switch
+
+            var parser = SelectParser(bbText, audience);
+            if (parser is not BbParserWrapper wrapper)
             {
-                BbParseMode.Common => bbParserProvider.CurrentCommon.Parse(value),
-                BbParseMode.Info => bbParserProvider.CurrentInfo.Parse(value),
-                BbParseMode.Post => bbParserProvider.CurrentPost.Parse(value),
-                _ => throw new ArgumentOutOfRangeException(nameof(bbText.ParseMode))
+                // Shouldn't happen — every registered parser is a wrapper —
+                // but keep a safe fallback.
+                writer.WriteStringValue(ParseLegacy(parser, raw, audience));
+                return;
+            }
+
+            var rendered = audience == RenderAudience.PlainText
+                ? wrapper.RenderText(raw, renderContext)
+                : wrapper.RenderHtml(raw, renderContext);
+
+            writer.WriteStringValue(rendered);
+        }
+
+        private RenderAudience ReadAudienceHeader()
+        {
+            var ctx = httpContextAccessor.HttpContext;
+            if (ctx is null) return BbAudienceHeader.Default;
+            if (!ctx.Request.Headers.TryGetValue(BbAudienceHeader.HeaderName, out var raw))
+                return BbAudienceHeader.Default;
+            return BbAudienceHeader.Parse(raw.ToString());
+        }
+
+        private IAuthorizationSubject? ResolveViewerFromRequest()
+        {
+            // Scoped services (authorization context) must be resolved from
+            // the current request's service scope, not from the singleton
+            // factory's captured references. HttpContextAccessor bridges
+            // the gap — it's a singleton but exposes the request-scoped
+            // service provider.
+            var provider = httpContextAccessor.HttpContext?.RequestServices;
+            if (provider is null) return null;
+            try
+            {
+                return provider.GetService<IAuthorizationContextProvider>()?.CurrentSubject;
+            }
+            catch
+            {
+                // Some endpoints render BbText before the authorization
+                // context is fully materialized. Fall back to an anonymous
+                // render rather than leaking provider internals.
+                return null;
+            }
+        }
+
+        private RenderContext BuildRenderContext(
+            TBbText bbText,
+            RenderAudience audience,
+            IAuthorizationSubject? viewer)
+        {
+            var envelope = bbText.Context;
+            var surface = envelope?.Surface ?? bbText.Surface;
+
+            if (audience == RenderAudience.PlainText)
+                return RenderContext.ForPlainText() with { Surface = surface };
+
+            if (audience == RenderAudience.EmbedSafe)
+                return RenderContext.ForEmbedSafe(surface);
+
+            if (audience == RenderAudience.AuthorEdit && viewer is not null)
+                return RenderContext.ForAuthorEdit(viewer, surface);
+
+            var privateMap = envelope?.PrivateAddresseeOwnerUserIdsByAttribute
+                             ?? new Dictionary<string, IReadOnlySet<Guid>>(StringComparer.Ordinal);
+
+            return new RenderContext
+            {
+                Viewer = viewer,
+                Audience = audience,
+                Surface = surface,
+                PostAuthorUserId = envelope?.PostAuthorUserId,
+                PostId = envelope?.PostId,
+                GameId = envelope?.GameId,
+                RoomId = envelope?.RoomId,
+                PrivateAddresseeOwnerUserIdsByAttribute = privateMap,
+                GameLeadUserIds = envelope?.GameLeadUserIds ?? Array.Empty<Guid>(),
+                PostSharePrivateWithAll = envelope?.PostSharePrivateWithAll ?? false,
+                RoomViewPrivateText = envelope?.RoomViewPrivateText ?? false
             };
-                
-            // Handle WrappedNodeTree (from BbParserWrapper) which has custom ToHtml/ToBb/ToText methods
-            var text = parsedTree is BbParserWrapper.WrappedNodeTree wrappedTree
-                ? renderMode switch
+        }
+
+        private BBCodeParser.IBbParser SelectParser(TBbText bbText, RenderAudience audience)
+        {
+            var surface = bbText.Context?.Surface ?? bbText.Surface;
+
+            return audience switch
+            {
+                // EmbedSafe uses the NSFW-safe variant for the surface.
+                RenderAudience.EmbedSafe => bbParserProvider.GetSafeForSurface(surface),
+                // AuthorEdit uses the round-trip variant emitting data-bb-*.
+                RenderAudience.AuthorEdit => bbParserProvider.GetForAuthorEdit(surface),
+                _ => bbParserProvider.GetForSurface(surface)
+            };
+        }
+
+        private static string ParseLegacy(BBCodeParser.IBbParser parser, string raw, RenderAudience audience)
+        {
+            var tree = parser.Parse(raw);
+            if (tree is BbParserWrapper.WrappedNodeTree wrapped)
+                return audience switch
                 {
-                    BbRenderMode.Html => wrappedTree.ToHtml(),
-                    BbRenderMode.Bb => wrappedTree.ToBb(),
-                    BbRenderMode.Text => wrappedTree.ToText(),
-                    _ => throw new ArgumentOutOfRangeException()
-                }
-                : renderMode switch
-                {
-                    BbRenderMode.Html => parsedTree.ToHtml(),
-                    BbRenderMode.Bb => parsedTree.ToBb(),
-                    BbRenderMode.Text => parsedTree.ToText(),
-                    _ => throw new ArgumentOutOfRangeException()
+                    RenderAudience.PlainText => wrapped.ToText(),
+                    _ => wrapped.ToHtml()
                 };
-                
-            writer.WriteStringValue(text);
+            return audience switch
+            {
+                RenderAudience.PlainText => tree.ToText(),
+                _ => tree.ToHtml()
+            };
         }
     }
 }

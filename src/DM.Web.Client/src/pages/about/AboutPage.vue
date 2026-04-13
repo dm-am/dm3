@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { SvgIcon } from "@/shared/ui";
+import mottoSnakeSvg from "@/assets/images/illustrations/motto-snake.svg";
 
 interface FaqItem {
   question: string;
@@ -35,7 +35,7 @@ const faqItems: FaqItem[] = [
 
   <!-- MOTTO (static) -->
   <div class="motto" v-once>
-    <SvgIcon name="snake" class="motto-snake" />
+    <img :src="mottoSnakeSvg" alt="" class="motto-snake" />
     <p class="motto-text">
       <span class="quote-mark">«</span>Мы в ответе за тех, кого сгенерили!<span class="quote-mark">»</span>
     </p>

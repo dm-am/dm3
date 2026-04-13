@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
+import { symbols } from "@/shared/lib/utils/icons";
 import { useEditor, EditorContent } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -20,7 +21,6 @@ import {
   Spoiler,
   Nsfw,
   BbTab,
-  CutMarker,
   BbQuote,
   Private,
   Noparse,
@@ -63,8 +63,10 @@ const emit = defineEmits<{
   (e: "submit"): void;
 }>();
 
-// Editor mode: 'wysiwyg' or 'bbcode'
-const mode = ref<"wysiwyg" | "bbcode">("bbcode");
+// Editor mode: 'wysiwyg' (default — visual preview of the BBCode that will
+// be sent) or 'bbcode' (raw BBCode source — the authoritative representation
+// sent to the server on save, regardless of which mode is active).
+const mode = ref<"wysiwyg" | "bbcode">("wysiwyg");
 const bbcodeText = ref("");
 const editorContainer = ref<HTMLElement | null>(null);
 const bbcodeTextarea = ref<HTMLTextAreaElement | null>(null);
@@ -281,7 +283,7 @@ const editor = useEditor({
   extensions: [
     StarterKit.configure({
       heading: false, // BBCode doesn't support headings
-      horizontalRule: false, // We use custom CutMarker instead
+      horizontalRule: false, // [cut] marker was removed — truncation is now height-based
       blockquote: false, // We use custom BbQuote instead
       codeBlock: false, // We use inline code only, no code blocks
     }),
@@ -293,7 +295,6 @@ const editor = useEditor({
     Spoiler,
     Nsfw,
     BbTab,
-    CutMarker,
     BbQuote,
     Private,
     Noparse,
@@ -615,26 +616,6 @@ function handlePrivateSubmit(values: Record<string, string>) {
     wrapSelection(`[private=${character}]`, "[/private]");
   } else {
     editor.value?.chain().focus().togglePrivate({ character }).run();
-  }
-}
-
-function insertCut() {
-  if (mode.value === "bbcode") {
-    const textarea = bbcodeTextarea.value;
-    if (!textarea) return;
-    const pos = textarea.selectionStart;
-    bbcodeText.value =
-      bbcodeText.value.substring(0, pos) +
-      "[cut]" +
-      bbcodeText.value.substring(pos);
-    emit("update:modelValue", bbcodeText.value);
-    saveDraft(bbcodeText.value);
-    nextTick(() => {
-      textarea.focus();
-      textarea.setSelectionRange(pos + 5, pos + 5);
-    });
-  } else {
-    editor.value?.chain().focus().insertCut().run();
   }
 }
 
@@ -1184,17 +1165,6 @@ defineExpose({
           tab
         </button>
       </Tooltip>
-      <Tooltip v-if="availableTags.includes('cut')" text="Разрыв для длинных постов">
-        <button
-          type="button"
-          class="tag-btn"
-          :disabled="disabled"
-          @click="insertCut"
-          aria-label="Вставить разрыв"
-        >
-          cut
-        </button>
-      </Tooltip>
       <span
         class="toolbar-separator"
         role="separator"
@@ -1269,7 +1239,7 @@ defineExpose({
             @click="switchMode('bbcode')"
             aria-label="Режим BBCode"
           >
-            &lt;/&gt;
+            <small>[bbcode]</small>
           </button>
         </Tooltip>
         <Tooltip text="Визуальный редактор">
@@ -1280,7 +1250,7 @@ defineExpose({
             @click="switchMode('wysiwyg')"
             aria-label="Визуальный редактор"
           >
-            <i>Aa</i>
+            <small><i>wysiwyg</i></small>
           </button>
         </Tooltip>
         <span class="mode-indicator" :style="indicatorStyle"></span>
@@ -1304,7 +1274,7 @@ defineExpose({
               @click="showHelp = false"
               aria-label="Закрыть"
             >
-              &times;
+              {{ symbols.close }}
             </button>
           </div>
           <div class="help-dialog-body">
@@ -1399,9 +1369,6 @@ defineExpose({
                 <h4 class="help-section-title">Разное</h4>
                 <div class="help-item">
                   <code>[tab]</code> — отступ (красная строка)
-                </div>
-                <div class="help-item">
-                  <code>[cut]</code> — разрыв (скрыть остаток)
                 </div>
                 <div class="help-item">
                   <code>[noparse]</code>текст<code>[/noparse]</code> — без
@@ -1535,7 +1502,7 @@ defineExpose({
         v-for="error in validationErrors"
         :key="error"
       >
-        <span class="error-icon" aria-hidden="true">⚠</span>
+        <span class="error-icon" aria-hidden="true">{{ symbols.warning }}</span>
         <span class="error-text">{{ error }}</span>
       </div>
     </div>
@@ -1632,7 +1599,6 @@ defineExpose({
   font-size: 12px
   font-family: inherit
   color: $text
-  transition: background-color 0.1s
 
   &:hover:not(:disabled)
     background-color: $bg-element-accent
@@ -1693,8 +1659,9 @@ defineExpose({
       margin: 0
       line-height: 0.5
 
-    // Tiptap-specific: horizontal rule (base, not cut marker)
-    hr:not(.bb-cut-marker)
+    // Tiptap-specific: horizontal rule (rare in BBCode, kept for any
+    // legacy <hr> rendering inside the editor)
+    hr
       border: none
       border-top: 2px dashed
       border-color: $border

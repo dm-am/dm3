@@ -834,6 +834,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     GameText = table.Column<string>(type: "text", nullable: false),
                     MetagameText = table.Column<string>(type: "text", nullable: true),
+                    SharePrivateWithAll = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    PrivateAddresseeSnapshotJson = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'{}'::jsonb"),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)

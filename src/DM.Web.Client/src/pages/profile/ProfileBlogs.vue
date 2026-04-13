@@ -81,7 +81,7 @@ watch(() => props.username, fetchBlogs);
   background: $bg-element-overlay
   border-radius: $border-radius
   text-decoration: none
-  transition: background 0.2s
+  transition: background-color 0.2s
 
   &:hover
     background: $bg-element-hover

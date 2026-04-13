@@ -19,7 +19,7 @@ import { CommentariesAccessMode, GameRole } from "@/entities/game";
 const route = useRoute();
 const gameStore = useGameDetailsStore();
 const { user } = storeToRefs(useUserStore());
-const { isCompactMode } = storeToRefs(useUiStore());
+const { isCompactLayout } = storeToRefs(useUiStore());
 const { game, comments, commentsPaging, commentsLoading, commentsError } =
   storeToRefs(gameStore);
 
@@ -175,7 +175,7 @@ useFetchData(
             v-for="(comment, index) in comments"
             :key="comment.id"
             :comment="comment"
-            :compact="isCompactMode"
+            :compact="isCompactLayout"
             :number="getCommentNumber(index)"
             :data-id="comment.id"
           />

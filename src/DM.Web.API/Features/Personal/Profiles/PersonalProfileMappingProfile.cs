@@ -58,8 +58,7 @@ internal class PersonalProfileMappingProfile : Profile
                 ? null
                 : new InfoBbText { Value = s.Info }))
             .ForMember(d => d.UsernameHistory, o => o.Ignore())
-            .ForMember(d => d.PersonalNote, o => o.Ignore())
-            .ForMember(d => d.BestPost, o => o.Ignore());
+            .ForMember(d => d.PersonalNote, o => o.Ignore());
 
         // UpdateProfile (API) -> UpdateUser (domain)
         CreateMap<UpdateProfile, UpdateUser>()

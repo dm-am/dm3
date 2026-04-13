@@ -10,7 +10,6 @@ export { Nsfw, type NsfwOptions } from "./Nsfw";
 export { ModBlock, type ModBlockOptions } from "./ModBlock";
 export { WarningBlock, type WarningBlockOptions } from "./WarningBlock";
 export { BbTab, type BbTabOptions } from "./BbTab";
-export { CutMarker, type CutOptions } from "./Cut";
 export { BbQuote, type BbQuoteOptions } from "./BbQuote";
 export { Private, type PrivateOptions } from "./Private";
 export { Noparse, type NoparseOptions } from "./Noparse";
@@ -23,7 +22,6 @@ import { Nsfw } from "./Nsfw";
 import { ModBlock } from "./ModBlock";
 import { WarningBlock } from "./WarningBlock";
 import { BbTab } from "./BbTab";
-import { CutMarker } from "./Cut";
 import { BbQuote } from "./BbQuote";
 import { Private } from "./Private";
 import { Noparse } from "./Noparse";
@@ -39,7 +37,6 @@ export const BBCodeExtensions = [
   ModBlock,
   WarningBlock,
   BbTab,
-  CutMarker,
   BbQuote,
   Private,
   Noparse,

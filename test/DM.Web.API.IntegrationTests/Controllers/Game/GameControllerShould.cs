@@ -1,5 +1,7 @@
+using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using FluentAssertions;
 using Xunit;
 
@@ -312,6 +314,114 @@ public class GameControllerShould : IntegrationTestBase
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// GetGameDetails must return the game's active characters in the
+    /// `activeCharacters` array — this feeds the game/room tooltip
+    /// payload on the home page and Pulse. Regression guard for a
+    /// silent mapping gap: the repository populated ActiveCharacters
+    /// only on list paths, never on details, and the API-layer mapping
+    /// relied on AutoMapper convention walking through a 3-level
+    /// IncludeBase chain — both combined to silently drop the field.
+    /// </summary>
+    [Fact]
+    public async Task GetGameDetails_IncludesActiveCharactersWithOwners()
+    {
+        var response = await Client.GetAsync($"/v1/games/{TestConstants.TestGameId}/details");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var json = await response.Content.ReadAsStringAsync();
+        // Seeded player characters must appear in the envelope's
+        // activeCharacters array with their owner usernames.
+        json.Should().Contain("activeCharacters");
+        json.Should().Contain(TestConstants.TestCharacterName);
+        json.Should().Contain(TestConstants.SecondCharacterName);
+        json.Should().Contain(TestConstants.TestUserLogin);
+        json.Should().Contain(TestConstants.SecondUserLogin);
+    }
+
+    /// <summary>
+    /// GetGameDetails must carry the recruitment PcCount so the game
+    /// tooltip renders "Персонажи: N/∞" with the real count instead of
+    /// a misleading zero. Regression guard for the details endpoint
+    /// previously skipping the EnrichGamesAsync helper that populates
+    /// Recruitment.PcCount via a batched GROUP BY query.
+    /// </summary>
+    [Fact]
+    public async Task GetGameDetails_CarriesRealPcCount()
+    {
+        var response = await Client.GetAsync($"/v1/games/{TestConstants.TestGameId}/details");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var json = await response.Content.ReadAsStringAsync();
+        json.Should().Contain("\"pcCount\":2");
+    }
+
+    /// <summary>
+    /// The rated posts endpoint must return `post.room.game` as a FULL
+    /// sidebar-tier GameRef — master, assistants, activeCharacters,
+    /// recruitment, subscribersCount — so GameLink / RoomLink on the
+    /// home page and Pulse render exactly the same tooltip content
+    /// that sidebar GameLink does. This is a STRUCTURAL assertion
+    /// (JsonDocument traversal, not string.Contains) because a stray
+    /// `"master":` at any level of the response would silently pass
+    /// a substring match while the real tooltip pipeline still
+    /// misses the nested field. Regression guard for the previous
+    /// thin `{id, publicId, title}` projection on `post.room.game`.
+    /// </summary>
+    [Fact]
+    public async Task GetRatedPosts_ReturnsFullGameRefOnPostRoomGame()
+    {
+        var response = await Client.GetAsync("/v1/posts?take=10");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        var resources = doc.RootElement.GetProperty("resources");
+        resources.GetArrayLength().Should().BeGreaterThan(0,
+            "the seed includes one reviewed post in TestGame");
+
+        var post = resources.EnumerateArray().First();
+        var room = post.GetProperty("room");
+        room.TryGetProperty("game", out var game).Should().BeTrue(
+            "post.room.game is what GameLink / RoomLink read for tooltips");
+
+        // Tooltip fields the sidebar primitive buildTooltip() reads.
+        // These MUST be present and non-null on post.room.game, otherwise
+        // the game tooltip on featured posts drifts from the sidebar one.
+        game.TryGetProperty("master", out var master).Should().BeTrue();
+        master.ValueKind.Should().Be(JsonValueKind.Object);
+        master.GetProperty("username").GetString()
+            .Should().Be(TestConstants.TestUserLogin);
+
+        game.TryGetProperty("assistants", out _).Should().BeTrue();
+
+        game.TryGetProperty("recruitment", out var recruitment).Should().BeTrue();
+        recruitment.GetProperty("pcCount").GetInt32()
+            .Should().Be(2, "two player characters are seeded in TestGame");
+
+        game.TryGetProperty("subscribersCount", out _).Should().BeTrue();
+
+        // Tooltip fields that feed the ROOM tooltip (buildRoomTooltip →
+        // collectRoomParticipants reads game.activeCharacters for open
+        // rooms, which is every featured / Pulse post). Must carry the
+        // character NAMES with their OWNER USERNAMES — exactly what the
+        // user-visible tooltip renders as "• Name (owner)".
+        game.TryGetProperty("activeCharacters", out var activeChars).Should().BeTrue();
+        activeChars.ValueKind.Should().Be(JsonValueKind.Array);
+        activeChars.GetArrayLength().Should().Be(2);
+        var names = activeChars.EnumerateArray()
+            .Select(c => c.GetProperty("name").GetString())
+            .ToArray();
+        names.Should().Contain(TestConstants.TestCharacterName);
+        names.Should().Contain(TestConstants.SecondCharacterName);
+        var owners = activeChars.EnumerateArray()
+            .Select(c => c.GetProperty("ownerUsername").GetString())
+            .ToArray();
+        owners.Should().Contain(TestConstants.TestUserLogin);
+        owners.Should().Contain(TestConstants.SecondUserLogin);
     }
 
     /// <summary>

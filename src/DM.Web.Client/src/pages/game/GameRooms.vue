@@ -3,8 +3,6 @@ import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import Icon from "@/shared/ui/Icon/Icon.vue";
-import { IconType } from "@/shared/ui/Icon/iconType";
 import { RoomType, RoomAccessType } from "@/entities/game";
 
 const gameStore = useGameDetailsStore();
@@ -14,12 +12,6 @@ const roomTypeLabels: Record<RoomType, string> = {
   [RoomType.Clean]: "Чистая",
   [RoomType.Hybrid]: "Гибрид",
   [RoomType.Chat]: "Чат",
-};
-
-const roomTypeIcons: Record<RoomType, IconType> = {
-  [RoomType.Clean]: IconType.List,
-  [RoomType.Hybrid]: IconType.Edit,
-  [RoomType.Chat]: IconType.Comment,
 };
 
 const accessTypeLabels: Record<RoomAccessType, string> = {
@@ -46,11 +38,6 @@ const accessTypeLabels: Record<RoomAccessType, string> = {
         class="room-card"
       >
         <div class="room-header">
-          <Icon
-            v-if="room.type"
-            :font="roomTypeIcons[room.type]"
-            class="room-icon"
-          />
           <span class="room-title">{{ room.title }}</span>
           <span v-if="room.unreadPostsCount" class="room-unread">
             +{{ room.unreadPostsCount }}
@@ -102,7 +89,6 @@ const accessTypeLabels: Record<RoomAccessType, string> = {
   border-radius: $border-radius
   text-decoration: none
   color: $text
-  transition: background-color 0.2s
 
   &:hover
     background-color: $bg-element-accent

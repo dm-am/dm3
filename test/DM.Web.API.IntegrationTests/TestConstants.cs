@@ -33,6 +33,17 @@ public static class TestConstants
     // Games
     public static readonly Guid TestGameId = Guid.Parse("00000000-0000-0000-0000-000000000040");
     public static readonly Guid TestRoomId = Guid.Parse("00000000-0000-0000-0000-000000000041");
+
+    // Characters (seeded into TestGame so game/room tooltips have content to render)
+    public static readonly Guid TestCharacterId = Guid.Parse("00000000-0000-0000-0000-000000000050");
+    public static readonly Guid SecondCharacterId = Guid.Parse("00000000-0000-0000-0000-000000000051");
+    public const string TestCharacterName = "Арагорн Следопыт";
+    public const string SecondCharacterName = "Горим Железный Кулак";
+
+    // Game posts + reviews (seeded so /v1/posts rated-listing is non-empty
+    // and tooltip-shape assertions can exercise post.room.game)
+    public static readonly Guid TestGamePostId = Guid.Parse("00000000-0000-0000-0000-000000000052");
+    public static readonly Guid TestGamePostReviewId = Guid.Parse("00000000-0000-0000-0000-000000000053");
     public static readonly Guid SecondGameId = Guid.Parse("00000000-0000-0000-0000-000000000042");
     public static readonly Guid InitialRecruitmentGameId = Guid.Parse("00000000-0000-0000-0000-000000000043");
     public static readonly Guid SubsequentRecruitmentGameId = Guid.Parse("00000000-0000-0000-0000-000000000044");

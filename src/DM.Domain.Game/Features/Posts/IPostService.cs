@@ -43,14 +43,9 @@ public interface IPostService
     Task MarkAsReadAsync(Guid roomId);
 
     /// <summary>
-    /// Get best post (highest rated) by user from open rooms
-    /// </summary>
-    /// <param name="userId">User identifier</param>
-    /// <returns>Best post result or null if no posts with positive rating found</returns>
-    Task<BestPostResult?> GetBestPostAsync(Guid userId);
-
-    /// <summary>
-    /// Get posts with rating info (global search with filters and sorting)
+    /// Get posts with rating info (global search with filters and sorting).
+    /// A single user's best post is fetched via <see cref="PostsQuery"/>
+    /// with author username filter + rating sort + take=1.
     /// </summary>
     Task<(IEnumerable<Post> Posts, PagingResult Paging)> GetRatedAsync(PostsQuery query);
 

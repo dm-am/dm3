@@ -22,7 +22,11 @@ internal class RoomMappingProfile : Profile
     public RoomMappingProfile()
     {
         CreateMap<DomainRoom, Room>()
-            .ForMember(d => d.Access, opt => opt.Ignore());
+            // Project Domain.Room.AccessType → Api.Room.Access. Previously
+            // ignored, which left every room in game-details responses
+            // with `access = null`. Downstream tooltip logic then defaulted
+            // every room to "open" and leaked the wrong character list.
+            .ForMember(d => d.Access, s => s.MapFrom(r => r.AccessType));
 
         CreateMap<DomainRoomSettings, RoomSettings>();
 

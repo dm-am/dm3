@@ -6,12 +6,14 @@ import { useUserStore } from "@/entities/user";
 import { useUiStore } from "@/shared/stores/ui";
 import { UserRole } from "@/shared/api/models/community";
 import { Tooltip } from "@/shared/ui/Tooltip";
-import { useContentTruncation } from "@/shared/lib/composables";
+import { TruncatedContent } from "@/shared/ui/TruncatedContent";
 import dayjs from "dayjs";
-import defaultPicture from "@/assets/images/userpic.png";
+import { defaultAvatarUrl as defaultPicture } from "@/shared/lib/utils/icons";
+import { SvgIcon } from "@/shared/ui/Icon";
 import {
   initBbcodeInteractive,
   cleanupBbcodeInteractive,
+  trimHtmlWhitespace,
 } from "@/shared/lib/utils/bbcodeInteractive";
 
 const props = withDefaults(
@@ -37,7 +39,7 @@ const emit = defineEmits<{
 const ONLINE_THRESHOLD_MINUTES = 5;
 
 const { user: currentUser } = storeToRefs(useUserStore());
-const { isCompactMode } = storeToRefs(useUiStore());
+const { isCompactLayout } = storeToRefs(useUiStore());
 
 const showLikesPopup = ref(false);
 
@@ -48,12 +50,12 @@ const authorPicture = computed(
 
 const formattedDate = computed(() => {
   if (!props.topic.createdUtc) return "";
-  return dayjs(props.topic.createdUtc).format("DD.MM.YYYY HH:mm");
+  return dayjs(props.topic.createdUtc).format("DD.MM.YYYY [в] HH:mm");
 });
 
 const formattedEditDate = computed(() => {
   if (!props.topic.modifiedUtc) return "";
-  return dayjs(props.topic.modifiedUtc).format("DD.MM.YYYY в HH:mm");
+  return dayjs(props.topic.modifiedUtc).format("DD.MM.YYYY [в] HH:mm");
 });
 
 const isEdited = computed(() => !!props.topic.modifiedUtc);
@@ -108,26 +110,20 @@ const roleBadge = computed(() => {
   }
 });
 
-// Content description ref for BBCode initialization
-const topicDescription = computed(() => props.topic.description);
+// Topic description, pre-trimmed of leading/trailing whitespace. Pure
+// transform — TruncatedContent never mutates slot DOM.
+const topicDescriptionHtml = computed(() =>
+  trimHtmlWhitespace(props.topic.description),
+);
 
-// Truncation (unified composable)
-const {
-  setContentRef,
-  contentStyle,
-  needsTruncation,
-  isExpanded,
-  toggleExpand,
-  contentRef,
-} = useContentTruncation({
-  maxHeight: props.maxHeight,
-  enabled: computed(() => props.truncatable),
-  watchContent: topicDescription,
-  onContentMounted: (el) => {
-    cleanupBbcodeInteractive(el);
-    initBbcodeInteractive(el);
-  },
-});
+// Truncation is delegated to <TruncatedContent>. BBCode interactive elements
+// (spoilers, NSFW toggles) need to be (re)initialized whenever the content
+// DOM is mounted or replaced — the component forwards its inner content
+// element here via the onContentMounted callback.
+function initTopicBbcode(el: HTMLElement) {
+  cleanupBbcodeInteractive(el);
+  initBbcodeInteractive(el);
+}
 
 // Methods
 function toggleLike() {
@@ -144,7 +140,7 @@ function handleWarn() {
 </script>
 
 <template>
-  <div class="topic" :class="{ compact: isCompactMode }">
+  <div class="topic" :class="{ compact: isCompactLayout }">
     <!-- Title -->
     <h3 class="topic-title">
       <router-link :to="{ name: 'topic', params: { alias: topic.board?.alias, num: topic.topicNumber } }">
@@ -155,7 +151,7 @@ function handleWarn() {
     <div class="topic-content">
       <!-- Avatar (non-compact only) -->
       <router-link
-        v-if="!isCompactMode && topic.author"
+        v-if="!isCompactLayout && topic.author"
         :to="{ name: 'profile', params: { username: topic.author.username } }"
         class="avatar-link"
       >
@@ -165,18 +161,14 @@ function handleWarn() {
       <div class="topic-body">
         <!-- Description -->
         <div class="topic-description">
-          <div
-            :ref="setContentRef"
-            class="topic-text bbcode-content"
-            :class="{ truncatable: needsTruncation }"
-            :style="contentStyle"
-            v-html="topic.description"
-          />
-          <a
-            v-if="needsTruncation && !isExpanded"
-            class="expand-link"
-            @click="toggleExpand"
-          >... <strong>показать полностью</strong></a>
+          <TruncatedContent
+            :truncatable="truncatable"
+            :max-height="maxHeight"
+            :watch-key="topicDescriptionHtml"
+            :on-content-mounted="initTopicBbcode"
+          >
+            <div class="topic-text bbcode-content" v-html="topicDescriptionHtml" />
+          </TruncatedContent>
         </div>
 
         <!-- Footer: Author info + Actions -->
@@ -217,7 +209,7 @@ function handleWarn() {
                 :disabled="!canLike"
                 @click="toggleLike"
               >
-                <span class="like-icon">&#9829;</span>
+                <SvgIcon name="heartFilled" class="like-icon" />
                 <span v-if="likesCount > 0" class="likes-count">{{ likesCount }}</span>
               </button>
               <div v-if="showLikesPopup && likesCount > 0" class="likes-popup">
@@ -256,7 +248,8 @@ function handleWarn() {
 
   a
     color: $link
-    text-decoration: none
+    // No local text-decoration override — the global a:hover rule in
+    // Reset.sass provides the underline on hover.
 
     &:hover
       color: $link-hover
@@ -288,20 +281,8 @@ function handleWarn() {
   color: $text
   line-height: 1.6
 
-// .topic-text uses global .bbcode-content class
-.topic-text
-  &.truncatable
-    overflow: hidden
-    transition: max-height 0.4s ease
-
-.expand-link
-  display: inline-block
-  margin-top: $tiny
-  color: $link
-  cursor: pointer
-
-  &:hover
-    color: $link-hover
+// .topic-text uses the global .bbcode-content class for typography.
+// Truncation & expand-link are owned by <TruncatedContent>.
 
 .topic-footer
   display: flex
@@ -317,11 +298,9 @@ function handleWarn() {
 
 .author-link
   color: $link
-  text-decoration: none
 
   &:hover
     color: $link-hover
-    text-decoration: underline
 
 .role-letter
   font-weight: bold
@@ -336,13 +315,11 @@ function handleWarn() {
 
 .comments-link
   color: $link
-  text-decoration: none
   &:hover
     color: $link-hover
 
 .unread-link
   color: $link
-  text-decoration: none
   &:hover
     color: $link-hover
 

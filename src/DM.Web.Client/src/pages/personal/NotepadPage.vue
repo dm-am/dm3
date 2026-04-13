@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { symbols } from "@/shared/lib/utils/icons";
 import notepadApi from "@/shared/api/notepadApi";
 import type {
   NotepadEntry,
@@ -131,7 +132,7 @@ onMounted(() => fetchEntries());
     <div class="page-header">
       <page-title>Блокнот</page-title>
       <button class="add-btn" @click="openNewEntryEditor">
-        <Icon icon="plus" /> Новая запись
+        Новая запись
       </button>
     </div>
 
@@ -167,7 +168,7 @@ onMounted(() => fetchEntries());
             <h3>
               {{ editingEntry ? "Редактирование записи" : "Новая запись" }}
             </h3>
-            <button class="close-btn" @click="closeEditor">&times;</button>
+            <button class="close-btn" @click="closeEditor">{{ symbols.close }}</button>
           </div>
 
           <div class="editor-form">
@@ -302,7 +303,7 @@ onMounted(() => fetchEntries());
   padding: $small
   border-bottom: 1px solid $border
   cursor: pointer
-  transition: background 0.2s
+  transition: background-color 0.2s
 
   &:last-child
     border-bottom: none

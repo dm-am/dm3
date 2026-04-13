@@ -189,7 +189,6 @@ const hasBubbles = computed(() => {
   return (
     state.status !== "" ||
     state.pollType !== "" ||
-    state.search !== "" ||
     hasStartsFilter.value ||
     hasEndsFilter.value ||
     state.sortBy !== def.sortBy ||
@@ -201,6 +200,16 @@ function clearAll() {
   localInput.value = "";
   clearFilters();
 }
+
+function handleSearchKeydown(event: KeyboardEvent) {
+  if (event.key === "Backspace" && !localInput.value) {
+    const state = filterState.value;
+    if (hasEndsFilter.value) { event.preventDefault(); setEndsRange(null, null); return; }
+    if (hasStartsFilter.value) { event.preventDefault(); setStartsRange(null, null); return; }
+    if (state.pollType !== "") { event.preventDefault(); setPollType(""); return; }
+    if (state.status !== "") { event.preventDefault(); setStatus(""); }
+  }
+}
 </script>
 
 <template>
@@ -211,7 +220,7 @@ function clearAll() {
         v-model="localInput"
         placeholder="Поиск по названию и описанию"
         @input="handleInput"
-        @keydown.enter="applySearch"
+        @keydown="handleSearchKeydown"
         @blur="applySearch"
       />
 
@@ -306,12 +315,6 @@ function clearAll() {
         prefix="Тип:"
         :value="pollTypeLabel"
         @remove="setPollType('')"
-      />
-      <FilterBubble
-        v-if="filterState.search"
-        prefix="Поиск:"
-        :value="filterState.search"
-        @remove="setSearch('')"
       />
       <FilterBubble
         v-if="hasStartsFilter"

@@ -69,6 +69,14 @@ export const useBoardsStore = defineStore("boards", () => {
   const topics = ref<ListEnvelope<Topic> | null>(null);
   const topicsLoading = ref(false);
 
+  // Topics search cache (30s TTL, max 20 entries, stale-while-revalidate)
+  const TOPICS_CACHE_TTL = 30_000;
+  const topicsCache = new Map<string, { data: ListEnvelope<Topic>; attached: Topic[] | null; timestamp: number }>();
+
+  function createTopicsCacheKey(boardAlias: string, query: TopicsQuery): string {
+    return JSON.stringify({ board: boardAlias, ...query });
+  }
+
   /**
    * Search topics with filters. Single source of truth for loading topics.
    * Called by TopicsList via paramsKey watcher.
@@ -76,12 +84,29 @@ export const useBoardsStore = defineStore("boards", () => {
   async function searchTopics(query: TopicsQuery) {
     if (!selectedBoard.value) return;
 
+    // Apply user's page size preference
+    const size = query.size ?? currentUser.value?.settings?.paging?.topicsPerPage ?? 20;
+    const fullQuery = { ...query, size };
+    const boardAlias = selectedBoard.value.alias as BoardId;
+    const cacheKey = createTopicsCacheKey(boardAlias as string, fullQuery);
+
+    // Return cached if fresh
+    const cached = topicsCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && now - cached.timestamp < TOPICS_CACHE_TTL) {
+      topics.value = cached.data;
+      attachedTopics.value = cached.attached;
+      return;
+    }
+
+    // Show stale while revalidating
+    if (cached) {
+      topics.value = cached.data;
+      attachedTopics.value = cached.attached;
+    }
+
     topicsLoading.value = true;
     try {
-      // Apply user's page size preference
-      const size = query.size ?? currentUser.value?.settings?.paging?.topicsPerPage ?? 20;
-      const fullQuery = { ...query, size };
-
       const effectiveSortBy = query.sortBy ?? "lastActivity";
       const effectiveSortOrder = query.sortOrder ?? "desc";
       const hasFilters =
@@ -92,19 +117,34 @@ export const useBoardsStore = defineStore("boards", () => {
         effectiveSortBy !== "lastActivity" ||
         effectiveSortOrder !== "desc";
 
+      let fetchedAttached: Topic[] | null = null;
+      let fetchedTopics: ListEnvelope<Topic> | null = null;
+
       if (hasFilters) {
         // With filters: single unified query (attached mixed with regular)
-        const { data } = await forumApi.getTopics(selectedBoard.value!.alias as BoardId, fullQuery);
-        attachedTopics.value = null; // No separate attached section when filtering
-        topics.value = data ?? null;
+        const { data } = await forumApi.getTopics(boardAlias, fullQuery);
+        fetchedAttached = null;
+        fetchedTopics = data ?? null;
       } else {
         // No filters: fetch attached separately, show at top
-        const [fetchedAttached, fetchedRegular] = await Promise.all([
-          forumApi.getTopics(selectedBoard.value!.alias as BoardId, { isAttached: true }),
-          forumApi.getTopics(selectedBoard.value!.alias as BoardId, { ...fullQuery, isAttached: false }),
+        const [attachedResult, regularResult] = await Promise.all([
+          forumApi.getTopics(boardAlias, { isAttached: true }),
+          forumApi.getTopics(boardAlias, { ...fullQuery, isAttached: false }),
         ]);
-        attachedTopics.value = fetchedAttached.data?.resources ?? null;
-        topics.value = fetchedRegular.data ?? null;
+        fetchedAttached = attachedResult.data?.resources ?? null;
+        fetchedTopics = regularResult.data ?? null;
+      }
+
+      attachedTopics.value = fetchedAttached;
+      topics.value = fetchedTopics;
+
+      // Update cache
+      if (fetchedTopics) {
+        topicsCache.set(cacheKey, { data: fetchedTopics, attached: fetchedAttached, timestamp: now });
+        if (topicsCache.size > 20) {
+          const firstKey = topicsCache.keys().next().value;
+          if (firstKey) topicsCache.delete(firstKey);
+        }
       }
     } finally {
       topicsLoading.value = false;
@@ -180,6 +220,14 @@ export const useBoardsStore = defineStore("boards", () => {
   const comments = ref<ListEnvelope<Comment> | null>(null);
   const commentsLoading = ref(false);
 
+  // Comments search cache (30s TTL, max 20 entries)
+  const COMMENTS_CACHE_TTL = 30_000;
+  const commentsCache = new Map<string, { data: ListEnvelope<Comment>; timestamp: number }>();
+
+  function createCommentsCacheKey(topicId: string, query: CommentsQuery): string {
+    return JSON.stringify({ topic: topicId, ...query });
+  }
+
   /**
    * Search comments with filters. Single source of truth for loading comments.
    * Called by CommentsList via watcher.
@@ -187,15 +235,39 @@ export const useBoardsStore = defineStore("boards", () => {
   async function searchComments(query: CommentsQuery) {
     if (!selectedTopic.value) return;
 
-    commentsLoading.value = true;
-    comments.value = null;
-    try {
-      // Apply user's page size preference
-      const size = query.size ?? currentUser.value?.settings?.paging?.commentsPerPage ?? 20;
-      const fullQuery: CommentsQuery = { ...query, size };
+    const size = query.size ?? currentUser.value?.settings?.paging?.commentsPerPage ?? 20;
+    const fullQuery: CommentsQuery = { ...query, size };
+    const topicId = selectedTopic.value.id!;
+    const cacheKey = createCommentsCacheKey(topicId, fullQuery);
 
-      const { data } = await forumApi.getComments(selectedTopic.value.id!, fullQuery);
+    // Return cached if fresh
+    const cached = commentsCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && now - cached.timestamp < COMMENTS_CACHE_TTL) {
+      comments.value = cached.data;
+      return;
+    }
+
+    // Show stale while revalidating
+    if (cached) {
+      comments.value = cached.data;
+    } else {
+      comments.value = null;
+    }
+
+    commentsLoading.value = true;
+    try {
+      const { data } = await forumApi.getComments(topicId, fullQuery);
       comments.value = data ?? null;
+
+      // Update cache
+      if (data) {
+        commentsCache.set(cacheKey, { data, timestamp: now });
+        if (commentsCache.size > 20) {
+          const firstKey = commentsCache.keys().next().value;
+          if (firstKey) commentsCache.delete(firstKey);
+        }
+      }
     } finally {
       commentsLoading.value = false;
     }

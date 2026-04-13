@@ -21,6 +21,7 @@ import type {
   FirstUnreadPostResult,
   FirstUnreadCommentResult,
 } from "../model/types";
+import type { GameReview } from "@/shared/api/models/game/reviews";
 import { Api } from "@/shared/api";
 
 /**
@@ -235,7 +236,7 @@ class GameApi {
    * @param params.sortBy - Sort field: rating, lastreview, created
    * @param params.sortOrder - Sort direction: asc, desc
    * @param params.hasReviews - Only posts with reviews
-   * @param params.reviewedAfter - Posts reviewed after this ISO date
+   * @param params.lastReviewedAfter - Posts reviewed after this ISO date
    * @param params.search - Search text in post content (ILIKE)
    * @param params.minRating - Minimum rating filter
    * @param params.gameId - Filter by game ID
@@ -243,12 +244,16 @@ class GameApi {
    * @param params.skip - Number of posts to skip
    */
   public getRatedPosts(params?: {
-    sortBy?: "rating" | "lastreview" | "created";
+    sortBy?: "rating" | "lastreview" | "reviewcount" | "created";
     sortOrder?: "asc" | "desc";
     hasReviews?: boolean;
-    reviewedAfter?: string;
+    lastReviewedAfter?: string;
     search?: string;
     minRating?: number;
+    maxRating?: number;
+    authorUsernames?: string;
+    createdAfter?: string;
+    createdBefore?: string;
     gameId?: string;
     take?: number;
     skip?: number;
@@ -299,6 +304,10 @@ class GameApi {
     return Api.delete(`posts/${postId}`);
   }
 
+  public createPostReview(postId: string, request: { sign: number; text: string }) {
+    return Api.post<PostReview>(`posts/${postId}/reviews`, request);
+  }
+
   public getPostReviews(postId: string, paging?: PagingQuery) {
     // Convert page number to skip/take for backend
     const queryParams: Record<string, number | undefined> = {};
@@ -340,6 +349,23 @@ class GameApi {
 
   public deleteGameComment(commentId: string) {
     return Api.delete(`games/comments/${commentId}`);
+  }
+
+  // Game reviews (рецензии на игру)
+  public getGameReviews(gameId: string, paging?: PagingQuery) {
+    const queryParams: Record<string, number | undefined> = {};
+    const pageSize = paging?.take ?? 20;
+    queryParams.take = pageSize;
+    if (paging?.number && paging.number > 1) {
+      queryParams.skip = (paging.number - 1) * pageSize;
+    } else if (paging?.skip) {
+      queryParams.skip = paging.skip;
+    }
+    return Api.get<ListEnvelope<GameReview>>(`games/${gameId}/reviews`, queryParams);
+  }
+
+  public createGameReview(gameId: string, review: { text: string }) {
+    return Api.post<GameReview>(`games/${gameId}/reviews`, review);
   }
 
   // Game users

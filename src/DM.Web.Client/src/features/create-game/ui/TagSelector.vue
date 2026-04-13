@@ -154,7 +154,6 @@ onMounted(loadTags);
   color: $text
   font-size: $secondary-font-size
   cursor: pointer
-  transition: all 0.2s
 
   &:hover
     background-color: $button-bg-hover

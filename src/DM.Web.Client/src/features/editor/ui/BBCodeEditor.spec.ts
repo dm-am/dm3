@@ -97,13 +97,15 @@ describe("BBCodeEditor", () => {
       expect(modeButtons.length).toBe(2);
     });
 
-    it("starts in BBCode mode by default", () => {
+    it("starts in WYSIWYG mode by default", () => {
       const wrapper = mount(BBCodeEditor, {
         props: { modelValue: "" },
       });
-      // Component starts in BBCode mode, order is: BBCode[0], WYSIWYG[1]
-      const bbcodeBtn = wrapper.findAll(".mode-tab")[0];
-      expect(bbcodeBtn.classes()).toContain("active");
+      // Default mode is WYSIWYG (visual preview of the BBCode being
+      // composed). BBCode is the source of truth sent on save; WYSIWYG
+      // is the default preview surface. Tab order: BBCode[0], WYSIWYG[1].
+      const wysiwygBtn = wrapper.findAll(".mode-tab")[1];
+      expect(wysiwygBtn.classes()).toContain("active");
     });
   });
 
@@ -195,13 +197,17 @@ describe("BBCodeEditor", () => {
       expect(wrapper.findAll(".mode-tab")[1].classes()).toContain("active");
     });
 
-    it("shows textarea in BBCode mode by default", async () => {
+    it("shows textarea when switching into BBCode mode", async () => {
       const wrapper = mount(BBCodeEditor, {
         props: { modelValue: "" },
       });
       await nextTick();
 
-      // Component starts in BBCode mode, textarea should be visible
+      // Default is WYSIWYG — textarea is not visible. Switch to BBCode mode.
+      await wrapper.findAll(".mode-tab")[0].trigger("click");
+      await flushPromises();
+      await nextTick();
+
       const textarea = wrapper.find(".bbcode-textarea");
       expect(textarea.isVisible()).toBe(true);
     });
@@ -213,7 +219,12 @@ describe("BBCodeEditor", () => {
       await flushPromises();
       await nextTick();
 
-      // Component starts in BBCode mode, textarea should have content
+      // Default is WYSIWYG. Switch to BBCode mode to expose the textarea,
+      // which holds the authoritative BBCode source.
+      await wrapper.findAll(".mode-tab")[0].trigger("click");
+      await flushPromises();
+      await nextTick();
+
       const textarea = wrapper.find(".bbcode-textarea");
       expect((textarea.element as HTMLTextAreaElement).value).toContain("[b]");
     });
@@ -384,7 +395,12 @@ describe("BBCodeEditor", () => {
       });
       await nextTick();
 
-      // Component starts in BBCode mode, wait for debounced validation
+      // Default is WYSIWYG; validation runs only in BBCode source mode.
+      // Switch into BBCode mode, then wait for debounced validation.
+      await wrapper.findAll(".mode-tab")[0].trigger("click");
+      await flushPromises();
+      await nextTick();
+
       await new Promise((resolve) => setTimeout(resolve, 400));
       await nextTick();
 

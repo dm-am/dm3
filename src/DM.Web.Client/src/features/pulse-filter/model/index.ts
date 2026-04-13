@@ -3,5 +3,4 @@ export type {
   PulseFilterState,
   PulseFilterComposable,
   PulseSortBy,
-  MinRatingFilter,
 } from "./usePulseFilter";

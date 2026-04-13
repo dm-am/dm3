@@ -35,11 +35,14 @@
       ><span class="bracket">]</span>
     </div>
   </div>
-  <!-- Skeleton placeholder while loading -->
+  <!-- Skeleton placeholder while loading. Matches .site-stats
+       dimensions exactly: 4 rows at $secondary-font-size × line-height
+       1.4, with the text line occupying ~0.75em of each row's height
+       so nothing shifts vertically when the numbers arrive. -->
   <div v-else class="site-stats-skeleton" aria-hidden="true">
     <div class="skeleton-row"><span class="skeleton-text" /></div>
     <div class="skeleton-row"><span class="skeleton-text skeleton-short" /></div>
-    <div class="skeleton-row"><span class="skeleton-text" /></div>
+    <div class="skeleton-row"><span class="skeleton-text skeleton-medium" /></div>
     <div class="skeleton-row"><span class="skeleton-text" /></div>
   </div>
 </template>
@@ -97,27 +100,38 @@ onUnmounted(() => {
 .online
   color: $accent-green
 
-// Skeleton styles
+// Skeleton — same external box model as .site-stats so no vertical or
+// horizontal shift happens when the loaded numbers replace it.
+// Each row is exactly 1.4em tall (matches line-height) and the shimmer
+// bar takes ~65% of that height, vertically centred via flex.
 .site-stats-skeleton
   font-size: $secondary-font-size
   line-height: 1.4
+  text-align: left
 
 .skeleton-row
+  display: flex
+  align-items: center
   height: 1.4em
-  margin-bottom: 1px
 
 .skeleton-text
   display: inline-block
-  width: 180px
-  height: 0.9em
+  width: 210px
+  height: 0.85em
   background: linear-gradient(90deg, $bg-element 25%, $bg-element-hover 50%, $bg-element 75%)
   background-size: 200% 100%
   animation: skeleton-shimmer 1.5s ease-in-out infinite
   border-radius: 2px
-  vertical-align: middle
 
   &.skeleton-short
-    width: 120px
+    width: 140px
+
+  &.skeleton-medium
+    width: 180px
+
+  @media (prefers-reduced-motion: reduce)
+    animation: none
+    background: $bg-element-hover
 
 @keyframes skeleton-shimmer
   0%

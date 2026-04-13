@@ -15,7 +15,7 @@ import type {
 } from "../model/types";
 import type { Patch } from "@/shared/api/models";
 import { Api } from "@/shared/api";
-import { BbRenderMode } from "@/shared/api";
+import { RENDER_AUDIENCE } from "@/shared/api";
 
 /**
  * Query parameters for cursor-based pagination
@@ -127,7 +127,7 @@ export default new (class MessagingApi {
    * Get message with BBCode text for editing
    */
   public getMessageForEdit(id: MessageId) {
-    return Api.get<Message>(`messages/${id}`, undefined, BbRenderMode.Bb);
+    return Api.get<Message>(`messages/${id}`, undefined, RENDER_AUDIENCE.AuthorEdit);
   }
 
   public updateMessage(id: MessageId, message: Patch<Message>) {

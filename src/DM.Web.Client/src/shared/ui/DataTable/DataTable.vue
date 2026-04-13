@@ -5,6 +5,7 @@ import type { Column, SortState } from "./types";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import DataTableSkeleton from "./DataTableSkeleton.vue";
 import { Tooltip } from "@/shared/ui/Tooltip";
+import { SvgIcon } from "@/shared/ui/Icon";
 
 const slots = useSlots();
 
@@ -133,31 +134,17 @@ function handleSortClick(column: Column) {
                 @click.stop="handleSortClick(column)"
               >
               <!-- Ascending icon (shown on hover when not sorted, or when sorted asc) -->
-              <svg
+              <SvgIcon
                 v-if="!isSortedBy(column) || sort?.direction === 'asc'"
+                name="sortAsc"
                 class="sort-icon"
-                viewBox="0 0 100 100"
-                fill="currentColor"
-              >
-                <path d="M31.953,36.663l4.714-4.713L25.69,20.977c-1.303-1.302-3.415-1.302-4.714,0L10,31.95l4.714,4.717L20,31.38V80h6.667V31.38L31.953,36.663z"/>
-                <rect x="43.333" y="26.667" width="46.667" height="6.667"/>
-                <rect x="43.333" y="40" width="36.667" height="6.667"/>
-                <rect x="43.333" y="53.333" width="26.667" height="6.667"/>
-                <rect x="43.333" y="66.667" width="16.667" height="6.666"/>
-              </svg>
+              />
               <!-- Descending icon (shown when sorted desc) -->
-              <svg
+              <SvgIcon
                 v-else
+                name="sortDesc"
                 class="sort-icon"
-                viewBox="0 0 100 100"
-                fill="currentColor"
-              >
-                <path d="M14.714,63.337L10,68.05l10.977,10.974c1.302,1.302,3.415,1.302,4.714,0L36.667,68.05l-4.714-4.717l-5.286,5.287V20H20v48.62L14.714,63.337z"/>
-                <rect x="43.333" y="26.667" width="46.667" height="6.667"/>
-                <rect x="43.333" y="40" width="36.667" height="6.667"/>
-                <rect x="43.333" y="53.333" width="26.667" height="6.667"/>
-                <rect x="43.333" y="66.667" width="16.667" height="6.666"/>
-              </svg>
+              />
               </button>
             </Tooltip>
           </span>
@@ -332,7 +319,6 @@ function handleSortClick(column: Column) {
   background: transparent
   cursor: pointer
   color: transparent
-  transition: color 0.15s ease
 
   &.active
     color: $text-muted

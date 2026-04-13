@@ -23,8 +23,6 @@ export {
   type Birthday,
   type VisibilitySettings,
   type Contact,
-  type FeaturedPost,
-  type BestPost,
   type BbText,
   type UserProfile,
   type PersonalProfile,

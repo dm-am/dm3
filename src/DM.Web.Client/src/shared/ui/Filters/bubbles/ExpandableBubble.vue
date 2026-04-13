@@ -6,6 +6,7 @@
  */
 import { ref, computed } from "vue";
 import { SvgIcon } from "@/shared/ui/Icon";
+import { symbols } from "@/shared/lib/utils/icons";
 import type { BubbleValue } from "../types";
 
 defineOptions({ name: "ExpandableBubble" });
@@ -107,7 +108,7 @@ onUnmounted(() => {
         class="bubble-owner-remove"
         @click.stop="removeValue(values[0].id)"
       >
-        <SvgIcon name="closeThin" />
+        {{ symbols.close }}
       </button>
     </span>
   </div>
@@ -126,7 +127,7 @@ onUnmounted(() => {
           class="bubble-owner-remove"
           @click.stop="removeValue(item.id)"
         >
-          <SvgIcon name="closeThin" />
+          {{ symbols.close }}
         </button>
       </span>
     </template>
@@ -144,7 +145,7 @@ onUnmounted(() => {
       :class="{ active: showDropdown }"
       @click.stop="toggleDropdown"
     >
-      <SvgIcon name="expandDown" />
+      <SvgIcon name="chevronDown" />
     </button>
 
     <!-- Dropdown for hidden values -->
@@ -157,7 +158,7 @@ onUnmounted(() => {
         @click.stop="removeFromDropdown(item.id)"
       >
         <span class="owner-name">{{ item.label }}</span>
-        <SvgIcon name="closeThin" class="owner-remove" />
+        <span class="owner-remove">{{ symbols.close }}</span>
       </button>
     </div>
   </div>

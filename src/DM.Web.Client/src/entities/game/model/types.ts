@@ -312,6 +312,30 @@ export interface RoomClaim {
   claimedAt: string;
 }
 
+/**
+ * Per-room access grant policy.
+ *  - ReadOnly: can view the room but cannot post
+ *  - Full: can view and post (only valid for characters)
+ */
+export enum RoomAccessPolicy {
+  ReadOnly = "ReadOnly",
+  Full = "Full",
+}
+
+/**
+ * Per-room access grant. For Private rooms, this enumerates:
+ *  - characters whose owners may view the room (character + user);
+ *    characters can have either ReadOnly or Full policy
+ *  - explicit readers added to the room (user only, no character);
+ *    readers are always ReadOnly
+ */
+export interface RoomAccess {
+  id: string;
+  policy?: RoomAccessPolicy;
+  character?: Character | null;
+  user?: UserRef | null;
+}
+
 export interface PendingPost {
   id: string;
   characterId: string;
@@ -334,15 +358,21 @@ export type Room = {
   access?: RoomAccessType;
   type?: RoomType;
   claims?: RoomClaim[];
+  /** Explicit per-room access grants (characters and/or readers) */
+  accesses?: RoomAccess[];
   pendings?: PendingPost[];
   unreadPostsCount: number;
   settings?: RoomSettings;
-  /** Game reference (for navigation in post listings) */
-  game?: {
-    id: string;
-    publicId: string;
-    title: string;
-  };
+  /**
+   * Parent game reference for this room. Post-listing endpoints
+   * (rated posts, pulse) populate this with a full sidebar-tier
+   * GameRef — master, assistants, active characters, recruitment,
+   * counts — so downstream GameLink / RoomLink components can
+   * render tooltips without a second network round-trip per post.
+   * Mirrors the sidebar's data-flow (ActiveGames, RecruitingGames,
+   * OwnedGames all pass full GameRef objects straight into GameLink).
+   */
+  game?: GameRef;
 };
 
 export interface DiceRoll {

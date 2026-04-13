@@ -35,6 +35,11 @@ public class BbParserProvider : IBbParserProvider
 
     // Mod block - green highlighted block for moderator messages (Common and Message contexts only)
     private static readonly Tag Mod = new("mod", "<div class=\"mod-block\">", "</div>");
+
+    // AuthorEdit variant of [mod] — emits data-bb-tag so Tiptap's ModBlock
+    // extension can round-trip the tag back into BBCode on save.
+    private static readonly Tag ModAuthorEdit = new(
+        "mod", "<div class=\"mod-block\" data-bb-tag=\"mod\">", "</div>");
     private static readonly Tag Preformatted = new("pre", $"<pre class=\"{CodeClassName}\">", "</pre>");
     private static readonly ListTag OrderedList = new("ol", "<ol>", "</ol>");
     private static readonly ListTag UnorderedList = new("ul", "<ul>", "</ul>");
@@ -68,6 +73,15 @@ public class BbParserProvider : IBbParserProvider
 
     private static readonly Tag Private = new("private", $"<div class=\"{PrivateClassName}\">",
         $"</div><div class=\"{PrivateHeaderClassName}\">??????????: {{value}}</div>", true, false);
+
+    // AuthorEdit variant of [private] — opens with data-bb-tag and
+    // data-bb-addressees carrying the raw attribute value so Tiptap's
+    // Private extension can round-trip the tag on save.
+    private static readonly Tag PrivateAuthorEdit = new(
+        "private",
+        $"<div class=\"{PrivateClassName}\" data-bb-tag=\"private\" data-bb-addressees=\"{{value}}\">",
+        $"</div><div class=\"{PrivateHeaderClassName}\">??????????: {{value}}</div>",
+        true, false);
 
     private static readonly Dictionary<string, string> CommonSubstitutions = new()
     {
@@ -142,6 +156,28 @@ public class BbParserProvider : IBbParserProvider
         new BbParserWrapper(new BbParser(DefaultSafeTags.Build(),
             BbParser.SecuritySubstitutions, SafeSubstitutions)));
 
+    // ═════════════════════════════════════════════════════════════════════
+    // AuthorEdit parsers — same tag sets as their Display counterparts
+    // but with round-trip-enabled templates for [private] and [mod] so
+    // Tiptap can parse and re-serialize the privacy tags without loss.
+    // ═════════════════════════════════════════════════════════════════════
+
+    private static readonly Lazy<IBbParser> PostAuthorEditParser = new(() =>
+        new BbParserWrapper(new BbParser(DefaultTags.With(PrivateAuthorEdit).Build(),
+            BbParser.SecuritySubstitutions, CommonSubstitutions)));
+
+    private static readonly Lazy<IBbParser> CommonAuthorEditParser = new(() =>
+        new BbParserWrapper(new BbParser(DefaultTags.With(ModAuthorEdit).Build(),
+            BbParser.SecuritySubstitutions, CommonSubstitutions)));
+
+    private static readonly Lazy<IBbParser> ChatAuthorEditParser = new(() =>
+        new BbParserWrapper(new BbParser(DefaultTags.With(ModAuthorEdit).Build(),
+            BbParser.SecuritySubstitutions, ChatMessageSubstitutions)));
+
+    private static readonly Lazy<IBbParser> GeneralChatAuthorEditParser = new(() =>
+        new BbParserWrapper(new BbParser(DefaultSafeTags.With(Preformatted, ModAuthorEdit).Build(),
+            BbParser.SecuritySubstitutions, CommonSubstitutions)));
+
     /// <inheritdoc />
     public IBbParser CurrentCommon => CommonParser.Value;
 
@@ -162,4 +198,41 @@ public class BbParserProvider : IBbParserProvider
 
     /// <inheritdoc />
     public IBbParser CurrentGeneralChat => GeneralChatMessageParser.Value;
+
+    /// <inheritdoc />
+    public IBbParser GetForSurface(BbSurface surface) => surface switch
+    {
+        // Game posts: [private] allowed, [mod] not.
+        BbSurface.GamePost => PostParser.Value,
+        // Forum topics: [mod] allowed, [private] not.
+        BbSurface.ForumTopic => CommonParser.Value,
+        // All comments (forum / blog / game): [mod] allowed, [private] not.
+        BbSurface.Comment => CommonParser.Value,
+        // Global chat: [mod] allowed, [private] not, safe tag set.
+        BbSurface.GlobalChatMessage => GeneralChatMessageParser.Value,
+        // Profile bios / best posts: neither [mod] nor [private]; info tag set.
+        BbSurface.Profile => InfoParser.Value,
+        // Private 1-to-1 messages: neither [mod] nor [private].
+        BbSurface.DirectMessage => ChatMessageParser.Value,
+        _ => CommonParser.Value
+    };
+
+    /// <inheritdoc />
+    public IBbParser GetSafeForSurface(BbSurface surface) => surface switch
+    {
+        BbSurface.GamePost => SafePostParser.Value,
+        _ => SafeRatingParser.Value
+    };
+
+    /// <inheritdoc />
+    public IBbParser GetForAuthorEdit(BbSurface surface) => surface switch
+    {
+        BbSurface.GamePost => PostAuthorEditParser.Value,
+        BbSurface.ForumTopic => CommonAuthorEditParser.Value,
+        BbSurface.Comment => CommonAuthorEditParser.Value,
+        BbSurface.GlobalChatMessage => GeneralChatAuthorEditParser.Value,
+        BbSurface.Profile => InfoParser.Value, // profile has neither [mod] nor [private]
+        BbSurface.DirectMessage => ChatAuthorEditParser.Value,
+        _ => CommonAuthorEditParser.Value
+    };
 }

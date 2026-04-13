@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from "vue";
+import { ref, computed } from "vue";
 import { storeToRefs } from "pinia";
 import type { Comment } from "@/shared/api/models/common/comment";
 import { useUserStore } from "@/entities/user";
 import { UserRole } from "@/shared/api/models/community";
 import { Tooltip } from "@/shared/ui/Tooltip";
+import { TruncatedContent } from "@/shared/ui/TruncatedContent";
 import dayjs from "dayjs";
-import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
-import defaultPicture from "@/assets/images/userpic.png";
+import {
+  initBbcodeInteractive,
+  trimHtmlWhitespace,
+} from "@/shared/lib/utils/bbcodeInteractive";
+import { defaultAvatarUrl as defaultPicture } from "@/shared/lib/utils/icons";
+import { SvgIcon } from "@/shared/ui/Icon";
 
 const props = withDefaults(
   defineProps<{
@@ -36,12 +41,12 @@ const { user: currentUser } = storeToRefs(useUserStore());
 // State
 const isEditing = ref(false);
 const editText = ref("");
-const isExpanded = ref(false);
 const showDeletedContent = ref(false);
-const contentRef = ref<HTMLElement | null>(null);
-const isOverflowing = ref(false);
 const showLikesPopup = ref(false);
-const maxHeight = 300;
+
+// Max collapsed height before TruncatedContent shows "показать полностью".
+// 300px ≈ 15-20 lines of BBCode text, matches DM2 comment visual rhythm.
+const COMMENT_MAX_HEIGHT = 300;
 
 // Computed
 const authorPicture = computed(
@@ -50,12 +55,12 @@ const authorPicture = computed(
 
 const formattedDate = computed(() => {
   if (!props.comment.createdUtc) return "";
-  return dayjs(props.comment.createdUtc).format("DD.MM.YYYY HH:mm");
+  return dayjs(props.comment.createdUtc).format("DD.MM.YYYY [в] HH:mm");
 });
 
 const formattedEditDate = computed(() => {
   if (!props.comment.modifiedUtc) return "";
-  return dayjs(props.comment.modifiedUtc).format("DD.MM.YYYY в HH:mm");
+  return dayjs(props.comment.modifiedUtc).format("DD.MM.YYYY [в] HH:mm");
 });
 
 const isEdited = computed(() => !!props.comment.modifiedUtc);
@@ -128,18 +133,11 @@ const roleBadge = computed(() => {
   }
 });
 
-const hasCutTag = computed(() => props.comment.text?.includes("[cut]"));
-
-const displayText = computed(() => {
-  if (!props.comment.text) return "";
-  if (hasCutTag.value && !isExpanded.value) {
-    const cutIndex = props.comment.text.indexOf("[cut]");
-    return props.comment.text.substring(0, cutIndex);
-  }
-  return props.comment.text;
-});
-
-const needsTruncation = computed(() => hasCutTag.value || isOverflowing.value);
+// Comment rendered HTML, pre-trimmed of leading/trailing whitespace so
+// phantom empty lines never eat the truncation budget. Pure transform,
+// no DOM mutation. TruncatedContent handles overflow detection, height-
+// based truncation, collapsed-state media shrinkage, and the expand link.
+const commentHtml = computed(() => trimHtmlWhitespace(props.comment.text));
 
 // Methods
 function startEdit() {
@@ -184,10 +182,6 @@ function handleWarn() {
   emit("warn", props.comment.id);
 }
 
-function toggleExpand() {
-  isExpanded.value = !isExpanded.value;
-}
-
 function toggleDeletedContent() {
   showDeletedContent.value = !showDeletedContent.value;
 }
@@ -198,28 +192,11 @@ function copyAnchorLink() {
   );
 }
 
-function checkContentHeight() {
-  if (contentRef.value && !hasCutTag.value) {
-    isOverflowing.value = contentRef.value.scrollHeight > maxHeight;
-  }
+// Reinitialize interactive BBCode elements (spoilers, NSFW toggles) each
+// time TruncatedContent mounts / refreshes the content element.
+function initCommentBbcode(el: HTMLElement) {
+  initBbcodeInteractive(el);
 }
-
-onMounted(() => {
-  checkContentHeight();
-  nextTick(() => {
-    initBbcodeInteractive(contentRef.value);
-  });
-});
-
-watch(
-  () => props.comment.text,
-  () => {
-    checkContentHeight();
-    nextTick(() => {
-      initBbcodeInteractive(contentRef.value);
-    });
-  },
-);
 </script>
 
 <template>
@@ -268,16 +245,14 @@ watch(
 
         <!-- View mode -->
         <template v-else>
-          <div
-            ref="contentRef"
-            class="comment-text bbcode-content"
-            :class="{ collapsed: needsTruncation && !isExpanded }"
-            :style="{ maxHeight: needsTruncation && !isExpanded ? `${maxHeight}px` : 'none' }"
-            v-html="displayText"
-          />
-          <button v-if="needsTruncation" class="expand-btn" @click="toggleExpand">
-            {{ isExpanded ? "Свернуть" : "Читать далее" }}
-          </button>
+          <TruncatedContent
+            :truncatable="true"
+            :max-height="COMMENT_MAX_HEIGHT"
+            :watch-key="commentHtml"
+            :on-content-mounted="initCommentBbcode"
+          >
+            <div class="comment-text bbcode-content" v-html="commentHtml" />
+          </TruncatedContent>
         </template>
 
         <!-- Footer: Author info + Actions + Number -->
@@ -308,7 +283,7 @@ watch(
                 :disabled="!canLike"
                 @click="toggleLike"
               >
-                <span class="like-icon">&#9829;</span>
+                <SvgIcon name="heartFilled" class="like-icon" />
                 <span v-if="likesCount > 0" class="likes-count">{{ likesCount }}</span>
               </button>
               <div v-if="showLikesPopup && likesCount > 0" class="likes-popup">
@@ -394,37 +369,12 @@ watch(
   flex: 1
   min-width: 0
 
-// .comment-text uses global .bbcode-content class
+// .comment-text uses the global .bbcode-content class for typography.
+// Truncation, fade, expand link, and media shrinkage are owned by
+// <TruncatedContent> — see @/shared/ui/TruncatedContent.
 .comment-text
-  overflow: hidden
   color: $text
   line-height: 1.6
-
-  &.collapsed
-    overflow: hidden
-    position: relative
-
-    &::after
-      content: ""
-      position: absolute
-      bottom: 0
-      left: 0
-      right: 0
-      height: $grid-step * 10
-      background: linear-gradient(transparent, var(--bg-element))
-
-.expand-btn
-  padding: $tiny $small
-  margin-top: $small
-  font-size: $secondary-font-size
-  border: none
-  border-radius: $tiny
-  cursor: pointer
-  background-color: $bg-element-accent
-  color: $link
-
-  &:hover
-    background-color: $bg-element
 
 .edit-container
   margin-bottom: $small

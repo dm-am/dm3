@@ -4,6 +4,7 @@
  * Replaces browser prompt() with styled modal
  */
 import { ref, watch, nextTick } from "vue";
+import { symbols } from "@/shared/lib/utils/icons";
 
 export interface InputField {
   name: string;
@@ -166,7 +167,7 @@ function handleBackdropClick(e: MouseEvent) {
               @click="handleCancel"
               aria-label="Закрыть"
             >
-              &times;
+              {{ symbols.close }}
             </button>
           </div>
 
