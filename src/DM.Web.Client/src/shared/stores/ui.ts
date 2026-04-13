@@ -7,7 +7,7 @@ import { Theme } from "@/shared/api/models/community";
  * Future-proof union — новые значения (например, "cozy") добавляются без рефакторинга.
  *
  * - `compact` — без аватаров, плотная компоновка
- * - `full`    — с аватарами, развёрнутая компоновка
+ * - `full`    — с аватарами, развернутая компоновка
  */
 export type MessageLayout = "compact" | "full";
 

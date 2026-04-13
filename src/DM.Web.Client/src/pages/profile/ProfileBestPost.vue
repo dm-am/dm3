@@ -9,7 +9,7 @@
 import { onMounted, watch } from "vue";
 import type { Username } from "@/shared/api/models/community";
 import { GamePost } from "@/pages/game";
-import { GamePostSkeleton } from "@/pages/home";
+import { GamePostSkeleton } from "@/shared/ui/Skeleton";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { useRatedPostsStore } from "@/entities/game";

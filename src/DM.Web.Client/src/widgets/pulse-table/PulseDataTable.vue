@@ -6,7 +6,7 @@ import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { GamePost } from "@/pages/game";
 import { usePulseStore } from "@/entities/game";
 import { PulseFilter, usePulseFilter } from "@/features/pulse-filter";
-import PulsePostSkeleton from "./PulsePostSkeleton.vue";
+import { GamePostSkeleton } from "@/shared/ui/Skeleton";
 
 const pulseStore = usePulseStore();
 const { posts, paging, loading, error } = storeToRefs(pulseStore);
@@ -54,7 +54,7 @@ const hasPaging = computed(() => paging.value && paging.value.pages > 1);
          refetch avoids a jarring full-page blank flash when the user
          changes sort/filter. This mirrors the stale-while-revalidate
          pattern documented in PERFORMANCE.md. -->
-    <PulsePostSkeleton v-else-if="loading && posts.length === 0" :count="5" />
+    <GamePostSkeleton v-else-if="loading && posts.length === 0" :count="5" />
 
     <!-- Empty state -->
     <SecondaryText v-else-if="posts.length === 0">

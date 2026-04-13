@@ -7,7 +7,6 @@
 
 @import "Themes"
 @import "ZIndex"
-@import "Animations"
 
 // -----------------------------------------------------------------------------
 // Variables
@@ -308,6 +307,7 @@ $filter-avatar-size: 24px
     border: none
     background: none
     color: $text
+    transition: background-color 0.1s ease
 
     &.indented
       padding-left: $large
@@ -392,7 +392,7 @@ $filter-avatar-size: 24px
     background: none
     color: $text-muted
     opacity: 0.5
-    +transition-safe(opacity, $transition-fast)
+    transition: opacity 0.1s ease
 
     &:hover
       color: $text
@@ -420,6 +420,7 @@ $filter-avatar-size: 24px
     align-items: center
     padding: 2px 4px
     border-radius: $border-radius
+    transition: background-color 0.1s ease
 
     &:hover
       background-color: $bg-element-accent
@@ -441,7 +442,7 @@ $filter-avatar-size: 24px
     background: none
     color: $text-muted
     opacity: 0.5
-    +transition-safe(opacity, $transition-fast)
+    transition: opacity 0.1s ease
 
     &:hover
       color: $text
@@ -472,6 +473,7 @@ $filter-avatar-size: 24px
     background: none
     color: $text-muted
     border-radius: 2px
+    transition: background-color 0.1s ease, color 0.1s ease
 
     &:hover,
     &.active
@@ -481,7 +483,7 @@ $filter-avatar-size: 24px
     svg
       width: 16px
       height: 16px
-      +transition-safe(transform)
+      transition: transform 0.15s ease
 
     &.active svg
       transform: rotate(180deg)
@@ -514,6 +516,7 @@ $filter-avatar-size: 24px
     border-radius: $border-radius
     background: none
     color: $text
+    transition: background-color 0.1s ease
 
     &:hover
       background-color: $bg-element-accent
@@ -533,7 +536,7 @@ $filter-avatar-size: 24px
     height: 12px
     color: $text-muted
     opacity: 0.5
-    +transition-safe(opacity, $transition-fast)
+    transition: opacity 0.1s ease
 
     &:hover
       color: $accent-red

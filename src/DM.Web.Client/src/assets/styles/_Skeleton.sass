@@ -28,11 +28,9 @@
   background-size: 200% 100%
   animation: skeleton-shimmer 1.5s ease-in-out infinite
 
-// Reduced-motion override — must be applied globally, not inside mixin,
-// since the mixin's @media creates a nested rule that triggers Sass
-// deprecation warnings when callers add declarations after the mixin.
-@media (prefers-reduced-motion: reduce)
-  // Applied via global Reset.sass rule: animation: none !important
+// Reduced-motion: handled by the global rule in Reset.sass
+// (animation-duration: 0.01ms !important on *, *::before, *::after).
+// No per-mixin @media needed.
 
 @keyframes skeleton-shimmer
   0%

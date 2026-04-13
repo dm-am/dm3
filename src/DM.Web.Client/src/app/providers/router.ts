@@ -52,8 +52,8 @@ const router = createRouter({
       },
     },
     {
-      name: "globalChat",
-      path: "/chat",
+      name: "global-chat",
+      path: "/global-chat",
       components: {
         left: LeftSidebar,
         right: RightSidebar,
@@ -396,6 +396,26 @@ const router = createRouter({
         left: LeftSidebar,
         right: RightSidebar,
         page: () => import("@/pages/legal/UserAgreementPage.vue"),
+      },
+    },
+    // Error page — single dynamic route for /error/:code (400, 401, 403, etc.)
+    {
+      name: "error",
+      path: "/error/:code",
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/error/ErrorPageRoute.vue"),
+      },
+    },
+    // Catch-all 404 — must be the last route
+    {
+      name: "not-found",
+      path: "/:pathMatch(.*)*",
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/error/ErrorPageRoute.vue"),
       },
     },
   ],

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, nextTick, computed, watch } from "vue";
+import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import {
   useGlobalChatStore,
@@ -25,6 +26,7 @@ import {
 } from "@/shared/lib/utils/chat";
 import { useMessagePermissions, useVirtualScroll } from "@/shared/lib/composables";
 
+const router = useRouter();
 const globalChatStore = useGlobalChatStore();
 const userStore = useUserStore();
 const {
@@ -673,7 +675,7 @@ async function confirmDelete() {
       <template v-for="(date, index) in recentDates" :key="date.value">
         <a
           class="archive-link"
-          :href="`/chat?date=${date.value}`"
+          :href="router.resolve({ name: 'global-chat', query: { date: date.value } }).href"
           @click.prevent="loadLogsForDate(date.value)"
           >{{ date.label }}</a
         ><span v-if="index < recentDates.length - 1" class="archive-sep"
@@ -871,7 +873,7 @@ async function confirmDelete() {
           v-model="newMessage"
           context="message"
           placeholder=""
-          draft-key="globalChat"
+          draft-key="global-chat"
           :disabled="sending"
           :min-height="60"
           :max-height="200"

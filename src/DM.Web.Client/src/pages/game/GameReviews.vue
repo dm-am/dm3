@@ -7,10 +7,10 @@ import { useAuthStore } from "@/shared/stores/auth";
 import type { GameReview } from "@/shared/api/models/game/reviews";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { ContentText } from "@/shared/ui";
-import { Tooltip } from "@/shared/ui/Tooltip";
 import { UserLink } from "@/entities/user";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import Paging from "@/shared/ui/Paging/Paging.vue";
+import { ExpandableList, type ExpandableItem } from "@/shared/ui/ExpandableList";
 import dayjs from "dayjs";
 
 const route = useRoute();
@@ -29,6 +29,16 @@ const page = computed(() => {
   const p = route.query.number;
   return p ? parseInt(String(p), 10) : 1;
 });
+
+// Map reviews to ExpandableItem format for ExpandableList.
+// Title shows "Author — Date" as plain text (ExpandableList renders it).
+const reviewItems = computed<(ExpandableItem & { review: GameReview })[]>(() =>
+  (reviews.value?.resources ?? []).map((r) => ({
+    id: r.id,
+    title: `${r.author?.username ?? "Аноним"} — ${formatDate(r.createdUtc)}`,
+    review: r,
+  })),
+);
 
 async function fetchReviews() {
   if (!gameId.value) return;
@@ -75,19 +85,17 @@ watch(page, fetchReviews);
     </SecondaryText>
 
     <template v-else-if="reviews">
-      <div v-if="reviews.resources.length" class="reviews-list">
-        <div v-for="review in reviews.resources" :key="review.id" class="review-item">
-          <div class="review-header">
-            <UserLink v-if="review.author" :user="review.author" />
-            <Tooltip :text="formatDate(review.createdUtc)">
-              <span class="review-date">{{ formatDate(review.createdUtc) }}</span>
-            </Tooltip>
-          </div>
+      <ExpandableList
+        v-if="reviewItems.length"
+        :items="reviewItems"
+        :allow-multiple="true"
+      >
+        <template #content="{ item }">
           <div class="review-text">
-            <ContentText :html="review.text" />
+            <ContentText :html="item.review.text" />
           </div>
-        </div>
-      </div>
+        </template>
+      </ExpandableList>
 
       <SecondaryText v-else>
         Рецензий на эту игру пока нет. Будьте первым!
@@ -129,26 +137,6 @@ watch(page, fetchReviews);
 
 .game-reviews
   padding: $small 0
-
-.reviews-list
-  display: flex
-  flex-direction: column
-  gap: $medium
-
-.review-item
-  padding: $small
-  background-color: $bg-element
-  border: 1px dashed $border
-
-.review-header
-  display: flex
-  align-items: center
-  gap: $small
-  margin-bottom: $small
-
-.review-date
-  color: $text-muted
-  font-size: $secondary-font-size
 
 .review-text
   color: $text

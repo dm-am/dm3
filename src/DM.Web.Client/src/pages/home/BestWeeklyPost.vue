@@ -22,7 +22,7 @@
 import { GamePost } from "@/pages/game";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
-import GamePostSkeleton from "./GamePostSkeleton.vue";
+import { GamePostSkeleton } from "@/shared/ui/Skeleton";
 import { useRatedPostsStore } from "@/entities/game";
 import { onMounted } from "vue";
 

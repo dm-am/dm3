@@ -1,5 +1,4 @@
 @import "Themes"
-@import "Animations"
 
 $input-padding: ($minor + 1px) $small
 
@@ -27,10 +26,7 @@ $input-padding: ($minor + 1px) $small
   &:disabled
     background-color: $input-bg-disabled
 
-/// Primary button - main action button (solid background).
-/// Theme-dependent colors (background, color) animate via the global
-/// theme transition in Reset.sass. Only opacity needs a local transition
-/// for the :disabled state.
+/// Primary button - main action button (solid background)
 @mixin primary-button()
   padding: $button-padding
   font-size: $font-size
@@ -41,7 +37,7 @@ $input-padding: ($minor + 1px) $small
   color: #fff
   border: none
   border-radius: $button-border-radius
-  +transition-safe(opacity)
+  transition: background-color 0.15s ease
 
   &:hover:not(:disabled)
     background-color: $link-hover
@@ -53,8 +49,7 @@ $input-padding: ($minor + 1px) $small
     opacity: 0.5
     cursor: not-allowed
 
-/// Secondary button - outline style.
-/// Theme colors animated globally; only opacity needs local transition.
+/// Secondary button - outline style
 @mixin secondary-button()
   padding: $button-padding
   font-size: $font-size
@@ -65,7 +60,7 @@ $input-padding: ($minor + 1px) $small
   color: $link
   border: 1px solid $link
   border-radius: $button-border-radius
-  +transition-safe(opacity)
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease
 
   &:hover:not(:disabled)
     color: $link-hover

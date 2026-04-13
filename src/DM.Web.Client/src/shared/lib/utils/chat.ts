@@ -153,7 +153,7 @@ export function getLikesTooltip(likes: User[]): string {
   if (count === 1) return `${names[0]} оценил(а) это`;
   if (count === 2) return `${names[0]} и ${names[1]} оценили это`;
   if (count <= 5) return `${names.slice(0, -1).join(", ")} и ${names[count - 1]} оценили это`;
-  return `${names.slice(0, 3).join(", ")} и ещё ${count - 3} оценили это`;
+  return `${names.slice(0, 3).join(", ")} и еще ${count - 3} оценили это`;
 }
 
 // =============================================================================

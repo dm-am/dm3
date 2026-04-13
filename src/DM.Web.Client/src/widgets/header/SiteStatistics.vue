@@ -83,6 +83,7 @@ onUnmounted(() => {
 <style scoped lang="sass">
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
+@import "src/assets/styles/Skeleton"
 
 .site-stats
   font-size: $secondary-font-size
@@ -118,24 +119,11 @@ onUnmounted(() => {
   display: inline-block
   width: 210px
   height: 0.85em
-  background: linear-gradient(90deg, $bg-element 25%, $bg-element-hover 50%, $bg-element 75%)
-  background-size: 200% 100%
-  animation: skeleton-shimmer 1.5s ease-in-out infinite
-  border-radius: 2px
+  +skeleton-shimmer
 
   &.skeleton-short
     width: 140px
 
   &.skeleton-medium
     width: 180px
-
-  @media (prefers-reduced-motion: reduce)
-    animation: none
-    background: $bg-element-hover
-
-@keyframes skeleton-shimmer
-  0%
-    background-position: 200% 0
-  100%
-    background-position: -200% 0
 </style>

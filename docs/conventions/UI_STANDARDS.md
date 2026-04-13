@@ -86,41 +86,41 @@
 | Normal | 0.15s | ease |
 | Slow (modals) | 0.3s | ease |
 
-**Обязательно:** `prefers-reduced-motion: reduce` → `transition: none`
+`prefers-reduced-motion` покрывается глобальным правилом в `Reset.sass` (0.01ms duration для всех transitions и animations). Не нужно добавлять media query в каждый компонент.
 
 **Файл:** `src/assets/styles/_Animations.sass`
 
 ---
 
-## Переключение темы (View Transition API)
+## Переключение темы
 
-Переключение темы использует **View Transition API** (`document.startViewTransition()`) в `App.vue`. API захватывает скриншот текущего состояния страницы, применяет class swap на `<html>`, захватывает новое состояние, и cross-fade'ит между двумя bitmap'ами за 0.3s. Всё — цвета, картинки, `filter:invert()` на хэдере/футере — переходит синхронно как единое целое.
+Переключение темы — **мгновенное**. CSS custom properties snap между значениями light/dark.
 
-**Почему не CSS transitions:** хэдер и футер переключают тему через `filter: $filter-invert` (CSS custom property). Нерегистрированные custom properties — строки, их нельзя интерполировать. `filter: invert()` при transition проходит через уродливые промежуточные состояния (серая каша). View Transition API решает это на уровне рендеринга: оба состояния — bitmap'ы, cross-fade между ними всегда чистый.
+**Механизм** (`App.vue`): на время смены класса `theme_Light`/`theme_Dark` на `<html>` добавляется класс `.no-transitions`, блокирующий все CSS transitions через `!important`. Forced reflow (`offsetHeight`) гарантирует, что все значения обновятся за один кадр. После reflow transitions разблокируются.
 
-**Fallback:** если View Transition API недоступен — мгновенный swap (graceful degradation).
-
-**CSS (Reset.sass):**
-```sass
-::view-transition-old(root),
-::view-transition-new(root)
-  animation-duration: 0.3s
-
-@media (prefers-reduced-motion: reduce)
-  ::view-transition-old(root),
-  ::view-transition-new(root)
-    animation-duration: 0s
+**CSS** (`ThemeVariables.css`):
+```css
+html.no-transitions,
+html.no-transitions *,
+html.no-transitions *::before,
+html.no-transitions *::after {
+  transition: none !important;
+}
 ```
 
-**Два механизма, дополняющих друг друга:**
-
-1. **View Transition API** (`document.startViewTransition()` в App.vue) — bitmap cross-fade всей страницы при смене темы. Всё (цвета, картинки, filter:invert) переходит атомарно.
-2. **Глобальное правило** `*, *::before, *::after { transition: background-color, color, border-color, fill, stroke, box-shadow 0.3s }` в `Reset.sass` — плавные hover/focus/active цветовые переходы на интерактивных элементах (кнопки, строки таблиц, dropdown items). Не для темы, а для UX.
+**JS** (`App.vue`):
+```ts
+html.classList.add("no-transitions");
+// ... swap theme classes ...
+void html.offsetHeight; // Force reflow
+html.classList.remove("no-transitions");
+```
 
 **Правила:**
 1. **`transition: all` запрещён.** Всегда перечислять свойства явно (performance, predictability).
-2. **Не ставить `transition` на theme-dependent цветовые свойства в base state** — глобальное правило уже покрывает их для hover/state переходов.
-3. Для non-theme свойств (`opacity`, `transform`, `width`, `height`, `max-height`) — `+transition-safe()` / `+transition-safe-multi()` из `_Animations.sass`.
+2. Per-component hover/focus/active transitions на цветовые свойства **допустимы** — `.no-transitions` автоматически подавляет их при смене темы.
+3. Для стандартных transition — `+transition-safe()` / `+transition-safe-multi()` из `_Animations.sass`.
+4. Любой новый компонент с `transition:` автоматически покрывается `.no-transitions` — никакого opt-in не нужно.
 
 ---
 

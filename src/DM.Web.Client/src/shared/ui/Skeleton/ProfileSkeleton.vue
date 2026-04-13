@@ -10,7 +10,7 @@
 </script>
 
 <template>
-  <div class="profile-skeleton">
+  <div class="profile-skeleton" aria-hidden="true">
     <div class="skeleton-avatar" />
     <div class="skeleton-info">
       <div class="skeleton-name" />

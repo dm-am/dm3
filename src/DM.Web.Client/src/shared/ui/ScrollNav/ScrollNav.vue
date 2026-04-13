@@ -353,6 +353,10 @@ const {
     width: 0
     height: 0
 
+  // Colors snap instantly during theme switch (.no-transitions handles this).
+  // Only transform/opacity use !important to survive .no-transitions —
+  // scoped specificity (0,0,2,1) beats global .no-transitions (0,0,1,2).
+  // cubic-bezier(0.4, 0, 0.2, 1) — Material standard easing (natural deceleration).
   .slider
     position: absolute
     top: 0
@@ -373,7 +377,7 @@ const {
       bottom: 2px
       border-radius: 50%
       background: $link-nav
-      transition: transform 0.3s ease-in-out, background-color 0.3s ease
+      transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important
 
     &:after
       content: ''
@@ -386,7 +390,7 @@ const {
       background: $bg-page
       z-index: 1
       opacity: 0
-      transition: transform 0.3s ease-in-out, background-color 0.3s ease
+      transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important
 
   input:checked + .slider:before,
   input:checked + .slider:after

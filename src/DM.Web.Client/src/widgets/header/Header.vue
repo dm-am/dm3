@@ -83,7 +83,7 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
       <router-link class="link" :to="{ name: 'forum-index' }"
         >Форум</router-link
       >
-      <router-link class="link" :to="{ name: 'globalChat' }">Чат</router-link>
+      <router-link class="link" :to="{ name: 'global-chat' }">Чат</router-link>
       <router-link
         class="link"
         :to="{ name: 'forum', params: { alias: 'newbies' } }"

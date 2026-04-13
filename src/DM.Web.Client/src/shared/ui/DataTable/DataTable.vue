@@ -152,13 +152,9 @@ function handleSortClick(column: Column) {
       </tr>
     </thead>
 
-    <!-- Skeleton loading state (shown instead of tbody) -->
-    <tbody v-if="loading" class="table-loading-body">
-      <tr>
-        <td :colspan="showRowNumbers ? columns.length + 1 : columns.length" class="skeleton-cell">
-          <DataTableSkeleton :rows="10" :columns="columns.length" />
-        </td>
-      </tr>
+    <!-- Skeleton loading state (rendered as real table rows for correct column widths) -->
+    <tbody v-if="loading" aria-hidden="true">
+      <DataTableSkeleton :rows="10" :columns="columns" :show-row-numbers="showRowNumbers" />
     </tbody>
 
     <!-- Non-virtual tbody (for small lists) -->
@@ -370,11 +366,6 @@ th.sortable .sort-icon-button.active:hover
 
   &.col-tags
     text-align: left
-
-.table-loading-body
-  .skeleton-cell
-    padding: 0
-    background-color: transparent
 
 .table-empty-row
   td

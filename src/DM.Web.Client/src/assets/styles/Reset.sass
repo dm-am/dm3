@@ -37,6 +37,7 @@ body
 a
   text-decoration: none
   cursor: pointer
+  transition: color $animation-time ease
   color: $link
   &:hover
     text-decoration: underline
@@ -52,7 +53,7 @@ field
 
   &.error input
     animation-name: shake-error
-    animation-duration: 0.4s
+    animation-duration: $animation-time
     animation-timing-function: ease-in-out
     border-color: $border-accent-red
 
@@ -81,28 +82,6 @@ field
 .muted
   color: $text-muted
 
-// ---------------------------------------------------------------------------
-// Global hover/state color transitions.
-// Gives ALL interactive elements (table rows, buttons, dropdown items, links)
-// a smooth background-color / color fade on :hover/:focus/:active without
-// requiring per-component transition declarations.
-//
-// NOTE: Theme switch transitions are handled separately by @property
-// registrations in ThemeVariables.css (variables transition on <html>).
-// This rule handles hover/focus/active state changes only.
-//
-// Specificity: (0,0,1). Any scoped component rule overrides trivially.
-// ---------------------------------------------------------------------------
-*, *::before, *::after
-  transition-property: background-color, color, border-color, fill, stroke, box-shadow
-  transition-duration: 0.3s
-  transition-timing-function: ease
-
-@media (prefers-reduced-motion: reduce)
-  *, *::before, *::after
-    transition: none !important
-    animation: none !important
-
 // Highlight animation for unread content navigation
 .highlight-unread
   animation: highlight-pulse 2s ease-out
@@ -124,3 +103,11 @@ field
   border-radius: 3px
   box-decoration-break: clone
   -webkit-box-decoration-break: clone
+
+// Global reduced-motion: respect user OS preference
+// 0.01ms (not 0) so transitionend/animationend events still fire
+@media (prefers-reduced-motion: reduce)
+  *, *::before, *::after
+    transition-duration: 0.01ms !important
+    animation-duration: 0.01ms !important
+    animation-iteration-count: 1 !important

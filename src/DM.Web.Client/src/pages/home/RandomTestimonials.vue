@@ -217,23 +217,21 @@ function onTestimonialEntered() {
   // arrived.
   min-height: calc(1.5 * 3 * 1em + ($medium + $tiny) + 22px)
 
+// Uses +skeleton-shimmer for animation/border-radius, then overrides
+// the gradient for white-on-green bubble context.
 .skeleton-text-line
   height: 14px
   width: 100%
+  +skeleton-shimmer
   border-radius: 3px
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.25) 25%, rgba(255, 255, 255, 0.5) 50%, rgba(255, 255, 255, 0.25) 75%)
   background-size: 200% 100%
-  animation: skeleton-shimmer 1.5s ease-in-out infinite
 
   &.wide
     width: 95%
 
   &.short
     width: 60%
-
-  @media (prefers-reduced-motion: reduce)
-    animation: none
-    background: rgba(255, 255, 255, 0.35)
 
 .skeleton-footer
   display: flex

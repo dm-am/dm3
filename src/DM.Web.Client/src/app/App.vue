@@ -54,15 +54,16 @@ const themeToClass = (theme: string) => theme;
 watch(
   () => uiStore.theme,
   (value, oldValue) => {
-    const html = document.querySelector("html")!;
+    const html = document.documentElement;
+    // Suppress transitions during theme swap to prevent color fading
+    html.classList.add("no-transitions");
     if (oldValue) {
       html.classList.remove(`theme_${themeToClass(oldValue)}`);
     }
     html.classList.add(`theme_${themeToClass(value)}`);
-    // Enable theme transitions after first application (prevent flash on load)
-    if (!html.classList.contains("theme-ready")) {
-      requestAnimationFrame(() => html.classList.add("theme-ready"));
-    }
+    // Force reflow — browser computes styles with transitions disabled
+    void html.offsetHeight;
+    html.classList.remove("no-transitions");
   },
   { immediate: true },
 );
@@ -134,7 +135,7 @@ onMounted(async () => {
     height: $header-height
     background: url('@/assets/images/decorations/header-decoration.png') left top repeat-x
     background-size: auto $header-height
-    filter: invert($invert-amount)
+    filter: $filter-invert
 
 .content-wrapper
   position: relative

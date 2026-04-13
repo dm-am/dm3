@@ -84,7 +84,7 @@ function rickroll(event: MouseEvent) {
     bottom: 0
     background: url('@/assets/images/decorations/footer-decoration.png') left bottom repeat-x
     background-size: auto $footer-height
-    filter: invert($invert-amount)
+    filter: $filter-invert
 
 .credits
   position: relative
@@ -140,6 +140,7 @@ function rickroll(event: MouseEvent) {
 
   a
     color: $link
+    transition: color $animation-time ease
     &:hover
       color: $link-hover
 
