@@ -25,8 +25,11 @@ export enum NotificationType {
   NewGameFromSubscribedAuthor = 73,
   NewPostInSubscribedGame = 74,
   UserMentioned = 75,
-  NewPublicationFromSubscribedAuthor = 76,
+  // 76 vacated (was NewPublicationFromSubscribedAuthor — per-publication
+  // notifications for user subscriptions were dropped in favor of
+  // blog-level signals).
   NewTopicFromSubscribedAuthor = 77,
+  NewBlogFromSubscribedAuthor = 78,
 
   // Forum notifications (101-114)
   NewForumTopic = 101,
@@ -65,9 +68,7 @@ export type NewGameFromSubscribedAuthorData = {
   authorUsername: Served<Username>;
 };
 
-export type NewPublicationFromSubscribedAuthorData = {
-  publicationId: Served<PublicationId>;
-  publicationTitle: Served<string>;
+export type NewBlogFromSubscribedAuthorData = {
   blogId: Served<BlogId>;
   blogTitle: Served<string>;
   authorUsername: Served<Username>;

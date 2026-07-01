@@ -3,7 +3,11 @@
  * FilterApplyButton - Apply/Clear buttons for filter inputs.
  *
  * Used in date range and numeric range pickers.
+ * "apply" — solid button (default), "clear" — text-link style.
+ * Shows tooltip with reason when disabled.
  */
+import { Tooltip } from "@/shared/ui/Tooltip";
+
 defineOptions({ name: "FilterApplyButton" });
 
 withDefaults(
@@ -12,13 +16,16 @@ withDefaults(
     label?: string;
     /** Whether button is disabled */
     disabled?: boolean;
-    /** Button variant */
-    variant?: "primary" | "secondary";
+    /** Tooltip explaining why button is disabled */
+    disabledReason?: string;
+    /** Button variant: "apply" (solid) or "clear" (text link) */
+    variant?: "apply" | "clear";
   }>(),
   {
     label: "Применить",
     disabled: false,
-    variant: "primary",
+    disabledReason: undefined,
+    variant: "apply",
   },
 );
 
@@ -28,47 +35,26 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <button
-    type="button"
-    class="filter-apply-btn"
-    :class="[`filter-apply-btn--${variant}`]"
-    :disabled="disabled"
-    @click="emit('click')"
-  >
-    {{ label }}
-  </button>
+  <Tooltip :text="disabled ? disabledReason : undefined" placement="top">
+    <button
+      type="button"
+      class="filter-apply-btn"
+      :class="[`filter-apply-btn--${variant}`]"
+      :disabled="disabled"
+      @click="emit('click')"
+    >
+      {{ label }}
+    </button>
+  </Tooltip>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-@import "src/assets/styles/Variables"
+@import "src/assets/styles/Inputs"
 
 .filter-apply-btn
   width: 100%
-  padding: $small
-  font-size: $secondary-font-size
-  font-family: inherit
-  cursor: pointer
-  border: 1px solid $border
-  border-radius: $border-radius
+  +button
 
-  &--primary
-    background-color: $bg-element
-    color: $text
-
-    &:hover:not(:disabled)
-      background-color: $bg-element-accent
-
-  &--secondary
-    background-color: transparent
-    color: $link
-    border-color: transparent
-
-    &:hover:not(:disabled)
-      color: $link-hover
-      text-decoration: underline
-
-  &:disabled
-    opacity: 0.5
-    cursor: not-allowed
+  &--clear
+    +button-link
 </style>

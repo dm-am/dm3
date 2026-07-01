@@ -18,7 +18,6 @@ export { default as AccountBlacklistSection } from "./sections/AccountBlacklistS
 export { default as AccountBotLinksSection } from "./sections/AccountBotLinksSection.vue";
 export { default as AccountInvitationsSection } from "./sections/AccountInvitationsSection.vue";
 export { default as AccountNotificationsSection } from "./sections/AccountNotificationsSection.vue";
-export { default as AccountProfileSection } from "./sections/AccountProfileSection.vue";
 export { default as AccountSecurityHistorySection } from "./sections/AccountSecurityHistorySection.vue";
 export { default as AccountSecuritySection } from "./sections/AccountSecuritySection.vue";
 export { default as AccountSessionsSection } from "./sections/AccountSessionsSection.vue";

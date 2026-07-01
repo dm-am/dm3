@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, nextTick, computed, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import {
   useGlobalChatStore,
@@ -11,29 +11,33 @@ import { useUiStore } from "@/shared/stores/ui";
 import { AccessPolicy } from "@/shared/api/models/community";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import dayjs from "dayjs";
-import { defaultAvatarUrl as defaultAvatar, symbols } from "@/shared/lib/utils/icons";
+import { symbols } from "@/shared/lib/utils/icons";
 import { SvgIcon } from "@/shared/ui/Icon";
+import { DatePicker } from "@/shared/ui/DatePicker";
 import { BBCodeEditor } from "@/features/editor";
 import { globalChatApi } from "@/entities/global-chat";
 import { ChatMessage } from "@/widgets/chat-message";
+import ChatEventBanner from "./ChatEventBanner.vue";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
 import {
   groupMessagesWithSeparators,
   isDateSeparator,
-  getLikesTooltip,
   isUserOnline,
   type MessageOrSeparator,
 } from "@/shared/lib/utils/chat";
-import { useMessagePermissions, useVirtualScroll } from "@/shared/lib/composables";
+import {
+  useMessagePermissions,
+  useVirtualScroll,
+} from "@/shared/lib/composables";
 
 const router = useRouter();
+const route = useRoute();
 const globalChatStore = useGlobalChatStore();
 const userStore = useUserStore();
 const {
   messages,
   loading,
-  loadingBefore,
-  loadingAfter,
+  error,
   sending,
   hasMoreBefore,
   hasMoreAfter,
@@ -45,7 +49,12 @@ const { isCompactLayout } = storeToRefs(useUiStore());
 const MAX_MESSAGE_HEIGHT = 500;
 
 // Message permissions (shared composable)
-const { isModerator, canEdit: canEditMsg, canDelete: canDeleteMsg, canLike: canLikeMsg } = useMessagePermissions(user);
+const {
+  isModerator,
+  canEdit: canEditMsg,
+  canDelete: canDeleteMsg,
+  canLike: canLikeMsg,
+} = useMessagePermissions(user);
 
 const isBanned = computed(() => {
   if (!user.value?.accessPolicy) return false;
@@ -286,25 +295,26 @@ const messagesWithSeparators = computed((): MessageOrSeparator[] =>
 
 // Virtual scroll for message list
 const itemCount = computed(() => messagesWithSeparators.value.length);
-const { virtualItems, totalSize, measureElement, scrollToIndex } = useVirtualScroll({
-  count: itemCount,
-  container: messagesContainer,
-  estimateSize: 80,
-  overscan: 15,
-});
+const { virtualItems, totalSize, measureElement, scrollToIndex } =
+  useVirtualScroll({
+    count: itemCount,
+    container: messagesContainer,
+    estimateSize: 80,
+    overscan: 15,
+  });
 
-// Generate recent dates for archive links
-const recentDates = computed(() => {
-  const dates = [];
-  for (let i = 0; i < 10; i++) {
-    const date = dayjs().subtract(i, "day");
-    dates.push({
-      value: date.format("YYYY-MM-DD"),
-      label: date.format("DD.MM.YYYY"),
-    });
-  }
-  return dates;
-});
+// Today (capped maximum for the date picker, YYYY-MM-DD)
+const todayValue = dayjs().format("YYYY-MM-DD");
+
+// Currently selected archive date (drives the DatePicker)
+const selectedDate = ref("");
+
+// User picked a date from the DatePicker — push to the URL; the
+// route.query.date watcher performs the actual load (single code path).
+function onDatePicked(value: string) {
+  if (!value) return;
+  router.push({ name: "global-chat", query: { date: value } });
+}
 
 // Replace images with links in compact layout
 function replaceImagesWithLinks(container: HTMLElement | null) {
@@ -372,6 +382,8 @@ watch(
 
 onMounted(async () => {
   const hashMsgId = getHashMessageId();
+  const dateQuery =
+    typeof route.query.date === "string" ? route.query.date : null;
 
   if (hashMsgId) {
     isInitialScrolling = true;
@@ -384,6 +396,12 @@ onMounted(async () => {
       setTimeout(() => {
         isInitialScrolling = false;
       }, 600);
+    });
+  } else if (dateQuery) {
+    await loadArchiveDate(dateQuery);
+    nextTick(() => {
+      setupInfiniteScroll();
+      initBbcodeInteractive(messagesContainer.value);
     });
   } else {
     await globalChatStore.fetchMessages();
@@ -415,50 +433,21 @@ watch(highlightedMessageId, (newId) => {
   }
 });
 
-// formatTime — use shared formatChatTime
-function formatTime(dateStr: string) {
-  return dayjs(dateStr).format("HH:mm");
-}
-// TODO: replace formatTime calls with formatChatTime import
-
-function formatFullDate(msg: GlobalChatMessage) {
-  let result = `Отправлено: ${dayjs(msg.createdUtc).format("DD.MM.YYYY [в] HH:mm")}`;
-  if (msg.edits?.length) {
-    for (const edit of msg.edits) {
-      const isSelf =
-        user.value && edit.editor?.username === user.value.username;
-      const editorName = isSelf
-        ? "вами"
-        : edit.editor?.username || "неизвестно";
-      result += `\nРедактирование: ${dayjs(edit.editedUtc).format("DD.MM.YYYY [в] HH:mm")} (${editorName})`;
+// React to ?date changes (archive quick links, picker, back/forward).
+// onMounted performs the very first load, so this fires only on later changes.
+watch(
+  () => route.query.date,
+  (newDate, oldDate) => {
+    if (newDate === oldDate) return;
+    if (typeof newDate === "string" && newDate) {
+      loadArchiveDate(newDate);
+    } else {
+      // Date cleared — return to latest.
+      selectedDate.value = "";
+      globalChatStore.jumpToLatest().then(scrollToBottom);
     }
-  }
-  return result;
-}
-
-function formatDeletedDate(msg: GlobalChatMessage) {
-  let result = `Отправлено: ${dayjs(msg.createdUtc).format("DD.MM.YYYY [в] HH:mm")}`;
-  if (msg.edits?.length) {
-    for (const edit of msg.edits) {
-      const isSelf =
-        user.value && edit.editor?.username === user.value.username;
-      const editorName = isSelf
-        ? "вами"
-        : edit.editor?.username || "неизвестно";
-      result += `\nРедактирование: ${dayjs(edit.editedUtc).format("DD.MM.YYYY [в] HH:mm")} (${editorName})`;
-    }
-  }
-  const deleterUsername = msg.deletedBy?.username;
-  const isSelfDelete = user.value && deleterUsername === user.value.username;
-  const deleterName = isSelfDelete ? "вами" : deleterUsername || "неизвестно";
-  const deletedUtcStr = msg.deletedUtc
-    ? dayjs(msg.deletedUtc).format("DD.MM.YYYY [в] HH:mm")
-    : "";
-  result += deletedUtcStr
-    ? `\nУдалено: ${deletedUtcStr} (${deleterName})`
-    : `\nУдалено (${deleterName})`;
-  return result;
-}
+  },
+);
 
 // Track latest activity per username
 // Using ISO string comparison (lexicographic) instead of dayjs for performance
@@ -501,11 +490,6 @@ function isLikedByMe(msg: GlobalChatMessage) {
   return (
     msg.likes?.some((u: any) => u.username === user.value?.username) ?? false
   );
-}
-
-// getLikesTooltip — delegated to shared utility
-function getMsgLikesTooltip(msg: GlobalChatMessage) {
-  return getLikesTooltip(msg.likes ?? []);
 }
 
 // Edit
@@ -617,17 +601,25 @@ function getHashMessageId(): string | null {
   return null;
 }
 
-// Archive date navigation
-async function loadLogsForDate(date: string) {
+// Load messages for an archive date and scroll to the top of the result.
+// The URL (?date=YYYY-MM-DD) is the single source of truth — callers change
+// the route, the route.query.date watcher routes here.
+async function loadArchiveDate(date: string) {
+  selectedDate.value = date;
   await globalChatStore.navigateToDate(date);
-  // Scroll to top of loaded messages
   nextTick(() => {
     scrollToIndex(0, { align: "start" });
   });
 }
 
-// Jump to latest
+// Jump to latest. Clearing the date query lets the watcher load latest;
+// when no date query is present, load directly.
 async function jumpToLatest() {
+  selectedDate.value = "";
+  if (route.query.date) {
+    router.replace({ name: "global-chat", query: {} });
+    return;
+  }
   await globalChatStore.jumpToLatest();
   scrollToBottom();
 }
@@ -638,6 +630,18 @@ function scrollToBottom() {
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
     }
   });
+}
+
+// Retry after a load error — re-run the load path for the current view.
+async function retryLoad() {
+  const dateQuery =
+    typeof route.query.date === "string" ? route.query.date : null;
+  if (dateQuery) {
+    await loadArchiveDate(dateQuery);
+  } else {
+    await globalChatStore.fetchMessages();
+    scrollToBottom();
+  }
 }
 
 async function handleSend() {
@@ -668,21 +672,17 @@ async function confirmDelete() {
 <template>
   <page-title v-once>Глобальный чат</page-title>
 
-  <!-- Archive links -->
-  <div class="globalChat-archive">
-    <div class="archive-dates">
-      <span class="archive-label">Архив: </span>
-      <template v-for="(date, index) in recentDates" :key="date.value">
-        <a
-          class="archive-link"
-          :href="router.resolve({ name: 'global-chat', query: { date: date.value } }).href"
-          @click.prevent="loadLogsForDate(date.value)"
-          >{{ date.label }}</a
-        ><span v-if="index < recentDates.length - 1" class="archive-sep"
-          >,
-        </span>
-      </template>
-    </div>
+  <!-- One row: the active chat event (left, read-only for guests) and the
+       "jump to a past day" date picker (right). -->
+  <div class="globalChat-topbar">
+    <ChatEventBanner />
+    <DatePicker
+      class="globalChat-datepicker"
+      :model-value="selectedDate"
+      :max="todayValue"
+      label="Перейти к дате"
+      @update:model-value="onDatePicked"
+    />
   </div>
 
   <div
@@ -703,8 +703,21 @@ async function confirmDelete() {
       <secondary-text v-if="loading" class="globalChat-empty">
         Загрузка сообщений...
       </secondary-text>
+      <!-- Error takes precedence over fake-empty; stale content (if any) is preserved -->
+      <div
+        v-else-if="error && !messages?.length"
+        class="globalChat-empty globalChat-error"
+      >
+        <secondary-text>{{ error }}</secondary-text>
+        <button type="button" class="globalChat-retry" @click="retryLoad">
+          Повторить
+        </button>
+      </div>
       <secondary-text v-else-if="!messages?.length" class="globalChat-empty">
-        Сообщений пока нет. Начните общение!
+        <template v-if="canSendMessages"
+          >Сообщений пока нет. Начните общение!</template
+        >
+        <template v-else>Сообщений пока нет.</template>
       </secondary-text>
       <template v-else>
         <!-- Top sentinel for loading older messages -->
@@ -715,11 +728,21 @@ async function confirmDelete() {
         ></div>
 
         <!-- Virtual scroll container -->
-        <div :style="{ height: `${totalSize}px`, width: '100%', position: 'relative' }">
+        <div
+          :style="{
+            height: `${totalSize}px`,
+            width: '100%',
+            position: 'relative',
+          }"
+        >
           <div
             v-for="vRow in virtualItems"
-            :key="vRow.key"
-            :ref="(el) => { if (el) measureElement(el as HTMLElement) }"
+            :key="String(vRow.key)"
+            :ref="
+              (el) => {
+                if (el) measureElement(el as HTMLElement);
+              }
+            "
             :data-index="vRow.index"
             :style="{
               position: 'absolute',
@@ -729,49 +752,92 @@ async function confirmDelete() {
               transform: `translateY(${vRow.start}px)`,
             }"
           >
-          <div v-if="isDateSeparator(messagesWithSeparators[vRow.index])" class="date-separator">
-            <div class="separator-line"></div>
-            <span class="separator-text">{{ (messagesWithSeparators[vRow.index] as any).formattedDate }}</span>
-            <div class="separator-line"></div>
-          </div>
+            <div
+              v-if="isDateSeparator(messagesWithSeparators[vRow.index])"
+              class="date-separator"
+            >
+              <div class="separator-line"></div>
+              <span class="separator-text">{{
+                (messagesWithSeparators[vRow.index] as any).formattedDate
+              }}</span>
+              <div class="separator-line"></div>
+            </div>
 
-          <div
-            v-else
-            :id="`msg-${(messagesWithSeparators[vRow.index] as any).id}`"
-            :data-id="(messagesWithSeparators[vRow.index] as any).id"
-            class="globalChat-message"
-            :class="{
-              removed: (messagesWithSeparators[vRow.index] as any).isRemoved,
-              hovered: hoveredMessageId === (messagesWithSeparators[vRow.index] as any).id,
-              continuation: (messagesWithSeparators[vRow.index] as any).isContinuation,
-              'deleted-collapsed':
-                (messagesWithSeparators[vRow.index] as any).isRemoved && !isDeletedExpanded((messagesWithSeparators[vRow.index] as any).id),
-            }"
-            @mouseenter="handleMessageMouseEnter($event, (messagesWithSeparators[vRow.index] as any).id)"
-            @mouseleave="handleMessageMouseLeave"
-          >
-            <ChatMessage
-              :message="(messagesWithSeparators[vRow.index] as any)"
-              :compact="isCompactLayout"
-              :hovered="hoveredMessageId === (messagesWithSeparators[vRow.index] as any).id"
-              :is-online="isOnline((messagesWithSeparators[vRow.index] as any).author)"
-              :is-liked-by-me="isLikedByMe(messagesWithSeparators[vRow.index] as any)"
-              :can-edit="canEditMessage(messagesWithSeparators[vRow.index] as any)"
-              :can-delete="canDeleteMessage(messagesWithSeparators[vRow.index] as any)"
-              :can-like="canLikeMessage(messagesWithSeparators[vRow.index] as any)"
-              :is-moderator="isModerator"
-              :is-editing="isEditing((messagesWithSeparators[vRow.index] as any).id)"
-              :edit-text="editText"
-              :is-deleted-expanded="isDeletedExpanded((messagesWithSeparators[vRow.index] as any).id)"
-              :max-height="MAX_MESSAGE_HEIGHT"
-              @like="toggleLike(messagesWithSeparators[vRow.index] as any)"
-              @toggle-deleted="toggleDeletedExpand((messagesWithSeparators[vRow.index] as any).id)"
-              @start-edit="startEdit(messagesWithSeparators[vRow.index] as any)"
-              @save-edit="saveEdit((messagesWithSeparators[vRow.index] as any).id)"
-              @cancel-edit="cancelEdit"
-              @update:edit-text="editText = $event"
-            />
-          </div>
+            <div
+              v-else
+              :id="`msg-${(messagesWithSeparators[vRow.index] as any).id}`"
+              :data-id="(messagesWithSeparators[vRow.index] as any).id"
+              class="globalChat-message"
+              :class="{
+                removed: (messagesWithSeparators[vRow.index] as any).isRemoved,
+                hovered:
+                  hoveredMessageId ===
+                  (messagesWithSeparators[vRow.index] as any).id,
+                continuation: (messagesWithSeparators[vRow.index] as any)
+                  .isContinuation,
+                'deleted-collapsed':
+                  (messagesWithSeparators[vRow.index] as any).isRemoved &&
+                  !isDeletedExpanded(
+                    (messagesWithSeparators[vRow.index] as any).id,
+                  ),
+              }"
+              @mouseenter="
+                handleMessageMouseEnter(
+                  $event,
+                  (messagesWithSeparators[vRow.index] as any).id,
+                )
+              "
+              @mouseleave="handleMessageMouseLeave"
+            >
+              <ChatMessage
+                :message="messagesWithSeparators[vRow.index] as any"
+                :compact="isCompactLayout"
+                :hovered="
+                  hoveredMessageId ===
+                  (messagesWithSeparators[vRow.index] as any).id
+                "
+                :is-online="
+                  isOnline((messagesWithSeparators[vRow.index] as any).author)
+                "
+                :is-liked-by-me="
+                  isLikedByMe(messagesWithSeparators[vRow.index] as any)
+                "
+                :can-edit="
+                  canEditMessage(messagesWithSeparators[vRow.index] as any)
+                "
+                :can-delete="
+                  canDeleteMessage(messagesWithSeparators[vRow.index] as any)
+                "
+                :can-like="
+                  canLikeMessage(messagesWithSeparators[vRow.index] as any)
+                "
+                :is-moderator="isModerator"
+                :is-editing="
+                  isEditing((messagesWithSeparators[vRow.index] as any).id)
+                "
+                :edit-text="editText"
+                :is-deleted-expanded="
+                  isDeletedExpanded(
+                    (messagesWithSeparators[vRow.index] as any).id,
+                  )
+                "
+                :max-height="MAX_MESSAGE_HEIGHT"
+                @like="toggleLike(messagesWithSeparators[vRow.index] as any)"
+                @toggle-deleted="
+                  toggleDeletedExpand(
+                    (messagesWithSeparators[vRow.index] as any).id,
+                  )
+                "
+                @start-edit="
+                  startEdit(messagesWithSeparators[vRow.index] as any)
+                "
+                @save-edit="
+                  saveEdit((messagesWithSeparators[vRow.index] as any).id)
+                "
+                @cancel-edit="cancelEdit"
+                @update:edit-text="editText = $event"
+              />
+            </div>
           </div>
         </div>
 
@@ -825,18 +891,29 @@ async function confirmDelete() {
           <button
             class="toolbar-btn"
             :class="{ active: isLikedByMe(hoveredMessage) }"
+            :aria-label="
+              isLikedByMe(hoveredMessage) ? 'Убрать лайк' : 'Нравится'
+            "
             @click="toggleLike(hoveredMessage)"
           >
             <SvgIcon name="heartEmpty" />
           </button>
         </Tooltip>
         <Tooltip v-if="canEditMessage(hoveredMessage)" text="Редактировать">
-          <button class="toolbar-btn" @click="startEdit(hoveredMessage)">
+          <button
+            class="toolbar-btn"
+            aria-label="Редактировать"
+            @click="startEdit(hoveredMessage)"
+          >
             <SvgIcon name="pencil" />
           </button>
         </Tooltip>
         <Tooltip v-if="canDeleteMessage(hoveredMessage)" text="Удалить">
-          <button class="toolbar-btn" @click="requestDelete(hoveredMessage.id)">
+          <button
+            class="toolbar-btn"
+            aria-label="Удалить"
+            @click="requestDelete(hoveredMessage.id)"
+          >
             <SvgIcon name="trash" />
           </button>
         </Tooltip>
@@ -844,6 +921,7 @@ async function confirmDelete() {
           <a
             class="toolbar-btn"
             :href="`#msg-${hoveredMessage.id}`"
+            aria-label="Скопировать ссылку на сообщение"
             @click.prevent="copyAnchor(hoveredMessage.id)"
           >
             <SvgIcon name="anchor" />
@@ -853,7 +931,12 @@ async function confirmDelete() {
     </div>
 
     <!-- Scroll to latest button (centered over globalChat) -->
-    <button v-if="hasMoreAfter" class="scroll-to-latest" @click="jumpToLatest">
+    <button
+      v-if="hasMoreAfter"
+      class="scroll-to-latest"
+      aria-label="К последним сообщениям"
+      @click="jumpToLatest"
+    >
       <SvgIcon name="chevronDown" />
     </button>
   </div>
@@ -907,25 +990,15 @@ async function confirmDelete() {
 @import "src/assets/styles/Inputs"
 @import "src/assets/styles/ZIndex"
 
-.globalChat-archive
+.globalChat-topbar
   display: flex
   align-items: center
-  justify-content: space-between
+  gap: $small
   margin-bottom: $small
-  color: $text
 
-.archive-dates
-  flex: 1
-
-.archive-label
-  margin-right: $tiny
-
-.archive-link
-  &:hover
-    text-decoration: underline
-
-.archive-sep
-  color: $text
+// Always pinned right, even when no event renders on the left.
+.globalChat-datepicker
+  margin-left: auto
 
 .globalChat-container
   display: flex
@@ -980,6 +1053,13 @@ async function confirmDelete() {
   text-align: center
   padding: $big
 
+.globalChat-error
+  flex-direction: column
+  gap: $small
+
+.globalChat-retry
+  +button
+
 .scroll-sentinel
   height: 1px
   width: 100%
@@ -1017,7 +1097,8 @@ async function confirmDelete() {
   white-space: nowrap
 
 .globalChat-message
-  padding: $small
+  // Full layout: comfortable horizontal container padding (compact overrides below)
+  padding: $small $medium
   margin-bottom: $medium
   word-break: break-word
   overflow-wrap: break-word
@@ -1113,130 +1194,11 @@ async function confirmDelete() {
       svg
         filter: brightness($hover-brightness)
 
-.reaction-badge
-  display: inline-flex
-  align-items: center
-  gap: 6px
-  padding: 6px 10px
-  border: none
-  background-color: $hover-overlay
-  color: $text-muted
-  cursor: pointer
-  transition: transform 0.1s ease
-  border-radius: $border-radius
-  svg
-    width: 22px
-    height: 22px
-    fill: none
-    transition: transform 0.15s ease
-  &:hover
-    background-color: $active-overlay
-    svg
-      filter: brightness($hover-brightness)
-      transform: scale(1.15)
-  &:active
-    background-color: $hover-overlay
-    transform: scale(0.95)
-  &.my-reaction
-    svg
-      fill: currentColor
-
-.globalChat-message:hover .reaction-badge,
-.globalChat-message.hovered .reaction-badge
-  background-color: $hover-overlay
-
-.globalChat-message:hover .reaction-badge:hover,
-.globalChat-message.hovered .reaction-badge:hover
-  background-color: $active-overlay
-
-.globalChat-message:hover .reaction-badge.my-reaction,
-.globalChat-message.hovered .reaction-badge.my-reaction
-  background-color: $hover-overlay
-
-.globalChat-message:hover .reaction-badge.my-reaction:hover,
-.globalChat-message.hovered .reaction-badge.my-reaction:hover
-  background-color: $active-overlay
-
 // BBCodeEditor overlay при hover на сообщение
 // Overlay накладывается ПОВЕРХ базового $input-bg (не заменяет)
 .globalChat-message:hover :deep(.bbcode-editor),
 .globalChat-message.hovered :deep(.bbcode-editor)
   background: linear-gradient($hover-overlay, $hover-overlay), $input-bg
-
-.reaction-count
-  color: inherit
-  font-size: $secondary-font-size
-  font-weight: 500
-
-.msg-deleted
-  display: flex
-  flex-direction: column
-  justify-content: center
-  min-height: 40px
-  color: $text-muted
-  &.clickable
-    cursor: pointer
-    &:hover .msg-deleted-label
-      text-decoration: underline
-
-.msg-deleted-label
-  font-style: italic
-
-.msg-deleted-icon-inline
-  width: 16px
-  height: 16px
-  margin-right: 6px
-  vertical-align: middle
-
-// Inline likes in compact layout (with background like reaction-badge)
-.msg-likes-inline
-  display: inline-flex
-  align-items: center
-  gap: 4px
-  padding: 2px 6px
-  border: 1px solid $border
-  border-radius: $border-radius
-  background-color: $hover-overlay
-  color: $text-muted
-  font-size: $font-size
-  line-height: 1
-  cursor: pointer
-  vertical-align: baseline
-  svg
-    width: 16px
-    height: 16px
-    fill: none
-    flex-shrink: 0
-    transition: transform 0.15s ease
-  &:hover
-    background-color: $active-overlay
-    svg
-      filter: brightness($hover-brightness)
-      transform: scale(1.1)
-  &.my-like svg
-    fill: currentColor
-
-// Triangle toggle for deleted messages
-.msg-triangle
-  color: $text-muted
-  font-size: 10px
-  margin-right: 4px
-  vertical-align: middle
-  user-select: none
-
-.msg-triangle-clickable
-  cursor: pointer
-  &:hover
-    filter: brightness($hover-brightness)
-
-// "(скрыть)" link
-.msg-hide-link
-  color: $text-muted
-  font-size: 16px
-  text-decoration: none
-  &:hover
-    text-decoration: underline
-    filter: brightness($hover-brightness)
 
 .globalChat-input-wrapper
   margin-top: $medium
@@ -1308,7 +1270,7 @@ async function confirmDelete() {
 
 .globalChat-send-button
   align-self: flex-start
-  +primary-button
+  +button
 
 .globalChat-login-hint
   flex: 1

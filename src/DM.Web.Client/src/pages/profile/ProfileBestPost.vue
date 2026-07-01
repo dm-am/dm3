@@ -8,10 +8,9 @@
  */
 import { onMounted, watch } from "vue";
 import type { Username } from "@/shared/api/models/community";
-import { GamePost } from "@/pages/game";
+import { GamePost } from "@/widgets/game-post";
 import { GamePostSkeleton } from "@/shared/ui/Skeleton";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { useRatedPostsStore } from "@/entities/game";
 
 const props = defineProps<{
@@ -29,7 +28,6 @@ watch(
 
 <template>
   <section class="profile-best-post">
-    <BlockTitle>Лучший пост за все время</BlockTitle>
     <GamePost
       v-if="store.bestPostOfUser(username)"
       :post="store.bestPostOfUser(username)!"

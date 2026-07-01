@@ -10,5 +10,8 @@ export * from "./polls";
 // Website testimonials (positive reviews about the platform)
 export * from "./testimonials";
 
+// User endorsements (positive recommendations between users)
+export * from "./endorsements";
+
 // Statistics
 export * from "./statistics";

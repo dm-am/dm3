@@ -156,8 +156,8 @@ onMounted(loadTags);
   cursor: pointer
 
   &:hover
-    background-color: $button-bg-hover
-    border-color: $button-border-hover
+    background-image: linear-gradient($hover-overlay, $hover-overlay)
+    border-color: $border-focus
 
   &.selected
     background-color: $link

@@ -22,6 +22,6 @@ public enum PollStatus
     /// <summary>
     /// Poll has ended (now &gt;= EndsUtc)
     /// </summary>
-    [Description("Завершён")]
+    [Description("Завершен")]
     Closed = 2
 }

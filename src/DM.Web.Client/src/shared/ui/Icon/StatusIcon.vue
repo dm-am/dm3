@@ -1,8 +1,14 @@
 <template>
   <div class="status-icon" :class="`status-icon--${type}`">
-    <span v-if="type === 'success'" class="status-symbol">{{ symbols.checkmark }}</span>
-    <span v-else-if="type === 'warning'" class="status-symbol">{{ symbols.warning }}</span>
-    <span v-else-if="type === 'error'" class="status-symbol">{{ symbols.close }}</span>
+    <span v-if="type === 'success'" class="status-symbol">{{
+      symbols.checkmark
+    }}</span>
+    <span v-else-if="type === 'warning'" class="status-symbol">{{
+      symbols.warning
+    }}</span>
+    <span v-else-if="type === 'error'" class="status-symbol">{{
+      symbols.close
+    }}</span>
   </div>
 </template>
 

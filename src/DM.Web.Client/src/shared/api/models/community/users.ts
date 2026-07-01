@@ -18,6 +18,7 @@ export {
   type UserPicture,
   type Rating,
   type UsernameHistoryEntry,
+  type SubscriberRef,
   UserRole,
   AccessPolicy,
 } from "../common/user";

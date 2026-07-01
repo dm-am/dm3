@@ -10,6 +10,7 @@ import { useScrollToElement } from "@/shared/lib/composables/useScrollToElement"
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { Comment } from "@/features/comment";
+import { CommentSkeleton } from "@/shared/ui/Skeleton";
 import { BBCodeEditor } from "@/features/editor";
 import Button from "@/shared/ui/Button/Button.vue";
 import { gameApi } from "@/entities/game";
@@ -165,7 +166,10 @@ useFetchData(
 
     <!-- Comments list -->
     <template v-else>
-      <div v-if="comments.length === 0" class="comments-empty">
+      <!-- Loading -->
+      <CommentSkeleton v-if="commentsLoading && comments.length === 0" />
+
+      <div v-else-if="comments.length === 0" class="comments-empty">
         <secondary-text>Пока нет комментариев</secondary-text>
       </div>
 
@@ -186,7 +190,10 @@ useFetchData(
       <Paging
         v-if="commentsPaging"
         :paging="commentsPaging"
-        :to="{ name: 'game-comments', params: { id: game?.publicId || game?.id } }"
+        :to="{
+          name: 'game-comments',
+          params: { id: game?.publicId || game?.id },
+        }"
         :use-query="true"
         query-key="number"
       />
@@ -226,8 +233,8 @@ useFetchData(
             Комментарии в этой игре доступны только для чтения
           </secondary-text>
           <secondary-text v-else-if="!user" class="comment-hint">
-            <router-link to="/?action=login">Войдите</router-link>, чтобы оставить
-            комментарий
+            <router-link to="/?action=login">Войдите</router-link>, чтобы
+            оставить комментарий
           </secondary-text>
         </div>
       </div>

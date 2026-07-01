@@ -29,7 +29,11 @@ export function useMessagePermissions(
   user: Ref<UserWithRole | null>,
   editTimeLimitMinutes = EDIT_TIME_LIMIT_MINUTES,
 ): MessagePermissions {
-  const MODERATOR_ROLES = new Set([UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator]);
+  const MODERATOR_ROLES = new Set([
+    UserRole.Admin,
+    UserRole.SeniorModerator,
+    UserRole.Moderator,
+  ]);
 
   const isModerator = computed(() => {
     if (!user.value) return false;
@@ -39,7 +43,9 @@ export function useMessagePermissions(
   });
 
   function isWithinTimeLimit(createdUtc: string): boolean {
-    return dayjs().diff(dayjs(createdUtc), "minute", true) <= editTimeLimitMinutes;
+    return (
+      dayjs().diff(dayjs(createdUtc), "minute", true) <= editTimeLimitMinutes
+    );
   }
 
   function canEdit(msg: Message): boolean {

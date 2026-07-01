@@ -216,6 +216,7 @@ function formatDate(dateStr: string): string {
 <style scoped lang="sass">
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 @import "../AccountPage.styles"
 
 .blacklist-content
@@ -261,7 +262,7 @@ function formatDate(dateStr: string): string {
 
   &:has(input:disabled)
     opacity: 0.6
-    cursor: not-allowed
+    cursor: default
 
 .blocked-list
   display: flex
@@ -316,7 +317,7 @@ function formatDate(dateStr: string): string {
 
   &:disabled
     opacity: 0.5
-    cursor: not-allowed
+    cursor: default
 
   @media (max-width: 768px)
     align-self: flex-end
@@ -324,14 +325,5 @@ function formatDate(dateStr: string): string {
 
 .add-btn
   align-self: flex-start
-  background: none
-  border: 1px solid $link
-  color: $link
-  padding: $tiny $small
-  border-radius: $border-radius
-  cursor: pointer
-  font-size: $secondary-font-size
-
-  &:hover
-    background-color: rgba($link, 0.1)
+  +button
 </style>

@@ -9,7 +9,7 @@
  *   4. Action links (back / home) in a row
  */
 import { computed } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 import img400 from "@/assets/images/errors/400.png";
 import img401 from "@/assets/images/errors/401.png";
@@ -26,38 +26,45 @@ interface ErrorConfig {
 const errorDefaults: Record<number, ErrorConfig> = {
   400: {
     title: "Неверный запрос",
-    description: "Что-то пошло не так с запросом. Попробуйте вернуться и повторить действие.",
+    description:
+      "Сервер не понял запрос. Проверьте введенные данные и попробуйте снова.",
   },
   401: {
     title: "Требуется авторизация",
-    description: "Для доступа к этой странице необходимо войти в аккаунт.",
+    description:
+      "Эта страница доступна только авторизованным пользователям. Войдите в аккаунт или зарегистрируйтесь.",
     showBack: false,
   },
   403: {
     title: "Доступ запрещен",
-    description: "У вас недостаточно прав для просмотра этой страницы.",
+    description:
+      "У вас недостаточно прав для просмотра этой страницы. Возможно, доступ ограничен автором или администрацией.",
   },
   404: {
     title: "Страница не найдена",
-    description: "Возможно, страница была перемещена или удалена.",
+    description:
+      "Такой страницы не существует. Возможно, она была перемещена или удалена.",
   },
   409: {
     title: "Конфликт данных",
-    description: "Произошел конфликт при обработке запроса. Попробуйте повторить действие.",
+    description:
+      "При обработке запроса произошел конфликт. Попробуйте повторить действие.",
   },
   410: {
     title: "Страница удалена",
-    description: "Эта страница больше не существует и была окончательно удалена.",
+    description:
+      "Этой страницы больше не существует. Возможно, она была удалена автором или модератором.",
   },
   500: {
-    title: "Ошибка сервера",
-    description: "Что-то сломалось на нашей стороне. Попробуйте позже.",
+    title: "Произошла ошибка сервера",
+    description: "Что-то сломалось на нашей стороне. Попробуйте немного позже.",
   },
 };
 
 const fallbackConfig: ErrorConfig = {
   title: "Неизвестная ошибка",
-  description: "Что-то пошло не так. Попробуйте вернуться и повторить действие.",
+  description:
+    "Что-то пошло не так. Попробуйте вернуться и повторить действие.",
 };
 
 const props = withDefaults(
@@ -75,12 +82,30 @@ const props = withDefaults(
 );
 
 const router = useRouter();
+const route = useRoute();
+
+// 401 login/register links open the auth modal on the CURRENT route (the
+// GuestActions widget reads ?action=…) instead of sending the user to home.
+const loginTo = computed(() => ({
+  query: { ...route.query, action: "login" },
+}));
+const registerTo = computed(() => ({
+  query: { ...route.query, action: "register" },
+}));
 
 const defaults = computed(() => errorDefaults[props.code] ?? fallbackConfig);
 const resolvedTitle = computed(() => props.title ?? defaults.value.title);
-const resolvedDescription = computed(() => props.description ?? defaults.value.description);
-const resolvedShowBack = computed(() => props.showBack ?? defaults.value.showBack ?? true);
+const resolvedDescription = computed(
+  () => props.description ?? defaults.value.description,
+);
+const resolvedShowBack = computed(
+  () => props.showBack ?? defaults.value.showBack ?? true,
+);
 
+// TODO(round-2 art): dedicated illustrations for 404 / 409 / 410 are missing.
+// They currently fall back to general-error.png. Add 404 (empty chest),
+// 409 (fighting goblins), 410 (ashes) per docs/plans/ERROR_PAGES_AND_LORE.md
+// and extend this map. 404 is the most visited error page (catch-all route).
 const codeImageMap: Record<number, string> = {
   400: img400,
   401: img401,
@@ -92,6 +117,9 @@ const resolvedImage = computed(
   () => props.image ?? codeImageMap[props.code] ?? imgGeneral,
 );
 
+// 401 means the viewer is a guest hitting an authorized-only page — the
+// «Войдите»/«зарегистрируйтесь» links are rendered inline inside the
+// description sentence (see template), not as a separate action row.
 const canGoBack = computed(() => !!window.history.state?.back);
 
 function goBack() {
@@ -107,30 +135,40 @@ function goBack() {
   <div class="error-page">
     <page-title>Упс! {{ resolvedTitle }}!</page-title>
 
-    <img
-      :src="resolvedImage"
-      :alt="`Ошибка ${code}`"
-      class="error-image"
-    />
+    <img :src="resolvedImage" :alt="`Ошибка ${code}`" class="error-image" />
 
-    <p class="error-description">{{ resolvedDescription }}</p>
+    <!-- 401: login/register are inline links inside the sentence. -->
+    <p v-if="code === 401" class="error-description">
+      Эта страница доступна только авторизованным пользователям.
+      <router-link :to="loginTo" class="inline-link">Войдите</router-link>
+      в аккаунт или
+      <router-link :to="registerTo" class="inline-link"
+        >зарегистрируйтесь</router-link
+      >.
+    </p>
+    <p v-else class="error-description">{{ resolvedDescription }}</p>
 
     <div class="error-actions">
       <slot />
 
-      <a
+      <button
         v-if="resolvedShowBack && canGoBack"
-        href="#"
+        type="button"
         class="error-link"
-        @click.prevent="goBack"
+        @click="goBack"
       >
-        <strong>Вернуться к предыдущему действию</strong>
-      </a>
+        Вернуться к предыдущему действию
+      </button>
 
-      <span v-if="resolvedShowBack && canGoBack && showHome" class="action-sep">/</span>
+      <span
+        v-if="resolvedShowBack && canGoBack && showHome"
+        class="action-sep"
+        aria-hidden="true"
+        >/</span
+      >
 
       <router-link v-if="showHome" to="/" class="error-link">
-        <strong>Вернуться на главную</strong>
+        Вернуться на главную
       </router-link>
     </div>
   </div>
@@ -154,6 +192,14 @@ function goBack() {
   margin: 0 0 $medium
   line-height: 1.6
 
+.inline-link
+  color: $link
+  font-weight: 700
+  text-decoration: none
+  &:hover
+    color: $link-hover
+    text-decoration: underline
+
 .error-actions
   display: flex
   align-items: center
@@ -163,7 +209,15 @@ function goBack() {
   color: $text-muted
 
 .error-link
+  font: inherit
+  font-weight: 700
   color: $link
+  text-decoration: none
+  cursor: pointer
+  // Reset so a <button> styled as a link is indistinguishable from <a>.
+  padding: 0
+  border: none
+  background: none
   &:hover
     color: $link-hover
 </style>

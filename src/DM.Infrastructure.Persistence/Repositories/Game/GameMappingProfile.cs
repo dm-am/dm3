@@ -141,8 +141,9 @@ internal class GameMappingProfile : Profile
     {
         CreateMap<DbCharacter, Character>()
             .ForMember(d => d.Id, s => s.MapFrom(c => c.CharacterId))
-            // NOTE: Pictures navigation removed - PictureUrl is now set via resolver or ignored
-            .ForMember(d => d.PictureUrl, opt => opt.Ignore())
+            // Picture поднимается отдельным batched-query (см. PostRepository
+            // / CharacterRepository); здесь оставляем дефолт пустой AvatarPicture().
+            .ForMember(d => d.Picture, opt => opt.Ignore())
             .ForMember(d => d.ModifiedUtc, opt => opt.Ignore()) // Not stored on the DB entity yet
             .ForMember(d => d.TotalPostsCount, s => s.MapFrom(c => c.Posts.Count()));
 
@@ -162,8 +163,9 @@ internal class GameMappingProfile : Profile
         CreateMap<DbCharacter, CharacterShort>()
             .Include<DbCharacter, CharacterShortInfo>()
             .ForMember(d => d.Id, s => s.MapFrom(c => c.CharacterId))
-            // NOTE: Pictures navigation removed - PictureUrl is now set via resolver or ignored
-            .ForMember(d => d.PictureUrl, opt => opt.Ignore());
+            // Picture поднимается отдельным batched-query из Uploads
+            // (PostRepository.EnrichWithCharacterPictures).
+            .ForMember(d => d.Picture, opt => opt.Ignore());
 
         CreateMap<DbCharacter, CharacterShortInfo>()
             .ForMember(d => d.LastPost, s => s.MapFrom(c => c.Posts

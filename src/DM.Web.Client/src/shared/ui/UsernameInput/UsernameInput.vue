@@ -68,8 +68,10 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Forbidden: control chars, HTML/URL unsafe, quotes, brackets, special chars, zero-width
 // See: docs/architecture/USERNAME_POLICY.md
+// Control characters are matched intentionally (forbidden in usernames).
 const forbiddenPattern =
-  /[\x00-\x1F\x7F<>"'`\\/@?#%&\[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]/;
+  // eslint-disable-next-line no-control-regex
+  /[\x00-\x1F\x7F<>"'`\\/@?#%&[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]/;
 
 const showStatus = computed(() => {
   return (

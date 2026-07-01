@@ -111,6 +111,14 @@ public interface IBlogRepository
     Task<Publication?> GetPublication(Guid publicationId, CancellationToken ct = default);
 
     /// <summary>
+    /// Get the user's most-liked publication across every blog they author.
+    /// Published-only — drafts and unpublished posts are excluded so the
+    /// profile widget never shows content the user hasn't released yet.
+    /// Returns null when the user has no published publications at all.
+    /// </summary>
+    Task<Publication?> GetBestUserPublication(Guid authorId, CancellationToken ct = default);
+
+    /// <summary>
     /// Get rubrics for a blog
     /// </summary>
     Task<IEnumerable<Rubric>> GetRubrics(Guid blogId, CancellationToken ct = default);

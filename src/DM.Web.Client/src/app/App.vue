@@ -29,7 +29,8 @@
 import { useUiStore } from "@/shared/stores/ui";
 import { useUserStore } from "@/entities/user";
 import { useMessagingStore } from "@/entities/message";
-import { onMounted, watch } from "vue";
+import { setScrollContainer } from "@/shared/lib/scroll";
+import { onMounted, ref, watch } from "vue";
 import { ModalsContainer } from "vue-final-modal";
 import { Header } from "@/widgets/header";
 import { Footer } from "@/widgets/footer";
@@ -42,6 +43,9 @@ import type { SignalRNotification } from "@/shared/api/models/notifications/sign
 const uiStore = useUiStore();
 const userStore = useUserStore();
 const messagingStore = useMessagingStore();
+
+// Template ref for the scrollable content container (".main")
+const scroll = ref<HTMLElement | null>(null);
 const {
   connect: connectSignalR,
   disconnect: disconnectSignalR,
@@ -76,7 +80,25 @@ function handleNotification(notification: SignalRNotification) {
       // Refresh unread count when new message arrives
       messagingStore.fetchUnreadCount();
       break;
+    case EventType.UserAvatarChanged:
+      // Live-обновление аватара в open tabs. Если изменился текущий
+      // пользователь — освежаем user store. Чужие аватары в чате/
+      // комментариях обновятся через next render когда DOM перерисуется
+      // (urls в payload immutable, browser cache safe).
+      handleAvatarChanged(notification.payload);
+      break;
     // Add more event handlers as needed
+  }
+}
+
+function handleAvatarChanged(payload: Record<string, unknown>) {
+  const userId = payload.userId as string | undefined;
+  if (!userId) return;
+  const currentUserId = userStore.user?.id;
+  if (currentUserId === userId) {
+    // Re-fetch current user — гарантирует, что settings/visibility
+    // тоже подхвачены, не только picture.
+    userStore.fetchUser();
   }
 }
 
@@ -96,6 +118,9 @@ watch(
 );
 
 onMounted(async () => {
+  // Register the scrollable container so paging/router can scroll to top
+  setScrollContainer(scroll.value);
+
   // User уже инициализирован из localStorage в store
   // Параллельно обновляем данные с сервера
   userStore.fetchUser();
@@ -126,6 +151,10 @@ onMounted(async () => {
   flex-direction: column
   min-height: 100vh
   min-width: $min-width
+  // Below the sidebar breakpoint both sidebars are hidden, so the rigid
+  // min-width would only force a horizontal scrollbar — relax it
+  @media (max-width: $min-width)
+    min-width: 0
   &:before
     content: ''
     position: absolute
@@ -141,6 +170,8 @@ onMounted(async () => {
   position: relative
   flex: 1 0 auto
   min-width: $min-width
+  @media (max-width: $min-width)
+    min-width: 0
 
 .content-body
   display: flex
@@ -151,6 +182,10 @@ onMounted(async () => {
   flex-shrink: 0
   padding-left: $big
   box-sizing: border-box
+  // Hide together with the right sidebar so narrow viewports get the
+  // full width for content instead of an asymmetric layout
+  @media (max-width: $min-width)
+    display: none
 
 .content
   flex-grow: 1

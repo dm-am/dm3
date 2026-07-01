@@ -27,7 +27,9 @@ function makeUser(username: string, id: string): UserRef {
     username,
     lastActivityUtc: asServed("2026-01-01T00:00:00Z"),
     role: asServed("RegularUser"),
-  } as UserRef;
+    isNewbie: false,
+    isHonorary: false,
+  } as unknown as UserRef;
 }
 
 function makeGame(overrides: Partial<GameRef> = {}): GameRef {
@@ -36,7 +38,9 @@ function makeGame(overrides: Partial<GameRef> = {}): GameRef {
     publicId: asServed("gamea"),
     title: "Test Game",
     status: GameStatus.Active,
-    master: asServed(makeUser("testuser", "00000000-0000-0000-0000-000000000010")),
+    master: asServed(
+      makeUser("testuser", "00000000-0000-0000-0000-000000000010"),
+    ),
     assistants: asServed([]),
     participation: asServed([]),
     subscribersCount: 1,
@@ -76,7 +80,9 @@ describe("useGameDisplay.buildTooltip — game tooltip (sidebar + post unified)"
   it("produces the exact same tooltip string when the same GameRef is passed in, regardless of context (sidebar vs featured post)", () => {
     const { buildTooltip } = useGameDisplay();
     const game = makeGame();
-    const expected = ["Мастер: testuser", "Персонажи: 2/∞", "Читатели: 1"].join("\n");
+    const expected = ["Мастер: testuser", "Персонажи: 2/∞", "Читатели: 1"].join(
+      "\n",
+    );
     expect(buildTooltip(game)).toBe(expected);
   });
 
@@ -136,9 +142,14 @@ describe("useGameDisplay.buildRoomTooltip — room tooltip for featured / Pulse 
   it("explicit Open access and undefined access produce identical output", () => {
     const { buildRoomTooltip } = useGameDisplay();
     const game = makeGame();
-    const openRoom = makeRoom({ access: RoomAccessType.Open, type: RoomType.Chat });
+    const openRoom = makeRoom({
+      access: RoomAccessType.Open,
+      type: RoomType.Chat,
+    });
     const undefRoom = makeRoom();
-    expect(buildRoomTooltip(openRoom, game)).toBe(buildRoomTooltip(undefRoom, game));
+    expect(buildRoomTooltip(openRoom, game)).toBe(
+      buildRoomTooltip(undefRoom, game),
+    );
   });
 
   it("lists characters in the same order as game.activeCharacters", () => {

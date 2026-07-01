@@ -35,7 +35,9 @@ const formattedDate = computed(() => {
   <li class="review-item">
     <ContentText v-if="review.text" :html="review.text" class="review-text" />
     <div class="review-meta">
-      <span class="review-sign" :class="getSignClass(review.sign)">{{ getSignText(review.sign) }}</span>
+      <span class="review-sign" :class="getSignClass(review.sign)">{{
+        getSignText(review.sign)
+      }}</span>
       <span class="review-from">от</span>
       <UserLink :user="review.author!" :hide-badge="true" /><!--
       --><span class="review-date">, {{ formattedDate }}</span>

@@ -1,5 +1,9 @@
-import type { ListEnvelope, PagingQuery } from "@/shared/api/models/common";
-import type { Blog, BlogRef, BlogUser } from "../model/types";
+import type {
+  Envelope,
+  ListEnvelope,
+  PagingQuery,
+} from "@/shared/api/models/common";
+import type { Blog, BlogRef, BlogUser, Publication } from "../model/types";
 import { Api } from "@/shared/api";
 
 export default new (class {
@@ -61,6 +65,41 @@ export default new (class {
    */
   public getUserBlogs(username: string) {
     return Api.get<ListEnvelope<Blog>>("blogs", { authorUsername: username });
+  }
+
+  /**
+   * Get blogs filtered by host usernames (owner OR assistant, OR logic).
+   * Use this for the profile "В роли ведущего" section.
+   */
+  public getBlogsByHost(username: string, take = 100) {
+    return Api.get<ListEnvelope<Blog>>("blogs", {
+      hostUsernames: [username],
+      take,
+    });
+  }
+
+  /**
+   * Get all blogs the current authenticated user participates in
+   * (owner, assistant, mentor, or reader). Used for the profile
+   * "В роли читателя" section — only visible on own profile.
+   */
+  public getMyParticipatingBlogs(take = 100) {
+    return Api.get<ListEnvelope<Blog>>("blogs", {
+      participating: true,
+      take,
+    });
+  }
+
+  /**
+   * Get the user's most-liked (published) publication across every blog
+   * they author. Drives the profile "Blogs" tab spotlight. The envelope's
+   * `resource` is `null` when the user has no published publications —
+   * callers branch on that instead of failing the request.
+   */
+  public getUserBestPublication(username: string) {
+    return Api.get<Envelope<Publication | null>>(
+      `users/${encodeURIComponent(username)}/best-publication`,
+    );
   }
 
   // Blog users

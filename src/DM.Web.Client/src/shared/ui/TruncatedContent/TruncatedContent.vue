@@ -43,7 +43,7 @@
  * Callers put the content into the default slot. The root is a flex column
  * so any number of block children compose naturally.
  */
-import { computed, nextTick, onBeforeUnmount, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useContentTruncation } from "@/shared/lib/composables/useContentTruncation";
 import {
   registerExpandable,
@@ -100,9 +100,7 @@ const {
 });
 
 // True while the user sees the truncated (collapsed) version.
-const isCollapsed = computed(
-  () => needsTruncation.value && !isExpanded.value,
-);
+const isCollapsed = computed(() => needsTruncation.value && !isExpanded.value);
 
 // Inline max-height override driven by the click handler. Values:
 //   null      — no override, use the declarative contentStyle below.
@@ -221,28 +219,33 @@ function onTransitionEnd(e: TransitionEvent) {
 // Global "expand all / collapse all" integration
 // ───────────────────────────────────────────────────────────────────
 // Register with the page-wide registry so the ScrollNav toggle button
-// can expand/collapse every truncated block on the current route in
-// one click. Only instances where truncation is enabled participate —
-// non-truncatable wrappers don't register, preventing the ScrollNav
-// toggle button from appearing on pages with no expandable content.
+// can expand/collapse every truncated block on the current route in one
+// click. Register ONLY while the content actually needs truncation (has
+// something to collapse) — registering a truncatable-but-short block would
+// make the ScrollNav "Свернуть все" button appear on pages with nothing to
+// collapse. `needsTruncation` is measured async, so a watch syncs it.
 let unregisterExpand: (() => void) | null = null;
 
-if (props.truncatable) {
-  unregisterExpand = registerExpandable({
-    id: Symbol("TruncatedContent"),
-    isExpanded: () => !needsTruncation.value || isExpanded.value,
-    expand: () => {
-      if (needsTruncation.value && !isExpanded.value) {
-        toggleExpand();
-      }
-    },
-    collapse: () => {
-      if (needsTruncation.value && isExpanded.value) {
-        toggleExpand();
-      }
-    },
-  });
+function syncRegistration() {
+  const collapsible = props.truncatable && needsTruncation.value;
+  if (collapsible && !unregisterExpand) {
+    unregisterExpand = registerExpandable({
+      id: Symbol("TruncatedContent"),
+      isExpanded: () => isExpanded.value,
+      expand: () => {
+        if (!isExpanded.value) toggleExpand();
+      },
+      collapse: () => {
+        if (isExpanded.value) toggleExpand();
+      },
+    });
+  } else if (!collapsible && unregisterExpand) {
+    unregisterExpand();
+    unregisterExpand = null;
+  }
 }
+
+watch(needsTruncation, syncRegistration, { immediate: true });
 onBeforeUnmount(() => unregisterExpand?.());
 </script>
 
@@ -266,7 +269,9 @@ onBeforeUnmount(() => unregisterExpand?.());
       class="truncated-expand-button"
       :aria-expanded="isExpanded"
       @click="toggleExpand"
-    >... <strong>показать полностью</strong></button>
+    >
+      ... <strong>показать полностью</strong>
+    </button>
   </div>
 </template>
 

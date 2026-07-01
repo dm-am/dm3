@@ -1,8 +1,4 @@
-import type {
-  Envelope,
-  ListEnvelope,
-  User,
-} from "@/shared/api/models/common";
+import type { Envelope, ListEnvelope, User } from "@/shared/api/models/common";
 import type {
   Comment,
   CommentId,
@@ -41,18 +37,43 @@ export default new (class ForumApi {
   }
 
   public getTopics(id: BoardId, q: TopicsQuery) {
-    // Convert page number to skip/take for backend
+    return Api.get<ListEnvelope<Topic>>(
+      `boards/${id}/topics`,
+      this.buildTopicsParams(q),
+    );
+  }
+
+  /**
+   * Cross-board topic search — backs the user-profile "Topics" tab. The
+   * caller is expected to set `q.authors = [username]` to scope results
+   * to a specific user; access policy is enforced server-side so private
+   * boards never leak into the response.
+   *
+   * Shares the same TopicsQuery → query-string mapping as `getTopics` so
+   * both call sites stay in lock-step when a new filter is added.
+   */
+  public getAllTopics(q: TopicsQuery) {
+    return Api.get<ListEnvelope<Topic>>("topics", this.buildTopicsParams(q));
+  }
+
+  /**
+   * One place — and one place only — where TopicsQuery becomes
+   * query-string parameters. The per-board and cross-board endpoints
+   * share this builder so a new filter automatically propagates to both
+   * without diverging.
+   */
+  private buildTopicsParams(q: TopicsQuery) {
     const pageSize = q.size ?? 20;
-    const queryParams: Record<string, string | number | boolean | string[] | undefined> = {
+    const queryParams: Record<
+      string,
+      string | number | boolean | string[] | undefined
+    > = {
       take: pageSize,
     };
 
-    // Paging
     if (q.number && q.number > 1) {
       queryParams.skip = (q.number - 1) * pageSize;
     }
-
-    // Filtering
     if (q.isAttached !== undefined) {
       queryParams.isAttached = q.isAttached;
     }
@@ -68,16 +89,13 @@ export default new (class ForumApi {
     if (q.createdToUtc) {
       queryParams.createdToUtc = q.createdToUtc;
     }
-
-    // Sorting
     if (q.sortBy) {
       queryParams.sortBy = q.sortBy;
     }
     if (q.sortOrder) {
       queryParams.sortOrder = q.sortOrder;
     }
-
-    return Api.get<ListEnvelope<Topic>>(`boards/${id}/topics`, queryParams);
+    return queryParams;
   }
 
   public reorderPinnedTopics(boardId: BoardId, topicIds: string[]) {
@@ -115,9 +133,10 @@ export default new (class ForumApi {
   public getComments(id: TopicId, q: CommentsQuery) {
     // Convert page number to skip/take for backend
     const pageSize = q.size ?? 20;
-    const queryParams: Record<string, string | number | string[] | undefined> = {
-      take: pageSize,
-    };
+    const queryParams: Record<string, string | number | string[] | undefined> =
+      {
+        take: pageSize,
+      };
 
     // Paging
     if (q.number && q.number > 1) {

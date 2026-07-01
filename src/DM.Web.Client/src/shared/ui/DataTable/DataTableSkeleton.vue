@@ -32,7 +32,11 @@ withDefaults(
 // across rows. Narrow columns (≤10%) get a fixed short bar instead.
 const widthFactors = [0.6, 0.45, 0.7, 0.5, 0.55, 0.65, 0.4, 0.75];
 
-function getBarWidth(rowIndex: number, colIndex: number, column: Column): string {
+function getBarWidth(
+  rowIndex: number,
+  colIndex: number,
+  column: Column,
+): string {
   // Narrow columns (counters, percentages) — short fixed bar
   const widthNum = column.width ? parseInt(column.width) : 0;
   if (widthNum > 0 && widthNum <= 10) {
@@ -45,11 +49,7 @@ function getBarWidth(rowIndex: number, colIndex: number, column: Column): string
 </script>
 
 <template>
-  <tr
-    v-for="rowIndex in rows"
-    :key="rowIndex"
-    class="skeleton-row"
-  >
+  <tr v-for="rowIndex in rows" :key="rowIndex" class="skeleton-row">
     <td v-if="showRowNumbers" class="skeleton-td col-number">
       <div class="skeleton-bar skeleton-bar-number" />
     </td>

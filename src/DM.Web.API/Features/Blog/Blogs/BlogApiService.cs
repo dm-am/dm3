@@ -223,6 +223,14 @@ internal class BlogApiService : IBlogApiService
     }
 
     /// <inheritdoc />
+    public async Task<Envelope<ApiPublication?>> GetUserBestPublication(string username)
+    {
+        var publication = await _blogService.GetBestUserPublication(username);
+        return new Envelope<ApiPublication?>(
+            publication == null ? null : _mapper.Map<ApiPublication>(publication));
+    }
+
+    /// <inheritdoc />
     public async Task<Envelope<ApiPublication>> CreatePublication(Guid blogId, ApiCreatePublicationRequest request)
     {
         var createPublication = _mapper.Map<CreatePublication>(request);

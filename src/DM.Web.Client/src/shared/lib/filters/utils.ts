@@ -34,7 +34,9 @@ export function isValidDate(value: string | null | undefined): value is string {
  * Accepts both YYYY-MM-DD and ISO 8601 formats.
  * Returns YYYY-MM-DD string or null.
  */
-export function parseDateFromUrl(value: string | string[] | undefined): string | null {
+export function parseDateFromUrl(
+  value: string | string[] | undefined,
+): string | null {
   if (!value || Array.isArray(value)) return null;
 
   // If it's a full ISO datetime, extract date part
@@ -119,19 +121,26 @@ export function emptyDateRange(): DateRange {
 /**
  * Parse comma-separated string to Set<string>
  */
-export function parseSetFromUrl(value: string | string[] | undefined): Set<string> {
+export function parseSetFromUrl(
+  value: string | string[] | undefined,
+): Set<string> {
   if (!value) return new Set();
   const str = Array.isArray(value) ? value[0] : value;
   if (!str) return new Set();
 
-  const items = str.split(",").map((s) => s.trim()).filter(Boolean);
+  const items = str
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   return new Set(items);
 }
 
 /**
  * Parse comma-separated string to Set<number>
  */
-export function parseNumberSetFromUrl(value: string | string[] | undefined): Set<number> {
+export function parseNumberSetFromUrl(
+  value: string | string[] | undefined,
+): Set<number> {
   if (!value) return new Set();
   const str = Array.isArray(value) ? value[0] : value;
   if (!str) return new Set();

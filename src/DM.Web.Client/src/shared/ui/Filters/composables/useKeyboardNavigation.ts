@@ -33,7 +33,9 @@ export interface KeyboardNavigationOptions<T> {
  * });
  * ```
  */
-export function useKeyboardNavigation<T>(options: KeyboardNavigationOptions<T>) {
+export function useKeyboardNavigation<T>(
+  options: KeyboardNavigationOptions<T>,
+) {
   const {
     items,
     onSelect,
@@ -84,7 +86,8 @@ export function useKeyboardNavigation<T>(options: KeyboardNavigationOptions<T>) 
 
     // Validate final index
     if (newIndex < 0 || newIndex >= length) return currentIndex;
-    if (skipCondition && skipCondition(itemsArray[newIndex])) return currentIndex;
+    if (skipCondition && skipCondition(itemsArray[newIndex]))
+      return currentIndex;
 
     return newIndex;
   }
@@ -117,7 +120,10 @@ export function useKeyboardNavigation<T>(options: KeyboardNavigationOptions<T>) 
         return true;
 
       case "Enter":
-        if (highlightedIndex.value >= 0 && highlightedIndex.value < itemsArray.length) {
+        if (
+          highlightedIndex.value >= 0 &&
+          highlightedIndex.value < itemsArray.length
+        ) {
           event.preventDefault();
           onSelect(highlightedIndex.value, itemsArray[highlightedIndex.value]);
           return true;

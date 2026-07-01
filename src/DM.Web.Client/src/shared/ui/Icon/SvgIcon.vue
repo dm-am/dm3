@@ -7,6 +7,8 @@
     :stroke-linecap="icon.strokeLinecap"
     :stroke-linejoin="icon.strokeLinejoin"
     class="svg-icon"
+    aria-hidden="true"
+    focusable="false"
     v-html="icon.path"
   />
 </template>

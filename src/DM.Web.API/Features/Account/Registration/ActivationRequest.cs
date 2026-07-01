@@ -20,7 +20,7 @@ public class ActivationRequest
     /// <example>JohnDoe_123</example>
     [Required(ErrorMessage = "Имя пользователя обязательно")]
     [StringLength(20, MinimumLength = 2, ErrorMessage = "От 2 до 20 символов")]
-    [RegularExpression(@"^(?!.*  )[a-zA-Zа-яА-ЯёЁ0-9]([a-zA-Zа-яА-ЯёЁ0-9_.\- ]*[a-zA-Zа-яА-ЯёЁ0-9])?$",
+    [RegularExpression(@"^(?!.*  )[a-zA-Zа-яА-ЯеЕ0-9]([a-zA-Zа-яА-ЯеЕ0-9_.\- ]*[a-zA-Zа-яА-ЯеЕ0-9])?$",
         ErrorMessage = "Недопустимые символы или формат")]
     public string Username { get; set; } = "";
 

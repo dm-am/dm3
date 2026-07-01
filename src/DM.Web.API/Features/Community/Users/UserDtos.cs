@@ -95,6 +95,59 @@ public class User : UserRef
     public int ReviewsReceived { get; set; }
 
     /// <summary>
+    /// Number of endorsements (user recommendations) written by this user
+    /// about other users.
+    /// </summary>
+    public int EndorsementsGiven { get; set; }
+
+    /// <summary>
+    /// Number of endorsements received by this user (other users wrote them).
+    /// </summary>
+    public int EndorsementsReceived { get; set; }
+
+    /// <summary>
+    /// Forum topics authored by this user.
+    /// </summary>
+    public int TopicsAuthored { get; set; }
+
+    /// <summary>
+    /// Comments authored by this user (polymorphic — across forum / blog /
+    /// game / publication).
+    /// </summary>
+    public int CommentsAuthored { get; set; }
+
+    /// <summary>
+    /// Messages this user has posted in the global chat.
+    /// </summary>
+    public int GlobalChatMessages { get; set; }
+
+    /// <summary>
+    /// Number of bans this user has received. Drives the «резиновая уточка»
+    /// achievement chain — пасхалка на мем про утят-террористов.
+    /// </summary>
+    public int BansReceived { get; set; }
+
+    /// <summary>
+    /// Number of games this user has voluntarily dropped (Retired characters
+    /// with IsPlayerLeft=true). Drives the «дропы» achievement chain.
+    /// </summary>
+    public int GameDrops { get; set; }
+
+    /// <summary>
+    /// Number of publications (blog articles) authored by this user.
+    /// Drives the «публикации» achievement chain.
+    /// </summary>
+    public int PublicationsAuthored { get; set; }
+
+    /// <summary>
+    /// Total likes received on this user's authored content across
+    /// topics, publications, comments and chat messages combined.
+    /// Drives the «лайки» achievement chain. Game posts excluded —
+    /// they have their own quality signal via «Рейтинг».
+    /// </summary>
+    public int LikesReceived { get; set; }
+
+    /// <summary>
     /// Number of subscribers (users following this user)
     /// </summary>
     public int SubscribersCount { get; set; }
@@ -103,6 +156,42 @@ public class User : UserRef
     /// Subscriber usernames for tooltip display (limited to first 20)
     /// </summary>
     public IReadOnlyCollection<string> SubscriberUsernames { get; set; } = [];
+
+    /// <summary>
+    /// Richer subscriber refs (username + last activity) — used by the
+    /// profile page to style inactive subscribers in muted gray. Same 20
+    /// budget as <see cref="SubscriberUsernames"/>.
+    /// </summary>
+    public IReadOnlyCollection<SubscriberRef> Subscribers { get; set; } = [];
+}
+
+/// <summary>
+/// Lightweight subscriber reference for profile-page display.
+/// Just enough fields to render a styled router-link to the profile,
+/// plus the subscription <see cref="Settings"/> bitmask so the profile
+/// UI can filter the list per active tab ("subscribed to games / blogs
+/// / topics") without a second round-trip.
+/// </summary>
+public class SubscriberRef
+{
+    /// <summary>
+    /// Subscriber's display name.
+    /// </summary>
+    public string Username { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Last activity moment (UTC). Null = never recorded.
+    /// </summary>
+    public DateTimeOffset? LastActivityUtc { get; set; }
+
+    /// <summary>
+    /// Subscription settings bitmask (the <c>SubscriptionSettings</c>
+    /// [Flags] enum — InApp + Email channels and the per-category author
+    /// event bits). The profile UI ANDs this against the active tab's
+    /// flag (AuthorGameEvents / AuthorBlogEvents / AuthorTopicEvents) to
+    /// decide whether to render this subscriber in that tab's section.
+    /// </summary>
+    public int Settings { get; set; }
 }
 
 /// <summary>

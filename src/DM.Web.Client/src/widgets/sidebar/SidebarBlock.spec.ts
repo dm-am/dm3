@@ -159,7 +159,7 @@ describe("SidebarBlock", () => {
 
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
         "__HideMenuModule_MyBlock__",
-        expect.any(String)
+        expect.any(String),
       );
     });
 
@@ -173,7 +173,7 @@ describe("SidebarBlock", () => {
 
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
         "__HideMenuModule_TestBlock__",
-        "false"
+        "false",
       );
     });
 
@@ -190,7 +190,7 @@ describe("SidebarBlock", () => {
 
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
         "__HideMenuModule_TestBlock__",
-        "true"
+        "true",
       );
     });
 
@@ -222,7 +222,8 @@ describe("SidebarBlock", () => {
       // Initially hidden (opacity 0)
       expect(icon.attributes("style")).toContain("opacity: 0");
 
-      await wrapper.find(".toggle").trigger("mouseenter");
+      // Hover target is the whole title row (only the icon button toggles).
+      await wrapper.find(".sidebar-title").trigger("mouseenter");
       await nextTick();
 
       // After hover, should be visible (opacity 1)
@@ -235,10 +236,10 @@ describe("SidebarBlock", () => {
         slots: { title: "Title" },
       });
 
-      await wrapper.find(".toggle").trigger("mouseenter");
+      await wrapper.find(".sidebar-title").trigger("mouseenter");
       await nextTick();
 
-      await wrapper.find(".toggle").trigger("mouseleave");
+      await wrapper.find(".sidebar-title").trigger("mouseleave");
       await nextTick();
 
       const icon = wrapper.find(".icon");
@@ -267,11 +268,11 @@ describe("SidebarBlock", () => {
 
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
         "__HideMenuModule_Block1__",
-        expect.any(String)
+        expect.any(String),
       );
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
         "__HideMenuModule_Block2__",
-        expect.any(String)
+        expect.any(String),
       );
     });
   });

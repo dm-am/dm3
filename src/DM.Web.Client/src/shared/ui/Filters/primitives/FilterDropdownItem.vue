@@ -5,6 +5,7 @@
  * Displays a clickable item with optional avatar, label, hint, and navigation arrow.
  */
 import { SvgIcon } from "@/shared/ui/Icon";
+import { highlightMatch } from "@/shared/lib/utils/highlight";
 
 defineOptions({ name: "FilterDropdownItem" });
 
@@ -22,6 +23,8 @@ withDefaults(
     indent?: boolean;
     /** Whether this item has sub-options (shows arrow) */
     hasSubOptions?: boolean;
+    /** Search query for highlighting matches in label */
+    searchQuery?: string;
   }>(),
   {
     hint: undefined,
@@ -56,14 +59,15 @@ function handleMouseEnter() {
   >
     <img v-if="avatarUrl" :src="avatarUrl" alt="" class="item-avatar" />
     <span class="item-content">
-      <span class="item-label">{{ label }}</span>
+      <span
+        v-if="searchQuery"
+        class="item-label"
+        v-html="highlightMatch(label, searchQuery)"
+      />
+      <span v-else class="item-label">{{ label }}</span>
       <span v-if="hint" class="item-hint">{{ hint }}</span>
     </span>
-    <SvgIcon
-      v-if="hasSubOptions"
-      name="chevronRight"
-      class="item-arrow"
-    />
+    <SvgIcon v-if="hasSubOptions" name="chevronRight" class="item-arrow" />
   </button>
 </template>
 
@@ -94,7 +98,6 @@ function handleMouseEnter() {
 .item-avatar
   width: $filter-avatar-size
   height: $filter-avatar-size
-  border-radius: 50%
   flex-shrink: 0
 
 .item-content

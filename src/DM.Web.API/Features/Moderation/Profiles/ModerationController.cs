@@ -138,7 +138,7 @@ public class ModerationController : ControllerBase
     /// **This endpoint is only available in development environment.**
     ///
     /// Creates users with various roles and states:
-    /// - TestAdmin, TestSeniorMod, TestModerator, TestMentor, TestUser
+    /// - SolohinLex (Admin), TestSeniorMod, TestModerator, TestMentor, TestUser
     /// - Edge cases: Ab (min login), LongestLoginPossible (max login)
     /// - Special states: TestHonorary
     /// - Pending registration: inactive@test.local (for testing activation flow)

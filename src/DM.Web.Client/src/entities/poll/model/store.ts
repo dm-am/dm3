@@ -8,10 +8,9 @@ import { useApiList } from "@/shared/lib/composables/useApiResource";
 
 export const usePollsStore = defineStore("polls", () => {
   // Sidebar active polls with caching (60s TTL)
-  const active = useApiList<Poll>(
-    () => pollApi.getActivePolls(),
-    { cacheMs: 60_000 },
-  );
+  const active = useApiList<Poll>(() => pollApi.getActivePolls(), {
+    cacheMs: 60_000,
+  });
 
   // Paginated polls list (no caching - always fresh for polls page)
   const polls = ref<ListEnvelope<Poll> | null>(null);

@@ -75,6 +75,31 @@ public class TopicController : ControllerBase
         Ok(await _topicApiService.Get(id, q));
 
     /// <summary>
+    /// Get topics across all boards
+    /// </summary>
+    /// <remarks>
+    /// Cross-board topic search — primarily used by the user-profile
+    /// "Topics" tab, which scopes results with the <c>authors</c> filter
+    /// to render every topic authored by a given user.
+    ///
+    /// Access policy is enforced on the server: topics on boards the
+    /// viewer cannot see never appear in the response.
+    ///
+    /// Supports the same filters and sort options as the per-board
+    /// endpoint: search, authors, createdFromUtc, createdToUtc,
+    /// sortBy (lastActivity / created / comments / title / likes),
+    /// sortOrder (asc / desc), and standard paging (number / size).
+    /// </remarks>
+    /// <param name="q">Filter, sort and paging parameters</param>
+    /// <response code="200">Paginated list of topics</response>
+    /// <response code="400">Invalid query parameters</response>
+    [HttpGet("", Name = nameof(GetTopics))]
+    [ProducesResponseType(typeof(ListEnvelope<Topic>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetTopics([FromQuery] TopicsQuery q) =>
+        Ok(await _topicApiService.GetAcrossBoards(q));
+
+    /// <summary>
     /// Create new topic on board
     /// </summary>
     /// <remarks>

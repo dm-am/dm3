@@ -4,7 +4,19 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
-import type { Game, GameRef, GameId, Room, Post, Character, GameStatus, GameRole, GameRecruitment, GamePrivacySettings, CommentariesAccessMode } from "./types";
+import type {
+  Game,
+  GameRef,
+  GameId,
+  Room,
+  Post,
+  Character,
+  GameStatus,
+  GameRole,
+  GameRecruitment,
+  GamePrivacySettings,
+  CommentariesAccessMode,
+} from "./types";
 import type { Served } from "@/shared/api/models";
 import type { UserRef } from "@/shared/api/models/common";
 
@@ -70,11 +82,12 @@ vi.mock("../api/gameApi", () => ({
 
 import { useGamesStore, useGameDetailsStore } from "./store";
 
-const createMockUserRef = (id: string, username: string): UserRef => ({
-  id: id,
-  username,
-  lastActivityUtc: "2024-01-01T00:00:00Z",
-} as UserRef);
+const createMockUserRef = (id: string, username: string): UserRef =>
+  ({
+    id: id,
+    username,
+    lastActivityUtc: "2024-01-01T00:00:00Z",
+  }) as UserRef;
 
 const createMockRecruitment = (): GameRecruitment => ({
   isOpen: true,
@@ -94,7 +107,12 @@ const createMockPrivacySettings = (): GamePrivacySettings => ({
 
 const createMockGameRef = (id: string, title: string): GameRef => ({
   id: asServed(id as GameId),
-  publicId: asServed(id.slice(0, 5).toLowerCase().replace(/[^a-z]/g, "a")),
+  publicId: asServed(
+    id
+      .slice(0, 5)
+      .toLowerCase()
+      .replace(/[^a-z]/g, "a"),
+  ),
   title,
   status: "Active" as GameStatus,
   master: asServed(createMockUserRef("user-1", "master")),
@@ -176,7 +194,10 @@ describe("useGamesStore", () => {
 
   describe("fetchPopularGames", () => {
     it("fetches popular games", async () => {
-      const mockGames = [createMockGameRef("1", "Game 1"), createMockGameRef("2", "Game 2")];
+      const mockGames = [
+        createMockGameRef("1", "Game 1"),
+        createMockGameRef("2", "Game 2"),
+      ];
       mockGetPopularGames.mockResolvedValue({
         data: { resources: mockGames },
         error: null,
@@ -277,7 +298,10 @@ describe("useGamesStore", () => {
     it("searches games with params", async () => {
       const mockGames = [createMockGame("1", "Found Game")];
       mockSearchGames.mockResolvedValue({
-        data: { resources: mockGames, paging: { current: 1, pages: 1, total: 1 } },
+        data: {
+          resources: mockGames,
+          paging: { current: 1, pages: 1, total: 1 },
+        },
         error: null,
       });
 
@@ -291,7 +315,10 @@ describe("useGamesStore", () => {
     it("caches search results", async () => {
       const mockGames = [createMockGame("1", "Game")];
       mockSearchGames.mockResolvedValue({
-        data: { resources: mockGames, paging: { current: 1, pages: 1, total: 1 } },
+        data: {
+          resources: mockGames,
+          paging: { current: 1, pages: 1, total: 1 },
+        },
         error: null,
       });
 
@@ -362,7 +389,7 @@ describe("useGamesStore", () => {
       await store.prefetchPage(2);
 
       expect(mockSearchGames).toHaveBeenCalledWith(
-        expect.objectContaining({ number: 2 })
+        expect.objectContaining({ number: 2 }),
       );
     });
 
@@ -515,10 +542,17 @@ describe("useGameDetailsStore", () => {
   describe("loadPosts", () => {
     it("loads posts for room", async () => {
       const mockPosts: Post[] = [
-        { id: "post-1", gameText: "Post 1", createdUtc: "2024-01-01T00:00:00Z" } as Post,
+        {
+          id: "post-1",
+          gameText: "Post 1",
+          createdUtc: "2024-01-01T00:00:00Z",
+        } as Post,
       ];
       mockGetPosts.mockResolvedValue({
-        data: { resources: mockPosts, paging: { current: 1, pages: 1, total: 1 } },
+        data: {
+          resources: mockPosts,
+          paging: { current: 1, pages: 1, total: 1 },
+        },
         error: null,
       });
 

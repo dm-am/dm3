@@ -107,11 +107,19 @@ internal class PostRepository : IPostRepository
             baseQuery = baseQuery.Where(p => p.Room.GameId == query.GameId.Value);
         }
 
-        // Search filter (case-insensitive contains on GameText)
+        // Search filter (case-insensitive contains on GameText, excluding [private] blocks).
+        // Uses PostgreSQL regexp_replace via DbFunction mapping to strip [private=X]...[/private]
+        // before matching, so private text is never included in search results.
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var pattern = $"%{query.Search}%";
-            baseQuery = baseQuery.Where(p => EF.Functions.ILike(p.GameText, pattern));
+            baseQuery = baseQuery.Where(p => EF.Functions.ILike(
+                DmDbContext.RegexpReplace(
+                    p.GameText,
+                    @"\[private=[^\]]*\][\s\S]*?\[/private\]",
+                    "",
+                    "gi"),
+                pattern));
         }
 
         // Author filter (comma-separated usernames, parsed before LINQ)
@@ -120,6 +128,19 @@ internal class PostRepository : IPostRepository
             var usernames = query.AuthorUsernames
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             baseQuery = baseQuery.Where(p => usernames.Contains(p.Author.Username));
+        }
+
+        // Reviewer filter — keep only posts which have at least one active
+        // review authored by the given username. Powers the profile page
+        // «Оценил чужих постов: {username}». Subquery against PostReviews
+        // mirrors the LastReviewedAfter pattern below for plan stability.
+        if (!string.IsNullOrWhiteSpace(query.ReviewerUsername))
+        {
+            var reviewer = query.ReviewerUsername.Trim();
+            baseQuery = baseQuery.Where(p => _dbContext.PostReviews
+                .Any(r => r.PostId == p.PostId &&
+                          !r.IsRemoved &&
+                          r.Author.Username == reviewer));
         }
 
         // Post creation date filters
@@ -262,7 +283,7 @@ internal class PostRepository : IPostRepository
                 {
                     Id = x.CharId.Value,
                     Name = x.CharName ?? string.Empty,
-                    PictureUrl = string.Empty, // Populated by EnrichWithCharacterPictures below
+                    // Picture заполняется батчем в EnrichWithCharacterPictures.
                     IsNpc = x.CharIsNpc ?? false,
                     Author = new GeneralUser
                     {
@@ -351,7 +372,9 @@ internal class PostRepository : IPostRepository
     }
 
     /// <summary>
-    /// Enriches posts with character picture URLs from the uploads table
+    /// Батчем поднимает аватары всех персонажей на странице из таблицы Uploads
+    /// и заполняет <see cref="CharacterShort.Picture"/> (3 URL: original / medium /
+    /// small). Один query вместо N correlated subqueries.
     /// </summary>
     private async Task EnrichWithCharacterPictures(IEnumerable<Post> posts)
     {
@@ -363,17 +386,23 @@ internal class PostRepository : IPostRepository
 
         if (characterIds.Count == 0) return;
 
-        var pictureUrls = await _dbContext.Uploads
-            .Where(u => u.EntityId != null && characterIds.Contains(u.EntityId.Value) && u.Type == UploadType.CharacterAvatar)
-            .ToDictionaryAsync(
-                u => u.EntityId!.Value,
-                u => u.MediumFilePath ?? u.FilePath);
+        var pictures = await _dbContext.Uploads
+            .Where(u => u.TargetCharacterId != null
+                && characterIds.Contains(u.TargetCharacterId.Value)
+                && u.Type == UploadType.CharacterAvatar
+                && !u.IsRemoved)
+            .Select(u => new
+            {
+                CharacterId = u.TargetCharacterId!.Value,
+                Picture = Shared.Users.AvatarProjections.From(u),
+            })
+            .ToDictionaryAsync(x => x.CharacterId, x => x.Picture);
 
         foreach (var post in posts)
         {
-            if (post.Character != null && pictureUrls.TryGetValue(post.Character.Id, out var pictureUrl))
+            if (post.Character != null && pictures.TryGetValue(post.Character.Id, out var picture))
             {
-                post.Character.PictureUrl = pictureUrl ?? string.Empty;
+                post.Character.Picture = picture;
             }
         }
     }

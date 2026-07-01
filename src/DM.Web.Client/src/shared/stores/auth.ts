@@ -22,9 +22,21 @@ export const useAuthStore = defineStore("root", () => {
   const userKey = "user";
 
   // Initialize user from localStorage immediately when creating the store
-  // This allows components to react instantly without waiting for API
-  const storedUser = localStorage.getItem(userKey);
-  const user = ref<User | null>(storedUser ? JSON.parse(storedUser) : null);
+  // This allows components to react instantly without waiting for API.
+  // A corrupted value (manual edit, partial write, schema drift) must not crash
+  // app startup — clear the bad key and start as a guest.
+  function readStoredUser(): User | null {
+    const stored = localStorage.getItem(userKey);
+    if (!stored) return null;
+    try {
+      return JSON.parse(stored) as User;
+    } catch {
+      localStorage.removeItem(userKey);
+      return null;
+    }
+  }
+
+  const user = ref<User | null>(readStoredUser());
 
   function updateUser(newUser: User | null) {
     const { updateTheme } = useUiStore();

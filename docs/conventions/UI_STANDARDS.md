@@ -43,7 +43,9 @@
 |------------|------------|
 | Row hover | `background-color: $bg-element-hover` + transition 0.15s |
 | Empty state | `EmptyState` или `SecondaryText` компонент |
-| Loading state | `LoadingSpinner` компонент |
+| Loading state | `DataTableSkeleton` — только когда данных еще нет |
+| Перезагрузка | Уже показанные строки остаются видимыми (`aria-busy="true"` на таблице), skeleton их не заменяет |
+| Сортировка | `aria-sort` на заголовке; первая сортировка колонки может задавать естественное направление (`defaultDirection`) |
 | Virtual scroll | >50 элементов |
 
 **Файл:** `src/assets/styles/_Tables.sass`
@@ -117,20 +119,77 @@ html.classList.remove("no-transitions");
 ```
 
 **Правила:**
-1. **`transition: all` запрещён.** Всегда перечислять свойства явно (performance, predictability).
+1. **`transition: all` запрещен.** Всегда перечислять свойства явно (performance, predictability).
 2. Per-component hover/focus/active transitions на цветовые свойства **допустимы** — `.no-transitions` автоматически подавляет их при смене темы.
 3. Для стандартных transition — `+transition-safe()` / `+transition-safe-multi()` из `_Animations.sass`.
 4. Любой новый компонент с `transition:` автоматически покрывается `.no-transitions` — никакого opt-in не нужно.
 
 ---
 
-## Avatar Sizes
+## Avatars
 
-| Контекст | Размер |
-|----------|--------|
-| Inline (списки, dropdowns) | 24px |
-| Preview (chat preview) | 48px |
-| Profile (header) | 96px |
+Используйте компонент `<AvatarImg>` (из `@/entities/user`) — он сам решает,
+какой URL грузить из `picture` объекта и формирует srcset для DPR-aware
+загрузки на retina.
+
+```vue
+<AvatarImg :picture="user.picture" :alt="user.username" :size="48" />
+<AvatarImg :picture="user.picture" :alt="user.username" :size="220" prefer-original eager />
+```
+
+Сервер отдает 3 URL в `picture: { smallUrl, mediumUrl, originalUrl }`:
+- `smallUrl` — 100×100 (через imgproxy, AVIF/WebP auto)
+- `mediumUrl` — 400×400 (через imgproxy)
+- `originalUrl` — ≤1024 px aspect-preserving (прямой MinIO link)
+
+Подробнее: [UPLOADS.md](../architecture/UPLOADS.md).
+
+---
+
+## Состояния данных
+
+Каждое представление данных обязано иметь **четыре состояния**: загрузка (skeleton) → ошибка → пусто → контент.
+
+| Правило | Пояснение |
+|---------|-----------|
+| Ошибка ≠ пусто | При ошибке запроса показывается сообщение об ошибке, а не empty state |
+| Нет вечных skeleton | Skeleton живет только пока идет загрузка; при ошибке сменяется сообщением |
+| Тексты ошибок на русском | «Не удалось загрузить …»; сырые `error.title` с сервера пользователю не показываем |
+| API-клиент не бросает исключения | Возвращает `{ data, error }` — поле `error` проверяется всегда |
+| Stale-while-revalidate | При перезагрузке уже показанные данные не прячутся под skeleton |
+
+---
+
+## Гейтинг гостя
+
+Действия, требующие авторизации, **никогда не делают молчаливый редирект**.
+
+| Сценарий | Паттерн |
+|----------|---------|
+| CTA-ссылка / подсказка «Войдите» | router-link, добавляющий `action: "login"` в query **текущего** маршрута — модал входа открывается на месте, фильтры и контекст сохраняются |
+| Route guard (`requiresAuth`) | Редирект на главную с `?action=login` — гость сразу видит форму входа |
+| Микродействия (лайк, голос) | Не рендерить для гостя или disabled + tooltip |
+| Счетчики «непрочитанного» | Гостю показываются нейтральные подписи («Постов: N»), без слова «непрочитанных» |
+
+Поддерживаемые значения query: `action=login | register | recovery`.
+
+---
+
+## Клавиатура и фокус
+
+| Требование | Реализация |
+|------------|------------|
+| Видимый фокус | Глобальный `:focus-visible` (outline) — компоненты его не подавляют |
+| Кликабельные действия | `<button>`, а не `<a>` без `href` |
+| Tooltips | Показываются и по фокусу (focusin/focusout), не только по hover |
+| Декоративные иконки и разделители | `aria-hidden="true"` |
+| Иконки-кнопки и числовые ссылки | Обязательный `aria-label` |
+
+---
+
+## Формат даты-времени
+
+Полная дата-время отображается единообразно: **`DD.MM.YYYY в HH:mm`** (общий util, без локальных копий форматирования). Пустое значение — «—».
 
 ---
 

@@ -36,7 +36,8 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 - **Frontend:** http://localhost:5173
 - **API/Swagger:** http://localhost:5000
 - **Health:** http://localhost:5000/_health (liveness), http://localhost:5000/_ready (readiness)
-- **MinIO:** http://localhost:9001 (credentials из `docker/.env`)  — создать bucket `dm-uploads` с Access Policy = `Public`
+- **MinIO:** http://localhost:9001 (credentials из `docker/.env`) — bucket `dm-uploads` создается автоматически при первом старте API
+- **imgproxy:** http://localhost:8080 (on-the-fly resize + AVIF/WebP negotiation)
 
 ---
 
@@ -55,6 +56,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 | MongoDB | 27017 | — |
 | RabbitMQ | 5672, 15672 | из `docker/.env` |
 | MinIO | 9000, 9001 | из `docker/.env` |
+| imgproxy | 8080 | HMAC key/salt из `docker/.env` |
 | MailHog | 1025, 8025 | — |
 | OpenSearch | 9200, 5601 | — |
 | Jaeger | 16686 | — |
@@ -92,7 +94,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 
 | Роль | Логин | Email |
 |------|-------|-------|
-| Admin | `TestAdmin` | admin@test.local |
+| Admin | `SolohinLex` | admin@test.local |
 | SeniorModerator | `TestSeniorMod` | seniormod@test.local |
 | Moderator | `TestModerator` | mod@test.local |
 | Mentor | `TestMentor` | mentor@test.local |
@@ -110,7 +112,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 | `Player Four` | Space |
 | `Игрок` | Cyrillic only |
 | `Игрок_Один` | Cyrillic + underscore |
-| `Тест Ёлки` | Cyrillic + space + Ё |
+| `Тест Елки` | Cyrillic + space + Е |
 
 **Специальные состояния:**
 
@@ -215,7 +217,8 @@ dotnet ef database update -p src/DM.Infrastructure.Persistence -s src/DM.Web.API
 | `AuthenticationConfiguration` | Сессии (1 год), throttling, lockout | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | `PasswordPolicyConfiguration` | Требования к паролям (8+ символов) | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | `TokenConfiguration` | Срок жизни токенов (активация, сброс пароля) | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
-| `CdnConfiguration` | MinIO/S3 для загрузки файлов | — |
+| `CdnConfiguration` | MinIO/S3 для source-файлов | [UPLOADS.md](../architecture/UPLOADS.md) |
+| `ImageProxyConfiguration` | imgproxy endpoint + HMAC key/salt для signed transform URL's | [UPLOADS.md](../architecture/UPLOADS.md) |
 | `MirrorConfiguration` | Зеркала (dm.am, ru.l.dm.am) | [MIRRORING.md](./MIRRORING.md) |
 
 ### Frontend
@@ -232,6 +235,8 @@ VITE_API_HOST=http://localhost:5000
 POSTGRES_PASSWORD=...
 RABBITMQ_DEFAULT_PASS=...
 MINIO_ROOT_PASSWORD=...
+IMGPROXY_KEY=...   # 64 hex chars (32 bytes), HMAC-SHA256 key
+IMGPROXY_SALT=...  # 64 hex chars (32 bytes), HMAC-SHA256 salt
 ```
 
 ---
@@ -242,7 +247,8 @@ MINIO_ROOT_PASSWORD=...
 |----------|---------|
 | Порт занят | `taskkill //F //IM node.exe` (Windows) |
 | Frontend не видит API | Проверить `.env.local`: `VITE_API_HOST=http://localhost:5000` |
-| Изображения не загружаются | MinIO bucket `dm-uploads` с Access Policy = `Public` |
+| Изображения не загружаются | API создает bucket автоматически на старте. Проверь `docker logs dm-api 2>&1 \| grep -i bucket` |
+| Thumbnails не отдаются (404 на imgproxy) | `docker ps \| grep imgproxy`. Проверить `IMGPROXY_KEY`/`IMGPROXY_SALT` в `docker/.env` (64 hex chars each) |
 | Seed: письма не доходят | Используй `node scripts/seed.js` без `--with-email` |
 | Seed: "API not available" | Запусти API: `dotnet run --project src/DM.Web.API` |
 | Seed: "PostgreSQL not available" | Запусти: `docker compose up -d dm-pg` |

@@ -41,14 +41,14 @@ public class WarningController : ControllerBase
     /// Returns all active warnings for the specified user,
     /// including total warning points.
     /// </remarks>
-    /// <param name="login">User login</param>
+    /// <param name="username">Username</param>
     /// <response code="200">User warnings info</response>
     /// <response code="404">User not found</response>
-    [HttpGet("users/{login}/warnings", Name = nameof(GetUserWarnings))]
+    [HttpGet("users/{username}/warnings", Name = nameof(GetUserWarnings))]
     [ProducesResponseType(typeof(UserWarningsInfo), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetUserWarnings(string login) =>
-        Ok(await _warningApiService.GetUserWarnings(login));
+    public async Task<IActionResult> GetUserWarnings(string username) =>
+        Ok(await _warningApiService.GetUserWarnings(username));
 
     /// <summary>
     /// Get all warnings (moderators only)
@@ -98,7 +98,7 @@ public class WarningController : ControllerBase
     public async Task<IActionResult> CreateWarning([FromBody] CreateWarningRequest request)
     {
         var result = await _warningApiService.CreateWarning(request);
-        return CreatedAtRoute(nameof(GetUserWarnings), new { login = request.Username }, result);
+        return CreatedAtRoute(nameof(GetUserWarnings), new { username = request.Username }, result);
     }
 
     /// <summary>

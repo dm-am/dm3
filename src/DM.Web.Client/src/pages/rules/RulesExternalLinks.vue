@@ -4,7 +4,10 @@
  */
 
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
-import { ExpandableList, type ExpandableItem } from "@/shared/ui/ExpandableList";
+import {
+  ExpandableList,
+  type ExpandableItem,
+} from "@/shared/ui/ExpandableList";
 
 const sections: ExpandableItem[] = [
   {

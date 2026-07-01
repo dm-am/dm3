@@ -34,6 +34,7 @@ using DM.Domain.Game.Features.Inactivity;
 using DM.Domain.Game.Features.Unread;
 using DM.Domain.Core.Likes;
 using DM.Domain.Core.Notepads;
+using DM.Domain.Community.Features.Fundraising;
 using DM.Domain.Community.Features.Polls;
 using DM.Domain.Community.Features.UserEndorsements;
 using DM.Domain.Community.Features.WebsiteTestimonials;
@@ -132,6 +133,10 @@ public class PersistenceModule : Module
 
         builder.RegisterType<WebsiteTestimonialRepository>()
             .As<IWebsiteTestimonialRepository>()
+            .InstancePerLifetimeScope();
+
+        builder.RegisterType<FundraisingGoalRepository>()
+            .As<IFundraisingGoalRepository>()
             .InstancePerLifetimeScope();
 
         // Forum repositories

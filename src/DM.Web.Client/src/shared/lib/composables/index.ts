@@ -61,7 +61,10 @@ export { usePaging } from "./usePaging";
 
 // Filter dispatcher (for URL-synced filters)
 export { createFilterDispatcher } from "./createFilterDispatcher";
-export type { FilterDispatcherConfig, FilterDispatcher } from "./createFilterDispatcher";
+export type {
+  FilterDispatcherConfig,
+  FilterDispatcher,
+} from "./createFilterDispatcher";
 
 // Dropdown keyboard navigation
 export { useDropdownKeyboard } from "./useDropdownKeyboard";
@@ -82,6 +85,9 @@ export { useSignalR, useGlobalSignalR } from "./useSignalR";
 export { useToast } from "./useToast";
 export type { ToastType, Toast } from "./useToast";
 
+// Document title (per-route + dynamic page titles)
+export { useDocumentTitle, formatDocumentTitle } from "./useDocumentTitle";
+
 // Content truncation (expand/collapse)
 export { useContentTruncation } from "./useContentTruncation";
 export type {
@@ -95,4 +101,7 @@ export type { MessagePermissions } from "./useMessagePermissions";
 
 // Virtual scroll (@tanstack/vue-virtual wrapper)
 export { useVirtualScroll } from "./useVirtualScroll";
-export type { VirtualScrollOptions, VirtualScrollReturn } from "./useVirtualScroll";
+export type {
+  VirtualScrollOptions,
+  VirtualScrollReturn,
+} from "./useVirtualScroll";

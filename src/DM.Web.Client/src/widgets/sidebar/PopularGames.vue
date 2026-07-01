@@ -1,9 +1,15 @@
 <template>
   <SidebarBlock token="PopularGames">
     <template #title>Популярные игры</template>
-    <SidebarSkeleton v-if="store.popularGames === null" :lines="10" />
+    <SidebarSkeleton
+      v-if="store.popularGames === null && !failed"
+      :lines="10"
+    />
+    <SecondaryText v-else-if="store.popularGames === null">
+      Не удалось загрузить
+    </SecondaryText>
     <SecondaryText v-else-if="store.popularGames.length === 0">
-      Нет популярных игр
+      Популярных игр пока нет
     </SecondaryText>
     <template v-else>
       <GameLink
@@ -38,12 +44,20 @@ import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import GameLink from "./GameLink.vue";
 import { useGamesStore } from "@/entities/game";
 import { useUserStore } from "@/entities/user";
-import { onMounted } from "vue";
+import { onMounted, ref } from "vue";
 
 const store = useGamesStore();
 const userStore = useUserStore();
 
-onMounted(() => store.fetchPopularGames());
+// The games store does not expose an error ref for this list, so detect
+// failure locally: when the fetch settles and the list is still null,
+// the request failed (prevents an eternal skeleton).
+const failed = ref(false);
+
+onMounted(async () => {
+  await store.fetchPopularGames();
+  failed.value = store.popularGames === null;
+});
 </script>
 
 <style scoped lang="sass">

@@ -43,4 +43,11 @@ internal class PersonalProfileApiService : IPersonalProfileApiService
         var updatedUser = await _userService.UpdateAsync(updateUser);
         return _mapper.Map<PersonalProfile>(updatedUser);
     }
+
+    /// <inheritdoc />
+    public Task RemoveMyAvatar()
+    {
+        var currentUser = _identityProvider.Current.User;
+        return _userService.RemoveAvatarAsync(currentUser.UserId);
+    }
 }

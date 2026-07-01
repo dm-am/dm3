@@ -54,4 +54,10 @@ public interface IUserService : IUserLookupService
     /// Update user details
     /// </summary>
     Task<Core.Users.UserDetails> UpdateAsync(UpdateUser updateUser);
+
+    /// <summary>
+    /// Сбросить аватар пользователя. Идемпотент (если аватара нет — no-op).
+    /// Триггерит GC старого Upload (S3 + DB cleanup через background worker).
+    /// </summary>
+    Task RemoveAvatarAsync(Guid userId);
 }

@@ -55,7 +55,7 @@ internal class NewForumTopicFromSubscribedAuthorNotificationGenerator : BaseNoti
         var subscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.User,
             topicData.AuthorId,
-            SubscriptionSettings.AuthorNewContent);
+            SubscriptionSettings.AuthorTopicEvents);
 
         var subscriberIds = subscriptions
             .Select(s => s.SubscriberId)

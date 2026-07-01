@@ -124,7 +124,7 @@ None (0)        Нет связи с блогом
 | Удаление ассистентов | - | - | - | - | ✓ |
 | Удаление игры | - | - | - | - | ✓ |
 
-**Ведущие игры = Master + Assistant.** Ментор (`GameRole.Mentor`) **не** является ведущим — он курирует игру новичка, но не ведёт её. Это правило используется в render-контракте `[private]`: только master и assistants видят все приватные блоки в игре автоматически (lead-override), ментор — нет.
+**Ведущие игры = Master + Assistant.** Ментор (`GameRole.Mentor`) **не** является ведущим — он курирует игру новичка, но не ведет ее. Это правило используется в render-контракте `[private]`: только master и assistants видят все приватные блоки в игре автоматически (lead-override), ментор — нет.
 
 ---
 
@@ -137,9 +137,9 @@ None (0)        Нет связи с блогом
 **`[private]`** — валиден только в GamePost. Виден если выполнено ЛЮБОЕ из:
 - зритель = автор поста (author-forever, snapshot);
 - зритель — владелец одного из персонажей-адресатов (addressee-forever, per-block snapshot);
-- зритель — ведущий игры (master или assistant; ментор исключён);
-- у поста включён `SharePrivateWithAll` (per-post override, внутри множества читателей комнаты);
-- у комнаты включён `ViewPrivateText` (per-room override, внутри множества читателей комнаты).
+- зритель — ведущий игры (master или assistant; ментор исключен);
+- у поста включен `SharePrivateWithAll` (per-post override, внутри множества читателей комнаты);
+- у комнаты включен `ViewPrivateText` (per-room override, внутри множества читателей комнаты).
 
 Moderator+ **не** видит `[private]` — нет backdoor'а для аудита. Полный контракт — в [BBCODE_RENDERING.md](BBCODE_RENDERING.md).
 

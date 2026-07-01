@@ -51,7 +51,8 @@
 | `AuthenticationConfiguration` | Сессии, throttling, lockout | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | `PasswordPolicyConfiguration` | Требования к паролям | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | `TokenConfiguration` | Сроки жизни токенов | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
-| `CdnConfiguration` | MinIO/S3 | [LOCAL_SETUP.md](../guides/LOCAL_SETUP.md) |
+| `CdnConfiguration` | MinIO/S3 source storage | [UPLOADS.md](../architecture/UPLOADS.md) |
+| `ImageProxyConfiguration` | imgproxy endpoint + URL signing | [UPLOADS.md](../architecture/UPLOADS.md) |
 | `MirrorConfiguration` | Зеркала | [MIRRORING.md](../guides/MIRRORING.md) |
 
 ---

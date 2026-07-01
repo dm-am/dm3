@@ -5,15 +5,16 @@ using DM.Web.API.Shared.Dto;
 using DM.Domain.Core.Enums;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace DM.Web.API.Features.General.Upload;
 
 /// <summary>
-/// File upload management with presigned URLs
+/// File upload management.
 /// </summary>
 /// <remarks>
-/// Provides secure file upload workflow using presigned URLs for direct S3/MinIO upload.
-/// Flow: 1) Request presigned URL → 2) Upload file directly to storage → 3) Confirm upload
+/// Direct upload flow only. Клиент шлет multipart/form-data на POST /v1/uploads,
+/// сервер валидирует, процессит и атомарно кладет в S3.
 /// </remarks>
 [ApiController]
 [Route("v1/uploads")]
@@ -81,7 +82,7 @@ public class UploadController : ControllerBase
     }
 
     /// <summary>
-    /// Delete upload
+    /// Delete upload (soft-delete; S3 cleanup сделает фоновый GC)
     /// </summary>
     /// <param name="id">Upload identifier</param>
     /// <response code="204">Upload deleted</response>
@@ -101,87 +102,35 @@ public class UploadController : ControllerBase
     }
 
     /// <summary>
-    /// Request presigned URL for direct upload
+    /// Upload file with server-side processing
     /// </summary>
     /// <remarks>
-    /// Returns a presigned URL that allows direct upload to storage.
-    /// The URL expires after 15 minutes.
-    /// After uploading, call the confirm endpoint to process the file.
-    /// </remarks>
-    /// <param name="request">Upload request details</param>
-    /// <response code="200">Presigned URL for upload</response>
-    /// <response code="400">Invalid request (file too large, invalid type)</response>
-    /// <response code="401">User not authenticated</response>
-    [HttpPost("presign", Name = nameof(RequestPresignedUrl))]
-    [AuthenticationRequired]
-    [ProducesResponseType(typeof(PresignResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> RequestPresignedUrl([FromBody] PresignRequest request)
-    {
-        var result = await _uploadApiService.RequestPresignedUrl(request);
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Upload file directly with server-side processing
-    /// </summary>
-    /// <remarks>
-    /// For small files (avatars, character portraits) that need server-side image processing.
-    /// The file is uploaded, processed (thumbnails generated for images), and stored in one step.
-    /// For large files, use the presigned URL workflow instead.
+    /// Multipart/form-data upload. Для изображений (UserAvatar, CharacterAvatar):
+    /// magic-byte валидация, EXIF/IPTC/XMP strip, генерация WebP thumbnails
+    /// (medium 400×400, small 100×100), атомарный batch S3 PUT.
     ///
-    /// Supported image types: JPEG, PNG, WebP, GIF. Max file size: 10 MB.
-    ///
-    /// After upload, use the returned upload ID to attach it to an entity
-    /// (e.g., PATCH /v1/account with avatarUploadId).
+    /// Допустимые форматы: JPEG, PNG, WebP. Максимум 10 МБ.
     /// </remarks>
-    /// <param name="file">Image file (multipart/form-data)</param>
+    /// <param name="file">File (multipart/form-data)</param>
     /// <param name="type">Upload type/purpose</param>
     /// <param name="targetId">Optional target entity ID</param>
     /// <response code="200">File uploaded, processed, and confirmed</response>
     /// <response code="400">Invalid file (wrong format, too large, not an image)</response>
     /// <response code="401">User not authenticated</response>
-    [HttpPost("direct", Name = nameof(DirectUpload))]
+    [HttpPost(Name = nameof(DirectUpload))]
     [AuthenticationRequired]
+    [EnableRateLimiting("uploads")]
     [RequestSizeLimit(10 * 1024 * 1024)]
     [ProducesResponseType(typeof(Shared.Dto.Upload), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> DirectUpload(
         IFormFile file,
         [FromQuery] UploadType type,
         [FromQuery] Guid? targetId = null)
     {
         var result = await _uploadApiService.DirectUpload(file, type, targetId);
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Confirm upload completion
-    /// </summary>
-    /// <remarks>
-    /// Call this after successfully uploading to the presigned URL.
-    /// Triggers image processing (thumbnails, optimization) for image files.
-    /// </remarks>
-    /// <param name="id">Upload ID from presign response</param>
-    /// <response code="200">Upload confirmed and processed</response>
-    /// <response code="400">Upload processing failed or file not found in storage</response>
-    /// <response code="401">User not authenticated</response>
-    /// <response code="403">Not allowed to confirm this upload</response>
-    /// <response code="404">Upload not found</response>
-    /// <response code="410">Upload session expired</response>
-    [HttpPost("{id:guid}/confirm", Name = nameof(ConfirmUpload))]
-    [AuthenticationRequired]
-    [ProducesResponseType(typeof(Shared.Dto.Upload), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status410Gone)]
-    public async Task<IActionResult> ConfirmUpload(Guid id)
-    {
-        var result = await _uploadApiService.ConfirmUpload(id);
         return Ok(result);
     }
 }

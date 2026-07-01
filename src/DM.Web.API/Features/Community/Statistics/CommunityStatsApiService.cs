@@ -3,7 +3,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Persistence;
+using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Shared.Dto;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -16,6 +18,7 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
     private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IMemoryCache _cache;
+    private readonly IImgproxyUrlBuilder _imgproxy;
 
     private const string CacheKey = "CommunityStats";
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
@@ -25,11 +28,13 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
     public CommunityStatsApiService(
         DmDbContext dbContext,
         IDateTimeProvider dateTimeProvider,
-        IMemoryCache cache)
+        IMemoryCache cache,
+        IImgproxyUrlBuilder imgproxy)
     {
         _dbContext = dbContext;
         _dateTimeProvider = dateTimeProvider;
         _cache = cache;
+        _imgproxy = imgproxy;
     }
 
     /// <inheritdoc />
@@ -296,14 +301,14 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
             {
                 EntityId = u.UserId,
                 Name = u.Username,
-                PictureUrl = u.AvatarUpload != null ? (u.AvatarUpload.SmallFilePath ?? u.AvatarUpload.FilePath) : null,
+                // ObjectKey проектируется из EF, signed imgproxy URL
+                // строится в memory-сtep ниже (HMAC не translatable в SQL).
+                PictureUrl = u.AvatarUpload != null ? u.AvatarUpload.ObjectKey : null,
                 Score = x.TotalRating
             })
             .ToListAsync();
 
-        // Add ranks
-        for (int i = 0; i < topByRating.Count; i++)
-            topByRating[i].Rank = i + 1;
+        ResolveLeaderboardPictures(topByRating);
 
         // Top players by posts count
         var topByPosts = await _dbContext.Posts
@@ -316,13 +321,12 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
             {
                 EntityId = u.UserId,
                 Name = u.Username,
-                PictureUrl = u.AvatarUpload != null ? (u.AvatarUpload.SmallFilePath ?? u.AvatarUpload.FilePath) : null,
+                PictureUrl = u.AvatarUpload != null ? u.AvatarUpload.ObjectKey : null,
                 Score = x.PostCount
             })
             .ToListAsync();
 
-        for (int i = 0; i < topByPosts.Count; i++)
-            topByPosts[i].Rank = i + 1;
+        ResolveLeaderboardPictures(topByPosts);
 
         // Top games by rating (sum of post review ratings)
         var topGamesByRating = await _dbContext.PostReviews
@@ -368,6 +372,22 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
             TopGamesByRating = topGamesByRating.ToArray(),
             TopGamesByPosts = topGamesByPosts.ToArray()
         };
+    }
+
+    /// <summary>
+    /// Post-process leaderboard entries: ObjectKey → signed imgproxy URL
+    /// для small-thumbnail. HMAC не translatable в SQL, поэтому делается
+    /// в-memory после fetch.
+    /// </summary>
+    private void ResolveLeaderboardPictures(System.Collections.Generic.List<LeaderboardEntry> entries)
+    {
+        for (int i = 0; i < entries.Count; i++)
+        {
+            entries[i].Rank = i + 1;
+            entries[i].PictureUrl = string.IsNullOrEmpty(entries[i].PictureUrl)
+                ? null
+                : _imgproxy.BuildSquareThumbnail(entries[i].PictureUrl!, AvatarPictureConverter.SmallSize);
+        }
     }
 
     /// <inheritdoc />

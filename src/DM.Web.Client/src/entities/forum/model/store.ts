@@ -10,7 +10,6 @@ import type {
   TopicsQuery,
   CommentsQuery,
 } from "./types";
-import type { User } from "@/shared/api/models/common";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import forumApi from "../api/forumApi";
 import { useAuthStore } from "@/shared/stores";
@@ -25,6 +24,7 @@ export const useBoardsStore = defineStore("boards", () => {
   });
   const boards = boardsResource.data;
   const boardsLoading = boardsResource.loading;
+  const boardsError = boardsResource.error;
   const fetchBoards = boardsResource.fetch;
 
   // News rarely changes - 5 minute cache
@@ -32,6 +32,7 @@ export const useBoardsStore = defineStore("boards", () => {
     cacheMs: 300_000,
   });
   const news = newsResource.data;
+  const newsError = newsResource.error;
   const fetchNews = newsResource.fetch;
 
   const selectedBoard = ref<Board | null>(null);
@@ -57,23 +58,22 @@ export const useBoardsStore = defineStore("boards", () => {
     return true;
   }
 
-  const moderators = ref<User[] | null>(null);
-  async function fetchModerators() {
-    if (!selectedBoard.value) return;
-
-    const { data } = await forumApi.getModerators(selectedBoard.value!.id);
-    if (data) moderators.value = data.resources;
-  }
-
   const attachedTopics = ref<Topic[] | null>(null);
   const topics = ref<ListEnvelope<Topic> | null>(null);
   const topicsLoading = ref(false);
+  const topicsError = ref(false);
 
   // Topics search cache (30s TTL, max 20 entries, stale-while-revalidate)
   const TOPICS_CACHE_TTL = 30_000;
-  const topicsCache = new Map<string, { data: ListEnvelope<Topic>; attached: Topic[] | null; timestamp: number }>();
+  const topicsCache = new Map<
+    string,
+    { data: ListEnvelope<Topic>; attached: Topic[] | null; timestamp: number }
+  >();
 
-  function createTopicsCacheKey(boardAlias: string, query: TopicsQuery): string {
+  function createTopicsCacheKey(
+    boardAlias: string,
+    query: TopicsQuery,
+  ): string {
     return JSON.stringify({ board: boardAlias, ...query });
   }
 
@@ -85,7 +85,8 @@ export const useBoardsStore = defineStore("boards", () => {
     if (!selectedBoard.value) return;
 
     // Apply user's page size preference
-    const size = query.size ?? currentUser.value?.settings?.paging?.topicsPerPage ?? 20;
+    const size =
+      query.size ?? currentUser.value?.settings?.paging?.topicsPerPage ?? 20;
     const fullQuery = { ...query, size };
     const boardAlias = selectedBoard.value.alias as BoardId;
     const cacheKey = createTopicsCacheKey(boardAlias as string, fullQuery);
@@ -106,6 +107,7 @@ export const useBoardsStore = defineStore("boards", () => {
     }
 
     topicsLoading.value = true;
+    topicsError.value = false;
     try {
       const effectiveSortBy = query.sortBy ?? "lastActivity";
       const effectiveSortOrder = query.sortOrder ?? "desc";
@@ -119,10 +121,12 @@ export const useBoardsStore = defineStore("boards", () => {
 
       let fetchedAttached: Topic[] | null = null;
       let fetchedTopics: ListEnvelope<Topic> | null = null;
+      let failed = false;
 
       if (hasFilters) {
         // With filters: single unified query (attached mixed with regular)
-        const { data } = await forumApi.getTopics(boardAlias, fullQuery);
+        const { data, error } = await forumApi.getTopics(boardAlias, fullQuery);
+        if (error) failed = true;
         fetchedAttached = null;
         fetchedTopics = data ?? null;
       } else {
@@ -131,8 +135,17 @@ export const useBoardsStore = defineStore("boards", () => {
           forumApi.getTopics(boardAlias, { isAttached: true }),
           forumApi.getTopics(boardAlias, { ...fullQuery, isAttached: false }),
         ]);
+        if (attachedResult.error || regularResult.error) failed = true;
         fetchedAttached = attachedResult.data?.resources ?? null;
         fetchedTopics = regularResult.data ?? null;
+      }
+
+      // On failure surface the error and keep any already-shown rows
+      // (stale-while-revalidate) instead of blanking the list — never
+      // present a failed load as fake-empty.
+      if (failed) {
+        topicsError.value = true;
+        return;
       }
 
       attachedTopics.value = fetchedAttached;
@@ -140,7 +153,11 @@ export const useBoardsStore = defineStore("boards", () => {
 
       // Update cache
       if (fetchedTopics) {
-        topicsCache.set(cacheKey, { data: fetchedTopics, attached: fetchedAttached, timestamp: now });
+        topicsCache.set(cacheKey, {
+          data: fetchedTopics,
+          attached: fetchedAttached,
+          timestamp: now,
+        });
         if (topicsCache.size > 20) {
           const firstKey = topicsCache.keys().next().value;
           if (firstKey) topicsCache.delete(firstKey);
@@ -157,11 +174,17 @@ export const useBoardsStore = defineStore("boards", () => {
   async function reorderPinnedTopics(topicIds: string[]) {
     if (!selectedBoard.value) return { error: new Error("No board selected") };
 
-    const { error } = await forumApi.reorderPinnedTopics(selectedBoard.value.alias as BoardId, topicIds);
+    const { error } = await forumApi.reorderPinnedTopics(
+      selectedBoard.value.alias as BoardId,
+      topicIds,
+    );
     if (error) return { error };
 
     // Refresh attached topics to reflect new order
-    const { data } = await forumApi.getTopics(selectedBoard.value.alias as BoardId, { isAttached: true });
+    const { data } = await forumApi.getTopics(
+      selectedBoard.value.alias as BoardId,
+      { isAttached: true },
+    );
     attachedTopics.value = data?.resources ?? null;
 
     return { data: true };
@@ -174,19 +197,28 @@ export const useBoardsStore = defineStore("boards", () => {
     if (!selectedBoard.value) return { error: new Error("No board selected") };
 
     // Find topic to get current pin status
-    const topic = [...(attachedTopics.value ?? []), ...(topics.value?.resources ?? [])]
-      .find(t => t.id === topicId);
+    const topic = [
+      ...(attachedTopics.value ?? []),
+      ...(topics.value?.resources ?? []),
+    ].find((t) => t.id === topicId);
 
     if (!topic) return { error: new Error("Topic not found") };
 
     const newStatus = !topic.isAttached;
-    const { error } = await forumApi.updateTopic(topicId as TopicId, { isAttached: newStatus } as any);
+    const { error } = await forumApi.updateTopic(
+      topicId as TopicId,
+      { isAttached: newStatus } as any,
+    );
     if (error) return { error };
 
     // Refresh topics list
     const [fetchedAttached, fetchedRegular] = await Promise.all([
-      forumApi.getTopics(selectedBoard.value.alias as BoardId, { isAttached: true }),
-      forumApi.getTopics(selectedBoard.value.alias as BoardId, { isAttached: false }),
+      forumApi.getTopics(selectedBoard.value.alias as BoardId, {
+        isAttached: true,
+      }),
+      forumApi.getTopics(selectedBoard.value.alias as BoardId, {
+        isAttached: false,
+      }),
     ]);
 
     attachedTopics.value = fetchedAttached.data?.resources ?? null;
@@ -206,7 +238,10 @@ export const useBoardsStore = defineStore("boards", () => {
     await trySelectBoard(topic.board.id);
   }
 
-  async function trySelectTopicByNumber(boardAlias: string, topicNumber: number) {
+  async function trySelectTopicByNumber(
+    boardAlias: string,
+    topicNumber: number,
+  ) {
     selectedTopic.value = null;
     const { data } = await forumApi.getTopicByNumber(boardAlias, topicNumber);
     const topic = data?.resource;
@@ -219,12 +254,19 @@ export const useBoardsStore = defineStore("boards", () => {
 
   const comments = ref<ListEnvelope<Comment> | null>(null);
   const commentsLoading = ref(false);
+  const commentsError = ref(false);
 
   // Comments search cache (30s TTL, max 20 entries)
   const COMMENTS_CACHE_TTL = 30_000;
-  const commentsCache = new Map<string, { data: ListEnvelope<Comment>; timestamp: number }>();
+  const commentsCache = new Map<
+    string,
+    { data: ListEnvelope<Comment>; timestamp: number }
+  >();
 
-  function createCommentsCacheKey(topicId: string, query: CommentsQuery): string {
+  function createCommentsCacheKey(
+    topicId: string,
+    query: CommentsQuery,
+  ): string {
     return JSON.stringify({ topic: topicId, ...query });
   }
 
@@ -235,7 +277,8 @@ export const useBoardsStore = defineStore("boards", () => {
   async function searchComments(query: CommentsQuery) {
     if (!selectedTopic.value) return;
 
-    const size = query.size ?? currentUser.value?.settings?.paging?.commentsPerPage ?? 20;
+    const size =
+      query.size ?? currentUser.value?.settings?.paging?.commentsPerPage ?? 20;
     const fullQuery: CommentsQuery = { ...query, size };
     const topicId = selectedTopic.value.id!;
     const cacheKey = createCommentsCacheKey(topicId, fullQuery);
@@ -256,8 +299,17 @@ export const useBoardsStore = defineStore("boards", () => {
     }
 
     commentsLoading.value = true;
+    commentsError.value = false;
     try {
-      const { data } = await forumApi.getComments(topicId, fullQuery);
+      const { data, error } = await forumApi.getComments(topicId, fullQuery);
+
+      // On failure surface the error and keep any stale rows already shown
+      // instead of blanking to a fake-empty list.
+      if (error) {
+        commentsError.value = true;
+        return;
+      }
+
       comments.value = data ?? null;
 
       // Update cache
@@ -394,19 +446,20 @@ export const useBoardsStore = defineStore("boards", () => {
   return {
     boards,
     boardsLoading,
+    boardsError,
     fetchBoards,
     selectedBoard,
     trySelectBoard,
     trySelectBoardByAlias,
-    moderators,
-    fetchModerators,
     attachedTopics,
     topics,
     topicsLoading,
+    topicsError,
     searchTopics,
     reorderPinnedTopics,
     togglePinTopic,
     news,
+    newsError,
     fetchNews,
     trySelectTopic,
     trySelectTopicByNumber,
@@ -415,6 +468,7 @@ export const useBoardsStore = defineStore("boards", () => {
     searchComments,
     comments,
     commentsLoading,
+    commentsError,
     createComment,
     updateComment,
     deleteComment,

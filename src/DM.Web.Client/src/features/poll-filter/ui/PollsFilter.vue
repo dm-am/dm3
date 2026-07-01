@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { vClickOutside } from "@/shared/directives";
-import { usePollsFilter, SORT_OPTIONS, STATUS_OPTIONS, POLL_TYPE_OPTIONS, DEFAULT_FILTER_STATE } from "../model";
+import {
+  usePollsFilter,
+  SORT_OPTIONS,
+  STATUS_OPTIONS,
+  POLL_TYPE_OPTIONS,
+} from "../model";
 import { useFilterSearch, useFilterDropdown } from "@/shared/lib/composables";
 import { formatDateRangeForDisplay } from "@/shared/lib/filters";
 import {
@@ -10,6 +15,7 @@ import {
   FilterDropdown,
   FilterDropdownHeader,
   FilterDropdownItem,
+  OptionsList,
   DateRangePicker,
   SortButton,
   FilterBubble,
@@ -35,7 +41,7 @@ const {
 // Search with debounce
 const { localInput, handleInput, applySearch } = useFilterSearch(
   computed(() => filterState.value.search),
-  setSearch
+  setSearch,
 );
 
 // Filter dropdown with navigation
@@ -56,7 +62,11 @@ const filterOptions = [
   { key: "status", label: "Статус", hint: "Активные или завершенные" },
   { key: "pollType", label: "Тип опроса", hint: "Анонимные или публичные" },
   { key: "startsRange", label: "Дата начала", hint: "Фильтр по дате начала" },
-  { key: "endsRange", label: "Дата окончания", hint: "Фильтр по дате окончания" },
+  {
+    key: "endsRange",
+    label: "Дата окончания",
+    hint: "Фильтр по дате окончания",
+  },
 ];
 
 function selectRootItem(key: string) {
@@ -99,13 +109,23 @@ function handleStatusSelect(value: string) {
 
 function getStatusHint(value: string): string {
   switch (value) {
-    case "": return "Все опросы";
-    case "Pending": return "Еще не начались";
-    case "Active": return "Сейчас идут";
-    case "Closed": return "Уже закончились";
-    default: return "";
+    case "":
+      return "Все опросы";
+    case "Pending":
+      return "Еще не начались";
+    case "Active":
+      return "Сейчас идут";
+    case "Closed":
+      return "Уже закончились";
+    default:
+      return "";
   }
 }
+
+// Status options with hints (for OptionsList)
+const statusOptions = computed(() =>
+  STATUS_OPTIONS.map((o) => ({ ...o, hint: getStatusHint(o.value) })),
+);
 
 // Status label for bubble
 const statusLabel = computed(() => {
@@ -121,16 +141,27 @@ function handlePollTypeSelect(value: string) {
 
 function getPollTypeHint(value: string): string {
   switch (value) {
-    case "": return "Все опросы";
-    case "anonymous": return "Голоса скрыты";
-    case "public": return "Видно кто голосовал";
-    default: return "";
+    case "":
+      return "Все опросы";
+    case "anonymous":
+      return "Голоса скрыты";
+    case "public":
+      return "Видно кто голосовал";
+    default:
+      return "";
   }
 }
 
+// Poll type options with hints (for OptionsList)
+const pollTypeOptions = computed(() =>
+  POLL_TYPE_OPTIONS.map((o) => ({ ...o, hint: getPollTypeHint(o.value) })),
+);
+
 // Poll type label for bubble
 const pollTypeLabel = computed(() => {
-  const opt = POLL_TYPE_OPTIONS.find((o) => o.value === filterState.value.pollType);
+  const opt = POLL_TYPE_OPTIONS.find(
+    (o) => o.value === filterState.value.pollType,
+  );
   return opt?.label || "";
 });
 
@@ -182,17 +213,15 @@ const endsFilterLabel = computed(() => {
   });
 });
 
-// Has bubbles (show clear all when any filter OR non-default sorting)
+// Has bubbles (only when at least one actual filter bubble is rendered;
+// non-default sorting alone must not show a row with a lone "Сбросить")
 const hasBubbles = computed(() => {
   const state = filterState.value;
-  const def = DEFAULT_FILTER_STATE;
   return (
     state.status !== "" ||
     state.pollType !== "" ||
     hasStartsFilter.value ||
-    hasEndsFilter.value ||
-    state.sortBy !== def.sortBy ||
-    state.sortOrder !== def.sortOrder
+    hasEndsFilter.value
   );
 });
 
@@ -204,10 +233,27 @@ function clearAll() {
 function handleSearchKeydown(event: KeyboardEvent) {
   if (event.key === "Backspace" && !localInput.value) {
     const state = filterState.value;
-    if (hasEndsFilter.value) { event.preventDefault(); setEndsRange(null, null); return; }
-    if (hasStartsFilter.value) { event.preventDefault(); setStartsRange(null, null); return; }
-    if (state.pollType !== "") { event.preventDefault(); setPollType(""); return; }
-    if (state.status !== "") { event.preventDefault(); setStatus(""); }
+    if (hasEndsFilter.value) {
+      event.preventDefault();
+      setEndsFrom("");
+      setEndsTo("");
+      return;
+    }
+    if (hasStartsFilter.value) {
+      event.preventDefault();
+      setStartsFrom("");
+      setStartsTo("");
+      return;
+    }
+    if (state.pollType !== "") {
+      event.preventDefault();
+      setPollType("");
+      return;
+    }
+    if (state.status !== "") {
+      event.preventDefault();
+      setStatus("");
+    }
   }
 }
 </script>
@@ -249,26 +295,18 @@ function handleSearchKeydown(event: KeyboardEvent) {
           </template>
 
           <!-- Status options -->
-          <template v-if="navPath?.filter === 'status'">
-            <FilterDropdownItem
-              v-for="option in STATUS_OPTIONS"
-              :key="option.value"
-              :label="option.label"
-              :hint="getStatusHint(option.value)"
-              @item-select="handleStatusSelect(option.value)"
-            />
-          </template>
+          <OptionsList
+            v-if="navPath?.filter === 'status'"
+            :options="statusOptions"
+            @select="handleStatusSelect"
+          />
 
           <!-- Poll type options -->
-          <template v-if="navPath?.filter === 'pollType'">
-            <FilterDropdownItem
-              v-for="option in POLL_TYPE_OPTIONS"
-              :key="option.value"
-              :label="option.label"
-              :hint="getPollTypeHint(option.value)"
-              @item-select="handlePollTypeSelect(option.value)"
-            />
-          </template>
+          <OptionsList
+            v-if="navPath?.filter === 'pollType'"
+            :options="pollTypeOptions"
+            @select="handlePollTypeSelect"
+          />
 
           <!-- Starts date range picker -->
           <DateRangePicker

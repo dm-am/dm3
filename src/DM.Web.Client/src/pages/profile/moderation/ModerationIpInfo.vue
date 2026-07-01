@@ -62,7 +62,9 @@ function formatDateTime(dateStr: string): string {
         @click="showLoginHistory = !showLoginHistory"
       >
         История входов ({{ loginHistory?.length ?? 0 }})
-        <span class="mod-expand-icon">{{ showLoginHistory ? symbols.triangleDown : symbols.triangleRight }}</span>
+        <span class="mod-expand-icon">{{
+          showLoginHistory ? symbols.triangleDown : symbols.triangleRight
+        }}</span>
       </h5>
       <table v-if="showLoginHistory && loginHistory?.length" class="mod-table">
         <thead>
@@ -81,7 +83,9 @@ function formatDateTime(dateStr: string): string {
             <td>{{ formatDateTime(record.loginUtc) }}</td>
             <td class="mod-ip">{{ record.ipAddress }}</td>
             <td>
-              <span v-if="record.isSuccessful" class="mod-success">{{ symbols.checkmark }}</span>
+              <span v-if="record.isSuccessful" class="mod-success">{{
+                symbols.checkmark
+              }}</span>
               <span v-else class="mod-fail">{{ symbols.cross }}</span>
             </td>
           </tr>

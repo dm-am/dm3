@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
+using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -73,11 +74,21 @@ public class UserController : ControllerBase
     /// <summary>
     /// Get login history for a user
     /// </summary>
+    /// <remarks>
+    /// Requires admin role: login records contain personal data (IP addresses
+    /// and user agents). Users can view their own login history via
+    /// the /v1/account/security endpoints.
+    /// </remarks>
     /// <param name="username">User username</param>
     /// <response code="200">Login history retrieved successfully</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User is not authorized to view login history</response>
     /// <response code="404">User not found or was deleted</response>
     [HttpGet("{username}/login-history", Name = nameof(GetLoginHistory))]
+    [RequireRole(UserRole.Admin)]
     [ProducesResponseType(typeof(ListEnvelope<LoginHistoryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetLoginHistory(string username) => Ok(await _userApiService.GetLoginHistory(username));
 }

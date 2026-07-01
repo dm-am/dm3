@@ -146,7 +146,7 @@ Endpoint, который читается на каждой загрузке hom
 
 Polling-эндпойнты (SiteStatistics, unread counters) — **средство, а не цель**. Правила:
 
-- **Серверный TTL кэша должен превышать интервал polling клиента** — иначе половина запросов идёт в БД впустую. Если клиент опрашивает раз в 60 секунд, кэшируй хотя бы на 90 секунд.
+- **Серверный TTL кэша должен превышать интервал polling клиента** — иначе половина запросов идет в БД впустую. Если клиент опрашивает раз в 60 секунд, кэшируй хотя бы на 90 секунд.
 - **Интервал polling выводится из UX-требования**, а не удобства. «Статистика сайта» — приблизительные числа, 60s достаточно; unread counter в чате — другое дело.
 - **Polling прерывается когда вкладка скрыта** (`document.visibilitychange` → `stopPolling`). Обязательная энергосберегающая практика.
 
@@ -155,7 +155,7 @@ Polling-эндпойнты (SiteStatistics, unread counters) — **средст�
 Если UI может отрендериться с compact payload, а extra info (tooltip, advanced stats) доступен через отдельный endpoint — enrichment НЕ должен блокировать first paint. Паттерн:
 
 ```ts
-// ПЛОХО: критический путь ждёт второй запрос
+// ПЛОХО: критический путь ждет второй запрос
 bestOfWeek.value = (await fetchRatedPosts()).resources[0];
 bestOfWeekGame.value = await enrichGame(bestOfWeek.value); // +1 roundtrip
 loaded.value = true; // Only fires after both complete
@@ -299,7 +299,7 @@ function setSearch(search: string) {
 }
 
 function setStatus(status: string) {
-  const newState = { ...filterState.value };  // ❌ URL ещё не обновился!
+  const newState = { ...filterState.value };  // ❌ URL еще не обновился!
   newState.status = status;                   // Потеряли search="та"
   updateUrl(newState);
 }
@@ -431,7 +431,7 @@ function dispatch(action: FilterAction, getCurrentState: () => FilterState) {
 
     isNavigating = true;
     try {
-      // ✅ route NAME, не path — Vue Router распознаёт тот же route
+      // ✅ route NAME, не path — Vue Router распознает тот же route
       await routerInstance.replace({ name: currentRoute.name as string, query });
     } catch (err: unknown) {
       const error = err as { name?: string };
@@ -459,7 +459,7 @@ export function useFilter(): FilterComposable {
 
   const getCurrentState = () => filterState.value;
 
-  // ✅ Тонкие обёртки — просто создают action и dispatch
+  // ✅ Тонкие обертки — просто создают action и dispatch
   const setSearch = (search: string) =>
     dispatch({ type: "SET_SEARCH", search }, getCurrentState);
 

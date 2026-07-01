@@ -141,7 +141,10 @@ export const BbImage = Node.create<BbImageOptions>({
   },
 
   renderHTML({ HTMLAttributes, node }) {
-    const { width, height, ...rest } = HTMLAttributes as Record<string, unknown>;
+    const { width, height, ...rest } = HTMLAttributes as Record<
+      string,
+      unknown
+    >;
     const imgAttrs = mergeAttributes(this.options.HTMLAttributes, rest);
 
     // Use the node's own attributes for width/height rather than the merged

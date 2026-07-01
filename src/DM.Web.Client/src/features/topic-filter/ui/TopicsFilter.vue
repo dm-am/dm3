@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { vClickOutside } from "@/shared/directives";
-import { useTopicsFilter, SORT_OPTIONS, DEFAULT_SORT } from "../model";
+import { useTopicsFilter, SORT_OPTIONS } from "../model";
 import { useFilterSearch, useFilterDropdown } from "@/shared/lib/composables";
 import { formatDateRangeForDisplay } from "@/shared/lib/filters";
 import {
@@ -17,6 +17,17 @@ import {
   FilterBubble,
   BubblesRow,
 } from "@/shared/ui/Filters";
+
+// `hideAuthor` is set by the profile "Topics" tab — the author scope is
+// implicit (the profile owner) so the dropdown option and the bubble row
+// hide it. The composable still tracks the scope in URL state, so a deep
+// link with extra ?authors=... still works for power users.
+const props = withDefaults(
+  defineProps<{
+    hideAuthor?: boolean;
+  }>(),
+  { hideAuthor: false },
+);
 
 const {
   filterState,
@@ -35,7 +46,7 @@ const {
 
 const { localInput, handleInput, applySearch } = useFilterSearch(
   computed(() => filterState.value.search),
-  setSearch
+  setSearch,
 );
 
 // =============================================================================
@@ -54,11 +65,20 @@ function closeDropdown() {
   closeDropdownBase();
 }
 
-// Root level filter options
-const filterOptions = [
-  { key: "author", label: "Автор", hint: "Фильтр по автору топика" },
-  { key: "dateRange", label: "Дата создания", hint: "Фильтр по периоду создания" },
-];
+// Root level filter options. Author is dropped when the host page
+// already scopes by author (profile "Topics" tab) — surfacing the option
+// would just confuse the viewer ("filter the topics of X… by X?").
+const filterOptions = computed(() => {
+  const items = [
+    { key: "author", label: "Автор", hint: "Фильтр по автору топика" },
+    {
+      key: "dateRange",
+      label: "Дата создания",
+      hint: "Фильтр по периоду создания",
+    },
+  ];
+  return props.hideAuthor ? items.filter((i) => i.key !== "author") : items;
+});
 
 function selectRootItem(key: string) {
   navPath.value = { filter: key };
@@ -120,7 +140,10 @@ function handleSortOrderChange(order: "asc" | "desc") {
 // =============================================================================
 
 const hasDateFilter = computed(() => {
-  return filterState.value.createdFromUtc !== null || filterState.value.createdToUtc !== null;
+  return (
+    filterState.value.createdFromUtc !== null ||
+    filterState.value.createdToUtc !== null
+  );
 });
 
 const dateFilterLabel = computed(() => {
@@ -130,21 +153,18 @@ const dateFilterLabel = computed(() => {
   });
 });
 
+// Sort is driven by the SortButton, not the filter bubbles — it must NOT
+// trigger the "Сбросить" row (consistent with Games / Pulse / Polls).
 const hasBubbles = computed(() => {
   const state = filterState.value;
-  return (
-    state.authors.size > 0 ||
-    hasDateFilter.value ||
-    state.sortBy !== DEFAULT_SORT.sortBy ||
-    state.sortOrder !== DEFAULT_SORT.sortOrder
-  );
+  return state.authors.size > 0 || hasDateFilter.value;
 });
 
 // Authors bubble values
 const authorsBubbleValues = computed(() =>
   [...filterState.value.authors]
     .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), "ru"))
-    .map((author) => ({ id: author, label: author }))
+    .map((author) => ({ id: author, label: author })),
 );
 
 function handleRemoveAuthor(id: string) {
@@ -211,12 +231,14 @@ function handleSearchKeydown(event: KeyboardEvent) {
             />
           </template>
 
-          <!-- Author multi-select -->
+          <!-- Author multi-select (suppressed when the host page locks
+               the author scope — e.g. the profile "Topics" tab). -->
           <UserMultiSelect
-            v-if="navPath?.filter === 'author'"
+            v-if="!hideAuthor && navPath?.filter === 'author'"
             :selected-users="filterState.authors"
             placeholder="Поиск автора"
             @add="handleAddAuthor"
+            @remove="handleRemoveAuthor"
           />
 
           <!-- Date range picker -->
@@ -243,9 +265,11 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
     <!-- Active filters row (bubbles) -->
     <BubblesRow v-if="hasBubbles" @clear-all="clearAll">
-      <!-- Expandable authors bubble -->
+      <!-- Expandable authors bubble (suppressed when the host page
+           locks the author scope — surfacing the implicit author as a
+           chip would suggest it can be removed, which it can't). -->
       <ExpandableBubble
-        v-if="filterState.authors.size > 0"
+        v-if="!hideAuthor && filterState.authors.size > 0"
         :prefix="filterState.authors.size > 1 ? 'Авторы:' : 'Автор:'"
         :values="authorsBubbleValues"
         :max-visible="1"

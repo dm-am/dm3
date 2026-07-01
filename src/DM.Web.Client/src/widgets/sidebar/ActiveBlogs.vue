@@ -1,9 +1,15 @@
 <template>
   <SidebarBlock token="ActiveBlogs">
     <template #title>Активные блоги</template>
-    <SidebarSkeleton v-if="store.activeBlogs === null" :lines="5" />
+    <SidebarSkeleton
+      v-if="store.activeBlogs === null && !store.activeBlogsError"
+      :lines="5"
+    />
+    <SecondaryText v-else-if="store.activeBlogs === null">
+      Не удалось загрузить
+    </SecondaryText>
     <SecondaryText v-else-if="store.activeBlogs.length === 0">
-      Нет активных блогов
+      Активных блогов пока нет
     </SecondaryText>
     <BlogLink
       v-else

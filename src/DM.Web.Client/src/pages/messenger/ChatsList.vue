@@ -3,13 +3,14 @@ import { ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useRoute, useRouter } from "vue-router";
 import { useMessagingStore } from "@/entities/message";
-import { useUserStore } from "@/entities/user";
+import { useUserStore, AvatarImg } from "@/entities/user";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import ChatPreview from "./ChatPreview.vue";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import communityApi from "@/shared/api/communityApi";
 import type { User } from "@/shared/api/models/community";
-import { defaultAvatarUrl as defaultAvatar, symbols } from "@/shared/lib/utils/icons";
+import { symbols } from "@/shared/lib/utils/icons";
+import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { EmptyState } from "@/shared/ui";
 
@@ -31,7 +32,10 @@ function extractPage(value: string | null | undefined): number {
 }
 
 useFetchData(
-  () => messagingStore.fetchChats(extractPage(route.query.page as string | undefined)),
+  () =>
+    messagingStore.fetchChats(
+      extractPage(route.query.page as string | undefined),
+    ),
   [],
   [
     {
@@ -107,7 +111,7 @@ function clearSearch() {
         <input
           v-model="searchQuery"
           type="text"
-          class="search-input"
+          class="the-input"
           placeholder="Поиск собеседника"
           @input="onSearchInput"
           @focus="onSearchFocus"
@@ -134,11 +138,16 @@ function clearSearch() {
           class="search-result-item"
           @mousedown.prevent="selectUser(user)"
         >
-          <img
-            :src="user.smallPictureUrl || defaultAvatar"
-            class="result-avatar"
+          <AvatarImg
+            :picture="user.picture"
+            :alt="user.username"
+            :size="24"
+            img-class="result-avatar"
           />
-          <span class="result-name">{{ user.username }}</span>
+          <span
+            class="result-name"
+            v-html="highlightMatch(user.username, searchQuery)"
+          />
         </div>
         <div
           v-if="
@@ -181,6 +190,7 @@ function clearSearch() {
 <style scoped lang="sass">
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
+@import "src/assets/styles/Filters"
 @import "src/assets/styles/ZIndex"
 
 .messenger-list
@@ -191,67 +201,8 @@ function clearSearch() {
   position: relative
   margin-bottom: $medium
 
-$filter-control-height: 38px
-
-.search-container
-  display: flex
-  align-items: center
-  height: $filter-control-height
-  box-sizing: border-box
-  padding: 0 $small
-  border: 1px solid $border
-  border-radius: $border-radius
-  background-color: $bg-element
-  cursor: text
-
-  &:focus-within
-    border-color: $link
-
-.search-icon
-  width: 16px
-  height: 16px
-  flex-shrink: 0
-  color: $text-muted
-  margin-right: $small
-
-.search-input
-  width: 100%
-  flex: 1
-  min-width: 80px
-  height: 100%
-  padding: 0
-  margin: 0
-  font-size: $secondary-font-size
-  font-family: inherit
-  line-height: $filter-control-height - 2px
-  border: none
-  background: none
-  color: $text
-  outline: none
-
-  &::placeholder
-    color: $text-muted
-
-.clear-input-btn
-  display: flex
-  align-items: center
-  justify-content: center
-  width: 20px
-  height: 20px
-  padding: 0
-  flex-shrink: 0
-  margin-left: auto
-  cursor: pointer
-  border: none
-  background: none
-  color: $text-muted
-
-  &:hover
-    color: $text
-
-  svg
-    width: 14px
-    height: 14px
+// Reuse filter search container styles from _Filters.sass
++filter-search-container
 
 .search-results
   position: absolute
@@ -285,7 +236,6 @@ $filter-control-height: 38px
 .result-avatar
   width: 24px
   height: 24px
-  border-radius: 50%
   object-fit: cover
 
 .result-name

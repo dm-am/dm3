@@ -68,6 +68,7 @@ $button-border-disabled: var(--button-border-disabled)
 
 // Borders
 $border: var(--border)
+$border-focus: var(--border-focus)
 $border-accent-blue: var(--border-accent-blue)
 $border-accent-green: var(--border-accent-green)
 $border-accent-red: var(--border-accent-red)
@@ -92,8 +93,13 @@ $tooltip-border: var(--tooltip-border)
 $overlay-bg: var(--overlay-bg)
 $overlay-subtle: var(--overlay-subtle)
 $overlay-emphasis: var(--overlay-emphasis)
+$selected-overlay: var(--selected-overlay)
 $hover-overlay: var(--hover-overlay)
 $active-overlay: var(--active-overlay)
+// Control overlays — alpha calibrated to equal solid $bg-element / $bg-element-accent
+// when composed over $bg-page. Use for buttons, dropdowns, any "control surface".
+$control-bg-overlay: var(--control-bg-overlay)
+$control-bg-hover-overlay: var(--control-bg-hover-overlay)
 $shadow-color: var(--shadow-color)
 $nsfw-overlay: var(--nsfw-overlay)
 $highlight-overlay-green: var(--highlight-overlay-green)

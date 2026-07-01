@@ -11,7 +11,8 @@ import Paging from "@/shared/ui/Paging/Paging.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { SvgIcon } from "@/shared/ui/Icon";
-import GamePost from "./GamePost.vue";
+import { GamePost } from "@/widgets/game-post";
+import { GamePostSkeleton } from "@/shared/ui/Skeleton";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
@@ -46,18 +47,22 @@ watch(
   { once: true },
 );
 
+const gameId = computed(() => route.params.id as string);
+
 useFetchData(
-  () => gameStore.loadPostsByRoomNumber(roomNum.value, getPage()),
+  () => gameStore.loadPostsByRoomNumber(gameId.value, roomNum.value, getPage()),
   [
     {
       param: (p) => p.num,
-      callback: () => gameStore.loadPostsByRoomNumber(roomNum.value, 1),
+      callback: () =>
+        gameStore.loadPostsByRoomNumber(gameId.value, roomNum.value, 1),
     },
   ],
   [
     {
       query: (q) => q.page,
-      callback: () => gameStore.loadPostsByRoomNumber(roomNum.value, getPage()),
+      callback: () =>
+        gameStore.loadPostsByRoomNumber(gameId.value, roomNum.value, getPage()),
     },
   ],
 );
@@ -84,6 +89,13 @@ useFetchData(
       {{ postsError }}
     </div>
 
+    <!-- Loading -->
+    <GamePostSkeleton
+      v-else-if="postsLoading && posts.length === 0"
+      :count="3"
+      :show-navigation="false"
+    />
+
     <!-- Empty -->
     <div v-else-if="posts.length === 0" class="posts-empty">
       <secondary-text>В этой комнате пока нет постов</secondary-text>
@@ -103,7 +115,10 @@ useFetchData(
     <Paging
       v-if="postsPaging"
       :paging="postsPaging"
-      :to="{ name: 'game-room', params: { id: game?.publicId || game?.id, num: roomNum } }"
+      :to="{
+        name: 'game-room',
+        params: { id: game?.publicId || game?.id, num: roomNum },
+      }"
       :use-query="true"
       query-key="number"
     />

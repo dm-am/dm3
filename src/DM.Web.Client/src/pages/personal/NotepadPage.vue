@@ -131,9 +131,7 @@ onMounted(() => fetchEntries());
   <div class="notepad-page">
     <div class="page-header">
       <page-title>Блокнот</page-title>
-      <button class="add-btn" @click="openNewEntryEditor">
-        Новая запись
-      </button>
+      <button class="add-btn" @click="openNewEntryEditor">Новая запись</button>
     </div>
 
     <secondary-text v-if="loading">Загрузка...</secondary-text>
@@ -168,7 +166,9 @@ onMounted(() => fetchEntries());
             <h3>
               {{ editingEntry ? "Редактирование записи" : "Новая запись" }}
             </h3>
-            <button class="close-btn" @click="closeEditor">{{ symbols.close }}</button>
+            <button class="close-btn" @click="closeEditor">
+              {{ symbols.close }}
+            </button>
           </div>
 
           <div class="editor-form">
@@ -247,6 +247,8 @@ onMounted(() => fetchEntries());
 </template>
 
 <style scoped lang="sass">
+@import "src/assets/styles/Inputs"
+
 .notepad-page
   padding: $medium
   height: 100%
@@ -266,16 +268,7 @@ onMounted(() => fetchEntries());
   display: flex
   align-items: center
   gap: $minor
-  padding: $minor $small
-  border: 1px solid $accent-green
-  border-radius: $border-radius
-  background: transparent
-  color: $accent-green
-  cursor: pointer
-
-  &:hover
-    background: $accent-green
-    color: $text-on-green
+  +button
 
 .hint
   color: $text-muted
@@ -309,10 +302,10 @@ onMounted(() => fetchEntries());
     border-bottom: none
 
   &:hover
-    background: $bg-element-hover
+    background: $hover-overlay
 
   &.selected
-    background: $bg-element-accent
+    background: $selected-overlay
     border-left: 3px solid $accent-green
 
 .entry-title
@@ -369,7 +362,7 @@ onMounted(() => fetchEntries());
   justify-content: center
 
   &:hover
-    background: $bg-element-hover
+    background: $hover-overlay
     color: $text
 
 .editor-form
@@ -412,34 +405,10 @@ onMounted(() => fetchEntries());
   margin-top: $medium
 
 .cancel-btn
-  padding: $small $medium
-  border: 1px solid $border
-  border-radius: $border-radius
-  background: transparent
-  color: $text
-  cursor: pointer
-
-  &:hover:not(:disabled)
-    background: $bg-element-hover
-
-  &:disabled
-    opacity: 0.5
-    cursor: not-allowed
+  +button
 
 .save-btn
-  padding: $small $medium
-  border: none
-  border-radius: $border-radius
-  background: $accent-green
-  color: $text-on-green
-  cursor: pointer
-
-  &:hover:not(:disabled)
-    opacity: 0.9
-
-  &:disabled
-    opacity: 0.5
-    cursor: not-allowed
+  +button
 
 .content-header
   display: flex

@@ -2,15 +2,14 @@ import { computed, type Ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useUserStore } from "@/entities/user";
 import { UserRole } from "@/shared/api/models/community";
+import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
 import dayjs from "dayjs";
-
-const ONLINE_THRESHOLD_MINUTES = 5;
 
 interface Author {
   username: string;
   role?: UserRole;
   lastActivityUtc?: string;
-  smallPictureUrl?: string;
+  picture?: { smallUrl?: string };
 }
 
 interface ContentData {
@@ -27,7 +26,10 @@ export function useContentAuthor<T extends ContentData>(content: Ref<T>) {
   const isAuthorOnline = computed(() => {
     const lastActivityUtc = author.value?.lastActivityUtc;
     if (!lastActivityUtc) return false;
-    return dayjs().diff(dayjs(lastActivityUtc), "minute", true) <= ONLINE_THRESHOLD_MINUTES;
+    return (
+      dayjs().diff(dayjs(lastActivityUtc), "minute", true) <=
+      ONLINE_THRESHOLD_MINUTES
+    );
   });
 
   const roleBadge = computed(() => {
@@ -60,13 +62,15 @@ export function useContentAuthor<T extends ContentData>(content: Ref<T>) {
   const isEdited = computed(() => !!content.value.modifiedUtc);
 
   const isAuthor = computed(
-    () => currentUser.value?.username === author.value?.username
+    () => currentUser.value?.username === author.value?.username,
   );
 
   const isModerator = computed(() => {
     if (!currentUser.value) return false;
     return (currentUser.value.roles ?? []).some((r) =>
-      [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(r)
+      [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(
+        r,
+      ),
     );
   });
 

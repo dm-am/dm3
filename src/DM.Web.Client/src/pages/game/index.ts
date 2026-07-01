@@ -5,7 +5,6 @@ export { default as GameCharacter } from "./GameCharacter.vue";
 export { default as GameComments } from "./GameComments.vue";
 export { default as GameRooms } from "./GameRooms.vue";
 export { default as GameRoom } from "./GameRoom.vue";
-export { default as GamePost } from "./GamePost.vue";
 export { default as GameReviews } from "./GameReviews.vue";
 export { default as GamePostReviews } from "./GamePostReviews.vue";
 export { default as GameFirstUnreadPost } from "./GameFirstUnreadPost.vue";

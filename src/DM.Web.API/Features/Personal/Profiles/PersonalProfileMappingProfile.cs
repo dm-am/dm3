@@ -25,12 +25,9 @@ internal class PersonalProfileMappingProfile : Profile
                 TotalPosts = s.QuantityRating,
                 PostReviewScoreSum = s.QualityRating
             }))
-            .ForMember(d => d.Picture, o => o.MapFrom(s => new UserPicture
-            {
-                SmallUrl = s.SmallPictureUrl,
-                MediumUrl = s.MediumPictureUrl,
-                OriginalUrl = s.OriginalPictureUrl
-            }))
+            // Picture — через зарегистрированный AvatarPicture→UserPicture
+            // конвертер (имгпрокси thumbnails on the fly, см. AvatarPictureConverter).
+            .ForMember(d => d.Picture, o => o.MapFrom(s => s.Picture))
             .ForMember(d => d.Birthday, o => o.MapFrom(s => s.BirthdayDate.HasValue
                 ? new Birthday
                 {

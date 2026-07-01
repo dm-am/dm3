@@ -13,12 +13,16 @@ import {
   isUserOnline,
   type MessageOrSeparator,
 } from "@/shared/lib/utils/chat";
-import { useMessagePermissions, useVirtualScroll } from "@/shared/lib/composables";
+import {
+  useMessagePermissions,
+  useVirtualScroll,
+} from "@/shared/lib/composables";
 import { ChatMessage } from "@/widgets/chat-message";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import type { ChatId, Message } from "@/entities/message";
 import dayjs from "dayjs";
-import { defaultAvatarUrl as defaultAvatar, symbols } from "@/shared/lib/utils/icons";
+import { symbols } from "@/shared/lib/utils/icons";
+import { AvatarImg } from "@/entities/user";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { BBCodeEditor } from "@/features/editor";
 import { messagingApi } from "@/entities/message";
@@ -52,7 +56,12 @@ const isBanned = computed(() => {
 });
 
 // Message permissions (shared composable)
-const { isModerator, canEdit: canEditMsg, canDelete: canDeleteMsg, canLike: canLikeMsg } = useMessagePermissions(currentUser);
+const {
+  isModerator,
+  canEdit: canEditMsg,
+  canDelete: canDeleteMsg,
+  canLike: canLikeMsg,
+} = useMessagePermissions(currentUser);
 
 const canSendMessages = computed(() => currentUser.value && !isBanned.value);
 
@@ -67,10 +76,6 @@ let topObserver: IntersectionObserver | null = null;
 let isLoadingOlder = false;
 let isScrolling = false;
 let scrollEndTimeout: ReturnType<typeof setTimeout> | null = null;
-
-const interlocutorPicture = computed(
-  () => interlocutor.value?.smallPictureUrl || defaultAvatar,
-);
 
 // Group messages with date separators (shared utility)
 const messagesWithSeparators = computed((): MessageOrSeparator[] =>
@@ -303,9 +308,15 @@ function isOnline(author: any) {
 }
 
 // Permissions — delegated to shared composable
-function canEditMessage(msg: Message) { return canEditMsg(msg); }
-function canDeleteMessage(msg: Message) { return canDeleteMsg(msg); }
-function canLikeMessage(msg: Message) { return canLikeMsg(msg); }
+function canEditMessage(msg: Message) {
+  return canEditMsg(msg);
+}
+function canDeleteMessage(msg: Message) {
+  return canDeleteMsg(msg);
+}
+function canLikeMessage(msg: Message) {
+  return canLikeMsg(msg);
+}
 
 function isLikedByMe(msg: Message) {
   if (!currentUser.value) return false;
@@ -466,23 +477,30 @@ onUnmounted(() => {
       <page-title v-else>Переписка</page-title>
 
       <div class="chat-header">
-        <button class="back-button" @click="goBack">{{ symbols.arrowLeft }} Назад</button>
+        <button class="back-button" @click="goBack">
+          {{ symbols.arrowLeft }} Назад
+        </button>
         <router-link
           v-if="interlocutor"
           :to="{ name: 'profile', params: { username: interlocutor.username } }"
           class="interlocutor"
         >
-          <img
-            :src="interlocutorPicture"
+          <AvatarImg
+            :picture="interlocutor.picture"
             :alt="interlocutor.username"
-            class="header-avatar"
+            :size="40"
+            img-class="header-avatar"
+            eager
           />
           <span class="username">{{ interlocutor.username }}</span>
         </router-link>
         <span v-else class="username">Загрузка...</span>
       </div>
 
-      <div class="messages-wrapper" :class="{ 'layout-compact': isCompactLayout }">
+      <div
+        class="messages-wrapper"
+        :class="{ 'layout-compact': isCompactLayout }"
+      >
         <div ref="messagesContainer" class="messages-container">
           <template v-if="!messagesList?.length">
             <secondary-text class="empty-messages">
@@ -499,11 +517,21 @@ onUnmounted(() => {
             ></div>
 
             <!-- Virtual scroll container -->
-            <div :style="{ height: `${totalSize}px`, width: '100%', position: 'relative' }">
+            <div
+              :style="{
+                height: `${totalSize}px`,
+                width: '100%',
+                position: 'relative',
+              }"
+            >
               <div
                 v-for="virtualRow in virtualItems"
-                :key="virtualRow.key"
-                :ref="(el) => { if (el) measureElement(el as HTMLElement) }"
+                :key="String(virtualRow.key)"
+                :ref="
+                  (el) => {
+                    if (el) measureElement(el as HTMLElement);
+                  }
+                "
                 :data-index="virtualRow.index"
                 :style="{
                   position: 'absolute',
@@ -513,10 +541,17 @@ onUnmounted(() => {
                   transform: `translateY(${virtualRow.start}px)`,
                 }"
               >
-                <template v-if="isDateSeparator(messagesWithSeparators[virtualRow.index])">
+                <template
+                  v-if="
+                    isDateSeparator(messagesWithSeparators[virtualRow.index])
+                  "
+                >
                   <div class="date-separator">
                     <div class="separator-line"></div>
-                    <span class="separator-text">{{ (messagesWithSeparators[virtualRow.index] as any).formattedDate }}</span>
+                    <span class="separator-text">{{
+                      (messagesWithSeparators[virtualRow.index] as any)
+                        .formattedDate
+                    }}</span>
                     <div class="separator-line"></div>
                   </div>
                 </template>
@@ -525,31 +560,89 @@ onUnmounted(() => {
                     :id="`msg-${(messagesWithSeparators[virtualRow.index] as any).id}`"
                     class="pm-message"
                     :class="{
-                      removed: (messagesWithSeparators[virtualRow.index] as any).isRemoved,
-                      hovered: hoveredMessageId === (messagesWithSeparators[virtualRow.index] as any).id,
-                      continuation: (messagesWithSeparators[virtualRow.index] as any).isContinuation,
+                      removed: (messagesWithSeparators[virtualRow.index] as any)
+                        .isRemoved,
+                      hovered:
+                        hoveredMessageId ===
+                        (messagesWithSeparators[virtualRow.index] as any).id,
+                      continuation: (
+                        messagesWithSeparators[virtualRow.index] as any
+                      ).isContinuation,
                     }"
-                    @mouseenter="handleMessageMouseEnter($event, (messagesWithSeparators[virtualRow.index] as any).id)"
+                    @mouseenter="
+                      handleMessageMouseEnter(
+                        $event,
+                        (messagesWithSeparators[virtualRow.index] as any).id,
+                      )
+                    "
                     @mouseleave="handleMessageMouseLeave"
                   >
                     <ChatMessage
                       :message="messagesWithSeparators[virtualRow.index] as any"
                       :compact="isCompactLayout"
-                      :hovered="hoveredMessageId === (messagesWithSeparators[virtualRow.index] as any).id"
-                      :is-online="isOnline((messagesWithSeparators[virtualRow.index] as any).author)"
-                      :is-liked-by-me="isLikedByMe(messagesWithSeparators[virtualRow.index] as any)"
-                      :can-edit="canEditMessage(messagesWithSeparators[virtualRow.index] as any)"
-                      :can-delete="canDeleteMessage(messagesWithSeparators[virtualRow.index] as any)"
-                      :can-like="canLikeMessage(messagesWithSeparators[virtualRow.index] as any)"
+                      :hovered="
+                        hoveredMessageId ===
+                        (messagesWithSeparators[virtualRow.index] as any).id
+                      "
+                      :is-online="
+                        isOnline(
+                          (messagesWithSeparators[virtualRow.index] as any)
+                            .author,
+                        )
+                      "
+                      :is-liked-by-me="
+                        isLikedByMe(
+                          messagesWithSeparators[virtualRow.index] as any,
+                        )
+                      "
+                      :can-edit="
+                        canEditMessage(
+                          messagesWithSeparators[virtualRow.index] as any,
+                        )
+                      "
+                      :can-delete="
+                        canDeleteMessage(
+                          messagesWithSeparators[virtualRow.index] as any,
+                        )
+                      "
+                      :can-like="
+                        canLikeMessage(
+                          messagesWithSeparators[virtualRow.index] as any,
+                        )
+                      "
                       :is-moderator="isModerator"
-                      :is-editing="isEditing((messagesWithSeparators[virtualRow.index] as any).id)"
+                      :is-editing="
+                        isEditing(
+                          (messagesWithSeparators[virtualRow.index] as any).id,
+                        )
+                      "
                       :edit-text="editText"
-                      :is-deleted-expanded="isDeletedExpanded((messagesWithSeparators[virtualRow.index] as any).id)"
+                      :is-deleted-expanded="
+                        isDeletedExpanded(
+                          (messagesWithSeparators[virtualRow.index] as any).id,
+                        )
+                      "
                       :max-height="MAX_MESSAGE_HEIGHT"
-                      @like="toggleLike(messagesWithSeparators[virtualRow.index] as any)"
-                      @toggle-deleted="toggleDeletedExpand((messagesWithSeparators[virtualRow.index] as any).id)"
-                      @start-edit="startEdit(messagesWithSeparators[virtualRow.index] as any)"
-                      @save-edit="saveEdit((messagesWithSeparators[virtualRow.index] as any).id)"
+                      @like="
+                        toggleLike(
+                          messagesWithSeparators[virtualRow.index] as any,
+                        )
+                      "
+                      @toggle-deleted="
+                        toggleDeletedExpand(
+                          (messagesWithSeparators[virtualRow.index] as any).id,
+                        )
+                      "
+                      @start-edit="
+                        startEdit(
+                          messagesWithSeparators[virtualRow.index] as any,
+                        )
+                      "
+                      @save-edit="
+                        saveEdit(
+                          (messagesWithSeparators[virtualRow.index] as any).id,
+                        )
+                      "
                       @cancel-edit="cancelEdit"
                       @update:edit-text="editText = $event"
                     />
@@ -696,7 +789,7 @@ onUnmounted(() => {
 
 .back-button
   padding: $tiny $small
-  +primary-button
+  +button
 
 .interlocutor
   display: flex
@@ -707,7 +800,6 @@ onUnmounted(() => {
 .header-avatar
   width: 40px
   height: 40px
-  border-radius: 50%
   object-fit: cover
 
 .username
@@ -944,7 +1036,7 @@ onUnmounted(() => {
 
 .send-button
   align-self: flex-start
-  +primary-button
+  +button
 
 .banned-hint
   flex: 1

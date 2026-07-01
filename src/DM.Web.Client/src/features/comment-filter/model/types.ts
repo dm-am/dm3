@@ -1,11 +1,25 @@
-import type { SortOption, BaseFilterState, BaseSearchParams } from "@/shared/lib/filters";
+import type {
+  SortOption,
+  BaseFilterState,
+  BaseSearchParams,
+} from "@/shared/lib/filters";
 
 /**
  * Sort options for comments list
  */
 export const SORT_OPTIONS: readonly SortOption[] = [
-  { value: "created", label: "Дата", hint: "По времени создания (новые сверху)", defaultDirection: "desc" },
-  { value: "likes", label: "Популярность", hint: "По количеству лайков", defaultDirection: "desc" },
+  {
+    value: "created",
+    label: "Дата",
+    hint: "По времени создания (старые сверху)",
+    defaultDirection: "asc",
+  },
+  {
+    value: "likes",
+    label: "Популярность",
+    hint: "По количеству лайков",
+    defaultDirection: "desc",
+  },
 ] as const;
 
 export type SortByValue = (typeof SORT_OPTIONS)[number]["value"];
@@ -19,7 +33,7 @@ export type SortByValue = (typeof SORT_OPTIONS)[number]["value"];
 export interface CommentsFilterState extends BaseFilterState {
   authors: Set<string>;
   createdFromUtc: string | null; // YYYY-MM-DD format
-  createdToUtc: string | null;   // YYYY-MM-DD format
+  createdToUtc: string | null; // YYYY-MM-DD format
   sortBy: SortByValue;
 }
 
@@ -30,7 +44,7 @@ export interface CommentsFilterState extends BaseFilterState {
 export interface CommentsSearchParams extends BaseSearchParams {
   authors?: string[];
   createdFromUtc?: string; // ISO 8601 (YYYY-MM-DDTHH:mm:ssZ)
-  createdToUtc?: string;   // ISO 8601 (YYYY-MM-DDTHH:mm:ssZ)
+  createdToUtc?: string; // ISO 8601 (YYYY-MM-DDTHH:mm:ssZ)
 }
 
 /**
@@ -38,5 +52,5 @@ export interface CommentsSearchParams extends BaseSearchParams {
  */
 export const DEFAULT_SORT = {
   sortBy: "created" as SortByValue,
-  sortOrder: "desc" as const,
+  sortOrder: "asc" as const,
 };

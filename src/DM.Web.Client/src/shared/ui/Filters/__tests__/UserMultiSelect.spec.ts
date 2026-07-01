@@ -74,7 +74,9 @@ describe("UserMultiSelect", () => {
 
     it("shows prompt when input is empty", () => {
       const wrapper = mountComponent();
-      expect(wrapper.find(".dropdown-empty").text()).toBe("Введите имя пользователя");
+      expect(wrapper.find(".dropdown-empty").text()).toBe(
+        "Введите имя пользователя",
+      );
     });
 
     it("renders user-multi-select container", () => {
@@ -120,7 +122,9 @@ describe("UserMultiSelect", () => {
       await nextTick();
 
       // Should show the prompt again
-      expect(wrapper.find(".dropdown-empty").text()).toBe("Введите имя пользователя");
+      expect(wrapper.find(".dropdown-empty").text()).toBe(
+        "Введите имя пользователя",
+      );
     });
 
     it("shows empty message when no results after search", async () => {
@@ -246,7 +250,9 @@ describe("UserMultiSelect", () => {
 
     it("accepts custom placeholder", () => {
       const wrapper = mountComponent({ placeholder: "Найти пользователя" });
-      expect(wrapper.find("input").attributes("placeholder")).toBe("Найти пользователя");
+      expect(wrapper.find("input").attributes("placeholder")).toBe(
+        "Найти пользователя",
+      );
     });
 
     it("accepts custom maxSuggestions", () => {

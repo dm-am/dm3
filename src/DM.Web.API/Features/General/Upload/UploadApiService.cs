@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Amazon.S3;
 using Amazon.S3.Model;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Caching;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -13,6 +17,7 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Uploads;
 using DM.Domain.Personal.Features.Profiles;
+using DM.Infrastructure.Core.Tracing;
 using DM.Infrastructure.Persistence;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
@@ -32,10 +37,20 @@ internal class UploadApiService : IUploadApiService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IAmazonS3 _s3Client;
     private readonly IImageProcessingService _imageProcessingService;
+    private readonly ICache _cache;
+    private readonly IHttpContextAccessor _httpContext;
     private readonly CdnConfiguration _cdnConfig;
 
-    private const int PresignedUrlExpirationMinutes = 15;
-    private const long MaxImageSizeBytes = 10 * 1024 * 1024; // 10 MB
+    /// <summary>Max upload size — 10 MB (sync с RequestSizeLimit на контроллере).</summary>
+    private const long MaxUploadSizeBytes = 10 * 1024 * 1024;
+
+    /// <summary>
+    /// Idempotency-Key header. Клиент шлет уникальный per-логический-upload
+    /// ключ; если тот же ключ приходит дважды — возвращаем cached response,
+    /// не процессим повторно. TTL 1ч.
+    /// </summary>
+    private const string IdempotencyHeader = "Idempotency-Key";
+    private static readonly TimeSpan IdempotencyTtl = TimeSpan.FromHours(1);
 
     /// <inheritdoc />
     public UploadApiService(
@@ -46,6 +61,8 @@ internal class UploadApiService : IUploadApiService
         IDateTimeProvider dateTimeProvider,
         IAmazonS3 s3Client,
         IImageProcessingService imageProcessingService,
+        ICache cache,
+        IHttpContextAccessor httpContext,
         IOptions<CdnConfiguration> cdnOptions)
     {
         _dbContext = dbContext;
@@ -55,22 +72,25 @@ internal class UploadApiService : IUploadApiService
         _dateTimeProvider = dateTimeProvider;
         _s3Client = s3Client;
         _imageProcessingService = imageProcessingService;
+        _cache = cache;
+        _httpContext = httpContext;
         _cdnConfig = cdnOptions.Value;
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<Shared.Dto.Upload> Uploads, PagingInfo Paging)> GetUploads(UploadsQuery query, string? username, bool all)
+    public async Task<(IEnumerable<Shared.Dto.Upload> Uploads, PagingInfo Paging)> GetUploads(
+        UploadsQuery query, string? username, bool all)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
 
-        // Case 1: scope=all → admin wants all uploads
+        // Admin scope=all → все uploads системы.
         if (all)
         {
             _intentionManager.ThrowIfForbidden(UploadIntention.ListAll);
             return await GetUploadsInternal(query, userId: null);
         }
 
-        // Case 2: username specified → admin wants specific user's uploads
+        // Admin username=... → uploads конкретного пользователя.
         if (!string.IsNullOrWhiteSpace(username))
         {
             _intentionManager.ThrowIfForbidden(UploadIntention.ListUser);
@@ -78,7 +98,7 @@ internal class UploadApiService : IUploadApiService
             return await GetUploadsInternal(query, user.UserId);
         }
 
-        // Case 3: Default → current user's uploads (same for user and admin)
+        // Default → собственные uploads.
         return await GetUploadsInternal(query, currentUserId);
     }
 
@@ -95,7 +115,6 @@ internal class UploadApiService : IUploadApiService
             throw new HttpException(System.Net.HttpStatusCode.NotFound, "Upload not found");
         }
 
-        // Users can only view their own uploads (admins handled separately)
         if (upload.UserId != userId && _identityProvider.Current.User.Role < UserRole.Admin)
         {
             throw new HttpException(System.Net.HttpStatusCode.Forbidden, "Access denied");
@@ -117,7 +136,6 @@ internal class UploadApiService : IUploadApiService
             throw new HttpException(System.Net.HttpStatusCode.NotFound, "Upload not found");
         }
 
-        // Users can only delete their own uploads (admins handled separately)
         if (upload.UserId != userId && _identityProvider.Current.User.Role < UserRole.Admin)
         {
             throw new HttpException(System.Net.HttpStatusCode.Forbidden, "Access denied");
@@ -128,198 +146,314 @@ internal class UploadApiService : IUploadApiService
     }
 
     /// <inheritdoc />
-    public async Task<PresignResponse> RequestPresignedUrl(PresignRequest request)
-    {
-        var userId = _identityProvider.Current.User.UserId;
-        var now = _dateTimeProvider.Now;
-
-        // Validate content type for image uploads
-        if (_imageProcessingService.IsImageType(request.Type))
-        {
-            _imageProcessingService.ValidateImageContentType(request.ContentType);
-            if (request.SizeBytes > MaxImageSizeBytes)
-            {
-                throw new HttpBadRequestException(
-                    new Dictionary<string, string>
-                    {
-                        ["sizeBytes"] = "Максимальный размер изображения: 10 МБ"
-                    });
-            }
-        }
-
-        // Generate unique object key
-        var objectKey = GenerateObjectKey(request.Type, userId, request.FileName);
-
-        // Create pending upload record
-        var upload = new DbUpload
-        {
-            UploadId = Guid.NewGuid(),
-            UserId = userId,
-            Type = request.Type,
-            Status = UploadStatus.Pending,
-            FileName = request.FileName,
-            ContentType = request.ContentType,
-            SizeBytes = request.SizeBytes,
-            ObjectKey = objectKey,
-            EntityId = request.TargetId,
-            Original = true,
-            CreatedUtc = now
-        };
-
-        await _dbContext.Uploads.AddAsync(upload);
-        await _dbContext.SaveChangesAsync();
-
-        // Generate presigned URL for PUT
-        var presignedUrl = GeneratePresignedPutUrl(objectKey, request.ContentType);
-
-        return new PresignResponse
-        {
-            UploadId = upload.UploadId,
-            PresignedUrl = presignedUrl,
-            ExpiresUtc = now.AddMinutes(PresignedUrlExpirationMinutes)
-        };
-    }
-
-    /// <inheritdoc />
-    public async Task<Shared.Dto.Upload> ConfirmUpload(Guid id)
-    {
-        var userId = _identityProvider.Current.User.UserId;
-        var upload = await _dbContext.Uploads
-            .Where(u => u.UploadId == id)
-            .FirstOrDefaultAsync();
-
-        if (upload == null)
-        {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Upload not found");
-        }
-
-        if (upload.UserId != userId)
-        {
-            throw new HttpException(System.Net.HttpStatusCode.Forbidden, "Access denied");
-        }
-
-        if (upload.Status != UploadStatus.Pending)
-        {
-            throw new HttpException(System.Net.HttpStatusCode.BadRequest,
-                $"Upload is not in pending status. Current status: {upload.Status}");
-        }
-
-        // Check if presigned URL has expired
-        var expirationTime = upload.CreatedUtc.AddMinutes(PresignedUrlExpirationMinutes);
-        if (_dateTimeProvider.Now > expirationTime)
-        {
-            upload.Status = UploadStatus.Failed;
-            await _dbContext.SaveChangesAsync();
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Upload session expired");
-        }
-
-        // Verify file exists in S3
-        var fileExists = await VerifyFileExists(upload.ObjectKey);
-        if (!fileExists)
-        {
-            throw new HttpException(System.Net.HttpStatusCode.BadRequest,
-                "File not found in storage. Please upload the file first.");
-        }
-
-        // Generate public URL
-        var publicUrl = GeneratePublicUrl(upload.ObjectKey);
-
-        // Generate thumbnails for image uploads
-        string? mediumUrl = null;
-        string? smallUrl = null;
-        if (_imageProcessingService.IsImageType(upload.Type))
-        {
-            (mediumUrl, smallUrl) = await _imageProcessingService.ProcessAndUploadThumbnails(
-                upload.ObjectKey, GeneratePublicUrl);
-        }
-
-        upload.FilePath = publicUrl;
-        upload.MediumFilePath = mediumUrl;
-        upload.SmallFilePath = smallUrl;
-        upload.Status = UploadStatus.Confirmed;
-        upload.ConfirmedUtc = _dateTimeProvider.Now;
-
-        await _dbContext.SaveChangesAsync();
-
-        return MapToDto(upload);
-    }
-
-    /// <inheritdoc />
     public async Task<Shared.Dto.Upload> DirectUpload(IFormFile file, UploadType type, Guid? targetId)
     {
+        using var activity = DmActivitySource.Source.StartActivity(
+            "upload.direct",
+            ActivityKind.Server);
+        activity?.SetTag("upload.type", type.ToString());
+        activity?.SetTag("upload.declared_content_type", file.ContentType);
+        activity?.SetTag("upload.input_size_bytes", file.Length);
+
+        // Idempotency: если клиент шлет Idempotency-Key, возвращаем cached
+        // response для дублирующих retry'ев (mobile сетевые retry, double-
+        // click ниже rate-limit окна). Cache scoped per-user — кросс-юзер
+        // replay невозможен.
+        var userId = _identityProvider.Current.User.UserId;
+        var idempotencyKey = _httpContext.HttpContext?.Request.Headers[IdempotencyHeader].ToString();
+        if (!string.IsNullOrWhiteSpace(idempotencyKey))
+        {
+            activity?.SetTag("upload.idempotency_key", idempotencyKey);
+            var cacheKey = $"upload:idemp:{userId:N}:{idempotencyKey}";
+            return await _cache.GetOrCreateAsync(
+                cacheKey,
+                () => DirectUploadInstrumented(file, type, targetId, activity),
+                IdempotencyTtl);
+        }
+
+        return await DirectUploadInstrumented(file, type, targetId, activity);
+    }
+
+    private async Task<Shared.Dto.Upload> DirectUploadInstrumented(
+        IFormFile file,
+        UploadType type,
+        Guid? targetId,
+        Activity? activity)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var typeTag = new KeyValuePair<string, object?>("type", type.ToString());
+
+        try
+        {
+            var result = await DirectUploadCore(file, type, targetId);
+
+            stopwatch.Stop();
+            UploadMetrics.Success.Add(1, typeTag,
+                new("content_type", result.ContentType));
+            UploadMetrics.DurationMs.Record(stopwatch.Elapsed.TotalMilliseconds, typeTag);
+            UploadMetrics.InputSizeBytes.Record(file.Length, typeTag);
+            // OutputSizeBytes пишется внутри DirectUploadCore через activity tag —
+            // здесь добавим, если есть.
+            if (activity?.GetTagItem("upload.output_size_bytes") is long outputBytes)
+            {
+                UploadMetrics.OutputSizeBytes.Record(outputBytes, typeTag);
+            }
+            return result;
+        }
+        catch (HttpBadRequestException)
+        {
+            UploadMetrics.Failure.Add(1, typeTag, new("reason", "validation"));
+            throw;
+        }
+        catch (AmazonS3Exception)
+        {
+            UploadMetrics.Failure.Add(1, typeTag, new("reason", "s3"));
+            activity?.SetStatus(ActivityStatusCode.Error, "S3 failure");
+            throw;
+        }
+        catch (DbUpdateException)
+        {
+            UploadMetrics.Failure.Add(1, typeTag, new("reason", "db"));
+            activity?.SetStatus(ActivityStatusCode.Error, "DB failure");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            UploadMetrics.Failure.Add(1, typeTag, new("reason", "other"));
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
+    }
+
+    private async Task<Shared.Dto.Upload> DirectUploadCore(IFormFile file, UploadType type, Guid? targetId)
+    {
         var userId = _identityProvider.Current.User.UserId;
         var now = _dateTimeProvider.Now;
 
-        // Validate content type and size for image uploads
-        if (_imageProcessingService.IsImageType(type))
+        // Размер проверяем заранее (до magic-byte). Это дешевая проверка
+        // на DoS-вектор — не пускаем 10+ MB в buffer / процессинг.
+        if (file.Length > MaxUploadSizeBytes)
         {
-            _imageProcessingService.ValidateImageContentType(file.ContentType);
-            if (file.Length > MaxImageSizeBytes)
+            throw new HttpBadRequestException(new Dictionary<string, string>
             {
-                throw new HttpBadRequestException(
-                    new Dictionary<string, string>
-                    {
-                        ["file"] = "Максимальный размер изображения: 10 МБ"
-                    });
-            }
+                ["file"] = $"Максимальный размер: {MaxUploadSizeBytes / (1024 * 1024)} МБ",
+            });
         }
 
-        // Generate object key and upload original to S3
-        var objectKey = GenerateObjectKey(type, userId, file.FileName);
-        await using var stream = file.OpenReadStream();
-        await UploadStreamToS3(objectKey, stream, file.ContentType);
-
-        // Generate public URL for original
-        var publicUrl = GeneratePublicUrl(objectKey);
-
-        // Process image: generate thumbnails if applicable
-        string? mediumUrl = null;
-        string? smallUrl = null;
-        if (_imageProcessingService.IsImageType(type))
+        if (file.Length <= 0)
         {
-            (mediumUrl, smallUrl) = await _imageProcessingService.ProcessAndUploadThumbnails(
-                objectKey, GeneratePublicUrl);
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                ["file"] = "Пустой файл",
+            });
         }
 
-        // Create confirmed upload record
+        if (!_imageProcessingService.IsImageType(type))
+        {
+            // Не-image upload'ы (PostAttachment): простой single-PUT без процессинга.
+            return await UploadNonImageAsync(file, type, targetId, userId, now);
+        }
+
+        // 1. Buffer + validate + process (in-memory; magic-byte, EXIF strip,
+        //    decompression-bomb guard, downscale до 1024 px). Один файл —
+        //    thumbnails генерируются on-the-fly через imgproxy при serving.
+        ProcessedImage processed;
+        await using (var fileStream = file.OpenReadStream())
+        {
+            processed = await _imageProcessingService.ProcessAsync(fileStream, file.ContentType);
+        }
+
+        // 2. Генерируем object key (расширение НОРМАЛИЗОВАНО из validated
+        //    content-type, НЕ из user-filename — anti-extension-spoofing).
+        var objectKey = GenerateObjectKey(type, userId, processed.Extension);
+
+        // 3. Один S3 PUT (никаких batch + rollback list — один шаг,
+        //    либо успех, либо failure → следующий блок сделает rollback).
+        try
+        {
+            await PutToS3Async(objectKey, processed.Bytes, processed.ContentType);
+        }
+        catch
+        {
+            // Ничего PUT'ить было не успели — просто пробрасываем.
+            throw;
+        }
+
+        Activity.Current?.SetTag("upload.output_size_bytes", processed.Bytes.LongLength);
+
+        // 4. DB-запись. Если SaveChangesAsync упадет — rollback S3 PUT.
+        // Effective target: для UserAvatar когда targetId не задан явно,
+        // owner uploader = self (грузим свой аватар). Для CharacterAvatar
+        // и PostAttachment targetId обязателен.
+        var effectiveTarget = targetId ?? (type == UploadType.UserAvatar ? userId : (Guid?)null);
         var upload = new DbUpload
         {
             UploadId = Guid.NewGuid(),
             UserId = userId,
             Type = type,
             Status = UploadStatus.Confirmed,
-            FileName = file.FileName,
-            ContentType = file.ContentType,
-            SizeBytes = file.Length,
+            // Filename НОРМАЛИЗОВАН: расширение из content-type, original-имя
+            // (если пришло) только для UI display purposes.
+            FileName = SanitizeFileName(file.FileName, processed.Extension),
+            ContentType = processed.ContentType,
+            SizeBytes = processed.Bytes.LongLength,
             ObjectKey = objectKey,
-            EntityId = targetId,
             Original = true,
-            FilePath = publicUrl,
-            MediumFilePath = mediumUrl,
-            SmallFilePath = smallUrl,
+            FilePath = GeneratePublicUrl(objectKey),
             CreatedUtc = now,
-            ConfirmedUtc = now
+            ConfirmedUtc = now,
         };
+        AssignTypedTarget(upload, type, effectiveTarget);
 
-        await _dbContext.Uploads.AddAsync(upload);
-        await _dbContext.SaveChangesAsync();
+        try
+        {
+            await _dbContext.Uploads.AddAsync(upload);
+            await _dbContext.SaveChangesAsync();
+        }
+        catch
+        {
+            await RollbackS3PutsAsync(new[] { objectKey });
+            throw;
+        }
 
         return MapToDto(upload);
     }
 
-    private async Task UploadStreamToS3(string objectKey, System.IO.Stream stream, string contentType)
+    private async Task<Shared.Dto.Upload> UploadNonImageAsync(
+        IFormFile file, UploadType type, Guid? targetId, Guid userId, DateTimeOffset now)
+    {
+        var extension = Path.GetExtension(file.FileName) ?? string.Empty;
+        var objectKey = GenerateObjectKey(type, userId, extension);
+        await using (var stream = file.OpenReadStream())
+        {
+            await PutToS3Async(objectKey, stream, file.ContentType);
+        }
+
+        var upload = new DbUpload
+        {
+            UploadId = Guid.NewGuid(),
+            UserId = userId,
+            Type = type,
+            Status = UploadStatus.Confirmed,
+            FileName = SanitizeFileName(file.FileName, extension),
+            ContentType = file.ContentType,
+            SizeBytes = file.Length,
+            ObjectKey = objectKey,
+            Original = true,
+            FilePath = GeneratePublicUrl(objectKey),
+            CreatedUtc = now,
+            ConfirmedUtc = now,
+        };
+        AssignTypedTarget(upload, type, targetId);
+        try
+        {
+            await _dbContext.Uploads.AddAsync(upload);
+            await _dbContext.SaveChangesAsync();
+        }
+        catch
+        {
+            await RollbackS3PutsAsync(new[] { objectKey });
+            throw;
+        }
+        return MapToDto(upload);
+    }
+
+    /// <summary>
+    /// Заполняет одну из TargetUserId / TargetCharacterId / TargetPostId
+    /// в зависимости от <paramref name="type"/>. Кидает <see cref="HttpBadRequestException"/>
+    /// если target обязателен, но не передан.
+    /// </summary>
+    private static void AssignTypedTarget(DbUpload upload, UploadType type, Guid? target)
+    {
+        switch (type)
+        {
+            case UploadType.UserAvatar:
+                if (target == null)
+                    throw new HttpBadRequestException(new Dictionary<string, string>
+                    {
+                        ["targetId"] = "User avatar requires a target user ID",
+                    });
+                upload.TargetUserId = target;
+                break;
+            case UploadType.CharacterAvatar:
+                if (target == null)
+                    throw new HttpBadRequestException(new Dictionary<string, string>
+                    {
+                        ["targetId"] = "Character avatar requires a target character ID",
+                    });
+                upload.TargetCharacterId = target;
+                break;
+            case UploadType.PostAttachment:
+                if (target == null)
+                    throw new HttpBadRequestException(new Dictionary<string, string>
+                    {
+                        ["targetId"] = "Post attachment requires a target post ID",
+                    });
+                upload.TargetPostId = target;
+                break;
+            default:
+                throw new InvalidOperationException($"Unknown UploadType {type}");
+        }
+    }
+
+    private async Task PutToS3Async(string objectKey, byte[] bytes, string contentType)
+    {
+        await PutToS3Async(objectKey, new MemoryStream(bytes, writable: false), contentType);
+    }
+
+    private async Task PutToS3Async(string objectKey, Stream stream, string contentType)
     {
         var putRequest = new PutObjectRequest
         {
             BucketName = _cdnConfig.BucketName,
             Key = objectKey,
             InputStream = stream,
-            ContentType = contentType
+            ContentType = contentType,
+            // objectKey hash-based (immutable) → агрессивное browser/CDN кеширование.
+            // Заменяем аватар = новый ключ, никаких cache-busting issues.
+            Headers =
+            {
+                CacheControl = "public, max-age=31536000, immutable",
+            },
         };
         await _s3Client.PutObjectAsync(putRequest);
     }
 
-    private async Task<(IEnumerable<Shared.Dto.Upload> Uploads, PagingInfo Paging)> GetUploadsInternal(UploadsQuery query, Guid? userId)
+    private async Task RollbackS3PutsAsync(IReadOnlyCollection<string> keys)
+    {
+        foreach (var key in keys)
+        {
+            try
+            {
+                await _s3Client.DeleteObjectAsync(new DeleteObjectRequest
+                {
+                    BucketName = _cdnConfig.BucketName,
+                    Key = key,
+                });
+            }
+            catch
+            {
+                // Best-effort rollback — оставшиеся orphans подметет фоновый GC.
+            }
+        }
+    }
+
+    private static string SanitizeFileName(string? originalName, string normalizedExtension)
+    {
+        if (string.IsNullOrWhiteSpace(originalName))
+        {
+            return $"image{normalizedExtension}";
+        }
+        // Сохраняем base-name (для UX в Uploads-tab), расширение всегда normalized.
+        var baseName = Path.GetFileNameWithoutExtension(originalName);
+        // Убираем все символы кроме букв/цифр/тире/подчеркивания (anti-path-traversal).
+        var safe = Regex.Replace(baseName, @"[^\p{L}\p{N}_\-.]", "_");
+        if (safe.Length > 80) safe = safe[..80];
+        return $"{safe}{normalizedExtension}";
+    }
+
+    private async Task<(IEnumerable<Shared.Dto.Upload> Uploads, PagingInfo Paging)> GetUploadsInternal(
+        UploadsQuery query, Guid? userId)
     {
         var queryable = _dbContext.Uploads.AsQueryable();
 
@@ -350,57 +484,34 @@ internal class UploadApiService : IUploadApiService
         return (uploads.Select(MapToDto), paging);
     }
 
-    private string GenerateObjectKey(UploadType type, Guid userId, string fileName)
+    /// <summary>
+    /// Hash-based immutable object key: тип-папка + scope (userId) + 8-char hex.
+    /// Расширение принимаем как валидированную нормализованную строку.
+    /// </summary>
+    private string GenerateObjectKey(UploadType type, Guid userId, string normalizedExtension)
     {
         var folder = type switch
         {
             UploadType.UserAvatar => "avatars",
             UploadType.CharacterAvatar => "characters",
             UploadType.PostAttachment => "posts",
-            _ => "misc"
+            _ => "misc",
         };
 
         var uniqueId = Guid.NewGuid().ToString("N")[..8];
-        var extension = System.IO.Path.GetExtension(fileName);
-        var safeFileName = $"{userId:N}_{uniqueId}{extension}";
+        var ext = string.IsNullOrEmpty(normalizedExtension) ? string.Empty : normalizedExtension;
+        var keyName = $"{userId:N}_{uniqueId}{ext}";
 
         return string.IsNullOrEmpty(_cdnConfig.Folder)
-            ? $"{folder}/{safeFileName}"
-            : $"{_cdnConfig.Folder}/{folder}/{safeFileName}";
-    }
-
-    private string GeneratePresignedPutUrl(string objectKey, string contentType)
-    {
-        var request = new GetPreSignedUrlRequest
-        {
-            BucketName = _cdnConfig.BucketName,
-            Key = objectKey,
-            Verb = HttpVerb.PUT,
-            Expires = DateTime.UtcNow.AddMinutes(PresignedUrlExpirationMinutes),
-            ContentType = contentType
-        };
-
-        return _s3Client.GetPreSignedURL(request);
-    }
-
-    private async Task<bool> VerifyFileExists(string objectKey)
-    {
-        try
-        {
-            await _s3Client.GetObjectMetadataAsync(_cdnConfig.BucketName, objectKey);
-            return true;
-        }
-        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return false;
-        }
+            ? $"{folder}/{keyName}"
+            : $"{_cdnConfig.Folder}/{folder}/{keyName}";
     }
 
     private string GeneratePublicUrl(string objectKey)
     {
         return new UriBuilder(new Uri(_cdnConfig.PublicUrl))
         {
-            Path = $"{_cdnConfig.BucketName}/{objectKey}"
+            Path = $"{_cdnConfig.BucketName}/{objectKey}",
         }.ToString();
     }
 
@@ -411,16 +522,15 @@ internal class UploadApiService : IUploadApiService
             Id = upload.UploadId,
             UserId = upload.UserId,
             Type = upload.Type,
-            TargetId = upload.EntityId,
+            // Дедуцируем TargetId из соответствующей типизированной колонки.
+            TargetId = upload.TargetUserId ?? upload.TargetCharacterId ?? upload.TargetPostId,
             OriginalFileName = upload.FileName ?? string.Empty,
             ContentType = upload.ContentType ?? string.Empty,
             SizeBytes = upload.SizeBytes,
             Status = upload.Status,
-            OriginalUrl = upload.FilePath,
-            MediumUrl = upload.MediumFilePath,
-            SmallUrl = upload.SmallFilePath,
+            Url = upload.FilePath,
             CreatedUtc = upload.CreatedUtc,
-            ConfirmedUtc = upload.ConfirmedUtc
+            ConfirmedUtc = upload.ConfirmedUtc,
         };
     }
 }

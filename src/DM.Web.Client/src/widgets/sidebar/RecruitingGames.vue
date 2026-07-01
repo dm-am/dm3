@@ -1,9 +1,15 @@
 <template>
   <SidebarBlock token="RecruitingGames">
     <template #title>Набор игроков</template>
-    <SidebarSkeleton v-if="store.recruitingGames === null" :lines="15" />
+    <SidebarSkeleton
+      v-if="store.recruitingGames === null && !failed"
+      :lines="15"
+    />
+    <SecondaryText v-else-if="store.recruitingGames === null">
+      Не удалось загрузить
+    </SecondaryText>
     <SecondaryText v-else-if="store.recruitingGames.length === 0">
-      Нет игр с набором
+      Игр с набором пока нет
     </SecondaryText>
     <GameLink
       v-else
@@ -22,7 +28,11 @@
         class="forward"
         :to="{
           name: 'games',
-          query: { status: 'Active', recruitmentFilter: 'open', sortBy: 'activated' },
+          query: {
+            status: 'Active',
+            recruitmentFilter: 'open',
+            sortBy: 'activated',
+          },
         }"
         >Все игры с набором</router-link
       >
@@ -37,12 +47,20 @@ import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import GameLink from "./GameLink.vue";
 import { useGamesStore } from "@/entities/game";
 import { useUserStore } from "@/entities/user";
-import { onMounted } from "vue";
+import { onMounted, ref } from "vue";
 
 const store = useGamesStore();
 const userStore = useUserStore();
 
-onMounted(() => store.fetchRecruitingGames());
+// The games store does not expose an error ref for this list, so detect
+// failure locally: when the fetch settles and the list is still null,
+// the request failed (prevents an eternal skeleton).
+const failed = ref(false);
+
+onMounted(async () => {
+  await store.fetchRecruitingGames();
+  failed.value = store.recruitingGames === null;
+});
 </script>
 
 <style scoped lang="sass">

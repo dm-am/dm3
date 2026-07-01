@@ -8,7 +8,11 @@
  */
 
 import { computed, type Ref, type ComputedRef } from "vue";
-import { useVirtualizer } from "@tanstack/vue-virtual";
+import {
+  useVirtualizer,
+  type VirtualItem,
+  type Virtualizer,
+} from "@tanstack/vue-virtual";
 
 export interface VirtualScrollOptions {
   /** Total number of items */
@@ -23,35 +27,37 @@ export interface VirtualScrollOptions {
 
 export interface VirtualScrollReturn {
   /** The virtualizer instance */
-  virtualizer: ReturnType<typeof useVirtualizer>;
+  virtualizer: Ref<Virtualizer<HTMLElement, Element>>;
   /** Currently visible virtual items */
-  virtualItems: ComputedRef<ReturnType<ReturnType<typeof useVirtualizer>["getVirtualItems"]>>;
+  virtualItems: ComputedRef<VirtualItem[]>;
   /** Total height of all items */
   totalSize: ComputedRef<number>;
   /** Ref callback for measuring element heights — pass as :ref on each virtual row */
   measureElement: (el: HTMLElement) => void;
   /** Scroll to a specific index */
-  scrollToIndex: (index: number, options?: { align?: "start" | "center" | "end" | "auto" }) => void;
+  scrollToIndex: (
+    index: number,
+    options?: { align?: "start" | "center" | "end" | "auto" },
+  ) => void;
   /** Get the visible range */
   range: ComputedRef<{ startIndex: number; endIndex: number } | null>;
 }
 
-export function useVirtualScroll(options: VirtualScrollOptions): VirtualScrollReturn {
-  const {
-    count,
-    container,
-    estimateSize = 80,
-    overscan = 10,
-  } = options;
+export function useVirtualScroll(
+  options: VirtualScrollOptions,
+): VirtualScrollReturn {
+  const { count, container, estimateSize = 80, overscan = 10 } = options;
 
   // Options must be reactive (computed) for @tanstack/vue-virtual to re-measure
   // when count changes or scroll element becomes available after mount
-  const virtualizer = useVirtualizer(computed(() => ({
-    count: count.value,
-    getScrollElement: () => container.value,
-    estimateSize: () => estimateSize,
-    overscan,
-  })));
+  const virtualizer = useVirtualizer(
+    computed(() => ({
+      count: count.value,
+      getScrollElement: () => container.value,
+      estimateSize: () => estimateSize,
+      overscan,
+    })),
+  );
 
   const virtualItems = computed(() => virtualizer.value.getVirtualItems());
   const totalSize = computed(() => virtualizer.value.getTotalSize());
@@ -60,7 +66,10 @@ export function useVirtualScroll(options: VirtualScrollOptions): VirtualScrollRe
     return r ? { startIndex: r.startIndex, endIndex: r.endIndex } : null;
   });
 
-  function scrollToIndex(index: number, opts?: { align?: "start" | "center" | "end" | "auto" }) {
+  function scrollToIndex(
+    index: number,
+    opts?: { align?: "start" | "center" | "end" | "auto" },
+  ) {
     virtualizer.value.scrollToIndex(index, opts);
   }
 

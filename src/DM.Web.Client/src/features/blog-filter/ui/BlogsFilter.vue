@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { vClickOutside } from "@/shared/directives";
-import { useBlogsFilter, STATUS_OPTIONS, SORT_OPTIONS, DEFAULT_FILTER_STATE } from "../model";
+import { useBlogsFilter, STATUS_OPTIONS, SORT_OPTIONS } from "../model";
 import type { StatusFilter } from "../model";
 import { useFilterSearch, useFilterDropdown } from "@/shared/lib/composables";
 import { formatDateForDisplay } from "@/shared/lib/filters";
@@ -41,7 +41,7 @@ const {
 
 const { localInput, handleInput, applySearch } = useFilterSearch(
   computed(() => filterState.value.search),
-  setSearch
+  setSearch,
 );
 
 // =============================================================================
@@ -79,16 +79,22 @@ const filterOptions = [
 // Date type options (level 2)
 const dateTypeOptions = [
   { value: "created", label: "Создание блога", hint: "По дате создания блога" },
-  { value: "activated", label: "Открытие блога", hint: "По дате открытия блога" },
+  {
+    value: "activated",
+    label: "Открытие блога",
+    hint: "По дате открытия блога",
+  },
   { value: "closed", label: "Закрытие блога", hint: "По дате закрытия блога" },
 ];
 
 // Status options for OptionsList
-const statusListOptions = STATUS_OPTIONS.filter((o) => o.value !== "any").map((o) => ({
-  value: o.value,
-  label: o.label,
-  hint: o.hint,
-}));
+const statusListOptions = STATUS_OPTIONS.filter((o) => o.value !== "any").map(
+  (o) => ({
+    value: o.value,
+    label: o.label,
+    hint: o.hint,
+  }),
+);
 
 function selectRootItem(key: string) {
   navPath.value = { filter: key };
@@ -135,13 +141,22 @@ function handleAddHost(username: string) {
 function getCurrentDateValues(): { from: string | null; to: string | null } {
   const group = navPath.value?.group;
   if (group === "created") {
-    return { from: filterState.value.createdFromUtc, to: filterState.value.createdToUtc };
+    return {
+      from: filterState.value.createdFromUtc,
+      to: filterState.value.createdToUtc,
+    };
   }
   if (group === "activated") {
-    return { from: filterState.value.activatedFromUtc, to: filterState.value.activatedToUtc };
+    return {
+      from: filterState.value.activatedFromUtc,
+      to: filterState.value.activatedToUtc,
+    };
   }
   if (group === "closed") {
-    return { from: filterState.value.closedFromUtc, to: filterState.value.closedToUtc };
+    return {
+      from: filterState.value.closedFromUtc,
+      to: filterState.value.closedToUtc,
+    };
   }
   return { from: null, to: null };
 }
@@ -208,7 +223,10 @@ const statusLabel = computed(() => {
 });
 
 const hasCreatedDateFilter = computed(() => {
-  return filterState.value.createdFromUtc !== null || filterState.value.createdToUtc !== null;
+  return (
+    filterState.value.createdFromUtc !== null ||
+    filterState.value.createdToUtc !== null
+  );
 });
 const createdDateLabel = computed(() => {
   const from = formatDateForDisplay(filterState.value.createdFromUtc);
@@ -220,7 +238,10 @@ const createdDateLabel = computed(() => {
 });
 
 const hasActivatedDateFilter = computed(() => {
-  return filterState.value.activatedFromUtc !== null || filterState.value.activatedToUtc !== null;
+  return (
+    filterState.value.activatedFromUtc !== null ||
+    filterState.value.activatedToUtc !== null
+  );
 });
 const activatedDateLabel = computed(() => {
   const from = formatDateForDisplay(filterState.value.activatedFromUtc);
@@ -232,7 +253,10 @@ const activatedDateLabel = computed(() => {
 });
 
 const hasClosedDateFilter = computed(() => {
-  return filterState.value.closedFromUtc !== null || filterState.value.closedToUtc !== null;
+  return (
+    filterState.value.closedFromUtc !== null ||
+    filterState.value.closedToUtc !== null
+  );
 });
 const closedDateLabel = computed(() => {
   const from = formatDateForDisplay(filterState.value.closedFromUtc);
@@ -243,17 +267,16 @@ const closedDateLabel = computed(() => {
   return "";
 });
 
+// Sort is driven by the SortButton, not the filter bubbles — it must NOT
+// trigger the "Сбросить" row (consistent with Games / Pulse / Polls).
 const hasBubbles = computed(() => {
   const state = filterState.value;
-  const def = DEFAULT_FILTER_STATE;
   return (
     hasStatusFilter.value ||
     state.hostUsernames.size > 0 ||
     hasCreatedDateFilter.value ||
     hasActivatedDateFilter.value ||
-    hasClosedDateFilter.value ||
-    state.sortBy !== def.sortBy ||
-    state.sortOrder !== def.sortOrder
+    hasClosedDateFilter.value
   );
 });
 
@@ -261,7 +284,7 @@ const hasBubbles = computed(() => {
 const hostsBubbleValues = computed(() =>
   [...filterState.value.hostUsernames]
     .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), "ru"))
-    .map((username) => ({ id: username, label: username }))
+    .map((username) => ({ id: username, label: username })),
 );
 
 function handleRemoveHost(id: string) {
@@ -357,6 +380,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
             :selected-users="filterState.hostUsernames"
             placeholder="Поиск ведущего"
             @add="handleAddHost"
+            @remove="handleRemoveHost"
           />
 
           <!-- Date type selection (level 2) -->

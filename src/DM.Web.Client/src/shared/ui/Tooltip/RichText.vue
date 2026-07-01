@@ -123,19 +123,30 @@ const activeSegment = computed(() => {
         class="rich-text-trigger"
         @mouseenter="showPopup(idx)"
         @mouseleave="scheduleHidePopup"
-      >{{ segment.content }}<span
+        >{{ segment.content
+        }}<span
           v-if="activeSegmentIdx === idx && activeSegment"
           class="rich-text-popup"
           @mouseenter="cancelHidePopup"
           @mouseleave="scheduleHidePopup"
-        ><template v-if="activeSegment.type === 'tipimg' && activeSegment.imageUrl"><img
+          ><template
+            v-if="activeSegment.type === 'tipimg' && activeSegment.imageUrl"
+            ><img
               :src="activeSegment.imageUrl"
               alt=""
               class="popup-image"
-              @error="($event.target as HTMLImageElement).outerHTML = '<span style=\'color: #ff6b6b;\'>Ошибка загрузки GIF</span>'"
-            /></template><template v-else-if="activeSegment.type === 'tip' && activeSegment.tipText">{{
-            activeSegment.tipText
-          }}</template><template v-else>[Debug: type={{ activeSegment.type }}]</template></span></span>
+              @error="
+                ($event.target as HTMLImageElement).outerHTML =
+                  '<span style=\'color: #ff6b6b;\'>Ошибка загрузки GIF</span>'
+              " /></template
+          ><template
+            v-else-if="activeSegment.type === 'tip' && activeSegment.tipText"
+            >{{ activeSegment.tipText }}</template
+          ><template v-else
+            >[Debug: type={{ activeSegment.type }}]</template
+          ></span
+        ></span
+      >
     </template>
   </span>
 </template>

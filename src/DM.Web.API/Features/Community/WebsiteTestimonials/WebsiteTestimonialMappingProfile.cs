@@ -9,14 +9,10 @@ internal class WebsiteTestimonialMappingProfile : Profile
     /// <inheritdoc />
     public WebsiteTestimonialMappingProfile()
     {
+        // Author = GeneralUser → User reuses the existing UserMappingProfile map
+        // (which includes the AvatarPicture → UserPicture conversion via
+        // AvatarPictureConverter — single source of truth for avatar URLs).
         CreateMap<DM.Domain.Community.Features.WebsiteTestimonials.WebsiteTestimonial, WebsiteTestimonialDto>()
-            .ForMember(d => d.Author, s => s.MapFrom(t => t.Author != null ? new User
-            {
-                Id = t.Author.UserId,
-                Username = t.Author.Username,
-                Role = t.Author.Role,
-                Rating = new Rating { TotalPosts = t.Author.QuantityRating, PostReviewScoreSum = t.Author.QualityRating },
-                Picture = new UserPicture { SmallUrl = t.Author.SmallPictureUrl }
-            } : null));
+            .ForMember(d => d.Author, opt => opt.MapFrom(t => t.Author));
     }
 }

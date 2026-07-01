@@ -35,7 +35,7 @@ public class TopicsQuery : PagingQuery
     public DateTimeOffset? CreatedToUtc { get; set; }
 
     /// <summary>
-    /// Sort field: lastActivity, created, comments, title
+    /// Sort field: lastActivity (default), created, title, likes.
     /// </summary>
     public string? SortBy { get; set; }
 

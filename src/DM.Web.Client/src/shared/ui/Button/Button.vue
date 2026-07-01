@@ -4,7 +4,6 @@ withDefaults(
     type?: "submit" | "button";
     loading?: boolean;
     disabled?: boolean;
-    secondary?: boolean;
   }>(),
   {
     type: "submit",
@@ -17,7 +16,6 @@ withDefaults(
     :type="type"
     :disabled="loading || disabled"
     :aria-busy="loading || undefined"
-    :class="{ secondary }"
   >
     <slot />
   </button>
@@ -27,8 +25,5 @@ withDefaults(
 @import "src/assets/styles/Inputs"
 
 button
-  +primary-button
-
-  &.secondary
-    +secondary-button
+  +button
 </style>

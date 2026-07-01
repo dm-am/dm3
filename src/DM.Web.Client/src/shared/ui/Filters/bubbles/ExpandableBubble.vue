@@ -43,15 +43,15 @@ const visibleValues = computed(() =>
   sortedValues.value.slice(0, props.maxVisible),
 );
 
-const hiddenValues = computed(() =>
-  sortedValues.value.slice(props.maxVisible),
-);
+const hiddenValues = computed(() => sortedValues.value.slice(props.maxVisible));
 
 const remainingCount = computed(() =>
   Math.max(0, sortedValues.value.length - props.maxVisible),
 );
 
-const isExpandable = computed(() => sortedValues.value.length > props.maxVisible);
+const isExpandable = computed(
+  () => sortedValues.value.length > props.maxVisible,
+);
 const isSingleValue = computed(() => props.values.length === 1);
 
 function toggleDropdown() {
@@ -96,10 +96,7 @@ onUnmounted(() => {
 
 <template>
   <!-- Single value - simple bubble -->
-  <div
-    v-if="isSingleValue"
-    class="bubble bubble-single-owner"
-  >
+  <div v-if="isSingleValue" class="bubble bubble-single-owner">
     <span class="bubble-prefix">{{ prefix }} </span>
     <span class="bubble-owner-item">
       <span class="bubble-value-text">{{ values[0].label }}</span>
@@ -114,7 +111,11 @@ onUnmounted(() => {
   </div>
 
   <!-- Multiple values - expandable bubble -->
-  <div v-else class="bubble bubble-expandable" :class="{ 'bubble-owners': isExpandable }">
+  <div
+    v-else
+    class="bubble bubble-expandable"
+    :class="{ 'bubble-owners': isExpandable }"
+  >
     <span class="bubble-prefix">{{ prefix }} </span>
 
     <!-- Visible values -->

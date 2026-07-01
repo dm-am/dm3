@@ -3,6 +3,8 @@
  * Used in: HelpLinksSection.vue, AdminList.vue
  */
 
+import { DISCORD_INVITE_URL } from "./contacts";
+
 export type HelpIconType = "question" | "complaint" | "bug" | "idea";
 
 export interface HelpLink {
@@ -28,7 +30,7 @@ export const HELP_LINKS: HelpLink[] = [
     key: "question",
     icon: "question",
     problem: "Возникли вопросы",
-    solution: "напиши наставнику в ЛС",
+    solution: "напишите наставнику в ЛС",
     linkText: "наставнику",
     url: "/community?role=Mentor",
   },
@@ -71,7 +73,7 @@ export const ADMIN_LINKS: AdminLink[] = [
   },
   {
     title: "Discord",
-    url: "https://discord.gg/dm-roleplay",
+    url: DISCORD_INVITE_URL,
     external: true,
   },
 ];

@@ -2,8 +2,11 @@ using AutoMapper;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Identity;
+using DM.Domain.Core.Users;
 using DomainUsernameHistory = DM.Domain.Core.Users.UsernameHistoryEntry;
+using DomainUserContact = DM.Domain.Core.Users.UserContact;
 using DomainModuleStatusCounts = DM.Domain.Core.Dto.ModuleStatusCounts;
+using DomainSubscriberInfo = DM.Domain.Core.Dto.SubscriberInfo;
 
 namespace DM.Web.API.Features.Community.Users;
 
@@ -16,6 +19,12 @@ internal class UserMappingProfile : Profile
 
     public UserMappingProfile()
     {
+        // Avatar: Domain AvatarPicture (single source-key) → API UserPicture (3 URLs).
+        // Конвертер собирает imgproxy thumbnails на лету через
+        // AvatarPictureConverter (см. соседний файл) — нужен IImgproxyUrlBuilder DI.
+        CreateMap<DM.Domain.Core.Dto.AvatarPicture, UserPicture>()
+            .ConvertUsing<AvatarPictureConverter>();
+
         // Domain ModuleStatusCounts -> API ModuleStatusCounts
         CreateMap<DomainModuleStatusCounts, ModuleStatusCounts>();
 
@@ -24,6 +33,14 @@ internal class UserMappingProfile : Profile
             .ForMember(d => d.OldUsername, o => o.MapFrom(s => s.OldUsername))
             .ForMember(d => d.ChangedUtc, o => o.MapFrom(s => s.ChangedUtc));
 
+        // Domain UserContact -> API Contact (field rename: ContactValue -> Value)
+        CreateMap<DomainUserContact, Contact>()
+            .ForMember(d => d.ContactType, o => o.MapFrom(s => s.ContactType))
+            .ForMember(d => d.Value, o => o.MapFrom(s => s.ContactValue));
+
+        // Domain SubscriberInfo -> API SubscriberRef (1:1 fields)
+        CreateMap<DomainSubscriberInfo, SubscriberRef>();
+
         // GeneralUser (domain) -> User (API)
         CreateMap<GeneralUser, User>()
             .ForMember(d => d.Id, o => o.MapFrom(s => s.UserId))
@@ -31,11 +48,26 @@ internal class UserMappingProfile : Profile
             .ForMember(d => d.Rating, o => o.MapFrom(s => s.RatingDisabled
                 ? null
                 : new Rating { TotalPosts = s.QuantityRating, PostReviewScoreSum = s.QualityRating }))
-            .ForMember(d => d.Picture, o => o.MapFrom(s => new UserPicture { SmallUrl = s.SmallPictureUrl }))
+            // Lists (User DTO) only expose SmallUrl. Profile page calls
+            // /v1/users/{username}/profile → UserProfile mapping below adds
+            // MediumUrl for retina-quality avatars.
+            // Picture — через зарегистрированный AvatarPicture→UserPicture конвертер
+            // (imgproxy thumbnails on the fly). Lists и profile page получают
+            // одинаковую структуру (3 URL), bandwidth-cost ~200 байт/юзер пренебрежим.
+            .ForMember(d => d.Picture, o => o.MapFrom(s => s.Picture))
             .ForMember(d => d.UsernameHistory, o => o.MapFrom(s => s.UsernameHistory))
             // Statistics for community list
             .ForMember(d => d.ReviewsGiven, o => o.MapFrom(s => s.PostReviewsGivenCount))
-            .ForMember(d => d.ReviewsReceived, o => o.MapFrom(s => s.PostReviewsReceivedCount));
+            .ForMember(d => d.ReviewsReceived, o => o.MapFrom(s => s.PostReviewsReceivedCount))
+            .ForMember(d => d.EndorsementsGiven, o => o.MapFrom(s => s.EndorsementsGivenCount))
+            .ForMember(d => d.EndorsementsReceived, o => o.MapFrom(s => s.EndorsementsReceivedCount))
+            .ForMember(d => d.TopicsAuthored, o => o.MapFrom(s => s.TopicsAuthoredCount))
+            .ForMember(d => d.CommentsAuthored, o => o.MapFrom(s => s.CommentsAuthoredCount))
+            .ForMember(d => d.GlobalChatMessages, o => o.MapFrom(s => s.GlobalChatMessagesCount))
+            .ForMember(d => d.BansReceived, o => o.MapFrom(s => s.BansReceivedCount))
+            .ForMember(d => d.GameDrops, o => o.MapFrom(s => s.GameDropsCount))
+            .ForMember(d => d.PublicationsAuthored, o => o.MapFrom(s => s.PublicationsAuthoredCount))
+            .ForMember(d => d.LikesReceived, o => o.MapFrom(s => s.LikesReceivedCount));
 
         // AuthenticatedUser (domain) -> User (API) - inherits from GeneralUser
         CreateMap<AuthenticatedUser, User>()
@@ -46,11 +78,8 @@ internal class UserMappingProfile : Profile
             .ForMember(d => d.Id, o => o.MapFrom(s => s.UserId))
             .ForMember(d => d.IsNewbie, o => o.MapFrom(s => s.QuantityRating < NewbieThreshold))
             .ForMember(d => d.Rating, o => o.MapFrom(s => new Rating { TotalPosts = s.QuantityRating, PostReviewScoreSum = s.QualityRating }))
-            .ForMember(d => d.Picture, o => o.MapFrom(s => new UserPicture
-            {
-                SmallUrl = s.SmallPictureUrl,
-                MediumUrl = s.MediumPictureUrl
-            }))
+            // Picture — через зарегистрированный AvatarPicture→UserPicture конвертер.
+            .ForMember(d => d.Picture, o => o.MapFrom(s => s.Picture))
             .ForMember(d => d.Birthday, o => o.MapFrom(s => s.ShowBirthday && s.BirthdayDate.HasValue
                 ? new Birthday { Day = s.BirthdayDate.Value.Day, Month = s.BirthdayDate.Value.Month, Year = s.BirthdayDate.Value.Year }
                 : null))
@@ -62,6 +91,15 @@ internal class UserMappingProfile : Profile
             .ForMember(d => d.Info, o => o.Ignore())
             // Statistics for community list (inherited from User)
             .ForMember(d => d.ReviewsGiven, o => o.MapFrom(s => s.PostReviewsGivenCount))
-            .ForMember(d => d.ReviewsReceived, o => o.MapFrom(s => s.PostReviewsReceivedCount));
+            .ForMember(d => d.ReviewsReceived, o => o.MapFrom(s => s.PostReviewsReceivedCount))
+            .ForMember(d => d.EndorsementsGiven, o => o.MapFrom(s => s.EndorsementsGivenCount))
+            .ForMember(d => d.EndorsementsReceived, o => o.MapFrom(s => s.EndorsementsReceivedCount))
+            .ForMember(d => d.TopicsAuthored, o => o.MapFrom(s => s.TopicsAuthoredCount))
+            .ForMember(d => d.CommentsAuthored, o => o.MapFrom(s => s.CommentsAuthoredCount))
+            .ForMember(d => d.GlobalChatMessages, o => o.MapFrom(s => s.GlobalChatMessagesCount))
+            .ForMember(d => d.BansReceived, o => o.MapFrom(s => s.BansReceivedCount))
+            .ForMember(d => d.GameDrops, o => o.MapFrom(s => s.GameDropsCount))
+            .ForMember(d => d.PublicationsAuthored, o => o.MapFrom(s => s.PublicationsAuthoredCount))
+            .ForMember(d => d.LikesReceived, o => o.MapFrom(s => s.LikesReceivedCount));
     }
 }

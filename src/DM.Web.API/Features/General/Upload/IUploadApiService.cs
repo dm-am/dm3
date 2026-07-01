@@ -8,43 +8,26 @@ using Microsoft.AspNetCore.Http;
 namespace DM.Web.API.Features.General.Upload;
 
 /// <summary>
-/// API service for file upload management
+/// API service for file upload management.
+/// Direct upload only: server валидирует, процессит (для изображений — генерирует
+/// thumbnails), кладет в S3 атомарно. Никаких presigned URLs.
 /// </summary>
 public interface IUploadApiService
 {
-    /// <summary>
-    /// Get uploads with optional filters
-    /// </summary>
-    /// <param name="query">Query parameters for filtering and pagination</param>
-    /// <param name="username">Optional username filter (admin only)</param>
-    /// <param name="all">If true, returns all uploads (admin only)</param>
-    Task<(IEnumerable<Shared.Dto.Upload> Uploads, PagingInfo Paging)> GetUploads(UploadsQuery query, string? username, bool all);
+    /// <summary>List uploads (current user, specific user, or all — admin gating).</summary>
+    Task<(IEnumerable<Shared.Dto.Upload> Uploads, PagingInfo Paging)> GetUploads(
+        UploadsQuery query, string? username, bool all);
 
-    /// <summary>
-    /// Get upload by ID
-    /// </summary>
+    /// <summary>Get upload by ID (owner или admin).</summary>
     Task<Shared.Dto.Upload> GetUpload(Guid id);
 
-    /// <summary>
-    /// Delete upload (soft delete)
-    /// </summary>
+    /// <summary>Soft-delete upload (owner или admin).</summary>
     Task DeleteUpload(Guid id);
 
     /// <summary>
-    /// Request presigned URL for direct upload to storage
+    /// Upload file directly with server-side processing.
+    /// Для изображений — magic-byte валидация, EXIF-strip, генерация WebP thumbnails,
+    /// атомарный batch S3 PUT, нормализация расширения по validated content-type.
     /// </summary>
-    Task<PresignResponse> RequestPresignedUrl(PresignRequest request);
-
-    /// <summary>
-    /// Confirm upload completion and trigger processing
-    /// </summary>
-    Task<Shared.Dto.Upload> ConfirmUpload(Guid id);
-
-    /// <summary>
-    /// Upload file directly with server-side processing (thumbnails for images)
-    /// </summary>
-    /// <param name="file">Uploaded file</param>
-    /// <param name="type">Upload type/purpose</param>
-    /// <param name="targetId">Optional target entity ID</param>
     Task<Shared.Dto.Upload> DirectUpload(IFormFile file, UploadType type, Guid? targetId);
 }

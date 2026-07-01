@@ -3,19 +3,55 @@
 // =============================================================================
 // Shared styles for filter components (GamesFilter, BlogsFilter, etc.)
 // See UI_STANDARDS.md for documentation.
+//
+// Color rules:
+//   - All controls use $bg-element base with $hover-overlay (hover/active),
+//     $selected-overlay (persistent selection indicator — sort, etc.)
+//   - All dropdowns use $bg-page background (float above controls)
+//   - Focus borders use $border-focus (gray, NOT $link)
+//   - $link only for actual links and link-styled buttons ("Сбросить")
+//   - Disabled uses $disabled-opacity, muted icons use $muted-opacity
 // =============================================================================
 
 @import "Themes"
+@import "Variables"
 @import "ZIndex"
 
 // -----------------------------------------------------------------------------
 // Variables
 // -----------------------------------------------------------------------------
 
-$filter-control-height: 38px
 $filter-dropdown-min-width: 260px
 $filter-dropdown-max-height: 300px
 $filter-avatar-size: 24px
+
+// -----------------------------------------------------------------------------
+// Remove/Clear Icon Button (shared across all filter/bubble X buttons)
+// Unified size, color, alignment, and hover behavior.
+// -----------------------------------------------------------------------------
+
+=remove-icon-btn
+  display: inline-flex
+  align-items: center
+  justify-content: center
+  width: 14px
+  height: 14px
+  padding: 0
+  flex-shrink: 0
+  cursor: pointer
+  border: none
+  background: none
+  color: $text-muted
+  opacity: $muted-opacity
+  transition: opacity $transition-fast
+
+  &:hover
+    color: $text
+    opacity: 1
+
+  svg
+    width: 12px
+    height: 12px
 
 // -----------------------------------------------------------------------------
 // Filter Bar Container
@@ -36,16 +72,17 @@ $filter-avatar-size: 24px
     display: flex
     align-items: center
     flex: 1
-    height: $filter-control-height
+    height: $control-height
     box-sizing: border-box
     padding: 0 $small
+    font-size: $secondary-font-size
     border: 1px solid $border
     border-radius: $border-radius
     background-color: $bg-element
     cursor: text
 
     &:focus-within
-      border-color: $link
+      border-color: $border-focus
 
   .search-icon
     width: 16px
@@ -62,7 +99,7 @@ $filter-avatar-size: 24px
     margin: 0
     font-size: $secondary-font-size
     font-family: inherit
-    line-height: $filter-control-height - 2px
+    line-height: $control-height - 2px
     border: none
     background: none
     color: $text
@@ -75,11 +112,10 @@ $filter-avatar-size: 24px
     display: flex
     align-items: center
     justify-content: center
-    width: 20px
-    height: 20px
     padding: 0
     flex-shrink: 0
-    margin-left: auto
+    margin-left: $small
+    font-size: $font-size
     cursor: pointer
     border: none
     background: none
@@ -101,26 +137,7 @@ $filter-avatar-size: 24px
     position: relative
     flex-shrink: 0
 
-  .filter-btn
-    display: inline-flex
-    align-items: center
-    justify-content: flex-start
-    gap: $small
-    height: $filter-control-height
-    box-sizing: border-box
-    padding: 0 $medium
-    font-size: $secondary-font-size
-    font-family: inherit
-    white-space: nowrap
-    cursor: pointer
-    border: 1px solid $border
-    border-radius: $border-radius
-    background-color: $bg-element
-    color: $text
-
-    &:hover,
-    &.active
-      background-color: $bg-element-accent
+  // .filter-btn visual comes from the unified +button mixin — see FilterButton.vue.
 
   .filter-icon
     width: 20px
@@ -131,20 +148,25 @@ $filter-avatar-size: 24px
 // Dropdown Base
 // -----------------------------------------------------------------------------
 
+/// Shared dropdown panel styles — used by FilterDropdown.vue and =filter-dropdown-base.
+/// Single source of truth for dropdown positioning, sizing, and visuals.
+=_dropdown-panel
+  position: absolute
+  top: calc(100% + $tiny)
+  left: auto
+  right: 0
+  min-width: $filter-dropdown-min-width
+  z-index: $z-dropdown
+  max-height: $filter-dropdown-max-height
+  overflow-y: auto
+  background-color: $bg-element
+  border: 1px solid $border
+  border-radius: $border-radius
+  box-shadow: 0 4px 12px $shadow-color
+
 =filter-dropdown-base
   .dropdown
-    position: absolute
-    top: calc(100% + $tiny)
-    left: auto
-    right: 0
-    min-width: $filter-dropdown-min-width
-    z-index: $z-dropdown
-    max-height: $filter-dropdown-max-height
-    overflow-y: auto
-    background-color: $bg-element
-    border: 1px solid $border
-    border-radius: $border-radius
-    box-shadow: 0 4px 12px $shadow-color
+    +_dropdown-panel
 
   .dropdown-nav-header
     display: flex
@@ -220,7 +242,7 @@ $filter-avatar-size: 24px
     box-sizing: border-box
 
     &:focus
-      border-color: $link
+      border-color: $border-focus
 
     &::placeholder
       color: $text-muted
@@ -262,10 +284,10 @@ $filter-avatar-size: 24px
     box-sizing: border-box
 
     &:focus
-      border-color: $link
+      border-color: $border-focus
 
     &::-webkit-calendar-picker-indicator
-      opacity: 0.6
+      opacity: $muted-opacity
       cursor: pointer
 
       &:hover
@@ -283,11 +305,11 @@ $filter-avatar-size: 24px
     color: $text
 
     &:hover:not(:disabled)
-      background-color: $bg-element-accent
+      background-image: linear-gradient($hover-overlay, $hover-overlay)
 
     &:disabled
-      opacity: 0.5
-      cursor: not-allowed
+      opacity: $disabled-opacity
+      cursor: default
 
 // -----------------------------------------------------------------------------
 // Dropdown Items
@@ -307,19 +329,18 @@ $filter-avatar-size: 24px
     border: none
     background: none
     color: $text
-    transition: background-color 0.1s ease
+    transition: background-color $transition-fast
 
     &.indented
       padding-left: $large
 
     &:hover,
     &.highlighted
-      background-color: $bg-element-accent
+      background-color: $hover-overlay
 
   .item-avatar
     width: $filter-avatar-size
     height: $filter-avatar-size
-    border-radius: 50%
     flex-shrink: 0
 
   .item-content
@@ -358,7 +379,7 @@ $filter-avatar-size: 24px
 
     &:not(.bubble-owners):not(.bubble-expandable):hover,
     &.bubble-single-owner:hover
-      background-color: $bg-element-accent
+      background-image: linear-gradient($hover-overlay, $hover-overlay)
 
       .bubble-remove-btn,
       .bubble-owner-remove
@@ -379,28 +400,8 @@ $filter-avatar-size: 24px
     color: $text
 
   .bubble-remove-btn
-    display: inline-flex
-    align-items: center
-    justify-content: center
-    width: 16px
-    height: 16px
     margin-left: 4px
-    padding: 0
-    flex-shrink: 0
-    cursor: pointer
-    border: none
-    background: none
-    color: $text-muted
-    opacity: 0.5
-    transition: opacity 0.1s ease
-
-    &:hover
-      color: $text
-      opacity: 1
-
-    svg
-      width: 12px
-      height: 12px
+    +remove-icon-btn
 
   .clear-all-link
     align-self: center
@@ -420,37 +421,17 @@ $filter-avatar-size: 24px
     align-items: center
     padding: 2px 4px
     border-radius: $border-radius
-    transition: background-color 0.1s ease
+    transition: background-color $transition-fast
 
     &:hover
-      background-color: $bg-element-accent
+      background-color: $hover-overlay
 
       .bubble-owner-remove
         opacity: 1
 
   .bubble-owner-remove
-    display: inline-flex
-    align-items: center
-    justify-content: center
-    width: 14px
-    height: 14px
     margin-left: 2px
-    padding: 0
-    flex-shrink: 0
-    cursor: pointer
-    border: none
-    background: none
-    color: $text-muted
-    opacity: 0.5
-    transition: opacity 0.1s ease
-
-    &:hover
-      color: $text
-      opacity: 1
-
-    svg
-      width: 10px
-      height: 10px
+    +remove-icon-btn
 
   // Expandable bubble (for owners/authors with multiple values)
   .bubble-expandable
@@ -473,17 +454,17 @@ $filter-avatar-size: 24px
     background: none
     color: $text-muted
     border-radius: 2px
-    transition: background-color 0.1s ease, color 0.1s ease
+    transition: background-color $transition-fast, color $transition-fast
 
     &:hover,
     &.active
-      background-color: $bg-element-accent
+      background-color: $hover-overlay
       color: $text
 
     svg
       width: 16px
       height: 16px
-      transition: transform 0.15s ease
+      transition: transform $transition-normal
 
     &.active svg
       transform: rotate(180deg)
@@ -505,21 +486,19 @@ $filter-avatar-size: 24px
     display: flex
     align-items: center
     justify-content: space-between
-    width: calc(100% - $small)
-    margin: 0 $tiny
-    padding: $small calc($medium - $tiny)
+    width: 100%
+    padding: $small $medium
     font-size: $secondary-font-size
     font-family: inherit
     text-align: left
     cursor: pointer
     border: none
-    border-radius: $border-radius
     background: none
     color: $text
-    transition: background-color 0.1s ease
+    transition: background-color $transition-fast
 
     &:hover
-      background-color: $bg-element-accent
+      background-color: $hover-overlay
 
       .owner-remove
         opacity: 1
@@ -531,16 +510,7 @@ $filter-avatar-size: 24px
     text-overflow: ellipsis
 
   .owner-remove
-    flex-shrink: 0
-    width: 12px
-    height: 12px
-    color: $text-muted
-    opacity: 0.5
-    transition: opacity 0.1s ease
-
-    &:hover
-      color: $accent-red
-      opacity: 1
+    +remove-icon-btn
 
 // -----------------------------------------------------------------------------
 // Sort Control
@@ -551,26 +521,7 @@ $filter-avatar-size: 24px
     position: relative
     flex-shrink: 0
 
-  .sort-btn
-    display: inline-flex
-    align-items: center
-    justify-content: flex-start
-    gap: $small
-    height: $filter-control-height
-    box-sizing: border-box
-    padding: 0 $medium
-    font-size: $secondary-font-size
-    font-family: inherit
-    white-space: nowrap
-    cursor: pointer
-    border: 1px solid $border
-    border-radius: $border-radius
-    background-color: $bg-element
-    color: $text
-
-    &:hover,
-    &.active
-      background-color: $bg-element-accent
+  // .sort-btn visual comes from the unified +button mixin — see SortButton.vue
 
   .sort-icon
     width: 24px
@@ -582,7 +533,7 @@ $filter-avatar-size: 24px
     top: calc(100% + $tiny)
     right: 0
     z-index: $z-dropdown
-    min-width: 270px
+    min-width: $filter-dropdown-min-width
     padding: $small 0
     background-color: $bg-element
     border: 1px solid $border
@@ -600,14 +551,13 @@ $filter-avatar-size: 24px
     border: none
     background: none
     color: $text
+    transition: background-color $transition-fast
 
-    &:hover
-      background-color: $bg-element-accent
+    &:hover:not(.selected)
+      background-color: $hover-overlay
 
     &.selected
-      .sort-option-label
-        color: $link
-        font-weight: 500
+      background-color: $selected-overlay
 
     &.sort-direction
       display: flex

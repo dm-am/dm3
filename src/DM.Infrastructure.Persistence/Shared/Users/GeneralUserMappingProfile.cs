@@ -21,17 +21,23 @@ internal class GeneralUserMappingProfile : Profile
     public GeneralUserMappingProfile()
     {
         CreateMap<User, GeneralUser>()
-            .ForMember(d => d.OriginalPictureUrl, s => s.MapFrom(u =>
-                u.AvatarUpload != null ? u.AvatarUpload.FilePath : null))
-            .ForMember(d => d.MediumPictureUrl, s => s.MapFrom(u =>
-                u.AvatarUpload != null ? (u.AvatarUpload.MediumFilePath ?? u.AvatarUpload.FilePath) : null))
-            .ForMember(d => d.SmallPictureUrl, s => s.MapFrom(u =>
-                u.AvatarUpload != null ? (u.AvatarUpload.SmallFilePath ?? u.AvatarUpload.FilePath) : null))
+            // Avatar projection — SSOT через AvatarProjections.From; никаких
+            // больше тернарных дубликатов в каждом репозитории.
+            .ForMember(d => d.Picture, s => s.MapFrom(u => AvatarProjections.From(u.AvatarUpload)))
             .ForMember(d => d.LastActivityUtc, s => s.MapFrom(u => u.LastActivityUtc))
             .ForMember(d => d.RegisteredUtc, s => s.MapFrom(u => u.CreatedUtc))
             .ForMember(d => d.UsernameHistory, s => s.Ignore()) // Set separately after mapping (OrderBy not translatable in ProjectTo)
             .ForMember(d => d.PostReviewsGivenCount, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.PostReviewsReceivedCount, s => s.Ignore()) // Set separately after mapping
+            .ForMember(d => d.EndorsementsGivenCount, s => s.Ignore()) // Set separately after mapping
+            .ForMember(d => d.EndorsementsReceivedCount, s => s.Ignore()) // Set separately after mapping
+            .ForMember(d => d.TopicsAuthoredCount, s => s.Ignore()) // Set separately after mapping
+            .ForMember(d => d.CommentsAuthoredCount, s => s.Ignore()) // Set separately after mapping
+            .ForMember(d => d.GlobalChatMessagesCount, s => s.Ignore()) // Set separately after mapping
+            .ForMember(d => d.BansReceivedCount, s => s.Ignore()) // Set separately after mapping
+            .ForMember(d => d.GameDropsCount, s => s.Ignore()) // Set separately after mapping
+            .ForMember(d => d.PublicationsAuthoredCount, s => s.Ignore()) // Set separately after mapping
+            .ForMember(d => d.LikesReceivedCount, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.GamesHosting, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.GamesHostingByStatus, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.GamesPlaying, s => s.Ignore()) // Set separately after mapping
@@ -39,7 +45,8 @@ internal class GeneralUserMappingProfile : Profile
             .ForMember(d => d.BlogsHosting, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.BlogsHostingByStatus, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.SubscribersCount, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.SubscriberUsernames, s => s.Ignore()); // Set separately after mapping
+            .ForMember(d => d.SubscriberUsernames, s => s.Ignore()) // Set separately after mapping
+            .ForMember(d => d.Subscribers, s => s.Ignore()); // Set separately after mapping (richer SubscriberInfo list)
 
         // UsernameHistory entity -> UsernameHistoryEntry domain
         CreateMap<EntityUsernameHistory, UsernameHistoryEntry>()

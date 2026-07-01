@@ -1,9 +1,15 @@
 <template>
   <SidebarBlock v-if="!userStore.user" token="ActiveGames">
     <template #title>Активные игры</template>
-    <SidebarSkeleton v-if="store.activeGames === null" :lines="5" />
+    <SidebarSkeleton
+      v-if="store.activeGames === null && !store.activeGamesError"
+      :lines="5"
+    />
+    <SecondaryText v-else-if="store.activeGames === null">
+      Не удалось загрузить
+    </SecondaryText>
     <SecondaryText v-else-if="store.activeGames.length === 0">
-      Нет активных игр
+      Активных игр пока нет
     </SecondaryText>
     <GameLink
       v-else
@@ -20,7 +26,14 @@
       <span class="muted">- </span>
       <router-link
         class="forward"
-        :to="{ name: 'games', query: { status: 'Active', recruitmentFilter: 'closed', sortBy: 'activated' } }"
+        :to="{
+          name: 'games',
+          query: {
+            status: 'Active',
+            recruitmentFilter: 'closed',
+            sortBy: 'activated',
+          },
+        }"
         >Все активные игры</router-link
       >
     </div>

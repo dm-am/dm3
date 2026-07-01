@@ -6,7 +6,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, config } from "@vue/test-utils";
 import { nextTick } from "vue";
 import GameLink from "./GameLink.vue";
-import type { GameRef, GameId, GameStatus, GameRecruitment, GameRole } from "@/entities/game";
+import type {
+  GameRef,
+  GameId,
+  GameStatus,
+  GameRecruitment,
+  GameRole,
+} from "@/entities/game";
 import type { Served } from "@/shared/api/models";
 import type { UserRef } from "@/shared/api/models/common";
 
@@ -29,25 +35,28 @@ config.global.stubs = {
 
 // Mock useGameDisplay composable
 vi.mock("@/entities/game", async (importOriginal) => {
-  const actual = await importOriginal() as any;
+  const actual = (await importOriginal()) as any;
   return {
     ...actual,
     useGameDisplay: () => ({
       buildTooltip: (game: any) => `Tooltip for ${game.title}`,
       getUnreadPosts: () => 5,
       getUnreadComments: () => 3,
-      formatUnreadPostsTooltip: (count: number) => `${count} непрочитанных постов`,
-      formatUnreadCommentsTooltip: (count: number) => `${count} непрочитанных комментариев`,
+      formatUnreadPostsTooltip: (count: number) =>
+        `${count} непрочитанных постов`,
+      formatUnreadCommentsTooltip: (count: number) =>
+        `${count} непрочитанных комментариев`,
       isNew: () => false,
     }),
   };
 });
 
-const createMockUserRef = (id: string, username: string): UserRef => ({
-  id: id,
-  username,
-  lastActivityUtc: "2024-01-01T00:00:00Z",
-} as unknown as UserRef);
+const createMockUserRef = (id: string, username: string): UserRef =>
+  ({
+    id: id,
+    username,
+    lastActivityUtc: "2024-01-01T00:00:00Z",
+  }) as unknown as UserRef;
 
 const createMockRecruitment = (): GameRecruitment => ({
   isOpen: true,
@@ -55,7 +64,9 @@ const createMockRecruitment = (): GameRecruitment => ({
   isSubsequent: false,
 });
 
-const createMockGame = (overrides: Partial<{ id: string; title: string }> = {}): GameRef => ({
+const createMockGame = (
+  overrides: Partial<{ id: string; title: string }> = {},
+): GameRef => ({
   id: asServed((overrides.id ?? "game-1") as GameId),
   publicId: asServed("abcde"),
   title: overrides.title ?? "Test Game",
@@ -155,7 +166,11 @@ describe("GameLink", () => {
 
     it("always shows counters when alwaysShowCounters is true", () => {
       const wrapper = mount(GameLink, {
-        props: { game: createMockGame(), counters: true, alwaysShowCounters: true },
+        props: {
+          game: createMockGame(),
+          counters: true,
+          alwaysShowCounters: true,
+        },
       });
       expect(wrapper.find(".counters").exists()).toBe(true);
     });
@@ -168,7 +183,10 @@ describe("GameLink", () => {
   describe("New Game Indicator", () => {
     it("renders game title in link", () => {
       const wrapper = mount(GameLink, {
-        props: { game: createMockGame({ title: "Epic Adventure" }), counters: false },
+        props: {
+          game: createMockGame({ title: "Epic Adventure" }),
+          counters: false,
+        },
       });
 
       // Component should render the game title
@@ -190,15 +208,20 @@ describe("GameLink", () => {
       expect(tooltips.length).toBeGreaterThanOrEqual(1);
     });
 
-    it("wraps counters in Tooltips when shown", async () => {
+    it("renders counters as plain links without per-counter tooltips", async () => {
       const wrapper = mount(GameLink, {
-        props: { game: createMockGame(), counters: true, alwaysShowCounters: true },
+        props: {
+          game: createMockGame(),
+          counters: true,
+          alwaysShowCounters: true,
+        },
       });
 
-      // Stub renders as <span class="tooltip">
-      // Should have tooltips for posts and comments counters
-      const tooltips = wrapper.findAll(".tooltip");
-      expect(tooltips.length).toBeGreaterThanOrEqual(3); // game + posts + comments
+      // Counters are plain aria-labelled router-links — no tooltips on them.
+      // (The only Tooltip is the game-title one from the GameLink primitive.)
+      const counters = wrapper.find(".counters");
+      expect(counters.findAll(".tooltip").length).toBe(0);
+      expect(counters.findAll(".router-link").length).toBe(2);
     });
   });
 
@@ -218,7 +241,11 @@ describe("GameLink", () => {
 
     it("renders multiple links when counters shown", () => {
       const wrapper = mount(GameLink, {
-        props: { game: createMockGame({ id: "game-123" }), counters: true, alwaysShowCounters: true },
+        props: {
+          game: createMockGame({ id: "game-123" }),
+          counters: true,
+          alwaysShowCounters: true,
+        },
       });
 
       // Should have links for game title, posts counter, comments counter
@@ -228,7 +255,11 @@ describe("GameLink", () => {
 
     it("displays unread counts in counters", () => {
       const wrapper = mount(GameLink, {
-        props: { game: createMockGame(), counters: true, alwaysShowCounters: true },
+        props: {
+          game: createMockGame(),
+          counters: true,
+          alwaysShowCounters: true,
+        },
       });
 
       // Mock returns 5 posts and 3 comments
@@ -252,7 +283,11 @@ describe("GameLink", () => {
 
     it("renders counter links when counters shown", () => {
       const wrapper = mount(GameLink, {
-        props: { game: createMockGame(), counters: true, alwaysShowCounters: true },
+        props: {
+          game: createMockGame(),
+          counters: true,
+          alwaysShowCounters: true,
+        },
       });
 
       const counters = wrapper.find(".counters");

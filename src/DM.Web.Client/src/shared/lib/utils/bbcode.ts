@@ -343,7 +343,11 @@ const PATTERN_ORDER_RULES: Array<{
     reason: "[quote=X] before [quote] (author ignored)",
   },
   { first: "linkWithText", then: "link", reason: "[link=text] before [link]" },
-  { first: "imgWithSize", then: "imgWithAttrs", reason: "[img=WxH] before [img attrs]" },
+  {
+    first: "imgWithSize",
+    then: "imgWithAttrs",
+    reason: "[img=WxH] before [img attrs]",
+  },
   { first: "imgWithAttrs", then: "img", reason: "[img attrs] before [img]" },
 ];
 
@@ -746,7 +750,9 @@ function phase3_convertBbcodeTags(state: BbcodeToHtmlState): BbcodeToHtmlState {
   // With attributes — e.g. [img alt="text"]URL[/img]
   html = html.replace(BB_TO_HTML.imgWithAttrs, (_, attrs, src) => {
     const safeSrc = sanitizeImageUrl(src.trim());
-    const altMatch = attrs.match(/alt\s*=\s*"([^"]*)"/i) || attrs.match(/alt\s*=\s*'([^']*)'/i);
+    const altMatch =
+      attrs.match(/alt\s*=\s*"([^"]*)"/i) ||
+      attrs.match(/alt\s*=\s*'([^']*)'/i);
     const altText = altMatch ? altMatch[1] : "";
     return renderBbImage(safeSrc, altText, { width: null, height: null });
   });

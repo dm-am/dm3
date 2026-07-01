@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /auth/
+Disallow: /account
+Disallow: /notifications
+Disallow: /subscriptions
+Disallow: /notepad
+Disallow: /messenger
+Disallow: /moderation
+Disallow: /error/

@@ -114,7 +114,9 @@ function handleClose() {
       </div>
 
       <div class="modal-content">
-        <p class="hint">Перетащите топики для изменения порядка или используйте кнопки</p>
+        <p class="hint">
+          Перетащите топики для изменения порядка или используйте кнопки
+        </p>
 
         <ul class="topics-list">
           <li
@@ -132,7 +134,9 @@ function handleClose() {
             @drop="onDrop(index, $event)"
             @dragend="onDragEnd"
           >
-            <span class="drag-handle" title="Перетащите для перемещения">⋮⋮</span>
+            <span class="drag-handle" title="Перетащите для перемещения"
+              >⋮⋮</span
+            >
             <span class="topic-title">{{ topic.title }}</span>
             <div class="move-buttons">
               <Tooltip text="Переместить вверх">
@@ -157,12 +161,20 @@ function handleClose() {
           </li>
         </ul>
 
-        <p v-if="!localTopics.length" class="empty-message">Нет закрепленных топиков</p>
+        <p v-if="!localTopics.length" class="empty-message">
+          Нет закрепленных топиков
+        </p>
       </div>
 
       <div class="modal-footer">
-        <button class="cancel-button" :disabled="saving" @click="handleClose">Отмена</button>
-        <button class="save-button" :disabled="saving || !localTopics.length" @click="handleSave">
+        <button class="cancel-button" :disabled="saving" @click="handleClose">
+          Отмена
+        </button>
+        <button
+          class="save-button"
+          :disabled="saving || !localTopics.length"
+          @click="handleSave"
+        >
           {{ saving ? "Сохранение..." : "Сохранить порядок" }}
         </button>
       </div>
@@ -173,6 +185,7 @@ function handleClose() {
 <style scoped lang="sass">
 @import "@/assets/styles/Variables"
 @import "@/assets/styles/Themes"
+@import "@/assets/styles/Inputs"
 @import "@/assets/styles/ZIndex"
 
 .pinned-manager-overlay
@@ -256,8 +269,8 @@ function handleClose() {
     cursor: grabbing
 
   &.drag-over
-    border-color: $link
-    background: $bg-element-hover
+    border-color: $border-focus
+    background: $hover-overlay
 
 .drag-handle
   color: $text-muted
@@ -277,21 +290,8 @@ function handleClose() {
   gap: 4px
 
 .move-button
-  background: none
-  border: 1px solid $border
-  border-radius: 4px
-  padding: 2px 8px
-  cursor: pointer
-  color: $text-muted
-  font-size: 14px
-
-  &:hover:not(:disabled)
-    color: $link
-    border-color: $link
-
-  &:disabled
-    opacity: 0.3
-    cursor: not-allowed
+  padding: $tiny $small
+  +button
 
 .empty-message
   text-align: center
@@ -306,32 +306,8 @@ function handleClose() {
   border-top: 1px solid $border
 
 .cancel-button
-  padding: $small $medium
-  background: transparent
-  border: 1px solid $border
-  border-radius: 4px
-  cursor: pointer
-  color: $text
-
-  &:hover:not(:disabled)
-    background: $bg-element-hover
-
-  &:disabled
-    opacity: 0.5
-    cursor: not-allowed
+  +button
 
 .save-button
-  padding: $small $medium
-  background: $link
-  border: none
-  border-radius: 4px
-  cursor: pointer
-  color: white
-
-  &:hover:not(:disabled)
-    opacity: 0.9
-
-  &:disabled
-    opacity: 0.5
-    cursor: not-allowed
+  +button
 </style>

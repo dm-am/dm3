@@ -28,7 +28,10 @@ export interface BlogsSearchParams {
 
 // Cache configuration
 const CACHE_TTL = 30_000; // 30 seconds
-const searchCache = new Map<string, { data: ListEnvelope<Blog>; timestamp: number }>();
+const searchCache = new Map<
+  string,
+  { data: ListEnvelope<Blog>; timestamp: number }
+>();
 
 function createCacheKey(params: BlogsSearchParams): string {
   return JSON.stringify({
@@ -97,7 +100,10 @@ export const useBlogsStore = defineStore("blogs", () => {
     // Map frontend params to backend API params
     const pageSize = params.size || 20;
     const pageNumber = params.number || 1;
-    const apiParams: Record<string, string | number | boolean | string[] | number[] | undefined> = {
+    const apiParams: Record<
+      string,
+      string | number | boolean | string[] | number[] | undefined
+    > = {
       take: pageSize,
     };
 
@@ -150,7 +156,10 @@ export const useBlogsStore = defineStore("blogs", () => {
     }
 
     try {
-      const { data, error } = await Api.get<ListEnvelope<Blog>>("blogs", apiParams);
+      const { data, error } = await Api.get<ListEnvelope<Blog>>(
+        "blogs",
+        apiParams,
+      );
 
       // Ignore stale responses
       if (requestId !== currentRequestId) {
@@ -204,7 +213,10 @@ export const useBlogsStore = defineStore("blogs", () => {
 
     // Map params to API params (same as searchBlogs)
     const pageSize = params.size || 20;
-    const apiParams: Record<string, string | number | boolean | string[] | number[] | undefined> = {
+    const apiParams: Record<
+      string,
+      string | number | boolean | string[] | number[] | undefined
+    > = {
       take: pageSize,
     };
 
@@ -219,7 +231,8 @@ export const useBlogsStore = defineStore("blogs", () => {
     }
     if (params.createdFromUtc) apiParams.createdFromUtc = params.createdFromUtc;
     if (params.createdToUtc) apiParams.createdToUtc = params.createdToUtc;
-    if (params.activatedFromUtc) apiParams.activatedFromUtc = params.activatedFromUtc;
+    if (params.activatedFromUtc)
+      apiParams.activatedFromUtc = params.activatedFromUtc;
     if (params.activatedToUtc) apiParams.activatedToUtc = params.activatedToUtc;
     if (params.closedFromUtc) apiParams.closedFromUtc = params.closedFromUtc;
     if (params.closedToUtc) apiParams.closedToUtc = params.closedToUtc;

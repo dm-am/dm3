@@ -19,7 +19,9 @@
           <p class="link-instructions">2. Отправьте команду:</p>
           <div class="code-block">
             <code>/connect {{ telegramCode }}</code>
-            <Tooltip :text="copied === 'telegram' ? 'Скопировано!' : 'Скопировать'">
+            <Tooltip
+              :text="copied === 'telegram' ? 'Скопировано!' : 'Скопировать'"
+            >
               <button
                 class="copy-btn"
                 @click="copyToClipboard(`/connect ${telegramCode}`)"
@@ -75,7 +77,9 @@
           <p class="link-instructions">2. Отправьте команду:</p>
           <div class="code-block">
             <code>/connect {{ discordCode }}</code>
-            <Tooltip :text="copied === 'discord' ? 'Скопировано!' : 'Скопировать'">
+            <Tooltip
+              :text="copied === 'discord' ? 'Скопировано!' : 'Скопировать'"
+            >
               <button
                 class="copy-btn"
                 @click="copyToClipboard(`/connect ${discordCode}`)"
@@ -258,6 +262,7 @@ onUnmounted(() => {
 <style scoped lang="sass">
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 @import "../AccountPage.styles"
 
 .bot-links-content
@@ -298,20 +303,7 @@ onUnmounted(() => {
 
 .connect-btn
   align-self: flex-start
-  background: none
-  border: 1px solid $link
-  color: $link
-  padding: $tiny $small
-  border-radius: $border-radius
-  cursor: pointer
-  font-size: $secondary-font-size
-
-  &:hover:not(:disabled)
-    background-color: rgba($link, 0.1)
-
-  &:disabled
-    opacity: 0.5
-    cursor: not-allowed
+  +button
 
 // Link process
 .link-process
@@ -347,15 +339,7 @@ onUnmounted(() => {
     user-select: all
 
 .copy-btn
-  background: none
-  border: 1px solid $border
-  padding: $tiny $small
-  border-radius: $border-radius
-  cursor: pointer
-  font-size: 1em
-
-  &:hover
-    background-color: rgba($text-muted, 0.1)
+  +button
 
 .timer-section
   display: flex
@@ -387,15 +371,6 @@ onUnmounted(() => {
 
 .cancel-btn
   align-self: flex-start
-  background: none
-  border: 1px solid $border
-  color: $text-muted
-  padding: $tiny $small
-  border-radius: $border-radius
-  cursor: pointer
-  font-size: $secondary-font-size
   margin-top: $small
-
-  &:hover
-    background-color: rgba($text-muted, 0.1)
+  +button
 </style>

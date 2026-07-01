@@ -35,6 +35,10 @@ internal class TopicMappingProfile : Profile
             .ForMember(d => d.TotalCommentsCount, opt => opt.Ignore())
             .ForMember(d => d.UnreadCommentsCount, opt => opt.Ignore())
             .ForMember(d => d.ModifiedUtc, opt => opt.Ignore())
-            .ForMember(d => d.Likes, s => s.Ignore());
+            .ForMember(d => d.Likes, s => s.Ignore())
+            // Same rationale as TotalCommentsCount: avoid a per-row
+            // correlated SELECT COUNT(*) on Likes; fill in a single
+            // batched GROUP BY after the main projection.
+            .ForMember(d => d.LikesCount, opt => opt.Ignore());
     }
 }

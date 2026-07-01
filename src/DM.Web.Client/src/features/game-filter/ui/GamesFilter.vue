@@ -7,14 +7,14 @@ import {
   RECRUITMENT_FILTER_OPTIONS,
   CLOSED_REASON_FILTER_OPTIONS,
   SORT_OPTIONS,
-  DEFAULT_FILTER_STATE,
 } from "../model";
 import type {
   RecruitmentFilter,
   ClosedReasonFilter,
   StatusValue,
 } from "../model";
-import { gameApi, type Tag } from "@/entities/game";
+import { storeToRefs } from "pinia";
+import { useGamesStore, type Tag } from "@/entities/game";
 import { useFilterSearch, useFilterDropdown } from "@/shared/lib/composables";
 import { formatDateForDisplay } from "@/shared/lib/filters";
 import {
@@ -52,7 +52,6 @@ const {
   toggleSortOrder,
   clearFilters,
   validateTagFilters,
-  removeFilter,
 } = useGamesFilter();
 
 // =============================================================================
@@ -61,7 +60,7 @@ const {
 
 const { localInput, handleInput, applySearch } = useFilterSearch(
   computed(() => filterState.value.search),
-  setSearch
+  setSearch,
 );
 
 // =============================================================================
@@ -82,7 +81,11 @@ function closeDropdown() {
 
 // Root level filter options
 const filterOptions = [
-  { key: "status", label: "Статус игры", hint: "Оформляется, Идет игра, Закрыта" },
+  {
+    key: "status",
+    label: "Статус игры",
+    hint: "Оформляется, Идет игра, Закрыта",
+  },
   { key: "host", label: "Ведущие", hint: "Мастер или ассистент" },
   { key: "dates", label: "Даты", hint: "Фильтр по датам" },
   { key: "tag", label: "Тег", hint: "Обязательный тег" },
@@ -93,7 +96,11 @@ const filterOptions = [
 const dateTypeOptions = [
   { value: "created", label: "Создание игры", hint: "По дате создания игры" },
   { value: "activated", label: "Начало игры", hint: "По дате начала игры" },
-  { value: "recruitmentstarted", label: "Начало последнего набора", hint: "По дате последнего набора" },
+  {
+    value: "recruitmentstarted",
+    label: "Начало последнего набора",
+    hint: "По дате последнего набора",
+  },
   { value: "closed", label: "Закрытие игры", hint: "По дате закрытия игры" },
 ];
 
@@ -109,7 +116,10 @@ function navigateBack() {
 
   // Level 4: recruitment sub-options → level 3: Active sub-options
   if (navPath.value.recruitment) {
-    navPath.value = { filter: navPath.value.filter, status: navPath.value.status };
+    navPath.value = {
+      filter: navPath.value.filter,
+      status: navPath.value.status,
+    };
     return;
   }
 
@@ -138,12 +148,14 @@ function getDropdownTitle(): string | null {
   if (navPath.value.filter === "dates") {
     if (navPath.value.group === "created") return "Создание игры";
     if (navPath.value.group === "activated") return "Начало игры";
-    if (navPath.value.group === "recruitmentstarted") return "Начало последнего набора";
+    if (navPath.value.group === "recruitmentstarted")
+      return "Начало последнего набора";
     if (navPath.value.group === "closed") return "Закрытие игры";
     return "Даты";
   }
   if (navPath.value.filter === "tag") return navPath.value.group || "Тег";
-  if (navPath.value.filter === "excludeTag") return navPath.value.group || "Без тега";
+  if (navPath.value.filter === "excludeTag")
+    return navPath.value.group || "Без тега";
 
   return null;
 }
@@ -154,15 +166,19 @@ function getDropdownTitle(): string | null {
 
 import { ref } from "vue";
 
-const tags = ref<Tag[]>([]);
+const gamesStore = useGamesStore();
+const { tags: storeTags } = storeToRefs(gamesStore);
+
+// Tags come from the cached store (shared with the table and the tag
+// cloud) - one HTTP request per page instead of a duplicate direct call
+const tags = computed(() => storeTags.value ?? []);
 const tagSearchQuery = ref("");
 
-// Load tags on mount
+// Ensure tags are loaded (store dedupes concurrent fetches)
 onMounted(async () => {
-  const { data } = await gameApi.getTags();
-  if (data) {
-    tags.value = data.resources;
-    validateTagFilters(new Set(data.resources.map((t) => t.id)));
+  await gamesStore.fetchTags();
+  if (storeTags.value) {
+    validateTagFilters(new Set(storeTags.value.map((t) => t.id)));
   }
 });
 
@@ -187,15 +203,18 @@ const tagMap = computed(() => {
 });
 
 // All selected tags (required + excluded)
-const allSelectedTags = computed(() => new Set([
-  ...filterState.value.requiredTags,
-  ...filterState.value.excludedTags,
-]));
+const allSelectedTags = computed(
+  () =>
+    new Set([
+      ...filterState.value.requiredTags,
+      ...filterState.value.excludedTags,
+    ]),
+);
 
 // Strip tooltip markup for display
 function stripRichTextMarkup(text: string | undefined): string | undefined {
   if (!text) return text;
-  return text.replace(/\[(tipimg|tip):[^\]]+\]([^\[]*)\[\/\1\]/g, "$2");
+  return text.replace(/\[(tipimg|tip):[^\]]+\]([^[]*)\[\/\1\]/g, "$2");
 }
 
 // Tags for current level (groups or tags in group)
@@ -203,13 +222,16 @@ const tagGroupOptions = computed(() => {
   return tagGroups.value
     .map((groupName) => {
       const groupTags = tags.value.filter(
-        (t) => t.groupTitle === groupName && !allSelectedTags.value.has(t.id)
+        (t) => t.groupTitle === groupName && !allSelectedTags.value.has(t.id),
       );
       if (groupTags.length === 0) return null;
       const groupDesc = groupTags[0]?.groupDescription;
       return { value: groupName, label: groupName, hint: groupDesc };
     })
-    .filter((o): o is { value: string; label: string; hint: string | undefined } => o !== null);
+    .filter(
+      (o): o is { value: string; label: string; hint: string | undefined } =>
+        o !== null,
+    );
 });
 
 // Tags in selected group (or all matching tags when searching)
@@ -223,7 +245,8 @@ const tagsInGroup = computed(() => {
       .filter((t) => !allSelectedTags.value.has(t.id))
       .filter((t) => t.title.toLowerCase().includes(query))
       .sort((a, b) => {
-        if (a.groupSortOrder !== b.groupSortOrder) return a.groupSortOrder - b.groupSortOrder;
+        if (a.groupSortOrder !== b.groupSortOrder)
+          return a.groupSortOrder - b.groupSortOrder;
         return a.sortOrder - b.sortOrder;
       })
       .map((t) => ({
@@ -270,15 +293,35 @@ function selectTag(tagIdStr: string) {
 
 // Status options (level 2)
 const statusOptions = [
-  { value: "Draft", label: "Оформляется", hint: "Подготавливаемые игры", hasSubOptions: false },
-  { value: "Active", label: "Идет игра", hint: "Активные игры", hasSubOptions: true },
-  { value: "Closed", label: "Закрыта", hint: "Закрытые игры", hasSubOptions: true },
+  {
+    value: "Draft",
+    label: "Оформляется",
+    hint: "Оформляющиеся игры",
+    hasSubOptions: false,
+  },
+  {
+    value: "Active",
+    label: "Идет игра",
+    hint: "Активные игры",
+    hasSubOptions: true,
+  },
+  {
+    value: "Closed",
+    label: "Закрыта",
+    hint: "Закрытые игры",
+    hasSubOptions: true,
+  },
 ];
 
 // Active sub-options (level 3)
 const activeSubOptions = [
   { value: "any", label: "Все", hint: "Все активные игры" },
-  { value: "recruiting", label: "Набор игроков", hint: "Игры с открытым набором", hasSubOptions: true },
+  {
+    value: "recruiting",
+    label: "Набор игроков",
+    hint: "Игры с открытым набором",
+    hasSubOptions: true,
+  },
   { value: "closed", label: "Набор закрыт", hint: "Игры без набора" },
 ];
 
@@ -286,14 +329,22 @@ const activeSubOptions = [
 const recruitmentSubOptions = [
   { value: "open", label: "Все", hint: "Любой тип набора" },
   { value: "initial", label: "Первый набор", hint: "Новые игры, первый набор" },
-  { value: "subsequent", label: "Донабор игроков", hint: "Продолжающиеся игры, повторный набор" },
+  {
+    value: "subsequent",
+    label: "Донабор игроков",
+    hint: "Продолжающиеся игры, повторный набор",
+  },
 ];
 
 // Closed sub-options (level 3)
 const closedSubOptions = [
   { value: "any", label: "Все", hint: "Все закрытые игры" },
   { value: "None", label: "Без флагов", hint: "Игра закрыта" },
-  { value: "Frozen", label: "Заморожена", hint: "Игра временно приостановлена" },
+  {
+    value: "Frozen",
+    label: "Заморожена",
+    hint: "Игра временно приостановлена",
+  },
   { value: "Finished", label: "Завершена", hint: "Игра доведена до финала" },
 ];
 
@@ -354,16 +405,28 @@ function selectDateType(value: string) {
 function getCurrentDateValues(): { from: string | null; to: string | null } {
   const group = navPath.value?.group;
   if (group === "created") {
-    return { from: filterState.value.createdFromUtc, to: filterState.value.createdToUtc };
+    return {
+      from: filterState.value.createdFromUtc,
+      to: filterState.value.createdToUtc,
+    };
   }
   if (group === "activated") {
-    return { from: filterState.value.activatedFromUtc, to: filterState.value.activatedToUtc };
+    return {
+      from: filterState.value.activatedFromUtc,
+      to: filterState.value.activatedToUtc,
+    };
   }
   if (group === "recruitmentstarted") {
-    return { from: filterState.value.recruitmentStartedFromUtc, to: filterState.value.recruitmentStartedToUtc };
+    return {
+      from: filterState.value.recruitmentStartedFromUtc,
+      to: filterState.value.recruitmentStartedToUtc,
+    };
   }
   if (group === "closed") {
-    return { from: filterState.value.closedFromUtc, to: filterState.value.closedToUtc };
+    return {
+      from: filterState.value.closedFromUtc,
+      to: filterState.value.closedToUtc,
+    };
   }
   return { from: null, to: null };
 }
@@ -436,11 +499,15 @@ const statusBubbleLabel = computed(() => {
   let subLabel = "";
 
   if (status === "Active" && filterState.value.recruitmentFilter !== "any") {
-    const opt = RECRUITMENT_FILTER_OPTIONS.find((o) => o.value === filterState.value.recruitmentFilter);
+    const opt = RECRUITMENT_FILTER_OPTIONS.find(
+      (o) => o.value === filterState.value.recruitmentFilter,
+    );
     subLabel = opt?.label ?? "";
   }
   if (status === "Closed" && filterState.value.closedReasonFilter !== "any") {
-    const opt = CLOSED_REASON_FILTER_OPTIONS.find((o) => o.value === filterState.value.closedReasonFilter);
+    const opt = CLOSED_REASON_FILTER_OPTIONS.find(
+      (o) => o.value === filterState.value.closedReasonFilter,
+    );
     subLabel = opt?.label.toLowerCase() ?? "";
   }
 
@@ -448,7 +515,11 @@ const statusBubbleLabel = computed(() => {
 });
 
 // Date range filters
-const hasCreatedDateFilter = computed(() => filterState.value.createdFromUtc !== null || filterState.value.createdToUtc !== null);
+const hasCreatedDateFilter = computed(
+  () =>
+    filterState.value.createdFromUtc !== null ||
+    filterState.value.createdToUtc !== null,
+);
 const createdDateLabel = computed(() => {
   const from = formatDateForDisplay(filterState.value.createdFromUtc);
   const to = formatDateForDisplay(filterState.value.createdToUtc);
@@ -458,7 +529,11 @@ const createdDateLabel = computed(() => {
   return "";
 });
 
-const hasActivatedDateFilter = computed(() => filterState.value.activatedFromUtc !== null || filterState.value.activatedToUtc !== null);
+const hasActivatedDateFilter = computed(
+  () =>
+    filterState.value.activatedFromUtc !== null ||
+    filterState.value.activatedToUtc !== null,
+);
 const activatedDateLabel = computed(() => {
   const from = formatDateForDisplay(filterState.value.activatedFromUtc);
   const to = formatDateForDisplay(filterState.value.activatedToUtc);
@@ -468,9 +543,15 @@ const activatedDateLabel = computed(() => {
   return "";
 });
 
-const hasRecruitmentStartedDateFilter = computed(() => filterState.value.recruitmentStartedFromUtc !== null || filterState.value.recruitmentStartedToUtc !== null);
+const hasRecruitmentStartedDateFilter = computed(
+  () =>
+    filterState.value.recruitmentStartedFromUtc !== null ||
+    filterState.value.recruitmentStartedToUtc !== null,
+);
 const recruitmentStartedDateLabel = computed(() => {
-  const from = formatDateForDisplay(filterState.value.recruitmentStartedFromUtc);
+  const from = formatDateForDisplay(
+    filterState.value.recruitmentStartedFromUtc,
+  );
   const to = formatDateForDisplay(filterState.value.recruitmentStartedToUtc);
   if (from && to) return `${from} — ${to}`;
   if (from) return `с ${from}`;
@@ -478,7 +559,11 @@ const recruitmentStartedDateLabel = computed(() => {
   return "";
 });
 
-const hasClosedDateFilter = computed(() => filterState.value.closedFromUtc !== null || filterState.value.closedToUtc !== null);
+const hasClosedDateFilter = computed(
+  () =>
+    filterState.value.closedFromUtc !== null ||
+    filterState.value.closedToUtc !== null,
+);
 const closedDateLabel = computed(() => {
   const from = formatDateForDisplay(filterState.value.closedFromUtc);
   const to = formatDateForDisplay(filterState.value.closedToUtc);
@@ -498,7 +583,8 @@ const requiredTagsBubbles = computed(() => {
       sortOrder: tagMap.value[tagId]?.sortOrder ?? 99,
     }))
     .sort((a, b) => {
-      if (a.groupSortOrder !== b.groupSortOrder) return a.groupSortOrder - b.groupSortOrder;
+      if (a.groupSortOrder !== b.groupSortOrder)
+        return a.groupSortOrder - b.groupSortOrder;
       return a.sortOrder - b.sortOrder;
     });
 });
@@ -512,7 +598,8 @@ const excludedTagsBubbles = computed(() => {
       sortOrder: tagMap.value[tagId]?.sortOrder ?? 99,
     }))
     .sort((a, b) => {
-      if (a.groupSortOrder !== b.groupSortOrder) return a.groupSortOrder - b.groupSortOrder;
+      if (a.groupSortOrder !== b.groupSortOrder)
+        return a.groupSortOrder - b.groupSortOrder;
       return a.sortOrder - b.sortOrder;
     });
 });
@@ -521,16 +608,17 @@ const excludedTagsBubbles = computed(() => {
 const hostsBubbleValues = computed(() =>
   [...filterState.value.hostUsernames]
     .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), "ru"))
-    .map((username) => ({ id: username, label: username }))
+    .map((username) => ({ id: username, label: username })),
 );
 
 function handleRemoveHost(id: string) {
   removeHost(id);
 }
 
+// Only when at least one actual filter bubble is rendered; non-default
+// sorting alone must not show a row with a lone "Сбросить"
 const hasBubbles = computed(() => {
   const state = filterState.value;
-  const def = DEFAULT_FILTER_STATE;
   return (
     hasStatusFilter.value ||
     state.hostUsernames.size > 0 ||
@@ -539,9 +627,7 @@ const hasBubbles = computed(() => {
     hasRecruitmentStartedDateFilter.value ||
     hasClosedDateFilter.value ||
     state.requiredTags.size > 0 ||
-    state.excludedTags.size > 0 ||
-    state.sortBy !== def.sortBy ||
-    state.sortOrder !== def.sortOrder
+    state.excludedTags.size > 0
   );
 });
 
@@ -640,32 +726,30 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
           <!-- STATUS NAVIGATION -->
           <!-- Level 2: Status options -->
-          <template v-if="navPath?.filter === 'status' && !navPath.status">
-            <FilterDropdownItem
-              v-for="option in statusOptions"
-              :key="option.value"
-              :label="option.label"
-              :hint="option.hint"
-              :has-sub-options="option.hasSubOptions"
-              @item-select="handleStatusSelect(option.value)"
-            />
-          </template>
+          <OptionsList
+            v-if="navPath?.filter === 'status' && !navPath.status"
+            :options="statusOptions"
+            @select="handleStatusSelect"
+          />
 
           <!-- Level 3: Active sub-options -->
-          <template v-if="navPath?.filter === 'status' && navPath.status === 'Active' && !navPath.recruitment">
-            <FilterDropdownItem
-              v-for="option in activeSubOptions"
-              :key="option.value"
-              :label="option.label"
-              :hint="option.hint"
-              :has-sub-options="option.hasSubOptions"
-              @item-select="handleActiveSubSelect(option.value)"
-            />
-          </template>
+          <OptionsList
+            v-if="
+              navPath?.filter === 'status' &&
+              navPath.status === 'Active' &&
+              !navPath.recruitment
+            "
+            :options="activeSubOptions"
+            @select="handleActiveSubSelect"
+          />
 
           <!-- Level 4: Recruitment sub-options -->
           <OptionsList
-            v-if="navPath?.filter === 'status' && navPath.status === 'Active' && navPath.recruitment"
+            v-if="
+              navPath?.filter === 'status' &&
+              navPath.status === 'Active' &&
+              navPath.recruitment
+            "
             :options="recruitmentSubOptions"
             @select="handleRecruitmentSubSelect"
           />
@@ -677,12 +761,15 @@ function handleSearchKeydown(event: KeyboardEvent) {
             @select="handleClosedSubSelect"
           />
 
-          <!-- HOSTS -->
+          <!-- HOSTS: include-inactive so masters of archived games
+               (inactive 30+ days) stay findable -->
           <UserMultiSelect
             v-if="navPath?.filter === 'host'"
             :selected-users="filterState.hostUsernames"
             placeholder="Поиск ведущего"
+            include-inactive
             @add="handleAddHost"
+            @remove="handleRemoveHost"
           />
 
           <!-- DATES NAVIGATION -->
@@ -718,12 +805,20 @@ function handleSearchKeydown(event: KeyboardEvent) {
               v-model="tagSearchQuery"
               type="text"
               class="dropdown-search-input"
-              :placeholder="navPath?.group ? 'Поиск тега в группе' : 'Поиск тега'"
+              :placeholder="
+                navPath?.group ? 'Поиск тега в группе' : 'Поиск тега'
+              "
             />
           </div>
 
           <!-- Level 2: Tag groups (when not searching) -->
-          <template v-if="(navPath?.filter === 'tag' || navPath?.filter === 'excludeTag') && !navPath.group && !tagSearchQuery">
+          <template
+            v-if="
+              (navPath?.filter === 'tag' || navPath?.filter === 'excludeTag') &&
+              !navPath.group &&
+              !tagSearchQuery
+            "
+          >
             <FilterDropdownItem
               v-for="group in tagGroupOptions"
               :key="group.value"
@@ -735,7 +830,12 @@ function handleSearchKeydown(event: KeyboardEvent) {
           </template>
 
           <!-- Level 3: Tags in group OR search results -->
-          <template v-if="(navPath?.filter === 'tag' || navPath?.filter === 'excludeTag') && (navPath.group || tagSearchQuery)">
+          <template
+            v-if="
+              (navPath?.filter === 'tag' || navPath?.filter === 'excludeTag') &&
+              (navPath.group || tagSearchQuery)
+            "
+          >
             <FilterDropdownItem
               v-for="tag in tagsInGroup"
               :key="tag.value"

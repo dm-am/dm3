@@ -35,6 +35,14 @@ internal class TopicApiService : ITopicApiService
     }
 
     /// <inheritdoc />
+    public async Task<ListEnvelope<Topic>> GetAcrossBoards(TopicsQuery query)
+    {
+        var domainQuery = _mapper.Map<DomainTopicsQuery>(query);
+        var (topics, paging) = await _topicService.GetListAcrossBoardsAsync(domainQuery);
+        return new ListEnvelope<Topic>(topics.Select(_mapper.Map<Topic>), paging != null ? new PagingInfo(paging) : null);
+    }
+
+    /// <inheritdoc />
     public async Task<Envelope<Topic>> Get(Guid topicId)
     {
         var topic = await _topicService.GetAsync(topicId);

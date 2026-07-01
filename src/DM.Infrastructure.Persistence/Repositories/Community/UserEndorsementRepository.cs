@@ -55,41 +55,71 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
-    public Task<int> CountAllAsync(UserEndorsementFilter? filter = null)
-    {
-        var query = _dbContext.UserEndorsements
-            .Where(e => !e.IsRemoved);
-
-        if (filter != null)
-        {
-            if (filter.AuthorId.HasValue)
-                query = query.Where(e => e.AuthorId == filter.AuthorId.Value);
-            if (filter.RecipientId.HasValue)
-                query = query.Where(e => e.TargetUserId == filter.RecipientId.Value);
-        }
-
-        return query.CountAsync();
-    }
+    public Task<int> CountAllAsync(UserEndorsementFilter? filter = null) =>
+        ApplyFilter(_dbContext.UserEndorsements.Where(e => !e.IsRemoved), filter)
+            .CountAsync();
 
     /// <inheritdoc />
     public async Task<IEnumerable<UserEndorsement>> GetAllAsync(PagingData paging, UserEndorsementFilter? filter = null)
     {
-        var query = _dbContext.UserEndorsements
-            .Where(e => !e.IsRemoved);
+        var query = ApplyFilter(_dbContext.UserEndorsements.Where(e => !e.IsRemoved), filter);
 
-        if (filter != null)
-        {
-            if (filter.AuthorId.HasValue)
-                query = query.Where(e => e.AuthorId == filter.AuthorId.Value);
-            if (filter.RecipientId.HasValue)
-                query = query.Where(e => e.TargetUserId == filter.RecipientId.Value);
-        }
+        var sorted = ApplySort(query, filter);
 
-        return await query
-            .OrderByDescending(e => e.CreatedUtc)
+        return await sorted
             .Page(paging)
             .ProjectTo<UserEndorsement>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
+    }
+
+    /// <summary>
+    /// Общий predicate-блок: фильтрация по автору / получателю и
+    /// подстрочный поиск. Search ILIKE'ит по тексту, имени автора и
+    /// имени получателя одновременно — три SQL-условия через OR. Это
+    /// эквивалент «найди где упоминается X» без отдельных бакетов поиска.
+    /// </summary>
+    private static IQueryable<DbUserEndorsement> ApplyFilter(
+        IQueryable<DbUserEndorsement> query, UserEndorsementFilter? filter)
+    {
+        if (filter == null) return query;
+
+        if (filter.AuthorId.HasValue)
+            query = query.Where(e => e.AuthorId == filter.AuthorId.Value);
+        if (filter.RecipientId.HasValue)
+            query = query.Where(e => e.TargetUserId == filter.RecipientId.Value);
+
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var pattern = $"%{filter.Search.Trim()}%";
+            query = query.Where(e =>
+                EF.Functions.ILike(e.Text, pattern) ||
+                EF.Functions.ILike(e.Author.Username, pattern) ||
+                EF.Functions.ILike(e.TargetUser.Username, pattern));
+        }
+
+        return query;
+    }
+
+    /// <summary>
+    /// Сортировка списка. Поддерживаемые поля синхронизированы с FE
+    /// ReviewsFilter SORT_OPTIONS ("created", "author") — добавление
+    /// новой опции на FE без соответствующего case'а здесь молча
+    /// упадет в default-порядок, поэтому держим SSOT в этом switch.
+    /// </summary>
+    private static IOrderedQueryable<DbUserEndorsement> ApplySort(
+        IQueryable<DbUserEndorsement> query, UserEndorsementFilter? filter)
+    {
+        var sortBy = (filter?.SortBy ?? "created").ToLowerInvariant();
+        var desc = string.IsNullOrEmpty(filter?.SortOrder) ||
+                   filter.SortOrder.Equals("desc", StringComparison.OrdinalIgnoreCase);
+
+        return (sortBy, desc) switch
+        {
+            ("author", true) => query.OrderByDescending(e => e.Author.Username),
+            ("author", false) => query.OrderBy(e => e.Author.Username),
+            (_, true) => query.OrderByDescending(e => e.CreatedUtc),
+            (_, false) => query.OrderBy(e => e.CreatedUtc),
+        };
     }
 
     // ═══ WRITE ═══

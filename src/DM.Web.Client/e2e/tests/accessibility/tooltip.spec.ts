@@ -50,7 +50,9 @@ test.describe("Tooltip Accessibility", () => {
       await expect(tooltip).not.toBeVisible();
     });
 
-    test("tooltip persists when hovering over tooltip itself", async ({ page }) => {
+    test("tooltip persists when hovering over tooltip itself", async ({
+      page,
+    }) => {
       const scrollNavBtn = page.locator(".scroll-nav-btn").first();
 
       // Hover to show tooltip
@@ -78,7 +80,9 @@ test.describe("Tooltip Accessibility", () => {
       await expect(tooltip).toHaveAttribute("role", "tooltip");
     });
 
-    test("trigger has aria-describedby when tooltip is visible", async ({ page }) => {
+    test("trigger has aria-describedby when tooltip is visible", async ({
+      page,
+    }) => {
       const scrollNavBtn = page.locator(".scroll-nav-btn").first();
       const trigger = scrollNavBtn.locator("xpath=..");
 
@@ -242,9 +246,11 @@ test.describe("Tooltip Accessibility", () => {
       await page.goto("/games");
 
       // Wait for table to load
-      await page.waitForSelector(".games-data-table, .games-list", {
-        timeout: 5000,
-      }).catch(() => null);
+      await page
+        .waitForSelector(".games-data-table, .games-list", {
+          timeout: 5000,
+        })
+        .catch(() => null);
 
       // Find table cells that might have tooltips
       const statusCell = page.locator('[data-testid="game-status"]').first();

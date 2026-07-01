@@ -90,7 +90,7 @@ async function deleteNote(noteId: string) {
         <strong>{{ note.authorUsername }}</strong>
         <secondary-text>{{ formatDateTime(note.createdUtc) }}</secondary-text>
         <secondary-text v-if="note.modifiedUtc">
-          (изм. {{ formatDateTime(note.modifiedUtc) }})
+          (изменено {{ formatDateTime(note.modifiedUtc) }})
         </secondary-text>
       </div>
 
@@ -117,7 +117,7 @@ async function deleteNote(noteId: string) {
             <Button :disabled="!editText.trim()" @click="saveEdit(note.id)">
               Сохранить
             </Button>
-            <Button secondary @click="cancelEdit">Отмена</Button>
+            <Button @click="cancelEdit">Отмена</Button>
           </div>
         </div>
       </template>

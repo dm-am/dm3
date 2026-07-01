@@ -1,4 +1,8 @@
-import type { CursorEnvelope, ListEnvelope } from "@/shared/api/models/common";
+import type {
+  CursorEnvelope,
+  Envelope,
+  ListEnvelope,
+} from "@/shared/api/models/common";
 import type {
   GlobalChatMessage,
   GlobalChatEvent,
@@ -141,10 +145,13 @@ export default new (class GlobalChatApi {
   // ─────────────────────────────────────────────────────────────
 
   /**
-   * Get currently active (Live) event
+   * Get currently active (Live) event.
+   * Backend returns an Envelope ({ resource }) or null when no event is live.
    */
   public getActiveEvent() {
-    return Api.get<GlobalChatEventSummary | null>("global-chat/events/active");
+    return Api.get<Envelope<GlobalChatEventSummary> | null>(
+      "global-chat/events/active",
+    );
   }
 
   /**

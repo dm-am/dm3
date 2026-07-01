@@ -8,6 +8,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   const { user: currentUser } = storeToRefs(useAuthStore());
   const messages = ref<GlobalChatMessage[]>([]);
   const loading = ref(false);
+  const error = ref<string | null>(null);
   const loadingBefore = ref(false);
   const loadingAfter = ref(false);
   const sending = ref(false);
@@ -46,8 +47,15 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   // Initial load - fetches the latest messages
   async function fetchMessages() {
     loading.value = true;
+    error.value = null;
     try {
-      const { data } = await globalChatApi.getMessages({ limit: 50 });
+      const { data, error: apiError } = await globalChatApi.getMessages({
+        limit: 50,
+      });
+      if (apiError) {
+        error.value = "Не удалось загрузить сообщения";
+        return;
+      }
       messages.value = data?.resources || [];
       prevCursor.value = data?.paging?.prevCursor ?? null;
       nextCursor.value = data?.paging?.nextCursor ?? null;
@@ -108,8 +116,16 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   // Navigate to a specific message (loads messages around it)
   async function navigateToMessage(messageId: string) {
     loading.value = true;
+    error.value = null;
     try {
-      const { data } = await globalChatApi.getMessagesAround(messageId, 50);
+      const { data, error: apiError } = await globalChatApi.getMessagesAround(
+        messageId,
+        50,
+      );
+      if (apiError) {
+        error.value = "Не удалось загрузить сообщения";
+        return;
+      }
       if (data && data.resources.length > 0) {
         messages.value = data.resources;
         prevCursor.value = data.paging?.prevCursor ?? null;
@@ -127,13 +143,18 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   // Navigate to messages for a specific date
   async function navigateToDate(date: string) {
     loading.value = true;
+    error.value = null;
     try {
       // Convert date to ISO 8601 UTC timestamp (start of day)
       const timestampUtc = new Date(date + "T00:00:00Z").toISOString();
-      const { data } = await globalChatApi.getMessagesNearDate(
+      const { data, error: apiError } = await globalChatApi.getMessagesNearDate(
         timestampUtc,
         50,
       );
+      if (apiError) {
+        error.value = "Не удалось загрузить сообщения";
+        return;
+      }
       if (data && data.resources.length > 0) {
         messages.value = data.resources;
         prevCursor.value = data.paging?.prevCursor ?? null;
@@ -264,6 +285,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   return {
     messages,
     loading,
+    error,
     loadingBefore,
     loadingAfter,
     sending,

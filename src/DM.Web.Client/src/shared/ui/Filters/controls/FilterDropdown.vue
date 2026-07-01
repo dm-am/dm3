@@ -43,16 +43,5 @@ function handleBack() {
 @import "src/assets/styles/Filters"
 
 .filter-dropdown-container
-  position: absolute
-  top: calc(100% + $tiny)
-  left: auto
-  right: 0
-  min-width: $filter-dropdown-min-width
-  z-index: $z-dropdown
-  max-height: $filter-dropdown-max-height
-  overflow-y: auto
-  background-color: $bg-element
-  border: 1px solid $border
-  border-radius: $border-radius
-  box-shadow: 0 4px 12px $shadow-color
+  +_dropdown-panel
 </style>

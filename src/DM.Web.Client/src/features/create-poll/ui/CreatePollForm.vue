@@ -55,7 +55,9 @@ const {
           />
         </div>
         <div class="form-field">
-          <label class="form-label"><strong>Описание</strong> (опционально)</label>
+          <label class="form-label"
+            ><strong>Описание</strong> (опционально)</label
+          >
           <textarea
             v-model="pollDetails"
             class="form-input form-textarea"
@@ -65,11 +67,19 @@ const {
         </div>
         <div class="form-field">
           <label class="form-label"><strong>Начало</strong></label>
-          <input v-model="pollStartsUtc" type="datetime-local" class="form-input" />
+          <input
+            v-model="pollStartsUtc"
+            type="datetime-local"
+            class="form-input"
+          />
         </div>
         <div class="form-field">
           <label class="form-label"><strong>Окончание</strong></label>
-          <input v-model="pollEndsUtc" type="datetime-local" class="form-input" />
+          <input
+            v-model="pollEndsUtc"
+            type="datetime-local"
+            class="form-input"
+          />
         </div>
         <div class="form-field">
           <label class="form-label"><strong>Тип опроса</strong></label>
@@ -88,7 +98,11 @@ const {
         </div>
         <div class="form-field">
           <label class="form-label"><strong>Варианты ответа</strong></label>
-          <div v-for="(option, index) in pollOptions" :key="option.id" class="option-row">
+          <div
+            v-for="(option, index) in pollOptions"
+            :key="option.id"
+            class="option-row"
+          >
             <input
               v-model="option.text"
               type="text"
@@ -112,7 +126,9 @@ const {
           <Button :disabled="isSubmitting" @click="submitPoll">
             {{ isSubmitting ? "Создание..." : "Создать опрос" }}
           </Button>
-          <span v-if="errorMessage" class="error-message">{{ errorMessage }}</span>
+          <span v-if="errorMessage" class="error-message">{{
+            errorMessage
+          }}</span>
         </div>
       </div>
     </div>

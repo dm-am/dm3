@@ -14,7 +14,7 @@ import { ref, watch, onMounted, onUnmounted, type Ref } from "vue";
 export function useFilterSearch(
   filterSearch: Ref<string>,
   setSearch: (value: string) => void,
-  debounceMs = 300
+  debounceMs = 300,
 ) {
   const localInput = ref("");
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;

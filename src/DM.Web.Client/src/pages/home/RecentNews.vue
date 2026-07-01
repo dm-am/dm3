@@ -9,7 +9,7 @@ import dayjs from "dayjs";
 const NEWS_AGE_DAYS = 7;
 
 const store = useBoardsStore();
-const { news: allNews } = storeToRefs(store);
+const { news: allNews, newsError } = storeToRefs(store);
 
 // Show news from last week, or just the latest one if none are recent
 const news = computed(() => {
@@ -45,37 +45,39 @@ onMounted(() => {
       :max-height="150"
     />
   </div>
+  <secondary-text v-else-if="newsError">
+    Не удалось загрузить новости
+  </secondary-text>
   <!-- Loading placeholder. Mirrors the real <Topic> shape pixel-for-pixel
        so the home page below (Best post, Featured post, discovery link)
        does not jump when the news array arrives. Structure matches
-       Topic.vue: dashed card, title with underline, two-column content
-       (avatar + body with TruncatedContent + footer). `news === null`
-       means "not loaded yet"; empty array is the genuine "no news". -->
+       Topic.vue: dashed card, title with underline, description
+       (TruncatedContent) + footer. `news === null` means "not loaded
+       yet" (fetch errors land in the branch above); empty array is the
+       genuine "no news". -->
   <div v-else-if="news === null" class="news-skeleton" aria-hidden="true">
     <div class="skeleton-topic">
       <div class="skeleton-title-row">
         <div class="skeleton-title" />
       </div>
-      <div class="skeleton-content">
-        <div class="skeleton-avatar" />
-        <div class="skeleton-body">
-          <div class="skeleton-description">
-            <div class="skeleton-line wide" />
-            <div class="skeleton-line" />
-            <div class="skeleton-line" />
-            <div class="skeleton-line" />
-            <div class="skeleton-line narrow" />
-          </div>
-          <div class="skeleton-footer">
-            <div class="skeleton-meta" />
-          </div>
-        </div>
+      <div class="skeleton-description">
+        <div class="skeleton-line wide" />
+        <div class="skeleton-line" />
+        <div class="skeleton-line" />
+        <div class="skeleton-line" />
+        <div class="skeleton-line narrow" />
+      </div>
+      <div class="skeleton-footer">
+        <div class="skeleton-meta" />
       </div>
     </div>
   </div>
-  <secondary-text v-else>Нет новостных топиков</secondary-text>
+  <secondary-text v-else>Новостных топиков пока нет</secondary-text>
   <p class="all-news-link">
-    С остальными новостями можно ознакомиться <router-link to="/forum/news"><strong>в новостном разделе форума</strong></router-link>.
+    С остальными новостями можно ознакомиться
+    <router-link to="/forum/news"
+      ><strong>в новостном разделе форума</strong></router-link
+    >.
   </p>
 </template>
 
@@ -102,12 +104,11 @@ onMounted(() => {
 //   • outer dashed-bordered box with $medium padding
 //   • h3 title with $small padding-bottom + 1px dashed underline +
 //     $small bottom margin
-//   • flex row (gap $medium): avatar 64×64 round on left, body on right
-//   • body has description (clamped to the 150px `:max-height` prop
-//     passed by RecentNews) + footer margin-top $small
+//   • description (clamped to the 150px `:max-height` prop passed by
+//     RecentNews) + footer margin-top $small
 // Total budgeted height: 16 padding + (~20 title + 8 + 1 + 8) + 175
-// body-row + 16 padding ≈ 244px, matching the real card so the
-// "С остальными новостями..." discovery link below stays pinned.
+// description+footer + 16 padding ≈ 244px, matching the real card so
+// the "С остальными новостями..." discovery link below stays pinned.
 .news-skeleton
   display: flex
   flex-direction: column
@@ -127,24 +128,6 @@ onMounted(() => {
   // Matches h3.topic-title: $font-size (16px) × ~1.3 line-height = 21px
   height: 21px
   width: 40%
-
-.skeleton-content
-  display: flex
-  gap: $medium
-  align-items: flex-start
-
-.skeleton-avatar
-  +skeleton-shimmer
-  flex-shrink: 0
-  width: 64px
-  height: 64px
-  border-radius: 50%
-
-.skeleton-body
-  flex: 1
-  min-width: 0
-  display: flex
-  flex-direction: column
 
 .skeleton-description
   // Reserves the same budget as <TruncatedContent :max-height="150">

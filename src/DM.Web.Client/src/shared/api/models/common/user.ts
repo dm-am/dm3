@@ -168,14 +168,8 @@ export interface User extends UserRef {
   roles?: UserRole[];
   /** User rating information (null if user has disabled rating display) */
   rating: Rating | null;
-  /** User profile picture */
+  /** User profile picture (SSOT — все URLs только тут). */
   picture: UserPicture;
-  /** Small picture URL shortcut */
-  smallPictureUrl?: string;
-  /** Medium picture URL (from picture.mediumUrl) */
-  mediumPictureUrl?: string;
-  /** Original picture URL (from picture.originalUrl) */
-  originalPictureUrl?: string;
   /** User status message */
   status?: string;
   /** User access policy (moderation restrictions) */
@@ -220,11 +214,49 @@ export interface User extends UserRef {
   reviewsGiven?: number;
   /** Number of post reviews received */
   reviewsReceived?: number;
+  /** Number of endorsements written by this user (about others). */
+  endorsementsGiven?: number;
+  /** Number of endorsements received by this user. */
+  endorsementsReceived?: number;
+  /** Forum topics authored by this user. */
+  topicsAuthored?: number;
+  /** Comments authored by this user (polymorphic across all comment-host entities). */
+  commentsAuthored?: number;
+  /** Messages this user has posted in the global chat. */
+  globalChatMessages?: number;
+  /** Bans this user has received — drives the «резиновая уточка» achievement chain. */
+  bansReceived?: number;
+  /** Games voluntarily dropped (retired characters with IsPlayerLeft=true) — drives the «дропы» chain. */
+  gameDrops?: number;
+  /** Publications (blog articles) authored by this user — drives the «публикации» chain. */
+  publicationsAuthored?: number;
+  /** Total likes received across topics+publications+comments+messages — drives the «лайки» chain. */
+  likesReceived?: number;
   /** Number of subscribers following this user */
   subscribersCount?: number;
   /** Subscriber usernames for tooltip display (limited to first 20) */
   subscriberUsernames?: string[];
+  /**
+   * Richer subscriber refs (username + last activity) for profile-page
+   * display. Same 20 budget as `subscriberUsernames`. Inactive subscribers
+   * (no activity in 30 days) are rendered in muted gray on the profile.
+   */
+  subscribers?: SubscriberRef[];
 }
+
+/**
+ * Lightweight subscriber reference: just enough to style + link, PLUS
+ * the subscription settings bitmask so the profile UI can filter the
+ * subscribers list per active tab ("subscribed to games / blogs / topics")
+ * without a second round-trip. The bitmask matches the server-side
+ * SubscriptionSettings [Flags] enum.
+ */
+export type SubscriberRef = {
+  username: Username;
+  lastActivityUtc: string | null;
+  /** SubscriptionSettings flags (numeric bitmask). */
+  settings: number;
+};
 
 /**
  * BB-code rendered text with source

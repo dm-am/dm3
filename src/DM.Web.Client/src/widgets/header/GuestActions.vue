@@ -83,8 +83,10 @@ const { open: openRecovery, close: closeRecovery } = useModal({
 function handleActionParam() {
   const action = route.query.action as string;
   if (action) {
-    // Remove query param first
-    router.replace({ query: {} });
+    // Remove only the consumed action key, keep the rest of the query intact
+    const query = { ...route.query };
+    delete query.action;
+    router.replace({ query });
     prefillEmail.value = "";
 
     if (action === "login") {
@@ -114,14 +116,52 @@ function handleRecoveryClick() {
 
 <template>
   <div class="guest-actions">
-    <a @click="handleLoginClick" data-testid="login-button">Вход</a>
-    |
-    <a @click="openRegistrar" data-testid="register-button">Регистрация</a>
-    |
-    <a @click="handleRecoveryClick" data-testid="recovery-button"
-      >Восстановление доступа</a
+    <button
+      type="button"
+      class="action-link"
+      @click="handleLoginClick"
+      data-testid="login-button"
     >
+      Вход
+    </button>
+    |
+    <button
+      type="button"
+      class="action-link"
+      @click="openRegistrar"
+      data-testid="register-button"
+    >
+      Регистрация
+    </button>
+    |
+    <button
+      type="button"
+      class="action-link"
+      @click="handleRecoveryClick"
+      data-testid="recovery-button"
+    >
+      Восстановление доступа
+    </button>
   </div>
 </template>
 
-<style scoped lang="sass"></style>
+<style scoped lang="sass">
+@import "src/assets/styles/Variables"
+@import "src/assets/styles/Themes"
+
+// Button reset that mimics the global anchor styles (Reset.sass)
+.action-link
+  background: none
+  border: none
+  padding: 0
+  font: inherit
+  vertical-align: baseline
+  text-decoration: none
+  cursor: pointer
+  transition: color $animation-time ease
+  color: $link
+
+  &:hover
+    text-decoration: underline
+    color: $link-hover
+</style>

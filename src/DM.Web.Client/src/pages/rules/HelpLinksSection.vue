@@ -39,7 +39,11 @@ const linksWithSplit = computed(() =>
     <BlockTitle>Куда обращаться</BlockTitle>
 
     <div class="help-table">
-      <div v-for="{ link, split } in linksWithSplit" :key="link.key" class="help-row">
+      <div
+        v-for="{ link, split } in linksWithSplit"
+        :key="link.key"
+        class="help-row"
+      >
         <span class="help-icon-col">
           <HelpIcon :type="link.icon" />
         </span>

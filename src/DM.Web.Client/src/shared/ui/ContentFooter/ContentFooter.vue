@@ -9,7 +9,7 @@ interface Author {
   username: string;
   role?: UserRole;
   lastActivityUtc?: string;
-  smallPictureUrl?: string;
+  picture?: { smallUrl?: string };
 }
 
 interface Like {
@@ -37,7 +37,7 @@ const props = withDefaults(
     canDelete: false,
     canWarn: false,
     canHide: false,
-  }
+  },
 );
 
 const emit = defineEmits<{
@@ -91,7 +91,7 @@ function toggleLike() {
 function copyAnchorLink() {
   if (!anchorLink.value) return;
   navigator.clipboard.writeText(
-    window.location.origin + window.location.pathname + anchorLink.value
+    window.location.origin + window.location.pathname + anchorLink.value,
   );
 }
 </script>
@@ -104,12 +104,18 @@ function copyAnchorLink() {
       <router-link
         :to="{ name: 'profile', params: { username: author.username } }"
         class="author-link"
-      >{{ author.username }}</router-link>
+        >{{ author.username }}</router-link
+      >
       <span v-if="roleBadge" class="role-badge">
-        [<Tooltip :text="roleBadge.title"><b>{{ roleBadge.label }}</b></Tooltip>]
+        [<Tooltip :text="roleBadge.title"
+          ><b>{{ roleBadge.label }}</b></Tooltip
+        >]
       </span>
       <span class="status-badge">
-        [<span :class="isAuthorOnline ? 'online' : 'offline'">{{ isAuthorOnline ? "online" : "offline" }}</span>]
+        [<span :class="isAuthorOnline ? 'online' : 'offline'">{{
+          isAuthorOnline ? "online" : "offline"
+        }}</span
+        >]
       </span>
       <span class="date-info">
         , {{ formattedDate }}
@@ -135,7 +141,9 @@ function copyAnchorLink() {
           @click="toggleLike"
         >
           <SvgIcon name="heartFilled" class="like-icon" />
-          <span v-if="likesCount > 0" class="likes-count">{{ likesCount }}</span>
+          <span v-if="likesCount > 0" class="likes-count">{{
+            likesCount
+          }}</span>
         </button>
 
         <div v-if="showLikesPopup && likesCount > 0" class="likes-popup">
@@ -146,13 +154,17 @@ function copyAnchorLink() {
       </span>
 
       <button v-if="canEdit" class="action-btn" @click="emit('edit')">
-        {{ compact ? "ред." : "Редактировать" }}
+        Редактировать
       </button>
-      <button v-if="canDelete" class="action-btn delete-btn" @click="emit('delete')">
-        {{ compact ? "удл." : "Удалить" }}
+      <button
+        v-if="canDelete"
+        class="action-btn delete-btn"
+        @click="emit('delete')"
+      >
+        Удалить
       </button>
       <button v-if="canWarn" class="action-btn warn-btn" @click="emit('warn')">
-        {{ compact ? "пред." : "Предупреждение" }}
+        Предупреждение
       </button>
       <button v-if="canHide" class="action-btn" @click="emit('hide')">
         Скрыть
@@ -291,6 +303,7 @@ function copyAnchorLink() {
 
   &:hover
     color: $link
+    text-decoration: underline
 
   &.delete-btn:hover
     color: $accent-red
@@ -312,4 +325,5 @@ function copyAnchorLink() {
 
   &:hover
     color: $link
+    text-decoration: underline
 </style>

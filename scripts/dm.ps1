@@ -255,7 +255,7 @@ function Start-Services {
         }
 
         # Infrastructure - start containers (with animation)
-        if (-not (Invoke-WithAnimation -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres mongo rabbitmq opensearch minio mailhog jaeger prometheus grafana")) {
+        if (-not (Invoke-WithAnimation -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres mongo rabbitmq opensearch minio imgproxy mailhog jaeger prometheus grafana")) {
             Write-FailedStep -Label "Infrastructure" -Current 0 -Total 5
             exit 1
         }
@@ -264,6 +264,7 @@ function Start-Services {
             @{ Name = "dm-pg"; Label = "Postgres" },
             @{ Name = "dm-mongo"; Label = "Mongo" },
             @{ Name = "dm-minio"; Label = "MinIO" },
+            @{ Name = "dm-imgproxy"; Label = "imgproxy" },
             @{ Name = "dm-es"; Label = "OpenSearch" },
             @{ Name = "dm-rmq"; Label = "RabbitMQ" }
         )
@@ -272,10 +273,8 @@ function Start-Services {
             exit 1
         }
 
-        # MinIO bucket init (create bucket and set public read access for uploads)
-        & $script:DockerPath exec dm-minio mc alias set local http://localhost:9000 minio miniokey 2>&1 | Out-Null
-        & $script:DockerPath exec dm-minio mc mb local/dm-uploads --ignore-existing 2>&1 | Out-Null
-        & $script:DockerPath exec dm-minio mc anonymous set download local/dm-uploads 2>&1 | Out-Null
+        # MinIO bucket создается автоматически API при старте
+        # (StorageBucketInitializer) — ручной mc-init не нужен.
 
         # Migration
         & $script:DockerPath compose up -d migration 2>&1 | Out-Null
@@ -475,7 +474,7 @@ function Invoke-Seed {
     Write-Host "  Password:  " -ForegroundColor DarkGray -NoNewline
     Write-Host "Test123!"
     Write-Host "  Accounts:  " -ForegroundColor DarkGray -NoNewline
-    Write-Host "TestAdmin, TestModerator, TestUser, Player_One..."
+    Write-Host "SolohinLex, TestModerator, TestUser, Player_One..."
     Write-Host ""
 }
 
@@ -494,7 +493,7 @@ function Show-Status {
     }
 
     # Group services
-    $infra = @("pg", "mongo", "rmq", "es", "minio")
+    $infra = @("pg", "mongo", "rmq", "es", "minio", "imgproxy")
     $apps = @("api", "mail-worker", "search-worker", "notification-worker", "migration")
     $tools = @("mailhog", "grafana", "prometheus", "jaeger")
 

@@ -16,11 +16,31 @@ type RoleBadge = {
 };
 
 const ROLE_BADGES: Partial<Record<UserRole, RoleBadge>> = {
-  [UserRole.Admin]: { letter: "А", label: "Администратор", cssClass: "role-admin" },
-  [UserRole.SeniorModerator]: { letter: "С", label: "Старший модератор", cssClass: "role-senior-moderator" },
-  [UserRole.Moderator]: { letter: "М", label: "Модератор", cssClass: "role-moderator" },
-  [UserRole.Mentor]: { letter: "Н", label: "Наставник", cssClass: "role-mentor" },
-  [UserRole.System]: { letter: "Р", label: "Робот-администратор", cssClass: "role-system" },
+  [UserRole.Admin]: {
+    letter: "А",
+    label: "Администратор",
+    cssClass: "role-admin",
+  },
+  [UserRole.SeniorModerator]: {
+    letter: "С",
+    label: "Старший модератор",
+    cssClass: "role-senior-moderator",
+  },
+  [UserRole.Moderator]: {
+    letter: "М",
+    label: "Модератор",
+    cssClass: "role-moderator",
+  },
+  [UserRole.Mentor]: {
+    letter: "Н",
+    label: "Наставник",
+    cssClass: "role-mentor",
+  },
+  [UserRole.System]: {
+    letter: "Р",
+    label: "Робот-администратор",
+    cssClass: "role-system",
+  },
 };
 
 const props = defineProps<{
@@ -40,19 +60,10 @@ function isFullUser(u: User | UserRef): u is User {
   return "usernameHistory" in u;
 }
 
-
-
 // Role badge for staff and system users
 const roleBadge = computed((): RoleBadge | null => {
   if (props.hideBadge) return null;
   return ROLE_BADGES[props.user.role] ?? null;
-});
-
-// Honorary badge [П] for former staff (only if no role badge)
-const showHonoraryBadge = computed(() => {
-  if (props.hideBadge) return false;
-  if (roleBadge.value) return false; // Don't show [П] if user has role badge
-  return props.user.isHonorary;
 });
 </script>
 
@@ -66,21 +77,14 @@ const showHonoraryBadge = computed(() => {
       <template v-else>{{ props.user.username }}</template>
     </router-link>
 
-    <span v-if="roleBadge" class="role-badge">
-      <span class="bracket">[</span>
-      <Tooltip :text="roleBadge.label">
-        <span class="letter" :class="roleBadge.cssClass">{{ roleBadge.letter }}</span>
-      </Tooltip>
-      <span class="bracket">]</span>
-    </span>
-
-    <span v-if="showHonoraryBadge" class="role-badge honorary">
-      <span class="bracket">[</span>
-      <Tooltip text="Почетный пользователь">
-        <span class="letter">П</span>
-      </Tooltip>
-      <span class="bracket">]</span>
-    </span>
+    <span v-if="roleBadge" class="role-badge"
+      >{{ " " }}<span class="bracket">[</span
+      ><Tooltip :text="roleBadge.label"
+        ><span class="letter" :class="roleBadge.cssClass">{{
+          roleBadge.letter
+        }}</span></Tooltip
+      ><span class="bracket">]</span></span
+    >
   </span>
 </template>
 
@@ -94,7 +98,6 @@ const showHonoraryBadge = computed(() => {
 // Role badges: [А], [С], [М], [Н], [Р] - gray brackets, green bold letter
 .role-badge
   display: inline
-  margin-left: 0.35em
   white-space: nowrap
 
   .bracket
@@ -104,8 +107,4 @@ const showHonoraryBadge = computed(() => {
     font-weight: bold
     color: $accent-green
     cursor: help
-
-  // Honorary badge [П] - gray letter instead of green
-  &.honorary .letter
-    color: $text-muted
 </style>

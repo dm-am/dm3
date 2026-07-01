@@ -57,7 +57,7 @@ internal class GameRecruitmentOpenedNotificationGenerator : BaseNotificationGene
         var masterSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.User,
             gameData.MasterId,
-            SubscriptionSettings.AuthorNewContent);
+            SubscriptionSettings.AuthorGameEvents);
         usersInterested.UnionWith(masterSubscriptions.Select(s => s.SubscriberId));
 
         // Get subscribers of Assistants
@@ -66,7 +66,7 @@ internal class GameRecruitmentOpenedNotificationGenerator : BaseNotificationGene
             var assistantSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
                 SubscriptionTargetType.User,
                 assistantId,
-                SubscriptionSettings.AuthorNewContent);
+                SubscriptionSettings.AuthorGameEvents);
             usersInterested.UnionWith(assistantSubscriptions.Select(s => s.SubscriberId));
         }
 

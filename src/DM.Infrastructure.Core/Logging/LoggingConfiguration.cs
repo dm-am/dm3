@@ -63,6 +63,7 @@ public static class LoggingConfiguration
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()
+                .AddMeter(DM.Infrastructure.Core.Tracing.UploadMetrics.MeterName)
                 .AddPrometheusExporter());
 
         return services.AddLogging(b => b.AddSerilog());

@@ -27,8 +27,9 @@ internal class UserService : IUserService
     private readonly IIntentionManager _intentionManager;
     private readonly ICache _cache;
     private readonly IValidator<UpdateUser> _validator;
-    private readonly IObsoleteUploadsCleanup _uploadsCleanup;
+    private readonly IUploadGarbageCollector _uploadsCleanup;
     private readonly IGuidFactory _guidFactory;
+    private readonly IRealtimeAvatarBroadcaster _avatarBroadcaster;
 
     /// <inheritdoc />
     public UserService(
@@ -38,8 +39,9 @@ internal class UserService : IUserService
         IIntentionManager intentionManager,
         ICache cache,
         IValidator<UpdateUser> validator,
-        IObsoleteUploadsCleanup uploadsCleanup,
-        IGuidFactory guidFactory)
+        IUploadGarbageCollector uploadsCleanup,
+        IGuidFactory guidFactory,
+        IRealtimeAvatarBroadcaster avatarBroadcaster)
     {
         _identityProvider = identityProvider;
         _repository = repository;
@@ -49,6 +51,7 @@ internal class UserService : IUserService
         _validator = validator;
         _uploadsCleanup = uploadsCleanup;
         _guidFactory = guidFactory;
+        _avatarBroadcaster = avatarBroadcaster;
     }
 
     /// <inheritdoc />
@@ -195,7 +198,12 @@ internal class UserService : IUserService
 
             // Link upload to user entity and mark old uploads as obsolete
             await _repository.LinkAvatarUpload(user.UserId, confirmedUploadId.Value);
-            await _uploadsCleanup.PrepareObsoleteForDeletingAsync(user.UserId);
+            await _uploadsCleanup.CollectObsoleteAsync(user.UserId);
+
+            // Broadcast в открытые вкладки чтобы аватары в чатах/комментариях
+            // обновились без перезагрузки. Best-effort, не падаем если SignalR-down.
+            // Payload содержит только userId — клиент перезагружает свои данные.
+            await _avatarBroadcaster.BroadcastAvatarChangedAsync(user.UserId);
         }
 
         // Handle contacts replacement (if provided, replace all contacts)
@@ -239,6 +247,25 @@ internal class UserService : IUserService
         await _cache.InvalidateAsync($"user_details_{user.UserId}");
 
         return await GetDetailsAsync(updateUser.Username);
+    }
+
+    /// <inheritdoc />
+    public async Task RemoveAvatarAsync(Guid userId)
+    {
+        // Intent check: только сам юзер (или админ) может сбросить аватар.
+        var user = await GetAsync(userId);
+        _intentionManager.ThrowIfForbidden(UserIntention.Edit, user);
+
+        await _repository.UnlinkAvatarUpload(userId);
+
+        // Best-effort cleanup (S3 + DB cleanup делает фоновый GC worker).
+        await _uploadsCleanup.CollectObsoleteAsync(userId);
+
+        await _cache.InvalidateAsync($"user_details_{userId}");
+        await _cache.InvalidateAsync($"user_{user.Username}");
+
+        // Push в открытые вкладки — теперь аватар null/default.
+        await _avatarBroadcaster.BroadcastAvatarChangedAsync(userId);
     }
 
     // ═══ IUserLookupService ═══

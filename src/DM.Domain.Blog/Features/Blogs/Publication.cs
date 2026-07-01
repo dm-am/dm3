@@ -25,6 +25,12 @@ public class Publication : ILikable
     public Guid BlogId { get; set; }
 
     /// <summary>
+    /// Parent blog title (projected via join — lets callers show the blog
+    /// name instead of a bare blog id, e.g. the profile "best publication").
+    /// </summary>
+    public string BlogTitle { get; set; } = null!;
+
+    /// <summary>
     /// Rubric (optional)
     /// </summary>
     public Rubric Rubric { get; set; } = null!;

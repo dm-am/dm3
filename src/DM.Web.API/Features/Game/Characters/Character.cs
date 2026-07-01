@@ -1,5 +1,6 @@
 using System;
 using DM.Domain.Core.Enums;
+using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Game.Characters;
@@ -45,9 +46,10 @@ public class Character
     public string Class { get; set; } = null!;
 
     /// <summary>
-    /// Character picture URL
+    /// Character avatar (3 варианта). Симметрично с User.Picture.
+    /// Все URLs null если у персонажа нет загруженного аватара.
     /// </summary>
-    public string PictureUrl { get; set; } = null!;
+    public UserPicture Picture { get; set; } = new();
 
     /// <summary>
     /// Character is NPC (controlled by game master)

@@ -1,16 +1,33 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { useTestimonialStore } from "@/shared/stores/testimonials";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { storeToRefs } from "pinia";
-import Paging from "@/shared/ui/Paging/Paging.vue";
+import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
+import LeadText from "@/shared/ui/Layout/LeadText.vue";
 import { Testimonial } from "@/entities/testimonial";
 import { ReviewsFilter, useReviewsFilter } from "@/features/review-filter";
 import { CreateReviewForm } from "@/features/create-review";
+import { useUserStore, UserRole } from "@/entities/user";
 
 const route = useRoute();
 const testimonialStore = useTestimonialStore();
-const { testimonials } = storeToRefs(testimonialStore);
+const { testimonials, error } = storeToRefs(testimonialStore);
+
+const userStore = useUserStore();
+const { user } = storeToRefs(userStore);
+
+// Testimonials are a moderator-only review barrier — regular users post in the
+// forum topic, only moderators add entries here.
+const isModerator = computed(
+  () =>
+    user.value?.roles?.some((r) =>
+      [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(
+        r,
+      ),
+    ) ?? false,
+);
 
 const { filterState, searchParams, hasActiveFilters } = useReviewsFilter();
 
@@ -28,40 +45,53 @@ useFetchData(
 <template>
   <page-title v-once>Отзывы о сайте</page-title>
 
-  <p class="intro">
-    Здесь собраны отзывы пользователей о DM.AM. Вы можете оставить свой отзыв ниже
-    (только обычный текст, без форматирования).
-  </p>
+  <LeadText>
+    Здесь собраны отзывы игроков о DM.AM. Будем рады, если поделитесь и своим —
+    <router-link to="/forum/general/1">в топике на форуме</router-link>
+  </LeadText>
 
-  <!-- Create Form (for authenticated users) -->
-  <CreateReviewForm />
+  <!-- Create Form (moderators only — testimonials are a moderator-curated review barrier) -->
+  <CreateReviewForm v-if="isModerator" />
 
   <!-- Filter controls -->
   <ReviewsFilter />
 
-  <div v-if="testimonials" class="testimonials-list">
+  <!-- Loading state (first load): skeleton bubbles -->
+  <div
+    v-if="!testimonials && !error"
+    class="testimonials-skeleton"
+    aria-hidden="true"
+  >
+    <div v-for="n in 3" :key="n" class="skeleton-item">
+      <div class="skeleton-bubble">
+        <div class="skeleton-text-line wide" />
+        <div class="skeleton-text-line" />
+        <div class="skeleton-text-line short" />
+      </div>
+      <div class="skeleton-footer">
+        <div class="skeleton-author" />
+        <div class="skeleton-date" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Error state -->
+  <div v-else-if="error" class="error-message">
+    {{ error }}
+  </div>
+
+  <!-- Content -->
+  <div
+    v-else-if="testimonials && testimonials.resources.length > 0"
+    class="testimonials-list"
+  >
     <!-- Top paging -->
-    <template v-if="testimonials.paging && testimonials.paging.pages > 1">
-      <div class="separator separator--paging">
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - -
-      </div>
-      <Paging
-        :paging="testimonials.paging"
-        :to="{ name: 'testimonials' }"
-        :use-query="true"
-      />
-      <div class="separator separator--paging">
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - -
-      </div>
-    </template>
+    <PagingWithSeparators
+      v-if="testimonials.paging"
+      :paging="testimonials.paging"
+      :to="{ name: 'testimonials' }"
+      :use-query="true"
+    />
 
     <template
       v-for="(testimonial, index) in testimonials.resources"
@@ -72,7 +102,11 @@ useFetchData(
         :testimonial="testimonial"
         :search-query="filterState.search"
       />
-      <div v-if="index < testimonials.resources.length - 1" class="separator">
+      <div
+        v-if="index < testimonials.resources.length - 1"
+        class="separator"
+        aria-hidden="true"
+      >
         - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -81,48 +115,29 @@ useFetchData(
       </div>
     </template>
 
-    <!-- Paging between separators -->
-    <template v-if="testimonials.paging && testimonials.paging.pages > 1">
-      <div class="separator separator--paging">
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - -
-      </div>
-      <Paging
-        :paging="testimonials.paging"
-        :to="{ name: 'testimonials' }"
-        :use-query="true"
-      />
-      <div class="separator separator--paging">
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - -
-      </div>
-    </template>
+    <!-- Bottom paging -->
+    <PagingWithSeparators
+      v-if="testimonials.paging"
+      :paging="testimonials.paging"
+      :to="{ name: 'testimonials' }"
+      :use-query="true"
+    />
   </div>
 
-  <secondary-text v-if="testimonials && testimonials.resources.length === 0">
-    {{ hasActiveFilters ? "Отзывов по заданным фильтрам не найдено" : "Отзывов пока нет" }}
+  <!-- Empty state -->
+  <secondary-text v-else-if="testimonials">
+    {{
+      hasActiveFilters
+        ? "Отзывов по заданным фильтрам не найдено"
+        : "Отзывов пока нет"
+    }}
   </secondary-text>
 </template>
 
 <style scoped lang="sass">
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
-
-.intro
-  margin-bottom: $medium
-  color: $text
-  line-height: 1.6
-
-  a
-    color: $link
-    &:hover
-      color: $link-hover
+@import "src/assets/styles/Skeleton"
 
 .testimonials-list
   display: flex
@@ -140,6 +155,66 @@ useFetchData(
   min-width: 100%
   user-select: none
 
-  &--paging
-    margin: 0
+.error-message
+  margin-top: $medium
+  padding: $medium
+  color: $text-on-red
+  background-color: $bg-highlight-red
+  border-radius: $border-radius
+
+// Skeleton bubbles mirror the collapsed testimonial bubble shape
+// (same padding/radius/min-height as the real .testimonial-text,
+// see entities/testimonial Testimonial.vue and RandomTestimonials).
+.testimonials-skeleton
+  display: flex
+  flex-direction: column
+  gap: $medium
+  margin-top: $medium
+
+.skeleton-bubble
+  display: flex
+  flex-direction: column
+  justify-content: center
+  gap: 8px
+  padding: $medium + $tiny $medium + $small
+  margin-bottom: $small
+  border-radius: 20px
+  background-color: $bg-highlight-green
+  min-height: calc(1.5 * 3 * 1em + ($medium + $tiny) + 26px)
+
+// Uses +skeleton-shimmer for animation/border-radius, then overrides
+// the gradient for the green bubble context: lines are derived from
+// $text-on-green (the bubble's own text color) instead of hardcoded
+// white, so they stay visible in both light and dark themes
+// (same approach as RandomTestimonials on the home page).
+.skeleton-text-line
+  height: 14px
+  width: 100%
+  +skeleton-shimmer
+  border-radius: 3px
+  background: linear-gradient(90deg, color-mix(in srgb, $text-on-green 25%, transparent) 25%, color-mix(in srgb, $text-on-green 50%, transparent) 50%, color-mix(in srgb, $text-on-green 25%, transparent) 75%)
+  background-size: 200% 100%
+
+  &.wide
+    width: 95%
+
+  &.short
+    width: 60%
+
+.skeleton-footer
+  display: flex
+  align-items: center
+  justify-content: space-between
+  gap: $small
+  margin-top: 18px // Clear the real bubble's tail position
+
+.skeleton-author
+  width: 120px
+  height: 14px
+  +skeleton-shimmer
+
+.skeleton-date
+  width: 70px
+  height: 12px
+  +skeleton-shimmer
 </style>

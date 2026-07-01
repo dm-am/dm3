@@ -38,7 +38,11 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
 <template>
   <div class="header">
     <div class="user-info">
-      <router-link class="logo" :to="{ name: 'home' }" />
+      <router-link
+        class="logo"
+        :to="{ name: 'home' }"
+        aria-label="DM.AM — на главную"
+      />
       <div class="user-actions">
         <template v-if="user && user.username">
           Здравствуй,
@@ -65,7 +69,14 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
             ></Tooltip
           ><span class="muted">)</span>
           |
-          <a @click="signOut" data-testid="logout-button">Выйти</a>
+          <button
+            type="button"
+            class="action-link"
+            @click="signOut"
+            data-testid="logout-button"
+          >
+            Выйти
+          </button>
         </template>
         <template v-else>
           <GuestActions />
@@ -145,6 +156,23 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
     &:hover
       color: $accent-green-hover
 
+// Button reset that mimics the global anchor styles (Reset.sass) —
+// keyboard-accessible control that looks exactly like a link
+.action-link
+  background: none
+  border: none
+  padding: 0
+  font: inherit
+  vertical-align: baseline
+  text-decoration: none
+  cursor: pointer
+  transition: color $animation-time ease
+  color: $link
+
+  &:hover
+    text-decoration: underline
+    color: $link-hover
+
 
 .top-menu
   flex-grow: 1
@@ -159,6 +187,9 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
   font-size: $menu-font-size
   font-weight: normal
   color: $link-nav
+  // Never break a single menu item into two lines; on narrow viewports
+  // the media tiers below compact spacing/typography instead
+  white-space: nowrap
 
   &:hover
     text-decoration: none
@@ -182,4 +213,26 @@ const hasUnread = computed(() => totalUnreadCount.value > 0);
   padding-right: $big
   box-sizing: border-box
   align-self: stretch
+
+// Progressive top-menu compaction: the side columns are fixed at
+// $sidebar-width each (they align with the page sidebars), so on
+// 1366–1699px viewports only the menu can give up space. Each tier
+// shrinks font/margins just enough to keep all eight links on one
+// line and the stats column unclipped. >=1700px stays untouched.
+@media (max-width: 1699px)
+  .link
+    font-size: 20px
+    margin-right: $medium
+
+@media (max-width: 1489px)
+  .link
+    font-size: 17px
+    margin-right: 10px
+
+@media (max-width: 1339px)
+  .top-menu
+    padding: 0 $medium 9px
+  .link
+    font-size: 15px
+    margin-right: $small
 </style>

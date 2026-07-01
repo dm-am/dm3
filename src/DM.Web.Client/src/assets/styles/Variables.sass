@@ -8,8 +8,10 @@ $big: 8 * $grid-step
 $major: 16 * $grid-step
 $large: 32 * $grid-step
 
-/// Animations
+/// Animations & Transitions
 $animation-time: .4s
+$transition-fast: 0.1s ease
+$transition-normal: 0.15s ease
 
 /// Typography
 $font-size: 16px
@@ -29,7 +31,13 @@ $header-row-height: 55px
 
 $border-radius: $small
 
-/// Buttons
-$button-padding: 6px 12px
-$button-font-weight: 600
-$button-border-radius: 6px
+/// Controls — unified height for all interactive controls (buttons, inputs, filter bar)
+$control-height: 38px
+
+/// Opacity
+$disabled-opacity: 0.5
+$muted-opacity: 0.5
+
+/// Buttons — unified with FilterButton visual style
+$button-padding: 0 $medium
+$button-border-radius: $border-radius

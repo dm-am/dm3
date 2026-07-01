@@ -391,7 +391,7 @@ defineExpose({ loadPreferences });
 
   &:has(input:disabled)
     opacity: 0.6
-    cursor: not-allowed
+    cursor: default
 
 .categories-group
   margin-top: $small
@@ -422,7 +422,7 @@ defineExpose({ loadPreferences });
 
   &:has(input:disabled)
     opacity: 0.6
-    cursor: not-allowed
+    cursor: default
 
 .channel-actions
   margin-top: $small
@@ -437,7 +437,7 @@ defineExpose({ loadPreferences });
 
   &:disabled
     opacity: 0.5
-    cursor: not-allowed
+    cursor: default
 
   &--connect
     border: 1px solid $link

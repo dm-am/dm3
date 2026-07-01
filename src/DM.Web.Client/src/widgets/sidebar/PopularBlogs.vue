@@ -1,9 +1,15 @@
 <template>
   <SidebarBlock token="PopularBlogs">
     <template #title>Популярные блоги</template>
-    <SidebarSkeleton v-if="store.popularBlogs === null" :lines="10" />
+    <SidebarSkeleton
+      v-if="store.popularBlogs === null && !store.popularBlogsError"
+      :lines="10"
+    />
+    <SecondaryText v-else-if="store.popularBlogs === null">
+      Не удалось загрузить
+    </SecondaryText>
     <SecondaryText v-else-if="store.popularBlogs.length === 0">
-      Нет популярных блогов
+      Популярных блогов пока нет
     </SecondaryText>
     <template v-else>
       <BlogLink
@@ -21,7 +27,10 @@
       <span class="muted">- </span>
       <router-link
         class="forward"
-        :to="{ name: 'blogs', query: { sortBy: 'popularity', sortOrder: 'desc' } }"
+        :to="{
+          name: 'blogs',
+          query: { sortBy: 'popularity', sortOrder: 'desc' },
+        }"
         >Все популярные блоги</router-link
       >
     </div>

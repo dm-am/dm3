@@ -103,7 +103,9 @@ describe("FilterBubble", () => {
 
     it("displays value correctly", () => {
       const wrapper = mountComponent({ value: "Some Filter Value" });
-      expect(wrapper.find(".bubble-value-text").text()).toBe("Some Filter Value");
+      expect(wrapper.find(".bubble-value-text").text()).toBe(
+        "Some Filter Value",
+      );
     });
 
     it("handles empty value", () => {
@@ -118,8 +120,12 @@ describe("FilterBubble", () => {
     });
 
     it("handles special characters in value", () => {
-      const wrapper = mountComponent({ value: "<script>alert('xss')</script>" });
-      expect(wrapper.find(".bubble-value-text").text()).toBe("<script>alert('xss')</script>");
+      const wrapper = mountComponent({
+        value: "<script>alert('xss')</script>",
+      });
+      expect(wrapper.find(".bubble-value-text").text()).toBe(
+        "<script>alert('xss')</script>",
+      );
     });
   });
 
@@ -143,7 +149,9 @@ describe("FilterBubble", () => {
         value: "01.01.2024 — 31.12.2024",
       });
       expect(wrapper.find(".bubble-prefix").text()).toBe("Дата:");
-      expect(wrapper.find(".bubble-value-text").text()).toBe("01.01.2024 — 31.12.2024");
+      expect(wrapper.find(".bubble-value-text").text()).toBe(
+        "01.01.2024 — 31.12.2024",
+      );
     });
 
     it("renders tag bubble correctly", () => {

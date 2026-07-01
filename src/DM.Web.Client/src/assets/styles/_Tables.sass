@@ -41,15 +41,14 @@ $table-gap: 1px
 
 // Row hover effect (for interactive tables)
 =table-row-hover
-  transition: background-color 0.15s ease
+  transition: background-image $transition-normal
   &:hover
-    background-color: $bg-element-hover
+    background-image: linear-gradient($hover-overlay, $hover-overlay)
 
 // Avatar in table cells (consistent sizing)
 =table-avatar($size: 24px)
   width: $size
   height: $size
-  border-radius: 50%
   object-fit: cover
   flex-shrink: 0
 
@@ -70,16 +69,16 @@ $details-offset: 20px
   background-color: $bg-element
   cursor: pointer
   user-select: none
-  transition: background-color 0.15s ease
+  transition: background-image $transition-normal
 
   &:hover
-    background-color: $bg-element-hover
+    background-image: linear-gradient($hover-overlay, $hover-overlay)
 
   &.expanded
-    background-color: $bg-element-hover
+    background-image: linear-gradient($selected-overlay, $selected-overlay)
 
   &:focus-visible
-    outline: 2px solid $link
+    outline: 2px solid $border-focus
     outline-offset: -2px
 
 =expand-icon

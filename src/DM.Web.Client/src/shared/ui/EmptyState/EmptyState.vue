@@ -39,12 +39,12 @@ defineProps<{
   margin-bottom: $medium
 
 .empty-title
-  font-size: $title-font-size
-  font-weight: 500
+  font-size: $font-size
   color: $text
   margin-bottom: $small
 
 .empty-hint
+  font-size: $secondary-font-size
   color: $text-muted
   margin-bottom: $medium
 </style>

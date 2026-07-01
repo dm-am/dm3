@@ -62,7 +62,11 @@ type BlogsFilterAction =
   | { type: "REMOVE_HOST"; username: string }
   | { type: "CLEAR_HOSTS" }
   | { type: "SET_CREATED_RANGE"; fromUtc: string | null; toUtc: string | null }
-  | { type: "SET_ACTIVATED_RANGE"; fromUtc: string | null; toUtc: string | null }
+  | {
+      type: "SET_ACTIVATED_RANGE";
+      fromUtc: string | null;
+      toUtc: string | null;
+    }
   | { type: "SET_CLOSED_RANGE"; fromUtc: string | null; toUtc: string | null }
   | { type: "SET_SORT"; sortBy: string; sortOrder?: "asc" | "desc" }
   | { type: "TOGGLE_SORT_ORDER" }
@@ -77,7 +81,10 @@ type BlogsFilterAction =
  * Pure reducer function - applies action to state and returns new state.
  * This is the ONLY place where state transformation logic lives.
  */
-function reducer(state: BlogsFilterState, action: BlogsFilterAction): BlogsFilterState {
+function reducer(
+  state: BlogsFilterState,
+  action: BlogsFilterAction,
+): BlogsFilterState {
   // Clone state with new Set instance to avoid mutation
   const newState: BlogsFilterState = {
     ...state,
@@ -205,7 +212,8 @@ function parseQueryToState(query: LocationQuery): BlogsFilterState {
 
   if (query.createdFromUtc) state.createdFromUtc = String(query.createdFromUtc);
   if (query.createdToUtc) state.createdToUtc = String(query.createdToUtc);
-  if (query.activatedFromUtc) state.activatedFromUtc = String(query.activatedFromUtc);
+  if (query.activatedFromUtc)
+    state.activatedFromUtc = String(query.activatedFromUtc);
   if (query.activatedToUtc) state.activatedToUtc = String(query.activatedToUtc);
   if (query.closedFromUtc) state.closedFromUtc = String(query.closedFromUtc);
   if (query.closedToUtc) state.closedToUtc = String(query.closedToUtc);
@@ -214,7 +222,8 @@ function parseQueryToState(query: LocationQuery): BlogsFilterState {
   if (validSortByValues.has(sortByRaw)) state.sortBy = sortByRaw;
 
   const sortOrderRaw = query.sortOrder as string;
-  if (sortOrderRaw === "asc" || sortOrderRaw === "desc") state.sortOrder = sortOrderRaw;
+  if (sortOrderRaw === "asc" || sortOrderRaw === "desc")
+    state.sortOrder = sortOrderRaw;
 
   return state;
 }
@@ -224,7 +233,8 @@ function buildQueryFromState(state: BlogsFilterState): Record<string, string> {
 
   if (state.search) query.search = state.search;
   if (state.status !== "any") query.status = state.status;
-  if (state.hostUsernames.size > 0) query.hosts = [...state.hostUsernames].join(",");
+  if (state.hostUsernames.size > 0)
+    query.hosts = [...state.hostUsernames].join(",");
   if (state.createdFromUtc) query.createdFromUtc = state.createdFromUtc;
   if (state.createdToUtc) query.createdToUtc = state.createdToUtc;
   if (state.activatedFromUtc) query.activatedFromUtc = state.activatedFromUtc;
@@ -268,7 +278,9 @@ export function useBlogsFilter(): BlogsFilterComposable {
   dispatcher.setRouter(router);
 
   // Filter state derived from URL (single source of truth)
-  const filterState = computed<BlogsFilterState>(() => parseQueryToState(route.query));
+  const filterState = computed<BlogsFilterState>(() =>
+    parseQueryToState(route.query),
+  );
 
   // Helper to get current state for dispatch
   const getCurrentState = () => filterState.value;
@@ -284,13 +296,19 @@ export function useBlogsFilter(): BlogsFilterComposable {
 
     if (state.search) params.search = state.search;
     if (state.status !== "any") params.status = state.status as BlogStatus;
-    if (state.hostUsernames.size > 0) params.hostUsernames = [...state.hostUsernames];
+    if (state.hostUsernames.size > 0)
+      params.hostUsernames = [...state.hostUsernames];
 
-    if (state.createdFromUtc) params.createdFromUtc = dateToApiStart(state.createdFromUtc);
-    if (state.createdToUtc) params.createdToUtc = dateToApiEnd(state.createdToUtc);
-    if (state.activatedFromUtc) params.activatedFromUtc = dateToApiStart(state.activatedFromUtc);
-    if (state.activatedToUtc) params.activatedToUtc = dateToApiEnd(state.activatedToUtc);
-    if (state.closedFromUtc) params.closedFromUtc = dateToApiStart(state.closedFromUtc);
+    if (state.createdFromUtc)
+      params.createdFromUtc = dateToApiStart(state.createdFromUtc);
+    if (state.createdToUtc)
+      params.createdToUtc = dateToApiEnd(state.createdToUtc);
+    if (state.activatedFromUtc)
+      params.activatedFromUtc = dateToApiStart(state.activatedFromUtc);
+    if (state.activatedToUtc)
+      params.activatedToUtc = dateToApiEnd(state.activatedToUtc);
+    if (state.closedFromUtc)
+      params.closedFromUtc = dateToApiStart(state.closedFromUtc);
     if (state.closedToUtc) params.closedToUtc = dateToApiEnd(state.closedToUtc);
 
     params.sortBy = state.sortBy;
@@ -326,18 +344,27 @@ export function useBlogsFilter(): BlogsFilterComposable {
   // ACTION DISPATCHERS (thin wrappers around dispatch)
   // ==========================================================================
 
-  const setSearch = (search: string) => dispatch({ type: "SET_SEARCH", search });
-  const setStatus = (status: StatusFilter) => dispatch({ type: "SET_STATUS", status });
+  const setSearch = (search: string) =>
+    dispatch({ type: "SET_SEARCH", search });
+  const setStatus = (status: StatusFilter) =>
+    dispatch({ type: "SET_STATUS", status });
   const clearStatus = () => dispatch({ type: "SET_STATUS", status: "any" });
-  const addHost = (username: string) => dispatch({ type: "ADD_HOST", username });
-  const removeHost = (username: string) => dispatch({ type: "REMOVE_HOST", username });
+  const addHost = (username: string) =>
+    dispatch({ type: "ADD_HOST", username });
+  const removeHost = (username: string) =>
+    dispatch({ type: "REMOVE_HOST", username });
   const clearHosts = () => dispatch({ type: "CLEAR_HOSTS" });
-  const setCreatedRange = (fromUtc: string | null, toUtc: string | null) => dispatch({ type: "SET_CREATED_RANGE", fromUtc, toUtc });
-  const setActivatedRange = (fromUtc: string | null, toUtc: string | null) => dispatch({ type: "SET_ACTIVATED_RANGE", fromUtc, toUtc });
-  const setClosedRange = (fromUtc: string | null, toUtc: string | null) => dispatch({ type: "SET_CLOSED_RANGE", fromUtc, toUtc });
-  const setSort = (sortBy: string, sortOrder?: "asc" | "desc") => dispatch({ type: "SET_SORT", sortBy, sortOrder });
+  const setCreatedRange = (fromUtc: string | null, toUtc: string | null) =>
+    dispatch({ type: "SET_CREATED_RANGE", fromUtc, toUtc });
+  const setActivatedRange = (fromUtc: string | null, toUtc: string | null) =>
+    dispatch({ type: "SET_ACTIVATED_RANGE", fromUtc, toUtc });
+  const setClosedRange = (fromUtc: string | null, toUtc: string | null) =>
+    dispatch({ type: "SET_CLOSED_RANGE", fromUtc, toUtc });
+  const setSort = (sortBy: string, sortOrder?: "asc" | "desc") =>
+    dispatch({ type: "SET_SORT", sortBy, sortOrder });
   const toggleSortOrder = () => dispatch({ type: "TOGGLE_SORT_ORDER" });
-  const removeFilter = (key: string) => dispatch({ type: "REMOVE_FILTER", key });
+  const removeFilter = (key: string) =>
+    dispatch({ type: "REMOVE_FILTER", key });
   const clearFilters = () => dispatch({ type: "CLEAR_FILTERS" });
 
   return {

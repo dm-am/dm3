@@ -22,30 +22,36 @@ const {
 <template>
   <!-- Add Review (authenticated users only) -->
   <template v-if="canAddReview">
-    <a v-if="!formExpanded" class="toggle-link" @click="toggleForm">+ Добавить отзыв</a>
+    <a v-if="!formExpanded" class="toggle-link" @click="toggleForm"
+      >+ Добавить отзыв</a
+    >
     <div
       ref="formContent"
       class="review-form-wrapper"
       :class="{ collapsed: !formExpanded }"
     >
-    <div class="review-form">
-      <div class="form-field">
-        <label class="form-label"><strong>Текст отзыва (обычный текст, без форматирования)</strong></label>
-        <text-area
-          v-model="reviewText"
-          placeholder="Расскажите, что вам нравится в DM.AM..."
-          :max-length="1000"
-        />
+      <div class="review-form">
+        <div class="form-field">
+          <label class="form-label"
+            ><strong
+              >Текст отзыва (обычный текст, без форматирования)</strong
+            ></label
+          >
+          <text-area
+            v-model="reviewText"
+            placeholder="Расскажите, что вам нравится в DM.AM..."
+            :max-length="1000"
+          />
+        </div>
+        <div class="form-actions">
+          <Button :disabled="isSubmitting" @click="submitReview">
+            {{ isSubmitting ? "Сохранение..." : "Добавить отзыв" }}
+          </Button>
+          <span v-if="errorMessage" class="error-message">{{
+            errorMessage
+          }}</span>
+        </div>
       </div>
-      <div class="form-actions">
-        <Button :disabled="isSubmitting" @click="submitReview">
-          {{ isSubmitting ? "Сохранение..." : "Добавить отзыв" }}
-        </Button>
-        <span v-if="errorMessage" class="error-message">{{
-          errorMessage
-        }}</span>
-      </div>
-    </div>
     </div>
   </template>
 </template>

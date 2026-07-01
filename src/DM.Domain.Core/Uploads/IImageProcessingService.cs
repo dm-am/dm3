@@ -1,31 +1,55 @@
-using System;
+using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Uploads;
 
 /// <summary>
-/// Unified image processing service for the Common Upload system.
-/// Handles validation, thumbnail generation, and resizing for image uploads.
+/// Pipeline для аватаров (UserAvatar, CharacterAvatar):
+///   1) magic-byte валидация формата (не доверяем client content-type),
+///   2) decompression-bomb защита (pre-decode pixel area check),
+///   3) min/max dimension guards,
+///   4) EXIF/IPTC/XMP strip (re-encode metadata-free),
+///   5) downscale до <see cref="ImageProcessingDefaults.OriginalMaxDimension"/>
+///      если изображение больше (Max-mode, aspect-preserving).
+///
+/// Возвращает один файл (source). Thumbnails генерируются on-the-fly
+/// через imgproxy при serving — не пре-генерируются.
 /// </summary>
 public interface IImageProcessingService
 {
-    /// <summary>
-    /// Validate content type for the given upload type. Throws HttpBadRequestException on failure.
-    /// </summary>
-    void ValidateImageContentType(string contentType);
-
-    /// <summary>
-    /// Check if upload type requires image processing (thumbnails)
-    /// </summary>
+    /// <summary>True если тип upload'а требует image-pipeline (validation+EXIF strip).</summary>
     bool IsImageType(UploadType type);
 
     /// <summary>
-    /// Download image from S3, generate center-cropped thumbnails, upload back to S3.
-    /// Returns (mediumPublicUrl, smallPublicUrl).
+    /// Прочесть stream, провалидировать (magic-byte, размеры, decompression-
+    /// bomb), застрипать EXIF, downscale если &gt;1024 px. Кидает
+    /// <see cref="DM.Domain.Core.Exceptions.HttpBadRequestException"/> при любой
+    /// ошибке валидации.
     /// </summary>
-    /// <param name="objectKey">S3 object key of the original image</param>
-    /// <param name="generatePublicUrl">Function to generate public URL from object key</param>
-    Task<(string mediumUrl, string smallUrl)> ProcessAndUploadThumbnails(
-        string objectKey, Func<string, string> generatePublicUrl);
+    Task<ProcessedImage> ProcessAsync(
+        Stream input,
+        string declaredContentType,
+        CancellationToken ct = default);
+}
+
+/// <summary>
+/// Результат обработки — единственный re-encoded source-файл,
+/// готовый к S3 PUT. Thumbnails не пре-генерируются — imgproxy
+/// делает on-the-fly transform по запросу.
+/// </summary>
+public sealed record ProcessedImage(
+    byte[] Bytes,
+    string ContentType,
+    string Extension);
+
+/// <summary>
+/// Public-доступные константы pipeline'а — SSOT для документов, тестов,
+/// imgproxy presets.
+/// </summary>
+public static class ImageProcessingDefaults
+{
+    /// <summary>Максимальная сторона source-файла после обработки.</summary>
+    public const int OriginalMaxDimension = 1024;
 }

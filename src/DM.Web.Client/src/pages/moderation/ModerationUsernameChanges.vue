@@ -208,7 +208,9 @@ onMounted(() => fetchRequests());
       <div class="modal">
         <div class="modal-header">
           <h4>Отклонение запроса</h4>
-          <button class="close-btn" @click="closeRejectModal">{{ symbols.close }}</button>
+          <button class="close-btn" @click="closeRejectModal">
+            {{ symbols.close }}
+          </button>
         </div>
         <div class="modal-body">
           <p>
@@ -244,6 +246,7 @@ onMounted(() => fetchRequests());
 <style scoped lang="sass">
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 @import "src/assets/styles/ZIndex"
 
 .username-changes
@@ -327,38 +330,10 @@ onMounted(() => fetchRequests());
   margin-top: $medium
 
 .approve-btn
-  padding: $minor $small
-  border: 1px solid $accent-green
-  border-radius: $border-radius
-  background: transparent
-  color: $accent-green
-  cursor: pointer
-  font-size: 0.9rem
-
-  &:hover:not(:disabled)
-    background: $accent-green
-    color: $text-on-green
-
-  &:disabled
-    opacity: 0.5
-    cursor: not-allowed
+  +button
 
 .reject-btn
-  padding: $minor $small
-  border: 1px solid $accent-red
-  border-radius: $border-radius
-  background: transparent
-  color: $accent-red
-  cursor: pointer
-  font-size: 0.9rem
-
-  &:hover:not(:disabled)
-    background: $accent-red
-    color: $text-on-red
-
-  &:disabled
-    opacity: 0.5
-    cursor: not-allowed
+  +button
 
 // Modal styles
 .modal-overlay
@@ -406,7 +381,7 @@ onMounted(() => fetchRequests());
   justify-content: center
 
   &:hover
-    background: $bg-element-hover
+    background: $hover-overlay
     color: $text
 
 .modal-body
@@ -446,28 +421,8 @@ onMounted(() => fetchRequests());
   border-top: 1px solid $border
 
 .cancel-btn
-  padding: $small $medium
-  border: 1px solid $border
-  border-radius: $border-radius
-  background: transparent
-  color: $text
-  cursor: pointer
-
-  &:hover
-    background: $bg-element-hover
+  +button
 
 .confirm-reject-btn
-  padding: $small $medium
-  border: none
-  border-radius: $border-radius
-  background: $accent-red
-  color: $text-on-red
-  cursor: pointer
-
-  &:hover:not(:disabled)
-    opacity: 0.9
-
-  &:disabled
-    opacity: 0.5
-    cursor: not-allowed
+  +button
 </style>

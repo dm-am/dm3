@@ -15,7 +15,8 @@ export const RENDER_AUDIENCE = {
   EmbedSafe: "embed_safe",
 } as const;
 
-export type RenderAudience = (typeof RENDER_AUDIENCE)[keyof typeof RENDER_AUDIENCE];
+export type RenderAudience =
+  (typeof RENDER_AUDIENCE)[keyof typeof RENDER_AUDIENCE];
 
 /** HTTP header name carrying the audience to the server. */
 export const X_DM_AUDIENCE = "X-Dm-Audience";

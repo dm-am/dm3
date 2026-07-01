@@ -1,4 +1,4 @@
-import { onBeforeUnmount, ref } from "vue";
+import { type MaybeRefOrGetter, onBeforeUnmount, ref, toValue } from "vue";
 import {
   registerExpandable,
   notifyExpandableChanged,
@@ -16,7 +16,8 @@ import {
  * current expanded state with the global expandable registry (used by
  * ScrollNav's "Развернуть все / Свернуть все" button).
  *
- * Used in: ExpandableList (RulesPage penalties, RulesBans, RulesExternalLinks, RulesAuthors).
+ * `ids` accepts a reactive ref/computed/getter so the registry always
+ * operates on the current item list (e.g. after pagination in GameReviews).
  */
 export interface UseExpandableOptions {
   /** Allow multiple items to be expanded simultaneously. Default: false. */
@@ -27,10 +28,10 @@ export interface UseExpandableOptions {
    */
   register?: boolean;
   /**
-   * Static list of item ids this composable controls. Required when
-   * `register: true` so expandAll() knows what to open.
+   * List of item ids this composable controls. Accepts a plain array,
+   * a ref, a computed, or a getter function — always reads the latest value.
    */
-  ids?: readonly string[];
+  ids?: MaybeRefOrGetter<readonly string[]>;
 }
 
 export function useExpandable(options: UseExpandableOptions = {}) {
@@ -40,6 +41,10 @@ export function useExpandable(options: UseExpandableOptions = {}) {
   const expandedId = ref<string | null>(null);
   // Multi-open mode stores the open ids as a Set.
   const expandedSet = ref<Set<string>>(new Set());
+
+  function currentIds(): readonly string[] {
+    return ids ? toValue(ids) : [];
+  }
 
   function isExpanded(id: string): boolean {
     return multiple ? expandedSet.value.has(id) : expandedId.value === id;
@@ -61,14 +66,15 @@ export function useExpandable(options: UseExpandableOptions = {}) {
   }
 
   function expandAllItems() {
-    if (!ids || ids.length === 0) return;
+    const current = currentIds();
+    if (current.length === 0) return;
     if (multiple) {
-      expandedSet.value = new Set(ids);
+      expandedSet.value = new Set(current);
     } else {
       // Single-open mode can only show one item at a time. "Expand all"
       // still opens at least one (the first) so the user sees *something*
       // change. Consumers wanting true multi-open should pass multiple: true.
-      expandedId.value = ids[0] ?? null;
+      expandedId.value = current[0] ?? null;
     }
     if (register) notifyExpandableChanged();
   }
@@ -83,19 +89,20 @@ export function useExpandable(options: UseExpandableOptions = {}) {
   }
 
   function allExpanded(): boolean {
-    if (!ids || ids.length === 0) return false;
+    const current = currentIds();
+    if (current.length === 0) return false;
     if (multiple) {
-      for (const id of ids) {
+      for (const id of current) {
         if (!expandedSet.value.has(id)) return false;
       }
       return true;
     }
     // Single-open mode can never have "all" expanded if there's more
     // than one id. Treat as expanded only if the sole id is open.
-    return ids.length === 1 && expandedId.value === ids[0];
+    return current.length === 1 && expandedId.value === current[0];
   }
 
-  if (register && ids && ids.length > 0) {
+  if (register) {
     const unregister = registerExpandable({
       id: Symbol("useExpandable"),
       isExpanded: allExpanded,

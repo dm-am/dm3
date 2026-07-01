@@ -20,6 +20,7 @@ const CACHE_TTL = 60_000; // 60 seconds
 export const useTestimonialStore = defineStore("testimonials", () => {
   const testimonials = ref<ListEnvelope<WebsiteTestimonial> | null>(null);
   const loading = ref(false);
+  const error = ref<string | null>(null);
   const lastFetchTime = ref(0);
   const lastQueryKey = ref("");
 
@@ -27,7 +28,15 @@ export const useTestimonialStore = defineStore("testimonials", () => {
     return JSON.stringify(query);
   }
 
-  async function fetchTestimonials(query: WebsiteTestimonialsQuery, force = false) {
+  /**
+   * Fetch testimonials (60s cache per query).
+   * @returns true on success (or fresh cache hit), false on failure.
+   * On failure previously loaded data is kept intact and `error` is set.
+   */
+  async function fetchTestimonials(
+    query: WebsiteTestimonialsQuery,
+    force = false,
+  ): Promise<boolean> {
     const queryKey = createQueryKey(query);
     const now = Date.now();
 
@@ -38,18 +47,25 @@ export const useTestimonialStore = defineStore("testimonials", () => {
       queryKey === lastQueryKey.value &&
       now - lastFetchTime.value < CACHE_TTL
     ) {
-      return;
+      error.value = null;
+      return true;
     }
 
     loading.value = true;
-    try {
-      const { data } = await CommunityApi.getTestimonials(query);
-      testimonials.value = data;
-      lastFetchTime.value = now;
-      lastQueryKey.value = queryKey;
-    } finally {
-      loading.value = false;
+    error.value = null;
+    const { data, error: apiError } = await CommunityApi.getTestimonials(query);
+    loading.value = false;
+
+    if (apiError || !data) {
+      // Keep stale data so consumers can still show something
+      error.value = "Не удалось загрузить отзывы";
+      return false;
     }
+
+    testimonials.value = data;
+    lastFetchTime.value = now;
+    lastQueryKey.value = queryKey;
+    return true;
   }
 
   async function removeTestimonial(id: WebsiteTestimonialId) {
@@ -72,6 +88,7 @@ export const useTestimonialStore = defineStore("testimonials", () => {
   return {
     testimonials,
     loading,
+    error,
     fetchTestimonials,
     removeTestimonial,
     createTestimonial,

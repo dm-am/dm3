@@ -100,10 +100,13 @@ describe("DateRangePicker", () => {
       await inputs[1].setValue("2024-12-31");
 
       const applyBtn = wrapper.findComponent(FilterApplyButton);
-      await applyBtn.trigger("click");
+      await applyBtn.find("button").trigger("click");
 
       expect(wrapper.emitted("apply")).toBeTruthy();
-      expect(wrapper.emitted("apply")![0]).toEqual(["2024-01-01", "2024-12-31"]);
+      expect(wrapper.emitted("apply")![0]).toEqual([
+        "2024-01-01",
+        "2024-12-31",
+      ]);
     });
 
     it("emits null when clearing existing values", async () => {
@@ -119,7 +122,7 @@ describe("DateRangePicker", () => {
       await inputs[1].setValue("");
 
       const applyBtn = wrapper.findComponent(FilterApplyButton);
-      await applyBtn.trigger("click");
+      await applyBtn.find("button").trigger("click");
 
       expect(wrapper.emitted("apply")).toBeTruthy();
       expect(wrapper.emitted("apply")![0]).toEqual([null, null]);
@@ -156,7 +159,7 @@ describe("DateRangePicker", () => {
         showClearButton: true,
       });
       const clearBtn = wrapper.findAllComponents(FilterApplyButton)[1];
-      await clearBtn.trigger("click");
+      await clearBtn.find("button").trigger("click");
 
       expect(wrapper.emitted("clear")).toBeTruthy();
     });

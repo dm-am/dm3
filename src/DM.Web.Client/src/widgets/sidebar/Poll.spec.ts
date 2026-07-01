@@ -7,7 +7,12 @@ import { mount, config } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import Poll from "./Poll.vue";
-import type { Poll as PollType, PollOption, PollId, PollOptionId } from "@/entities/poll";
+import type {
+  Poll as PollType,
+  PollOption,
+  PollId,
+  PollOptionId,
+} from "@/entities/poll";
 import { PollStatus } from "@/entities/poll";
 import type { Served } from "@/shared/api/models";
 
@@ -17,7 +22,12 @@ function asServed<T>(value: T): Served<T> {
 }
 
 // Helper to create a poll option with proper Served types
-function createPollOption(id: string, text: string, votesCount: number, voted: boolean | null): PollOption {
+function createPollOption(
+  id: string,
+  text: string,
+  votesCount: number,
+  voted: boolean | null,
+): PollOption {
   return {
     id: asServed(id as PollOptionId),
     text,
@@ -31,7 +41,7 @@ function createPollOption(id: string, text: string, votesCount: number, voted: b
 // Stub router-link
 config.global.stubs = {
   "router-link": {
-    template: '<a><slot /></a>',
+    template: "<a><slot /></a>",
     props: ["to"],
   },
 };
@@ -216,7 +226,9 @@ describe("Poll", () => {
 
     it("displays status text for active poll", () => {
       const wrapper = mount(Poll, {
-        props: { poll: createMockPoll({ status: asServed(PollStatus.Active) }) },
+        props: {
+          poll: createMockPoll({ status: asServed(PollStatus.Active) }),
+        },
       });
       expect(wrapper.text()).toContain("Активен до");
     });
@@ -258,9 +270,7 @@ describe("Poll", () => {
 
     it("passes correct current value to ProgressBar", () => {
       const poll = createMockPoll({
-        options: [
-          createPollOption("1", "A", 7, false),
-        ],
+        options: [createPollOption("1", "A", 7, false)],
       });
       const wrapper = mount(Poll, {
         props: { poll },

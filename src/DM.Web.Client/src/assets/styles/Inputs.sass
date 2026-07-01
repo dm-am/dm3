@@ -1,4 +1,5 @@
 @import "Themes"
+@import "Variables"
 
 $input-padding: ($minor + 1px) $small
 
@@ -12,80 +13,101 @@ $input-padding: ($minor + 1px) $small
 @mixin input()
   margin: 0
   +input-base()
-
   outline: none
-
   font-family: "PT Sans", sans-serif
   font-size: $font-size
 
   &:focus
     outline: none
     border-style: solid
-    border-color: $button-border-hover
+    border-color: $border-focus
 
   &:disabled
     background-color: $input-bg-disabled
 
-/// Primary button - main action button (solid background)
-@mixin primary-button()
+// =============================================================================
+// BUTTON SYSTEM — single source of truth for all buttons on the site.
+//
+// Three-tier architecture:
+//   +_button-layout  — shared dimensions/font (internal, no colors, no nesting)
+//   +button          — solid variant (grayscale, default)
+//   +button-link     — link-styled variant (transparent, blue text)
+//
+// IMPORTANT: call +button / +button-link AFTER all other declarations in the
+// selector to avoid Sass mixed-decls deprecation warning.
+// =============================================================================
+
+/// Internal layout base — pure declarations, no nested rules.
+/// Shared by +button and +button-link.
+@mixin _button-layout()
+  display: inline-flex
+  align-items: center
+  justify-content: center
+  height: $control-height
+  box-sizing: border-box
   padding: $button-padding
-  font-size: $font-size
-  font-family: "PT Sans", sans-serif
-  font-weight: $button-font-weight
-  cursor: pointer
-  background-color: $link
-  color: #fff
-  border: none
-  border-radius: $button-border-radius
-  transition: background-color 0.15s ease
-
-  &:hover:not(:disabled)
-    background-color: $link-hover
-
-  &:focus
-    outline: none
-
-  &:disabled
-    opacity: 0.5
-    cursor: not-allowed
-
-/// Secondary button - outline style
-@mixin secondary-button()
-  padding: $button-padding
-  font-size: $font-size
-  font-family: "PT Sans", sans-serif
-  font-weight: $button-font-weight
-  cursor: pointer
-  background: transparent
-  color: $link
-  border: 1px solid $link
-  border-radius: $button-border-radius
-  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease
-
-  &:hover:not(:disabled)
-    color: $link-hover
-    border-color: $link-hover
-    background-color: $hover-overlay
-
-  &:focus
-    outline: none
-
-  &:disabled
-    opacity: 0.5
-    cursor: not-allowed
-
-/// Alias for secondary-button (legacy support)
-@mixin button()
-  +secondary-button
-
-/// Badge/tag styling - small label with background
-@mixin badge()
-  display: inline-block
-  padding: $tiny $small
   font-size: $secondary-font-size
-  font-weight: bold
-  background-color: $button-bg
-  color: $button-text
+  font-family: inherit
+  line-height: 1
+  white-space: nowrap
+  cursor: pointer
+  border-radius: $button-border-radius
+
+/// Solid button — default variant.
+/// Grayscale: $bg-element bg, $border, $text color.
+/// Hover and active (e.g. dropdown open) share the SAME visual emphasis —
+/// $hover-overlay — so an open-menu button doesn't gain a stronger third
+/// shade that would compete with selection indicators elsewhere on the page.
+/// The overlay is translucent (rgba) so darkening is relative to the base.
+@mixin button()
+  +_button-layout
+  background-color: $bg-element
+  background-image: linear-gradient(transparent, transparent)
+  color: $text
+  border: 1px solid $border
+  transition: background-image $transition-normal
+
+  &:hover:not(:disabled),
+  &.active,
+  &:active:not(:disabled)
+    background-image: linear-gradient($hover-overlay, $hover-overlay)
+
+  // Keep mouse focus outline-free; keyboard focus shows the global
+  // :focus-visible outline from Reset.sass
+  &:focus:not(:focus-visible)
+    outline: none
+
+  &:disabled
+    opacity: $disabled-opacity
+    cursor: default
+
+/// Link-styled button — secondary variant.
+/// Transparent background, $link text color, underline on hover.
+/// Use for actions styled as links ("Сбросить").
+@mixin button-link()
+  +_button-layout
+  background-color: transparent
+  color: $link
+  border: 1px solid transparent
+  transition: color $transition-normal
+
+  &:hover:not(:disabled)
+    background-color: transparent
+    color: $link-hover
+    text-decoration: underline
+
+  &.active,
+  &:active:not(:disabled)
+    background-color: transparent
+
+  // Keep mouse focus outline-free; keyboard focus shows the global
+  // :focus-visible outline from Reset.sass
+  &:focus:not(:focus-visible)
+    outline: none
+
+  &:disabled
+    opacity: $disabled-opacity
+    cursor: default
 
 /// Custom checkbox styling
 @mixin checkbox()
@@ -114,8 +136,8 @@ $input-padding: ($minor + 1px) $small
       transform: translate(-50%, -50%) rotate(45deg)
 
   &:disabled
-    cursor: not-allowed
-    opacity: 0.5
+    cursor: default
+    opacity: $disabled-opacity
 
 input,
 textarea

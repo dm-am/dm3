@@ -959,7 +959,9 @@ defineExpose({
         <button
           type="button"
           class="tag-btn"
-          :class="{ active: mode === 'wysiwyg' && editor?.isActive('underline') }"
+          :class="{
+            active: mode === 'wysiwyg' && editor?.isActive('underline'),
+          }"
           :aria-pressed="mode === 'wysiwyg' && editor?.isActive('underline')"
           :disabled="disabled"
           @click="toggleUnderline"
@@ -1139,7 +1141,9 @@ defineExpose({
         <button
           type="button"
           class="tag-btn tag-btn-mod"
-          :class="{ active: mode === 'wysiwyg' && editor?.isActive('modBlock') }"
+          :class="{
+            active: mode === 'wysiwyg' && editor?.isActive('modBlock'),
+          }"
           :aria-pressed="mode === 'wysiwyg' && editor?.isActive('modBlock')"
           :disabled="disabled"
           @click="insertMod"
@@ -1184,7 +1188,10 @@ defineExpose({
           code
         </button>
       </Tooltip>
-      <Tooltip v-if="availableTags.includes('noparse')" text="Без обработки BBCode">
+      <Tooltip
+        v-if="availableTags.includes('noparse')"
+        text="Без обработки BBCode"
+      >
         <button
           type="button"
           class="tag-btn"
@@ -1528,7 +1535,7 @@ defineExpose({
   &:focus-within
     outline: none
     border-style: solid
-    border-color: $button-border-hover
+    border-color: $border-focus
 
   &.disabled
     opacity: 0.6
@@ -1605,7 +1612,7 @@ defineExpose({
 
   &:disabled
     opacity: 0.4
-    cursor: not-allowed
+    cursor: default
 
   &.active
     background-color: $bg-element-accent
@@ -1706,7 +1713,7 @@ defineExpose({
     opacity: 0.6
 
   &:disabled
-    cursor: not-allowed
+    cursor: default
 
   &::selection
     background-color: $selection-bg

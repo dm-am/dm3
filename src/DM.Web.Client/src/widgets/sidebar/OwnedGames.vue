@@ -1,12 +1,19 @@
 <template>
   <SidebarBlock token="OwnedGames">
     <template #title>Мои игры</template>
-    <SidebarSkeleton v-if="store.participatingGamesLoading && !store.participatingGames" :lines="5" />
+    <SidebarSkeleton
+      v-if="store.participatingGamesLoading && !store.participatingGames"
+      :lines="5"
+    />
     <SecondaryText v-else-if="store.participatingGamesError" class="error">
-      {{ store.participatingGamesError.title || "Ошибка загрузки" }}
+      Не удалось загрузить
     </SecondaryText>
-    <template v-else-if="!store.participatingGames || store.participatingGames.length === 0">
-      <SecondaryText>У вас нет игр</SecondaryText>
+    <template
+      v-else-if="
+        !store.participatingGames || store.participatingGames.length === 0
+      "
+    >
+      <SecondaryText>У вас пока нет игр</SecondaryText>
     </template>
     <template v-else>
       <!-- Mentored games (mentor role) -->

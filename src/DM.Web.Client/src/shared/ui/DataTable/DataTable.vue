@@ -1,13 +1,9 @@
 <script setup lang="ts" generic="T extends { id: string | number }">
-import { computed, useSlots, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import { useVirtualizer } from "@tanstack/vue-virtual";
 import type { Column, SortState } from "./types";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import DataTableSkeleton from "./DataTableSkeleton.vue";
-import { Tooltip } from "@/shared/ui/Tooltip";
-import { SvgIcon } from "@/shared/ui/Icon";
-
-const slots = useSlots();
 
 // Virtual scroll threshold - use virtualization for large lists
 const VIRTUAL_THRESHOLD = 50;
@@ -37,11 +33,6 @@ const props = withDefaults(
   },
 );
 
-const emit = defineEmits<{
-  /** Emitted when sort header is clicked */
-  sort: [column: Column, direction: "asc" | "desc"];
-}>();
-
 defineSlots<{
   /** Custom cell content slot */
   [key: `cell-${string}`]: (props: { row: T; index: number }) => void;
@@ -52,8 +43,6 @@ defineSlots<{
   /** Footer slot (for pagination) */
   footer: () => void;
 }>();
-
-const hasFooter = computed(() => !!slots.footer);
 
 // Virtual scroll setup
 const tableBodyRef = ref<HTMLElement | null>(null);
@@ -78,24 +67,29 @@ function getRow(index: number): T {
   return props.data[index];
 }
 
-function getToggledDirection(column: Column): "asc" | "desc" {
-  if (props.sort?.key === column.key) {
-    return props.sort.direction === "asc" ? "desc" : "asc";
-  }
-  return "asc";
+// Default cell renderer value. Lives in script because generic casts with
+// angle brackets inside template expressions break prettier's Vue parser.
+function cellValue(row: T, key: string): unknown {
+  return (row as Record<string, unknown>)[key];
 }
 
 function isSortedBy(column: Column): boolean {
   return props.sort?.key === column.key;
 }
 
-function handleSortClick(column: Column) {
-  emit("sort", column, getToggledDirection(column));
+function getAriaSort(column: Column): "ascending" | "descending" | undefined {
+  if (!isSortedBy(column)) return undefined;
+  return props.sort?.direction === "asc" ? "ascending" : "descending";
 }
 </script>
 
 <template>
-  <table class="data-table" cellspacing="1" cellpadding="4">
+  <table
+    class="data-table"
+    cellspacing="1"
+    cellpadding="4"
+    :aria-busy="loading ? 'true' : undefined"
+  >
     <!-- Header -->
     <thead>
       <tr class="table-header">
@@ -106,55 +100,34 @@ function handleSortClick(column: Column) {
           class="col"
           :class="[
             `col-${column.key}`,
-            {
-              sortable: column.sortable,
-              sorted: isSortedBy(column),
-              'sorted-asc': isSortedBy(column) && sort?.direction === 'asc',
-              'sorted-desc': isSortedBy(column) && sort?.direction === 'desc',
-              'hide-mobile': column.hideOnMobile,
-            },
+            { 'hide-mobile': column.hideOnMobile },
             `align-${column.align || 'left'}`,
           ]"
           :style="column.width ? { width: column.width } : {}"
+          :aria-sort="getAriaSort(column)"
         >
+          <!-- Headers are presentational labels. Sorting is driven solely by
+               the SortButton in each table's filter (per product decision);
+               aria-sort still announces the active sort column to screen
+               readers. -->
           <span class="header-content">
             <slot :name="`header-${column.key}`" :column="column">
               {{ column.label }}
             </slot>
-            <!-- Sort icon: on hover when not sorted, always visible when sorted -->
-            <Tooltip
-              v-if="column.sortable"
-              :text="isSortedBy(column) ? 'Изменить порядок сортировки' : 'Сортировать по возрастанию'"
-            >
-              <button
-                class="sort-icon-button"
-                :class="{ active: isSortedBy(column) }"
-                type="button"
-                aria-label="Сортировка"
-                @click.stop="handleSortClick(column)"
-              >
-              <!-- Ascending icon (shown on hover when not sorted, or when sorted asc) -->
-              <SvgIcon
-                v-if="!isSortedBy(column) || sort?.direction === 'asc'"
-                name="sortAsc"
-                class="sort-icon"
-              />
-              <!-- Descending icon (shown when sorted desc) -->
-              <SvgIcon
-                v-else
-                name="sortDesc"
-                class="sort-icon"
-              />
-              </button>
-            </Tooltip>
           </span>
         </th>
       </tr>
     </thead>
 
-    <!-- Skeleton loading state (rendered as real table rows for correct column widths) -->
-    <tbody v-if="loading" aria-hidden="true">
-      <DataTableSkeleton :rows="10" :columns="columns" :show-row-numbers="showRowNumbers" />
+    <!-- Skeleton loading state (rendered as real table rows for correct column widths).
+         Only shown on initial load — while reloading with stale rows present,
+         the rows stay visible (table carries aria-busy). -->
+    <tbody v-if="loading && !data?.length" aria-hidden="true">
+      <DataTableSkeleton
+        :rows="10"
+        :columns="columns"
+        :show-row-numbers="showRowNumbers"
+      />
     </tbody>
 
     <!-- Non-virtual tbody (for small lists) -->
@@ -170,14 +143,10 @@ function handleSortClick(column: Column) {
         </td>
       </tr>
 
-      <!-- Rows with v-memo for efficient updates -->
+      <!-- Rows (no v-memo: row content can change while id stays the same,
+           e.g. online indicators or refreshed counters) -->
       <template v-else>
-        <tr
-          v-for="(row, index) in data"
-          :key="row.id"
-          v-memo="[row.id]"
-          class="table-row"
-        >
+        <tr v-for="(row, index) in data" :key="row.id" class="table-row">
           <td v-if="showRowNumbers" class="col col-number">
             {{ startRowNumber + index }}
           </td>
@@ -192,7 +161,7 @@ function handleSortClick(column: Column) {
             ]"
           >
             <slot :name="`cell-${column.key}`" :row="row" :index="index">
-              {{ (row as Record<string, unknown>)[column.key] }}
+              {{ cellValue(row, column.key) }}
             </slot>
           </td>
         </tr>
@@ -229,7 +198,6 @@ function handleSortClick(column: Column) {
               <tr
                 v-for="virtualRow in virtualRows"
                 :key="getRow(virtualRow.index).id"
-                v-memo="[getRow(virtualRow.index).id]"
                 class="table-row"
                 :style="{
                   position: 'absolute',
@@ -258,7 +226,7 @@ function handleSortClick(column: Column) {
                     :row="getRow(virtualRow.index)"
                     :index="virtualRow.index"
                   >
-                    {{ (getRow(virtualRow.index) as Record<string, unknown>)[column.key] }}
+                    {{ cellValue(getRow(virtualRow.index), column.key) }}
                   </slot>
                 </td>
               </tr>
@@ -268,8 +236,10 @@ function handleSortClick(column: Column) {
       </template>
     </tbody>
 
-    <!-- Footer (pagination) -->
-    <tfoot v-if="hasFooter">
+    <!-- Footer (pagination). Use $slots directly (re-evaluated each render) so
+         a footer whose v-if flips true after async paging loads still shows —
+         a cached computed(() => !!slots.footer) would not react to that. -->
+    <tfoot v-if="$slots.footer">
       <tr class="table-footer">
         <td :colspan="showRowNumbers ? columns.length + 1 : columns.length">
           <slot name="footer" />
@@ -304,39 +274,6 @@ function handleSortClick(column: Column) {
   align-items: center
   justify-content: center
   gap: $tiny
-
-// Sort icon button styling
-.sort-icon-button
-  display: inline-flex
-  align-items: center
-  justify-content: center
-  padding: 0
-  border: none
-  background: transparent
-  cursor: pointer
-  color: transparent
-
-  &.active
-    color: $text-muted
-
-  &:focus-visible
-    outline: 2px solid $accent-yellow
-    outline-offset: 1px
-    border-radius: 2px
-
-// When hovering th, show icon (grey) - specificity 0-4-1
-th.sortable:hover .sort-icon-button:not(.active)
-  color: $text-muted
-
-// Hover on icon - text color - specificity 0-5-1 (wins over above)
-th.sortable:hover .sort-icon-button:not(.active):hover,
-th.sortable .sort-icon-button.active:hover
-  color: $text
-
-.sort-icon
-  width: 24px
-  height: 24px
-  transform: translateY(2px)
 
 .table-row
   +table-row-hover

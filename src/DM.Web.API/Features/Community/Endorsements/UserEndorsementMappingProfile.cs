@@ -9,22 +9,11 @@ internal class UserEndorsementMappingProfile : Profile
     /// <inheritdoc />
     public UserEndorsementMappingProfile()
     {
+        // Author/TargetUser = GeneralUser → User через существующий
+        // UserMappingProfile (single source of truth для avatar URL'ов
+        // через AvatarPictureConverter).
         CreateMap<DM.Domain.Community.Features.UserEndorsements.UserEndorsement, UserEndorsement>()
-            .ForMember(d => d.Author, s => s.MapFrom(e => e.Author != null ? new User
-            {
-                Id = e.Author.UserId,
-                Username = e.Author.Username,
-                Role = e.Author.Role,
-                Rating = new Rating { TotalPosts = e.Author.QuantityRating, PostReviewScoreSum = e.Author.QualityRating },
-                Picture = new UserPicture { SmallUrl = e.Author.SmallPictureUrl }
-            } : null))
-            .ForMember(d => d.TargetUser, s => s.MapFrom(e => e.TargetUser != null ? new User
-            {
-                Id = e.TargetUser.UserId,
-                Username = e.TargetUser.Username,
-                Role = e.TargetUser.Role,
-                Rating = new Rating { TotalPosts = e.TargetUser.QuantityRating, PostReviewScoreSum = e.TargetUser.QualityRating },
-                Picture = new UserPicture { SmallUrl = e.TargetUser.SmallPictureUrl }
-            } : null));
+            .ForMember(d => d.Author, opt => opt.MapFrom(e => e.Author))
+            .ForMember(d => d.TargetUser, opt => opt.MapFrom(e => e.TargetUser));
     }
 }

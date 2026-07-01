@@ -27,7 +27,9 @@ export interface ExpandableItem {
   [key: string]: unknown;
 }
 
-export interface ExpandableListColumn<Row extends ExpandableItem = ExpandableItem> {
+export interface ExpandableListColumn<
+  Row extends ExpandableItem = ExpandableItem,
+> {
   key: keyof Row & string;
   label: string;
   width?: string;
@@ -56,7 +58,7 @@ const itemIds = computed(() => props.items.map((i) => i.id));
 
 const { toggle, isExpanded } = useExpandable({
   multiple: props.allowMultiple,
-  ids: itemIds.value,
+  ids: itemIds,
 });
 
 const gridTemplate = computed(() => {
@@ -72,13 +74,16 @@ function handleKeydown(event: KeyboardEvent, id: string) {
   }
 }
 
-function cellAlign(column: ExpandableListColumn<T>): string {
+function cellAlign(
+  column: ExpandableListColumn<T>,
+): "left" | "center" | "right" {
   return column.align ?? "left";
 }
 </script>
 
 <template>
-  <div class="expandable-list" role="list">
+  <!-- No list role: children are toggle buttons + detail panels, not listitems -->
+  <div class="expandable-list">
     <div
       v-if="columns"
       class="expandable-header"
@@ -143,10 +148,7 @@ function cellAlign(column: ExpandableListColumn<T>): string {
       </div>
 
       <!-- Details: 3-level grid animation -->
-      <div
-        class="details-grid"
-        :class="{ open: isExpanded(item.id) }"
-      >
+      <div class="details-grid" :class="{ open: isExpanded(item.id) }">
         <div class="details-clip">
           <div
             :id="`expandable-details-${item.id}`"

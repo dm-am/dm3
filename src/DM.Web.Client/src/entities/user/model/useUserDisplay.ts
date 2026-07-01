@@ -1,4 +1,6 @@
 import { ref, onUnmounted } from "vue";
+import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { ONLINE_THRESHOLD_MS } from "@/shared/lib/constants/user";
 import type { User, UserRef } from "./types";
 import { UserRole } from "./types";
 
@@ -40,11 +42,31 @@ type RoleBadge = {
 };
 
 const ROLE_BADGES: Partial<Record<UserRole, RoleBadge>> = {
-  [UserRole.Admin]: { letter: "А", label: "Администратор", cssClass: "role-admin" },
-  [UserRole.SeniorModerator]: { letter: "С", label: "Старший модератор", cssClass: "role-senior-moderator" },
-  [UserRole.Moderator]: { letter: "М", label: "Модератор", cssClass: "role-moderator" },
-  [UserRole.Mentor]: { letter: "Н", label: "Наставник", cssClass: "role-mentor" },
-  [UserRole.System]: { letter: "Р", label: "Робот-администратор", cssClass: "role-system" },
+  [UserRole.Admin]: {
+    letter: "А",
+    label: "Администратор",
+    cssClass: "role-admin",
+  },
+  [UserRole.SeniorModerator]: {
+    letter: "С",
+    label: "Старший модератор",
+    cssClass: "role-senior-moderator",
+  },
+  [UserRole.Moderator]: {
+    letter: "М",
+    label: "Модератор",
+    cssClass: "role-moderator",
+  },
+  [UserRole.Mentor]: {
+    letter: "Н",
+    label: "Наставник",
+    cssClass: "role-mentor",
+  },
+  [UserRole.System]: {
+    letter: "Р",
+    label: "Робот-администратор",
+    cssClass: "role-system",
+  },
 };
 
 const ROLE_FULL_NAMES: Partial<Record<UserRole, string>> = {
@@ -56,6 +78,25 @@ const ROLE_FULL_NAMES: Partial<Record<UserRole, string>> = {
   [UserRole.Guest]: "Гость",
   [UserRole.System]: "Робот-администратор",
 };
+
+/**
+ * Active staff roles — users currently holding one of these CANNOT also be
+ * "honorary" at the same time. Honorary is a title reserved for retired /
+ * former staff (or long-time community veterans). The check is used
+ * everywhere that displays the honorary indicator, to defend against
+ * stale/buggy data where both flags slipped through.
+ */
+const STAFF_ROLES_FOR_HONORARY_CHECK: UserRole[] = [
+  UserRole.Admin,
+  UserRole.SeniorModerator,
+  UserRole.Moderator,
+  UserRole.Mentor,
+];
+
+function isCurrentlyStaff(user: { role?: UserRole | string | null }): boolean {
+  if (!user.role) return false;
+  return STAFF_ROLES_FOR_HONORARY_CHECK.includes(user.role as UserRole);
+}
 
 /**
  * Unified composable for user display logic
@@ -71,13 +112,8 @@ export function useUserDisplay() {
   });
 
   /**
-   * Online threshold: 10 minutes
-   */
-  const ONLINE_THRESHOLD_MS = 10 * 60 * 1000;
-
-  /**
-   * Check if user is online (last activity < 10 min ago)
-   * Optimized: uses cached timestamp instead of creating Date per call
+   * Check if user is online (last activity within the shared online threshold).
+   * Optimized: uses cached timestamp instead of creating Date per call.
    */
   function isOnline(user: User | UserRef): boolean {
     if (!user.lastActivityUtc) return false;
@@ -94,18 +130,6 @@ export function useUserDisplay() {
   }
 
   /**
-   * Honorary badge: [П] with bold gray letter
-   */
-  const HONORARY_BADGE = { letter: "П", label: "Почетный пользователь", cssClass: "status-honorary" };
-
-  /**
-   * Get honorary badge if user has honorary status
-   */
-  function getHonoraryBadge(user: User): typeof HONORARY_BADGE | null {
-    return user.isHonorary ? HONORARY_BADGE : null;
-  }
-
-  /**
    * Get full role name for tooltips
    */
   function getRoleFullName(user: User): string {
@@ -118,7 +142,8 @@ export function useUserDisplay() {
    */
   function formatRating(user: User): string {
     if (!user.rating) return "—";
-    const quality = user.rating.totalRating ?? user.rating.postReviewScoreSum ?? 0;
+    const quality =
+      user.rating.totalRating ?? user.rating.postReviewScoreSum ?? 0;
     const quantity = user.rating.totalPosts ?? 0;
     return `${quality} / ${quantity}`;
   }
@@ -128,23 +153,10 @@ export function useUserDisplay() {
    */
   function buildRatingTooltip(user: User): string {
     if (!user.rating) return "Рейтинг скрыт";
-    const quality = user.rating.totalRating ?? user.rating.postReviewScoreSum ?? 0;
+    const quality =
+      user.rating.totalRating ?? user.rating.postReviewScoreSum ?? 0;
     const quantity = user.rating.totalPosts ?? 0;
     return `Качество: ${quality} | Количество: ${quantity}`;
-  }
-
-  /**
-   * Format a date string to dd.MM.yyyy HH:mm
-   */
-  function formatDateFull(dateStr: string | null | undefined): string {
-    if (!dateStr) return "—";
-    const d = new Date(dateStr);
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear();
-    const hours = String(d.getHours()).padStart(2, "0");
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    return `${day}.${month}.${year} ${hours}:${minutes}`;
   }
 
   /**
@@ -172,8 +184,9 @@ export function useUserDisplay() {
     // Role (always show)
     parts.push(`Роль: ${getRoleFullName(user)}`);
 
-    // Honorary status
-    if (user.isHonorary) {
+    // Honorary status — only shown when user is NOT currently staff (the
+    // two are mutually exclusive; active mods can't also be honorary).
+    if (user.isHonorary && !isCurrentlyStaff(user)) {
       parts.push("Почетный");
     }
 
@@ -184,7 +197,8 @@ export function useUserDisplay() {
 
     // Rating (if enabled)
     if (user.rating) {
-      const quality = user.rating.totalRating ?? user.rating.postReviewScoreSum ?? 0;
+      const quality =
+        user.rating.totalRating ?? user.rating.postReviewScoreSum ?? 0;
       const quantity = user.rating.totalPosts ?? 0;
       parts.push(`Рейтинг: ${quality}/${quantity}`);
     }
@@ -197,7 +211,10 @@ export function useUserDisplay() {
    * @param user - User or UserRef object
    * @param onlineStatus - Pre-computed online status (use isOnline() result to ensure consistency with indicator)
    */
-  function buildOnlineTooltip(user: User | UserRef, onlineStatus?: boolean): string {
+  function buildOnlineTooltip(
+    user: User | UserRef,
+    onlineStatus?: boolean,
+  ): string {
     // System user - always available
     if (isSystemUser(user)) return "Робот-администратор";
     if (!user.lastActivityUtc) return "Активность неизвестна";
@@ -220,7 +237,9 @@ export function useUserDisplay() {
   /**
    * Get all status badges for user (role, honorary, newbie)
    */
-  function getStatusBadges(user: User): Array<{ label: string; cssClass: string }> {
+  function getStatusBadges(
+    user: User,
+  ): Array<{ label: string; cssClass: string }> {
     const badges: Array<{ label: string; cssClass: string }> = [];
 
     // Role badge (if staff)
@@ -229,8 +248,8 @@ export function useUserDisplay() {
       badges.push(roleBadge);
     }
 
-    // Honorary badge
-    if (user.isHonorary) {
+    // Honorary badge — never shown alongside an active role badge.
+    if (user.isHonorary && !isCurrentlyStaff(user)) {
       badges.push({ label: "Почетный", cssClass: "status-honorary" });
     }
 
@@ -276,7 +295,6 @@ export function useUserDisplay() {
     isOnline,
     isSystemUser,
     getRoleBadge,
-    getHonoraryBadge,
     getRoleFullName,
     formatRating,
     buildRatingTooltip,

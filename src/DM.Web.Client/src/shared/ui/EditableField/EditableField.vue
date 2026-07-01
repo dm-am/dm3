@@ -28,10 +28,13 @@ const isEmpty = computed(() => !props.modelValue);
 </script>
 
 <template>
+  <!-- Display mode: render colon + space as REAL text nodes so
+       Selection.toString() yields "Label: value" instead of
+       "Labelvalue" (CSS `::after` content is invisible to the Selection
+       API). Edit mode keeps label as a bare <label> for the input. -->
   <div class="editable-field" :class="{ 'is-editing': editing }">
-    <label v-if="label" class="field-label">{{ label }}</label>
-
     <template v-if="editing">
+      <label v-if="label" class="field-label">{{ label }}</label>
       <textarea
         v-if="type === 'textarea'"
         :value="modelValue"
@@ -57,9 +60,12 @@ const isEmpty = computed(() => !props.modelValue);
       />
     </template>
 
-    <span v-else class="field-value" :class="{ 'is-empty': isEmpty }">
-      {{ displayValue }}
-    </span>
+    <template v-else>
+      <span v-if="label" class="field-label">{{ label }}:</span>{{ " "
+      }}<span class="field-value" :class="{ 'is-empty': isEmpty }">{{
+        displayValue
+      }}</span>
+    </template>
   </div>
 </template>
 
@@ -68,38 +74,30 @@ const isEmpty = computed(() => !props.modelValue);
 @import "@/assets/styles/Themes"
 @import "@/assets/styles/Inputs"
 
+// No external margin — spacing is the parent container's responsibility
+// (e.g. ProfilePersonalInfo `.info-grid` uses `gap: 0`). A built-in
+// margin would stack with the parent gap, creating an uneven rhythm
+// between rows that mix EditableField + StatLine siblings.
+// line-height 1.25 синхронизирован с StatLine — в `.info-grid` оба
+// типа полей чередуются, и любой расхождение в line-height дает
+// неравномерные межстрочные интервалы.
 .editable-field
-  margin-bottom: $small
+  display: block
+  font-size: $font-size
+  line-height: 1.25
+  color: $text
 
 .field-label
-  display: block
-  font-size: $secondary-font-size
-  color: $text-muted
-  margin-bottom: $tiny
+  color: $text
 
 .field-value
-  display: block
   color: $text
-  line-height: 1.4
-
-  &.is-empty
-    color: $text-meta
-    font-style: italic
 
 .field-input
-  +input()
-  &
-    width: 100%
-    box-sizing: border-box
-
-  &::placeholder
-    color: $text-meta
+  font-family: inherit
+  font-size: $font-size
 
 .field-textarea
   resize: vertical
   min-height: $grid-step * 20
-
-.is-editing
-  .field-label
-    color: $text
 </style>

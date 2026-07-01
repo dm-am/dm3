@@ -1,17 +1,21 @@
+import type { ListEnvelope, ApiResult } from "@/shared/api/models/common";
 import type {
-  ListEnvelope,
-  ApiResult,
-} from "@/shared/api/models/common";
-import type { Poll, PollId, PollOptionId, PollsSearchParams } from "../model/types";
+  Poll,
+  PollId,
+  PollOptionId,
+  PollsSearchParams,
+} from "../model/types";
 import { Api } from "@/shared/api";
 import type { Patch, Post } from "@/shared/api/models";
 
 export default new (class PollApi {
   public getPolls(params: PollsSearchParams) {
-    const queryParams: Record<string, string | number | boolean | undefined> = {};
+    const queryParams: Record<string, string | number | boolean | undefined> =
+      {};
 
     if (params.status) queryParams.status = params.status;
-    if (params.isAnonymous !== undefined) queryParams.isAnonymous = params.isAnonymous;
+    if (params.isAnonymous !== undefined)
+      queryParams.isAnonymous = params.isAnonymous;
     if (params.search) queryParams.search = params.search;
     if (params.startsFrom) queryParams.startsFrom = params.startsFrom;
     if (params.startsTo) queryParams.startsTo = params.startsTo;

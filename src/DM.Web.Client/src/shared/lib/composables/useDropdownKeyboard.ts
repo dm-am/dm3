@@ -42,7 +42,7 @@ export interface UseDropdownKeyboardReturn {
  * ```
  */
 export function useDropdownKeyboard<T>(
-  options: UseDropdownKeyboardOptions<T>
+  options: UseDropdownKeyboardOptions<T>,
 ): UseDropdownKeyboardReturn {
   const { items, onSelect, onClose, skipPredicate } = options;
   const highlightedIndex = ref(-1);

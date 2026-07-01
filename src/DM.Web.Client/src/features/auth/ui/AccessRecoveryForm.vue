@@ -146,9 +146,9 @@ const onEmailInput = () => {
         >
           <template #label>
             <label for="recovery-email">Почта</label>
-            <a class="field-action" @click.prevent="goToSupport"
-              >Нет доступа к почте?</a
-            >
+            <button type="button" class="field-action" @click="goToSupport">
+              Нет доступа к почте?
+            </button>
           </template>
           <input
             v-model="emailField.value.value"
@@ -168,8 +168,20 @@ const onEmailInput = () => {
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
 
+// Button reset that mimics the global anchor styles (Reset.sass)
 .field-action
+  background: none
+  border: none
+  padding: 0
+  font: inherit
+  text-decoration: none
   cursor: pointer
+  transition: color $animation-time ease
+  color: $link
+
+  &:hover
+    text-decoration: underline
+    color: $link-hover
 
 .success-content
   text-align: center

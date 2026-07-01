@@ -144,7 +144,9 @@ test.describe("Users Search", () => {
   });
 
   test.describe("Empty States", () => {
-    test("should show empty message when no users match search", async ({ page }) => {
+    test("should show empty message when no users match search", async ({
+      page,
+    }) => {
       // Use a search that likely won't match anything
       await page.goto("/community?q=xyznonexistentuser123456789");
 
@@ -152,7 +154,9 @@ test.describe("Users Search", () => {
       await page.waitForTimeout(500);
 
       // Should show empty message or no results
-      const noResults = page.locator("text=Пользователи не найдены, .empty-message, .no-results");
+      const noResults = page.locator(
+        "text=Пользователи не найдены, .empty-message, .no-results",
+      );
       // May or may not be visible depending on implementation
     });
   });

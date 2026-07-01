@@ -479,22 +479,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<int>("SerialNumber")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SerialNumber"));
-
-                    b.Property<string>("PublicId")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                    b.Property<DateTimeOffset?>("ActivatedUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("AuthorId")
                         .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("ActivatedUtc")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset?>("ClosedUtc")
                         .HasColumnType("timestamp with time zone");
@@ -508,11 +497,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -531,9 +520,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<int>("PopularityScore")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset?>("PopularityScoreUpdatedUtc")
                         .HasColumnType("timestamp with time zone");
@@ -541,8 +528,18 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<int>("PremoderationStatus")
                         .HasColumnType("integer");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<int>("PublicationCount")
                         .HasColumnType("integer");
+
+                    b.Property<int>("SerialNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SerialNumber"));
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -562,14 +559,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasIndex("DeletedByUserId");
 
                     b.HasIndex("MentorId");
-
-                    b.HasIndex("PopularityScore");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.HasIndex("SerialNumber")
-                        .IsUnique();
 
                     b.ToTable("Blogs");
                 });
@@ -639,9 +628,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("BlogId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("PublicationNumber")
-                        .HasColumnType("integer");
-
                     b.Property<int>("CommentCount")
                         .HasColumnType("integer");
 
@@ -655,11 +641,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsPublished")
                         .HasColumnType("boolean");
@@ -680,6 +666,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<int>("PublicationNumber")
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset?>("PublishedUtc")
                         .HasColumnType("timestamp with time zone");
@@ -707,9 +696,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RubricId");
 
-                    b.HasIndex("BlogId", "PublicationNumber")
-                        .IsUnique();
-
                     b.ToTable("Publications");
                 });
 
@@ -728,11 +714,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
@@ -781,86 +767,244 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.ToTable("RubricAccesses");
                 });
 
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Comment", b =>
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.AchievementCategory", b =>
                 {
-                    b.Property<Guid>("CommentId")
+                    b.Property<Guid>("AchievementCategoryId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AuthorId")
-                        .HasColumnType("uuid");
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
 
-                    b.Property<DateTimeOffset>("CreatedUtc")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<string>("IconName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
 
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("EntityId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsRemoved")
+                    b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("Text")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("CommentId");
-
-                    b.HasIndex("AuthorId");
-
-                    b.HasIndex("DeletedByUserId");
-
-                    b.HasIndex("EntityId");
-
-                    b.ToTable("Comments");
-                });
-
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.CommentEdit", b =>
-                {
-                    b.Property<Guid>("CommentEditId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CommentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("EditedUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("EditorUserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("CommentEditId");
-
-                    b.HasIndex("CommentId");
-
-                    b.HasIndex("EditorUserId");
-
-                    b.ToTable("CommentEdits");
-                });
-
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Like", b =>
-                {
-                    b.Property<Guid>("LikeId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("EntityId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("EntityType")
+                    b.Property<int>("Metric")
                         .HasColumnType("integer");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("AchievementCategoryId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("Metric")
+                        .IsUnique();
+
+                    b.ToTable("AchievementCategories");
+
+                    b.HasData(
+                        new
+                        {
+                            AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000002"),
+                            Code = "game_posts_authored",
+                            Description = "Игровые посты в активных играх. Считаются все, включая удаленные игры.",
+                            IconName = "scroll-quill",
+                            IsActive = true,
+                            Metric = 1,
+                            SortOrder = 2,
+                            Title = "Игровые посты"
+                        });
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.AchievementType", b =>
+                {
+                    b.Property<Guid>("AchievementTypeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AchievementCategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int>("Threshold")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Tier")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("AchievementTypeId");
+
+                    b.HasIndex("AchievementCategoryId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("AchievementTypes");
+
+                    b.HasData(
+                        new
+                        {
+                            AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000001"),
+                            AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000002"),
+                            Code = "POSTS_100",
+                            Threshold = 100,
+                            Tier = 1,
+                            Title = "Автор"
+                        });
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.AwardType", b =>
+                {
+                    b.Property<Guid>("AwardTypeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("IconName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Tier")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("AwardTypeId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("AwardTypes");
+
+                    b.HasData(
+                        new
+                        {
+                            AwardTypeId = new Guid("00000000-0000-0000-0001-000000000001"),
+                            Code = "contest_first",
+                            Description = "Победитель конкурса",
+                            IconName = "trophy-cup",
+                            IsActive = true,
+                            SortOrder = 1,
+                            Tier = 1,
+                            Title = "Литконкурс"
+                        });
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.ContestSeries", b =>
+                {
+                    b.Property<Guid>("ContestSeriesId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ContestType")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TopicUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ContestSeriesId");
+
+                    b.HasIndex("ContestType", "Number")
+                        .IsUnique();
+
+                    b.ToTable("ContestSeries");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.FundraisingGoal", b =>
+                {
+                    b.Property<Guid>("FundraisingGoalId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("CollectedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("GoalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("FundraisingGoalId");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("FundraisingGoals");
+
+                    b.HasData(
+                        new
+                        {
+                            FundraisingGoalId = new Guid("00000000-0000-0000-0005-000000000001"),
+                            CollectedAmount = 17000m,
+                            GoalAmount = 50000m,
+                            UpdatedUtc = new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        });
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.UserAchievement", b =>
+                {
+                    b.Property<Guid>("UserAchievementId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AchievementTypeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("EarnedUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
@@ -868,83 +1012,36 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
-                    b.HasKey("LikeId");
+                    b.HasKey("UserAchievementId");
 
-                    b.HasIndex("DeletedByUserId");
+                    b.HasIndex("AchievementTypeId");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId", "AchievementTypeId")
+                        .IsUnique()
+                        .HasFilter("\"IsRemoved\" = false");
 
-                    b.ToTable("Likes");
+                    b.HasIndex("UserId", "EarnedUtc");
+
+                    b.ToTable("UserAchievements");
                 });
 
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.OutboxEvent", b =>
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.UserAward", b =>
                 {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<Guid>("AggregateId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("EventType")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsProcessed")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("LastError")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<DateTimeOffset?>("NextRetryUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Payload")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("ProcessedUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("RetryCount")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("OutboxEvents");
-                });
-
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.GameReview", b =>
-                {
-                    b.Property<Guid>("GameReviewId")
+                    b.Property<Guid>("UserAwardId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AuthorId")
+                    b.Property<Guid>("AwardTypeId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("GameId")
+                    b.Property<Guid>("AwardedByUserId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("CreatedUtc")
+                    b.Property<DateTimeOffset>("AwardedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("ModifiedUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("ModifiedByUserId")
+                    b.Property<Guid?>("ContestSeriesId")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("Text")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsRemoved")
-                        .HasColumnType("boolean");
 
                     b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uuid");
@@ -952,84 +1049,30 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("DeletedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("GameReviewId");
-
-                    b.HasIndex("AuthorId", "GameId")
-                        .IsUnique()
-                        .HasFilter("\"IsRemoved\" = false");
-
-                    b.HasIndex("GameId")
-                        .HasFilter("\"IsRemoved\" = false");
-
-                    b.HasIndex("ModifiedByUserId");
-
-                    b.HasIndex("DeletedByUserId");
-
-                    b.ToTable("GameReviews");
-                });
-
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.PostReview", b =>
-                {
-                    b.Property<Guid>("PostReviewId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AuthorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("PostId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("PostAuthorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("GameId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("ModifiedUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("ModifiedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Text")
-                        .HasColumnType("text");
-
-                    b.Property<short>("SignValue")
-                        .HasColumnType("smallint");
-
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
 
-                    b.Property<Guid?>("DeletedByUserId")
+                    b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<string>("WorkUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
-                    b.HasKey("PostReviewId");
+                    b.HasKey("UserAwardId");
 
-                    b.HasIndex("AuthorId", "PostId")
-                        .IsUnique()
-                        .HasFilter("\"IsRemoved\" = false");
+                    b.HasIndex("AwardTypeId");
 
-                    b.HasIndex("PostAuthorId")
-                        .HasFilter("\"IsRemoved\" = false");
+                    b.HasIndex("AwardedByUserId");
 
-                    b.HasIndex("GameId")
-                        .HasFilter("\"IsRemoved\" = false");
-
-                    b.HasIndex("PostId")
-                        .HasFilter("\"IsRemoved\" = false");
-
-                    b.HasIndex("ModifiedByUserId");
+                    b.HasIndex("ContestSeriesId");
 
                     b.HasIndex("DeletedByUserId");
 
-                    b.ToTable("PostReviews");
+                    b.HasIndex("UserId", "AwardedUtc")
+                        .HasFilter("\"IsRemoved\" = false");
+
+                    b.ToTable("UserAwards");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.UserEndorsement", b =>
@@ -1068,15 +1111,15 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("UserEndorsementId");
 
-                    b.HasIndex("AuthorId", "TargetUserId")
-                        .IsUnique()
-                        .HasFilter("\"IsRemoved\" = false");
-
                     b.HasIndex("DeletedByUserId");
 
                     b.HasIndex("ModifiedByUserId");
 
                     b.HasIndex("TargetUserId")
+                        .HasFilter("\"IsRemoved\" = false");
+
+                    b.HasIndex("AuthorId", "TargetUserId")
+                        .IsUnique()
                         .HasFilter("\"IsRemoved\" = false");
 
                     b.ToTable("UserEndorsements");
@@ -1126,142 +1169,15 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.ToTable("WebsiteTestimonials");
                 });
 
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Tag", b =>
-                {
-                    b.Property<Guid>("TagId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
-
-                    b.Property<int>("ShortId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("SortOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.Property<Guid>("TagGroupId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("TagId");
-
-                    b.HasIndex("ShortId")
-                        .IsUnique();
-
-                    b.HasIndex("TagGroupId");
-
-                    b.ToTable("Tags");
-                });
-
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.TagGroup", b =>
-                {
-                    b.Property<Guid>("TagGroupId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("TagGroupId");
-
-                    b.ToTable("TagGroups");
-                });
-
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Upload", b =>
-                {
-                    b.Property<Guid>("UploadId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("ConfirmedUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTimeOffset>("CreatedUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("EntityId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("FileName")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<string>("FilePath")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<bool>("IsRemoved")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("MediumFilePath")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("ObjectKey")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<bool>("Original")
-                        .HasColumnType("boolean");
-
-                    b.Property<long>("SizeBytes")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("SmallFilePath")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("UploadId");
-
-                    b.HasIndex("EntityId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("DeletedByUserId");
-
-                    b.ToTable("Uploads");
-                });
-
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Forum.Board", b =>
                 {
                     b.Property<Guid>("BoardId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Alias")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<int>("CommentsCount")
                         .HasColumnType("integer");
@@ -1281,13 +1197,19 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("LastCommentTopicId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("LastCommentTopicTitle")
-                        .HasColumnType("text");
-
                     b.Property<int?>("LastCommentTopicNumber")
                         .HasColumnType("integer");
 
+                    b.Property<string>("LastCommentTopicTitle")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset?>("LastCommentUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("LastTopicAuthorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("LastTopicCreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("LastTopicId")
@@ -1299,19 +1221,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<string>("LastTopicTitle")
                         .HasColumnType("text");
 
-                    b.Property<Guid?>("LastTopicAuthorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("LastTopicCreatedUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<int>("Order")
                         .HasColumnType("integer");
-
-                    b.Property<string>("Alias")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -1332,9 +1243,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasIndex("LastTopicAuthorId");
 
                     b.HasIndex("LastTopicId");
-
-                    b.HasIndex("Alias")
-                        .IsUnique();
 
                     b.ToTable("Boards");
                 });
@@ -1366,14 +1274,14 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int?>("AttachOrder")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("AuthorId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("BoardId")
                         .HasColumnType("uuid");
-
-                    b.Property<int>("TopicNumber")
-                        .HasColumnType("integer");
 
                     b.Property<int>("CommentCount")
                         .HasColumnType("integer");
@@ -1381,17 +1289,14 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("IsAttached")
                         .HasColumnType("boolean");
-
-                    b.Property<int?>("AttachOrder")
-                        .HasColumnType("integer");
 
                     b.Property<bool>("IsClosed")
                         .HasColumnType("boolean");
@@ -1410,6 +1315,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("TopicNumber")
+                        .HasColumnType("integer");
+
                     b.HasKey("TopicId");
 
                     b.HasIndex("AuthorId");
@@ -1419,9 +1327,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasIndex("DeletedByUserId");
 
                     b.HasIndex("LastCommentId");
-
-                    b.HasIndex("BoardId", "TopicNumber")
-                        .IsUnique();
 
                     b.ToTable("Topics");
                 });
@@ -1497,11 +1402,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("GameId")
                         .HasColumnType("uuid");
@@ -1584,22 +1489,14 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<int>("SerialNumber")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SerialNumber"));
-
-                    b.Property<string>("PublicId")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                    b.Property<DateTimeOffset?>("ActivatedUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("AttributeSchemaId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("MasterId")
-                        .HasColumnType("uuid");
+                    b.Property<int>("ClosedReason")
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset?>("ClosedUtc")
                         .HasColumnType("timestamp with time zone");
@@ -1616,8 +1513,17 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("DisableAlignment")
                         .HasColumnType("boolean");
+
+                    b.Property<int>("DraftVisibility")
+                        .HasColumnType("integer");
 
                     b.Property<bool>("HideDiceResult")
                         .HasColumnType("boolean");
@@ -1637,17 +1543,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<bool>("HideTemper")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("Info")
-                        .HasColumnType("text");
-
                     b.Property<DateTimeOffset?>("InactivityWarningUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("ClosedReason")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("DraftVisibility")
-                        .HasColumnType("integer");
+                    b.Property<string>("Info")
+                        .HasColumnType("text");
 
                     b.Property<bool>("IsRecruitmentOpen")
                         .HasColumnType("boolean");
@@ -1655,17 +1555,14 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
 
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<Guid?>("LastCommentId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset?>("LastPostCreatedUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MasterId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("MentorId")
                         .HasColumnType("uuid");
@@ -1682,17 +1579,24 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<int>("PremoderationStatus")
                         .HasColumnType("integer");
 
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("RecruitmentCount")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("RecruitmentPcLimit")
                         .HasColumnType("integer");
 
                     b.Property<DateTimeOffset?>("RecruitmentStartedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("RecruitmentCount")
+                    b.Property<int>("SerialNumber")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("integer");
 
-                    b.Property<DateTimeOffset?>("ActivatedUtc")
-                        .HasColumnType("timestamp with time zone");
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SerialNumber"));
 
                     b.Property<bool>("ShowPrivateMessages")
                         .HasColumnType("boolean");
@@ -1709,19 +1613,63 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("GameId");
 
+                    b.HasIndex("DeletedByUserId");
+
                     b.HasIndex("MasterId");
 
                     b.HasIndex("MentorId");
 
+                    b.ToTable("Games");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.GameReview", b =>
+                {
+                    b.Property<Guid>("GameReviewId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AuthorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("GameId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsRemoved")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ModifiedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("GameReviewId");
+
                     b.HasIndex("DeletedByUserId");
 
-                    b.HasIndex("PublicId")
-                        .IsUnique();
+                    b.HasIndex("GameId")
+                        .HasFilter("\"IsRemoved\" = false");
 
-                    b.HasIndex("SerialNumber")
-                        .IsUnique();
+                    b.HasIndex("ModifiedByUserId");
 
-                    b.ToTable("Games");
+                    b.HasIndex("AuthorId", "GameId")
+                        .IsUnique()
+                        .HasFilter("\"IsRemoved\" = false");
+
+                    b.ToTable("GameReviews");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Links.GameAssistant", b =>
@@ -1871,6 +1819,70 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.ToTable("RoomAccesses");
                 });
 
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.PostReview", b =>
+                {
+                    b.Property<Guid>("PostReviewId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AuthorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("GameId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsRemoved")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ModifiedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PostAuthorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PostId")
+                        .HasColumnType("uuid");
+
+                    b.Property<short>("SignValue")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("Text")
+                        .HasColumnType("text");
+
+                    b.HasKey("PostReviewId");
+
+                    b.HasIndex("DeletedByUserId");
+
+                    b.HasIndex("GameId")
+                        .HasFilter("\"IsRemoved\" = false");
+
+                    b.HasIndex("ModifiedByUserId");
+
+                    b.HasIndex("PostAuthorId")
+                        .HasFilter("\"IsRemoved\" = false");
+
+                    b.HasIndex("PostId")
+                        .HasFilter("\"IsRemoved\" = false");
+
+                    b.HasIndex("AuthorId", "PostId")
+                        .IsUnique()
+                        .HasFilter("\"IsRemoved\" = false");
+
+                    b.ToTable("PostReviews");
+                });
+
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Posts.Post", b =>
                 {
                     b.Property<Guid>("PostId")
@@ -1886,35 +1898,31 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uuid");
 
-                    b.Property<bool>("IsRemoved")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid>("RoomId")
-                        .HasColumnType("uuid");
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("GameText")
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsRemoved")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("MetagameText")
                         .HasColumnType("text");
 
-                    b.Property<bool>("SharePrivateWithAll")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
                     b.Property<string>("PrivateAddresseeSnapshotJson")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasDefaultValueSql("'{}'::jsonb");
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("SharePrivateWithAll")
+                        .HasColumnType("boolean");
 
                     b.HasKey("PostId");
 
@@ -1965,23 +1973,20 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ChatId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("DiceEnabled")
                         .HasColumnType("boolean");
 
                     b.Property<Guid>("GameId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("RoomNumber")
-                        .HasColumnType("integer");
-
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("NextRoomId")
                         .HasColumnType("uuid");
@@ -1991,6 +1996,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("PreviousRoomId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("RoomNumber")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -2007,16 +2015,13 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("RoomId");
 
+                    b.HasIndex("DeletedByUserId");
+
                     b.HasIndex("GameId");
 
                     b.HasIndex("NextRoomId");
 
                     b.HasIndex("PreviousRoomId");
-
-                    b.HasIndex("DeletedByUserId");
-
-                    b.HasIndex("GameId", "RoomNumber")
-                        .IsUnique();
 
                     b.ToTable("Rooms");
                 });
@@ -2027,21 +2032,20 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("LastMessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PublicId")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("RoomId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("SerialNumber")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SerialNumber"));
-
-                    b.Property<string>("PublicId")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
-                    b.Property<Guid?>("LastMessageId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("RoomId")
-                        .HasColumnType("uuid");
 
                     b.Property<string>("Title")
                         .HasColumnType("text");
@@ -2053,13 +2057,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("LastMessageId");
 
-                    b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasFilter("\"PublicId\" IS NOT NULL");
-
-                    b.HasIndex("SerialNumber")
-                        .IsUnique();
-
                     b.ToTable("Chats");
                 });
 
@@ -2069,11 +2066,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("CreatedUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<Guid>("CreatedByUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -2147,11 +2144,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("GlobalChatEventId")
                         .HasColumnType("uuid");
@@ -2432,11 +2429,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
@@ -2485,11 +2482,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
@@ -2519,6 +2516,277 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasIndex("DeletedByUserId");
 
                     b.ToTable("NotepadEntries");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Comment", b =>
+                {
+                    b.Property<Guid>("CommentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AuthorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsRemoved")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("CommentId");
+
+                    b.HasIndex("AuthorId");
+
+                    b.HasIndex("DeletedByUserId");
+
+                    b.HasIndex("EntityId");
+
+                    b.ToTable("Comments");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.CommentEdit", b =>
+                {
+                    b.Property<Guid>("CommentEditId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CommentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("EditedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("EditorUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("CommentEditId");
+
+                    b.HasIndex("CommentId");
+
+                    b.HasIndex("EditorUserId");
+
+                    b.ToTable("CommentEdits");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Like", b =>
+                {
+                    b.Property<Guid>("LikeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("EntityType")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsRemoved")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("LikeId");
+
+                    b.HasIndex("DeletedByUserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Likes");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.OutboxEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("AggregateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("EventType")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsProcessed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset?>("NextRetryUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Payload")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ProcessedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("OutboxEvents");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Tag", b =>
+                {
+                    b.Property<Guid>("TagId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ShortId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TagGroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("TagId");
+
+                    b.HasIndex("TagGroupId");
+
+                    b.ToTable("Tags");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.TagGroup", b =>
+                {
+                    b.Property<Guid>("TagGroupId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("TagGroupId");
+
+                    b.ToTable("TagGroups");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Upload", b =>
+                {
+                    b.Property<Guid>("UploadId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ConfirmedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("FilePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsRemoved")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("Original")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TargetCharacterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TargetPostId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TargetUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("UploadId");
+
+                    b.HasIndex("DeletedByUserId");
+
+                    b.HasIndex("TargetCharacterId")
+                        .HasFilter("\"TargetCharacterId\" IS NOT NULL");
+
+                    b.HasIndex("TargetPostId")
+                        .HasFilter("\"TargetPostId\" IS NOT NULL");
+
+                    b.HasIndex("TargetUserId")
+                        .HasFilter("\"TargetUserId\" IS NOT NULL");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Uploads", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Uploads_TypedTarget", "(\"Type\" = 1 AND \"TargetUserId\" IS NOT NULL AND \"TargetCharacterId\" IS NULL AND \"TargetPostId\" IS NULL) OR (\"Type\" = 2 AND \"TargetCharacterId\" IS NOT NULL AND \"TargetUserId\" IS NULL AND \"TargetPostId\" IS NULL) OR (\"Type\" = 3 AND \"TargetPostId\" IS NOT NULL AND \"TargetUserId\" IS NULL AND \"TargetCharacterId\" IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription", b =>
@@ -2575,7 +2843,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                 {
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Creator")
                         .WithMany()
-                        .HasForeignKey("CreatorId");
+                        .HasForeignKey("CreatorId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
                         .WithMany()
@@ -2853,155 +3122,101 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Comment", b =>
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.AchievementType", b =>
                 {
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Author")
-                        .WithMany("Comments")
-                        .HasForeignKey("AuthorId")
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Community.AchievementCategory", "Category")
+                        .WithMany("Types")
+                        .HasForeignKey("AchievementCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.UserAchievement", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Community.AchievementType", "AchievementType")
+                        .WithMany()
+                        .HasForeignKey("AchievementTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
+                    b.Navigation("AchievementType");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.UserAward", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Community.AwardType", "AwardType")
                         .WithMany()
-                        .HasForeignKey("DeletedByUserId")
+                        .HasForeignKey("AwardTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "AwardedBy")
+                        .WithMany()
+                        .HasForeignKey("AwardedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Community.ContestSeries", "ContestSeries")
+                        .WithMany("Awards")
+                        .HasForeignKey("ContestSeriesId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Forum.Topic", "Topic")
-                        .WithMany("Comments")
-                        .HasForeignKey("EntityId")
-                        .OnDelete(DeleteBehavior.ClientCascade)
-                        .IsRequired();
-
-                    b.Navigation("Author");
-
-                    b.Navigation("DeletedBy");
-
-                    b.Navigation("Topic");
-                });
-
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.CommentEdit", b =>
-                {
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Shared.Comment", "Comment")
-                        .WithMany("Edits")
-                        .HasForeignKey("CommentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Editor")
-                        .WithMany()
-                        .HasForeignKey("EditorUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Comment");
-
-                    b.Navigation("Editor");
-                });
-
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Like", b =>
-                {
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
                         .WithMany()
                         .HasForeignKey("DeletedByUserId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "User")
-                        .WithMany("Likes")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("AwardType");
+
+                    b.Navigation("AwardedBy");
+
+                    b.Navigation("ContestSeries");
 
                     b.Navigation("DeletedBy");
 
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.GameReview", b =>
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.AchievementCategory", b =>
                 {
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Author")
-                        .WithMany()
-                        .HasForeignKey("AuthorId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Game", "Game")
-                        .WithMany()
-                        .HasForeignKey("GameId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "ModifiedBy")
-                        .WithMany()
-                        .HasForeignKey("ModifiedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
-                        .WithMany()
-                        .HasForeignKey("DeletedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Author");
-
-                    b.Navigation("DeletedBy");
-
-                    b.Navigation("Game");
-
-                    b.Navigation("ModifiedBy");
+                    b.Navigation("Types");
                 });
 
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.PostReview", b =>
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.ContestSeries", b =>
                 {
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Author")
-                        .WithMany()
-                        .HasForeignKey("AuthorId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Navigation("Awards");
+                });
 
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Posts.Post", "Post")
-                        .WithMany("Reviews")
-                        .HasForeignKey("PostId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "PostAuthor")
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.FundraisingGoal", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "UpdatedBy")
                         .WithMany()
-                        .HasForeignKey("PostAuthorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Game", "Game")
-                        .WithMany()
-                        .HasForeignKey("GameId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "ModifiedBy")
-                        .WithMany()
-                        .HasForeignKey("ModifiedByUserId")
+                        .HasForeignKey("UpdatedByUserId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
-                        .WithMany()
-                        .HasForeignKey("DeletedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Author");
-
-                    b.Navigation("DeletedBy");
-
-                    b.Navigation("Game");
-
-                    b.Navigation("ModifiedBy");
-
-                    b.Navigation("Post");
-
-                    b.Navigation("PostAuthor");
+                    b.Navigation("UpdatedBy");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.UserEndorsement", b =>
                 {
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Author")
-                        .WithMany()
+                        .WithMany("UserEndorsementsAuthored")
                         .HasForeignKey("AuthorId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -3017,7 +3232,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "TargetUser")
-                        .WithMany()
+                        .WithMany("UserEndorsementsReceived")
                         .HasForeignKey("TargetUserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -3034,7 +3249,7 @@ namespace DM.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.WebsiteTestimonial", b =>
                 {
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Author")
-                        .WithMany()
+                        .WithMany("WebsiteTestimonials")
                         .HasForeignKey("AuthorId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -3056,38 +3271,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Navigation("ModifiedBy");
                 });
 
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Tag", b =>
-                {
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Shared.TagGroup", "TagGroup")
-                        .WithMany("Tags")
-                        .HasForeignKey("TagGroupId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("TagGroup");
-                });
-
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Upload", b =>
-                {
-                    // NOTE: EntityId FK relationships (Character, Game, Post, UserProfile) are ignored
-                    // because EntityId is a polymorphic column - application logic ensures referential integrity
-
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Owner")
-                        .WithMany("Uploads")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
-                        .WithMany()
-                        .HasForeignKey("DeletedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("DeletedBy");
-
-                    b.Navigation("Owner");
-                });
-
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Forum.Board", b =>
                 {
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "LastCommentAuthor")
@@ -3098,13 +3281,13 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("LastCommentId");
 
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Forum.Topic", "LastTopic")
-                        .WithMany()
-                        .HasForeignKey("LastTopicId");
-
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "LastTopicAuthor")
                         .WithMany()
                         .HasForeignKey("LastTopicAuthorId");
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Forum.Topic", "LastTopic")
+                        .WithMany()
+                        .HasForeignKey("LastTopicId");
 
                     b.Navigation("LastComment");
 
@@ -3241,6 +3424,10 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Game", b =>
                 {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
+                        .WithMany()
+                        .HasForeignKey("DeletedByUserId");
+
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Master")
                         .WithMany("GamesAsMaster")
                         .HasForeignKey("MasterId")
@@ -3251,16 +3438,44 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .WithMany("GamesAsMentor")
                         .HasForeignKey("MentorId");
 
+                    b.Navigation("DeletedBy");
+
+                    b.Navigation("Master");
+
+                    b.Navigation("Mentor");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.GameReview", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Author")
+                        .WithMany("GameReviews")
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
                         .WithMany()
                         .HasForeignKey("DeletedByUserId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.Navigation("Master");
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Game", "Game")
+                        .WithMany()
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "ModifiedBy")
+                        .WithMany()
+                        .HasForeignKey("ModifiedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Author");
 
                     b.Navigation("DeletedBy");
 
-                    b.Navigation("Mentor");
+                    b.Navigation("Game");
+
+                    b.Navigation("ModifiedBy");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Links.GameAssistant", b =>
@@ -3384,6 +3599,55 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Navigation("Room");
                 });
 
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.PostReview", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Author")
+                        .WithMany("PostReviewsAuthored")
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
+                        .WithMany()
+                        .HasForeignKey("DeletedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Game", "Game")
+                        .WithMany()
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "ModifiedBy")
+                        .WithMany()
+                        .HasForeignKey("ModifiedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "PostAuthor")
+                        .WithMany("PostReviewsReceived")
+                        .HasForeignKey("PostAuthorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Posts.Post", "Post")
+                        .WithMany("Reviews")
+                        .HasForeignKey("PostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Author");
+
+                    b.Navigation("DeletedBy");
+
+                    b.Navigation("Game");
+
+                    b.Navigation("ModifiedBy");
+
+                    b.Navigation("Post");
+
+                    b.Navigation("PostAuthor");
+                });
+
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Posts.Post", b =>
                 {
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Author")
@@ -3401,11 +3665,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .HasForeignKey("DeletedByUserId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "ModifiedBy")
-                        .WithMany()
-                        .HasForeignKey("ModifiedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Posts.Room", "Room")
                         .WithMany("Posts")
                         .HasForeignKey("RoomId")
@@ -3417,8 +3676,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Navigation("Character");
 
                     b.Navigation("DeletedBy");
-
-                    b.Navigation("ModifiedBy");
 
                     b.Navigation("Room");
                 });
@@ -3444,6 +3701,10 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Posts.Room", b =>
                 {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
+                        .WithMany()
+                        .HasForeignKey("DeletedByUserId");
+
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Game", "Game")
                         .WithMany("Rooms")
                         .HasForeignKey("GameId")
@@ -3457,11 +3718,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Posts.Room", "PreviousRoom")
                         .WithMany()
                         .HasForeignKey("PreviousRoomId");
-
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
-                        .WithMany()
-                        .HasForeignKey("DeletedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("DeletedBy");
 
@@ -3572,8 +3828,7 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
                         .WithMany()
-                        .HasForeignKey("DeletedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("DeletedByUserId");
 
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "User")
                         .WithMany("ChatLinks")
@@ -3698,8 +3953,7 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
                         .WithMany()
-                        .HasForeignKey("DeletedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("DeletedByUserId");
 
                     b.Navigation("Author");
 
@@ -3720,14 +3974,118 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
                         .WithMany()
-                        .HasForeignKey("DeletedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("DeletedByUserId");
 
                     b.Navigation("Author");
 
                     b.Navigation("Category");
 
                     b.Navigation("DeletedBy");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Comment", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Author")
+                        .WithMany("Comments")
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
+                        .WithMany()
+                        .HasForeignKey("DeletedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Forum.Topic", "Topic")
+                        .WithMany("Comments")
+                        .HasForeignKey("EntityId")
+                        .OnDelete(DeleteBehavior.ClientCascade)
+                        .IsRequired();
+
+                    b.Navigation("Author");
+
+                    b.Navigation("DeletedBy");
+
+                    b.Navigation("Topic");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.CommentEdit", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Shared.Comment", "Comment")
+                        .WithMany("Edits")
+                        .HasForeignKey("CommentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Editor")
+                        .WithMany()
+                        .HasForeignKey("EditorUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Comment");
+
+                    b.Navigation("Editor");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Like", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
+                        .WithMany()
+                        .HasForeignKey("DeletedByUserId");
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "User")
+                        .WithMany("Likes")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DeletedBy");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Tag", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Shared.TagGroup", "TagGroup")
+                        .WithMany("Tags")
+                        .HasForeignKey("TagGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TagGroup");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Upload", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
+                        .WithMany()
+                        .HasForeignKey("DeletedByUserId");
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Characters.Character", null)
+                        .WithMany()
+                        .HasForeignKey("TargetCharacterId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Posts.Post", null)
+                        .WithMany()
+                        .HasForeignKey("TargetPostId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", null)
+                        .WithMany()
+                        .HasForeignKey("TargetUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Owner")
+                        .WithMany("Uploads")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DeletedBy");
+
+                    b.Navigation("Owner");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription", b =>
@@ -3763,6 +4121,8 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Navigation("GameAssistants");
 
+                    b.Navigation("GameReviews");
+
                     b.Navigation("GamesAsMaster");
 
                     b.Navigation("GamesAsMentor");
@@ -3783,9 +4143,11 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Navigation("PostPendenciesWaitingFor");
 
-                    b.Navigation("Posts");
+                    b.Navigation("PostReviewsAuthored");
 
-                    // NOTE: ProfilePictures navigation removed (EntityId FK is polymorphic)
+                    b.Navigation("PostReviewsReceived");
+
+                    b.Navigation("Posts");
 
                     b.Navigation("Subscriptions");
 
@@ -3801,6 +4163,10 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Navigation("Uploads");
 
+                    b.Navigation("UserEndorsementsAuthored");
+
+                    b.Navigation("UserEndorsementsReceived");
+
                     b.Navigation("UsernameChangeRequests");
 
                     b.Navigation("UsernameHistories");
@@ -3808,6 +4174,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Navigation("WarningsGiven");
 
                     b.Navigation("WarningsReceived");
+
+                    b.Navigation("WebsiteTestimonials");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Blog.Blog", b =>
@@ -3826,21 +4194,6 @@ namespace DM.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Blog.Rubric", b =>
                 {
                     b.Navigation("Publications");
-                });
-
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Comment", b =>
-                {
-                    b.Navigation("Edits");
-                });
-
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Tag", b =>
-                {
-                    b.Navigation("GameTags");
-                });
-
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.TagGroup", b =>
-                {
-                    b.Navigation("Tags");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Forum.Board", b =>
@@ -3863,8 +4216,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Navigation("Edits");
 
-                    // NOTE: Pictures navigation removed (EntityId FK is polymorphic)
-
                     b.Navigation("Posts");
 
                     b.Navigation("RoomLinks");
@@ -3880,8 +4231,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Navigation("GameTags");
 
-                    // NOTE: Pictures navigation removed (EntityId FK is polymorphic)
-
                     b.Navigation("Rooms");
 
                     b.Navigation("Tokens");
@@ -3889,9 +4238,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Posts.Post", b =>
                 {
-                    // NOTE: Attachments navigation removed (EntityId FK is polymorphic)
-
                     b.Navigation("Edits");
+
+                    b.Navigation("Reviews");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Posts.Room", b =>
@@ -3930,6 +4279,21 @@ namespace DM.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Personal.Notepads.NotepadCategory", b =>
                 {
                     b.Navigation("Entries");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Comment", b =>
+                {
+                    b.Navigation("Edits");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Tag", b =>
+                {
+                    b.Navigation("GameTags");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.TagGroup", b =>
+                {
+                    b.Navigation("Tags");
                 });
 #pragma warning restore 612, 618
         }

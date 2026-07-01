@@ -7,6 +7,7 @@
 import { ref, watch, computed, onUnmounted } from "vue";
 import { FilterDropdownItem } from "../primitives";
 import { communityApi } from "@/shared/api";
+import { UserActivityFilter } from "@/shared/api/models/community";
 import type { UserSuggestion } from "../types";
 
 defineOptions({ name: "UserMultiSelect" });
@@ -21,11 +22,17 @@ const props = withDefaults(
     maxSuggestions?: number;
     /** Debounce delay for search */
     debounceMs?: number;
+    /**
+     * Include users inactive for 30+ days in search results
+     * (activity=All). Default keeps the backend's Active-only filter.
+     */
+    includeInactive?: boolean;
   }>(),
   {
     placeholder: "Поиск пользователя",
     maxSuggestions: 6,
     debounceMs: 150,
+    includeInactive: false,
   },
 );
 
@@ -75,7 +82,9 @@ watch(searchInput, (query) => {
 async function loadSuggestions(query: string) {
   loading.value = true;
   try {
-    const result = await communityApi.searchUsers(query, 10);
+    const result = props.includeInactive
+      ? await communityApi.searchUsers(query, 10, UserActivityFilter.All)
+      : await communityApi.searchUsers(query, 10);
     if (!result.data) {
       suggestions.value = [];
       return;
@@ -86,7 +95,7 @@ async function loadSuggestions(query: string) {
       .slice(0, props.maxSuggestions)
       .map((u) => ({
         username: u.username,
-        picture: u.smallPictureUrl,
+        picture: u.picture?.smallUrl,
       }));
     highlightedIndex.value = -1;
   } catch (error) {

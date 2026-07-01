@@ -43,11 +43,7 @@ export default { inheritAttrs: false };
 
 <template>
   <div class="sidebar-skeleton" aria-hidden="true">
-    <div
-      v-for="i in lines"
-      :key="i"
-      class="skeleton-row"
-    >
+    <div v-for="i in lines" :key="i" class="skeleton-row">
       <div class="skeleton-line" :style="{ width: getWidth(i) }" />
     </div>
   </div>

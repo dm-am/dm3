@@ -16,14 +16,17 @@ import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { buildReadersTooltip } from "@/shared/lib/utils/tooltipBuilders";
 
 const gamesStore = useGamesStore();
-const { searchResult, searchLoading, searchError, tags } = storeToRefs(gamesStore);
+const { searchResult, searchLoading, searchError, tags } =
+  storeToRefs(gamesStore);
 
 // filterState is computed from URL (single source of truth, no sync needed)
-const { filterState, searchParams, setSort, hasActiveFilters } = useGamesFilter();
+const { filterState, searchParams, hasActiveFilters } = useGamesFilter();
 
 // Two-state empty text
 const emptyText = computed(() =>
-  hasActiveFilters.value ? "Игр по заданным фильтрам не найдено" : "Игр пока нет"
+  hasActiveFilters.value
+    ? "Игр по заданным фильтрам не найдено"
+    : "Игр пока нет",
 );
 
 // O(1) tag lookup Map from cached store tags (for descriptions)
@@ -53,10 +56,10 @@ function buildSlotsTooltip(row: {
 
   // Characters
   if (chars.length > 0) {
-    lines.push('Персонажи:');
-    chars.forEach(c => lines.push(`• ${c.name} (${c.ownerUsername})`));
+    lines.push("Персонажи:");
+    chars.forEach((c) => lines.push(`• ${c.name} (${c.ownerUsername})`));
   } else {
-    lines.push('Нет персонажей');
+    lines.push("Нет персонажей");
   }
 
   // Free slots
@@ -65,13 +68,13 @@ function buildSlotsTooltip(row: {
     if (free > 0) {
       lines.push(`\nСвободных мест: ${free}`);
     } else {
-      lines.push('\nМест нет');
+      lines.push("\nМест нет");
     }
   } else {
-    lines.push('\nМест: без ограничений');
+    lines.push("\nМест: без ограничений");
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 // Ensure tags are loaded (sidebar may have loaded them already)
@@ -93,7 +96,13 @@ const sortableColumnKeys = new Set(["title", "status"]);
 
 // Define table columns
 const columns: Column[] = [
-  { key: "title", label: "Название", width: "28%", align: "left", sortable: true },
+  {
+    key: "title",
+    label: "Название",
+    width: "28%",
+    align: "left",
+    sortable: true,
+  },
   { key: "master", label: "Ведущие", width: "18%", align: "left" },
   {
     key: "tags",
@@ -102,8 +111,20 @@ const columns: Column[] = [
     align: "left",
     hideOnMobile: true,
   },
-  { key: "status", label: "Статус игры", width: "18%", align: "left", sortable: true },
-  { key: "reviews", label: "Отзывы", width: "6%", align: "center", hideOnMobile: true },
+  {
+    key: "status",
+    label: "Статус игры",
+    width: "18%",
+    align: "left",
+    sortable: true,
+  },
+  {
+    key: "reviews",
+    label: "Отзывы",
+    width: "6%",
+    align: "center",
+    hideOnMobile: true,
+  },
   { key: "readers", label: "Читатели", width: "7%", align: "center" },
 ];
 
@@ -118,11 +139,6 @@ const currentSort = computed<SortState | undefined>(() => {
   }
   return undefined;
 });
-
-// Handle column header click for sorting
-function handleSort(column: Column, direction: "asc" | "desc") {
-  setSort(column.key, direction);
-}
 
 // Computed games array
 const games = computed(() => searchResult.value?.resources ?? []);
@@ -194,9 +210,11 @@ function handlePrefetch(page: number) {
       {{ searchError }}
     </div>
 
-    <!-- Table -->
+    <!-- Table. Hidden when the request failed and there is nothing to
+         show - an error must not be presented as an empty list. Stale
+         rows (if any) stay visible under the error message. -->
     <DataTable
-      id="results"
+      v-if="!searchError || games.length > 0"
       :columns="columns"
       :data="games"
       :loading="searchLoading"
@@ -208,7 +226,6 @@ function handlePrefetch(page: number) {
       "
       :sort="currentSort"
       :empty-text="emptyText"
-      @sort="handleSort"
     >
       <!-- Title column: Title (unread/comments) with search highlighting -->
       <template #cell-title="{ row }">
@@ -217,32 +234,47 @@ function handlePrefetch(page: number) {
             :to="{ name: 'game', params: { id: row.publicId || row.id } }"
             :class="['game-link', { 'new-item': isNew(row) }]"
           >
-            <span v-if="filterState.search" v-html="highlightMatch(row.title, filterState.search)"></span>
+            <span
+              v-if="filterState.search"
+              v-html="highlightMatch(row.title, filterState.search)"
+            ></span>
             <template v-else>{{ row.title }}</template>
-          </router-link>
-        </Tooltip>{{ " "
+          </router-link> </Tooltip
+        >{{ " "
         }}<span class="counters"
           ><span class="muted">(</span
           ><Tooltip :text="formatUnreadPostsTooltip(getUnreadPosts(row))">
+            <!-- First-unread endpoints bind the id as a Guid - pass row.id -->
             <router-link
-              :to="{ name: 'game-first-unread-post', params: { id: row.publicId || row.id } }"
+              :to="{
+                name: 'game-first-unread-post',
+                params: { id: row.id },
+              }"
+              :aria-label="formatUnreadPostsTooltip(getUnreadPosts(row))"
               >{{ getUnreadPosts(row) }}</router-link
-            >
-          </Tooltip
+            > </Tooltip
           ><span class="muted">/</span
           ><Tooltip :text="formatUnreadCommentsTooltip(getUnreadComments(row))">
             <router-link
-              :to="{ name: 'game-first-unread-comment', params: { id: row.publicId || row.id } }"
+              :to="{
+                name: 'game-first-unread-comment',
+                params: { id: row.id },
+              }"
+              :aria-label="formatUnreadCommentsTooltip(getUnreadComments(row))"
               >{{ getUnreadComments(row) }}</router-link
-            >
-          </Tooltip
+            > </Tooltip
           ><span class="muted">)</span></span
         >
       </template>
 
       <!-- Master column -->
       <template #cell-master="{ row }">
-        <UserLink v-if="row.master" :user="row.master" :search-query="filterState.search" hide-badge /><Tooltip
+        <UserLink
+          v-if="row.master"
+          :user="row.master"
+          :search-query="filterState.search"
+          hide-badge
+        /><Tooltip
           v-if="row.assistants?.length"
           :text="buildAssistantTooltip(row.assistants)"
         >
@@ -274,14 +306,18 @@ function handlePrefetch(page: number) {
             <!-- Tag with description tooltip from cached store -->
             <Tooltip>
               <template #content>
-                <RichText :text="getTagInfo(tagId).description || getTagInfo(tagId).title" />
+                <RichText
+                  :text="
+                    getTagInfo(tagId).description || getTagInfo(tagId).title
+                  "
+                />
               </template>
               <router-link
                 :to="{ name: 'games', query: { requiredTags: String(tagId) } }"
                 class="tag-link"
                 >{{ getTagInfo(tagId).title }}</router-link
-              >
-            </Tooltip><template v-if="idx < row.tagIds.length - 1">, </template>
+              > </Tooltip
+            ><template v-if="idx < row.tagIds.length - 1">, </template>
           </template>
         </div>
       </template>
@@ -291,16 +327,24 @@ function handlePrefetch(page: number) {
         <span class="reviews-cell">
           <Tooltip :text="`Рецензий на игру: ${row.gameReviewsCount ?? 0}`">
             <router-link
-              :to="{ name: 'game-reviews', params: { id: row.publicId || row.id } }"
+              :to="{
+                name: 'game-reviews',
+                params: { id: row.publicId || row.id },
+              }"
               class="review-link"
-            >{{ row.gameReviewsCount ?? 0 }}</router-link>
+              >{{ row.gameReviewsCount ?? 0 }}</router-link
+            >
           </Tooltip>
           <span class="muted">/</span>
           <Tooltip :text="`Оценок постов: ${row.postReviewsCount ?? 0}`">
             <router-link
-              :to="{ name: 'game-post-reviews', params: { id: row.publicId || row.id } }"
+              :to="{
+                name: 'game-post-reviews',
+                params: { id: row.publicId || row.id },
+              }"
               class="review-link"
-            >{{ row.postReviewsCount ?? 0 }}</router-link>
+              >{{ row.postReviewsCount ?? 0 }}</router-link
+            >
           </Tooltip>
         </span>
       </template>
@@ -313,7 +357,10 @@ function handlePrefetch(page: number) {
       </template>
 
       <!-- Footer with pagination -->
-      <template v-if="searchResult?.paging && searchResult.paging.pages > 1" #footer>
+      <template
+        v-if="searchResult?.paging && searchResult.paging.pages > 1"
+        #footer
+      >
         <Paging
           :paging="searchResult.paging"
           :to="{ name: 'games' }"
@@ -372,17 +419,6 @@ function handlePrefetch(page: number) {
   color: $link
   &:hover
     color: $link-hover
-
-.tag-tooltip-image
-  display: block
-  max-width: 200px
-  height: auto
-  margin-bottom: $tiny
-  border-radius: $border-radius
-
-.tooltip-text
-  margin-top: 0.5em
-  font-size: inherit
 
 .status-wrapper
   cursor: help

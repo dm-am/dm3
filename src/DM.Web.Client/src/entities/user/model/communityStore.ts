@@ -1,16 +1,19 @@
 // Community store
 // Migrated from shared/stores/community.ts
 
-import { defineStore, storeToRefs } from "pinia";
+import { defineStore } from "pinia";
 import { ref } from "vue";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import type { User, Username } from "./types";
 import { UserActivityFilter } from "./types";
 import { CommunityApi } from "@/shared/api";
-import { useUserStore } from "./store";
 
 /**
- * Search parameters for users query (frontend model)
+ * Search parameters for users query (frontend model).
+ *
+ * Canonical definition — lives in the entity layer so both the store and the
+ * `user-filter` feature share a single type (FSD: feature imports from entity,
+ * never the reverse).
  */
 export interface UsersSearchParams {
   search?: string;
@@ -37,9 +40,16 @@ export interface UsersSearchParams {
 
 // Cache configuration
 const CACHE_TTL = 30_000; // 30 seconds
-const searchCache = new Map<string, { data: ListEnvelope<User>; timestamp: number }>();
+const searchCache = new Map<
+  string,
+  { data: ListEnvelope<User>; timestamp: number }
+>();
 
-function createCacheKey(params: UsersSearchParams): string {
+/**
+ * Stable cache key covering every filter param. Also reused by the widget to
+ * trigger refetches, so it is exported as the single source of truth.
+ */
+export function createCacheKey(params: UsersSearchParams): string {
   return JSON.stringify({
     search: params.search || "",
     activity: params.activity || "active",
@@ -64,37 +74,86 @@ function createCacheKey(params: UsersSearchParams): string {
   });
 }
 
-export const useCommunityStore = defineStore("community", () => {
-  const { user: currentUser } = storeToRefs(useUserStore());
-  const users = ref<ListEnvelope<User> | null>(null);
-  const usersError = ref<number | null>(null);
+const SORT_MAP: Record<string, string> = {
+  username: "Name",
+  rating: "Rating",
+  lastActivity: "LastActivity",
+  registered: "Registered",
+  gamesHosting: "GamesHosting",
+  gamesPlaying: "GamesPlaying",
+  popularity: "Popularity",
+  blogsHosting: "BlogsHosting",
+};
 
-  // New search state
+const ACTIVITY_MAP: Record<string, UserActivityFilter> = {
+  active: UserActivityFilter.Active,
+  inactive: UserActivityFilter.Inactive,
+  all: UserActivityFilter.All,
+};
+
+/**
+ * Map frontend search params to backend API query params. Single source of
+ * truth used by both searchUsers and prefetchPage so the forwarded param set
+ * never drifts between them.
+ */
+function buildApiParams(
+  params: UsersSearchParams,
+): Record<string, string | number | boolean | undefined> {
+  const pageSize = params.size || 20;
+  const pageNumber = params.number || 1;
+  const apiParams: Record<string, string | number | boolean | undefined> = {
+    take: pageSize,
+  };
+
+  // Convert 1-indexed page number to skip
+  if (pageNumber > 1) {
+    apiParams.skip = (pageNumber - 1) * pageSize;
+  }
+
+  if (params.search) apiParams.q = params.search;
+
+  if (params.activity) {
+    apiParams.activity =
+      ACTIVITY_MAP[params.activity] ?? UserActivityFilter.Active;
+  }
+
+  if (params.role && params.role !== "all") apiParams.role = params.role;
+  if (params.isOnline === true) apiParams.isOnline = true;
+  if (params.isHonorary !== undefined) apiParams.isHonorary = params.isHonorary;
+  if (params.isNewbie !== undefined) apiParams.isNewbie = params.isNewbie;
+  if (params.minRating !== undefined) apiParams.minRating = params.minRating;
+  if (params.maxRating !== undefined) apiParams.maxRating = params.maxRating;
+  if (params.minGamesHosting !== undefined)
+    apiParams.minGamesHosting = params.minGamesHosting;
+  if (params.maxGamesHosting !== undefined)
+    apiParams.maxGamesHosting = params.maxGamesHosting;
+  if (params.minGamesPlaying !== undefined)
+    apiParams.minGamesPlaying = params.minGamesPlaying;
+  if (params.maxGamesPlaying !== undefined)
+    apiParams.maxGamesPlaying = params.maxGamesPlaying;
+  if (params.minBlogsHosting !== undefined)
+    apiParams.minBlogsHosting = params.minBlogsHosting;
+  if (params.maxBlogsHosting !== undefined)
+    apiParams.maxBlogsHosting = params.maxBlogsHosting;
+  if (params.registeredFromUtc)
+    apiParams.registeredFromUtc = params.registeredFromUtc;
+  if (params.registeredToUtc)
+    apiParams.registeredToUtc = params.registeredToUtc;
+
+  if (params.sortBy && SORT_MAP[params.sortBy]) {
+    apiParams.sort = SORT_MAP[params.sortBy];
+  }
+  if (params.sortOrder) apiParams.sortOrder = params.sortOrder;
+
+  return apiParams;
+}
+
+export const useCommunityStore = defineStore("community", () => {
+  // Search state
   const searchResult = ref<ListEnvelope<User> | null>(null);
   const searchLoading = ref(false);
   const searchError = ref<string | null>(null);
   const lastSearchParams = ref<UsersSearchParams | null>(null);
-
-  async function fetchUsers(
-    number: number,
-    filter: UserActivityFilter = UserActivityFilter.Active,
-  ) {
-    const take = currentUser.value?.settings?.paging?.entitiesPerPage;
-    const { data, error } = await CommunityApi.getUsers({
-      number,
-      take,
-      filter,
-    });
-
-    if (error?.status === 403) {
-      users.value = null;
-      usersError.value = 403;
-      return;
-    }
-
-    usersError.value = null;
-    users.value = data;
-  }
 
   /**
    * Search users with caching (stale-while-revalidate)
@@ -120,114 +179,7 @@ export const useCommunityStore = defineStore("community", () => {
     searchLoading.value = true;
     searchError.value = null;
 
-    // Map frontend params to backend API params
-    const pageSize = params.size || 20;
-    const pageNumber = params.number || 1;
-    const apiParams: Record<string, unknown> = {
-      take: pageSize,
-    };
-
-    // Convert page number to skip (number is 1-indexed page)
-    if (pageNumber > 1) {
-      apiParams.skip = (pageNumber - 1) * pageSize;
-    }
-
-    // Search
-    if (params.search) {
-      apiParams.q = params.search;
-    }
-
-    // Activity filter -> backend Activity enum (param name is 'activity', not 'filter')
-    if (params.activity) {
-      const activityMap: Record<string, UserActivityFilter> = {
-        active: UserActivityFilter.Active,
-        inactive: UserActivityFilter.Inactive,
-        all: UserActivityFilter.All,
-      };
-      apiParams.activity = activityMap[params.activity] ?? UserActivityFilter.Active;
-    }
-
-    // Role
-    if (params.role && params.role !== "all") {
-      apiParams.role = params.role;
-    }
-
-    // Online filter
-    if (params.isOnline === true) {
-      apiParams.isOnline = true;
-    }
-
-    // Honorary filter (only when filtering by role)
-    if (params.isHonorary !== undefined) {
-      apiParams.isHonorary = params.isHonorary;
-    }
-
-    // Newbie filter
-    if (params.isNewbie !== undefined) {
-      apiParams.isNewbie = params.isNewbie;
-    }
-
-    // Rating range filters
-    if (params.minRating !== undefined) {
-      apiParams.minRating = params.minRating;
-    }
-    if (params.maxRating !== undefined) {
-      apiParams.maxRating = params.maxRating;
-    }
-
-    // Games hosting range filters
-    if (params.minGamesHosting !== undefined) {
-      apiParams.minGamesHosting = params.minGamesHosting;
-    }
-    if (params.maxGamesHosting !== undefined) {
-      apiParams.maxGamesHosting = params.maxGamesHosting;
-    }
-
-    // Games playing range filters
-    if (params.minGamesPlaying !== undefined) {
-      apiParams.minGamesPlaying = params.minGamesPlaying;
-    }
-    if (params.maxGamesPlaying !== undefined) {
-      apiParams.maxGamesPlaying = params.maxGamesPlaying;
-    }
-
-    // Blogs hosting range filters
-    if (params.minBlogsHosting !== undefined) {
-      apiParams.minBlogsHosting = params.minBlogsHosting;
-    }
-    if (params.maxBlogsHosting !== undefined) {
-      apiParams.maxBlogsHosting = params.maxBlogsHosting;
-    }
-
-    // Registration date range filters
-    if (params.registeredFromUtc) {
-      apiParams.registeredFromUtc = params.registeredFromUtc;
-    }
-    if (params.registeredToUtc) {
-      apiParams.registeredToUtc = params.registeredToUtc;
-    }
-
-    // Sort mapping: frontend -> backend UserSort enum
-    const sortMap: Record<string, string> = {
-      username: "Name",
-      rating: "Rating",
-      lastActivity: "LastActivity",
-      registered: "Registered",
-      gamesHosting: "GamesHosting",
-      gamesPlaying: "GamesPlaying",
-      popularity: "Popularity",
-      blogsHosting: "BlogsHosting",
-    };
-    if (params.sortBy && sortMap[params.sortBy]) {
-      apiParams.sort = sortMap[params.sortBy];
-    }
-
-    // Sort order (asc/desc)
-    if (params.sortOrder) {
-      apiParams.sortOrder = params.sortOrder;
-    }
-
-    const { data, error } = await CommunityApi.getUsers(apiParams);
+    const { data, error } = await CommunityApi.getUsers(buildApiParams(params));
 
     searchLoading.value = false;
 
@@ -265,59 +217,7 @@ export const useCommunityStore = defineStore("community", () => {
     // Skip if already cached
     if (searchCache.has(cacheKey)) return;
 
-    // Map params to API params (same as searchUsers)
-    const pageSize = params.size || 20;
-    const apiParams: Record<string, unknown> = {
-      take: pageSize,
-    };
-
-    // Convert page number to skip (number is 1-indexed page)
-    if (page > 1) {
-      apiParams.skip = (page - 1) * pageSize;
-    }
-    if (params.search) apiParams.q = params.search;
-    if (params.activity) {
-      const activityMap: Record<string, UserActivityFilter> = {
-        active: UserActivityFilter.Active,
-        inactive: UserActivityFilter.Inactive,
-        all: UserActivityFilter.All,
-      };
-      apiParams.activity = activityMap[params.activity] ?? UserActivityFilter.Active;
-    }
-    if (params.role && params.role !== "all") apiParams.role = params.role;
-    if (params.isOnline === true) apiParams.isOnline = true;
-    if (params.isHonorary !== undefined) apiParams.isHonorary = params.isHonorary;
-    if (params.isNewbie !== undefined) apiParams.isNewbie = params.isNewbie;
-    if (params.minRating !== undefined) apiParams.minRating = params.minRating;
-    if (params.maxRating !== undefined) apiParams.maxRating = params.maxRating;
-    if (params.minGamesHosting !== undefined) apiParams.minGamesHosting = params.minGamesHosting;
-    if (params.maxGamesHosting !== undefined) apiParams.maxGamesHosting = params.maxGamesHosting;
-    if (params.minGamesPlaying !== undefined) apiParams.minGamesPlaying = params.minGamesPlaying;
-    if (params.maxGamesPlaying !== undefined) apiParams.maxGamesPlaying = params.maxGamesPlaying;
-    if (params.minBlogsHosting !== undefined) apiParams.minBlogsHosting = params.minBlogsHosting;
-    if (params.maxBlogsHosting !== undefined) apiParams.maxBlogsHosting = params.maxBlogsHosting;
-    if (params.registeredFromUtc) apiParams.registeredFromUtc = params.registeredFromUtc;
-    if (params.registeredToUtc) apiParams.registeredToUtc = params.registeredToUtc;
-    // Sort mapping: frontend -> backend UserSort enum
-    const sortMap: Record<string, string> = {
-      username: "Name",
-      rating: "Rating",
-      lastActivity: "LastActivity",
-      registered: "Registered",
-      gamesHosting: "GamesHosting",
-      gamesPlaying: "GamesPlaying",
-      popularity: "Popularity",
-      blogsHosting: "BlogsHosting",
-    };
-    if (params.sortBy && sortMap[params.sortBy]) {
-      apiParams.sort = sortMap[params.sortBy];
-    }
-    // Sort order (asc/desc)
-    if (params.sortOrder) {
-      apiParams.sortOrder = params.sortOrder;
-    }
-
-    const { data } = await CommunityApi.getUsers(apiParams);
+    const { data } = await CommunityApi.getUsers(buildApiParams(params));
     if (data) {
       searchCache.set(cacheKey, { data, timestamp: Date.now() });
     }
@@ -330,12 +230,19 @@ export const useCommunityStore = defineStore("community", () => {
     loadingProfile.value = true;
     selectedUser.value = null;
 
-    const { data, error } = await CommunityApi.getUser(username);
+    // Profile page needs the rich UserProfile DTO (status, name, gender,
+    // birthday, location, contacts, info, mediumUrl picture) — not the
+    // truncated User DTO from /v1/users/{username} which is meant for lists.
+    const { data, error } = await CommunityApi.getUserProfile(username);
     loadingProfile.value = false;
 
     if (error) return false;
 
-    selectedUser.value = data ?? null;
+    // Backend returns a `{ resource: UserProfile }` envelope. The API client
+    // doesn't unwrap automatically (typed lie), so we extract here. Fall
+    // through to `data` if the response is already unwrapped (defensive
+    // against API shape divergence between endpoints).
+    selectedUser.value = unwrapResource(data);
     return true;
   }
 
@@ -343,19 +250,24 @@ export const useCommunityStore = defineStore("community", () => {
 
   async function fetchEditableUser(username: Username) {
     const { data } = await CommunityApi.getUserForUpdate(username);
-    editableUser.value = data ?? null;
+    editableUser.value = unwrapResource(data);
+  }
+
+  function unwrapResource(payload: unknown): User | null {
+    if (!payload || typeof payload !== "object") return null;
+    // UserProfile is a structural superset of User, so the `as User` cast is
+    // safe even when /profile returns the richer DTO.
+    if ("resource" in payload) return (payload as { resource: User }).resource;
+    return payload as User;
   }
 
   return {
-    users,
-    usersError,
-    fetchUsers,
     selectedUser,
     loadingProfile,
     trySelectProfile,
     editableUser,
     fetchEditableUser,
-    // New search API
+    // Search API
     searchResult,
     searchLoading,
     searchError,

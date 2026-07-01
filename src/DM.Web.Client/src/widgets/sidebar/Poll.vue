@@ -3,6 +3,7 @@ import type { Poll, PollOptionId } from "@/entities/poll";
 import ProgressBar from "@/shared/ui/ProgressBar/ProgressBar.vue";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { symbols } from "@/shared/lib/utils/icons";
+import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { computed, ref } from "vue";
 import dayjs from "dayjs";
@@ -10,6 +11,7 @@ import { storeToRefs } from "pinia";
 import { useUserStore, userIsSeniorModerator } from "@/entities/user";
 import { usePollsStore } from "@/entities/poll";
 import Button from "@/shared/ui/Button/Button.vue";
+import { buildSubscribersTooltip } from "@/shared/lib/utils/tooltipBuilders";
 
 const userStore = useUserStore();
 const { user } = storeToRefs(userStore);
@@ -20,14 +22,14 @@ const props = withDefaults(
     poll: Poll;
     /** Show edit controls (for moderators on polls page) */
     controls?: boolean;
+    /** Search query for highlighting matches in title */
+    searchQuery?: string;
   }>(),
   { controls: false },
 );
 
 // Use server-computed status
 const isActive = computed(() => props.poll.status === "Active");
-const isPending = computed(() => props.poll.status === "Pending");
-const isClosed = computed(() => props.poll.status === "Closed");
 
 const startsFormatted = computed(() =>
   dayjs(props.poll.startsUtc).format("DD.MM.YYYY [в] HH:mm"),
@@ -129,6 +131,20 @@ async function voteForOption(optionId: PollOptionId) {
 async function cancelVote() {
   await unvote(props.poll.id!);
 }
+
+// Voters tooltip mirrors the readers tooltip: one uniform-colored line
+// "Голосовали: A, B, C" (with "... и еще N" when truncated), not a faded
+// title over a column of names.
+function votersTooltipText(option: Poll["options"][number]): string {
+  return buildSubscribersTooltip(
+    {
+      subscribersCount: option.totalVoters ?? option.voters?.length ?? 0,
+      subscriberUsernames: option.voters?.map((v) => v.username) ?? [],
+    },
+    "",
+    "Голосовали",
+  );
+}
 </script>
 <template>
   <div class="poll">
@@ -141,15 +157,27 @@ async function cancelVote() {
         </div>
         <div class="edit-field">
           <label class="edit-label"><strong>Описание</strong></label>
-          <textarea v-model="editDetails" class="edit-input edit-textarea" rows="3" />
+          <textarea
+            v-model="editDetails"
+            class="edit-input edit-textarea"
+            rows="3"
+          />
         </div>
         <div class="edit-field">
           <label class="edit-label"><strong>Начало</strong></label>
-          <input v-model="editStartsUtc" type="datetime-local" class="edit-input" />
+          <input
+            v-model="editStartsUtc"
+            type="datetime-local"
+            class="edit-input"
+          />
         </div>
         <div class="edit-field">
           <label class="edit-label"><strong>Окончание</strong></label>
-          <input v-model="editEndsUtc" type="datetime-local" class="edit-input" />
+          <input
+            v-model="editEndsUtc"
+            type="datetime-local"
+            class="edit-input"
+          />
         </div>
         <div class="edit-field">
           <label class="edit-label"><strong>Тип опроса</strong></label>
@@ -171,7 +199,7 @@ async function cancelVote() {
           <Button :disabled="isSubmitting" @click="saveEdit">
             {{ isSubmitting ? "Сохранение..." : "Сохранить" }}
           </Button>
-          <Button secondary @click="cancelEditing">Отмена</Button>
+          <Button @click="cancelEditing">Отмена</Button>
           <span v-if="editError" class="edit-error">{{ editError }}</span>
         </div>
       </div>
@@ -180,7 +208,11 @@ async function cancelVote() {
     <!-- View mode -->
     <template v-else>
       <div class="poll-title">
-        {{ poll.title }}
+        <span
+          v-if="searchQuery"
+          v-html="highlightMatch(poll.title, searchQuery)"
+        />
+        <template v-else>{{ poll.title }}</template>
         <Tooltip v-if="canEdit" text="Редактировать">
           <a class="poll-edit-link" @click="startEditing">
             <SvgIcon name="pencil" />
@@ -188,49 +220,41 @@ async function cancelVote() {
         </Tooltip>
       </div>
       <div v-if="poll.details" class="poll-details">
-        {{ poll.details }}
+        <span
+          v-if="searchQuery"
+          v-html="highlightMatch(poll.details, searchQuery)"
+        />
+        <template v-else>{{ poll.details }}</template>
       </div>
       <div class="poll-status-inline">
         <Tooltip :text="statusTooltip">
           <span class="muted">{{ statusText }}</span>
         </Tooltip>
       </div>
-      <!-- Public poll with voters - show tooltip -->
       <template v-for="option in poll.options" :key="option.id">
+        <!-- Public poll with voters: hovering shows who voted. Read-only for
+             guests — they simply cannot vote, with no login prompt. -->
         <Tooltip
           v-if="!poll.isAnonymous && option.voters?.length"
+          :text="votersTooltipText(option)"
         >
-          <template #default>
-            <ProgressBar
-              :current="option.votesCount"
-              :goal="totalVotes || 1"
-              :class="{ 'poll-option-voted': option.voted }"
+          <ProgressBar
+            :current="option.votesCount"
+            :goal="totalVotes || 1"
+            :class="{ 'poll-option-voted': option.voted }"
+          >
+            <span v-if="option.voted">{{ symbols.checkmark }}</span>
+            {{ option.text }}&nbsp;&ndash;&nbsp;{{ option.votesCount }}
+            <Tooltip v-if="isActive && user && !voted" text="Проголосовать">
+              <a @click="voteForOption(option.id)" class="poll-option-vote" />
+            </Tooltip>
+            <Tooltip
+              v-if="isActive && user && option.voted"
+              text="Отменить голос"
             >
-              <span v-if="option.voted">{{ symbols.checkmark }}</span>
-              {{ option.text }}&nbsp;&ndash;&nbsp;{{ option.votesCount }}
-              <Tooltip v-if="isActive && user && !voted" text="Проголосовать">
-                <a @click="voteForOption(option.id)" class="poll-option-vote" />
-              </Tooltip>
-              <Tooltip v-if="isActive && user && option.voted" text="Отменить голос">
-                <a @click="cancelVote" class="poll-option-vote" />
-              </Tooltip>
-            </ProgressBar>
-          </template>
-          <template #content>
-            <div class="voters-tooltip">
-              <div class="voters-title">Голосовали:</div>
-              <div
-                v-for="voter in option.voters"
-                :key="voter.id"
-                class="voter-item"
-              >
-                {{ voter.username }}
-              </div>
-              <div v-if="option.totalVoters" class="voters-more">
-                ...еще {{ option.totalVoters - option.voters.length }}
-              </div>
-            </div>
-          </template>
+              <a @click="cancelVote" class="poll-option-vote" />
+            </Tooltip>
+          </ProgressBar>
         </Tooltip>
 
         <!-- Anonymous poll or no voters - no tooltip -->
@@ -245,7 +269,10 @@ async function cancelVote() {
           <Tooltip v-if="isActive && user && !voted" text="Проголосовать">
             <a @click="voteForOption(option.id)" class="poll-option-vote" />
           </Tooltip>
-          <Tooltip v-if="isActive && user && option.voted" text="Отменить голос">
+          <Tooltip
+            v-if="isActive && user && option.voted"
+            text="Отменить голос"
+          >
             <a @click="cancelVote" class="poll-option-vote" />
           </Tooltip>
         </ProgressBar>
@@ -253,7 +280,7 @@ async function cancelVote() {
 
       <!-- Poll type indicator -->
       <div class="poll-type-indicator">
-        {{ poll.isAnonymous ? 'Анонимный опрос' : 'Публичный опрос' }}
+        {{ poll.isAnonymous ? "Анонимный опрос" : "Публичный опрос" }}
       </div>
     </template>
   </div>
@@ -332,7 +359,7 @@ async function cancelVote() {
   &:focus
     outline: none
     border-style: solid
-    border-color: $button-border-hover
+    border-color: $border-focus
 
 .edit-textarea
   resize: vertical
@@ -370,25 +397,4 @@ async function cancelVote() {
   margin-top: $tiny
   color: $accent-red
   font-size: $secondary-font-size
-
-.voters-tooltip
-  padding: $tiny
-  min-width: 120px
-  max-width: 200px
-
-.voters-title
-  font-weight: bold
-  margin-bottom: $tiny
-  color: $text-muted
-
-.voter-item
-  padding: 2px 0
-  white-space: nowrap
-  overflow: hidden
-  text-overflow: ellipsis
-
-.voters-more
-  color: $text-muted
-  font-size: $secondary-font-size
-  margin-top: $tiny
 </style>

@@ -4,24 +4,31 @@ import { storeToRefs } from "pinia";
 import { DataTable, type Column, type SortState } from "@/shared/ui/DataTable";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import Paging from "@/shared/ui/Paging/Paging.vue";
-import { UserLink, useCommunityStore, useUserDisplay } from "@/entities/user";
+import {
+  UserLink,
+  UserRating,
+  useCommunityStore,
+  useUserDisplay,
+} from "@/entities/user";
+import { createCacheKey } from "@/entities/user/model/communityStore";
 import { UsersFilter, useUsersFilter } from "@/features/user-filter";
-import type { UsersSearchParams } from "@/features/user-filter";
-import { buildSubscribersTooltip } from "@/shared/lib/utils/tooltipBuilders";
+import { buildStatusLines } from "@/shared/lib/utils/tooltipBuilders";
 
 const communityStore = useCommunityStore();
-const { searchResult, searchLoading, searchError } = storeToRefs(communityStore);
+const { searchResult, searchLoading, searchError } =
+  storeToRefs(communityStore);
 
 // filterState is computed from URL (single source of truth, no sync needed)
-const { filterState, searchParams, setSort, hasActiveFilters } = useUsersFilter();
+const { filterState, searchParams, hasActiveFilters } = useUsersFilter();
 
 // Two-state empty text
 const emptyText = computed(() =>
-  hasActiveFilters.value ? "Пользователей по заданным фильтрам не найдено" : "Пользователей пока нет"
+  hasActiveFilters.value
+    ? "Пользователей по заданным фильтрам не найдено"
+    : "Пользователей пока нет",
 );
 const {
   isOnline,
-  buildRatingTooltip,
   buildOnlineTooltip,
   buildRegistrationTooltip,
   formatDateShort,
@@ -40,16 +47,63 @@ const sortKeyToColumn: Record<string, string> = Object.fromEntries(
   Object.entries(columnToSortKey).map(([col, sort]) => [sort, col]),
 );
 
-// Define table columns (UX order: identity → availability → quality → activity → social → tenure)
+// Define table columns (UX order: identity → availability → quality →
+// counts → tenure). Identifier/date columns left-aligned; short numeric
+// count columns centered. Widths sum to 100%.
 const columns: Column[] = [
-  { key: "username", label: "Имя пользователя", width: "16%", align: "left", sortable: true },
-  { key: "activity", label: "Активность", width: "12%", align: "left", sortable: true },
-  { key: "rating", label: "Рейтинг", width: "13%", align: "left", sortable: true },
-  { key: "reviews", label: "Рекомендации", width: "16%", align: "center", hideOnMobile: true },
-  { key: "games", label: "Игры", width: "8%", align: "center", hideOnMobile: true },
-  { key: "blogs", label: "Блоги", width: "7%", align: "center", hideOnMobile: true },
-  { key: "subscribers", label: "Подписчики", width: "9%", align: "center", hideOnMobile: true },
-  { key: "registered", label: "Регистрация", width: "13%", align: "left", sortable: true, hideOnMobile: true },
+  {
+    key: "username",
+    label: "Имя пользователя",
+    width: "22%",
+    align: "left",
+    sortable: true,
+  },
+  {
+    key: "activity",
+    label: "Активность",
+    width: "13%",
+    align: "left",
+    sortable: true,
+    defaultDirection: "desc",
+  },
+  {
+    key: "rating",
+    label: "Рейтинг",
+    width: "13%",
+    align: "center",
+    sortable: true,
+    defaultDirection: "desc",
+  },
+  {
+    key: "reviews",
+    label: "Рекомендации",
+    width: "16%",
+    align: "center",
+    hideOnMobile: true,
+  },
+  {
+    key: "games",
+    label: "Игры",
+    width: "11%",
+    align: "center",
+    hideOnMobile: true,
+  },
+  {
+    key: "blogs",
+    label: "Блоги",
+    width: "10%",
+    align: "center",
+    hideOnMobile: true,
+  },
+  {
+    key: "registered",
+    label: "Регистрация",
+    width: "15%",
+    align: "left",
+    sortable: true,
+    defaultDirection: "desc",
+    hideOnMobile: true,
+  },
 ];
 
 // Current sort state for DataTable (maps API sort fields to column keys)
@@ -65,44 +119,13 @@ const currentSort = computed<SortState | undefined>(() => {
   return undefined;
 });
 
-// Handle column header click for sorting (maps column keys to API sort fields)
-function handleSort(column: Column, direction: "asc" | "desc") {
-  const sortKey = columnToSortKey[column.key] || column.key;
-  setSort(sortKey, direction);
-}
-
 // Computed users array
 const users = computed(() => searchResult.value?.resources ?? []);
 
-// Create stable key for search params (must include ALL filter params)
-function createParamsKey(params: UsersSearchParams): string {
-  return JSON.stringify({
-    search: params.search || "",
-    activity: params.activity || "active",
-    isOnline: params.isOnline ?? false,
-    role: params.role || "",
-    isHonorary: params.isHonorary ?? false,
-    isNewbie: params.isNewbie,
-    minRating: params.minRating,
-    maxRating: params.maxRating,
-    minGamesHosting: params.minGamesHosting,
-    maxGamesHosting: params.maxGamesHosting,
-    minGamesPlaying: params.minGamesPlaying,
-    maxGamesPlaying: params.maxGamesPlaying,
-    minBlogsHosting: params.minBlogsHosting,
-    maxBlogsHosting: params.maxBlogsHosting,
-    registeredFromUtc: params.registeredFromUtc || "",
-    registeredToUtc: params.registeredToUtc || "",
-    sortBy: params.sortBy || "lastActivity",
-    sortOrder: params.sortOrder || "desc",
-    number: params.number || 1,
-    size: params.size || 20,
-  });
-}
+// Refetch whenever the cache key (covering every filter param) changes.
+// Shares the store's key builder so the widget and store never diverge.
+const paramsKey = computed(() => createCacheKey(searchParams.value));
 
-const paramsKey = computed(() => createParamsKey(searchParams.value));
-
-// Fetch users when search params key changes
 watch(
   paramsKey,
   () => {
@@ -116,18 +139,11 @@ function handlePrefetch(page: number) {
   communityStore.prefetchPage(page);
 }
 
-// Build status breakdown lines for tooltip
-function buildStatusLines(counts: { draft: number; active: number; closed: number } | undefined, itemName: string): string[] {
-  if (!counts) return [];
-  const lines: string[] = [];
-  if (counts.draft > 0) lines.push(`• Подготавливаемые ${itemName}: ${counts.draft}`);
-  if (counts.active > 0) lines.push(`• Активные ${itemName}: ${counts.active}`);
-  if (counts.closed > 0) lines.push(`• Закрытые ${itemName}: ${counts.closed}`);
-  return lines;
-}
-
 // Build hosting tooltip for games (left number)
-function buildHostingTooltip(row: { gamesHosting?: number; gamesHostingByStatus?: { draft: number; active: number; closed: number } }): string {
+function buildHostingTooltip(row: {
+  gamesHosting?: number;
+  gamesHostingByStatus?: { draft: number; active: number; closed: number };
+}): string {
   const total = row.gamesHosting ?? 0;
   if (total === 0) return "Нет игр в роли ведущего";
   const lines = ["В роли ведущего:"];
@@ -137,7 +153,10 @@ function buildHostingTooltip(row: { gamesHosting?: number; gamesHostingByStatus?
 }
 
 // Build playing tooltip for games (right number) - includes current and former players
-function buildPlayingTooltip(row: { gamesPlaying?: number; gamesPlayingByStatus?: { draft: number; active: number; closed: number } }): string {
+function buildPlayingTooltip(row: {
+  gamesPlaying?: number;
+  gamesPlayingByStatus?: { draft: number; active: number; closed: number };
+}): string {
   const total = row.gamesPlaying ?? 0;
   if (total === 0) return "Нет игр в роли игрока";
   const lines = ["В роли игрока:"];
@@ -146,27 +165,25 @@ function buildPlayingTooltip(row: { gamesPlaying?: number; gamesPlayingByStatus?
   return lines.join("\n");
 }
 
-// Build endorsements tooltip
-function buildEndorsementsTooltip(row: { reviewsReceived?: number }): string {
-  const received = row.reviewsReceived ?? 0;
+// Build endorsements tooltip (recommendations received, not post reviews)
+function buildEndorsementsTooltip(row: {
+  endorsementsReceived?: number;
+}): string {
+  const received = row.endorsementsReceived ?? 0;
   return `Рекомендаций: ${received}`;
 }
 
 // Build blogs hosting tooltip
-function buildBlogsTooltip(row: { blogsHosting?: number; blogsHostingByStatus?: { draft: number; active: number; closed: number } }): string {
+function buildBlogsTooltip(row: {
+  blogsHosting?: number;
+  blogsHostingByStatus?: { draft: number; active: number; closed: number };
+}): string {
   const total = row.blogsHosting ?? 0;
   if (total === 0) return "Не ведет блогов";
   const lines = ["Ведет блоги:"];
   lines.push(...buildStatusLines(row.blogsHostingByStatus, "блоги"));
   if (lines.length === 1) lines.push(`Блогов: ${total}`);
   return lines.join("\n");
-}
-
-// Get CSS class for rating quality score (green if positive, red if negative, default for zero)
-function getRatingClass(score: number): string {
-  if (score > 0) return "positive";
-  if (score < 0) return "negative";
-  return "";
 }
 </script>
 
@@ -194,55 +211,33 @@ function getRatingClass(score: number): string {
       "
       :sort="currentSort"
       :empty-text="emptyText"
-      @sort="handleSort"
     >
-      <!-- Username column with role/honorary badges and search highlighting -->
+      <!-- Username column with role badges and search highlighting -->
       <template #cell-username="{ row }">
         <UserLink :user="row" :search-query="filterState.search" />
       </template>
 
-      <!-- Rating column: quality/quantity or n/a if disabled -->
       <template #cell-rating="{ row }">
-        <template v-if="row.rating">
-          <Tooltip text="Сумма оценок постов">
-            <router-link
-              :to="{ name: 'profile', params: { username: row.username } }"
-              class="rating-quality"
-              :class="getRatingClass(row.rating.postReviewScoreSum)"
-              >{{ row.rating.postReviewScoreSum }}</router-link
-            ></Tooltip
-          ><span class="rating-separator">/</span
-          ><Tooltip text="Количество постов"
-            ><span class="rating-quantity">{{ row.rating.totalPosts }}</span></Tooltip
-          >
-        </template>
-        <Tooltip :text="buildRatingTooltip(row)">
-          <router-link
-            v-if="!row.rating"
-            :to="{ name: 'profile', params: { username: row.username } }"
-            class="rating-na"
-            >n/a</router-link
-          >
-        </Tooltip>
+        <UserRating :user="row" />
       </template>
 
-      <!-- Games column: X/Y (hosting/playing) with separate tooltips -->
+      <!-- Games column: X/Y (hosting/playing) — plain counts with tooltips -->
       <template #cell-games="{ row }">
         <span class="games-cell">
           <Tooltip :text="buildHostingTooltip(row)">
-            <span class="stats-cell">{{ row.gamesHosting ?? 0 }}</span>
+            <span class="stats-value">{{ row.gamesHosting ?? 0 }}</span>
           </Tooltip>
           <span class="muted">/</span>
           <Tooltip :text="buildPlayingTooltip(row)">
-            <span class="stats-cell">{{ row.gamesPlaying ?? 0 }}</span>
+            <span class="stats-value">{{ row.gamesPlaying ?? 0 }}</span>
           </Tooltip>
         </span>
       </template>
 
-      <!-- Blogs column: X (hosting) -->
+      <!-- Blogs column: X (hosting) — plain count with tooltip -->
       <template #cell-blogs="{ row }">
         <Tooltip :text="buildBlogsTooltip(row)">
-          <span class="stats-cell">{{ row.blogsHosting ?? 0 }}</span>
+          <span class="stats-value">{{ row.blogsHosting ?? 0 }}</span>
         </Tooltip>
       </template>
 
@@ -253,39 +248,33 @@ function getRatingClass(score: number): string {
         </Tooltip>
       </template>
 
-      <!-- Reviews column: received count with link to profile -->
+      <!-- Recommendations column: endorsements received — plain count -->
       <template #cell-reviews="{ row }">
         <Tooltip :text="buildEndorsementsTooltip(row)">
-          <router-link
-            :to="{ name: 'profile', params: { username: row.username } }"
-            class="reviews-link"
-          >
-            {{ row.reviewsReceived ?? 0 }}
-          </router-link>
+          <span class="stats-value">{{ row.endorsementsReceived ?? 0 }}</span>
         </Tooltip>
       </template>
 
       <!-- Activity column (online/offline status) -->
       <!-- Compute isOnline once per row to ensure consistency between indicator and tooltip -->
       <template #cell-activity="{ row }">
-        <template v-for="online in [isOnline(row)]" :key="0">
+        <template v-for="online in [isOnline(row)]" :key="String(online)">
           <Tooltip :text="buildOnlineTooltip(row, online)">
-            <span class="online-indicator" :class="{ online, offline: !online }">
+            <span
+              class="online-indicator"
+              :class="{ online, offline: !online }"
+            >
               {{ online ? "online" : "offline" }}
             </span>
           </Tooltip>
         </template>
       </template>
 
-      <!-- Subscribers column (like readers in games) -->
-      <template #cell-subscribers="{ row }">
-        <Tooltip :text="buildSubscribersTooltip(row)">
-          <span class="stats-cell">{{ row.subscribersCount ?? 0 }}</span>
-        </Tooltip>
-      </template>
-
       <!-- Footer with pagination -->
-      <template v-if="searchResult?.paging && searchResult.paging.pages > 1" #footer>
+      <template
+        v-if="searchResult?.paging && searchResult.paging.pages > 1"
+        #footer
+      >
         <Paging
           :paging="searchResult.paging"
           :to="{ name: 'community' }"
@@ -313,7 +302,7 @@ function getRatingClass(score: number): string {
   border-radius: $border-radius
   margin-bottom: $medium
 
-.stats-cell
+.stats-value
   color: $text
   cursor: help
 
@@ -332,37 +321,4 @@ function getRatingClass(score: number): string {
 
   &.offline
     color: $text-muted
-
-// Rating column styles
-.rating-quality
-  font-weight: bold
-  color: $link
-  &:hover
-    color: $link-hover
-  &.positive
-    color: $accent-green
-    &:hover
-      color: $accent-green-hover
-  &.negative
-    color: $accent-red
-    &:hover
-      color: $accent-red-hover
-
-.rating-separator
-  color: $text-muted
-  margin: 0 0.15em
-
-.rating-quantity
-  color: $text
-  cursor: help
-
-.rating-na
-  color: $link
-  &:hover
-    color: $link-hover
-
-.reviews-link
-  color: $text
-  &:hover
-    color: $link-hover
 </style>

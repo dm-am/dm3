@@ -66,6 +66,28 @@ field
     min-width: $grid-step * 30
     color: $text
 
+// Keyboard focus indicator — the reset above removes outlines, so restore
+// them for keyboard navigation only (mouse focus stays outline-free).
+// Component-level :focus-visible rules (e.g. _Tables.sass expandable rows,
+// DataTable sort buttons) have higher specificity and override this.
+a:focus-visible,
+button:focus-visible
+  outline: 2px solid $border-focus
+  outline-offset: 2px
+
+// Screen-reader-only content (standard clip pattern)
+.visually-hidden
+  position: absolute
+  width: 1px
+  height: 1px
+  margin: -1px
+  padding: 0
+  overflow: hidden
+  clip: rect(0, 0, 0, 0)
+  clip-path: inset(50%)
+  white-space: nowrap
+  border: 0
+
 ::selection
   background-color: $selection-bg
   color: $selection-text

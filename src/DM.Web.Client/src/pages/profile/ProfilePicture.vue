@@ -1,106 +1,79 @@
-﻿<script setup lang="ts">
-import { ref, computed, onUnmounted } from "vue";
-import type { AxiosProgressEvent } from "axios";
-import { personalApi } from "@/shared/api";
-import { uploadApi } from "@/shared/api";
+<script setup lang="ts">
+import { computed, toRef } from "vue";
+import {
+  useCommunityStore,
+  useAvatarUpload,
+  AVATAR_ACCEPT,
+} from "@/entities/user";
 import { Upload } from "@/features/upload";
-let resetTimeout: ReturnType<typeof setTimeout> | null = null;
 
-onUnmounted(() => {
-  if (resetTimeout) clearTimeout(resetTimeout);
-});
+/**
+ * Overlay для редактирования аватара на странице профиля.
+ * Показывается только когда canEdit && isEditMode (см. ProfilePage.vue).
+ * Единственная точка UX для редактирования аватара в приложении.
+ *
+ * Использует `useAvatarUpload` composable — SSOT для логики upload/reset,
+ * drag-drop, paste, compression, progress.
+ */
+const props = defineProps<{
+  username: string;
+}>();
 
-type UploadState = "idle" | "uploading" | "success" | "error";
-const uploadState = ref<UploadState>("idle");
-const progress = ref(0);
-const errorMessage = ref("");
+// Берем юзера из community-store (там лежит selectedUser профиля). Если
+// текущий юзер открыл свой профиль — это тот же объект, что и в userStore.
+const communityStore = useCommunityStore();
+const selectedUser = computed(() => communityStore.selectedUser);
+
+const avatar = useAvatarUpload(selectedUser);
 
 const stateLabel = computed(() => {
-  switch (uploadState.value) {
-    case "idle":
-      return "Загрузить фото";
-    case "uploading":
-      return `${progress.value}%`;
-    case "success":
-      return "Готово!";
-    case "error":
-      return errorMessage.value || "Ошибка";
-    default:
-      return "Загрузить фото";
-  }
+  if (avatar.uploading.value) return `${avatar.progress.value}%`;
+  if (avatar.resetting.value) return "Сброс...";
+  if (avatar.isDragover.value) return "Отпустите для загрузки";
+  return "Загрузить · перетащите или вставьте";
 });
 
-const onProgress = (e: AxiosProgressEvent) => {
-  if (e.total) {
-    progress.value = Math.round((e.loaded / e.total) * 100);
-  }
-};
-
-const onUploading = async (formData: FormData) => {
+const handleUploaded = async (formData: FormData) => {
   const file = formData.get("file") as File | null;
-  if (!file) return;
-
-  // Client-side validation
-  const maxSize = 10 * 1024 * 1024; // 10 MB
-  if (file.size > maxSize) {
-    uploadState.value = "error";
-    errorMessage.value = "Макс. 10 МБ";
-    resetTimeout = setTimeout(() => {
-      uploadState.value = "idle";
-    }, 3000);
-    return;
-  }
-
-  uploadState.value = "uploading";
-  progress.value = 0;
-
-  // Step 1: Upload through Common Upload system
-  const { data: uploadData, error: uploadError } = await uploadApi.directUpload(
-    file,
-    "UserAvatar",
-    { onProgress },
-  );
-
-  if (uploadError || !uploadData) {
-    uploadState.value = "error";
-    errorMessage.value = "Ошибка загрузки";
-    resetTimeout = setTimeout(() => {
-      uploadState.value = "idle";
-    }, 2000);
-    return;
-  }
-
-  // Step 2: Attach to profile
-  const { error: profileError } = await personalApi.updateMyProfile({
-    avatarUploadId: uploadData.id,
-  });
-
-  if (profileError) {
-    uploadState.value = "error";
-    errorMessage.value = "Ошибка профиля";
-    resetTimeout = setTimeout(() => {
-      uploadState.value = "idle";
-    }, 2000);
-    return;
-  }
-
-  uploadState.value = "success";
-  resetTimeout = setTimeout(() => {
-    uploadState.value = "idle";
-  }, 1500);
+  if (file) await avatar.uploadFile(file);
 };
 </script>
 
 <template>
-  <div class="profile-picture-upload">
+  <div
+    class="profile-picture-upload"
+    :class="{
+      'is-active': avatar.uploading.value || avatar.resetting.value,
+      'is-dragover': avatar.isDragover.value,
+    }"
+    @dragenter="avatar.onDragEnter"
+    @dragover="avatar.onDragOver"
+    @dragleave="avatar.onDragLeave"
+    @drop="avatar.onDrop"
+  >
     <div class="upload-overlay">
       <span class="upload-label">{{ stateLabel }}</span>
       <Upload
-        v-if="uploadState === 'idle'"
-        accept="image/jpeg,image/png,image/webp,image/gif"
-        @uploading="onUploading"
+        v-if="!avatar.uploading.value && !avatar.resetting.value"
+        :accept="AVATAR_ACCEPT"
+        @uploading="handleUploaded"
       />
+      <button
+        v-if="avatar.hasAvatar.value && !avatar.uploading.value"
+        type="button"
+        class="reset-btn"
+        :disabled="avatar.resetting.value"
+        @click.stop="avatar.resetAvatar"
+      >
+        Сбросить
+      </button>
     </div>
+    <div
+      v-if="avatar.uploading.value"
+      class="upload-progress"
+      :style="{ width: `${avatar.progress.value}%` }"
+      aria-hidden="true"
+    />
   </div>
 </template>
 
@@ -117,8 +90,14 @@ const onUploading = async (formData: FormData) => {
   opacity: 0
   transition: opacity 0.2s ease
 
-  &:hover
+  &:hover,
+  &.is-active,
+  &.is-dragover
     opacity: 1
+
+  &.is-dragover .upload-overlay
+    outline: 2px dashed $accent-green
+    outline-offset: -4px
 
 .upload-overlay
   position: absolute
@@ -128,8 +107,10 @@ const onUploading = async (formData: FormData) => {
   bottom: 0
   background-color: $shade-bg
   display: flex
+  flex-direction: column
   align-items: center
   justify-content: center
+  gap: $small
   border-radius: $border-radius
   cursor: pointer
 
@@ -138,4 +119,32 @@ const onUploading = async (formData: FormData) => {
   font-weight: bold
   text-transform: uppercase
   pointer-events: none
+  text-align: center
+  padding: 0 $small
+  font-size: $secondary-font-size
+
+.reset-btn
+  background: transparent
+  border: none
+  color: $shade-text
+  font-size: $secondary-font-size
+  text-decoration: underline
+  cursor: pointer
+  padding: $tiny $small
+  pointer-events: auto
+
+  &:hover:not(:disabled)
+    color: $accent-red
+
+  &:disabled
+    cursor: not-allowed
+    opacity: 0.5
+
+.upload-progress
+  position: absolute
+  left: 0
+  bottom: 0
+  height: 4px
+  background-color: $accent-green
+  transition: width 0.2s ease
 </style>

@@ -317,7 +317,7 @@ async function submitRequest() {
 
   &:disabled
     opacity: 0.6
-    cursor: not-allowed
+    cursor: default
 
 .char-count
   font-size: $secondary-font-size

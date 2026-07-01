@@ -27,11 +27,16 @@ const {
   isNew,
 } = useBlogDisplay();
 
-// Blog is "new" if activated < 7 days ago
-const isNewBlog = computed(() => isNew(props.blog));
+// Закрытый блог: приглушенный серый до hover. Muted приоритетнее "new".
+const isClosedBlog = computed(() => props.blog.status === "Closed");
 
-// TODO: Change to { name: 'blog', params: { id: props.blog.id } } when blog detail page exists
-const blogRoute = computed(() => ({ name: "blogs" }));
+// Blog is "new" if activated < 7 days ago
+const isNewBlog = computed(() => !isClosedBlog.value && isNew(props.blog));
+
+const blogRoute = computed(() => ({
+  name: "blog",
+  params: { id: props.blog.id },
+}));
 const hovered = ref(false);
 const showCounters = computed(
   () => props.counters && (props.alwaysShowCounters || hovered.value),
@@ -42,8 +47,12 @@ const publicationsCount = computed(() => getUnreadPublications(props.blog));
 const commentsCount = computed(() => getUnreadComments(props.blog));
 
 // Tooltips using shared composable
-const publicationsTooltip = computed(() => formatUnreadPublicationsTooltip(publicationsCount.value));
-const commentsTooltip = computed(() => formatUnreadCommentsTooltip(commentsCount.value));
+const publicationsTooltip = computed(() =>
+  formatUnreadPublicationsTooltip(publicationsCount.value),
+);
+const commentsTooltip = computed(() =>
+  formatUnreadCommentsTooltip(commentsCount.value),
+);
 const blogTooltip = computed(() => buildTooltip(props.blog));
 </script>
 
@@ -51,23 +60,23 @@ const blogTooltip = computed(() => buildTooltip(props.blog));
   <div class="link" @mouseenter="hovered = true" @mouseleave="hovered = false">
     <span class="muted" aria-hidden="true">{{ prefix }}</span>
     <Tooltip :text="blogTooltip">
-      <router-link :to="blogRoute" :class="{ 'new-item': isNewBlog }">{{
-        blog.title
-      }}</router-link>
-    </Tooltip>{{ " "
+      <router-link
+        :to="blogRoute"
+        :class="{ 'new-item': isNewBlog, 'closed-item': isClosedBlog }"
+        >{{ blog.title }}</router-link
+      > </Tooltip
+    >{{ " "
     }}<span v-if="showCounters" class="counters"
       ><span class="bracket">(</span
-      ><Tooltip :text="publicationsTooltip"
-        ><router-link :to="blogRoute" :aria-label="publicationsTooltip">{{
-          publicationsCount
-        }}</router-link></Tooltip
-      ><span class="separator">/</span
-      ><Tooltip :text="commentsTooltip"
-        ><router-link :to="blogRoute" :aria-label="commentsTooltip">{{
-          commentsCount
-        }}</router-link></Tooltip
-      ><span class="bracket">)</span
-    ></span>
+      ><router-link :to="blogRoute" :aria-label="publicationsTooltip">{{
+        publicationsCount
+      }}</router-link
+      ><span class="counter-sep">/</span
+      ><router-link :to="blogRoute" :aria-label="commentsTooltip">{{
+        commentsCount
+      }}</router-link
+      ><span class="bracket">)</span></span
+    >
   </div>
 </template>
 
@@ -83,6 +92,12 @@ const blogTooltip = computed(() => buildTooltip(props.blog));
   &:hover
     color: $accent-green-hover
 
+// Закрытые блоги: приглушенный серый, при hover — обычное link-поведение.
+.closed-item
+  color: $text-muted
+  &:hover
+    color: $link-hover
+
 .counters
   transition: opacity 0.15s ease
   a
@@ -91,6 +106,6 @@ const blogTooltip = computed(() => buildTooltip(props.blog));
       color: $link-hover
 
 .bracket,
-.separator
+.counter-sep
   color: $text-muted
 </style>

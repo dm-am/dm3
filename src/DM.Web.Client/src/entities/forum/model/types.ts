@@ -19,7 +19,8 @@ export type BoardLastComment = {
   topicTitle: string;
   topicNumber: number;
   createdUtc: string;
-  author: User;
+  // Null when the author account has been deleted (backend maps to null).
+  author: User | null;
 };
 
 export type BoardLastTopic = {
@@ -27,7 +28,8 @@ export type BoardLastTopic = {
   topicNumber: number;
   title: string;
   createdUtc: string;
-  author: User;
+  // Null when the author account has been deleted (backend maps to null).
+  author: User | null;
 };
 
 export type Board = {
@@ -47,13 +49,15 @@ export type Board = {
 export type LastComment = {
   id: CommentId;
   createdUtc: string;
-  author: User;
+  // Null when the author account has been deleted (backend maps to null).
+  author: User | null;
 };
 
 export type Topic = {
   id: Served<TopicId>;
   topicNumber: Served<number>;
-  author: Served<User>;
+  // Null when the author account has been deleted (backend maps to null).
+  author: Served<User | null>;
   createdUtc: Served<string>;
   modifiedUtc: Served<string | null>;
   title: string;
@@ -67,6 +71,12 @@ export type Topic = {
   unreadCommentsCount: Served<number>;
   board: Board;
   likes: Served<User[]>;
+  /**
+   * Denormalised likes count — populated by the backend listing path so
+   * the table can render the column without hydrating each topic's full
+   * Likes list. Also drives the "sort by likes" column.
+   */
+  likesCount: Served<number>;
 };
 
 // Query parameters for topics list

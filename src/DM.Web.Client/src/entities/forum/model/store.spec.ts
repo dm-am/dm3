@@ -4,7 +4,14 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
-import type { Board, Topic, Comment, BoardId, TopicId, CommentId } from "./types";
+import type {
+  Board,
+  Topic,
+  Comment,
+  BoardId,
+  TopicId,
+  CommentId,
+} from "./types";
 import type { Served } from "@/shared/api/models";
 import type { User } from "@/shared/api/models/common";
 
@@ -69,7 +76,11 @@ vi.mock("../api/forumApi", () => ({
 const { mockUser } = vi.hoisted(() => {
   const { ref } = require("vue");
   return {
-    mockUser: ref({ id: "user-1", username: "testuser", settings: { paging: { topicsPerPage: 20, commentsPerPage: 20 } } }),
+    mockUser: ref({
+      id: "user-1",
+      username: "testuser",
+      settings: { paging: { topicsPerPage: 20, commentsPerPage: 20 } },
+    }),
   };
 });
 
@@ -82,7 +93,7 @@ vi.mock("@/shared/stores", () => ({
 
 // Also mock storeToRefs to return our ref directly
 vi.mock("pinia", async (importOriginal) => {
-  const actual = await importOriginal() as any;
+  const actual = (await importOriginal()) as any;
   return {
     ...actual,
     storeToRefs: (store: any) => ({
@@ -93,56 +104,66 @@ vi.mock("pinia", async (importOriginal) => {
 
 import { useBoardsStore } from "./store";
 
-const createMockUser = (id: string, username: string): User => ({
-  id: id,
-  username,
-  role: "RegularUser",
-  isOnline: false,
-  lastActivityUtc: "2024-01-01T00:00:00Z",
-} as unknown as User);
+const createMockUser = (id: string, username: string): User =>
+  ({
+    id: id,
+    username,
+    role: "RegularUser",
+    isOnline: false,
+    lastActivityUtc: "2024-01-01T00:00:00Z",
+  }) as unknown as User;
 
-const createMockBoard = (id: string, title: string): Board => ({
-  id: asServed(id as BoardId),
-  title: asServed(title),
-  alias: asServed(title.toLowerCase().replace(/\s+/g, "-")),
-  description: asServed(`Description of ${title}`),
-  moderators: asServed([]),
-  topicsCount: asServed(10),
-  commentsCount: asServed(50),
-  unreadTopicsCount: asServed(0),
-  unreadCommentsCount: asServed(0),
-  lastComment: asServed(null),
-  lastTopic: asServed(null),
-} as Board);
+const createMockBoard = (id: string, title: string): Board =>
+  ({
+    id: asServed(id as BoardId),
+    title: asServed(title),
+    alias: asServed(title.toLowerCase().replace(/\s+/g, "-")),
+    description: asServed(`Description of ${title}`),
+    moderators: asServed([]),
+    topicsCount: asServed(10),
+    commentsCount: asServed(50),
+    unreadTopicsCount: asServed(0),
+    unreadCommentsCount: asServed(0),
+    lastComment: asServed(null),
+    lastTopic: asServed(null),
+  }) as Board;
 
-const createMockTopic = (id: string, title: string, boardId: string, topicNumber: number = 1): Topic => ({
-  id: asServed(id as TopicId),
-  topicNumber: asServed(topicNumber),
-  author: asServed(createMockUser("user-1", "author")),
-  createdUtc: asServed("2024-01-01T00:00:00Z"),
-  modifiedUtc: asServed(null),
-  title,
-  description: "Topic content",
-  isAttached: false,
-  attachOrder: asServed(null),
-  isClosed: false,
-  lastActivityUtc: asServed("2024-01-01T00:00:00Z"),
-  lastComment: asServed(null),
-  commentsCount: asServed(5),
-  unreadCommentsCount: asServed(0),
-  board: createMockBoard(boardId, "Board"),
-  likes: asServed([]),
-} as Topic);
+const createMockTopic = (
+  id: string,
+  title: string,
+  boardId: string,
+  topicNumber: number = 1,
+): Topic =>
+  ({
+    id: asServed(id as TopicId),
+    topicNumber: asServed(topicNumber),
+    author: asServed(createMockUser("user-1", "author")),
+    createdUtc: asServed("2024-01-01T00:00:00Z"),
+    modifiedUtc: asServed(null),
+    title,
+    description: "Topic content",
+    isAttached: false,
+    attachOrder: asServed(null),
+    isClosed: false,
+    lastActivityUtc: asServed("2024-01-01T00:00:00Z"),
+    lastComment: asServed(null),
+    commentsCount: asServed(5),
+    unreadCommentsCount: asServed(0),
+    board: createMockBoard(boardId, "Board"),
+    likes: asServed([]),
+    likesCount: asServed(0),
+  }) as Topic;
 
-const createMockComment = (id: string, text: string): Comment => ({
-  id: asServed(id as CommentId),
-  text,
-  author: asServed(createMockUser("user-1", "author")),
-  createdUtc: asServed("2024-01-01T00:00:00Z"),
-  modifiedUtc: asServed(null),
-  likes: asServed([]),
-  isRemoved: asServed(false),
-} as Comment);
+const createMockComment = (id: string, text: string): Comment =>
+  ({
+    id: asServed(id as CommentId),
+    text,
+    author: asServed(createMockUser("user-1", "author")),
+    createdUtc: asServed("2024-01-01T00:00:00Z"),
+    modifiedUtc: asServed(null),
+    likes: asServed([]),
+    isRemoved: asServed(false),
+  }) as Comment;
 
 describe("useBoardsStore", () => {
   beforeEach(() => {
@@ -175,7 +196,6 @@ describe("useBoardsStore", () => {
 
       expect(typeof store.fetchBoards).toBe("function");
       expect(typeof store.trySelectBoard).toBe("function");
-      expect(typeof store.fetchModerators).toBe("function");
       expect(typeof store.searchTopics).toBe("function");
       expect(typeof store.trySelectTopic).toBe("function");
       expect(typeof store.fetchComments).toBe("function");
@@ -206,7 +226,10 @@ describe("useBoardsStore", () => {
 
   describe("fetchBoards", () => {
     it("fetches all boards", async () => {
-      const mockBoards = [createMockBoard("1", "Board 1"), createMockBoard("2", "Board 2")];
+      const mockBoards = [
+        createMockBoard("1", "Board 1"),
+        createMockBoard("2", "Board 2"),
+      ];
       mockGetBoards.mockResolvedValue({
         data: { resources: mockBoards },
         error: null,
@@ -274,39 +297,6 @@ describe("useBoardsStore", () => {
   });
 
   // ============================================================================
-  // FETCH MODERATORS
-  // ============================================================================
-
-  describe("fetchModerators", () => {
-    it("fetches moderators for selected board", async () => {
-      const mockModerators = [{ id: "user-1", username: "mod1" }];
-      const mockBoard = createMockBoard("board-1", "Board");
-      mockGetBoard.mockResolvedValue({
-        data: { resource: mockBoard },
-        error: null,
-      });
-      mockGetModerators.mockResolvedValue({
-        data: { resources: mockModerators },
-        error: null,
-      });
-
-      const store = useBoardsStore();
-      await store.trySelectBoard("board-1" as BoardId);
-      await store.fetchModerators();
-
-      expect(mockGetModerators).toHaveBeenCalledWith("board-1");
-      expect(store.moderators).toEqual(mockModerators);
-    });
-
-    it("does nothing if no board selected", async () => {
-      const store = useBoardsStore();
-      await store.fetchModerators();
-
-      expect(mockGetModerators).not.toHaveBeenCalled();
-    });
-  });
-
-  // ============================================================================
   // SEARCH TOPICS
   // ============================================================================
 
@@ -314,7 +304,9 @@ describe("useBoardsStore", () => {
     it("fetches topics for selected board without filters", async () => {
       const mockBoard = createMockBoard("board-1", "Board");
       const mockTopics = [createMockTopic("topic-1", "Topic 1", "board-1")];
-      const mockAttachedTopics = [createMockTopic("attached-1", "Attached", "board-1")];
+      const mockAttachedTopics = [
+        createMockTopic("attached-1", "Attached", "board-1"),
+      ];
 
       mockGetBoard.mockResolvedValue({
         data: { resource: mockBoard },
@@ -322,10 +314,16 @@ describe("useBoardsStore", () => {
       });
       mockGetTopics.mockImplementation((_boardId, query) => {
         if (query?.isAttached === true) {
-          return Promise.resolve({ data: { resources: mockAttachedTopics }, error: null });
+          return Promise.resolve({
+            data: { resources: mockAttachedTopics },
+            error: null,
+          });
         }
         return Promise.resolve({
-          data: { resources: mockTopics, paging: { current: 1, pages: 1, total: 1 } },
+          data: {
+            resources: mockTopics,
+            paging: { current: 1, pages: 1, total: 1 },
+          },
           error: null,
         });
       });
@@ -443,7 +441,10 @@ describe("useBoardsStore", () => {
         error: null,
       });
       mockGetComments.mockResolvedValue({
-        data: { resources: mockComments, paging: { current: 1, pages: 1, total: 1 } },
+        data: {
+          resources: mockComments,
+          paging: { current: 1, pages: 1, total: 1 },
+        },
         error: null,
       });
 
@@ -456,7 +457,10 @@ describe("useBoardsStore", () => {
 
     it("clears comments before loading", async () => {
       const store = useBoardsStore();
-      store.comments = { resources: [createMockComment("old", "old")], paging: null } as any;
+      store.comments = {
+        resources: [createMockComment("old", "old")],
+        paging: null,
+      } as any;
       store.selectedTopic = createMockTopic("topic-1", "Topic", "board-1");
 
       mockGetComments.mockResolvedValue({
@@ -488,11 +492,16 @@ describe("useBoardsStore", () => {
 
       const store = useBoardsStore();
       store.selectedTopic = mockTopic;
-      store.comments = { resources: [], paging: { current: 1, pages: 1, total: 0 } } as any;
+      store.comments = {
+        resources: [],
+        paging: { current: 1, pages: 1, total: 0 },
+      } as any;
 
       const result = await store.createComment("New comment");
 
-      expect(mockCreateComment).toHaveBeenCalledWith("topic-1", { text: "New comment" });
+      expect(mockCreateComment).toHaveBeenCalledWith("topic-1", {
+        text: "New comment",
+      });
       expect(result.data).toEqual(newComment);
       expect(store.comments?.resources).toContainEqual(newComment);
     });
@@ -508,7 +517,10 @@ describe("useBoardsStore", () => {
 
       const store = useBoardsStore();
       store.selectedTopic = mockTopic;
-      store.comments = { resources: [], paging: { current: 1, pages: 1, total: 5 } } as any;
+      store.comments = {
+        resources: [],
+        paging: { current: 1, pages: 1, total: 5 },
+      } as any;
 
       await store.createComment("New comment");
 
@@ -591,7 +603,10 @@ describe("useBoardsStore", () => {
   describe("unlikeComment", () => {
     it("removes like from comment", async () => {
       const like = { id: "like-1", username: "testuser" };
-      const comment = { ...createMockComment("comment-1", "Comment"), likes: [like] };
+      const comment = {
+        ...createMockComment("comment-1", "Comment"),
+        likes: [like],
+      };
 
       mockDeleteCommentLike.mockResolvedValue({ error: null });
 

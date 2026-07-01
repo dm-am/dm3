@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
+import {
+  ref,
+  computed,
+  watch,
+  nextTick,
+  onMounted,
+  onBeforeUnmount,
+} from "vue";
 import type { WebsiteTestimonial } from "@/shared/api/models/community";
 import { Tooltip } from "@/shared/ui";
 import SvgIcon from "@/shared/ui/Icon/SvgIcon.vue";
@@ -8,6 +15,7 @@ import { useTestimonialStore } from "@/shared/stores/testimonials";
 import { useUserStore } from "@/entities/user";
 import { userIsAdmin } from "@/entities/user";
 import { registerExpandable } from "@/shared/lib/composables";
+import { highlightMatch } from "@/shared/lib/utils/highlight";
 import dayjs from "dayjs";
 
 const props = withDefaults(
@@ -174,23 +182,34 @@ watch(
 // Expose for parent transition callback (RandomTestimonials gallery).
 defineExpose({ measureContent: measureOverflow });
 
-// Register with the global expand/collapse-all registry. Only overflowing
-// testimonials participate — short ones don't have anything to expand.
-const unregister = registerExpandable({
-  id: Symbol("Testimonial"),
-  isExpanded: () => !isOverflowing.value || isExpanded.value,
-  expand: () => {
-    if (props.expandable && isOverflowing.value && !isExpanded.value) {
-      toggleExpand();
-    }
-  },
-  collapse: () => {
-    if (props.expandable && isOverflowing.value && isExpanded.value) {
-      toggleExpand();
-    }
-  },
-});
-onBeforeUnmount(unregister);
+// Register with the global expand/collapse-all registry ONLY while the
+// testimonial actually overflows (has something to collapse). Short ones
+// must not register, or the ScrollNav "Свернуть все" button would appear on
+// pages where nothing is collapsible. Overflow is measured async, so a watch
+// registers/unregisters as it flips.
+let unregister: (() => void) | null = null;
+
+function syncRegistration() {
+  const collapsible = props.expandable && isOverflowing.value;
+  if (collapsible && !unregister) {
+    unregister = registerExpandable({
+      id: Symbol("Testimonial"),
+      isExpanded: () => isExpanded.value,
+      expand: () => {
+        if (!isExpanded.value) toggleExpand();
+      },
+      collapse: () => {
+        if (isExpanded.value) toggleExpand();
+      },
+    });
+  } else if (!collapsible && unregister) {
+    unregister();
+    unregister = null;
+  }
+}
+
+watch(isOverflowing, syncRegistration, { immediate: true });
+onBeforeUnmount(() => unregister?.());
 </script>
 
 <template>
@@ -202,10 +221,14 @@ onBeforeUnmount(unregister);
         collapsed: expandable && !isExpanded && isOverflowing,
         'has-toggle': expandable && isOverflowing,
       }"
-      :style="expandable ? {
-        '--line-height': LINE_HEIGHT,
-        '--max-lines': MAX_COLLAPSED_LINES,
-      } : undefined"
+      :style="
+        expandable
+          ? {
+              '--line-height': LINE_HEIGHT,
+              '--max-lines': MAX_COLLAPSED_LINES,
+            }
+          : undefined
+      "
     >
       <!-- Plain text only, NO BBCode. The collapsed clamp is applied via
            CSS max-height (calc based on line-height × lines × em), driven
@@ -215,9 +238,18 @@ onBeforeUnmount(unregister);
       <div
         ref="contentRef"
         class="testimonial-content"
-        :style="overrideMaxHeight !== null ? { maxHeight: overrideMaxHeight } : undefined"
+        :style="
+          overrideMaxHeight !== null
+            ? { maxHeight: overrideMaxHeight }
+            : undefined
+        "
         @transitionend="onTransitionEnd"
-      >{{ displayText }}</div>
+      >
+        <span
+          v-if="searchQuery"
+          v-html="highlightMatch(displayText, searchQuery)"
+        /><template v-else>{{ displayText }}</template>
+      </div>
       <button
         v-if="expandable && isOverflowing"
         type="button"
@@ -246,9 +278,7 @@ onBeforeUnmount(unregister);
           </secondary-text>
         </Tooltip>
         <secondary-text v-if="canAdministrate" class="testimonial-controls">
-          <a v-if="!loading" @click="remove">
-            {{ symbols.close }} Удалить
-          </a>
+          <a v-if="!loading" @click="remove"> {{ symbols.close }} Удалить </a>
           <span v-else>...</span>
         </secondary-text>
       </span>
@@ -269,8 +299,8 @@ onBeforeUnmount(unregister);
 //
 // Size-invariant layout:
 //   The min-height reserves enough space for 3 lines of content,
-//   the full top/bottom padding, AND the toggle strip (20px button
-//   + 2px breath = 22px). Every testimonial — 1-line short, 3-line
+//   the full top/bottom padding, AND the toggle strip (24px button
+//   + 2px breath = 26px). Every testimonial — 1-line short, 3-line
 //   short, 10-line collapsed — renders at exactly the same height,
 //   so testimonial rotation in the gallery never causes the author
 //   row or the surrounding page blocks to shift. The toggle, when
@@ -280,10 +310,10 @@ onBeforeUnmount(unregister);
 //
 // Short-case flex alignment: `justify-content: center` keeps
 // short content centered in the taller min-height box. For the
-// has-toggle (long collapsed) case we switch to `flex-start` so
-// the content pins to the top and the absolutely-positioned
-// toggle sits in the reserved bottom strip without overlapping
-// the last line of text.
+// has-toggle case (long testimonial, chevron visible) we switch
+// to `flex-start` + `padding-bottom: 0` so the content pins to
+// the top and the absolutely-positioned toggle sits in the
+// reserved bottom strip.
 .testimonial-text
   position: relative
   display: flex
@@ -296,27 +326,28 @@ onBeforeUnmount(unregister);
   background-color: $bg-highlight-green
   color: $text-on-green
   // Budget: 3 lines of content + full top padding + reserved
-  // bottom strip (20px button + 2px breath below the chevron).
-  // Concrete numbers resolve to 72 + 18 + 22 = 112px at default
+  // bottom strip (24px button + 2px breath below the chevron).
+  // Concrete numbers resolve to 72 + 18 + 26 = 116px at default
   // font-size, which is both short-case and long-collapsed size.
-  min-height: calc(var(--line-height, 1.5) * var(--max-lines, 3) * 1em + ($medium + $tiny) + 22px)
+  min-height: calc(var(--line-height, 1.5) * var(--max-lines, 3) * 1em + ($medium + $tiny) + 26px)
 
-  // Long collapsed testimonial — content pinned to top so the
-  // absolute toggle in the reserved bottom strip does not collide
-  // with the last line of text, and `padding-bottom: 0` because the
-  // toggle's `bottom: $tiny` already provides the small breathing
-  // gap under the chevron.
+  // Long testimonial with a chevron toggle — content pinned to top,
+  // `padding-bottom: 26px` = the reserved toggle strip (24px button
+  // + 2px breath). The absolutely-positioned toggle lives inside the
+  // padding, so it never overlaps the last line of expanded text. In
+  // the collapsed state the math degenerates to exactly min-height:
+  // 3 lines (72px) + 18px top + 26px bottom = 116px.
   //
-  // IMPORTANT: these overrides must ONLY apply in the collapsed
-  // state. The `.has-toggle` class (gated on `isOverflowing`) stays
-  // on after the user clicks expand — `.collapsed` is what actually
-  // toggles. Scoping to `&.collapsed.has-toggle` restores full
-  // symmetric padding + centering the moment the bubble opens, so
-  // the expanded text breathes with the same 18px top/bottom buffer
-  // as every other bubble instead of hugging the rounded edge.
-  &.collapsed.has-toggle
+  // IMPORTANT: gate on `.has-toggle` (stable while the chevron is
+  // visible), NOT on `.collapsed`. The collapsed class flips at the
+  // START of the expand/collapse animation — if padding/alignment
+  // were tied to it, the bubble would jump by the padding delta the
+  // instant the animation begins, making collapse feel abrupt and
+  // out of tempo with expand. With the stable gate both directions
+  // animate pure max-height — perfectly symmetric motion.
+  &.has-toggle
     justify-content: flex-start
-    padding-bottom: 0
+    padding-bottom: 26px
 
   .testimonial-content
     position: relative
@@ -326,8 +357,18 @@ onBeforeUnmount(unregister);
     line-height: var(--line-height, 1.5)
     // Smooth max-height transition on expand/collapse. The JS handler
     // pins concrete start/end pixel values so CSS can animate between
-    // them (it cannot transition from px to `none`). Curve and duration
-    // match TruncatedContent.vue — a single site-wide "reveal" feel.
+    // them (it cannot transition from px to `none`). Curve matches
+    // TruncatedContent.vue — a single site-wide "reveal" feel.
+    //
+    // Direction-aware duration: the quint ease-out curve spends ~60%
+    // of its time on the last 20% of the path. On expand that long
+    // tail is masked by the text appearing; on collapse the nearly-
+    // closed bubble visibly "crawls" to the finish and feels slower
+    // than expand at the same duration. 0.55s open / 0.4s close makes
+    // both directions read at the same perceived tempo. The browser
+    // picks the duration from the element's NEW state, and `.collapsed`
+    // flips at the start of the animation — so this declaration drives
+    // the expand direction, the override below drives collapse.
     transition: max-height 0.55s cubic-bezier(0.22, 1, 0.36, 1)
 
   // Declarative collapsed max-height — hard clip at 3 lines via
@@ -337,6 +378,12 @@ onBeforeUnmount(unregister);
   // fixed length to `none`).
   &.collapsed .testimonial-content
     max-height: calc(var(--line-height) * var(--max-lines) * 1em)
+    transition-duration: 0.4s
+    // Collapsed preview reads as a continuous excerpt: paragraph breaks
+    // (blank lines from the source \n\n) collapse to spaces so the clamp
+    // never shows an awkward empty line. Full paragraph formatting returns
+    // on expand (base .testimonial-content keeps white-space: pre-wrap).
+    white-space: normal
 
   // Speech bubble arrow (on the left side)
   &::after
@@ -368,8 +415,8 @@ onBeforeUnmount(unregister);
   display: inline-flex
   align-items: center
   justify-content: center
-  min-width: 28px
-  min-height: 20px
+  min-width: 36px
+  min-height: 24px
   padding: 0 $small
   border: none
   border-radius: $small
@@ -390,13 +437,15 @@ onBeforeUnmount(unregister);
 
 .toggle-icon
   display: block
-  font-size: 14px
-  // Chevron rotation matches the content expand curve/duration exactly —
+  font-size: 20px
+  // Chevron rotation matches the content curve/duration exactly —
   // a single synchronized motion instead of two competing tempos.
-  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1)
+  // Direction-aware duration mirrors .testimonial-content below.
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)
 
   &.expanded
     transform: rotate(180deg)
+    transition-duration: 0.55s
 
 .testimonial-footer
   display: flex

@@ -14,6 +14,7 @@ import {
   ExpandableList,
   type ExpandableListColumn,
 } from "@/shared/ui/ExpandableList";
+import { DISCORD_INVITE_URL } from "@/shared/config/contacts";
 import RulesIntro from "./RulesIntro.vue";
 import HelpLinksSection from "./HelpLinksSection.vue";
 import RulesExternalLinks from "./RulesExternalLinks.vue";
@@ -21,25 +22,57 @@ import RulesBans from "./RulesBans.vue";
 import RulesAuthors from "./RulesAuthors.vue";
 import AdminList from "./AdminList.vue";
 
-interface Penalty {
+// Type alias (not interface) so the implicit index signature satisfies
+// the ExpandableItem constraint of ExpandableList.
+type Penalty = {
   id: string;
   violation: string;
   points: string;
   sortValue: number;
-}
+};
 
 // Order: from most serious violations to less serious
 const penalties: Penalty[] = [
   { id: "hacking", violation: "Атака на сайт", points: "∞", sortValue: 100 },
   { id: "insult", violation: "Оскорбление", points: "6", sortValue: 6.2 },
-  { id: "advertising", violation: "Несогласованная реклама", points: "6", sortValue: 6.1 },
-  { id: "multiaccounts", violation: "Мультиаккаунт", points: "6", sortValue: 6 },
-  { id: "banned-proxy", violation: "Нарушение бана", points: "5", sortValue: 5 },
-  { id: "provocation", violation: "Провокация и политика", points: "3", sortValue: 3 },
-  { id: "shock-content", violation: "Шок-контент без [nsfw]", points: "2", sortValue: 2 },
+  {
+    id: "advertising",
+    violation: "Несогласованная реклама",
+    points: "6",
+    sortValue: 6.1,
+  },
+  {
+    id: "multiaccounts",
+    violation: "Мультиаккаунт",
+    points: "6",
+    sortValue: 6,
+  },
+  {
+    id: "banned-proxy",
+    violation: "Нарушение бана",
+    points: "5",
+    sortValue: 5,
+  },
+  {
+    id: "provocation",
+    violation: "Провокация и политика",
+    points: "3",
+    sortValue: 3,
+  },
+  {
+    id: "shock-content",
+    violation: "Шок-контент без [nsfw]",
+    points: "2",
+    sortValue: 2,
+  },
   { id: "profanity", violation: "Мат без [nsfw]", points: "1", sortValue: 1.5 },
   { id: "flame", violation: "Флейм", points: "1", sortValue: 1 },
-  { id: "flood", violation: "Флуд, вайп и оффтоп", points: "1", sortValue: 0.5 },
+  {
+    id: "flood",
+    violation: "Флуд, вайп и оффтоп",
+    points: "1",
+    sortValue: 0.5,
+  },
 ].sort((a, b) => b.sortValue - a.sortValue);
 
 const penaltyColumns: ExpandableListColumn<Penalty>[] = [
@@ -65,32 +98,32 @@ const penaltyColumns: ExpandableListColumn<Penalty>[] = [
     >
       <template #item-hacking>
         Взлом, DDoS, эксплуатация уязвимостей, шантаж и угрозы — перманентный
-        бан. Хочешь помочь найти уязвимость — сначала согласуй с администрацией.
-        На критические обращения отвечаем в течение 7 дней.
+        бан. Хотите помочь найти уязвимость — сначала согласуйте с
+        администрацией. На критические обращения отвечаем в течение 7 дней.
       </template>
 
       <template #item-insult>
         Публичное умышленное унижение личности, действий или убеждений
-        пользователя. Исправил сам до модерации — баллы могут снизить.
+        пользователя. Исправили сами до модерации — баллы могут снизить.
       </template>
 
       <template #item-advertising>
-        Ссылки на ролевые проекты, набор игроков на сторонние сайты,
-        продвижение товаров и услуг. Спам-аккаунты банятся навсегда. Хочешь
-        согласовать — напиши администрации.
+        Ссылки на ролевые проекты, набор игроков на сторонние сайты, продвижение
+        товаров и услуг. Спам-аккаунты банятся навсегда. Хотите согласовать —
+        напишите администрации.
       </template>
 
       <template #item-multiaccounts>
         Один человек — один аккаунт. Дополнительные аккаунты банятся навсегда,
         основной получает 6 баллов (0 баллов — если сразу сообщить об ошибке
         через
-        <router-link to="/support"><strong>форму обращения</strong></router-link>
+        <router-link to="/support"
+          ><strong>форму обращения</strong></router-link
+        >
         или
-        <a
-          href="https://discord.gg/dm-roleplay"
-          target="_blank"
-          rel="noopener noreferrer"
-        ><strong>Discord</strong></a>).
+        <a :href="DISCORD_INVITE_URL" target="_blank" rel="noopener noreferrer"
+          ><strong>Discord</strong></a
+        >).
       </template>
 
       <template #item-banned-proxy>
@@ -129,7 +162,7 @@ const penaltyColumns: ExpandableListColumn<Penalty>[] = [
       </template>
     </ExpandableList>
     <p class="penalty-note">
-      Набрал 6 баллов — получил бан. Баллы сгорают через 6 месяцев без
+      Набрали 6 баллов — получили бан. Баллы сгорают через 6 месяцев без
       нарушений.
     </p>
   </section>

@@ -4,14 +4,17 @@
  */
 
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
-import { ExpandableList, type ExpandableItem } from "@/shared/ui/ExpandableList";
+import {
+  ExpandableList,
+  type ExpandableItem,
+} from "@/shared/ui/ExpandableList";
 
 const sections: ExpandableItem[] = [
   {
     id: "points",
     title: "Механика баллов",
     content: [
-      "Набрал 6 баллов — автоматический бан.",
+      "Набрали 6 баллов — автоматический бан.",
       "При 6+ баллах — автобан на 12 часов до рассмотрения администрацией.",
       "Максимум 6 баллов за один календарный день.",
       "3+ балла за одно нарушение — блокировка чата на сутки.",
@@ -61,9 +64,14 @@ const sections: ExpandableItem[] = [
           <li>
             Если не согласны с решением конкретного модератора — его можно
             обжаловать, заполнив соответствующую
-            <router-link to="/complaint"><strong>форму обращения</strong></router-link>.
+            <router-link to="/complaint"
+              ><strong>форму обращения</strong></router-link
+            >.
           </li>
-          <li>Решения по обжалованию принимаются коллегиально. Хамство = дополнительные баллы.</li>
+          <li>
+            Решения по обжалованию принимаются коллегиально. Хамство =
+            дополнительные баллы.
+          </li>
         </ul>
       </template>
     </ExpandableList>

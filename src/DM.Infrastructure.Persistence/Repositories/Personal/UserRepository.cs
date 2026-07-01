@@ -453,6 +453,32 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         await _dmDbContext.SaveChangesAsync();
     }
 
+    /// <inheritdoc />
+    public async Task UnlinkAvatarUpload(Guid userId)
+    {
+        var user = await _dmDbContext.Users.FindAsync(userId);
+        if (user == null) return;
+        if (user.AvatarUploadId == null) return; // Идемпотент: уже нет аватара
+
+        user.AvatarUploadId = null;
+
+        // Soft-delete все Upload-записи UserAvatar-типа этого юзера.
+        // GC-worker (UploadOrphanCleanupService) подметет S3-объекты после grace.
+        var avatarUploads = await _dmDbContext.Uploads
+            .Where(u => u.UserId == userId
+                && u.Type == UploadType.UserAvatar
+                && !u.IsRemoved)
+            .ToListAsync();
+
+        foreach (var upload in avatarUploads)
+        {
+            upload.IsRemoved = true;
+            upload.DeletedUtc = DateTimeOffset.UtcNow;
+        }
+
+        await _dmDbContext.SaveChangesAsync();
+    }
+
     // ═══ PRIVATE ═══
 
     private const int NewbieThreshold = 100;
@@ -674,6 +700,116 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             .Select(g => new { UserId = g.Key, Count = g.Count() })
             .ToListAsync();
 
+        // Endorsements (user-to-user recommendations) — two batched
+        // COUNT queries, symmetrical to PostReviews above. AuthorId =
+        // wrote-by-user, TargetUserId = wrote-about-user.
+        var endorsementsGivenCounts = await _dmDbContext.UserEndorsements
+            .Where(e => userIds.Contains(e.AuthorId) && !e.IsRemoved)
+            .GroupBy(e => e.AuthorId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var endorsementsReceivedCounts = await _dmDbContext.UserEndorsements
+            .Where(e => userIds.Contains(e.TargetUserId) && !e.IsRemoved)
+            .GroupBy(e => e.TargetUserId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        // Topics / Comments / GlobalChat counters — drive the achievement
+        // metrics TopicsAuthored / CommentsAuthored / GlobalChatMessages.
+        // Same batched-GROUP-BY pattern, no per-user N+1.
+        var topicsAuthoredCounts = await _dmDbContext.Topics
+            .Where(t => userIds.Contains(t.AuthorId) && !t.IsRemoved)
+            .GroupBy(t => t.AuthorId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var commentsAuthoredCounts = await _dmDbContext.Comments
+            .Where(c => userIds.Contains(c.AuthorId) && !c.IsRemoved)
+            .GroupBy(c => c.AuthorId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var globalChatId = Entities.Messaging.Chat.GlobalChatId;
+        var globalChatMessageCounts = await _dmDbContext.Messages
+            .Where(m => m.ChatId == globalChatId && userIds.Contains(m.UserId) && !m.IsRemoved)
+            .GroupBy(m => m.UserId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        // Bans received — drives the «резиновая уточка» chain. Same
+        // batched-GROUP-BY pattern. Soft-deleted bans excluded (IsRemoved):
+        // tidying ban history shouldn't retroactively erase the achievement,
+        // but if a ban gets revoked entirely we don't want to keep counting it.
+        var bansReceivedCounts = await _dmDbContext.Set<Entities.Moderation.Ban>()
+            .Where(b => userIds.Contains(b.TargetUserId) && !b.IsRemoved)
+            .GroupBy(b => b.TargetUserId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        // Game drops — drives the «дропы» chain. Игрок ушел сам
+        // (IsPlayerLeft=true), персонаж Retired, не NPC, удаленные
+        // персонажи и игры исключены. Смерть и изгнание GM-ом — не дропы.
+        var gameDropsCounts = await _dmDbContext.Set<Entities.Game.Characters.Character>()
+            .Where(c => c.AuthorId.HasValue
+                && userIds.Contains(c.AuthorId.Value)
+                && !c.IsNpc
+                && !c.IsRemoved
+                && !c.Game.IsRemoved
+                && c.Status == DM.Domain.Core.Enums.CharacterStatus.Retired
+                && c.IsPlayerLeft)
+            .GroupBy(c => c.AuthorId!.Value)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        // Publications authored — drives the «публикации» chain. Драфты
+        // тоже считаются (см. enum doc), потому что фильтрация только
+        // по IsRemoved.
+        var publicationsAuthoredCounts = await _dmDbContext.Set<Entities.Blog.Publication>()
+            .Where(p => userIds.Contains(p.AuthorId) && !p.IsRemoved)
+            .GroupBy(p => p.AuthorId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        // Likes received — drives the «лайки» chain. Likes полиморфные
+        // (Like.EntityType + Like.EntityId), поэтому делаем 4 отдельных
+        // JOIN'а с каждым типом контента (Topic / Publication / Comment /
+        // Message) и суммируем в .NET. Альтернатива (один SQL с UNION ALL)
+        // была бы сложнее и хуже читалась.
+        // Игровые посты и PostReview не учитываются — для них есть
+        // отдельный сигнал качества «Рейтинг» через PostReview.SignValue.
+        var likesOnTopicsCounts = await _dmDbContext.Set<Entities.Shared.Like>()
+            .Where(l => !l.IsRemoved && l.EntityType == DM.Domain.Core.Enums.LikeEntityType.Topic)
+            .Join(_dmDbContext.Topics.Where(t => !t.IsRemoved && userIds.Contains(t.AuthorId)),
+                l => l.EntityId, t => t.TopicId, (l, t) => t.AuthorId)
+            .GroupBy(uid => uid)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var likesOnPublicationsCounts = await _dmDbContext.Set<Entities.Shared.Like>()
+            .Where(l => !l.IsRemoved && l.EntityType == DM.Domain.Core.Enums.LikeEntityType.Publication)
+            .Join(_dmDbContext.Set<Entities.Blog.Publication>().Where(p => !p.IsRemoved && userIds.Contains(p.AuthorId)),
+                l => l.EntityId, p => p.PublicationId, (l, p) => p.AuthorId)
+            .GroupBy(uid => uid)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var likesOnCommentsCounts = await _dmDbContext.Set<Entities.Shared.Like>()
+            .Where(l => !l.IsRemoved && l.EntityType == DM.Domain.Core.Enums.LikeEntityType.Comment)
+            .Join(_dmDbContext.Comments.Where(c => !c.IsRemoved && userIds.Contains(c.AuthorId)),
+                l => l.EntityId, c => c.CommentId, (l, c) => c.AuthorId)
+            .GroupBy(uid => uid)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var likesOnMessagesCounts = await _dmDbContext.Set<Entities.Shared.Like>()
+            .Where(l => !l.IsRemoved && l.EntityType == DM.Domain.Core.Enums.LikeEntityType.Message)
+            .Join(_dmDbContext.Messages.Where(m => !m.IsRemoved && userIds.Contains(m.UserId)),
+                l => l.EntityId, m => m.MessageId, (l, m) => m.UserId)
+            .GroupBy(uid => uid)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
         // Games hosting: user is master (count games where user is MasterId) - with status breakdown
         var gamesMasterByStatus = await _dmDbContext.Games
             .Where(g => !g.IsRemoved && userIds.Contains(g.MasterId))
@@ -711,10 +847,20 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             .Select(g => new StatusCountItem(g.Key.UserId, g.Key.Status, g.Count()))
             .ToListAsync();
 
-        // Subscribers: fetch usernames for tooltip (limit to first 20 per user)
+        // Subscribers: fetch username + last activity + settings flags
+        // for richer profile display. Settings is the bitmask the profile
+        // UI uses to filter subscribers per active tab (games / blogs /
+        // topics). The username-only list is kept for tooltip compatibility.
+        // Limit retained at 20 per user — same budget across all three fields.
         var subscriberData = await _dmDbContext.Subscriptions
             .Where(s => s.TargetType == SubscriptionTargetType.User && userIds.Contains(s.TargetId))
-            .Select(s => new { s.TargetId, Username = s.Subscriber.Username })
+            .Select(s => new
+            {
+                s.TargetId,
+                Username = s.Subscriber.Username,
+                LastActivityUtc = s.Subscriber.LastActivityUtc,
+                Settings = s.Settings,
+            })
             .ToListAsync();
 
         var subscribersDict = subscriberData
@@ -726,6 +872,19 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             .ToDictionary(
                 g => g.Key,
                 g => g.Select(s => s.Username).Take(20).ToList());
+
+        var subscribersInfoDict = subscriberData
+            .GroupBy(s => s.TargetId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Take(20)
+                    .Select(s => new Domain.Core.Dto.SubscriberInfo
+                    {
+                        Username = s.Username,
+                        LastActivityUtc = s.LastActivityUtc,
+                        Settings = s.Settings,
+                    })
+                    .ToList());
 
         // Username history: fetch and group by user
         var usernameHistoryData = await _dmDbContext.Set<Entities.Account.UsernameHistory>()
@@ -751,6 +910,25 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
 
         var givenDict = givenCounts.ToDictionary(x => x.UserId, x => x.Count);
         var receivedDict = receivedCounts.ToDictionary(x => x.UserId, x => x.Count);
+        var endorsementsGivenDict = endorsementsGivenCounts.ToDictionary(x => x.UserId, x => x.Count);
+        var endorsementsReceivedDict = endorsementsReceivedCounts.ToDictionary(x => x.UserId, x => x.Count);
+        var topicsAuthoredDict = topicsAuthoredCounts.ToDictionary(x => x.UserId, x => x.Count);
+        var commentsAuthoredDict = commentsAuthoredCounts.ToDictionary(x => x.UserId, x => x.Count);
+        var globalChatMessagesDict = globalChatMessageCounts.ToDictionary(x => x.UserId, x => x.Count);
+        var bansReceivedDict = bansReceivedCounts.ToDictionary(x => x.UserId, x => x.Count);
+        var gameDropsDict = gameDropsCounts.ToDictionary(x => x.UserId, x => x.Count);
+        var publicationsAuthoredDict = publicationsAuthoredCounts.ToDictionary(x => x.UserId, x => x.Count);
+
+        // Сшиваем 4 источника лайков в один словарь (UserId → sum).
+        var likesReceivedDict = new Dictionary<Guid, int>();
+        foreach (var x in likesOnTopicsCounts)
+            likesReceivedDict[x.UserId] = (likesReceivedDict.TryGetValue(x.UserId, out var v) ? v : 0) + x.Count;
+        foreach (var x in likesOnPublicationsCounts)
+            likesReceivedDict[x.UserId] = (likesReceivedDict.TryGetValue(x.UserId, out var v) ? v : 0) + x.Count;
+        foreach (var x in likesOnCommentsCounts)
+            likesReceivedDict[x.UserId] = (likesReceivedDict.TryGetValue(x.UserId, out var v) ? v : 0) + x.Count;
+        foreach (var x in likesOnMessagesCounts)
+            likesReceivedDict[x.UserId] = (likesReceivedDict.TryGetValue(x.UserId, out var v) ? v : 0) + x.Count;
 
         // Build status breakdown dictionaries
         var gamesHostingByStatusDict = BuildStatusBreakdownDict(gamesMasterByStatus, gamesAssistantByStatus);
@@ -761,6 +939,15 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         {
             user.PostReviewsGivenCount = givenDict.TryGetValue(user.UserId, out var given) ? given : 0;
             user.PostReviewsReceivedCount = receivedDict.TryGetValue(user.UserId, out var received) ? received : 0;
+            user.EndorsementsGivenCount = endorsementsGivenDict.TryGetValue(user.UserId, out var eg) ? eg : 0;
+            user.EndorsementsReceivedCount = endorsementsReceivedDict.TryGetValue(user.UserId, out var er) ? er : 0;
+            user.TopicsAuthoredCount = topicsAuthoredDict.TryGetValue(user.UserId, out var ta) ? ta : 0;
+            user.CommentsAuthoredCount = commentsAuthoredDict.TryGetValue(user.UserId, out var ca) ? ca : 0;
+            user.GlobalChatMessagesCount = globalChatMessagesDict.TryGetValue(user.UserId, out var gc) ? gc : 0;
+            user.BansReceivedCount = bansReceivedDict.TryGetValue(user.UserId, out var br) ? br : 0;
+            user.GameDropsCount = gameDropsDict.TryGetValue(user.UserId, out var gd) ? gd : 0;
+            user.PublicationsAuthoredCount = publicationsAuthoredDict.TryGetValue(user.UserId, out var pa) ? pa : 0;
+            user.LikesReceivedCount = likesReceivedDict.TryGetValue(user.UserId, out var lr) ? lr : 0;
 
             // Games hosting = sum from status breakdown
             user.GamesHostingByStatus = gamesHostingByStatusDict.TryGetValue(user.UserId, out var gh) ? gh : null;
@@ -776,6 +963,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
 
             user.SubscribersCount = subscribersDict.TryGetValue(user.UserId, out var subs) ? subs : 0;
             user.SubscriberUsernames = subscriberUsernamesDict.TryGetValue(user.UserId, out var names) ? names : [];
+            user.Subscribers = subscribersInfoDict.TryGetValue(user.UserId, out var infos) ? infos : [];
             user.UsernameHistory = usernameHistoryDict.TryGetValue(user.UserId, out var history) ? history : [];
         }
     }

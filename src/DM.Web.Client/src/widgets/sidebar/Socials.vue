@@ -2,26 +2,34 @@
   <SidebarBlock token="Socials">
     <template #title>Наши соцсети</template>
     <div v-once class="socials">
-      <a
+      <Tooltip
         v-for="social in socialLinks"
         :key="social.name"
-        class="social-icon"
-        :href="social.url"
-        target="_blank"
-        :title="social.label"
+        :text="social.label"
       >
-        <svg
-          :viewBox="icons[social.icon].viewBox"
-          v-html="icons[social.icon].path"
-        />
-      </a>
+        <a
+          class="social-icon"
+          :href="social.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          :aria-label="social.label"
+        >
+          <svg
+            :viewBox="icons[social.icon].viewBox"
+            v-html="icons[social.icon].path"
+            aria-hidden="true"
+          />
+        </a>
+      </Tooltip>
     </div>
   </SidebarBlock>
 </template>
 
 <script setup lang="ts">
 import SidebarBlock from "./SidebarBlock.vue";
+import { Tooltip } from "@/shared/ui/Tooltip";
 import { icons } from "@/shared/lib/utils/icons";
+import { DISCORD_INVITE_URL } from "@/shared/config/contacts";
 
 const socialLinks = [
   {
@@ -33,7 +41,7 @@ const socialLinks = [
   {
     name: "discord",
     icon: "discord" as const,
-    url: "https://discord.gg/ez7FdeYgQv",
+    url: DISCORD_INVITE_URL,
     label: "Discord сервер",
   },
   {

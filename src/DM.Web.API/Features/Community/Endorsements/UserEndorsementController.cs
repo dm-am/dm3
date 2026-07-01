@@ -37,24 +37,63 @@ public class UserEndorsementController : ControllerBase
     }
 
     /// <summary>
-    /// Get endorsements for a user
+    /// Get endorsements received by a user
     /// </summary>
     /// <remarks>
-    /// Returns positive endorsements written about the specified user.
-    /// Users can only endorse other users they have played with in the same game.
-    /// Only one endorsement per author-target pair is allowed.
+    /// Возвращает рекомендации, написанные ПРО этого пользователя
+    /// (рекомендации, в которых он — recipient). Поддерживает
+    /// подстрочный поиск по тексту/имени автора, сортировку по дате
+    /// или имени автора, и пагинацию через PagingQuery.
     /// </remarks>
-    /// <param name="username">User's display name</param>
-    /// <param name="q">Paging parameters</param>
-    /// <response code="200">List of user endorsements</response>
-    /// <response code="404">User not found</response>
+    /// <param name="username">Имя получателя рекомендаций.</param>
+    /// <param name="q">Search / sort / paging.</param>
+    /// <response code="200">Список рекомендаций.</response>
+    /// <response code="404">Пользователь не найден.</response>
     [HttpGet(Name = nameof(GetUserEndorsements))]
     [ProducesResponseType(typeof(ListEnvelope<UserEndorsement>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetUserEndorsements(string username, [FromQuery] PagingQuery q)
+    public async Task<IActionResult> GetUserEndorsements(string username, [FromQuery] UserEndorsementsQuery q)
     {
         var user = await _userLookupService.GetAsync(username);
-        var (endorsements, paging) = await _endorsementService.GetListAsync(user.UserId, q);
+        var filter = new DM.Domain.Community.Features.UserEndorsements.UserEndorsementFilter
+        {
+            RecipientId = user.UserId,
+            Search = q.Search,
+            SortBy = q.SortBy,
+            SortOrder = q.SortOrder,
+        };
+        var (endorsements, paging) = await _endorsementService.GetAllAsync(q, filter);
+        var apiEndorsements = endorsements.Select(_mapper.Map<UserEndorsement>);
+        return Ok(new ListEnvelope<UserEndorsement>(apiEndorsements, new PagingInfo(paging)));
+    }
+
+    /// <summary>
+    /// Get endorsements written by a user
+    /// </summary>
+    /// <remarks>
+    /// Возвращает рекомендации, написанные ЭТИМ пользователем (он —
+    /// author). Симметрично GET endorsements; те же search/sort/paging
+    /// параметры. Используется на странице «Написанные рекомендации»
+    /// в профиле.
+    /// </remarks>
+    /// <param name="username">Имя автора рекомендаций.</param>
+    /// <param name="q">Search / sort / paging.</param>
+    /// <response code="200">Список рекомендаций, написанных пользователем.</response>
+    /// <response code="404">Пользователь не найден.</response>
+    [HttpGet("/v1/users/{username}/written-endorsements", Name = nameof(GetWrittenUserEndorsements))]
+    [ProducesResponseType(typeof(ListEnvelope<UserEndorsement>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetWrittenUserEndorsements(string username, [FromQuery] UserEndorsementsQuery q)
+    {
+        var user = await _userLookupService.GetAsync(username);
+        var filter = new DM.Domain.Community.Features.UserEndorsements.UserEndorsementFilter
+        {
+            AuthorId = user.UserId,
+            Search = q.Search,
+            SortBy = q.SortBy,
+            SortOrder = q.SortOrder,
+        };
+        var (endorsements, paging) = await _endorsementService.GetAllAsync(q, filter);
         var apiEndorsements = endorsements.Select(_mapper.Map<UserEndorsement>);
         return Ok(new ListEnvelope<UserEndorsement>(apiEndorsements, new PagingInfo(paging)));
     }

@@ -64,13 +64,18 @@ internal class NotificationDispatcherConsumer : BackgroundService
                 // Messaging
                 EventType.LikedMessage,
 
-                // Game status changes
+                // Game lifecycle
+                EventType.NewGame,
                 EventType.StatusGameActive,
                 EventType.StatusGameClosed,
                 EventType.StatusGameFrozen,
                 EventType.StatusGameFinished,
                 EventType.GameClosureWarning,
                 EventType.GameRecruitmentOpened,
+
+                // Blog lifecycle
+                EventType.NewBlog,
+                EventType.StatusBlogActive,
 
                 // Invitations
                 EventType.AssignmentRequestCreated,
@@ -92,7 +97,10 @@ internal class NotificationDispatcherConsumer : BackgroundService
                 EventType.RoomPendencyCreated,
 
                 // Posts
-                EventType.PostReviewed
+                EventType.PostReviewed,
+
+                // Awards
+                EventType.AwardGranted,
             }.ToRoutingKeys(),
         };
         var consumer = _consumerBuilder.BuildRabbit<InvokedEvent, NotificationProcessor>(parameters);

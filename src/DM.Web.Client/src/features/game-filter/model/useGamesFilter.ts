@@ -41,7 +41,9 @@ export interface GamesFilterComposable {
   /** API search parameters (computed from filterState) */
   searchParams: ComputedRef<GamesSearchParams>;
   /** Active filters for UI chips */
-  activeFilters: ComputedRef<{ key: string; label: string; type: "status" | "tag" | "host" }[]>;
+  activeFilters: ComputedRef<
+    { key: string; label: string; type: "status" | "tag" | "host" }[]
+  >;
   /** Whether any filters are active */
   hasActiveFilters: ComputedRef<boolean>;
 
@@ -60,7 +62,10 @@ export interface GamesFilterComposable {
   setCreatedRange: (fromUtc: string | null, toUtc: string | null) => void;
   setActivatedRange: (fromUtc: string | null, toUtc: string | null) => void;
   setClosedRange: (fromUtc: string | null, toUtc: string | null) => void;
-  setRecruitmentStartedRange: (fromUtc: string | null, toUtc: string | null) => void;
+  setRecruitmentStartedRange: (
+    fromUtc: string | null,
+    toUtc: string | null,
+  ) => void;
   clearDateRanges: () => void;
   setSort: (sortBy: string, sortOrder?: "asc" | "desc") => void;
   toggleSortOrder: () => void;
@@ -85,9 +90,17 @@ type GamesFilterAction =
   | { type: "REMOVE_HOST"; username: string }
   | { type: "CLEAR_HOSTS" }
   | { type: "SET_CREATED_RANGE"; fromUtc: string | null; toUtc: string | null }
-  | { type: "SET_ACTIVATED_RANGE"; fromUtc: string | null; toUtc: string | null }
+  | {
+      type: "SET_ACTIVATED_RANGE";
+      fromUtc: string | null;
+      toUtc: string | null;
+    }
   | { type: "SET_CLOSED_RANGE"; fromUtc: string | null; toUtc: string | null }
-  | { type: "SET_RECRUITMENT_STARTED_RANGE"; fromUtc: string | null; toUtc: string | null }
+  | {
+      type: "SET_RECRUITMENT_STARTED_RANGE";
+      fromUtc: string | null;
+      toUtc: string | null;
+    }
   | { type: "CLEAR_DATE_RANGES" }
   | { type: "SET_SORT"; sortBy: string; sortOrder?: "asc" | "desc" }
   | { type: "TOGGLE_SORT_ORDER" }
@@ -103,7 +116,10 @@ type GamesFilterAction =
  * Pure reducer function - applies action to state and returns new state.
  * This is the ONLY place where state transformation logic lives.
  */
-function reducer(state: GamesFilterState, action: GamesFilterAction): GamesFilterState {
+function reducer(
+  state: GamesFilterState,
+  action: GamesFilterAction,
+): GamesFilterState {
   // Clone state with new Set instances to avoid mutation
   const newState: GamesFilterState = {
     ...state,
@@ -357,18 +373,22 @@ function parseQueryToState(query: LocationQuery): GamesFilterState {
 
   if (query.createdFromUtc) state.createdFromUtc = String(query.createdFromUtc);
   if (query.createdToUtc) state.createdToUtc = String(query.createdToUtc);
-  if (query.activatedFromUtc) state.activatedFromUtc = String(query.activatedFromUtc);
+  if (query.activatedFromUtc)
+    state.activatedFromUtc = String(query.activatedFromUtc);
   if (query.activatedToUtc) state.activatedToUtc = String(query.activatedToUtc);
   if (query.closedFromUtc) state.closedFromUtc = String(query.closedFromUtc);
   if (query.closedToUtc) state.closedToUtc = String(query.closedToUtc);
-  if (query.recruitmentStartedFromUtc) state.recruitmentStartedFromUtc = String(query.recruitmentStartedFromUtc);
-  if (query.recruitmentStartedToUtc) state.recruitmentStartedToUtc = String(query.recruitmentStartedToUtc);
+  if (query.recruitmentStartedFromUtc)
+    state.recruitmentStartedFromUtc = String(query.recruitmentStartedFromUtc);
+  if (query.recruitmentStartedToUtc)
+    state.recruitmentStartedToUtc = String(query.recruitmentStartedToUtc);
 
   const sortByRaw = query.sortBy as string;
   if (validSortByValues.has(sortByRaw)) state.sortBy = sortByRaw;
 
   const sortOrderRaw = query.sortOrder as string;
-  if (sortOrderRaw === "asc" || sortOrderRaw === "desc") state.sortOrder = sortOrderRaw;
+  if (sortOrderRaw === "asc" || sortOrderRaw === "desc")
+    state.sortOrder = sortOrderRaw;
 
   return state;
 }
@@ -384,17 +404,22 @@ function buildQueryFromState(state: GamesFilterState): Record<string, string> {
   if (state.status === "Closed" && state.closedReasonFilter !== "any") {
     query.closedReasonFilter = state.closedReasonFilter;
   }
-  if (state.requiredTags.size > 0) query.requiredTags = [...state.requiredTags].join(",");
-  if (state.excludedTags.size > 0) query.excludedTags = [...state.excludedTags].join(",");
-  if (state.hostUsernames.size > 0) query.hosts = [...state.hostUsernames].join(",");
+  if (state.requiredTags.size > 0)
+    query.requiredTags = [...state.requiredTags].join(",");
+  if (state.excludedTags.size > 0)
+    query.excludedTags = [...state.excludedTags].join(",");
+  if (state.hostUsernames.size > 0)
+    query.hosts = [...state.hostUsernames].join(",");
   if (state.createdFromUtc) query.createdFromUtc = state.createdFromUtc;
   if (state.createdToUtc) query.createdToUtc = state.createdToUtc;
   if (state.activatedFromUtc) query.activatedFromUtc = state.activatedFromUtc;
   if (state.activatedToUtc) query.activatedToUtc = state.activatedToUtc;
   if (state.closedFromUtc) query.closedFromUtc = state.closedFromUtc;
   if (state.closedToUtc) query.closedToUtc = state.closedToUtc;
-  if (state.recruitmentStartedFromUtc) query.recruitmentStartedFromUtc = state.recruitmentStartedFromUtc;
-  if (state.recruitmentStartedToUtc) query.recruitmentStartedToUtc = state.recruitmentStartedToUtc;
+  if (state.recruitmentStartedFromUtc)
+    query.recruitmentStartedFromUtc = state.recruitmentStartedFromUtc;
+  if (state.recruitmentStartedToUtc)
+    query.recruitmentStartedToUtc = state.recruitmentStartedToUtc;
   if (state.sortBy !== "created") query.sortBy = state.sortBy;
   if (state.sortOrder !== "desc") query.sortOrder = state.sortOrder;
 
@@ -432,7 +457,9 @@ export function useGamesFilter(): GamesFilterComposable {
   dispatcher.setRouter(router);
 
   // Filter state derived from URL (single source of truth)
-  const filterState = computed<GamesFilterState>(() => parseQueryToState(route.query));
+  const filterState = computed<GamesFilterState>(() =>
+    parseQueryToState(route.query),
+  );
 
   // Helper to get current state for dispatch
   const getCurrentState = () => filterState.value;
@@ -454,22 +481,39 @@ export function useGamesFilter(): GamesFilterComposable {
         params.recruitmentFilter = state.recruitmentFilter;
       }
       if (state.status === "Closed" && state.closedReasonFilter !== "any") {
-        params.closedReasonFilter = state.closedReasonFilter as "None" | "Finished" | "Frozen";
+        params.closedReasonFilter = state.closedReasonFilter as
+          | "None"
+          | "Finished"
+          | "Frozen";
       }
     }
 
-    if (state.requiredTags.size > 0) params.requiredTags = [...state.requiredTags];
-    if (state.excludedTags.size > 0) params.excludedTags = [...state.excludedTags];
-    if (state.hostUsernames.size > 0) params.hostUsernames = [...state.hostUsernames];
+    if (state.requiredTags.size > 0)
+      params.requiredTags = [...state.requiredTags];
+    if (state.excludedTags.size > 0)
+      params.excludedTags = [...state.excludedTags];
+    if (state.hostUsernames.size > 0)
+      params.hostUsernames = [...state.hostUsernames];
 
-    if (state.createdFromUtc) params.createdFromUtc = dateToApiStart(state.createdFromUtc);
-    if (state.createdToUtc) params.createdToUtc = dateToApiEnd(state.createdToUtc);
-    if (state.activatedFromUtc) params.activatedFromUtc = dateToApiStart(state.activatedFromUtc);
-    if (state.activatedToUtc) params.activatedToUtc = dateToApiEnd(state.activatedToUtc);
-    if (state.closedFromUtc) params.closedFromUtc = dateToApiStart(state.closedFromUtc);
+    if (state.createdFromUtc)
+      params.createdFromUtc = dateToApiStart(state.createdFromUtc);
+    if (state.createdToUtc)
+      params.createdToUtc = dateToApiEnd(state.createdToUtc);
+    if (state.activatedFromUtc)
+      params.activatedFromUtc = dateToApiStart(state.activatedFromUtc);
+    if (state.activatedToUtc)
+      params.activatedToUtc = dateToApiEnd(state.activatedToUtc);
+    if (state.closedFromUtc)
+      params.closedFromUtc = dateToApiStart(state.closedFromUtc);
     if (state.closedToUtc) params.closedToUtc = dateToApiEnd(state.closedToUtc);
-    if (state.recruitmentStartedFromUtc) params.recruitmentStartedFromUtc = dateToApiStart(state.recruitmentStartedFromUtc);
-    if (state.recruitmentStartedToUtc) params.recruitmentStartedToUtc = dateToApiEnd(state.recruitmentStartedToUtc);
+    if (state.recruitmentStartedFromUtc)
+      params.recruitmentStartedFromUtc = dateToApiStart(
+        state.recruitmentStartedFromUtc,
+      );
+    if (state.recruitmentStartedToUtc)
+      params.recruitmentStartedToUtc = dateToApiEnd(
+        state.recruitmentStartedToUtc,
+      );
 
     params.sortBy = state.sortBy;
     params.sortOrder = state.sortOrder;
@@ -487,31 +531,66 @@ export function useGamesFilter(): GamesFilterComposable {
   // Active filters for UI display
   const activeFilters = computed(() => {
     const state = filterState.value;
-    const filters: { key: string; label: string; type: "status" | "tag" | "host" }[] = [];
+    const filters: {
+      key: string;
+      label: string;
+      type: "status" | "tag" | "host";
+    }[] = [];
 
     if (state.status) {
       const option = STATUS_OPTIONS.find((o) => o.value === state.status);
-      if (option) filters.push({ key: `status-${state.status}`, label: option.label, type: "status" });
+      if (option)
+        filters.push({
+          key: `status-${state.status}`,
+          label: option.label,
+          type: "status",
+        });
     }
 
     if (state.status === "Active" && state.recruitmentFilter !== "any") {
-      const option = RECRUITMENT_FILTER_OPTIONS.find((o) => o.value === state.recruitmentFilter);
-      if (option) filters.push({ key: "recruitment", label: `Набор: ${option.label}`, type: "status" });
+      const option = RECRUITMENT_FILTER_OPTIONS.find(
+        (o) => o.value === state.recruitmentFilter,
+      );
+      if (option)
+        filters.push({
+          key: "recruitment",
+          label: `Набор: ${option.label}`,
+          type: "status",
+        });
     }
 
     if (state.status === "Closed" && state.closedReasonFilter !== "any") {
-      const option = CLOSED_REASON_FILTER_OPTIONS.find((o) => o.value === state.closedReasonFilter);
-      if (option) filters.push({ key: "closedReason", label: `Причина: ${option.label}`, type: "status" });
+      const option = CLOSED_REASON_FILTER_OPTIONS.find(
+        (o) => o.value === state.closedReasonFilter,
+      );
+      if (option)
+        filters.push({
+          key: "closedReason",
+          label: `Причина: ${option.label}`,
+          type: "status",
+        });
     }
 
     for (const tagId of state.requiredTags) {
-      filters.push({ key: `required-tag-${tagId}`, label: `+Тег #${tagId}`, type: "tag" });
+      filters.push({
+        key: `required-tag-${tagId}`,
+        label: `+Тег #${tagId}`,
+        type: "tag",
+      });
     }
     for (const tagId of state.excludedTags) {
-      filters.push({ key: `excluded-tag-${tagId}`, label: `-Тег #${tagId}`, type: "tag" });
+      filters.push({
+        key: `excluded-tag-${tagId}`,
+        label: `-Тег #${tagId}`,
+        type: "tag",
+      });
     }
     for (const username of state.hostUsernames) {
-      filters.push({ key: `host-${username}`, label: `ведущий: ${username}`, type: "host" });
+      filters.push({
+        key: `host-${username}`,
+        label: `ведущий: ${username}`,
+        type: "host",
+      });
     }
 
     return filters;
@@ -540,27 +619,44 @@ export function useGamesFilter(): GamesFilterComposable {
   // ACTION DISPATCHERS (thin wrappers around dispatch)
   // ==========================================================================
 
-  const setSearch = (search: string) => dispatch({ type: "SET_SEARCH", search });
-  const setStatus = (status: StatusValue | null) => dispatch({ type: "SET_STATUS", status });
+  const setSearch = (search: string) =>
+    dispatch({ type: "SET_SEARCH", search });
+  const setStatus = (status: StatusValue | null) =>
+    dispatch({ type: "SET_STATUS", status });
   const clearStatus = () => dispatch({ type: "SET_STATUS", status: null });
-  const setRecruitmentFilter = (value: RecruitmentFilter) => dispatch({ type: "SET_RECRUITMENT_FILTER", value });
-  const setClosedReasonFilter = (value: ClosedReasonFilter) => dispatch({ type: "SET_CLOSED_REASON_FILTER", value });
-  const addRequiredTag = (tagId: number) => dispatch({ type: "ADD_REQUIRED_TAG", tagId });
-  const addExcludedTag = (tagId: number) => dispatch({ type: "ADD_EXCLUDED_TAG", tagId });
+  const setRecruitmentFilter = (value: RecruitmentFilter) =>
+    dispatch({ type: "SET_RECRUITMENT_FILTER", value });
+  const setClosedReasonFilter = (value: ClosedReasonFilter) =>
+    dispatch({ type: "SET_CLOSED_REASON_FILTER", value });
+  const addRequiredTag = (tagId: number) =>
+    dispatch({ type: "ADD_REQUIRED_TAG", tagId });
+  const addExcludedTag = (tagId: number) =>
+    dispatch({ type: "ADD_EXCLUDED_TAG", tagId });
   const removeTag = (tagId: number) => dispatch({ type: "REMOVE_TAG", tagId });
-  const addHost = (username: string) => dispatch({ type: "ADD_HOST", username });
-  const removeHost = (username: string) => dispatch({ type: "REMOVE_HOST", username });
+  const addHost = (username: string) =>
+    dispatch({ type: "ADD_HOST", username });
+  const removeHost = (username: string) =>
+    dispatch({ type: "REMOVE_HOST", username });
   const clearHosts = () => dispatch({ type: "CLEAR_HOSTS" });
-  const setCreatedRange = (fromUtc: string | null, toUtc: string | null) => dispatch({ type: "SET_CREATED_RANGE", fromUtc, toUtc });
-  const setActivatedRange = (fromUtc: string | null, toUtc: string | null) => dispatch({ type: "SET_ACTIVATED_RANGE", fromUtc, toUtc });
-  const setClosedRange = (fromUtc: string | null, toUtc: string | null) => dispatch({ type: "SET_CLOSED_RANGE", fromUtc, toUtc });
-  const setRecruitmentStartedRange = (fromUtc: string | null, toUtc: string | null) => dispatch({ type: "SET_RECRUITMENT_STARTED_RANGE", fromUtc, toUtc });
+  const setCreatedRange = (fromUtc: string | null, toUtc: string | null) =>
+    dispatch({ type: "SET_CREATED_RANGE", fromUtc, toUtc });
+  const setActivatedRange = (fromUtc: string | null, toUtc: string | null) =>
+    dispatch({ type: "SET_ACTIVATED_RANGE", fromUtc, toUtc });
+  const setClosedRange = (fromUtc: string | null, toUtc: string | null) =>
+    dispatch({ type: "SET_CLOSED_RANGE", fromUtc, toUtc });
+  const setRecruitmentStartedRange = (
+    fromUtc: string | null,
+    toUtc: string | null,
+  ) => dispatch({ type: "SET_RECRUITMENT_STARTED_RANGE", fromUtc, toUtc });
   const clearDateRanges = () => dispatch({ type: "CLEAR_DATE_RANGES" });
-  const setSort = (sortBy: string, sortOrder?: "asc" | "desc") => dispatch({ type: "SET_SORT", sortBy, sortOrder });
+  const setSort = (sortBy: string, sortOrder?: "asc" | "desc") =>
+    dispatch({ type: "SET_SORT", sortBy, sortOrder });
   const toggleSortOrder = () => dispatch({ type: "TOGGLE_SORT_ORDER" });
-  const removeFilter = (key: string) => dispatch({ type: "REMOVE_FILTER", key });
+  const removeFilter = (key: string) =>
+    dispatch({ type: "REMOVE_FILTER", key });
   const clearFilters = () => dispatch({ type: "CLEAR_FILTERS" });
-  const validateTagFilters = (validTagIds: Set<number>) => dispatch({ type: "VALIDATE_TAGS", validTagIds });
+  const validateTagFilters = (validTagIds: Set<number>) =>
+    dispatch({ type: "VALIDATE_TAGS", validTagIds });
 
   return {
     filterState,

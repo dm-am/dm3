@@ -101,6 +101,10 @@ internal class BlogMappingProfile : Profile
 
         CreateMap<DbPublication, Publication>()
             .ForMember(d => d.Id, s => s.MapFrom(p => p.PublicationId))
+            // Projected via the Blog navigation — ProjectTo turns this into a
+            // SQL join, so the publication carries its blog's name (used by the
+            // profile "best publication" instead of a bare blog id).
+            .ForMember(d => d.BlogTitle, s => s.MapFrom(p => p.Blog.Title))
             .ForMember(d => d.Author, s => s.MapFrom(p => p.Author))
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(p => p.CreatedUtc))
             .ForMember(d => d.ModifiedUtc, s => s.MapFrom(p => p.ModifiedUtc))

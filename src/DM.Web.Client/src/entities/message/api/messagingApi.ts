@@ -127,7 +127,11 @@ export default new (class MessagingApi {
    * Get message with BBCode text for editing
    */
   public getMessageForEdit(id: MessageId) {
-    return Api.get<Message>(`messages/${id}`, undefined, RENDER_AUDIENCE.AuthorEdit);
+    return Api.get<Message>(
+      `messages/${id}`,
+      undefined,
+      RENDER_AUDIENCE.AuthorEdit,
+    );
   }
 
   public updateMessage(id: MessageId, message: Patch<Message>) {

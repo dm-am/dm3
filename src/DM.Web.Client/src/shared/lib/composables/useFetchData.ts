@@ -1,4 +1,9 @@
-import { type RouteParams, type LocationQuery, type LocationQueryValue, useRoute } from "vue-router";
+import {
+  type RouteParams,
+  type LocationQuery,
+  type LocationQueryValue,
+  useRoute,
+} from "vue-router";
 import { watch, onMounted } from "vue";
 
 type ParamValue = string | string[] | undefined;

@@ -1,15 +1,20 @@
 import { computed, type Ref, type ComputedRef } from "vue";
 import dayjs from "dayjs";
 import { UserRole, type UserRef } from "@/shared/api/models/common";
-
-const ONLINE_THRESHOLD_MINUTES = 5;
+import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
 
 type RoleBadge = { label: string; title: string } | null;
 
 interface AuthorMetaOptions {
-  author: Ref<UserRef | null | undefined> | ComputedRef<UserRef | null | undefined>;
-  createdUtc: Ref<string | null | undefined> | ComputedRef<string | null | undefined>;
-  modifiedUtc?: Ref<string | null | undefined> | ComputedRef<string | null | undefined>;
+  author:
+    | Ref<UserRef | null | undefined>
+    | ComputedRef<UserRef | null | undefined>;
+  createdUtc:
+    | Ref<string | null | undefined>
+    | ComputedRef<string | null | undefined>;
+  modifiedUtc?:
+    | Ref<string | null | undefined>
+    | ComputedRef<string | null | undefined>;
 }
 
 interface AuthorMetaResult {
@@ -52,7 +57,11 @@ export function useAuthorMeta(options: AuthorMetaOptions): AuthorMetaResult {
   const isAuthorOnline = computed(() => {
     const lastActivityUtc = author.value?.lastActivityUtc;
     if (!lastActivityUtc) return false;
-    const minutesSinceOnline = dayjs().diff(dayjs(lastActivityUtc), "minute", true);
+    const minutesSinceOnline = dayjs().diff(
+      dayjs(lastActivityUtc),
+      "minute",
+      true,
+    );
     return minutesSinceOnline <= ONLINE_THRESHOLD_MINUTES;
   });
 

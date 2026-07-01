@@ -17,23 +17,10 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import type { Post } from "./types";
 import gameApi from "../api/gameApi";
+import { getWeekStartUtc } from "@/shared/lib/utils/datetime";
 
 /** Cache TTL: 5 minutes (rated posts don't change often) */
 const CACHE_TTL = 300_000;
-
-/**
- * Get the start of the current calendar week (Monday 00:00:00 UTC).
- * Week runs Monday to Sunday.
- */
-function getWeekStartUtc(): Date {
-  const now = new Date();
-  const dayOfWeek = now.getUTCDay();
-  const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  const monday = new Date(now);
-  monday.setUTCDate(now.getUTCDate() - daysSinceMonday);
-  monday.setUTCHours(0, 0, 0, 0);
-  return monday;
-}
 
 /** Per-user cache entry for "лучший пост за все время". */
 interface UserBestPostEntry {
@@ -52,6 +39,10 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
   // to its empty state the moment BestWeeklyPost finishes.
   const bestLoaded = ref(false);
   const latestLoaded = ref(false);
+  // Russian error messages so the widgets can render an error state
+  // instead of a fake "no posts" empty state when the API fails.
+  const bestError = ref<string | null>(null);
+  const latestError = ref<string | null>(null);
 
   /**
    * Per-username cache for "лучший пост за все время". Reactive map so
@@ -65,21 +56,31 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
 
   async function fetchBestOfWeek(force = false) {
     const now = Date.now();
-    if (!force && bestOfWeek.value !== null && now - lastFetchBest < CACHE_TTL) {
+    if (
+      !force &&
+      bestOfWeek.value !== null &&
+      now - lastFetchBest < CACHE_TTL
+    ) {
       return;
     }
     if (loadingBest.value) return;
     loadingBest.value = true;
+    bestError.value = null;
     try {
-      const weekStart = getWeekStartUtc();
       const response = await gameApi.getRatedPosts({
         sortBy: "rating",
         hasReviews: true,
-        createdAfter: weekStart.toISOString(),
+        createdAfter: getWeekStartUtc(),
         take: 1,
       });
-      bestOfWeek.value = response.data?.resources?.[0] ?? null;
-      lastFetchBest = now;
+      if (response.error) {
+        // Keep any stale post visible; the widget shows the error
+        // text only when it has no post to render.
+        bestError.value = "Не удалось загрузить лучший пост недели";
+      } else {
+        bestOfWeek.value = response.data?.resources?.[0] ?? null;
+        lastFetchBest = now;
+      }
     } finally {
       loadingBest.value = false;
       bestLoaded.value = true;
@@ -88,19 +89,30 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
 
   async function fetchLatestRated(force = false) {
     const now = Date.now();
-    if (!force && latestRated.value !== null && now - lastFetchLatest < CACHE_TTL) {
+    if (
+      !force &&
+      latestRated.value !== null &&
+      now - lastFetchLatest < CACHE_TTL
+    ) {
       return;
     }
     if (loadingLatest.value) return;
     loadingLatest.value = true;
+    latestError.value = null;
     try {
       const response = await gameApi.getRatedPosts({
         sortBy: "lastreview",
         hasReviews: true,
         take: 1,
       });
-      latestRated.value = response.data?.resources?.[0] ?? null;
-      lastFetchLatest = now;
+      if (response.error) {
+        // Keep any stale post visible; the widget shows the error
+        // text only when it has no post to render.
+        latestError.value = "Не удалось загрузить последний оцененный пост";
+      } else {
+        latestRated.value = response.data?.resources?.[0] ?? null;
+        lastFetchLatest = now;
+      }
     } finally {
       loadingLatest.value = false;
       latestLoaded.value = true;
@@ -178,6 +190,8 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
     loadingLatest,
     bestLoaded,
     latestLoaded,
+    bestError,
+    latestError,
     fetchBestOfWeek,
     fetchLatestRated,
     fetchBestPostOfUser,

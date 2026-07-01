@@ -1,20 +1,26 @@
 <template>
   <div>
-    <h4 class="sidebar-title">
-      <span
+    <h4
+      class="sidebar-title"
+      @mouseenter="hovered = true"
+      @mouseleave="hovered = false"
+    >
+      <slot name="title" /><button
+        type="button"
         class="toggle"
+        :aria-expanded="show"
+        :aria-label="show ? 'Свернуть раздел' : 'Развернуть раздел'"
         @click="toggle"
-        @mouseenter="hovered = true"
-        @mouseleave="hovered = false"
       >
-        <slot name="title" /><span
+        <span
           class="icon"
+          aria-hidden="true"
           :style="{
             transform: `rotate(${rotation}deg)`,
             opacity: hovered ? 1 : 0,
           }"
         ></span>
-      </span>
+      </button>
     </h4>
     <div :class="{ list: true, collapsed: !show }" ref="content">
       <slot />
@@ -70,6 +76,8 @@ const toggle = () => {
 @import "src/assets/styles/Themes"
 
 .sidebar-title
+  display: flex
+  align-items: center
   margin: $medium 0 $small
   font-size: $font-size
   font-weight: bold
@@ -77,20 +85,33 @@ const toggle = () => {
   letter-spacing: 0.5px
   color: $heading-alt
 
+// Only the +/- icon toggles the block (the title text is not clickable).
+// A small padding gives the icon a comfortable tap target without changing
+// its visual size.
 .toggle
   cursor: pointer
   color: inherit
+  display: inline-flex
+  align-items: center
+  vertical-align: middle
+  padding: 2px 4px
+  margin-left: 2px
+  border: none
+  background: none
+
+  // Keyboard parity with hover: reveal the +/- icon on keyboard focus
+  // (!important overrides the inline hover-driven opacity binding)
+  &:focus-visible .icon
+    opacity: 1 !important
 
 .icon
   position: relative
   display: inline-block
   width: 10px
   height: 10px
-  margin-left: 6px
   opacity: 0
   transition: opacity 0.15s ease, transform 0.3s ease
   vertical-align: middle
-  margin-top: -2px
 
   &::before,
   &::after

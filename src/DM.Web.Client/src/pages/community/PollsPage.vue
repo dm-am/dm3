@@ -15,7 +15,7 @@ watch(
   () => {
     fetchPolls(searchParams.value);
   },
-  { immediate: true }
+  { immediate: true },
 );
 </script>
 

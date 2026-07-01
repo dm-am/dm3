@@ -41,19 +41,11 @@ public class GeneralUser : IUser
     public DateTimeOffset? LastActivityUtc { get; set; }
 
     /// <summary>
-    /// URL of current profile picture original file
+    /// Avatar variants (original/medium/small). SSOT — nested object вместо
+    /// трех плоских свойств. Заполняется через
+    /// <c>AvatarProjections.From(u.AvatarUpload)</c> в EF Select'ах.
     /// </summary>
-    public string? OriginalPictureUrl { get; set; }
-
-    /// <summary>
-    /// URL of current profile picture M-sized
-    /// </summary>
-    public string? MediumPictureUrl { get; set; }
-
-    /// <summary>
-    /// URL of current profile picture S-sized
-    /// </summary>
-    public string? SmallPictureUrl { get; set; }
+    public AvatarPicture Picture { get; set; } = new();
 
     /// <summary>
     /// Status
@@ -105,6 +97,68 @@ public class GeneralUser : IUser
     public int PostReviewsReceivedCount { get; set; }
 
     /// <summary>
+    /// Number of endorsements (user recommendations) received by this user.
+    /// Denormalized aggregate populated by UserRepository.GetCommonRelatedData.
+    /// </summary>
+    public int EndorsementsReceivedCount { get; set; }
+
+    /// <summary>
+    /// Number of endorsements written by this user (about other users).
+    /// </summary>
+    public int EndorsementsGivenCount { get; set; }
+
+    /// <summary>
+    /// Forum topics authored by this user. Denormalized aggregate
+    /// populated by UserRepository.GetCommonRelatedData via batched COUNT.
+    /// Drives the <c>TopicsAuthored</c> achievement metric.
+    /// </summary>
+    public int TopicsAuthoredCount { get; set; }
+
+    /// <summary>
+    /// Comments authored by this user (forum + blog + game + publication —
+    /// all polymorphic Comments rows). Drives the <c>CommentsAuthored</c>
+    /// achievement metric.
+    /// </summary>
+    public int CommentsAuthoredCount { get; set; }
+
+    /// <summary>
+    /// Messages this user has posted in the global chat. Drives the
+    /// <c>GlobalChatMessages</c> achievement metric.
+    /// </summary>
+    public int GlobalChatMessagesCount { get; set; }
+
+    /// <summary>
+    /// Bans received by this user (count of <c>Bans</c> rows where this user
+    /// is the target). Drives the <c>BansReceived</c> achievement metric —
+    /// the "резиновая уточка" chain (пасхалка на мем про утят-террористов).
+    /// </summary>
+    public int BansReceivedCount { get; set; }
+
+    /// <summary>
+    /// Game drops — count of retired characters this user authored where
+    /// <c>IsPlayerLeft</c> is true (voluntary exit by the player). Excludes
+    /// deaths and GM exiles; those aren't drops. Drives the <c>GameDrops</c>
+    /// achievement metric.
+    /// </summary>
+    public int GameDropsCount { get; set; }
+
+    /// <summary>
+    /// Publications authored — articles in blogs written by this user.
+    /// Drives the <c>PublicationsAuthored</c> achievement metric.
+    /// Drafts count too (the work was done).
+    /// </summary>
+    public int PublicationsAuthoredCount { get; set; }
+
+    /// <summary>
+    /// Total likes received on user's authored content (topics +
+    /// publications + comments + chat messages). Drives the
+    /// <c>LikesReceived</c> achievement metric. Game posts have their
+    /// own quality signal (PostReview score sum → Рейтинг), so they
+    /// are NOT counted here to avoid double-counting recognition.
+    /// </summary>
+    public int LikesReceivedCount { get; set; }
+
+    /// <summary>
     /// Registration date (UTC)
     /// </summary>
     public DateTimeOffset? RegisteredUtc { get; set; }
@@ -148,6 +202,13 @@ public class GeneralUser : IUser
     /// Subscriber usernames for tooltip display (limited to first 20)
     /// </summary>
     public IReadOnlyCollection<string> SubscriberUsernames { get; set; } = [];
+
+    /// <summary>
+    /// Richer subscriber refs (username + last activity) for profile-page
+    /// display where the UI styles inactive subscribers differently.
+    /// Limited to first 20 — same budget as <see cref="SubscriberUsernames"/>.
+    /// </summary>
+    public IReadOnlyCollection<SubscriberInfo> Subscribers { get; set; } = [];
 
     /// <summary>
     /// Username change history (for tooltip display)

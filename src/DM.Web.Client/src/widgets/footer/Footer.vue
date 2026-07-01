@@ -1,5 +1,5 @@
 <template>
-  <div class="footer">
+  <footer class="footer">
     <!-- Static content - render once (currentYear computed once at component creation) -->
     <div class="credits" v-once>
       <div class="copyright-line">
@@ -22,11 +22,18 @@
         >
       </div>
       <div>
+        Помощь в разработке –
+        <router-link :to="{ name: 'profile', params: { username: 'Rayzen' } }"
+          >Rayzen</router-link
+        >
+      </div>
+      <div>
         Дизайн логотипа –
         <router-link
           :to="{ name: 'profile', params: { username: 'Azur' } }"
           @click="rickroll"
-        >Azur</router-link>
+          >Azur</router-link
+        >
       </div>
     </div>
 
@@ -44,7 +51,7 @@
         >
       </div>
     </div>
-  </div>
+  </footer>
 </template>
 
 <script setup lang="ts">
@@ -137,12 +144,6 @@ function rickroll(event: MouseEvent) {
   flex-direction: column
   justify-content: center
   align-self: stretch
-
-  a
-    color: $link
-    transition: color $animation-time ease
-    &:hover
-      color: $link-hover
 
 .legal-first
   margin-bottom: $small

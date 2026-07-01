@@ -15,21 +15,26 @@ public interface ITopicRepository
     // --- READ ---
 
     /// <summary>
-    /// Get number of topics matching query
+    /// Get number of topics matching query.
     /// </summary>
-    /// <param name="boardId">Board identifier</param>
+    /// <param name="boardId">Board identifier (null = cross-board, scoped by access policy)</param>
+    /// <param name="accessPolicy">Board access policy of the viewer — applied only when boardId is null</param>
     /// <param name="query">Filter parameters</param>
     /// <param name="ct">Cancellation token</param>
-    Task<int> Count(Guid boardId, TopicsQuery query, CancellationToken ct = default);
+    Task<int> Count(Guid? boardId, BoardAccessPolicy accessPolicy, TopicsQuery query, CancellationToken ct = default);
 
     /// <summary>
-    /// Get list of board topics with filtering and sorting
+    /// Get list of topics with filtering and sorting. The same method
+    /// drives the per-board forum listings and the cross-board user-profile
+    /// "Topics" tab — boardId=null switches to cross-board mode, in which
+    /// the access policy mask filters out topics the viewer can't see.
     /// </summary>
-    /// <param name="boardId">Board identifier</param>
+    /// <param name="boardId">Board identifier (null = cross-board, scoped by access policy)</param>
+    /// <param name="accessPolicy">Board access policy of the viewer — applied only when boardId is null</param>
     /// <param name="pagingData">Paging data</param>
     /// <param name="query">Filter and sort parameters</param>
     /// <param name="ct">Cancellation token</param>
-    Task<IEnumerable<Topic>> Get(Guid boardId, PagingData? pagingData, TopicsQuery query, CancellationToken ct = default);
+    Task<IEnumerable<Topic>> Get(Guid? boardId, BoardAccessPolicy accessPolicy, PagingData? pagingData, TopicsQuery query, CancellationToken ct = default);
 
     /// <summary>
     /// Get single topic by identifier

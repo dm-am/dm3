@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useReviewsFilter, SORT_OPTIONS, DEFAULT_FILTER_STATE } from "../model";
+import { useReviewsFilter, SORT_OPTIONS } from "../model";
 import { useFilterSearch } from "@/shared/lib/composables";
-import { FilterSearchInput, SortButton, BubblesRow, FilterBubble } from "@/shared/ui/Filters";
+import { FilterSearchInput, SortButton } from "@/shared/ui/Filters";
 
-const { filterState, setSearch, setSort, toggleSortOrder, clearFilters } = useReviewsFilter();
+const { filterState, setSearch, setSort, toggleSortOrder } = useReviewsFilter();
 
 // Search with debounce
 const { localInput, handleInput, applySearch } = useFilterSearch(
   computed(() => filterState.value.search),
-  setSearch
+  setSearch,
 );
 
 // Sort
@@ -30,21 +30,6 @@ function handleSortOrderChange(order: "asc" | "desc") {
     toggleSortOrder();
   }
 }
-
-// Show bubbles when sort is non-default (search visible in input, no separate bubble)
-const hasBubbles = computed(() => {
-  const state = filterState.value;
-  const def = DEFAULT_FILTER_STATE;
-  return (
-    state.sortBy !== def.sortBy ||
-    state.sortOrder !== def.sortOrder
-  );
-});
-
-function clearAll() {
-  localInput.value = "";
-  clearFilters();
-}
 </script>
 
 <template>
@@ -59,7 +44,7 @@ function clearAll() {
         @blur="applySearch"
       />
 
-      <!-- Sort -->
+      <!-- Sort (sorting is driven solely by this control, no bubble row) -->
       <SortButton
         :options="sortOptions"
         :sort-by="filterState.sortBy"
@@ -68,10 +53,6 @@ function clearAll() {
         @update:sort-order="handleSortOrderChange"
       />
     </div>
-
-    <!-- Active filter bubbles -->
-    <BubblesRow v-if="hasBubbles" @clear-all="clearAll">
-    </BubblesRow>
   </div>
 </template>
 

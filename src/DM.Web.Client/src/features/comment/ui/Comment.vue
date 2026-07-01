@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
+import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import type { Comment } from "@/shared/api/models/common/comment";
-import { useUserStore } from "@/entities/user";
+import { useUserStore, AvatarImg } from "@/entities/user";
 import { UserRole } from "@/shared/api/models/community";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { TruncatedContent } from "@/shared/ui/TruncatedContent";
@@ -11,14 +12,18 @@ import {
   initBbcodeInteractive,
   trimHtmlWhitespace,
 } from "@/shared/lib/utils/bbcodeInteractive";
-import { defaultAvatarUrl as defaultPicture } from "@/shared/lib/utils/icons";
+import { highlightDom, clearDomHighlight } from "@/shared/lib/utils/highlight";
 import { SvgIcon } from "@/shared/ui/Icon";
+import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
+import { useToast } from "@/shared/lib/composables/useToast";
 
 const props = withDefaults(
   defineProps<{
     comment: Comment;
     compact?: boolean;
     number?: number;
+    /** Search query for highlighting matches in comment text */
+    searchQuery?: string;
   }>(),
   {
     compact: true,
@@ -34,8 +39,9 @@ const emit = defineEmits<{
 }>();
 
 const EDIT_TIME_LIMIT_MINUTES = 15;
-const ONLINE_THRESHOLD_MINUTES = 5;
 
+const route = useRoute();
+const { success: toastSuccess } = useToast();
 const { user: currentUser } = storeToRefs(useUserStore());
 
 // State
@@ -47,11 +53,6 @@ const showLikesPopup = ref(false);
 // Max collapsed height before TruncatedContent shows "показать полностью".
 // 300px ≈ 15-20 lines of BBCode text, matches DM2 comment visual rhythm.
 const COMMENT_MAX_HEIGHT = 300;
-
-// Computed
-const authorPicture = computed(
-  () => props.comment.author?.picture?.mediumUrl || props.comment.author?.picture?.smallUrl || defaultPicture,
-);
 
 const formattedDate = computed(() => {
   if (!props.comment.createdUtc) return "";
@@ -108,12 +109,30 @@ const canLike = computed(() => {
 
 const likesCount = computed(() => props.comment.likes?.length ?? 0);
 
+// Whether the footer has any content. In the full layout the author meta and
+// permalink live in the header, so a guest viewing a like-less comment would
+// otherwise get an empty footer with stray spacing.
+const hasFooterContent = computed(
+  () =>
+    (props.compact && !!props.comment.author) ||
+    canLike.value ||
+    likesCount.value > 0 ||
+    canEdit.value ||
+    canDelete.value ||
+    canWarn.value ||
+    (props.comment.isRemoved && isModerator.value) ||
+    (props.compact && !!props.number),
+);
+
 const commentAnchor = computed(() => `#comment-${props.comment.id}`);
 
 const isAuthorOnline = computed(() => {
   const lastActivityUtc = props.comment.author?.lastActivityUtc;
   if (!lastActivityUtc) return false;
-  return dayjs().diff(dayjs(lastActivityUtc), "minute", true) <= ONLINE_THRESHOLD_MINUTES;
+  return (
+    dayjs().diff(dayjs(lastActivityUtc), "minute", true) <=
+    ONLINE_THRESHOLD_MINUTES
+  );
 });
 
 const roleBadge = computed(() => {
@@ -187,29 +206,64 @@ function toggleDeletedContent() {
 }
 
 function copyAnchorLink() {
-  navigator.clipboard.writeText(
-    window.location.origin + window.location.pathname + commentAnchor.value,
-  );
+  // Preserve the current page (?number=N) so a permalink copied from page 2+
+  // lands the recipient on the right page, then scrolls to the comment hash.
+  const numberParam = route.query.number;
+  const search = numberParam ? `?number=${String(numberParam)}` : "";
+  const url =
+    window.location.origin +
+    window.location.pathname +
+    search +
+    commentAnchor.value;
+  navigator.clipboard.writeText(url);
+  toastSuccess("Ссылка скопирована");
 }
+
+// Track the mounted content element for re-highlighting on searchQuery change
+const contentEl = ref<HTMLElement | null>(null);
 
 // Reinitialize interactive BBCode elements (spoilers, NSFW toggles) each
 // time TruncatedContent mounts / refreshes the content element.
 function initCommentBbcode(el: HTMLElement) {
+  contentEl.value = el;
   initBbcodeInteractive(el);
+  clearDomHighlight(el);
+  if (props.searchQuery) {
+    highlightDom(el, props.searchQuery);
+  }
 }
+
+// Re-highlight when searchQuery changes after initial mount
+watch(
+  () => props.searchQuery,
+  (query) => {
+    if (!contentEl.value) return;
+    clearDomHighlight(contentEl.value);
+    if (query) {
+      highlightDom(contentEl.value, query);
+    }
+  },
+);
 </script>
 
 <template>
   <div
     :id="`comment-${comment.id}`"
     class="comment"
-    :class="{ removed: comment.isRemoved && !showDeletedContent, compact: compact }"
+    :class="{
+      removed: comment.isRemoved && !showDeletedContent,
+      compact: compact,
+    }"
   >
     <!-- Deleted comment placeholder -->
     <template v-if="comment.isRemoved && !showDeletedContent">
       <div class="deleted-placeholder">
         <span class="deleted-text">Комментарий удален</span>
-        <button v-if="isModerator" class="show-deleted-btn" @click="toggleDeletedContent">
+        <button
+          v-if="isModerator"
+          class="show-deleted-btn"
+          @click="toggleDeletedContent"
+        >
           Показать
         </button>
       </div>
@@ -217,16 +271,67 @@ function initCommentBbcode(el: HTMLElement) {
 
     <!-- Normal comment content -->
     <template v-else>
-      <!-- Avatar (non-compact only) -->
+      <!-- Avatar (full layout only), top-aligned fixed column -->
       <router-link
         v-if="!compact && comment.author"
         :to="{ name: 'profile', params: { username: comment.author.username } }"
         class="avatar-link"
       >
-        <img :src="authorPicture" :alt="comment.author.username" class="avatar" />
+        <AvatarImg
+          :picture="comment.author.picture"
+          :alt="comment.author.username"
+          :size="72"
+          img-class="avatar"
+        />
       </router-link>
 
       <div class="comment-body">
+        <!-- Header (full layout only): author block left, permalink top-right -->
+        <div v-if="!compact" class="comment-header">
+          <span v-if="comment.author" class="author-block">
+            <span class="author-line">
+              <router-link
+                :to="{
+                  name: 'profile',
+                  params: { username: comment.author.username },
+                }"
+                class="author-name"
+                >{{ comment.author.username }}</router-link
+              ><template v-if="roleBadge">
+                <Tooltip :text="roleBadge.title"
+                  ><b class="role-letter">[{{ roleBadge.label }}]</b></Tooltip
+                ></template
+              >
+              <Tooltip :text="isAuthorOnline ? 'В сети' : 'Не в сети'"
+                ><span
+                  class="online-dot"
+                  :class="{ online: isAuthorOnline }"
+                  aria-hidden="true"
+              /></Tooltip>
+            </span>
+            <span class="comment-meta"
+              >{{ formattedDate
+              }}<template v-if="isEdited">
+                · изменено {{ formattedEditDate }}</template
+              ></span
+            >
+          </span>
+
+          <!-- Permalink number, pinned to the top-right corner (no '#'). -->
+          <Tooltip
+            v-if="number"
+            :text="`Скопировать ссылку на комментарий ${number}`"
+          >
+            <button
+              class="comment-number"
+              :aria-label="`Скопировать ссылку на комментарий ${number}`"
+              @click="copyAnchorLink"
+            >
+              {{ number }}
+            </button>
+          </Tooltip>
+        </div>
+
         <!-- Edit mode -->
         <template v-if="isEditing">
           <div class="edit-container">
@@ -237,8 +342,12 @@ function initCommentBbcode(el: HTMLElement) {
               @keydown="handleEditKeydown"
             />
             <div class="edit-actions">
-              <button class="action-btn save-btn" @click="saveEdit">Сохранить</button>
-              <button class="action-btn cancel-btn" @click="cancelEdit">Отменить</button>
+              <button class="action-btn save-btn" @click="saveEdit">
+                Сохранить
+              </button>
+              <button class="action-btn cancel-btn" @click="cancelEdit">
+                Отменить
+              </button>
             </div>
           </div>
         </template>
@@ -255,19 +364,30 @@ function initCommentBbcode(el: HTMLElement) {
           </TruncatedContent>
         </template>
 
-        <!-- Footer: Author info + Actions + Number -->
-        <div class="comment-footer">
-          <span v-if="comment.author" class="author-info"
-            >Автор: <router-link
-              :to="{ name: 'profile', params: { username: comment.author.username } }"
+        <!-- Footer: Author info (compact only) + Actions + Number (compact) -->
+        <div v-if="hasFooterContent" class="comment-footer">
+          <span v-if="compact && comment.author" class="author-info"
+            >Автор:
+            <router-link
+              :to="{
+                name: 'profile',
+                params: { username: comment.author.username },
+              }"
               class="author-link"
-            >{{ comment.author.username }}</router-link
-            ><template v-if="roleBadge"
-              > [<Tooltip :text="roleBadge.title"><b class="role-letter">{{ roleBadge.label }}</b></Tooltip>]</template
-            > [<span :class="isAuthorOnline ? 'online' : 'offline'">{{ isAuthorOnline ? "online" : "offline" }}</span
-            >], {{ formattedDate }}<template v-if="isEdited"
-              > | Отредактировано {{ formattedEditDate }}</template
-          ></span>
+              >{{ comment.author.username }}</router-link
+            ><template v-if="roleBadge">
+              [<Tooltip :text="roleBadge.title"
+                ><b class="role-letter">{{ roleBadge.label }}</b></Tooltip
+              >]</template
+            >
+            [<span :class="isAuthorOnline ? 'online' : 'offline'">{{
+              isAuthorOnline ? "online" : "offline"
+            }}</span
+            >], {{ formattedDate
+            }}<template v-if="isEdited">
+              | Отредактировано {{ formattedEditDate }}</template
+            ></span
+          >
 
           <!-- Actions -->
           <span class="comment-actions">
@@ -278,23 +398,54 @@ function initCommentBbcode(el: HTMLElement) {
               @mouseleave="showLikesPopup = false"
             >
               <button
+                v-if="canLike"
                 class="like-btn"
                 :class="{ liked: isLikedByMe }"
-                :disabled="!canLike"
+                :aria-label="
+                  likesCount > 0 ? `Нравится: ${likesCount}` : 'Нравится'
+                "
                 @click="toggleLike"
               >
                 <SvgIcon name="heartFilled" class="like-icon" />
-                <span v-if="likesCount > 0" class="likes-count">{{ likesCount }}</span>
+                <span v-if="likesCount > 0" class="likes-count">{{
+                  likesCount
+                }}</span>
               </button>
+              <span
+                v-else
+                class="like-static"
+                :aria-label="`Нравится: ${likesCount}`"
+              >
+                <SvgIcon name="heartFilled" class="like-icon" />
+                <span class="likes-count">{{ likesCount }}</span>
+              </span>
               <div v-if="showLikesPopup && likesCount > 0" class="likes-popup">
-                <div v-for="liker in comment.likes" :key="liker.username" class="liker">
+                <div
+                  v-for="liker in comment.likes"
+                  :key="liker.username"
+                  class="liker"
+                >
                   {{ liker.username }}
                 </div>
               </div>
             </span>
-            <button v-if="canEdit" class="action-btn" @click="startEdit">ред.</button>
-            <button v-if="canDelete" class="action-btn delete-btn" @click="handleDelete">удл.</button>
-            <button v-if="canWarn" class="action-btn warn-btn" @click="handleWarn">пред.</button>
+            <button v-if="canEdit" class="action-btn" @click="startEdit">
+              Редактировать
+            </button>
+            <button
+              v-if="canDelete"
+              class="action-btn delete-btn"
+              @click="handleDelete"
+            >
+              Удалить
+            </button>
+            <button
+              v-if="canWarn"
+              class="action-btn warn-btn"
+              @click="handleWarn"
+            >
+              Предупреждение
+            </button>
             <button
               v-if="comment.isRemoved && isModerator"
               class="action-btn"
@@ -304,10 +455,20 @@ function initCommentBbcode(el: HTMLElement) {
             </button>
           </span>
 
-          <!-- Number (anchor link) -->
-          <Tooltip v-if="number" text="Скопировать ссылку">
-            <button class="comment-number" @click="copyAnchorLink">{{ number }}</button>
-          </Tooltip>
+          <!-- Number (anchor link) — compact layout only (no '#'). Wrapped in a
+               span that IS the flex item, so margin-left:auto pins the number
+               to the footer's right edge regardless of author presence. -->
+          <span v-if="compact && number" class="comment-number-slot">
+            <Tooltip text="Скопировать ссылку">
+              <button
+                class="comment-number"
+                :aria-label="`Скопировать ссылку на комментарий ${number}`"
+                @click="copyAnchorLink"
+              >
+                {{ number }}
+              </button>
+            </Tooltip>
+          </span>
         </div>
       </div>
     </template>
@@ -360,14 +521,59 @@ function initCommentBbcode(el: HTMLElement) {
   flex-shrink: 0
 
 .avatar
-  width: 64px
-  height: 64px
-  border-radius: 50%
+  width: 72px
+  height: 72px
   object-fit: cover
+  border-radius: $border-radius
 
 .comment-body
   flex: 1
   min-width: 0
+
+// Full-layout header: author block (name + meta) on the left, permalink
+// pinned to the top-right corner.
+.comment-header
+  display: flex
+  justify-content: space-between
+  align-items: flex-start
+  gap: $small
+  margin-bottom: $small
+
+.author-block
+  display: flex
+  flex-direction: column
+  gap: 2px
+  min-width: 0
+
+.author-line
+  display: inline-flex
+  align-items: center
+  flex-wrap: wrap
+  gap: $tiny
+
+.author-name
+  color: $text
+  font-weight: 700
+  font-size: $font-size
+  text-decoration: none
+
+  &:hover
+    color: $link-hover
+    text-decoration: underline
+
+.online-dot
+  display: inline-block
+  width: 8px
+  height: 8px
+  border-radius: 50%
+  background-color: $text-muted
+
+  &.online
+    background-color: $accent-green
+
+.comment-meta
+  font-size: $tertiary-font-size
+  color: $text-muted
 
 // .comment-text uses the global .bbcode-content class for typography.
 // Truncation, fade, expand link, and media shrinkage are owned by
@@ -395,7 +601,7 @@ function initCommentBbcode(el: HTMLElement) {
   &:focus
     outline: none
     border-style: solid
-    border-color: $button-border-hover
+    border-color: $border-focus
 
 .edit-actions
   display: flex
@@ -437,6 +643,10 @@ function initCommentBbcode(el: HTMLElement) {
   display: inline-flex
   align-items: center
   gap: $small
+
+// In the compact layout the actions trail the inline author line, so they need
+// a small gap from it. In the full layout the footer holds only the actions.
+.comment.compact .comment-actions
   margin-left: $small
 
 .likes-container
@@ -463,6 +673,16 @@ function initCommentBbcode(el: HTMLElement) {
   &:disabled
     cursor: default
     opacity: 0.6
+
+// Non-interactive like indicator (own comment / guest): shows the count
+// without a clickable affordance.
+.like-static
+  display: inline-flex
+  align-items: center
+  gap: 2px
+  padding: 0 $tiny
+  color: $text-muted
+  font-size: $secondary-font-size
 
 .likes-count
   font-weight: bold
@@ -510,14 +730,20 @@ function initCommentBbcode(el: HTMLElement) {
   &.warn-btn:hover
     color: $accent-red
 
-.comment-number
+// Compact: this span is the footer flex item, so the auto margin must live
+// here (not on the inner button) to pin the number to the right edge.
+.comment-number-slot
   margin-left: auto
+  display: inline-flex
+
+.comment-number
+  flex-shrink: 0
   padding: 0
   border: none
   background: transparent
   cursor: pointer
   color: $text-muted
-  font-size: inherit
+  font-size: $tertiary-font-size
   font-family: inherit
 
   &:hover

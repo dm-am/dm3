@@ -12,9 +12,7 @@ const { signOut } = userStore;
     Сообщения
   </router-link>
   |
-  <a @click="signOut" data-testid="logout-button"
-    >Выйти</a
-  >
+  <a @click="signOut" data-testid="logout-button">Выйти</a>
 </template>
 
 <style scoped lang="sass"></style>

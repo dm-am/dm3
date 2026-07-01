@@ -65,7 +65,11 @@ type UsersFilterAction =
   | { type: "SET_GAMES_HOSTING_RANGE"; min: number | null; max: number | null }
   | { type: "SET_GAMES_PLAYING_RANGE"; min: number | null; max: number | null }
   | { type: "SET_BLOGS_HOSTING_RANGE"; min: number | null; max: number | null }
-  | { type: "SET_REGISTERED_RANGE"; fromUtc: string | null; toUtc: string | null }
+  | {
+      type: "SET_REGISTERED_RANGE";
+      fromUtc: string | null;
+      toUtc: string | null;
+    }
   | { type: "SET_SORT"; sortBy: string; sortOrder?: "asc" | "desc" }
   | { type: "TOGGLE_SORT_ORDER" }
   | { type: "CLEAR_FILTERS" };
@@ -78,7 +82,10 @@ type UsersFilterAction =
  * Pure reducer function - applies action to state and returns new state.
  * This is the ONLY place where state transformation logic lives.
  */
-function reducer(state: UsersFilterState, action: UsersFilterAction): UsersFilterState {
+function reducer(
+  state: UsersFilterState,
+  action: UsersFilterAction,
+): UsersFilterState {
   // Clone state to avoid mutation
   const newState: UsersFilterState = { ...state };
 
@@ -174,8 +181,12 @@ const validSortByValues = new Set<string>(SORT_OPTIONS.map((o) => o.value));
 const validActivityValues = new Set<string>(["active", "inactive", "all"]);
 const validOnlineValues = new Set<string>(["all", "online"]);
 const validRoleValues = new Set<string>(["all", ...Object.values(UserRole)]);
-const validHonoraryValues = new Set<string>(HONORARY_OPTIONS.map((o) => o.value));
-const validExperienceValues = new Set<string>(EXPERIENCE_OPTIONS.map((o) => o.value));
+const validHonoraryValues = new Set<string>(
+  HONORARY_OPTIONS.map((o) => o.value),
+);
+const validExperienceValues = new Set<string>(
+  EXPERIENCE_OPTIONS.map((o) => o.value),
+);
 
 function createDefaultState(): UsersFilterState {
   return { ...DEFAULT_FILTER_STATE };
@@ -259,14 +270,17 @@ function parseQueryToState(query: LocationQuery): UsersFilterState {
     if (!isNaN(val)) state.blogsHostingMax = val;
   }
 
-  if (query.registeredFromUtc) state.registeredFromUtc = String(query.registeredFromUtc);
-  if (query.registeredToUtc) state.registeredToUtc = String(query.registeredToUtc);
+  if (query.registeredFromUtc)
+    state.registeredFromUtc = String(query.registeredFromUtc);
+  if (query.registeredToUtc)
+    state.registeredToUtc = String(query.registeredToUtc);
 
   const sortByRaw = query.sortBy as string;
   if (validSortByValues.has(sortByRaw)) state.sortBy = sortByRaw;
 
   const sortOrderRaw = query.sortOrder as string;
-  if (sortOrderRaw === "asc" || sortOrderRaw === "desc") state.sortOrder = sortOrderRaw;
+  if (sortOrderRaw === "asc" || sortOrderRaw === "desc")
+    state.sortOrder = sortOrderRaw;
 
   return state;
 }
@@ -307,19 +321,26 @@ function buildQueryFromState(state: UsersFilterState): Record<string, string> {
   if (state.ratingMax !== null) query.ratingMax = String(state.ratingMax);
 
   // Games hosting range
-  if (state.gamesHostingMin !== null) query.gamesHostingMin = String(state.gamesHostingMin);
-  if (state.gamesHostingMax !== null) query.gamesHostingMax = String(state.gamesHostingMax);
+  if (state.gamesHostingMin !== null)
+    query.gamesHostingMin = String(state.gamesHostingMin);
+  if (state.gamesHostingMax !== null)
+    query.gamesHostingMax = String(state.gamesHostingMax);
 
   // Games playing range
-  if (state.gamesPlayingMin !== null) query.gamesPlayingMin = String(state.gamesPlayingMin);
-  if (state.gamesPlayingMax !== null) query.gamesPlayingMax = String(state.gamesPlayingMax);
+  if (state.gamesPlayingMin !== null)
+    query.gamesPlayingMin = String(state.gamesPlayingMin);
+  if (state.gamesPlayingMax !== null)
+    query.gamesPlayingMax = String(state.gamesPlayingMax);
 
   // Blogs hosting range
-  if (state.blogsHostingMin !== null) query.blogsHostingMin = String(state.blogsHostingMin);
-  if (state.blogsHostingMax !== null) query.blogsHostingMax = String(state.blogsHostingMax);
+  if (state.blogsHostingMin !== null)
+    query.blogsHostingMin = String(state.blogsHostingMin);
+  if (state.blogsHostingMax !== null)
+    query.blogsHostingMax = String(state.blogsHostingMax);
 
   // Date range
-  if (state.registeredFromUtc) query.registeredFromUtc = state.registeredFromUtc;
+  if (state.registeredFromUtc)
+    query.registeredFromUtc = state.registeredFromUtc;
   if (state.registeredToUtc) query.registeredToUtc = state.registeredToUtc;
 
   // Sort (only if non-default)
@@ -360,7 +381,9 @@ export function useUsersFilter(): UsersFilterComposable {
   dispatcher.setRouter(router);
 
   // Filter state derived from URL (single source of truth)
-  const filterState = computed<UsersFilterState>(() => parseQueryToState(route.query));
+  const filterState = computed<UsersFilterState>(() =>
+    parseQueryToState(route.query),
+  );
 
   // Helper to get current state for dispatch
   const getCurrentState = () => filterState.value;
@@ -389,7 +412,10 @@ export function useUsersFilter(): UsersFilterComposable {
       params.role = state.role as UserRole;
 
       // Honorary sub-filter (only for RegularUser)
-      if (state.role === UserRole.RegularUser && state.honorary === "honorary") {
+      if (
+        state.role === UserRole.RegularUser &&
+        state.honorary === "honorary"
+      ) {
         params.isHonorary = true;
       }
     }
@@ -406,20 +432,28 @@ export function useUsersFilter(): UsersFilterComposable {
     if (state.ratingMax !== null) params.maxRating = state.ratingMax;
 
     // Games hosting range
-    if (state.gamesHostingMin !== null) params.minGamesHosting = state.gamesHostingMin;
-    if (state.gamesHostingMax !== null) params.maxGamesHosting = state.gamesHostingMax;
+    if (state.gamesHostingMin !== null)
+      params.minGamesHosting = state.gamesHostingMin;
+    if (state.gamesHostingMax !== null)
+      params.maxGamesHosting = state.gamesHostingMax;
 
     // Games playing range
-    if (state.gamesPlayingMin !== null) params.minGamesPlaying = state.gamesPlayingMin;
-    if (state.gamesPlayingMax !== null) params.maxGamesPlaying = state.gamesPlayingMax;
+    if (state.gamesPlayingMin !== null)
+      params.minGamesPlaying = state.gamesPlayingMin;
+    if (state.gamesPlayingMax !== null)
+      params.maxGamesPlaying = state.gamesPlayingMax;
 
     // Blogs hosting range
-    if (state.blogsHostingMin !== null) params.minBlogsHosting = state.blogsHostingMin;
-    if (state.blogsHostingMax !== null) params.maxBlogsHosting = state.blogsHostingMax;
+    if (state.blogsHostingMin !== null)
+      params.minBlogsHosting = state.blogsHostingMin;
+    if (state.blogsHostingMax !== null)
+      params.maxBlogsHosting = state.blogsHostingMax;
 
     // Date range
-    if (state.registeredFromUtc) params.registeredFromUtc = dateToApiStart(state.registeredFromUtc);
-    if (state.registeredToUtc) params.registeredToUtc = dateToApiEnd(state.registeredToUtc);
+    if (state.registeredFromUtc)
+      params.registeredFromUtc = dateToApiStart(state.registeredFromUtc);
+    if (state.registeredToUtc)
+      params.registeredToUtc = dateToApiEnd(state.registeredToUtc);
 
     // Sort
     params.sortBy = state.sortBy;
@@ -464,18 +498,29 @@ export function useUsersFilter(): UsersFilterComposable {
   // ACTION DISPATCHERS (thin wrappers around dispatch)
   // ==========================================================================
 
-  const setSearch = (search: string) => dispatch({ type: "SET_SEARCH", search });
-  const setActivity = (activity: ActivityFilter) => dispatch({ type: "SET_ACTIVITY", activity });
-  const setOnlineFilter = (onlineFilter: OnlineFilter) => dispatch({ type: "SET_ONLINE_FILTER", onlineFilter });
+  const setSearch = (search: string) =>
+    dispatch({ type: "SET_SEARCH", search });
+  const setActivity = (activity: ActivityFilter) =>
+    dispatch({ type: "SET_ACTIVITY", activity });
+  const setOnlineFilter = (onlineFilter: OnlineFilter) =>
+    dispatch({ type: "SET_ONLINE_FILTER", onlineFilter });
   const setRole = (role: RoleFilter) => dispatch({ type: "SET_ROLE", role });
-  const setHonorary = (honorary: HonoraryFilter) => dispatch({ type: "SET_HONORARY", honorary });
-  const setExperience = (experience: ExperienceFilter) => dispatch({ type: "SET_EXPERIENCE", experience });
-  const setRatingRange = (min: number | null, max: number | null) => dispatch({ type: "SET_RATING_RANGE", min, max });
-  const setGamesHostingRange = (min: number | null, max: number | null) => dispatch({ type: "SET_GAMES_HOSTING_RANGE", min, max });
-  const setGamesPlayingRange = (min: number | null, max: number | null) => dispatch({ type: "SET_GAMES_PLAYING_RANGE", min, max });
-  const setBlogsHostingRange = (min: number | null, max: number | null) => dispatch({ type: "SET_BLOGS_HOSTING_RANGE", min, max });
-  const setRegisteredRange = (fromUtc: string | null, toUtc: string | null) => dispatch({ type: "SET_REGISTERED_RANGE", fromUtc, toUtc });
-  const setSort = (sortBy: string, sortOrder?: "asc" | "desc") => dispatch({ type: "SET_SORT", sortBy, sortOrder });
+  const setHonorary = (honorary: HonoraryFilter) =>
+    dispatch({ type: "SET_HONORARY", honorary });
+  const setExperience = (experience: ExperienceFilter) =>
+    dispatch({ type: "SET_EXPERIENCE", experience });
+  const setRatingRange = (min: number | null, max: number | null) =>
+    dispatch({ type: "SET_RATING_RANGE", min, max });
+  const setGamesHostingRange = (min: number | null, max: number | null) =>
+    dispatch({ type: "SET_GAMES_HOSTING_RANGE", min, max });
+  const setGamesPlayingRange = (min: number | null, max: number | null) =>
+    dispatch({ type: "SET_GAMES_PLAYING_RANGE", min, max });
+  const setBlogsHostingRange = (min: number | null, max: number | null) =>
+    dispatch({ type: "SET_BLOGS_HOSTING_RANGE", min, max });
+  const setRegisteredRange = (fromUtc: string | null, toUtc: string | null) =>
+    dispatch({ type: "SET_REGISTERED_RANGE", fromUtc, toUtc });
+  const setSort = (sortBy: string, sortOrder?: "asc" | "desc") =>
+    dispatch({ type: "SET_SORT", sortBy, sortOrder });
   const toggleSortOrder = () => dispatch({ type: "TOGGLE_SORT_ORDER" });
   const clearFilters = () => dispatch({ type: "CLEAR_FILTERS" });
 

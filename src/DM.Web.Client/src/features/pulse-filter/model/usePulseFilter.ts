@@ -69,8 +69,14 @@ function createDefaultState(): PulseFilterState {
   };
 }
 
-function reducer(state: PulseFilterState, action: PulseFilterAction): PulseFilterState {
-  const newState = { ...state, authorUsernames: new Set(state.authorUsernames) };
+function reducer(
+  state: PulseFilterState,
+  action: PulseFilterAction,
+): PulseFilterState {
+  const newState = {
+    ...state,
+    authorUsernames: new Set(state.authorUsernames),
+  };
 
   switch (action.type) {
     case "SET_SEARCH":
@@ -118,7 +124,19 @@ function reducer(state: PulseFilterState, action: PulseFilterAction): PulseFilte
 // PARSING & BUILDING
 // =============================================================================
 
-const validSortByValues = new Set<string>(["lastreview", "rating", "reviewcount"]);
+const validSortByValues = new Set<string>([
+  "lastreview",
+  "rating",
+  "reviewcount",
+]);
+
+// Strict "YYYY-MM-DD" — invalid date params from a hand-edited URL are
+// ignored instead of producing an Invalid Date downstream
+const dateFormatRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidDateParam(value: string): boolean {
+  return dateFormatRegex.test(value) && !isNaN(Date.parse(value));
+}
 
 function parseQueryToState(query: LocationQuery): PulseFilterState {
   const state = createDefaultState();
@@ -156,16 +174,25 @@ function parseQueryToState(query: LocationQuery): PulseFilterState {
   }
 
   if (query.authors) {
-    const authors = String(query.authors).split(",").map((s) => s.trim()).filter(Boolean);
+    const authors = String(query.authors)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     state.authorUsernames = new Set(authors);
   }
 
   if (query.createdFrom) {
-    state.createdFrom = String(query.createdFrom);
+    const createdFrom = String(query.createdFrom);
+    if (isValidDateParam(createdFrom)) {
+      state.createdFrom = createdFrom;
+    }
   }
 
   if (query.createdTo) {
-    state.createdTo = String(query.createdTo);
+    const createdTo = String(query.createdTo);
+    if (isValidDateParam(createdTo)) {
+      state.createdTo = createdTo;
+    }
   }
 
   if (query.game) {
@@ -183,7 +210,8 @@ function buildQueryFromState(state: PulseFilterState): Record<string, string> {
   if (state.sortOrder !== "desc") query.order = state.sortOrder;
   if (state.minRating !== null) query.minRating = String(state.minRating);
   if (state.maxRating !== null) query.maxRating = String(state.maxRating);
-  if (state.authorUsernames.size > 0) query.authors = [...state.authorUsernames].join(",");
+  if (state.authorUsernames.size > 0)
+    query.authors = [...state.authorUsernames].join(",");
   if (state.createdFrom) query.createdFrom = state.createdFrom;
   if (state.createdTo) query.createdTo = state.createdTo;
   if (state.gameId) query.game = state.gameId;
@@ -211,7 +239,9 @@ export function usePulseFilter(): PulseFilterComposable {
 
   dispatcher.setRouter(router);
 
-  const filterState = computed<PulseFilterState>(() => parseQueryToState(route.query));
+  const filterState = computed<PulseFilterState>(() =>
+    parseQueryToState(route.query),
+  );
   const getCurrentState = () => filterState.value;
   const dispatch = (action: PulseFilterAction) =>
     dispatcher.dispatch(action, reducer, getCurrentState);
@@ -225,7 +255,8 @@ export function usePulseFilter(): PulseFilterComposable {
     params.sortOrder = state.sortOrder;
     if (state.minRating !== null) params.minRating = state.minRating;
     if (state.maxRating !== null) params.maxRating = state.maxRating;
-    if (state.authorUsernames.size > 0) params.authorUsernames = [...state.authorUsernames].join(",");
+    if (state.authorUsernames.size > 0)
+      params.authorUsernames = [...state.authorUsernames].join(",");
     if (state.createdFrom) params.createdFrom = state.createdFrom;
     if (state.createdTo) params.createdTo = state.createdTo;
     if (state.gameId) params.gameId = state.gameId;
@@ -240,12 +271,12 @@ export function usePulseFilter(): PulseFilterComposable {
     return params;
   });
 
+  // Sorting is intentionally excluded: it changes the order, not the
+  // subset of data (same as games/blogs/topics filter composables)
   const hasActiveFilters = computed(() => {
     const state = filterState.value;
     return (
       state.search !== "" ||
-      state.sortBy !== "lastreview" ||
-      state.sortOrder !== "desc" ||
       state.minRating !== null ||
       state.maxRating !== null ||
       state.authorUsernames.size > 0 ||
@@ -255,7 +286,8 @@ export function usePulseFilter(): PulseFilterComposable {
     );
   });
 
-  const setSearch = (search: string) => dispatch({ type: "SET_SEARCH", search });
+  const setSearch = (search: string) =>
+    dispatch({ type: "SET_SEARCH", search });
   const setSort = (sortBy: PulseSortBy, sortOrder?: "asc" | "desc") =>
     dispatch({ type: "SET_SORT", sortBy, sortOrder });
   const setRatingRange = (min: number | null, max: number | null) =>

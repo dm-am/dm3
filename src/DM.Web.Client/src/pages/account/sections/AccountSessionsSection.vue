@@ -203,7 +203,7 @@ const logoutFromAll = () => {
 
   &:disabled
     opacity: 0.5
-    cursor: not-allowed
+    cursor: default
 
 .sessions-actions
   margin-top: $medium

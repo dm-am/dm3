@@ -43,7 +43,10 @@ type ReviewsFilterAction =
 // PURE REDUCER (Testable, no side effects)
 // =============================================================================
 
-function reducer(state: ReviewsFilterState, action: ReviewsFilterAction): ReviewsFilterState {
+function reducer(
+  state: ReviewsFilterState,
+  action: ReviewsFilterAction,
+): ReviewsFilterState {
   const newState: ReviewsFilterState = { ...state };
 
   switch (action.type) {
@@ -107,7 +110,9 @@ function parseQueryToState(query: LocationQuery): ReviewsFilterState {
   return state;
 }
 
-function buildQueryFromState(state: ReviewsFilterState): Record<string, string> {
+function buildQueryFromState(
+  state: ReviewsFilterState,
+): Record<string, string> {
   const query: Record<string, string> = {};
   const def = DEFAULT_FILTER_STATE;
 
@@ -122,7 +127,10 @@ function buildQueryFromState(state: ReviewsFilterState): Record<string, string> 
 // MODULE-LEVEL DISPATCHER (created once per module)
 // =============================================================================
 
-const dispatcher = createFilterDispatcher<ReviewsFilterState, ReviewsFilterAction>({
+const dispatcher = createFilterDispatcher<
+  ReviewsFilterState,
+  ReviewsFilterAction
+>({
   buildQuery: buildQueryFromState,
   name: "useReviewsFilter",
 });
@@ -149,7 +157,9 @@ export function useReviewsFilter(): ReviewsFilterComposable {
   dispatcher.setRouter(router);
 
   // Filter state derived from URL (single source of truth)
-  const filterState = computed<ReviewsFilterState>(() => parseQueryToState(route.query));
+  const filterState = computed<ReviewsFilterState>(() =>
+    parseQueryToState(route.query),
+  );
 
   // Helper to get current state for dispatch
   const getCurrentState = () => filterState.value;
@@ -189,7 +199,8 @@ export function useReviewsFilter(): ReviewsFilterComposable {
   // ACTION DISPATCHERS (thin wrappers around dispatch)
   // ==========================================================================
 
-  const setSearch = (search: string) => dispatch({ type: "SET_SEARCH", search });
+  const setSearch = (search: string) =>
+    dispatch({ type: "SET_SEARCH", search });
   const setSort = (sortBy: ReviewSortBy, sortOrder?: "asc" | "desc") =>
     dispatch({ type: "SET_SORT", sortBy, sortOrder });
   const toggleSortOrder = () => dispatch({ type: "TOGGLE_SORT_ORDER" });

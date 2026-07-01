@@ -11,27 +11,37 @@ test.describe("Sidebars", () => {
     });
 
     test("should display recruiting games section", async ({ page }) => {
-      const section = page.locator(".sidebar-block").filter({ hasText: "Набор игроков" });
+      const section = page
+        .locator(".sidebar-block")
+        .filter({ hasText: "Набор игроков" });
       await expect(section).toBeVisible();
     });
 
     test("should display active games section", async ({ page }) => {
-      const section = page.locator(".sidebar-block").filter({ hasText: "Активные игры" });
+      const section = page
+        .locator(".sidebar-block")
+        .filter({ hasText: "Активные игры" });
       await expect(section).toBeVisible();
     });
 
     test("should display finished games section", async ({ page }) => {
-      const section = page.locator(".sidebar-block").filter({ hasText: "Завершенные игры" });
+      const section = page
+        .locator(".sidebar-block")
+        .filter({ hasText: "Завершенные игры" });
       await expect(section).toBeVisible();
     });
 
     test("should display active blogs section", async ({ page }) => {
-      const section = page.locator(".sidebar-block").filter({ hasText: "Активные блоги" });
+      const section = page
+        .locator(".sidebar-block")
+        .filter({ hasText: "Активные блоги" });
       await expect(section).toBeVisible();
     });
 
     test("should display forum boards section", async ({ page }) => {
-      const section = page.locator(".sidebar-block").filter({ hasText: "Форум" });
+      const section = page
+        .locator(".sidebar-block")
+        .filter({ hasText: "Форум" });
       await expect(section).toBeVisible();
     });
 
@@ -51,26 +61,46 @@ test.describe("Sidebars", () => {
       await authenticatedPage.goto("/");
     });
 
-    test("should display owned games section when authenticated", async ({ authenticatedPage }) => {
-      const section = authenticatedPage.locator(".sidebar-block").filter({ hasText: "Мои игры" });
+    test("should display owned games section when authenticated", async ({
+      authenticatedPage,
+    }) => {
+      const section = authenticatedPage
+        .locator(".sidebar-block")
+        .filter({ hasText: "Мои игры" });
       await expect(section).toBeVisible();
     });
 
-    test("should display owned blogs section when authenticated", async ({ authenticatedPage }) => {
-      const section = authenticatedPage.locator(".sidebar-block").filter({ hasText: "Мои блоги" });
+    test("should display owned blogs section when authenticated", async ({
+      authenticatedPage,
+    }) => {
+      const section = authenticatedPage
+        .locator(".sidebar-block")
+        .filter({ hasText: "Мои блоги" });
       await expect(section).toBeVisible();
     });
 
-    test("should categorize owned games by role", async ({ authenticatedPage }) => {
+    test("should categorize owned games by role", async ({
+      authenticatedPage,
+    }) => {
       const ownedGames = authenticatedPage.locator(".owned-games");
       // Check for role categories if games exist
-      const mentorSection = ownedGames.locator(".games-category").filter({ hasText: "Наставник" });
-      const masterSection = ownedGames.locator(".games-category").filter({ hasText: "Мастер" });
-      const playerSection = ownedGames.locator(".games-category").filter({ hasText: "Игрок" });
-      const readerSection = ownedGames.locator(".games-category").filter({ hasText: "Читатель" });
+      const mentorSection = ownedGames
+        .locator(".games-category")
+        .filter({ hasText: "Наставник" });
+      const masterSection = ownedGames
+        .locator(".games-category")
+        .filter({ hasText: "Мастер" });
+      const playerSection = ownedGames
+        .locator(".games-category")
+        .filter({ hasText: "Игрок" });
+      const readerSection = ownedGames
+        .locator(".games-category")
+        .filter({ hasText: "Читатель" });
 
       // At least one category should exist or empty state
-      const hasContent = await ownedGames.locator(".game-link, .empty-state").count();
+      const hasContent = await ownedGames
+        .locator(".game-link, .empty-state")
+        .count();
       expect(hasContent).toBeGreaterThanOrEqual(0);
     });
   });
@@ -85,37 +115,51 @@ test.describe("Sidebars", () => {
     });
 
     test("should display active polls section", async ({ page }) => {
-      const section = page.locator(".sidebar-block").filter({ hasText: "Опросы" });
+      const section = page
+        .locator(".sidebar-block")
+        .filter({ hasText: "Опросы" });
       await expect(section).toBeVisible();
     });
 
     test("should display popular games section", async ({ page }) => {
-      const section = page.locator(".sidebar-block").filter({ hasText: "Популярные игры" });
+      const section = page
+        .locator(".sidebar-block")
+        .filter({ hasText: "Популярные игры" });
       await expect(section).toBeVisible();
     });
 
     test("should display popular blogs section", async ({ page }) => {
-      const section = page.locator(".sidebar-block").filter({ hasText: "Популярные блоги" });
+      const section = page
+        .locator(".sidebar-block")
+        .filter({ hasText: "Популярные блоги" });
       await expect(section).toBeVisible();
     });
 
     test("should display tag cloud section", async ({ page }) => {
-      const section = page.locator(".sidebar-block").filter({ hasText: "Облако тегов" });
+      const section = page
+        .locator(".sidebar-block")
+        .filter({ hasText: "Облако тегов" });
       await expect(section).toBeVisible();
     });
 
     test("should display contact forms section", async ({ page }) => {
-      const section = page.locator(".sidebar-block").filter({ hasText: "Обратная связь" });
+      const section = page
+        .locator(".sidebar-block")
+        .filter({ hasText: "Обратная связь" });
       await expect(section).toBeVisible();
     });
 
     test("should display support section", async ({ page }) => {
-      const section = page.locator(".sidebar-block").filter({ hasText: "Поддержать проект" });
+      const section = page
+        .locator(".sidebar-block")
+        .filter({ hasText: "Поддержать проект" });
       await expect(section).toBeVisible();
     });
 
     test("should display partners section", async ({ page }) => {
-      const section = page.locator(".sidebar-block").filter({ hasText: "Партнеры" });
+      const section = page
+        .locator(".sidebar-block")
+        .filter({ hasText: "Партнеры" });
       await expect(section).toBeVisible();
     });
   });
@@ -133,7 +177,9 @@ test.describe("Sidebars", () => {
     });
 
     test("should toggle block collapse on header click", async ({ page }) => {
-      const block = page.locator(".sidebar-block").filter({ hasText: "Популярные игры" });
+      const block = page
+        .locator(".sidebar-block")
+        .filter({ hasText: "Популярные игры" });
       const header = block.locator(".sidebar-block-header");
       const content = block.locator(".sidebar-block-content");
 
@@ -150,7 +196,9 @@ test.describe("Sidebars", () => {
     });
 
     test("should persist collapse state in localStorage", async ({ page }) => {
-      const block = page.locator(".sidebar-block").filter({ hasText: "Популярные игры" });
+      const block = page
+        .locator(".sidebar-block")
+        .filter({ hasText: "Популярные игры" });
       const header = block.locator(".sidebar-block-header");
 
       // Collapse the block
@@ -165,7 +213,9 @@ test.describe("Sidebars", () => {
     });
 
     test("should show collapse indicator icon", async ({ page }) => {
-      const block = page.locator(".sidebar-block").filter({ hasText: "Популярные игры" });
+      const block = page
+        .locator(".sidebar-block")
+        .filter({ hasText: "Популярные игры" });
       const header = block.locator(".sidebar-block-header");
       const collapseIcon = header.locator(".collapse-icon");
 
@@ -214,7 +264,7 @@ test.describe("Sidebars", () => {
       const section = page.locator(".recruiting-games");
       const games = section.locator(".game-link");
 
-      if (await games.count() > 0) {
+      if ((await games.count()) > 0) {
         // Games in this section should be recruiting
         await expect(games.first()).toBeVisible();
       }
@@ -235,10 +285,12 @@ test.describe("Sidebars", () => {
       const section = page.locator(".active-games");
       const games = section.locator(".game-link");
 
-      if (await games.count() > 0) {
+      if ((await games.count()) > 0) {
         const firstGame = games.first();
         // Should have activity indicator
-        const activityTime = firstGame.locator(".activity-time, .last-post-time");
+        const activityTime = firstGame.locator(
+          ".activity-time, .last-post-time",
+        );
         // Activity time may or may not be visible depending on game data
       }
     });
@@ -258,16 +310,18 @@ test.describe("Sidebars", () => {
       const tagCloud = page.locator(".game-tag-cloud");
       const tags = tagCloud.locator(".tag-link");
 
-      if (await tags.count() > 1) {
+      if ((await tags.count()) > 1) {
         // Tags should have different font sizes based on popularity
-        const firstTagSize = await tags.first().evaluate((el) =>
-          window.getComputedStyle(el).fontSize
-        );
+        const firstTagSize = await tags
+          .first()
+          .evaluate((el) => window.getComputedStyle(el).fontSize);
         expect(firstTagSize).toBeDefined();
       }
     });
 
-    test("should navigate to games filtered by tag on click", async ({ page }) => {
+    test("should navigate to games filtered by tag on click", async ({
+      page,
+    }) => {
       const tagCloud = page.locator(".game-tag-cloud");
       const tag = tagCloud.locator(".tag-link").first();
 
@@ -311,12 +365,16 @@ test.describe("Sidebars", () => {
       }
     });
 
-    test("should show vote button for authenticated users", async ({ authenticatedPage }) => {
+    test("should show vote button for authenticated users", async ({
+      authenticatedPage,
+    }) => {
       await authenticatedPage.goto("/");
 
       const poll = authenticatedPage.locator(".poll").first();
       if (await poll.isVisible().catch(() => false)) {
-        const voteButton = poll.locator("button").filter({ hasText: /голосовать/i });
+        const voteButton = poll
+          .locator("button")
+          .filter({ hasText: /голосовать/i });
         // Button should be visible if user hasn't voted
       }
     });
@@ -347,7 +405,7 @@ test.describe("Sidebars", () => {
       const section = page.locator(".forum-boards");
       const boards = section.locator(".board-link, a");
 
-      if (await boards.count() > 0) {
+      if ((await boards.count()) > 0) {
         await expect(boards.first()).toBeVisible();
       }
     });
@@ -357,7 +415,7 @@ test.describe("Sidebars", () => {
       const commentCounts = section.locator(".comment-count, .topic-count");
 
       // Comment counts may be displayed
-      if (await commentCounts.count() > 0) {
+      if ((await commentCounts.count()) > 0) {
         await expect(commentCounts.first()).toBeVisible();
       }
     });
@@ -385,18 +443,22 @@ test.describe("Sidebars", () => {
 
     test("should have support link", async ({ page }) => {
       const section = page.locator(".contact-forms");
-      const supportLink = section.locator("a").filter({ hasText: /поддержк|связь|обращени/i });
+      const supportLink = section
+        .locator("a")
+        .filter({ hasText: /поддержк|связь|обращени/i });
 
-      if (await supportLink.count() > 0) {
+      if ((await supportLink.count()) > 0) {
         await expect(supportLink.first()).toBeVisible();
       }
     });
 
     test("should have complaint link", async ({ page }) => {
       const section = page.locator(".contact-forms");
-      const complaintLink = section.locator("a").filter({ hasText: /жалоб|нарушени/i });
+      const complaintLink = section
+        .locator("a")
+        .filter({ hasText: /жалоб|нарушени/i });
 
-      if (await complaintLink.count() > 0) {
+      if ((await complaintLink.count()) > 0) {
         await expect(complaintLink.first()).toBeVisible();
       }
     });
@@ -425,7 +487,7 @@ test.describe("Sidebars", () => {
       const section = page.locator(".support-us");
       const donateLink = section.locator("a");
 
-      if (await donateLink.count() > 0) {
+      if ((await donateLink.count()) > 0) {
         await expect(donateLink.first()).toHaveAttribute("href");
       }
     });
@@ -445,7 +507,7 @@ test.describe("Sidebars", () => {
       const section = page.locator(".partners");
       const partnerLinks = section.locator("a");
 
-      if (await partnerLinks.count() > 0) {
+      if ((await partnerLinks.count()) > 0) {
         await expect(partnerLinks.first()).toHaveAttribute("href");
       }
     });
@@ -474,7 +536,9 @@ test.describe("Sidebars", () => {
       }
     });
 
-    test("should show unread indicator when applicable", async ({ authenticatedPage }) => {
+    test("should show unread indicator when applicable", async ({
+      authenticatedPage,
+    }) => {
       await authenticatedPage.goto("/");
 
       const gameLink = authenticatedPage.locator(".game-link").first();

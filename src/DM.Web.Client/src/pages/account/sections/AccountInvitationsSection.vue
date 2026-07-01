@@ -89,7 +89,6 @@ async function loadInvitations() {
   }
 }
 
-
 function typeLabel(type: InvitationType): string {
   switch (type) {
     case "player":
@@ -239,7 +238,7 @@ async function reject(invitationId: string) {
 
   &:disabled
     opacity: 0.5
-    cursor: not-allowed
+    cursor: default
 
   &--accept
     border: 1px solid $accent-green

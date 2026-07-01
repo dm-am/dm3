@@ -73,6 +73,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .Configure<IntegrationSettings>(configuration.GetSection(nameof(IntegrationSettings)).Bind)
             .Configure<EmailConfiguration>(configuration.GetSection(nameof(EmailConfiguration)).Bind)
             .Configure<CdnConfiguration>(configuration.GetSection(nameof(CdnConfiguration)).Bind)
+            .Configure<ImageProxyConfiguration>(configuration.GetSection(nameof(ImageProxyConfiguration)).Bind)
             .Configure<RabbitMqConfiguration>(configuration.GetSection(nameof(RabbitMqConfiguration)).Bind)
             .Configure<SearchServiceConfiguration>(configuration.GetSection(nameof(SearchServiceConfiguration)).Bind)
             .Configure<CryptoConfiguration>(configuration.GetSection(nameof(CryptoConfiguration)).Bind)
@@ -160,6 +161,12 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             services.AddHostedService<HostedServices.PendencyReminderService>();
             services.AddHostedService<HostedServices.GameInactivityService>();
             services.AddHostedService<HostedServices.PopularityScoreService>();
+            services.AddHostedService<HostedServices.UploadOrphanCleanupService>();
+
+            // Bucket initializer бежит и в migration mode тоже — но регистрируем
+            // только в обычном mode, потому что migration-контейнер не имеет
+            // S3-доступа (зависит только от postgres).
+            services.AddHostedService<DM.Infrastructure.Core.Storage.StorageBucketInitializer>();
         }
 
         var connectionStrings = new ConnectionStrings();
@@ -241,6 +248,22 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                             Window = TimeSpan.FromMinutes(1),
                             QueueLimit = 0
                         }));
+
+                // Upload endpoint: 10 uploads per minute per authenticated user
+                // (fallback на IP для guests; в норме upload requires auth).
+                // Анти-флуд защита поверх 10 MB лимита размера: даже если
+                // атакующий шлет валидные мелкие файлы — не более 10/мин.
+                options.AddPolicy("uploads", context =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: context.User.Identity?.Name
+                            ?? context.Connection.RemoteIpAddress?.ToString()
+                            ?? "anon",
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 10,
+                            Window = TimeSpan.FromMinutes(1),
+                            QueueLimit = 0,
+                        }));
             }
             else
             {
@@ -252,6 +275,8 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                 options.AddPolicy("username-check", _ =>
                     RateLimitPartition.GetNoLimiter<string>("unlimited"));
                 options.AddPolicy("email-check", _ =>
+                    RateLimitPartition.GetNoLimiter<string>("unlimited"));
+                options.AddPolicy("uploads", _ =>
                     RateLimitPartition.GetNoLimiter<string>("unlimited"));
             }
 

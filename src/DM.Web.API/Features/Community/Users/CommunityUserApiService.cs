@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
@@ -97,16 +98,36 @@ internal class CommunityUserApiService : ICommunityUserApiService
     {
         var user = await _profileService.GetProfile(username);
 
-        // Parallel queries
-        var fetchUsernameHistory = _profileService.GetUsernameHistory(user.UserId);
-        var fetchPersonalNote = _profileNoteService.GetNote(username);
+        // Username history is public — always fetch. Personal note is
+        // per-viewer (each authenticated user keeps their own private note
+        // about this subject) and the underlying service throws
+        // UnauthorizedAccessException for anonymous callers. Profile pages
+        // must remain accessible without login, so guard the note fetch.
+        var usernameHistory = await _profileService.GetUsernameHistory(user.UserId);
 
-        await Task.WhenAll(fetchUsernameHistory, fetchPersonalNote);
+        UserProfileNote? personalNote = null;
+        try
+        {
+            personalNote = await _profileNoteService.GetNote(username);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Anonymous viewer — no personal note to show. Continue.
+        }
 
         var profile = _mapper.Map<UserProfile>(user);
-        profile.UsernameHistory = fetchUsernameHistory.Result.Select(_mapper.Map<UsernameHistoryEntry>).ToList();
+        profile.UsernameHistory = usernameHistory.Select(_mapper.Map<UsernameHistoryEntry>).ToList();
+        // GeneralUser→UserProfile mapping ignores Contacts and Info because
+        // the base domain type lacks them; UserDetails (the actual source
+        // returned here) carries both. Populate them after the base map.
+        profile.Contacts = user.Contacts
+            .OrderBy(c => c.SortOrder)
+            .Select(_mapper.Map<Contact>)
+            .ToList();
+        profile.Info = string.IsNullOrEmpty(user.Info)
+            ? null
+            : new DM.Web.API.Shared.BbRendering.InfoBbText { Value = user.Info };
 
-        var personalNote = fetchPersonalNote.Result;
         if (personalNote != null)
         {
             profile.PersonalNote = new PersonalNote

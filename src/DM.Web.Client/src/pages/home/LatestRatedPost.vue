@@ -7,8 +7,11 @@
       show-navigation
       truncatable
     />
+    <SecondaryText v-else-if="store.latestError">
+      {{ store.latestError }}
+    </SecondaryText>
     <SecondaryText v-else-if="store.latestLoaded">
-      Нет оцененных постов
+      Оцененных постов пока нет
     </SecondaryText>
     <!-- Skeleton: same shape as BestWeeklyPost (shared primitive). Keeps
          the discovery link at the bottom of HomePage from hopping. -->
@@ -17,7 +20,7 @@
 </template>
 
 <script setup lang="ts">
-import { GamePost } from "@/pages/game";
+import { GamePost } from "@/widgets/game-post";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { GamePostSkeleton } from "@/shared/ui/Skeleton";

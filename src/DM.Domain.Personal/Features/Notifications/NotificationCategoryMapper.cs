@@ -41,7 +41,8 @@ public static class NotificationCategoryMapper
             => NotificationCategory.Games,
 
         EventType.NewCommentInSubscribedTopic or
-        EventType.NewGameFromSubscribedAuthor or EventType.NewPostInSubscribedGame
+        EventType.NewGameFromSubscribedAuthor or EventType.NewPostInSubscribedGame or
+        EventType.NewBlogFromSubscribedAuthor or EventType.NewTopicFromSubscribedAuthor
             => NotificationCategory.Subscriptions,
 
         EventType.PasswordChanged or EventType.EmailChanged or
@@ -49,7 +50,8 @@ public static class NotificationCategoryMapper
             => NotificationCategory.Security,
 
         EventType.TicketCreated or EventType.TicketAssigned or EventType.TicketResolved or
-        EventType.WarningIssued or EventType.BanIssued or EventType.BanLifted
+        EventType.WarningIssued or EventType.BanIssued or EventType.BanLifted or
+        EventType.AwardGranted
             => NotificationCategory.Moderation,
 
         _ => null

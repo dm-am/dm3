@@ -22,6 +22,11 @@ public class Publication
     public Guid BlogId { get; set; }
 
     /// <summary>
+    /// Parent blog title (so clients can show the blog name instead of its id)
+    /// </summary>
+    public string BlogTitle { get; set; } = string.Empty;
+
+    /// <summary>
     /// Rubric (category, optional)
     /// </summary>
     public Rubric Rubric { get; set; } = null!;

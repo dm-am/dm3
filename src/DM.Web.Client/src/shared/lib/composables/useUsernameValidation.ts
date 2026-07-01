@@ -4,8 +4,10 @@ import { AccountApi } from "@/shared/api";
 
 // Forbidden characters pattern
 // See: docs/architecture/USERNAME_POLICY.md
+// Control characters are matched intentionally (forbidden in usernames).
 const forbiddenPattern =
-  /[\x00-\x1F\x7F<>"'`\\/@?#%&\[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]/;
+  // eslint-disable-next-line no-control-regex
+  /[\x00-\x1F\x7F<>"'`\\/@?#%&[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]/;
 
 /**
  * Validates username format (sync validation).

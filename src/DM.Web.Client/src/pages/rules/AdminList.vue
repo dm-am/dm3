@@ -18,6 +18,7 @@ interface RoleGroup {
   role: UserRole;
   users: User[];
   loading: boolean;
+  error: boolean;
 }
 
 const roleGroups = ref<RoleGroup[]>(
@@ -25,6 +26,7 @@ const roleGroups = ref<RoleGroup[]>(
     role,
     users: [],
     loading: true,
+    error: false,
   })),
 );
 
@@ -33,6 +35,8 @@ async function loadUsersByRole(group: RoleGroup) {
   group.loading = false;
   if (!error && data) {
     group.users = data.resources;
+  } else {
+    group.error = true;
   }
 }
 
@@ -66,6 +70,9 @@ onMounted(() => {
         <span class="desc-col">{{ ROLE_INFO[group.role].description }}</span>
         <span class="users-col">
           <template v-if="group.loading">...</template>
+          <span v-else-if="group.error" class="load-error"
+            >Не удалось загрузить</span
+          >
           <template v-else-if="group.users.length">
             <span
               v-for="user in group.users"
@@ -80,7 +87,19 @@ onMounted(() => {
       </div>
     </div>
 
-    <p class="useful-links"><span class="links-label">Полезные ссылки:</span>{{ " " }}<template v-for="(link, idx) in ADMIN_LINKS" :key="link.title"><a v-if="link.external" :href="link.url" target="_blank" rel="noopener noreferrer">{{ link.title }}</a><router-link v-else :to="link.url">{{ link.title }}</router-link><template v-if="idx < ADMIN_LINKS.length - 1">, </template></template></p>
+    <p class="useful-links">
+      <span class="links-label">Полезные ссылки:</span>{{ " "
+      }}<template v-for="(link, idx) in ADMIN_LINKS" :key="link.title"
+        ><a
+          v-if="link.external"
+          :href="link.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          >{{ link.title }}</a
+        ><router-link v-else :to="link.url">{{ link.title }}</router-link
+        ><template v-if="idx < ADMIN_LINKS.length - 1">, </template></template
+      >
+    </p>
   </section>
 </template>
 
@@ -139,6 +158,10 @@ onMounted(() => {
 
 .no-users
   color: $text-muted
+
+.load-error
+  color: $text-muted
+  font-size: $secondary-font-size
 
 .useful-links
   margin-top: $medium

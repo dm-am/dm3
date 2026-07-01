@@ -7,8 +7,12 @@
 //
 // The green "new game" highlight is delegated to the primitive via the
 // highlight-new prop.
-import { useGameDisplay, GameLink, type Game, type GameRef } from "@/entities/game";
-import { Tooltip } from "@/shared/ui/Tooltip";
+import {
+  useGameDisplay,
+  GameLink,
+  type Game,
+  type GameRef,
+} from "@/entities/game";
 import { computed, ref } from "vue";
 
 const props = withDefaults(
@@ -39,30 +43,28 @@ const showCounters = computed(
 const postsCount = computed(() => getUnreadPosts(props.game));
 const commentsCount = computed(() => getUnreadComments(props.game));
 const postsTooltip = computed(() => formatUnreadPostsTooltip(postsCount.value));
-const commentsTooltip = computed(() => formatUnreadCommentsTooltip(commentsCount.value));
+const commentsTooltip = computed(() =>
+  formatUnreadCommentsTooltip(commentsCount.value),
+);
 </script>
 
 <template>
   <div class="link" @mouseenter="hovered = true" @mouseleave="hovered = false">
     <span class="muted" aria-hidden="true">{{ prefix }}</span>
-    <GameLink :game="game" highlight-new />{{ " "
+    <GameLink :game="game" highlight-new muted-closed />{{ " "
     }}<span v-if="showCounters" class="counters"
       ><span class="bracket">(</span
-      ><Tooltip :text="postsTooltip"
-        ><router-link
-          :to="{ name: 'game-first-unread-post', params }"
-          :aria-label="postsTooltip"
-          >{{ postsCount }}</router-link
-        ></Tooltip
-      ><span class="separator">/</span
-      ><Tooltip :text="commentsTooltip"
-        ><router-link
-          :to="{ name: 'game-first-unread-comment', params }"
-          :aria-label="commentsTooltip"
-          >{{ commentsCount }}</router-link
-        ></Tooltip
-      ><span class="bracket">)</span
-    ></span>
+      ><router-link
+        :to="{ name: 'game-first-unread-post', params }"
+        :aria-label="postsTooltip"
+        >{{ postsCount }}</router-link
+      ><span class="counter-sep">/</span
+      ><router-link
+        :to="{ name: 'game-first-unread-comment', params }"
+        :aria-label="commentsTooltip"
+        >{{ commentsCount }}</router-link
+      ><span class="bracket">)</span></span
+    >
   </div>
 </template>
 
@@ -77,6 +79,6 @@ const commentsTooltip = computed(() => formatUnreadCommentsTooltip(commentsCount
   transition: opacity 0.15s ease
 
 .bracket,
-.separator
+.counter-sep
   color: $text-muted
 </style>

@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import type { Chat } from "@/entities/message";
 import type { User } from "@/shared/api/models/community";
-import { defaultAvatarUrl as defaultPicture } from "@/shared/lib/utils/icons";
+import { AvatarImg } from "@/entities/user";
 import dayjs from "dayjs";
 
 const props = defineProps<{
@@ -10,10 +10,6 @@ const props = defineProps<{
   interlocutor?: User;
   currentUser?: User | null;
 }>();
-
-const userPicture = computed(
-  () => props.interlocutor?.smallPictureUrl || defaultPicture,
-);
 
 const isLastMessageFromMe = computed(() => {
   const msg = props.chat.lastMessage;
@@ -47,7 +43,12 @@ const hasUnread = computed(() => (props.chat.unreadMessagesCount ?? 0) > 0);
     class="chat-preview"
     :class="{ 'has-unread': hasUnread }"
   >
-    <img :src="userPicture" :alt="interlocutor?.username" class="avatar" />
+    <AvatarImg
+      :picture="interlocutor?.picture"
+      :alt="interlocutor?.username || ''"
+      :size="48"
+      img-class="avatar"
+    />
 
     <div class="content">
       <div class="header">
@@ -91,7 +92,6 @@ const hasUnread = computed(() => (props.chat.unreadMessagesCount ?? 0) > 0);
 .avatar
   width: $grid-step * 12
   height: $grid-step * 12
-  border-radius: 50%
   object-fit: cover
   flex-shrink: 0
 

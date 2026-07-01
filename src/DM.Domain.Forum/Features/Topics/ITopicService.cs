@@ -47,6 +47,16 @@ public interface ITopicService
         string boardTitle, TopicsQuery query, CancellationToken ct = default);
 
     /// <summary>
+    /// Get topics page across all boards visible to the current viewer.
+    /// Used by the user-profile "Topics" tab to render every topic the
+    /// target user has authored, regardless of which board it lives in.
+    /// Access policy is enforced inside the repository — topics on boards
+    /// the viewer cannot see are filtered out at the SQL layer.
+    /// </summary>
+    Task<(IEnumerable<Topic> topics, PagingResult? paging)> GetListAcrossBoardsAsync(
+        TopicsQuery query, CancellationToken ct = default);
+
+    /// <summary>
     /// Update existing topic
     /// </summary>
     /// <param name="updateTopic">Update topic model</param>

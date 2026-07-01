@@ -10,7 +10,11 @@ import {
   dateToApiStart,
   dateToApiEnd,
 } from "@/shared/lib/filters";
-import type { CommentsFilterState, CommentsSearchParams, SortByValue } from "./types";
+import type {
+  CommentsFilterState,
+  CommentsSearchParams,
+  SortByValue,
+} from "./types";
 import { SORT_OPTIONS } from "./types";
 
 // =============================================================================
@@ -54,7 +58,10 @@ type CommentsFilterAction =
 // PURE REDUCER
 // =============================================================================
 
-function reducer(state: CommentsFilterState, action: CommentsFilterAction): CommentsFilterState {
+function reducer(
+  state: CommentsFilterState,
+  action: CommentsFilterAction,
+): CommentsFilterState {
   // Clone state with new Set to avoid mutation
   const newState: CommentsFilterState = {
     ...state,
@@ -121,7 +128,7 @@ function createDefaultState(): CommentsFilterState {
     createdFromUtc: null,
     createdToUtc: null,
     sortBy: "created",
-    sortOrder: "desc",
+    sortOrder: "asc",
   };
 }
 
@@ -140,13 +147,19 @@ function parseQueryToState(query: LocationQuery): CommentsFilterState {
 
   state.createdFromUtc = parseDateFromUrl(query.createdFromUtc as string);
   state.createdToUtc = parseDateFromUrl(query.createdToUtc as string);
-  state.sortBy = validateSortField(query.sortBy as string, validSortByValues, "created") as SortByValue;
-  state.sortOrder = parseSortDirection(query.sortOrder as string, "desc");
+  state.sortBy = validateSortField(
+    query.sortBy as string,
+    validSortByValues,
+    "created",
+  ) as SortByValue;
+  state.sortOrder = parseSortDirection(query.sortOrder as string, "asc");
 
   return state;
 }
 
-function buildQueryFromState(state: CommentsFilterState): Record<string, string> {
+function buildQueryFromState(
+  state: CommentsFilterState,
+): Record<string, string> {
   const query: Record<string, string> = {};
 
   if (state.search) query.search = state.search;
@@ -155,7 +168,7 @@ function buildQueryFromState(state: CommentsFilterState): Record<string, string>
   if (state.createdToUtc) query.createdToUtc = state.createdToUtc;
   // Sort params always in URL for bookmarkability (consistent with Games/Blogs)
   if (state.sortBy !== "created") query.sortBy = state.sortBy;
-  if (state.sortOrder !== "desc") query.sortOrder = state.sortOrder;
+  if (state.sortOrder !== "asc") query.sortOrder = state.sortOrder;
 
   return query;
 }
@@ -164,7 +177,10 @@ function buildQueryFromState(state: CommentsFilterState): Record<string, string>
 // MODULE-LEVEL DISPATCHER
 // =============================================================================
 
-const dispatcher = createFilterDispatcher<CommentsFilterState, CommentsFilterAction>({
+const dispatcher = createFilterDispatcher<
+  CommentsFilterState,
+  CommentsFilterAction
+>({
   buildQuery: buildQueryFromState,
   name: "useCommentsFilter",
 });
@@ -188,7 +204,9 @@ export function useCommentsFilter(): CommentsFilterComposable {
 
   dispatcher.setRouter(router);
 
-  const filterState = computed<CommentsFilterState>(() => parseQueryToState(route.query));
+  const filterState = computed<CommentsFilterState>(() =>
+    parseQueryToState(route.query),
+  );
 
   const getCurrentState = () => filterState.value;
 
@@ -203,8 +221,10 @@ export function useCommentsFilter(): CommentsFilterComposable {
     if (state.authors.size > 0) params.authors = [...state.authors];
 
     // Convert dates to ISO 8601 with time for API
-    if (state.createdFromUtc) params.createdFromUtc = dateToApiStart(state.createdFromUtc);
-    if (state.createdToUtc) params.createdToUtc = dateToApiEnd(state.createdToUtc);
+    if (state.createdFromUtc)
+      params.createdFromUtc = dateToApiStart(state.createdFromUtc);
+    if (state.createdToUtc)
+      params.createdToUtc = dateToApiEnd(state.createdToUtc);
 
     params.sortBy = state.sortBy;
     params.sortOrder = state.sortOrder;
@@ -233,9 +253,12 @@ export function useCommentsFilter(): CommentsFilterComposable {
   });
 
   // Action dispatchers
-  const setSearch = (search: string) => dispatch({ type: "SET_SEARCH", search });
-  const addAuthor = (username: string) => dispatch({ type: "ADD_AUTHOR", username });
-  const removeAuthor = (username: string) => dispatch({ type: "REMOVE_AUTHOR", username });
+  const setSearch = (search: string) =>
+    dispatch({ type: "SET_SEARCH", search });
+  const addAuthor = (username: string) =>
+    dispatch({ type: "ADD_AUTHOR", username });
+  const removeAuthor = (username: string) =>
+    dispatch({ type: "REMOVE_AUTHOR", username });
   const clearAuthors = () => dispatch({ type: "CLEAR_AUTHORS" });
   const setDateRange = (from: string | null, to: string | null) =>
     dispatch({ type: "SET_DATE_RANGE", from, to });

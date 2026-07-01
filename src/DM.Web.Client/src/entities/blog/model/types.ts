@@ -85,3 +85,27 @@ export interface BlogInvitation {
   createdUtc: string;
   expiresUtc: string;
 }
+
+/**
+ * Blog publication (post) — slim DTO shape used by lists and widgets.
+ * Mirrors `DM.Web.API.Features.Blog.Publications.Publication`.
+ */
+export interface Publication {
+  id: PublicationId;
+  blogId: BlogId;
+  rubric?: Rubric | null;
+  author: UserRef;
+  title: string;
+  /** Pre-rendered HTML (server-side BBCode rendering). */
+  content: string;
+  /** Short excerpt (max 500 chars on the server). */
+  preview: string;
+  createdUtc: string;
+  modifiedUtc?: string | null;
+  isPublished: boolean;
+  publishedUtc?: string | null;
+  commentsEnabled: boolean;
+  viewCount: number;
+  commentCount: number;
+  likes: UserRef[];
+}

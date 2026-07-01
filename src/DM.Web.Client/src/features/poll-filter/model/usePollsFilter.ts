@@ -3,9 +3,18 @@ import { useRoute, useRouter } from "vue-router";
 import type { LocationQuery } from "vue-router";
 import { usePaging, createFilterDispatcher } from "@/shared/lib/composables";
 import { parseSortDirection, validateSortField } from "@/shared/lib/filters";
-import type { PollSortBy, PollStatus, PollsSearchParams } from "@/entities/poll";
+import type {
+  PollSortBy,
+  PollStatus,
+  PollsSearchParams,
+} from "@/entities/poll";
 import type { PollsFilterState } from "./types";
-import { DEFAULT_FILTER_STATE, SORT_OPTIONS, STATUS_OPTIONS, POLL_TYPE_OPTIONS } from "./types";
+import {
+  DEFAULT_FILTER_STATE,
+  SORT_OPTIONS,
+  STATUS_OPTIONS,
+  POLL_TYPE_OPTIONS,
+} from "./types";
 
 // =============================================================================
 // RETURN TYPE
@@ -52,7 +61,10 @@ type PollsFilterAction =
 // PURE REDUCER (Testable, no side effects)
 // =============================================================================
 
-function reducer(state: PollsFilterState, action: PollsFilterAction): PollsFilterState {
+function reducer(
+  state: PollsFilterState,
+  action: PollsFilterAction,
+): PollsFilterState {
   const newState: PollsFilterState = { ...state };
 
   switch (action.type) {
@@ -214,7 +226,9 @@ export function usePollsFilter(): PollsFilterComposable {
   dispatcher.setRouter(router);
 
   // Filter state derived from URL (single source of truth)
-  const filterState = computed<PollsFilterState>(() => parseQueryToState(route.query));
+  const filterState = computed<PollsFilterState>(() =>
+    parseQueryToState(route.query),
+  );
 
   // Helper to get current state for dispatch
   const getCurrentState = () => filterState.value;
@@ -269,13 +283,18 @@ export function usePollsFilter(): PollsFilterComposable {
   // ACTION DISPATCHERS (thin wrappers around dispatch)
   // ==========================================================================
 
-  const setStatus = (status: PollStatus | "") => dispatch({ type: "SET_STATUS", status });
+  const setStatus = (status: PollStatus | "") =>
+    dispatch({ type: "SET_STATUS", status });
   const setPollType = (pollType: "anonymous" | "public" | "") =>
     dispatch({ type: "SET_POLL_TYPE", pollType });
-  const setSearch = (search: string) => dispatch({ type: "SET_SEARCH", search });
-  const setStartsFrom = (date: string) => dispatch({ type: "SET_STARTS_FROM", date });
-  const setStartsTo = (date: string) => dispatch({ type: "SET_STARTS_TO", date });
-  const setEndsFrom = (date: string) => dispatch({ type: "SET_ENDS_FROM", date });
+  const setSearch = (search: string) =>
+    dispatch({ type: "SET_SEARCH", search });
+  const setStartsFrom = (date: string) =>
+    dispatch({ type: "SET_STARTS_FROM", date });
+  const setStartsTo = (date: string) =>
+    dispatch({ type: "SET_STARTS_TO", date });
+  const setEndsFrom = (date: string) =>
+    dispatch({ type: "SET_ENDS_FROM", date });
   const setEndsTo = (date: string) => dispatch({ type: "SET_ENDS_TO", date });
   const setSort = (sortBy: PollSortBy, sortOrder?: "asc" | "desc") =>
     dispatch({ type: "SET_SORT", sortBy, sortOrder });

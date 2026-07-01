@@ -41,14 +41,14 @@ public class BanController : ControllerBase
     /// <remarks>
     /// Returns current ban status and ban history for the user.
     /// </remarks>
-    /// <param name="login">User login</param>
+    /// <param name="username">Username</param>
     /// <response code="200">User ban status and history</response>
     /// <response code="404">User not found</response>
-    [HttpGet("~/v1/users/{login}/bans", Name = nameof(GetUserBans))]
+    [HttpGet("~/v1/users/{username}/bans", Name = nameof(GetUserBans))]
     [ProducesResponseType(typeof(UserBanStatus), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetUserBans(string login) =>
-        Ok(await _banApiService.GetUserBanStatus(login));
+    public async Task<IActionResult> GetUserBans(string username) =>
+        Ok(await _banApiService.GetUserBanStatus(username));
 
     /// <summary>
     /// Get active ban for a user
@@ -56,15 +56,15 @@ public class BanController : ControllerBase
     /// <remarks>
     /// Returns the currently active ban for the user, or 404 if not banned.
     /// </remarks>
-    /// <param name="login">User login</param>
+    /// <param name="username">Username</param>
     /// <response code="200">Active ban details</response>
     /// <response code="404">User not found or not banned</response>
-    [HttpGet("~/v1/users/{login}/bans/active", Name = nameof(GetActiveBan))]
+    [HttpGet("~/v1/users/{username}/bans/active", Name = nameof(GetActiveBan))]
     [ProducesResponseType(typeof(Envelope<Ban>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetActiveBan(string login)
+    public async Task<IActionResult> GetActiveBan(string username)
     {
-        var ban = await _banApiService.GetActiveBan(login);
+        var ban = await _banApiService.GetActiveBan(username);
         if (ban == null)
         {
             return NotFound(new GeneralError("User is not currently banned"));
@@ -121,7 +121,7 @@ public class BanController : ControllerBase
     public async Task<IActionResult> CreateBan([FromBody] CreateBanRequest request)
     {
         var result = await _banApiService.CreateBan(request);
-        return CreatedAtRoute(nameof(GetUserBans), new { login = request.Username }, result);
+        return CreatedAtRoute(nameof(GetUserBans), new { username = request.Username }, result);
     }
 
     /// <summary>

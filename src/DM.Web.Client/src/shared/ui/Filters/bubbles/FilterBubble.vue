@@ -29,7 +29,11 @@ const emit = defineEmits<{
   <div class="bubble">
     <span v-if="prefix" class="bubble-prefix">{{ prefix }} </span>
     <span class="bubble-value-text">{{ value }}</span>
-    <button type="button" class="bubble-remove-btn" @click.stop="emit('remove')">
+    <button
+      type="button"
+      class="bubble-remove-btn"
+      @click.stop="emit('remove')"
+    >
       {{ symbols.close }}
     </button>
   </div>

@@ -18,7 +18,14 @@
  * and hard-cut visual contract baked in.
  */
 
-import { ref, computed, watch, nextTick, type Ref, type ComputedRef } from "vue";
+import {
+  ref,
+  computed,
+  watch,
+  nextTick,
+  type Ref,
+  type ComputedRef,
+} from "vue";
 
 export interface ContentTruncationOptions {
   /** Maximum height in px before truncation (default: 150) */
@@ -62,7 +69,9 @@ export function useContentTruncation(
 
   // Normalize options to refs
   const maxHeight = computed(() =>
-    typeof maxHeightOption === "number" ? maxHeightOption : maxHeightOption.value,
+    typeof maxHeightOption === "number"
+      ? maxHeightOption
+      : maxHeightOption.value,
   );
   const enabled = computed(() =>
     typeof enabledOption === "boolean" ? enabledOption : enabledOption.value,

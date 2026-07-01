@@ -106,7 +106,7 @@ export const useGamesStore = defineStore("games", () => {
     const { data, error } = await gameApi.searchGames(params);
 
     if (error) {
-      searchError.value = error.title || "Failed to search games";
+      searchError.value = "Не удалось загрузить игры";
       // Keep stale data on error if available
       if (!cached) {
         searchResult.value = null;
@@ -312,10 +312,13 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     const { data, error } = await gameApi.getGame(id);
 
     if (error) {
-      gameError.value = error.title || "Failed to load game";
+      gameError.value = "Не удалось загрузить игру";
       game.value = null;
     } else if (data) {
-      game.value = data;
+      // The details endpoint wraps the payload in a single-resource
+      // envelope ({ resource }); unwrap defensively so a bare payload
+      // keeps working too.
+      game.value = data.resource ?? (data as unknown as Game);
     }
 
     gameLoading.value = false;
@@ -329,7 +332,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     const { data, error } = await gameApi.getRooms(gameId);
 
     if (error) {
-      roomsError.value = error.title || "Failed to load rooms";
+      roomsError.value = "Не удалось загрузить комнаты";
       rooms.value = [];
     } else if (data) {
       rooms.value = data.resources;
@@ -352,7 +355,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     const { data, error } = await gameApi.getPosts(roomId, { number: page });
 
     if (error) {
-      postsError.value = error.title || "Failed to load posts";
+      postsError.value = "Не удалось загрузить посты";
       posts.value = [];
       postsPaging.value = null;
     } else if (data) {
@@ -364,11 +367,21 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   }
 
   // Load posts for a room by room number (URL-based)
-  async function loadPostsByRoomNumber(roomNumber: number, page: number = 1): Promise<void> {
+  async function loadPostsByRoomNumber(
+    gameId: string,
+    roomNumber: number,
+    page: number = 1,
+  ): Promise<void> {
+    // Deep links (first-unread redirects, direct URLs) land here before the
+    // rooms list is in the store - resolve it first
+    if (!rooms.value.length) {
+      await loadRooms(gameId);
+    }
+
     // Find the room by number
     const room = rooms.value.find((r) => r.roomNumber === roomNumber);
     if (!room) {
-      postsError.value = `Room #${roomNumber} not found`;
+      postsError.value = `Комната №${roomNumber} не найдена`;
       posts.value = [];
       postsPaging.value = null;
       currentRoom.value = null;
@@ -386,7 +399,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     const { data, error } = await gameApi.getCharacters(gameId);
 
     if (error) {
-      charactersError.value = error.title || "Failed to load characters";
+      charactersError.value = "Не удалось загрузить персонажей";
       characters.value = [];
     } else if (data) {
       characters.value = data.resources;
@@ -405,7 +418,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     });
 
     if (error) {
-      commentsError.value = error.title || "Failed to load comments";
+      commentsError.value = "Не удалось загрузить комментарии";
       comments.value = [];
       commentsPaging.value = null;
     } else if (data) {

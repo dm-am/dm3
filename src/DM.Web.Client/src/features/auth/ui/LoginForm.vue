@@ -161,18 +161,22 @@ const onPasswordInput = () => {
       >
         <template #label>
           <label for="password">Пароль</label>
-          <a
+          <button
             v-if="pendingActivation"
+            type="button"
             class="field-action"
             @click="handleResendActivation"
-            >Отправить повторное письмо?</a
           >
-          <a
+            Отправить повторное письмо?
+          </button>
+          <button
             v-else
+            type="button"
             class="field-action"
             @click="emit('cantSignIn', emailField.value.value.trim())"
-            >Не могу войти</a
           >
+            Не могу войти
+          </button>
         </template>
         <password-input
           v-model="passwordField.value.value"
@@ -205,8 +209,20 @@ const onPasswordInput = () => {
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
 
+// Button reset that mimics the global anchor styles (Reset.sass)
 .field-action
+  background: none
+  border: none
+  padding: 0
+  font: inherit
+  text-decoration: none
   cursor: pointer
+  transition: color $animation-time ease
+  color: $link
+
+  &:hover
+    text-decoration: underline
+    color: $link-hover
 
 .honeypot-field
   display: none

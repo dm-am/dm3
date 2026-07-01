@@ -11,7 +11,11 @@
         :aria-expanded="showDropdown && suggestions.length > 0"
         aria-autocomplete="list"
         :aria-controls="listboxId"
-        :aria-activedescendant="highlightedIndex >= 0 ? `${listboxId}-option-${highlightedIndex}` : undefined"
+        :aria-activedescendant="
+          highlightedIndex >= 0
+            ? `${listboxId}-option-${highlightedIndex}`
+            : undefined
+        "
         @input="onInput"
         @focus="showDropdown = true"
         @keydown="onKeydown"
@@ -33,20 +37,22 @@
           @mousedown.prevent="selectUser(user)"
           @mouseenter="highlightedIndex = index"
         >
-          <img
-            :src="user.smallPictureUrl || defaultAvatar"
-            class="user-avatar"
-            alt=""
+          <AvatarImg
+            :picture="user.picture"
+            :alt="''"
+            :size="24"
+            img-class="user-avatar"
           />
           <span class="user-username">{{ user.username }}</span>
         </div>
       </div>
     </template>
     <div v-else class="selected-user">
-      <img
-        :src="selectedUser.smallPictureUrl || defaultAvatar"
-        class="user-avatar"
-        alt=""
+      <AvatarImg
+        :picture="selectedUser.picture"
+        :alt="''"
+        :size="24"
+        img-class="user-avatar"
       />
       <span class="user-username">{{ selectedUser.username }}</span>
       <button
@@ -65,8 +71,9 @@
 import { ref, watch, onMounted, onUnmounted, nextTick } from "vue";
 import type { User } from "@/shared/api/models/community";
 import { CommunityApi } from "@/shared/api";
+import { AvatarImg } from "@/entities/user";
 import { vClickOutside } from "@/shared/directives";
-import { defaultAvatarUrl as defaultAvatar, symbols } from "@/shared/lib/utils/icons";
+import { symbols } from "@/shared/lib/utils/icons";
 
 const props = defineProps<{
   modelValue: string;
@@ -159,7 +166,7 @@ function onKeydown(event: KeyboardEvent) {
       event.preventDefault();
       highlightedIndex.value = Math.min(
         highlightedIndex.value + 1,
-        suggestions.value.length - 1
+        suggestions.value.length - 1,
       );
       break;
     case "ArrowUp":
@@ -168,7 +175,10 @@ function onKeydown(event: KeyboardEvent) {
       break;
     case "Enter":
       event.preventDefault();
-      if (highlightedIndex.value >= 0 && highlightedIndex.value < suggestions.value.length) {
+      if (
+        highlightedIndex.value >= 0 &&
+        highlightedIndex.value < suggestions.value.length
+      ) {
         selectUser(suggestions.value[highlightedIndex.value]);
       }
       break;
@@ -235,7 +245,6 @@ watch(
 .user-avatar
   width: 24px
   height: 24px
-  border-radius: 50%
   margin-right: $small
 
 .user-username

@@ -43,7 +43,9 @@ describe("FilterDropdownItem", () => {
     });
 
     it("renders avatar when avatarUrl provided", () => {
-      const wrapper = mountComponent({ avatarUrl: "https://example.com/avatar.png" });
+      const wrapper = mountComponent({
+        avatarUrl: "https://example.com/avatar.png",
+      });
       const img = wrapper.find("img.item-avatar");
       expect(img.exists()).toBe(true);
       expect(img.attributes("src")).toBe("https://example.com/avatar.png");
@@ -77,7 +79,9 @@ describe("FilterDropdownItem", () => {
 
     it("does not add highlighted class when highlighted is false", () => {
       const wrapper = mountComponent({ highlighted: false });
-      expect(wrapper.find(".dropdown-item").classes()).not.toContain("highlighted");
+      expect(wrapper.find(".dropdown-item").classes()).not.toContain(
+        "highlighted",
+      );
     });
 
     it("adds indented class when indent is true", () => {
@@ -87,7 +91,9 @@ describe("FilterDropdownItem", () => {
 
     it("does not add indented class when indent is false", () => {
       const wrapper = mountComponent({ indent: false });
-      expect(wrapper.find(".dropdown-item").classes()).not.toContain("indented");
+      expect(wrapper.find(".dropdown-item").classes()).not.toContain(
+        "indented",
+      );
     });
   });
 

@@ -65,6 +65,26 @@ public class PublicationController : ControllerBase
         Ok(await _apiService.GetPublication(id));
 
     /// <summary>
+    /// Get the user's most-liked publication (profile widget)
+    /// </summary>
+    /// <remarks>
+    /// Returns the single highest-liked PUBLISHED publication authored by
+    /// the user, across every blog. Used by the profile page's "Blogs" tab
+    /// to spotlight the user's best work — same role <c>GET /v1/posts</c>
+    /// fills for forum posts on the same page.
+    ///
+    /// Tie-breaker on equal like counts is publication time (newer first).
+    /// </remarks>
+    /// <param name="username">Author username</param>
+    /// <response code="200">Envelope with the publication, or <c>resource: null</c> if the user has none</response>
+    /// <response code="404">User not found</response>
+    [HttpGet("~/v1/users/{username}/best-publication", Name = nameof(GetUserBestPublication))]
+    [ProducesResponseType(typeof(Envelope<Publication>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetUserBestPublication(string username) =>
+        Ok(await _apiService.GetUserBestPublication(username));
+
+    /// <summary>
     /// Create a new publication
     /// </summary>
     /// <param name="blogId">Blog public ID (5 letters) or GUID</param>

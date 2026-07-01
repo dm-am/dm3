@@ -1,11 +1,48 @@
 <!DOCTYPE html>
-<html lang="en" class="theme_Modern">
+<html lang="ru">
   <head>
     <meta charset="UTF-8">
     <link rel="icon" href="/favicon.ico">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta
+      name="description"
+      content="DM.AM — платформа для текстовых форумных ролевых игр: создавайте игры, ведите блоги, общайтесь на форуме и в чате с сообществом."
+    >
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#222222" media="(prefers-color-scheme: dark)">
+    <meta property="og:site_name" content="DM.AM">
+    <meta property="og:title" content="DM.AM — текстовые ролевые игры">
+    <meta
+      property="og:description"
+      content="Платформа для текстовых форумных ролевых игр: создавайте игры, ведите блоги, общайтесь на форуме и в чате с сообществом."
+    >
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="/apple-touch-icon.png">
+    <meta property="og:locale" content="ru_RU">
     <title>Форумные ролевые игры на сайте dm.am</title>
+    <script>
+      // Anti-FOUC: apply the persisted theme class to <html> before the bundle
+      // loads, so a dark-theme user never sees a light flash. Mirrors the
+      // getInitialTheme() logic in shared/stores/ui.ts (localStorage key
+      // "dm_theme" with values "Light"/"Dark", then prefers-color-scheme, then
+      // Light). App.vue swaps these classes reactively afterwards.
+      (function () {
+        try {
+          var stored = localStorage.getItem("dm_theme");
+          var theme =
+            stored === "Light" || stored === "Dark"
+              ? stored
+              : window.matchMedia &&
+                  window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "Dark"
+                : "Light";
+          document.documentElement.classList.add("theme_" + theme);
+        } catch (e) {
+          document.documentElement.classList.add("theme_Light");
+        }
+      })();
+    </script>
   </head>
   <body>
     <noscript>

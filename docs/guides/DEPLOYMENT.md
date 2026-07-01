@@ -5,7 +5,8 @@
 ```
 Internet → Nginx → Frontend (Vue.js)
                  → API (.NET 8)
-                 → MinIO (CDN)
+                 → MinIO (S3-compat, source-файлы)
+                 → imgproxy (on-the-fly resize + AVIF/WebP)
                        ↓
               PostgreSQL / MongoDB / RabbitMQ
                        ↓
@@ -118,10 +119,11 @@ Watchtower каждые 5 минут проверяет новые образы 
 |-----------|------------|
 | Базы данных | `DM_ConnectionStrings__Rdb`, `DM_ConnectionStrings__Mongo` |
 | RabbitMQ | `DM_RabbitMqConfiguration__*` |
-| MinIO | `DM_CdnConfiguration__*` |
+| MinIO (source storage) | `DM_CdnConfiguration__*` |
+| imgproxy (transform layer) | `DM_ImageProxyConfiguration__Endpoint/Key/Salt/SourceUrlPrefix` |
 | Email | `DM_EmailConfiguration__*` |
 
-**Production:** `docker/.env` (создать из `docker/.env.example`). Secrets: `POSTGRES_PASSWORD`, `RABBITMQ_DEFAULT_PASS`, `MINIO_ROOT_PASSWORD`, `GF_SECURITY_ADMIN_PASSWORD`.
+**Production:** `docker/.env` (создать из `docker/.env.example`). Secrets: `POSTGRES_PASSWORD`, `RABBITMQ_DEFAULT_PASS`, `MINIO_ROOT_PASSWORD`, `IMGPROXY_KEY`, `IMGPROXY_SALT`, `GF_SECURITY_ADMIN_PASSWORD`.
 
 ---
 

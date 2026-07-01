@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, watch } from "vue";
 import { storeToRefs } from "pinia";
-import Paging from "@/shared/ui/Paging/Paging.vue";
+import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { GamePost } from "@/pages/game";
+import { GamePost } from "@/widgets/game-post";
 import { usePulseStore } from "@/entities/game";
 import { PulseFilter, usePulseFilter } from "@/features/pulse-filter";
 import { GamePostSkeleton } from "@/shared/ui/Skeleton";
@@ -11,13 +11,13 @@ import { GamePostSkeleton } from "@/shared/ui/Skeleton";
 const pulseStore = usePulseStore();
 const { posts, paging, loading, error } = storeToRefs(pulseStore);
 
-const { searchParams, hasActiveFilters } = usePulseFilter();
+const { filterState, searchParams, hasActiveFilters } = usePulseFilter();
 
 // Empty state text
 const emptyText = computed(() =>
   hasActiveFilters.value
     ? "Постов по заданным фильтрам не найдено"
-    : "Нет оцененных постов за эту неделю"
+    : "Нет оцененных постов за эту неделю",
 );
 
 // Params key for deduplication
@@ -33,10 +33,13 @@ watch(
   () => {
     pulseStore.fetchPosts(searchParams.value);
   },
-  { immediate: true }
+  { immediate: true },
 );
 
-const hasPaging = computed(() => paging.value && paging.value.pages > 1);
+// Prefetch next page when pagination becomes visible
+function handlePrefetch(page: number) {
+  pulseStore.prefetchPage(page);
+}
 </script>
 
 <template>
@@ -64,23 +67,12 @@ const hasPaging = computed(() => paging.value && paging.value.pages > 1);
     <!-- Posts list -->
     <template v-else>
       <!-- Top paging with separators -->
-      <template v-if="hasPaging">
-        <div class="separator">
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - -
-        </div>
-        <Paging :paging="paging!" :to="{ name: 'pulse' }" :use-query="true" />
-        <div class="separator">
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - -
-        </div>
-      </template>
+      <PagingWithSeparators
+        v-if="paging"
+        :paging="paging"
+        :to="{ name: 'pulse' }"
+        :use-query="true"
+      />
 
       <div class="posts-list">
         <GamePost
@@ -88,27 +80,18 @@ const hasPaging = computed(() => paging.value && paging.value.pages > 1);
           :key="post.id"
           :post="post"
           show-navigation
+          :search-query="filterState.search"
         />
       </div>
 
       <!-- Bottom paging with separators -->
-      <template v-if="hasPaging">
-        <div class="separator">
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - -
-        </div>
-        <Paging :paging="paging!" :to="{ name: 'pulse' }" :use-query="true" />
-        <div class="separator">
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - -
-        </div>
-      </template>
+      <PagingWithSeparators
+        v-if="paging"
+        :paging="paging"
+        :to="{ name: 'pulse' }"
+        :use-query="true"
+        :on-prefetch="handlePrefetch"
+      />
     </template>
   </div>
 </template>
@@ -133,14 +116,4 @@ const hasPaging = computed(() => paging.value && paging.value.pages > 1);
   display: flex
   flex-direction: column
   gap: $medium
-
-.separator
-  margin: $tiny 0
-  color: $text-muted
-  white-space: nowrap
-  overflow: hidden
-  max-width: 100%
-  width: 0
-  min-width: 100%
-  user-select: none
 </style>

@@ -1,12 +1,19 @@
 <template>
   <SidebarBlock token="OwnedBlogs">
     <template #title>Мои блоги</template>
-    <SidebarSkeleton v-if="store.participatingBlogsLoading && !store.participatingBlogs" :lines="3" />
+    <SidebarSkeleton
+      v-if="store.participatingBlogsLoading && !store.participatingBlogs"
+      :lines="3"
+    />
     <SecondaryText v-else-if="store.participatingBlogsError" class="error">
-      {{ store.participatingBlogsError.title || "Ошибка загрузки" }}
+      Не удалось загрузить
     </SecondaryText>
-    <template v-else-if="!store.participatingBlogs || store.participatingBlogs.length === 0">
-      <SecondaryText>У вас нет блогов</SecondaryText>
+    <template
+      v-else-if="
+        !store.participatingBlogs || store.participatingBlogs.length === 0
+      "
+    >
+      <SecondaryText>У вас пока нет блогов</SecondaryText>
     </template>
     <template v-else>
       <BlogLink

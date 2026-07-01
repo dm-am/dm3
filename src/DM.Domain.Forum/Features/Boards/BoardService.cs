@@ -115,7 +115,13 @@ internal class BoardService : IBoardService
     public async Task<Board> GetBoard(string aliasOrTitle, bool onlyAvailable = true)
     {
         var boards = await GetBoards(onlyAvailable);
+
+        // Accept a board GUID as well as alias/title so endpoints that pass
+        // the board id (e.g. GET boards/{id}/moderators) resolve correctly.
+        var byId = System.Guid.TryParse(aliasOrTitle, out var boardId);
+
         var board = boards.FirstOrDefault(b =>
+            (byId && b.Id == boardId) ||
             string.Equals(b.Alias, aliasOrTitle, System.StringComparison.OrdinalIgnoreCase) ||
             string.Equals(b.Title, aliasOrTitle, System.StringComparison.OrdinalIgnoreCase));
         if (board == null)

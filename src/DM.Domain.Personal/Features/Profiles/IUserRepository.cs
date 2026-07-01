@@ -44,6 +44,13 @@ public interface IUserRepository : IUserReadRepository
     /// Link upload to user entity and mark old uploads as obsolete
     /// </summary>
     Task LinkAvatarUpload(Guid userId, Guid uploadId);
+
+    /// <summary>
+    /// Сбросить аватар пользователя: User.AvatarUploadId = null,
+    /// все его UserAvatar-uploads помечаются IsRemoved=true.
+    /// Идемпотент: если аватара нет — no-op.
+    /// </summary>
+    Task UnlinkAvatarUpload(Guid userId);
 }
 
 /// <summary>

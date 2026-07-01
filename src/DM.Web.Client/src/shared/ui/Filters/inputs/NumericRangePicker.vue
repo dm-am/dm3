@@ -1,8 +1,11 @@
 <script setup lang="ts">
 /**
- * NumericRangePicker - Numeric range input with Min/Max fields.
+ * NumericRangePicker — integer range input with +/− stepper buttons.
  *
- * Used for filtering by numeric ranges (rating, game counts, etc.)
+ * Used for filtering by integer ranges (rating, counts, etc).
+ * - Accepts only digits (and optional leading "-")
+ * - Native number spinners hidden, replaced by explicit stepper buttons
+ * - Enter applies, blur does not (avoids accidental apply)
  */
 import { ref, watch, computed } from "vue";
 import { FilterApplyButton } from "../primitives";
@@ -11,9 +14,9 @@ defineOptions({ name: "NumericRangePicker" });
 
 const props = withDefaults(
   defineProps<{
-    /** Minimum value */
+    /** Minimum value (null = unset) */
     minValue: number | null;
-    /** Maximum value */
+    /** Maximum value (null = unset) */
     maxValue: number | null;
     /** Label for min input */
     minLabel?: string;
@@ -25,12 +28,12 @@ const props = withDefaults(
     maxPlaceholder?: string;
     /** Allow negative numbers */
     allowNegative?: boolean;
-    /** Step for input */
+    /** Step for +/− buttons */
     step?: number;
   }>(),
   {
-    minLabel: "От:",
-    maxLabel: "До:",
+    minLabel: "От",
+    maxLabel: "До",
     minPlaceholder: "",
     maxPlaceholder: "",
     allowNegative: false,
@@ -43,11 +46,10 @@ const emit = defineEmits<{
   clear: [];
 }>();
 
-// Local state for inputs (as strings for input binding)
+// Local state for inputs (strings to preserve empty/intermediate states)
 const minInput = ref(props.minValue?.toString() ?? "");
 const maxInput = ref(props.maxValue?.toString() ?? "");
 
-// Sync with props when they change
 watch(
   () => props.minValue,
   (newVal) => {
@@ -62,30 +64,37 @@ watch(
   },
 );
 
-// Parse input to number
-function parseInput(value: string | number): number | null {
-  const strValue = String(value ?? "");
-  if (!strValue.trim()) return null;
-  const num = parseFloat(strValue);
+/** Parse input string to integer (null for empty/invalid), clamping negatives when disallowed */
+function parseInput(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "-") return null;
+  const num = parseInt(trimmed, 10);
   if (isNaN(num)) return null;
   if (!props.allowNegative && num < 0) return 0;
   return num;
 }
 
-// Check if values differ from props
-const canApply = computed(() => {
-  const minParsed = parseInput(minInput.value);
-  const maxParsed = parseInput(maxInput.value);
-  return minParsed !== props.minValue || maxParsed !== props.maxValue;
+const parsedMin = computed(() => parseInput(minInput.value));
+const parsedMax = computed(() => parseInput(maxInput.value));
+
+const isInvalidRange = computed(() => {
+  const min = parsedMin.value;
+  const max = parsedMax.value;
+  return min !== null && max !== null && min > max;
 });
 
-// Check if clear button should be shown
-const showClear = computed(() => {
-  return props.minValue !== null || props.maxValue !== null;
-});
+const canApply = computed(
+  () =>
+    !isInvalidRange.value &&
+    (parsedMin.value !== props.minValue || parsedMax.value !== props.maxValue),
+);
+
+const showClear = computed(
+  () => props.minValue !== null || props.maxValue !== null,
+);
 
 function handleApply() {
-  emit("apply", parseInput(minInput.value), parseInput(maxInput.value));
+  emit("apply", parsedMin.value, parsedMax.value);
 }
 
 function handleClear() {
@@ -94,12 +103,56 @@ function handleClear() {
   emit("clear");
 }
 
-// Handle keyboard
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === "Enter") {
     event.preventDefault();
     handleApply();
   }
+}
+
+/** Block keypress for non-digit characters (allow "-" only when allowNegative & at start) */
+function handleKeypress(event: KeyboardEvent, target: "min" | "max") {
+  const ch = event.key;
+  // Allow control keys handled by handleKeydown / browser defaults
+  if (ch.length !== 1) return;
+  if (/\d/.test(ch)) return;
+  if (props.allowNegative && ch === "-") {
+    const input = event.target as HTMLInputElement;
+    const value = target === "min" ? minInput.value : maxInput.value;
+    // Allow "-" only at position 0 and only once
+    if (input.selectionStart === 0 && !value.startsWith("-")) return;
+  }
+  event.preventDefault();
+}
+
+/** Sanitize pasted content */
+function handlePaste(event: ClipboardEvent, target: "min" | "max") {
+  const text = event.clipboardData?.getData("text") ?? "";
+  const cleaned = props.allowNegative
+    ? text.replace(/[^\d-]/g, "").replace(/(?!^)-/g, "")
+    : text.replace(/[^\d]/g, "");
+  if (cleaned !== text) {
+    event.preventDefault();
+    if (target === "min") minInput.value = cleaned;
+    else maxInput.value = cleaned;
+  }
+}
+
+/** Increment/decrement helpers. Empty input treated as 0. */
+function adjust(target: "min" | "max", delta: number) {
+  const current = target === "min" ? parsedMin.value : parsedMax.value;
+  const base = current ?? 0;
+  let next = base + delta;
+  if (!props.allowNegative && next < 0) next = 0;
+  const str = next.toString();
+  if (target === "min") minInput.value = str;
+  else maxInput.value = str;
+}
+
+function canDecrement(target: "min" | "max"): boolean {
+  if (props.allowNegative) return true;
+  const current = target === "min" ? parsedMin.value : parsedMax.value;
+  return (current ?? 0) > 0;
 }
 </script>
 
@@ -107,34 +160,78 @@ function handleKeydown(event: KeyboardEvent) {
   <div class="numeric-range-picker">
     <div class="range-row">
       <label class="range-label">{{ minLabel }}</label>
-      <input
-        v-model="minInput"
-        type="number"
-        class="range-input"
-        :placeholder="minPlaceholder"
-        :min="allowNegative ? undefined : 0"
-        :step="step"
-        @keydown="handleKeydown"
-      />
-    </div>
-    <div class="range-row">
+      <div class="stepper">
+        <button
+          type="button"
+          class="stepper-btn"
+          :disabled="!canDecrement('min')"
+          aria-label="Уменьшить"
+          @click="adjust('min', -step)"
+        >
+          −
+        </button>
+        <input
+          v-model="minInput"
+          type="text"
+          inputmode="numeric"
+          class="stepper-input"
+          :placeholder="minPlaceholder"
+          @keydown="handleKeydown"
+          @keypress="handleKeypress($event, 'min')"
+          @paste="handlePaste($event, 'min')"
+        />
+        <button
+          type="button"
+          class="stepper-btn"
+          aria-label="Увеличить"
+          @click="adjust('min', step)"
+        >
+          +
+        </button>
+      </div>
       <label class="range-label">{{ maxLabel }}</label>
-      <input
-        v-model="maxInput"
-        type="number"
-        class="range-input"
-        :placeholder="maxPlaceholder"
-        :min="allowNegative ? undefined : 0"
-        :step="step"
-        @keydown="handleKeydown"
-      />
+      <div class="stepper">
+        <button
+          type="button"
+          class="stepper-btn"
+          :disabled="!canDecrement('max')"
+          aria-label="Уменьшить"
+          @click="adjust('max', -step)"
+        >
+          −
+        </button>
+        <input
+          v-model="maxInput"
+          type="text"
+          inputmode="numeric"
+          class="stepper-input"
+          :placeholder="maxPlaceholder"
+          @keydown="handleKeydown"
+          @keypress="handleKeypress($event, 'max')"
+          @paste="handlePaste($event, 'max')"
+        />
+        <button
+          type="button"
+          class="stepper-btn"
+          aria-label="Увеличить"
+          @click="adjust('max', step)"
+        >
+          +
+        </button>
+      </div>
     </div>
     <div class="range-actions">
-      <FilterApplyButton :disabled="!canApply" @click="handleApply" />
+      <FilterApplyButton
+        :disabled="!canApply"
+        :disabled-reason="
+          isInvalidRange ? 'Минимум не может быть больше максимума' : undefined
+        "
+        @click="handleApply"
+      />
       <FilterApplyButton
         v-if="showClear"
         label="Сбросить"
-        variant="secondary"
+        variant="clear"
         @click="handleClear"
       />
     </div>
@@ -156,31 +253,63 @@ function handleKeydown(event: KeyboardEvent) {
   margin-bottom: $small
 
 .range-label
-  width: 30px
+  flex-shrink: 0
   font-size: $secondary-font-size
   color: $text-muted
+  white-space: nowrap
 
-.range-input
+.stepper
+  display: flex
   flex: 1
-  padding: $small
-  font-size: $secondary-font-size
-  font-family: inherit
+  min-width: 0
+  align-items: stretch
   border: 1px solid $border
   border-radius: $border-radius
   background-color: $bg-element
+  overflow: hidden
+
+  &:focus-within
+    border-color: $border-focus
+
+.stepper-btn
+  flex-shrink: 0
+  width: 24px
+  padding: 0
+  font-size: $font-size
+  font-family: inherit
+  line-height: 1
+  color: $text-muted
+  background: transparent
+  border: none
+  cursor: pointer
+  user-select: none
+
+  &:hover:not(:disabled)
+    background-color: $hover-overlay
+    color: $text
+
+  &:disabled
+    opacity: $disabled-opacity
+    cursor: default
+
+  &:first-child
+    border-right: 1px solid $border
+
+  &:last-child
+    border-left: 1px solid $border
+
+.stepper-input
+  flex: 1
+  min-width: 0
+  width: 100%
+  padding: $small 0
+  font-size: $secondary-font-size
+  font-family: inherit
+  text-align: center
+  border: none
+  background: transparent
   color: $text
   outline: none
-  box-sizing: border-box
-  -moz-appearance: textfield
-
-  &:focus
-    border-color: $link
-
-  // Hide spinner buttons
-  &::-webkit-outer-spin-button,
-  &::-webkit-inner-spin-button
-    -webkit-appearance: none
-    margin: 0
 
 .range-actions
   display: flex

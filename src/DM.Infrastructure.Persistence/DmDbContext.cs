@@ -1,3 +1,4 @@
+using System;
 using System.Linq.Expressions;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Entities.Blog;
@@ -28,6 +29,14 @@ public class DmDbContext : DbContext
     public DmDbContext(DbContextOptions options) : base(options)
     {
     }
+
+    /// <summary>
+    /// Maps to PostgreSQL regexp_replace(input, pattern, replacement, flags).
+    /// Used in LINQ queries to strip BBCode blocks (e.g. [private]) before text search.
+    /// </summary>
+    [DbFunction("regexp_replace", IsBuiltIn = true)]
+    public static string RegexpReplace(string input, string pattern, string replacement, string flags)
+        => throw new System.NotSupportedException("This method is for EF Core LINQ translation only");
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -67,6 +76,32 @@ public class DmDbContext : DbContext
             testimonialIndexBuilder.HasFilter("\"IsRemoved\" = false");
         }
         testimonialIndexBuilder.IsUnique();
+
+        #endregion
+
+        #region FundraisingGoal
+
+        // Single-row table with the website fundraising progress.
+        // Seeded with a fixed GUID (zero-family, block 0005) so that
+        // GET always has a row and repeated seeding never creates duplicates.
+        modelBuilder.Entity<FundraisingGoal>(entity =>
+        {
+            entity.Property(g => g.GoalAmount).HasPrecision(18, 2);
+            entity.Property(g => g.CollectedAmount).HasPrecision(18, 2);
+
+            entity.HasOne(g => g.UpdatedBy)
+                .WithMany()
+                .HasForeignKey(g => g.UpdatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasData(new FundraisingGoal
+            {
+                FundraisingGoalId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                GoalAmount = 50000m,
+                CollectedAmount = 17000m,
+                UpdatedUtc = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero)
+            });
+        });
 
         #endregion
 
@@ -140,6 +175,140 @@ public class DmDbContext : DbContext
         ConfigureEditableRelationships<PostReview>(modelBuilder);
         ConfigureEditableRelationships<UserEndorsement>(modelBuilder);
         ConfigureEditableRelationships<WebsiteTestimonial>(modelBuilder);
+        ConfigureDeletedByRelationship<UserAward>(modelBuilder);
+
+        // ---- Awards / Achievements: схема + индексы + seed ----
+
+        modelBuilder.Entity<AwardType>()
+            .HasIndex(t => t.Code)
+            .IsUnique();
+
+        modelBuilder.Entity<ContestSeries>(entity =>
+        {
+            // Каждый тип конкурса имеет свою сквозную нумерацию.
+            // Идентичность серии — пара (ContestType, Number). Год — чисто
+            // отображаемое поле, не участвует в UNIQUE.
+            entity.HasIndex(s => new { s.ContestType, s.Number }).IsUnique();
+        });
+
+        modelBuilder.Entity<UserAward>(entity =>
+        {
+            // Awarder-навигация настраивается отдельно, чтобы не словить
+            // multiple-cascade-paths: AwardedByUserId — это шаринг с User,
+            // у которого уже есть Subscribers/etc. Без коллекции на User.
+            entity.HasOne(a => a.AwardedBy)
+                .WithMany()
+                .HasForeignKey(a => a.AwardedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(a => a.User)
+                .WithMany()
+                .HasForeignKey(a => a.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(a => a.AwardType)
+                .WithMany()
+                .HasForeignKey(a => a.AwardTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // ContestSeries опциональна — если серию удалят/деактивируют,
+            // награда остается orphan-историей без ссылки на контекст конкурса.
+            entity.HasOne(a => a.ContestSeries)
+                .WithMany(s => s.Awards)
+                .HasForeignKey(a => a.ContestSeriesId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Индекс для эффективной выборки наград пользователя.
+            // Фильтр !IsRemoved обрабатывается глобальным soft-delete-фильтром,
+            // но в индексе ограничение все равно полезно — partial index
+            // экономит место и ускоряет диапазонный скан.
+            var awardIdx = entity.HasIndex(a => new { a.UserId, a.AwardedUtc });
+            if (isPostgres) awardIdx.HasFilter("\"IsRemoved\" = false");
+        });
+
+        modelBuilder.Entity<AchievementCategory>(entity =>
+        {
+            entity.HasIndex(c => c.Code).IsUnique();
+            // Одна метрика — одна категория. Защита от случайного дубля цепочки.
+            entity.HasIndex(c => c.Metric).IsUnique();
+        });
+
+        modelBuilder.Entity<AchievementType>(entity =>
+        {
+            entity.HasIndex(t => t.Code).IsUnique();
+
+            entity.HasOne(t => t.Category)
+                .WithMany(c => c.Types)
+                .HasForeignKey(t => t.AchievementCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<UserAchievement>(entity =>
+        {
+            entity.HasOne(a => a.User)
+                .WithMany()
+                .HasForeignKey(a => a.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(a => a.AchievementType)
+                .WithMany()
+                .HasForeignKey(a => a.AchievementTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // КЛЮЧЕВАЯ инвариантность: одно достижение пользователю
+            // выдается ровно один раз. UNIQUE-нарушение в TryGrantAsync
+            // молча трактуется как «уже было» — это и есть идемпотентность
+            // evaluator'а на гонках между lazy-eval и event-worker.
+            var achievementUniqueIdx = entity.HasIndex(a => new { a.UserId, a.AchievementTypeId }).IsUnique();
+            if (isPostgres) achievementUniqueIdx.HasFilter("\"IsRemoved\" = false");
+
+            entity.HasIndex(a => new { a.UserId, a.EarnedUtc });
+        });
+
+        // ---- Bootstrap seed: ровно по одной записи каждого каталога ----
+        // Фиксированные GUID'ы (ноль-семейство) — чтобы повторный seed не
+        // создавал дубли и чтобы код вне миграций мог ссылаться на эти
+        // записи по предсказуемому ID при необходимости.
+        // Полный seed (52 типа достижений, 13 категорий, 6 типов наград,
+        // 2 серии) живет в InitialCreate.cs через InsertData.
+
+        var seedAwardId = Guid.Parse("00000000-0000-0000-0001-000000000001");
+        var seedCategoryId = Guid.Parse("00000000-0000-0000-0003-000000000002");
+        var seedAchievementId = Guid.Parse("00000000-0000-0000-0002-000000000001");
+
+        modelBuilder.Entity<AwardType>().HasData(new AwardType
+        {
+            AwardTypeId = seedAwardId,
+            Code = "contest_first",
+            Title = "Литконкурс",
+            Description = "Победитель конкурса",
+            IconName = "trophy-cup",
+            Tier = 1,
+            SortOrder = 1,
+            IsActive = true,
+        });
+
+        modelBuilder.Entity<AchievementCategory>().HasData(new AchievementCategory
+        {
+            AchievementCategoryId = seedCategoryId,
+            Code = "game_posts_authored",
+            Title = "Игровые посты",
+            Description = "Игровые посты в активных играх. Считаются все, включая удаленные игры.",
+            IconName = "scroll-quill",
+            Metric = AchievementMetric.GamePostsAuthored,
+            SortOrder = 2,
+            IsActive = true,
+        });
+
+        modelBuilder.Entity<AchievementType>().HasData(new AchievementType
+        {
+            AchievementTypeId = seedAchievementId,
+            Code = "POSTS_100",
+            Title = "Автор",
+            Threshold = 100,
+            Tier = 1,
+            AchievementCategoryId = seedCategoryId,
+        });
 
         // Token has 3 user relationships: User (owner), Creator, DeletedBy
         modelBuilder.Entity<Token>()
@@ -163,6 +332,14 @@ public class DmDbContext : DbContext
         // Comment.EntityId is a polymorphic reference - it can point to Topic, Game, Blog, or Publication.
         // Blog.Comments, Game.Comments, Publication.Comments are [NotMapped] to prevent shadow FK creation.
         // Only Topic.Comments is a real EF relationship, configured here.
+        //
+        // ── ВАЖНО для regenerate миграции ──
+        // EF из этой `HasMany().WithOne()` пары генерирует DB-уровень FK
+        // `FK_Comments_Topics_EntityId`. Эта constraint ЛОЖНА: comments к Game/Blog/
+        // Publication имеют EntityId не из Topics, и INSERT падает на ее проверке.
+        // В сгенерированном файле миграции этот `migrationBuilder.AddForeignKey`
+        // блок нужно удалять вручную (см. NOTE-комментарий в InitialCreate.cs).
+        // Ссылочную целостность поддерживает application-логика.
         modelBuilder.Entity<Topic>()
             .HasMany(t => t.Comments)
             .WithOne(c => c.Topic)
@@ -258,9 +435,47 @@ public class DmDbContext : DbContext
                 .HasDatabaseName("IX_PendingRegistrations_CreatedUtc");
         });
 
-        // NOTE: Upload.EntityId is a polymorphic FK (points to User, Game, Character, or Post)
-        // depending on UploadType. No navigation properties or FK constraints are defined
-        // because the same column cannot have FK constraints to multiple tables.
+        // Upload target FKs: типизированные nullable columns (TargetUserId,
+        // TargetCharacterId, TargetPostId), ровно один не-null. Каждый
+        // с FK constraint и индексом для batched-query lookup.
+        modelBuilder.Entity<Upload>(entity =>
+        {
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(u => u.TargetUserId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .IsRequired(false);
+
+            entity.HasOne<DM.Infrastructure.Persistence.Entities.Game.Characters.Character>()
+                .WithMany()
+                .HasForeignKey(u => u.TargetCharacterId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .IsRequired(false);
+
+            entity.HasOne<DM.Infrastructure.Persistence.Entities.Game.Posts.Post>()
+                .WithMany()
+                .HasForeignKey(u => u.TargetPostId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .IsRequired(false);
+
+            entity.HasIndex(u => u.TargetUserId)
+                .HasFilter("\"TargetUserId\" IS NOT NULL");
+            entity.HasIndex(u => u.TargetCharacterId)
+                .HasFilter("\"TargetCharacterId\" IS NOT NULL");
+            entity.HasIndex(u => u.TargetPostId)
+                .HasFilter("\"TargetPostId\" IS NOT NULL");
+
+            // CHECK constraint: ровно одна типизированная target-колонка
+            // не-null И матчится с Type discriminator.
+            // CHECK: ровно одна типизированная target-колонка не-null И
+            // матчится с Type discriminator (UserAvatar=1, CharacterAvatar=2,
+            // PostAttachment=3 в UploadType enum).
+            entity.ToTable(t => t.HasCheckConstraint(
+                "CK_Uploads_TypedTarget",
+                "(\"Type\" = 1 AND \"TargetUserId\" IS NOT NULL AND \"TargetCharacterId\" IS NULL AND \"TargetPostId\" IS NULL) OR " +
+                "(\"Type\" = 2 AND \"TargetCharacterId\" IS NOT NULL AND \"TargetUserId\" IS NULL AND \"TargetPostId\" IS NULL) OR " +
+                "(\"Type\" = 3 AND \"TargetPostId\" IS NOT NULL AND \"TargetUserId\" IS NULL AND \"TargetCharacterId\" IS NULL)"));
+        });
 
         // Global Query Filter: automatically exclude soft-deleted entities
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
@@ -639,6 +854,45 @@ public class DmDbContext : DbContext
     /// User endorsements (positive recommendations between users)
     /// </summary>
     public DbSet<UserEndorsement> UserEndorsements { get; set; }
+
+    /// <summary>
+    /// Website fundraising progress (single-row table, seeded)
+    /// </summary>
+    public DbSet<FundraisingGoal> FundraisingGoals { get; set; }
+
+    /// <summary>
+    /// Award type catalog (timeless, 6 rows in seed). Grant context (year, season,
+    /// topic) lives on <see cref="ContestSeries"/>; per-grant on <see cref="UserAward"/>.
+    /// </summary>
+    public DbSet<AwardType> AwardTypes { get; set; }
+
+    /// <summary>
+    /// Literary contest series — one row per (Season, Year). Holds Number,
+    /// Variant (Full/Lite) and optional topic URL. Awards reference series.
+    /// </summary>
+    public DbSet<ContestSeries> ContestSeries { get; set; }
+
+    /// <summary>
+    /// Award grants per user.
+    /// </summary>
+    public DbSet<UserAward> UserAwards { get; set; }
+
+    /// <summary>
+    /// Achievement category catalog (13 rows in seed). SSOT for chain metadata
+    /// (Title, Description, IconName, Metric, SortOrder, IsActive).
+    /// </summary>
+    public DbSet<AchievementCategory> AchievementCategories { get; set; }
+
+    /// <summary>
+    /// Achievement tier catalog (52 rows in seed). Each row belongs to a category;
+    /// holds tier-specific data (Title, Threshold, Tier).
+    /// </summary>
+    public DbSet<AchievementType> AchievementTypes { get; set; }
+
+    /// <summary>
+    /// Achievement grants per user (auto-evaluated).
+    /// </summary>
+    public DbSet<UserAchievement> UserAchievements { get; set; }
 
     #endregion
 }

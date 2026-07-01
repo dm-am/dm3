@@ -6,6 +6,13 @@
       >Запросы на смену имени пользователя</router-link
     >
     <router-link :to="{ name: 'moderation-tags' }">Теги игр</router-link>
+    <router-link :to="{ name: 'moderation-awards' }">Награды</router-link>
+    <router-link :to="{ name: 'moderation-achievements' }"
+      >Достижения</router-link
+    >
+    <router-link :to="{ name: 'moderation-fundraising' }"
+      >Сбор средств</router-link
+    >
   </nav>
   <router-view />
 </template>

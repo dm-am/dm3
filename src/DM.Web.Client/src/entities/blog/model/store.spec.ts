@@ -7,7 +7,13 @@ import { setActivePinia, createPinia } from "pinia";
 import type { Blog, BlogRef, BlogId } from "./types";
 
 // Use vi.hoisted to ensure mocks are created before vi.mock hoisting
-const { mockGetPublicBlogs, mockGetActiveBlogs, mockGetPopularBlogs, mockGetParticipatingBlogs, mockApiGet } = vi.hoisted(() => ({
+const {
+  mockGetPublicBlogs,
+  mockGetActiveBlogs,
+  mockGetPopularBlogs,
+  mockGetParticipatingBlogs,
+  mockApiGet,
+} = vi.hoisted(() => ({
   mockGetPublicBlogs: vi.fn(),
   mockGetActiveBlogs: vi.fn(),
   mockGetPopularBlogs: vi.fn(),
@@ -32,27 +38,29 @@ vi.mock("@/shared/api", () => ({
 
 import { useBlogsStore } from "./store";
 
-const createMockBlogRef = (id: string, title: string): BlogRef => ({
-  id: id as BlogId,
-  title,
-  author: { id: "user-1", username: "author" } as any,
-  status: "Active",
-  createdUtc: "2024-01-01",
-  subscribersCount: 0,
-} as BlogRef);
+const createMockBlogRef = (id: string, title: string): BlogRef =>
+  ({
+    id: id as BlogId,
+    title,
+    author: { id: "user-1", username: "author" } as any,
+    status: "Active",
+    createdUtc: "2024-01-01",
+    subscribersCount: 0,
+  }) as BlogRef;
 
-const createMockBlog = (id: string, title: string): Blog => ({
-  id: id as BlogId,
-  title,
-  author: { id: "user-1", username: "author" } as any,
-  status: "Active",
-  createdUtc: "2024-01-01",
-  subscribersCount: 0,
-  draftVisibility: "Private",
-  commentsEnabled: true,
-  publicationCount: 0,
-  commentsCount: 0,
-} as Blog);
+const createMockBlog = (id: string, title: string): Blog =>
+  ({
+    id: id as BlogId,
+    title,
+    author: { id: "user-1", username: "author" } as any,
+    status: "Active",
+    createdUtc: "2024-01-01",
+    subscribersCount: 0,
+    draftVisibility: "Private",
+    commentsEnabled: true,
+    publicationCount: 0,
+    commentsCount: 0,
+  }) as Blog;
 
 describe("useBlogsStore", () => {
   beforeEach(() => {
@@ -103,7 +111,10 @@ describe("useBlogsStore", () => {
 
   describe("fetchActiveBlogs", () => {
     it("fetches active blogs", async () => {
-      const mockBlogs = [createMockBlogRef("1", "Blog 1"), createMockBlogRef("2", "Blog 2")];
+      const mockBlogs = [
+        createMockBlogRef("1", "Blog 1"),
+        createMockBlogRef("2", "Blog 2"),
+      ];
       mockGetActiveBlogs.mockResolvedValue({
         data: { resources: mockBlogs },
         error: null,
@@ -176,7 +187,10 @@ describe("useBlogsStore", () => {
     it("searches blogs with params", async () => {
       const mockBlogs = [createMockBlog("1", "Found Blog")];
       mockApiGet.mockResolvedValue({
-        data: { resources: mockBlogs, paging: { current: 1, pages: 1, total: 1 } },
+        data: {
+          resources: mockBlogs,
+          paging: { current: 1, pages: 1, total: 1 },
+        },
         error: null,
       });
 
@@ -185,7 +199,7 @@ describe("useBlogsStore", () => {
 
       expect(mockApiGet).toHaveBeenCalledWith(
         "blogs",
-        expect.objectContaining({ search: "Found" })
+        expect.objectContaining({ search: "Found" }),
       );
       expect(store.searchResult?.resources).toEqual(mockBlogs);
     });
@@ -215,14 +229,17 @@ describe("useBlogsStore", () => {
           sortOrder: "desc",
           skip: 10, // (number - 1) * size = (2 - 1) * 10 = 10
           take: 10,
-        })
+        }),
       );
     });
 
     it("caches search results", async () => {
       const mockBlogs = [createMockBlog("1", "Blog")];
       mockApiGet.mockResolvedValue({
-        data: { resources: mockBlogs, paging: { current: 1, pages: 1, total: 1 } },
+        data: {
+          resources: mockBlogs,
+          paging: { current: 1, pages: 1, total: 1 },
+        },
         error: null,
       });
 
@@ -280,7 +297,7 @@ describe("useBlogsStore", () => {
         "blogs",
         expect.objectContaining({
           hostUsernames: ["user1", "user2"],
-        })
+        }),
       );
     });
 
@@ -301,7 +318,7 @@ describe("useBlogsStore", () => {
         expect.objectContaining({
           createdFromUtc: "2024-01-01",
           createdToUtc: "2024-12-31",
-        })
+        }),
       );
     });
   });
@@ -332,7 +349,7 @@ describe("useBlogsStore", () => {
       // page 2 with default size 20 -> skip = (2-1) * 20 = 20
       expect(mockApiGet).toHaveBeenCalledWith(
         "blogs",
-        expect.objectContaining({ skip: 20, take: 20 })
+        expect.objectContaining({ skip: 20, take: 20 }),
       );
     });
 

@@ -90,6 +90,12 @@ public class Topic
     /// Users who like this
     /// </summary>
     public IEnumerable<User> Likes { get; set; } = [];
+
+    /// <summary>
+    /// Total likes count. Populated in the list path so the topics table
+    /// can show the column without hydrating each topic's full Likes list.
+    /// </summary>
+    public int LikesCount { get; set; }
 }
 
 /// <summary>

@@ -1,4 +1,6 @@
 import { ref, onUnmounted } from "vue";
+import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { useAuthStore } from "@/shared/stores";
 import type { Blog, BlogRef } from "./types";
 
 // Cached timestamp for isNew() optimization
@@ -26,6 +28,23 @@ function stopTimestampRefresh() {
 }
 
 /**
+ * Auth state for counter tooltip wording. Resolved lazily (only when a
+ * counter tooltip is built) so the composable keeps working in contexts
+ * without an active Pinia instance; guest wording is the safe default.
+ * Reading the store inside render/computed keeps the value reactive.
+ *
+ * For guests the backend intentionally returns total counts in the
+ * unread fields, so counter tooltips must not say "unread" for them.
+ */
+function isViewerAuthenticated(): boolean {
+  try {
+    return useAuthStore().isAuthenticated;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Unified composable for blog display logic
  * Single source of truth for tooltips, counters, and formatted info
  */
@@ -37,20 +56,6 @@ export function useBlogDisplay() {
   onUnmounted(() => {
     stopTimestampRefresh();
   });
-
-  /**
-   * Format a date string to dd.MM.yyyy HH:mm
-   */
-  function formatDateFull(dateStr: string | undefined): string {
-    if (!dateStr) return "—";
-    const d = new Date(dateStr);
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear();
-    const hours = String(d.getHours()).padStart(2, "0");
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    return `${day}.${month}.${year} ${hours}:${minutes}`;
-  }
 
   /**
    * Build status tooltip with multiple dates based on status (per GLOSSARY.md):
@@ -140,17 +145,25 @@ export function useBlogDisplay() {
   }
 
   /**
-   * Format unread publications tooltip: "Непрочитанных публикаций: 5"
+   * Format publications counter tooltip.
+   * Authenticated: "Непрочитанных публикаций: 5"
+   * Guest (counts are totals): "Публикаций: 5"
    */
   function formatUnreadPublicationsTooltip(count: number): string {
-    return `Непрочитанных публикаций: ${count}`;
+    return isViewerAuthenticated()
+      ? `Непрочитанных публикаций: ${count}`
+      : `Публикаций: ${count}`;
   }
 
   /**
-   * Format unread comments tooltip: "Непрочитанных комментариев: 3"
+   * Format comments counter tooltip.
+   * Authenticated: "Непрочитанных комментариев: 3"
+   * Guest (counts are totals): "Комментариев: 3"
    */
   function formatUnreadCommentsTooltip(count: number): string {
-    return `Непрочитанных комментариев: ${count}`;
+    return isViewerAuthenticated()
+      ? `Непрочитанных комментариев: ${count}`
+      : `Комментариев: ${count}`;
   }
 
   /**

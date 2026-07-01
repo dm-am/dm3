@@ -612,9 +612,10 @@ public class CharacterShort
     public string Class { get; set; } = null!;
 
     /// <summary>
-    /// Picture URL
+    /// Character avatar (3 варианта). Null URLs если аватар не загружен.
+    /// Симметрично с <see cref="GeneralUser.Picture"/>.
     /// </summary>
-    public string PictureUrl { get; set; } = null!;
+    public AvatarPicture Picture { get; set; } = new();
 
     /// <summary>
     /// Character is NPC
@@ -739,9 +740,10 @@ public class Character
     public string Class { get; set; } = null!;
 
     /// <summary>
-    /// Character picture URL
+    /// Character avatar (3 варианта). Null URLs если аватар не загружен.
+    /// Симметрично с <see cref="GeneralUser.Picture"/>.
     /// </summary>
-    public string PictureUrl { get; set; } = null!;
+    public AvatarPicture Picture { get; set; } = new();
 
     /// <summary>
     /// Character appearance

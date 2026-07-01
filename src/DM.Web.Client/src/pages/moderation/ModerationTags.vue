@@ -292,7 +292,9 @@ onMounted(() => {
         </div>
         <EmptyState
           v-if="filteredTags.length === 0"
-          :title="selectedGroupId ? 'Нет тегов в этой группе' : 'Тегов пока нет'"
+          :title="
+            selectedGroupId ? 'Нет тегов в этой группе' : 'Тегов пока нет'
+          "
         />
         <div v-else class="tags-list">
           <div v-for="tag in filteredTags" :key="tag.id" class="tag-item">
@@ -360,14 +362,10 @@ onMounted(() => {
             <input v-model.number="groupForm.sortOrder" type="number" min="0" />
           </div>
           <div class="modal-actions">
-            <button
-              type="button"
-              class="btn-secondary"
-              @click="closeGroupModal"
-            >
+            <button type="button" class="btn-action" @click="closeGroupModal">
               Отмена
             </button>
-            <button type="submit" class="btn-primary">Сохранить</button>
+            <button type="submit" class="btn-action">Сохранить</button>
           </div>
         </form>
       </div>
@@ -394,7 +392,8 @@ onMounted(() => {
             <label>Описание</label>
             <textarea v-model="tagForm.description" rows="3" />
             <small class="field-hint"
-              >Используйте [tipimg:URL]текст[/tipimg] для картинки в тултипе</small
+              >Используйте [tipimg:URL]текст[/tipimg] для картинки в
+              тултипе</small
             >
           </div>
           <div class="form-field">
@@ -402,10 +401,10 @@ onMounted(() => {
             <input v-model.number="tagForm.sortOrder" type="number" min="0" />
           </div>
           <div class="modal-actions">
-            <button type="button" class="btn-secondary" @click="closeTagModal">
+            <button type="button" class="btn-action" @click="closeTagModal">
               Отмена
             </button>
-            <button type="submit" class="btn-primary">Сохранить</button>
+            <button type="submit" class="btn-action">Сохранить</button>
           </div>
         </form>
       </div>
@@ -416,6 +415,7 @@ onMounted(() => {
 <style scoped lang="sass">
 @import "src/assets/styles/Layout"
 @import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 @import "src/assets/styles/ZIndex"
 
 .moderation-tags
@@ -454,17 +454,7 @@ onMounted(() => {
     font-weight: 500
 
 .btn-add
-  padding: $tiny $small
-  font-size: $secondary-font-size
-  font-family: inherit
-  cursor: pointer
-  border: 1px solid $link
-  border-radius: $border-radius
-  background: $link
-  color: white
-
-  &:hover
-    background: $link-hover
+  +button
 
 // Groups list
 .groups-list
@@ -585,7 +575,7 @@ onMounted(() => {
 
   &:disabled
     opacity: 0.3
-    cursor: not-allowed
+    cursor: default
 
   &.btn-danger:hover:not(:disabled)
     background: rgba($accent-red, 0.1)
@@ -663,29 +653,8 @@ onMounted(() => {
   gap: $small
   margin-top: $large
 
-.btn-primary,
-.btn-secondary
-  padding: $small $medium
-  font-size: $secondary-font-size
-  font-family: inherit
-  cursor: pointer
-  border-radius: $border-radius
-
-.btn-primary
-  border: 1px solid $link
-  background: $link
-  color: white
-
-  &:hover
-    background: $link-hover
-
-.btn-secondary
-  border: 1px solid $border
-  background: $bg-element
-  color: $text
-
-  &:hover
-    background: $bg-element-accent
+.btn-action
+  +button
 
 // Responsive
 @media (max-width: 768px)

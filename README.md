@@ -28,6 +28,7 @@ cd src/DM.Web.Client && npm install && npm run dev
 | Frontend | http://localhost:5173 |
 | API / Swagger | http://localhost:5000 |
 | MinIO | http://localhost:9001 |
+| imgproxy | http://localhost:8080 |
 | MailHog | http://localhost:8025 |
 
 **Подробнее:** [docs/guides/LOCAL_SETUP.md](./docs/guides/LOCAL_SETUP.md)
@@ -43,6 +44,7 @@ cd src/DM.Web.Client && npm install && npm run dev
 | [SYSTEM](./docs/architecture/SYSTEM.md) | "Из чего состоит система? Какая архитектура?" |
 | [AUTHENTICATION](./docs/architecture/AUTHENTICATION.md) | "Как работает вход? Какие параметры безопасности?" |
 | [AUTHORIZATION](./docs/architecture/AUTHORIZATION.md) | "Какие роли? Кто что может?" |
+| [UPLOADS](./docs/architecture/UPLOADS.md) | "Как работает upload аватаров? Какие варианты, форматы, защиты?" |
 
 ### conventions/ — Правила разработки
 

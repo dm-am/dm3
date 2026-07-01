@@ -322,6 +322,11 @@ export const symbols = {
 /**
  * Default avatar as a data URI for use in <img src>.
  * Generated from the defaultAvatar icon -- single source of truth, no separate file.
+ *
+ * Theme-aware: SVG включает `@media (prefers-color-scheme: dark)`, поэтому
+ * автоматически адаптируется к OS-настройке темы. Для приложения с manual
+ * theme toggle (light/dark вне зависимости от OS) контраст остается WCAG-safe
+ * благодаря mid-tone цветам (не белый и не чисто черный).
  */
-const _avatarSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${icons.defaultAvatar.viewBox}"><rect width="1200" height="1200" fill="#ccc"/>${icons.defaultAvatar.path.replace(/currentColor/g, "#999")}</svg>`;
+const _avatarSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${icons.defaultAvatar.viewBox}"><style>.bg{fill:#e0e0e0}.fg{fill:#9e9e9e}@media (prefers-color-scheme: dark){.bg{fill:#2a2a2a}.fg{fill:#666}}</style><rect class="bg" width="1200" height="1200"/>${icons.defaultAvatar.path.replace(/currentColor/g, "currentColor").replace(/<path /g, '<path class="fg" ')}</svg>`;
 export const defaultAvatarUrl = `data:image/svg+xml,${encodeURIComponent(_avatarSvg)}`;

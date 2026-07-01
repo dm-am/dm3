@@ -74,4 +74,22 @@ public class ProfileController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateProfile profile) =>
         Ok(await _profileApiService.UpdateMyProfile(profile));
+
+    /// <summary>
+    /// Сбросить мой аватар
+    /// </summary>
+    /// <remarks>
+    /// Снимает связь User → Upload, GC удалит S3-объекты через grace-period.
+    /// Идемпотент: вызов на пользователе без аватара возвращает 204.
+    /// </remarks>
+    /// <response code="204">Аватар сброшен (или его и не было).</response>
+    /// <response code="401">Требуется аутентификация.</response>
+    [HttpDelete("avatar", Name = nameof(RemoveMyAvatar))]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> RemoveMyAvatar()
+    {
+        await _profileApiService.RemoveMyAvatar();
+        return NoContent();
+    }
 }

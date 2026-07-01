@@ -90,6 +90,13 @@ public class Topic : ILikable
 
     /// <inheritdoc />
     public IEnumerable<GeneralUser> Likes { get; set; } = [];
+
+    /// <summary>
+    /// Number of likes (denormalized aggregate, populated in list path
+    /// via a single batched GROUP BY — never an inline correlated count).
+    /// Used by the "sort by likes" path and by the topics table column.
+    /// </summary>
+    public int LikesCount { get; set; }
 }
 
 /// <summary>

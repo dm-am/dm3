@@ -2,6 +2,7 @@
 // Migrated from api/requests/gameApi.ts
 
 import type {
+  Envelope,
   ListEnvelope,
   PagingQuery,
   Comment,
@@ -63,6 +64,15 @@ export interface GamesSearchParams {
   /** Hosts filter - master OR assistant (OR logic) */
   hostUsernames?: string[];
 
+  /** Player filter — games where this user owns an active character */
+  playerUsername?: string;
+
+  /**
+   * If true, returns games the current authenticated user participates in
+   * (any role: reader/player/assistant/mentor/master). Requires auth.
+   */
+  participating?: boolean;
+
   /** Created date range start (ISO string) */
   createdFromUtc?: string;
 
@@ -107,7 +117,7 @@ class GameApi {
   public searchGames(params: GamesSearchParams = {}) {
     const queryParams: Record<
       string,
-      string | number | string[] | number[] | undefined
+      string | number | boolean | string[] | number[] | undefined
     > = {};
 
     if (params.search) queryParams.search = params.search;
@@ -128,11 +138,15 @@ class GameApi {
     // Map hostUsernames to authorUsernames for backend
     if (params.hostUsernames?.length)
       queryParams.authorUsernames = params.hostUsernames;
+    if (params.playerUsername)
+      queryParams.playerUsername = params.playerUsername;
+    if (params.participating) queryParams.participating = true;
 
     // Date range filters
     if (params.createdFromUtc) queryParams.createdFrom = params.createdFromUtc;
     if (params.createdToUtc) queryParams.createdTo = params.createdToUtc;
-    if (params.activatedFromUtc) queryParams.activatedFrom = params.activatedFromUtc;
+    if (params.activatedFromUtc)
+      queryParams.activatedFrom = params.activatedFromUtc;
     if (params.activatedToUtc) queryParams.activatedTo = params.activatedToUtc;
     if (params.closedFromUtc) queryParams.closedFrom = params.closedFromUtc;
     if (params.closedToUtc) queryParams.closedTo = params.closedToUtc;
@@ -251,18 +265,26 @@ class GameApi {
     search?: string;
     minRating?: number;
     maxRating?: number;
+    /** Comma-separated POST author usernames. */
     authorUsernames?: string;
+    /**
+     * Restrict to posts that have at least one review by this user.
+     * Используется страницей профиля «Оценил чужих постов».
+     */
+    reviewerUsername?: string;
     createdAfter?: string;
     createdBefore?: string;
     gameId?: string;
     take?: number;
     skip?: number;
+    number?: number;
   }) {
     return Api.get<ListEnvelope<Post>>("posts", params);
   }
 
   public getGame(id: string) {
-    return Api.get<Game>(`games/${id}/details`);
+    // The details endpoint wraps the payload in a single-resource envelope
+    return Api.get<Envelope<Game>>(`games/${id}/details`);
   }
 
   public getCharacters(gameId: string) {
@@ -304,7 +326,10 @@ class GameApi {
     return Api.delete(`posts/${postId}`);
   }
 
-  public createPostReview(postId: string, request: { sign: number; text: string }) {
+  public createPostReview(
+    postId: string,
+    request: { sign: number; text: string },
+  ) {
     return Api.post<PostReview>(`posts/${postId}/reviews`, request);
   }
 
@@ -320,7 +345,10 @@ class GameApi {
       queryParams.skip = paging.skip;
     }
 
-    return Api.get<ListEnvelope<PostReview>>(`posts/${postId}/reviews`, queryParams);
+    return Api.get<ListEnvelope<PostReview>>(
+      `posts/${postId}/reviews`,
+      queryParams,
+    );
   }
 
   // Game comments
@@ -336,7 +364,10 @@ class GameApi {
       queryParams.skip = paging.skip;
     }
 
-    return Api.get<ListEnvelope<Comment>>(`games/${gameId}/comments`, queryParams);
+    return Api.get<ListEnvelope<Comment>>(
+      `games/${gameId}/comments`,
+      queryParams,
+    );
   }
 
   public createGameComment(gameId: string, comment: { text: string }) {
@@ -361,7 +392,10 @@ class GameApi {
     } else if (paging?.skip) {
       queryParams.skip = paging.skip;
     }
-    return Api.get<ListEnvelope<GameReview>>(`games/${gameId}/reviews`, queryParams);
+    return Api.get<ListEnvelope<GameReview>>(
+      `games/${gameId}/reviews`,
+      queryParams,
+    );
   }
 
   public createGameReview(gameId: string, review: { text: string }) {
@@ -430,13 +464,17 @@ class GameApi {
     return Api.delete(`games/${gameId}/invitations/${tokenId}`);
   }
 
-  // First unread content navigation
+  // First unread content navigation.
+  // The endpoints bind the game id as a Guid — callers must pass game.id
+  // (not publicId). Responses are single-resource envelopes.
   public getFirstUnreadPost(gameId: string) {
-    return Api.get<FirstUnreadPostResult>(`games/${gameId}/posts/first-unread`);
+    return Api.get<Envelope<FirstUnreadPostResult>>(
+      `games/${gameId}/posts/first-unread`,
+    );
   }
 
   public getFirstUnreadComment(gameId: string) {
-    return Api.get<FirstUnreadCommentResult>(
+    return Api.get<Envelope<FirstUnreadCommentResult>>(
       `games/${gameId}/comments/first-unread`,
     );
   }

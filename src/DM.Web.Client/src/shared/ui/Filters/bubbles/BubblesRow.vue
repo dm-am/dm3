@@ -2,7 +2,7 @@
 /**
  * BubblesRow - Container for active filter bubbles with clear link.
  *
- * Wraps filter bubbles and provides "Сбросить все" link.
+ * Wraps filter bubbles and provides "Сбросить" link.
  */
 defineOptions({ name: "BubblesRow" });
 
@@ -24,13 +24,14 @@ const emit = defineEmits<{
 <template>
   <div class="bubbles-row">
     <slot />
-    <span
+    <button
       v-if="showClearAll"
+      type="button"
       class="clear-all-link"
       @click="emit('clear-all')"
     >
-      Сбросить все
-    </span>
+      Сбросить
+    </button>
   </div>
 </template>
 
@@ -38,4 +39,11 @@ const emit = defineEmits<{
 @import "src/assets/styles/Filters"
 
 +filter-bubbles
+
+// Keep the button visually identical to the former <span>
+.clear-all-link
+  background: none
+  border: none
+  font-family: inherit
+  line-height: inherit
 </style>

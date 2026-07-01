@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { vClickOutside } from "@/shared/directives";
+import { gameApi } from "@/entities/game";
 import { usePulseFilter } from "../model";
 import type { PulseSortBy } from "../model";
 import { useFilterSearch, useFilterDropdown } from "@/shared/lib/composables";
@@ -21,6 +22,17 @@ import {
 import type { BubbleValue } from "@/shared/ui/Filters";
 import dayjs from "dayjs";
 
+// `hideAuthorFilter` — для страниц с неявной author-областью (профильные
+// «Полученные оценки» / «Оценил чужих постов»): scope задается
+// контейнером через query-параметр, кнопка «Авторы» в фильтре скрыта,
+// чтобы не сбивать пользователя.
+const props = withDefaults(
+  defineProps<{
+    hideAuthorFilter?: boolean;
+  }>(),
+  { hideAuthorFilter: false },
+);
+
 const {
   filterState,
   setSearch,
@@ -29,6 +41,7 @@ const {
   addAuthor,
   removeAuthor,
   setCreatedRange,
+  setGameId,
   clearFilters,
 } = usePulseFilter();
 
@@ -42,19 +55,21 @@ const { localInput, handleInput, applySearch } = useFilterSearch(
 // SINGLE FILTER DROPDOWN (with navigation, like GamesFilter)
 // =============================================================================
 
-const {
-  showDropdown,
-  navPath,
-  closeDropdown,
-  toggleDropdown,
-} = useFilterDropdown();
+const { showDropdown, navPath, closeDropdown, toggleDropdown } =
+  useFilterDropdown();
 
-// Root level filter options
-const filterOptions = [
-  { key: "rating", label: "Рейтинг", hint: "Диапазон рейтинга поста" },
-  { key: "author", label: "Авторы", hint: "Фильтр по авторам постов" },
-  { key: "date", label: "Дата создания", hint: "Когда был написан пост" },
-];
+// Root level filter options. Опция «Авторы» прячется, когда хост
+// прибил author-scope гвоздями (профильные подстраницы).
+const filterOptions = computed(() => {
+  const items = [
+    { key: "rating", label: "Рейтинг", hint: "Диапазон рейтинга поста" },
+    { key: "author", label: "Авторы", hint: "Фильтр по авторам постов" },
+    { key: "date", label: "Дата создания", hint: "Когда был написан пост" },
+  ];
+  return props.hideAuthorFilter
+    ? items.filter((i) => i.key !== "author")
+    : items;
+});
 
 function selectRootItem(key: string) {
   navPath.value = { filter: key };
@@ -96,9 +111,24 @@ function handleDateClear() {
 
 // Sort options
 const sortOptions = [
-  { value: "lastreview", label: "Последние оцененные", hint: "По дате оценки", defaultDirection: "desc" as const },
-  { value: "rating", label: "По рейтингу", hint: "По сумме оценок", defaultDirection: "desc" as const },
-  { value: "reviewcount", label: "По количеству оценок", hint: "По числу отзывов", defaultDirection: "desc" as const },
+  {
+    value: "lastreview",
+    label: "Последние оцененные",
+    hint: "По дате оценки",
+    defaultDirection: "desc" as const,
+  },
+  {
+    value: "rating",
+    label: "По рейтингу",
+    hint: "По сумме оценок",
+    defaultDirection: "desc" as const,
+  },
+  {
+    value: "reviewcount",
+    label: "По количеству оценок",
+    hint: "По числу отзывов",
+    defaultDirection: "desc" as const,
+  },
 ];
 
 // Track pending sortBy to avoid race condition:
@@ -115,33 +145,43 @@ function handleSortByChange(value: string) {
 function handleSortOrderChange(order: "asc" | "desc") {
   const sortBy = pendingSortBy ?? filterState.value.sortBy;
   pendingSortBy = null;
-  if (order !== filterState.value.sortOrder || sortBy !== filterState.value.sortBy) {
+  if (
+    order !== filterState.value.sortOrder ||
+    sortBy !== filterState.value.sortBy
+  ) {
     setSort(sortBy, order);
   }
 }
 
 // ── Bubbles ──
 
-const hasRatingFilter = computed(() =>
-  filterState.value.minRating !== null || filterState.value.maxRating !== null,
+const hasRatingFilter = computed(
+  () =>
+    filterState.value.minRating !== null ||
+    filterState.value.maxRating !== null,
 );
 
 const ratingBubbleLabel = computed(() => {
   const { minRating, maxRating } = filterState.value;
-  if (minRating !== null && maxRating !== null) return `от ${minRating} до ${maxRating}`;
+  if (minRating !== null && maxRating !== null)
+    return `от ${minRating} до ${maxRating}`;
   if (minRating !== null) return `от ${minRating}`;
   if (maxRating !== null) return `до ${maxRating}`;
   return "";
 });
 
-const hasAuthorFilter = computed(() => filterState.value.authorUsernames.size > 0);
+const hasAuthorFilter = computed(
+  () => filterState.value.authorUsernames.size > 0,
+);
 
 const authorsBubbleValues = computed<BubbleValue[]>(() =>
   [...filterState.value.authorUsernames].map((u) => ({ id: u, label: u })),
 );
 
-const hasDateFilter = computed(() =>
-  filterState.value.createdFrom !== null || filterState.value.createdTo !== null,
+const hasDateFilter = computed(
+  () =>
+    filterState.value.createdFrom !== null ||
+    filterState.value.createdTo !== null,
 );
 
 const dateBubbleLabel = computed(() => {
@@ -154,8 +194,34 @@ const dateBubbleLabel = computed(() => {
   return "";
 });
 
-const hasBubbles = computed(() =>
-  hasRatingFilter.value || hasAuthorFilter.value || hasDateFilter.value,
+// Game filter has no dropdown UI — it arrives via the ?game= URL param
+// (deep link). The bubble makes it visible and removable.
+const hasGameFilter = computed(() => filterState.value.gameId !== null);
+
+const gameTitle = ref<string | null>(null);
+
+watch(
+  () => filterState.value.gameId,
+  async (gameId) => {
+    gameTitle.value = null;
+    if (!gameId) return;
+    const { data } = await gameApi.getGame(gameId);
+    // Ignore stale response if the filter changed meanwhile;
+    // on fetch failure the bubble falls back to the generic label.
+    // The details endpoint wraps the game in a single-resource envelope.
+    if (filterState.value.gameId === gameId && data) {
+      gameTitle.value = data.resource?.title ?? null;
+    }
+  },
+  { immediate: true },
+);
+
+const hasBubbles = computed(
+  () =>
+    hasRatingFilter.value ||
+    (!props.hideAuthorFilter && hasAuthorFilter.value) ||
+    hasDateFilter.value ||
+    hasGameFilter.value,
 );
 
 function clearAll() {
@@ -226,25 +292,25 @@ function handleSearchKeydown(event: KeyboardEvent) {
             />
           </template>
 
+          <!-- Level 2: authors guard — даже если URL пришел с author=X
+               вручную, в hideAuthor-режиме открыть подуровень нельзя
+               (опция в filterOptions выше отсутствует). -->
+          <UserMultiSelect
+            v-if="!hideAuthorFilter && navPath?.filter === 'author'"
+            :selected-users="filterState.authorUsernames"
+            placeholder="Поиск автора"
+            @add="addAuthor"
+            @remove="removeAuthor"
+          />
+
           <!-- Level 2: Rating range -->
           <NumericRangePicker
             v-if="navPath?.filter === 'rating'"
             :min-value="filterState.minRating"
             :max-value="filterState.maxRating"
             :allow-negative="true"
-            min-label="От:"
-            max-label="До:"
             @apply="handleRatingApply"
             @clear="handleRatingClear"
-          />
-
-          <!-- Level 2: Authors multi-select -->
-          <UserMultiSelect
-            v-if="navPath?.filter === 'author'"
-            :selected-users="filterState.authorUsernames"
-            placeholder="Поиск автора"
-            @add="addAuthor"
-            @remove="removeAuthor"
           />
 
           <!-- Level 2: Date range -->
@@ -278,13 +344,17 @@ function handleSearchKeydown(event: KeyboardEvent) {
       />
 
       <FilterBubble
-        v-if="hasAuthorFilter && filterState.authorUsernames.size === 1"
+        v-if="
+          !hideAuthorFilter &&
+          hasAuthorFilter &&
+          filterState.authorUsernames.size === 1
+        "
         prefix="Автор:"
         :value="[...filterState.authorUsernames][0]"
         @remove="removeAuthor([...filterState.authorUsernames][0])"
       />
       <ExpandableBubble
-        v-else-if="hasAuthorFilter"
+        v-else-if="!hideAuthorFilter && hasAuthorFilter"
         prefix="Авторы:"
         :values="authorsBubbleValues"
         :max-visible="1"
@@ -296,6 +366,13 @@ function handleSearchKeydown(event: KeyboardEvent) {
         prefix="Дата создания:"
         :value="dateBubbleLabel"
         @remove="setCreatedRange(null, null)"
+      />
+
+      <FilterBubble
+        v-if="hasGameFilter"
+        :prefix="gameTitle ? 'Игра:' : undefined"
+        :value="gameTitle ?? 'Игра'"
+        @remove="setGameId(null)"
       />
     </BubblesRow>
   </div>

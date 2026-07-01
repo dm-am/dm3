@@ -116,6 +116,13 @@ public interface IBlogService
     Task<Publication> GetPublication(Guid publicationId, CancellationToken ct = default);
 
     /// <summary>
+    /// Get a user's best (most-liked, published-only) publication across
+    /// every blog they author. Used by the profile "Blogs" tab. Returns
+    /// null when the user has no published publications.
+    /// </summary>
+    Task<Publication?> GetBestUserPublication(string username, CancellationToken ct = default);
+
+    /// <summary>
     /// Create a new publication
     /// </summary>
     Task<Publication> CreatePublication(CreatePublication createPublication, CancellationToken ct = default);

@@ -1,5 +1,10 @@
 <template>
-  <div v-if="localPaging.pages > 1" ref="pagingRef" class="paging">
+  <nav
+    v-if="localPaging.pages > 1"
+    ref="pagingRef"
+    class="paging"
+    aria-label="Пагинация"
+  >
     <!-- First page << -->
     <Tooltip v-if="showFirst" text="Первая страница">
       <router-link
@@ -26,6 +31,7 @@
       :key="page"
       :to="getPageLink(page)"
       :class="['page-number', { active: page === localPaging.current }]"
+      :aria-current="page === localPaging.current ? 'page' : undefined"
       @click="prematureUpdate(page)"
       >{{ page }}</router-link
     >
@@ -49,7 +55,7 @@
         >&gt;&gt;</router-link
       >
     </Tooltip>
-  </div>
+  </nav>
 </template>
 
 <script setup lang="ts">
@@ -57,6 +63,7 @@ import type { Paging } from "@/shared/api/models/common";
 import { computed, ref, watch, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { Tooltip } from "@/shared/ui/Tooltip";
+import { scrollContentToTop } from "@/shared/lib/scroll";
 
 const props = withDefaults(
   defineProps<{
@@ -94,7 +101,10 @@ onMounted(() => {
       if (entry?.isIntersecting) {
         const nextPage = localPaging.value.current + 1;
         // Only prefetch if there's a next page and we haven't prefetched it yet
-        if (nextPage <= localPaging.value.pages && prefetchedPage !== nextPage) {
+        if (
+          nextPage <= localPaging.value.pages &&
+          prefetchedPage !== nextPage
+        ) {
           prefetchedPage = nextPage;
           props.onPrefetch?.(nextPage);
         }
@@ -140,6 +150,9 @@ watch(
 // Optimistic update when clicking pagination link
 const prematureUpdate = (page: number) => {
   localPaging.value = { ...localPaging.value, current: page };
+  // Query-based paging doesn't change the route path, so the router's
+  // scroll handling won't fire — scroll the content container ourselves
+  scrollContentToTop();
 };
 
 // Calculate window bounds (always 10 pages or fewer)

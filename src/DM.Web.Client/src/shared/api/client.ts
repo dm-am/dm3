@@ -8,7 +8,11 @@ import type {
 } from "axios";
 import { HubConnection, HubConnectionBuilder } from "@microsoft/signalr";
 import type { ApiResult } from "./models/common";
-import { RENDER_AUDIENCE, X_DM_AUDIENCE, type RenderAudience } from "./audience";
+import {
+  RENDER_AUDIENCE,
+  X_DM_AUDIENCE,
+  type RenderAudience,
+} from "./audience";
 import { useToast } from "@/shared/lib/composables/useToast";
 
 type QueryParams = Record<
@@ -48,6 +52,16 @@ class Api {
     this.axios.interceptors.response.use(
       (response) => response,
       async (error) => {
+        // Handle 401 Unauthorized — session expired or invalid
+        if (error.response?.status === 401) {
+          localStorage.removeItem("user");
+          const { warning } = useToast();
+          warning("Сессия истекла. Пожалуйста, войдите снова.");
+          // Lazy import to avoid circular dependency
+          const router = (await import("@/app/providers/router")).default;
+          router.push({ name: "home" });
+        }
+
         // Handle 403 Forbidden
         if (error.response?.status === 403) {
           const { error: showError } = useToast();
@@ -123,12 +137,17 @@ class Api {
     url: string,
     formData: FormData,
     progressCallback?: (event: AxiosProgressEvent) => void,
+    idempotencyKey?: string,
   ): Promise<ApiResult<T>> {
+    const headers: Record<string, string> = {
+      "Content-Type": "multipart/form-data",
+    };
+    if (idempotencyKey) {
+      headers["Idempotency-Key"] = idempotencyKey;
+    }
     const result = this.send<T>(() =>
       this.axios.post(url, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+        headers,
         onUploadProgress: progressCallback
           ? (event: AxiosProgressEvent) =>
               progressCallback(

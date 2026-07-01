@@ -8,7 +8,7 @@
       <Button :disabled="valid === false" :loading="loading">{{
         action
       }}</Button>
-      <Button v-if="cancel" type="button" secondary @click="handleCancel">
+      <Button v-if="cancel" type="button" @click="handleCancel">
         {{ cancel }}
       </Button>
     </div>

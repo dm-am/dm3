@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ref, computed, onUnmounted } from "vue";
+import { ref, computed } from "vue";
 import type { LiveStats } from "@/shared/api/models/community";
 import { CommunityApi } from "@/shared/api";
 
@@ -19,7 +19,7 @@ export const useStatisticsStore = defineStore("statistics", () => {
   const stats = ref<LiveStats | null>(null);
   const loading = ref(false);
   const loaded = ref(false);
-  const error = ref<Error | null>(null);
+  const error = ref<string | null>(null);
 
   let pollIntervalId: ReturnType<typeof setInterval> | null = null;
 
@@ -49,21 +49,18 @@ export const useStatisticsStore = defineStore("statistics", () => {
     loading.value = true;
     error.value = null;
 
-    try {
-      const response = await CommunityApi.getLiveStats();
-      // API returns Envelope<LiveStats> with { resource: LiveStats }
+    const response = await CommunityApi.getLiveStats();
+    if (response.error) {
+      // Keep previously loaded stats (if any) — the next poll may recover.
+      error.value = "Не удалось загрузить статистику";
+    } else if (response.data) {
+      // API returns Envelope<LiveStats> with { resource: LiveStats };
+      // handle both wrapped and unwrapped response formats
       const data = response.data as { resource: LiveStats } | LiveStats;
-      if (data) {
-        // Handle both wrapped and unwrapped response formats
-        stats.value = "resource" in data ? data.resource : data;
-      }
-    } catch (e) {
-      error.value = e as Error;
-      console.error("[Statistics] Failed to fetch:", e);
-    } finally {
-      loading.value = false;
-      loaded.value = true;
+      stats.value = "resource" in data ? data.resource : data;
     }
+    loading.value = false;
+    loaded.value = true;
   }
 
   function startPolling(interval = DEFAULT_POLL_INTERVAL) {

@@ -1,7 +1,8 @@
 import { ref, onUnmounted } from "vue";
 import type { Game, GameRef, Room } from "./types";
 import { GameRole, RoomAccessPolicy, RoomAccessType } from "./types";
-import { formatCount } from "@/shared/lib/utils/pluralize";
+import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { useAuthStore } from "@/shared/stores/auth";
 
 // Cached timestamp for isNew() optimization
 // Refreshed every minute to avoid creating Date objects per-row
@@ -24,6 +25,20 @@ function stopTimestampRefresh() {
     clearInterval(intervalId);
     intervalId = null;
     instanceCount = 0;
+  }
+}
+
+/**
+ * Auth state for counter tooltip wording. Resolved lazily (only when a
+ * counter tooltip is built) so the composable keeps working in contexts
+ * without an active Pinia instance; guest wording is the safe default.
+ * Reading the store inside render/computed keeps the value reactive.
+ */
+function isViewerAuthenticated(): boolean {
+  try {
+    return useAuthStore().isAuthenticated;
+  } catch {
+    return false;
   }
 }
 
@@ -87,32 +102,11 @@ export function useGameDisplay() {
   }
 
   /**
-   * Format status date with time for tooltip (dd.MM.yyyy HH:mm)
+   * Format status date with time for tooltip (DD.MM.YYYY в HH:mm)
+   * Uses the shared sitewide date-time format.
    */
   function formatStatusDateFull(game: Game): string {
-    const date = getStatusDate(game);
-    if (!date) return "—";
-    const d = new Date(date);
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear();
-    const hours = String(d.getHours()).padStart(2, "0");
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    return `${day}.${month}.${year} ${hours}:${minutes}`;
-  }
-
-  /**
-   * Format a date string to dd.MM.yyyy HH:mm
-   */
-  function formatDateFull(dateStr: string | undefined): string {
-    if (!dateStr) return "—";
-    const d = new Date(dateStr);
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear();
-    const hours = String(d.getHours()).padStart(2, "0");
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    return `${day}.${month}.${year} ${hours}:${minutes}`;
+    return formatDateFull(getStatusDate(game));
   }
 
   /**
@@ -134,7 +128,9 @@ export function useGameDisplay() {
 
     // Recruitment date - for Active games with open recruitment
     if (game.status === "Active" && game.recruitment?.isOpen) {
-      lines.push(`Начало последнего набора: ${formatDateFull(game.recruitment.startedUtc)}`);
+      lines.push(
+        `Начало последнего набора: ${formatDateFull(game.recruitment.startedUtc)}`,
+      );
     }
 
     // Close date - only for Closed
@@ -338,17 +334,24 @@ export function useGameDisplay() {
   }
 
   /**
-   * Format unread posts tooltip: "Непрочитанных постов: 5"
+   * Format posts counter tooltip.
+   * For guests the backend puts TOTAL counts into unreadPostsCount
+   * (nothing can be marked as read), so the wording must not claim
+   * "непрочитанных". Authorized users keep the unread wording.
    */
   function formatUnreadPostsTooltip(count: number): string {
-    return `Непрочитанных постов: ${count}`;
+    return isViewerAuthenticated()
+      ? `Непрочитанных постов: ${count}`
+      : `Постов: ${count}`;
   }
 
   /**
-   * Format unread comments tooltip: "Непрочитанных комментариев: 3"
+   * Format comments counter tooltip (same guest/authorized split as posts).
    */
   function formatUnreadCommentsTooltip(count: number): string {
-    return `Непрочитанных комментариев: ${count}`;
+    return isViewerAuthenticated()
+      ? `Непрочитанных комментариев: ${count}`
+      : `Комментариев: ${count}`;
   }
 
   /**

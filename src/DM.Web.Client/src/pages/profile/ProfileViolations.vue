@@ -1,148 +1,141 @@
-﻿<script setup lang="ts">
-import { ref, onMounted, watch } from "vue";
-import type {
-  Username,
-  PublicWarning,
-  PublicBan,
-} from "@/shared/api/models/community";
-import { communityApi } from "@/shared/api";
+<script setup lang="ts">
+import { computed, ref, onMounted, watch } from "vue";
+import type { Username } from "@/shared/api/models/community";
+// The public warnings/bans endpoints return bare `UserWarningsInfo` /
+// `UserBanStatus` payloads (NOT a ListEnvelope). `moderationApi` already
+// declares those exact shapes, so we consume it here — `communityApi`'s
+// ListEnvelope-typed pair never matched the wire contract and always
+// produced empty results.
+import moderationApi, {
+  BanType,
+  type UserWarningsInfo,
+  type UserBanStatus,
+  type Ban,
+} from "@/shared/api/moderationApi";
+import { BlockTitle } from "@/shared/ui/Layout";
+import { StatLine } from "@/shared/ui/StatLine";
 import dayjs from "dayjs";
 
-const props = defineProps<{
-  username: Username;
-}>();
+const WARNING_LIMIT = 6;
 
-const warnings = ref<PublicWarning[]>([]);
-const bans = ref<PublicBan[]>([]);
+const props = withDefaults(
+  defineProps<{
+    username: Username;
+    /**
+     * Inline mode renders as a single "Нарушения: x/y" stat-line suitable
+     * for embedding inside the identity info-stack (DM2 layout). Default
+     * renders the full standalone "Нарушения" section with a BlockTitle and
+     * additional context (current/last ban).
+     */
+    inline?: boolean;
+  }>(),
+  { inline: false },
+);
+
+const warningsInfo = ref<UserWarningsInfo | null>(null);
+const banStatus = ref<UserBanStatus | null>(null);
 const loading = ref(true);
 
 async function fetchViolations() {
   loading.value = true;
   const [warningsResult, bansResult] = await Promise.all([
-    communityApi.getWarnings(props.username),
-    communityApi.getBans(props.username),
+    moderationApi.getWarnings(props.username),
+    moderationApi.getBans(props.username),
   ]);
-
-  warnings.value = warningsResult.data?.resources || [];
-  bans.value = bansResult.data?.resources || [];
+  warningsInfo.value = warningsResult.data ?? null;
+  banStatus.value = bansResult.data ?? null;
   loading.value = false;
 }
 
 onMounted(fetchViolations);
 watch(() => props.username, fetchViolations);
 
-const activeBans = ref<PublicBan[]>([]);
-const hasViolations = ref(false);
+const activeBan = computed(() => banStatus.value?.activeBan ?? null);
+const history = computed(() => banStatus.value?.history ?? []);
 
-watch([warnings, bans], () => {
-  activeBans.value = bans.value.filter((b) => b.isActive);
-  hasViolations.value =
-    warnings.value.length > 0 || activeBans.value.length > 0;
+const lastBan = computed(() => {
+  if (!history.value.length) return null;
+  // Newest first by start date (falls back to index order when absent).
+  return [...history.value].sort((a, b) =>
+    dayjs(b.startedUtc ?? 0).diff(dayjs(a.startedUtc ?? 0)),
+  )[0];
+});
+
+const warningPoints = computed(() => warningsInfo.value?.totalPoints ?? 0);
+
+const hasAnything = computed(
+  () =>
+    !!activeBan.value || history.value.length > 0 || warningPoints.value > 0,
+);
+
+function formatActiveBan(ban: Ban): string {
+  if (ban.type === BanType.Permanent) return "полный бессрочный";
+  if (ban.expiresUtc) return `до ${dayjs(ban.expiresUtc).format("DD.MM.YYYY")}`;
+  return "активный";
+}
+
+function formatLastBan(ban: Ban, index: number): string {
+  const ordinal = `${index + 1}-й`;
+  const start = ban.startedUtc
+    ? dayjs(ban.startedUtc).format("DD.MM.YYYY")
+    : "";
+  return `${ordinal}${start ? ` с ${start}` : ""}`;
+}
+
+const lastBanIndex = computed(() => {
+  if (!lastBan.value) return -1;
+  return history.value.indexOf(lastBan.value);
 });
 </script>
 
 <template>
-  <section v-if="hasViolations && !loading" class="profile-violations">
-    <h3 class="section-title">Нарушения</h3>
+  <div v-if="inline && !loading" class="violations-inline">
+    <StatLine
+      label="Нарушения"
+      :value="`${warningPoints}/${WARNING_LIMIT}`"
+      :variant="activeBan || warningPoints > 0 ? 'negative' : 'default'"
+    />
+    <StatLine
+      v-if="activeBan"
+      label="Текущий бан"
+      :value="formatActiveBan(activeBan)"
+      variant="negative"
+    />
+    <StatLine
+      v-if="lastBan && !activeBan"
+      label="Последний бан"
+      :value="formatLastBan(lastBan, lastBanIndex)"
+    />
+  </div>
 
-    <div v-if="activeBans.length" class="violations-group">
-      <div v-for="ban in activeBans" :key="ban.id" class="violation ban">
-        <div class="violation-header">
-          <span class="violation-type">Бан</span>
-          <span class="violation-date">
-            {{
-              ban.isPermanent
-                ? "Постоянный"
-                : `до ${dayjs(ban.endUtc).format("DD.MM.YYYY")}`
-            }}
-          </span>
-        </div>
-        <div class="violation-reason">{{ ban.reason }}</div>
-        <div class="violation-moderator">
-          Модератор:
-          <router-link :to="{ name: 'profile', params: { username: ban.moderatorUsername } }">
-            {{ ban.moderatorUsername }}
-          </router-link>
-        </div>
-      </div>
-    </div>
+  <section
+    v-else-if="!inline && !loading && hasAnything"
+    class="profile-violations"
+  >
+    <BlockTitle>Нарушения</BlockTitle>
 
-    <div v-if="warnings.length" class="violations-group">
-      <div
-        v-for="warning in warnings"
-        :key="warning.id"
-        class="violation warning"
-      >
-        <div class="violation-header">
-          <span class="violation-type"
-            >Предупреждение ({{ warning.points }} балл.)</span
-          >
-          <span v-if="warning.expiresUtc" class="violation-date">
-            до {{ dayjs(warning.expiresUtc).format("DD.MM.YYYY") }}
-          </span>
-        </div>
-        <div class="violation-reason">{{ warning.text }}</div>
-        <div class="violation-moderator">
-          Модератор:
-          <router-link :to="{ name: 'profile', params: { username: warning.moderatorUsername } }">
-            {{ warning.moderatorUsername }}
-          </router-link>
-        </div>
-      </div>
-    </div>
+    <StatLine
+      v-if="activeBan"
+      label="Текущий бан"
+      :value="formatActiveBan(activeBan)"
+      variant="negative"
+    />
+    <StatLine
+      v-if="lastBan && !activeBan"
+      label="Последний бан"
+      :value="formatLastBan(lastBan, lastBanIndex)"
+    />
+    <StatLine
+      label="Баллы предупреждений"
+      :value="`${warningPoints}/${WARNING_LIMIT}`"
+      :variant="warningPoints > 0 ? 'negative' : 'muted'"
+    />
   </section>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 
 .profile-violations
-  background: rgba($accent-red, 0.1)
-  border: 1px solid rgba($accent-red, 0.3)
-  border-radius: $border-radius
-  padding: $medium
-  margin-bottom: $medium
-
-.section-title
-  color: $accent-red
-  margin: 0 0 $small
-  font-size: 1rem
-
-.violations-group
-  display: flex
-  flex-direction: column
-  gap: $small
-
-.violation
-  background: $bg-element
-  border-radius: $border-radius
-  padding: $small
-
-.ban
-  border-left: 3px solid $accent-red
-
-.warning
-  border-left: 3px solid $heading
-
-.violation-header
-  display: flex
-  justify-content: space-between
-  margin-bottom: $tiny
-
-.violation-type
-  font-weight: bold
-  color: $text
-
-.violation-date
-  font-size: $secondary-font-size
-  color: $text-muted
-
-.violation-reason
-  color: $text
-  margin-bottom: $tiny
-
-.violation-moderator
-  font-size: $secondary-font-size
-  color: $text-meta
+  // Flat — block title + StatLines. No red box wrappers.
 </style>

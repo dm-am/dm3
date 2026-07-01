@@ -1,7 +1,12 @@
 // Game entity types
 // Migrated from api/models/game/
 
-import type { PagingQuery, User, UserRef } from "@/shared/api/models/common";
+import type {
+  PagingQuery,
+  User,
+  UserPicture,
+  UserRef,
+} from "@/shared/api/models/common";
 import type { Id, Served } from "@/shared/api/models";
 
 // === Game Status & Roles ===
@@ -277,7 +282,11 @@ export type Character = {
   race: string;
   class: string;
   alignment: Alignment;
-  pictureUrl: Served<string>;
+  /**
+   * Character avatar (3 варианта). Симметрично с User.picture.
+   * Null URLs если у персонажа нет загруженного аватара.
+   */
+  picture: Served<UserPicture>;
   /** Character is NPC (controlled by game master) */
   isNpc: Served<boolean>;
   appearance: string;

@@ -87,6 +87,14 @@ public interface IBlogApiService
     Task<Envelope<Publication>> GetPublication(Guid publicationId);
 
     /// <summary>
+    /// Get the user's most-liked (published) publication across all blogs.
+    /// Returns null inside the envelope when the user has no published
+    /// publications — the API layer turns that into a 404 so callers can
+    /// branch on response status without parsing the body.
+    /// </summary>
+    Task<Envelope<Publication?>> GetUserBestPublication(string username);
+
+    /// <summary>
     /// Create a new publication
     /// </summary>
     Task<Envelope<Publication>> CreatePublication(Guid blogId, CreatePublicationRequest request);

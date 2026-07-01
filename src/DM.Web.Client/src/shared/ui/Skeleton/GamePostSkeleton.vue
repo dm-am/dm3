@@ -17,8 +17,10 @@ withDefaults(
   defineProps<{
     /** Number of skeleton post cards to render */
     count?: number;
+    /** Show navigation breadcrumb (Game > Room) above card */
+    showNavigation?: boolean;
   }>(),
-  { count: 1 },
+  { count: 1, showNavigation: true },
 );
 </script>
 
@@ -26,7 +28,7 @@ withDefaults(
   <div class="game-post-skeleton" aria-hidden="true">
     <div v-for="i in count" :key="i" class="skeleton-post">
       <!-- Navigation breadcrumb (Game > Room) — outside card, matching .post-nav -->
-      <div class="skeleton-nav">
+      <div v-if="showNavigation" class="skeleton-nav">
         <div class="skeleton-game" />
         <span class="nav-sep"> > </span>
         <div class="skeleton-room" />

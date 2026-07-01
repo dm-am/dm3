@@ -119,10 +119,16 @@ export function createFilterDispatcher<State, Action>(
       // This prevents component recreation during query-only changes
       isNavigating = true;
       try {
-        await routerInstance.replace({ name: currentRoute.name as string, query });
+        await routerInstance.replace({
+          name: currentRoute.name as string,
+          query,
+        });
       } catch (err: unknown) {
         const error = err as { name?: string };
-        if (error?.name !== "NavigationDuplicated" && error?.name !== "NavigationCancelled") {
+        if (
+          error?.name !== "NavigationDuplicated" &&
+          error?.name !== "NavigationCancelled"
+        ) {
           console.error(`[${config.name}] Navigation error:`, err);
         }
       } finally {

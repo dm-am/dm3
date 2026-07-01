@@ -12,6 +12,7 @@ using DM.Domain.Core.Identity;
 using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
+using DM.Infrastructure.Persistence.Shared.Users;
 using Microsoft.EntityFrameworkCore;
 using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
 using DbBlogAssistant = DM.Infrastructure.Persistence.Entities.Blog.BlogAssistant;
@@ -343,6 +344,32 @@ internal class BlogRepository : IBlogRepository
     }
 
     /// <inheritdoc />
+    public async Task<Publication?> GetBestUserPublication(Guid authorId, CancellationToken ct = default)
+    {
+        // Single-query "best" lookup: sort by the same likes subquery
+        // pattern used by topics/comments, take the top row, project to
+        // the API DTO. Soft-deleted + unpublished entries are filtered
+        // out so the profile widget can never surface drafts.
+        return await _dbContext.Publications
+            .TagWith("DM.Blog.GetBestUserPublication")
+            .Include(p => p.Blog)
+            .ThenInclude(b => b.Author)
+            .Include(p => p.Author)
+            .Include(p => p.Rubric)
+            .Where(p => !p.IsRemoved && p.IsPublished && p.AuthorId == authorId)
+            .OrderByDescending(p => _dbContext.Likes.Count(l =>
+                !l.IsRemoved &&
+                l.EntityId == p.PublicationId &&
+                l.EntityType == Domain.Core.Enums.LikeEntityType.Publication))
+            // Tie-breaker: newer-first so two zero-like publications still
+            // produce a deterministic result rather than relying on the
+            // server's insertion order.
+            .ThenByDescending(p => p.PublishedUtc ?? p.CreatedUtc)
+            .ProjectTo<Publication>(_mapper.ConfigurationProvider)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    /// <inheritdoc />
     public async Task<IEnumerable<Rubric>> GetRubrics(Guid blogId, CancellationToken ct = default)
     {
         return await _dbContext.Rubrics
@@ -416,8 +443,7 @@ internal class BlogRepository : IBlogRepository
                 Role = u.Role,
                 Status = u.Status,
                 LastActivityUtc = u.LastActivityUtc,
-                SmallPictureUrl = u.AvatarUpload != null ? (u.AvatarUpload.SmallFilePath ?? u.AvatarUpload.FilePath) : null,
-                MediumPictureUrl = u.AvatarUpload != null ? (u.AvatarUpload.MediumFilePath ?? u.AvatarUpload.FilePath) : null
+                Picture = AvatarProjections.From(u.AvatarUpload),
             })
             .ToListAsync(ct);
     }
@@ -436,8 +462,7 @@ internal class BlogRepository : IBlogRepository
                 Role = a.User.Role,
                 Status = a.User.Status,
                 LastActivityUtc = a.User.LastActivityUtc,
-                SmallPictureUrl = a.User.AvatarUpload != null ? (a.User.AvatarUpload.SmallFilePath ?? a.User.AvatarUpload.FilePath) : null,
-                MediumPictureUrl = a.User.AvatarUpload != null ? (a.User.AvatarUpload.MediumFilePath ?? a.User.AvatarUpload.FilePath) : null
+                Picture = AvatarProjections.From(a.User.AvatarUpload),
             })
             .ToListAsync(ct);
     }
@@ -457,8 +482,7 @@ internal class BlogRepository : IBlogRepository
                     Role = a.User.Role,
                     Status = a.User.Status,
                     LastActivityUtc = a.User.LastActivityUtc,
-                    SmallPictureUrl = a.User.AvatarUpload != null ? (a.User.AvatarUpload.SmallFilePath ?? a.User.AvatarUpload.FilePath) : null,
-                    MediumPictureUrl = a.User.AvatarUpload != null ? (a.User.AvatarUpload.MediumFilePath ?? a.User.AvatarUpload.FilePath) : null
+                    Picture = AvatarProjections.From(a.User.AvatarUpload),
                 },
                 Role = BlogRole.Assistant,
                 JoinedUtc = a.JoinedUtc

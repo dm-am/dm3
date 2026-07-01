@@ -43,29 +43,13 @@ function handleClick(event: MouseEvent) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Filters"
+@import "src/assets/styles/Inputs"
 
-// Only button styles, wrapper handled by parent
+// Icon-specific additions only — base visual comes from the unified +button mixin.
 .filter-btn
-  display: inline-flex
-  align-items: center
   justify-content: flex-start
   gap: $small
-  height: $filter-control-height
-  box-sizing: border-box
-  padding: 0 $medium
-  font-size: $secondary-font-size
-  font-family: inherit
-  white-space: nowrap
-  cursor: pointer
-  border: 1px solid $border
-  border-radius: $border-radius
-  background-color: $bg-element
-  color: $text
-
-  &:hover,
-  &.active
-    background-color: $bg-element-accent
+  +button
 
 .filter-icon
   width: 20px

@@ -2,7 +2,10 @@
   <SidebarBlock token="GameTags">
     <template #title>Теги игр</template>
     <SidebarSkeleton v-if="gamesStore.tagsLoading && !tags.length" :lines="4" />
-    <SecondaryText v-else-if="!tags.length">Нет тегов</SecondaryText>
+    <SecondaryText v-else-if="gamesStore.tagsError && !tags.length">
+      Не удалось загрузить
+    </SecondaryText>
+    <SecondaryText v-else-if="!tags.length">Тегов пока нет</SecondaryText>
     <div v-else class="tag-cloud">
       <Tooltip v-for="tag in sortedTags" :key="tag.id">
         <template #content>

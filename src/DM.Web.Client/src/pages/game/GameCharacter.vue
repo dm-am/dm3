@@ -2,11 +2,10 @@
 import { computed, ref } from "vue";
 import type { Character } from "@/entities/game";
 import { CharacterStatus, Alignment } from "@/entities/game";
-import { UserLink } from "@/entities/user";
+import { UserLink, AvatarImg } from "@/entities/user";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ContentText } from "@/shared/ui";
 import { SvgIcon } from "@/shared/ui/Icon";
-import { defaultAvatarUrl as defaultPicture } from "@/shared/lib/utils/icons";
 
 const props = defineProps<{
   character: Character;
@@ -34,7 +33,6 @@ const alignmentLabels: Record<Alignment, string> = {
   [Alignment.ChaoticEvil]: "Хаотичный злой",
 };
 
-const pictureUrl = computed(() => props.character.pictureUrl || defaultPicture);
 const hasDetails = computed(
   () =>
     props.character.appearance ||
@@ -53,7 +51,14 @@ function toggleExpand() {
   <article class="character-card" :class="{ expanded: isExpanded }">
     <!-- Character header -->
     <header class="character-header" @click="toggleExpand">
-      <img :src="pictureUrl" :alt="character.name" class="character-picture" />
+      <!-- Character: no avatar = no image (отличается от User-default силуэта). -->
+      <AvatarImg
+        :picture="character.picture"
+        :alt="character.name"
+        :size="60"
+        img-class="character-picture"
+        no-default
+      />
       <div class="character-info">
         <h4 class="character-name">{{ character.name }}</h4>
         <secondary-text class="character-meta">

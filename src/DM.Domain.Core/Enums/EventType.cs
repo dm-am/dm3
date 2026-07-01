@@ -88,6 +88,15 @@ public enum EventType
     [EventRoutingKey("community.user.newbie.graduated")]
     NoLongerNewbie = 23,
 
+    /// <summary>
+    /// User avatar has been changed (upload or reset).
+    /// Transient UI hint — payload includes user ID and new
+    /// picture URLs так чтобы вкладки могли live-обновить
+    /// аватары в чатах/комментариях без перезагрузки.
+    /// </summary>
+    [EventRoutingKey("community.user.avatar.changed")]
+    UserAvatarChanged = 24,
+
     // ========================================
     // Poll events (31-39)
     // ========================================
@@ -272,17 +281,25 @@ public enum EventType
     [EventRoutingKey("community.mention.created")]
     UserMentioned = 75,
 
-    /// <summary>
-    /// New blog publication from an author user is subscribed to
-    /// </summary>
-    [EventRoutingKey("subscription.author.publication.created")]
-    NewPublicationFromSubscribedAuthor = 76,
+    // Slot 76 was NewPublicationFromSubscribedAuthor — removed; per-publication
+    // notifications are no longer part of the user-subscription contract.
+    // Subscribers now receive a single NewBlogFromSubscribedAuthor signal
+    // when the blog itself becomes visible (public draft creation OR
+    // activation), not on every internal publication.
 
     /// <summary>
     /// New forum topic from an author user is subscribed to
     /// </summary>
     [EventRoutingKey("subscription.author.topic.created")]
     NewTopicFromSubscribedAuthor = 77,
+
+    /// <summary>
+    /// New blog from an author user is subscribed to —
+    /// fired when the blog is created with public-draft visibility or
+    /// when it transitions to Active status.
+    /// </summary>
+    [EventRoutingKey("subscription.author.blog.created")]
+    NewBlogFromSubscribedAuthor = 78,
 
     // ========================================
     // Moderation events (81-89)
@@ -323,6 +340,12 @@ public enum EventType
     /// </summary>
     [EventRoutingKey("moderation.ban.lifted")]
     BanLifted = 86,
+
+    /// <summary>
+    /// User has been granted an award by moderator/admin
+    /// </summary>
+    [EventRoutingKey("community.award.granted")]
+    AwardGranted = 87,
 
     // ========================================
     // Security audit events (91-99)
@@ -421,6 +444,25 @@ public enum EventType
     /// </summary>
     [EventRoutingKey("forum.topic.comment.liked")]
     LikedTopicComment = 114,
+
+    // ========================================
+    // Blog lifecycle events (201-249)
+    // ========================================
+    // Mirrors the Game lifecycle (301-329) one-to-one. Blog publications
+    // and comments stay in the 41-59 block — these slots are reserved for
+    // the blog ENTITY itself.
+
+    /// <summary>
+    /// New blog has been created.
+    /// </summary>
+    [EventRoutingKey("blog.created")]
+    NewBlog = 201,
+
+    /// <summary>
+    /// Blog has transitioned to Active status.
+    /// </summary>
+    [EventRoutingKey("blog.status.active")]
+    StatusBlogActive = 224,
 
     // ========================================
     // Game events (301-499)

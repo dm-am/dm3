@@ -13,9 +13,12 @@ import {
   initBbcodeInteractive,
   trimHtmlWhitespace,
 } from "@/shared/lib/utils/bbcodeInteractive";
-import { formatChatTime, getLikesTooltip as getLikesTooltipUtil } from "@/shared/lib/utils/chat";
+import {
+  formatChatTime,
+  getLikesTooltip as getLikesTooltipUtil,
+} from "@/shared/lib/utils/chat";
 import type { MessageWithContinuation } from "@/shared/lib/utils/chat";
-import { defaultAvatarUrl as defaultAvatar } from "@/shared/lib/utils/icons";
+import { AvatarImg } from "@/entities/user";
 import { SvgIcon } from "@/shared/ui/Icon";
 import dayjs from "dayjs";
 
@@ -64,10 +67,12 @@ const emit = defineEmits<{
 // Local state
 const localEditText = ref(props.editText);
 
-watch(() => props.editText, (v) => { localEditText.value = v; });
-
-// Computed
-const avatarUrl = computed(() => props.message.author?.smallPictureUrl || defaultAvatar);
+watch(
+  () => props.editText,
+  (v) => {
+    localEditText.value = v;
+  },
+);
 
 // Pre-trimmed BBCode HTML. Pure computed, no DOM mutation.
 // TruncatedContent handles overflow, collapsed media shrinkage, link.
@@ -91,13 +96,25 @@ const deletedDateTooltip = computed(() => {
   let result = fullDateTooltip.value;
   const msg = props.message;
   const deleterName = msg.deletedBy?.username || "неизвестно";
-  const deletedUtcStr = msg.deletedUtc ? dayjs(msg.deletedUtc).format("DD.MM.YYYY [в] HH:mm") : "";
-  result += deletedUtcStr ? `\nУдалено: ${deletedUtcStr} (${deleterName})` : `\nУдалено (${deleterName})`;
+  const deletedUtcStr = msg.deletedUtc
+    ? dayjs(msg.deletedUtc).format("DD.MM.YYYY [в] HH:mm")
+    : "";
+  result += deletedUtcStr
+    ? `\nУдалено: ${deletedUtcStr} (${deleterName})`
+    : `\nУдалено (${deleterName})`;
   return result;
 });
 
-const likesTooltip = computed(() => getLikesTooltipUtil(props.message.likes ?? []));
+const likesTooltip = computed(() =>
+  getLikesTooltipUtil(props.message.likes ?? []),
+);
 const likesCount = computed(() => props.message.likes?.length ?? 0);
+
+const reactionAriaLabel = computed(() =>
+  props.isLikedByMe
+    ? `Убрать лайк, нравится ${likesCount.value}`
+    : `Нравится ${likesCount.value}`,
+);
 
 function handleEditSubmit() {
   emit("save-edit", localEditText.value);
@@ -116,174 +133,344 @@ function initMessageBbcode(el: HTMLElement) {
 
 <template>
   <div class="chat-message" :class="{ compact, hovered }">
-  <!-- Deleted message (collapsed) -->
-  <template v-if="message.isRemoved && !isDeletedExpanded">
-    <div v-if="compact" class="msg-layout msg-layout-compact">
-      <div class="msg-body">
-        <div class="msg-header msg-header-compact">
-          <Tooltip :text="deletedDateTooltip">
-            <span class="msg-time-group">
-              <span class="msg-icon-placeholder" /><span class="msg-time">{{ formattedTime }}</span>
+    <!-- Deleted message (collapsed) -->
+    <template v-if="message.isRemoved && !isDeletedExpanded">
+      <div v-if="compact" class="msg-layout msg-layout-compact">
+        <div class="msg-body">
+          <div class="msg-header msg-header-compact">
+            <Tooltip :text="deletedDateTooltip">
+              <span class="msg-time-group">
+                <span class="msg-icon-placeholder" /><span class="msg-time">{{
+                  formattedTime
+                }}</span>
+              </span>
+            </Tooltip>
+            <span
+              class="msg-deleted-inline"
+              :class="{ clickable: isModerator }"
+              @click="isModerator && $emit('toggle-deleted')"
+              >Сообщение удалено</span
+            >
+          </div>
+        </div>
+      </div>
+      <div v-else class="msg-layout">
+        <div class="msg-avatar-placeholder">
+          <SvgIcon name="deletedAvatar" class="deleted-avatar" />
+        </div>
+        <div
+          class="msg-deleted"
+          :class="{ clickable: isModerator }"
+          @click="$emit('toggle-deleted')"
+        >
+          <span class="msg-deleted-label">Сообщение удалено</span>
+        </div>
+      </div>
+    </template>
+
+    <!-- Deleted message (expanded — show content) -->
+    <template v-else-if="message.isRemoved && isDeletedExpanded">
+      <div class="msg-layout" :class="{ 'msg-layout-compact': compact }">
+        <router-link
+          v-if="!compact"
+          :to="{
+            name: 'profile',
+            params: { username: message.author.username },
+          }"
+          class="msg-avatar-link"
+        >
+          <AvatarImg
+            :picture="message.author.picture"
+            :alt="message.author.username"
+            :size="72"
+            img-class="msg-avatar"
+          />
+        </router-link>
+        <div class="msg-body">
+          <div class="msg-header" :class="{ 'msg-header-compact': compact }">
+            <template v-if="compact">
+              <Tooltip :text="deletedDateTooltip">
+                <span class="msg-time-group">
+                  <span class="msg-time">{{ formattedTime }}</span>
+                  <SvgIcon name="trash" class="msg-deleted-icon" />
+                </span>
+              </Tooltip>
+              <router-link
+                :to="{
+                  name: 'profile',
+                  params: { username: message.author.username },
+                }"
+                class="msg-author"
+                >{{ message.author.username }}</router-link
+              >
+              <a
+                class="msg-hide-link"
+                href="#"
+                @click.prevent="$emit('toggle-deleted')"
+                >(скрыть)</a
+              >
+            </template>
+            <template v-else>
+              <router-link
+                :to="{
+                  name: 'profile',
+                  params: { username: message.author.username },
+                }"
+                class="msg-author"
+                >{{ message.author.username }}</router-link
+              >
+              <Tooltip :text="deletedDateTooltip">
+                <span class="msg-time-group">
+                  <span class="msg-time">{{ formattedTime }}</span>
+                  <SvgIcon name="trash" class="msg-deleted-icon" />
+                </span>
+              </Tooltip>
+              <a
+                class="msg-hide-link"
+                href="#"
+                @click.prevent="$emit('toggle-deleted')"
+                >(скрыть)</a
+              >
+            </template>
+          </div>
+          <div class="msg-content">
+            <div class="msg-text bbcode-content" v-html="message.text" />
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Normal message -->
+    <template v-else>
+      <!-- Continuation (same author, no avatar/name) -->
+      <div
+        v-if="message.isContinuation && !compact"
+        class="msg-layout msg-continuation"
+      >
+        <div class="msg-time-gutter">
+          <Tooltip :text="fullDateTooltip">
+            <span class="msg-time-group msg-time-hover">
+              <span class="msg-time">{{ formattedTime }}</span>
+              <SvgIcon v-if="hasEdits" name="pencil" class="msg-edited-icon" />
+              <span v-else class="msg-icon-placeholder" />
             </span>
           </Tooltip>
-          <span class="msg-deleted-inline" :class="{ clickable: isModerator }" @click="isModerator && $emit('toggle-deleted')">Сообщение удалено</span>
         </div>
-      </div>
-    </div>
-    <div v-else class="msg-layout">
-      <div class="msg-avatar-placeholder">
-        <SvgIcon name="deletedAvatar" class="deleted-avatar" />
-      </div>
-      <div class="msg-deleted" :class="{ clickable: isModerator }" @click="$emit('toggle-deleted')">
-        <span class="msg-deleted-label">Сообщение удалено</span>
-      </div>
-    </div>
-  </template>
-
-  <!-- Deleted message (expanded — show content) -->
-  <template v-else-if="message.isRemoved && isDeletedExpanded">
-    <div class="msg-layout" :class="{ 'msg-layout-compact': compact }">
-      <router-link v-if="!compact" :to="{ name: 'profile', params: { username: message.author.username } }" class="msg-avatar-link">
-        <img :src="avatarUrl" :alt="message.author.username" class="msg-avatar" />
-      </router-link>
-      <div class="msg-body">
-        <div class="msg-header" :class="{ 'msg-header-compact': compact }">
-          <template v-if="compact">
-            <Tooltip :text="deletedDateTooltip">
-              <span class="msg-time-group">
-                <span class="msg-time">{{ formattedTime }}</span>
-                <SvgIcon name="trash" class="msg-deleted-icon" />
-              </span>
-            </Tooltip>
-            <router-link :to="{ name: 'profile', params: { username: message.author.username } }" class="msg-author">{{ message.author.username }}</router-link>
-            <a class="msg-hide-link" href="#" @click.prevent="$emit('toggle-deleted')">(скрыть)</a>
+        <div class="msg-body">
+          <template v-if="!isEditing">
+            <TruncatedContent
+              class="msg-content"
+              :truncatable="true"
+              :max-height="maxHeight"
+              :watch-key="messageHtml"
+              :on-content-mounted="initMessageBbcode"
+            >
+              <div class="msg-text bbcode-content" v-html="messageHtml" />
+            </TruncatedContent>
+            <div v-if="!compact && likesCount > 0" class="msg-reactions">
+              <Tooltip :text="likesTooltip">
+                <button
+                  v-if="canLike"
+                  class="reaction-badge"
+                  :class="{ 'my-reaction': isLikedByMe }"
+                  :aria-label="reactionAriaLabel"
+                  @click="$emit('like')"
+                >
+                  <SvgIcon name="heartEmpty" class="reaction-heart" />
+                  <span class="reaction-count">{{ likesCount }}</span>
+                </button>
+                <span
+                  v-else
+                  class="reaction-badge reaction-badge-static"
+                  :class="{ 'my-reaction': isLikedByMe }"
+                  :aria-label="reactionAriaLabel"
+                >
+                  <SvgIcon name="heartEmpty" class="reaction-heart" />
+                  <span class="reaction-count">{{ likesCount }}</span>
+                </span>
+              </Tooltip>
+            </div>
           </template>
-          <template v-else>
-            <router-link :to="{ name: 'profile', params: { username: message.author.username } }" class="msg-author">{{ message.author.username }}</router-link>
-            <Tooltip :text="deletedDateTooltip">
-              <span class="msg-time-group">
-                <span class="msg-time">{{ formattedTime }}</span>
-                <SvgIcon name="trash" class="msg-deleted-icon" />
-              </span>
-            </Tooltip>
-            <a class="msg-hide-link" href="#" @click.prevent="$emit('toggle-deleted')">(скрыть)</a>
-          </template>
-        </div>
-        <div class="msg-content">
-          <div class="msg-text bbcode-content" v-html="message.text" />
-        </div>
-      </div>
-    </div>
-  </template>
-
-  <!-- Normal message -->
-  <template v-else>
-    <!-- Continuation (same author, no avatar/name) -->
-    <div v-if="message.isContinuation && !compact" class="msg-layout msg-continuation">
-      <div class="msg-time-gutter">
-        <Tooltip :text="fullDateTooltip">
-          <span class="msg-time-group msg-time-hover">
-            <span class="msg-time">{{ formattedTime }}</span>
-            <SvgIcon v-if="hasEdits" name="pencil" class="msg-edited-icon" />
-            <span v-else class="msg-icon-placeholder" />
-          </span>
-        </Tooltip>
-      </div>
-      <div class="msg-body">
-        <template v-if="!isEditing">
-          <TruncatedContent
-            class="msg-content"
-            :truncatable="true"
-            :max-height="maxHeight"
-            :watch-key="messageHtml"
-            :on-content-mounted="initMessageBbcode"
-          >
-            <div class="msg-text bbcode-content" v-html="messageHtml" />
-          </TruncatedContent>
-          <div v-if="!compact && likesCount > 0" class="msg-reactions">
-            <Tooltip :text="likesTooltip">
-              <button class="reaction-badge" :class="{ 'my-reaction': isLikedByMe }" @click="$emit('like')">
-                <SvgIcon name="heartEmpty" class="reaction-heart" />
-                <span class="reaction-count">{{ likesCount }}</span>
+          <div v-else class="msg-edit">
+            <BBCodeEditor
+              v-model="localEditText"
+              context="message"
+              placeholder="Редактирование сообщения..."
+              :min-height="60"
+              :max-height="200"
+              @submit="handleEditSubmit"
+              @keydown="handleEditKeydown"
+            />
+            <div class="msg-edit-actions">
+              <button
+                type="button"
+                class="msg-edit-btn"
+                @click="$emit('cancel-edit')"
+              >
+                Отмена
               </button>
-            </Tooltip>
-          </div>
-        </template>
-        <div v-else class="msg-edit">
-          <BBCodeEditor v-model="localEditText" context="message" placeholder="Редактирование сообщения..." :min-height="60" :max-height="200" @submit="handleEditSubmit" @keydown="handleEditKeydown" />
-          <div class="msg-edit-actions">
-            <button type="button" class="msg-edit-btn" @click="$emit('cancel-edit')">Отмена</button>
-            <button type="button" class="msg-edit-btn" @click="handleEditSubmit">Сохранить</button>
+              <button
+                type="button"
+                class="msg-edit-btn"
+                @click="handleEditSubmit"
+              >
+                Сохранить
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Full message (with avatar and header) -->
-    <div v-else class="msg-layout" :class="{ 'msg-layout-compact': compact }">
-      <router-link v-if="!compact" :to="{ name: 'profile', params: { username: message.author.username } }" class="msg-avatar-link">
-        <img :src="avatarUrl" :alt="message.author.username" class="msg-avatar" />
-      </router-link>
-      <div class="msg-body">
-        <div class="msg-header" :class="{ 'msg-header-compact': compact }">
-          <!-- Compact: time first, then name -->
-          <template v-if="compact">
-            <Tooltip :text="fullDateTooltip">
-              <span class="msg-time-group">
-                <SvgIcon v-if="hasEdits" name="pencil" class="msg-edited-icon" />
-                <span v-else class="msg-icon-placeholder" />
-                <span class="msg-time">{{ formattedTime }}</span>
-              </span>
-            </Tooltip>
-            <router-link :to="{ name: 'profile', params: { username: message.author.username } }" class="msg-author" :class="{ online: isOnline }">{{ message.author.username }}</router-link>
-            <Tooltip v-if="likesCount > 0" :text="likesTooltip">
-              <button class="msg-likes-inline" :class="{ 'my-like': isLikedByMe }" @click="$emit('like')">
-                <SvgIcon name="heartEmpty" />{{ likesCount }}
-              </button>
-            </Tooltip>
-          </template>
-          <!-- Normal: name first, then time -->
-          <template v-else>
-            <router-link :to="{ name: 'profile', params: { username: message.author.username } }" class="msg-author" :class="{ online: isOnline }">{{ message.author.username }}</router-link>
-            <Tooltip :text="fullDateTooltip">
-              <span class="msg-time-group">
-                <span class="msg-time">{{ formattedTime }}</span>
-                <SvgIcon v-if="hasEdits" name="pencil" class="msg-edited-icon" />
-                <span v-else class="msg-icon-placeholder" />
-              </span>
-            </Tooltip>
-          </template>
-        </div>
-
-        <template v-if="!isEditing">
-          <TruncatedContent
-            class="msg-content"
-            :truncatable="true"
-            :max-height="maxHeight"
-            :watch-key="messageHtml"
-            :on-content-mounted="initMessageBbcode"
-          >
-            <div class="msg-text bbcode-content" v-html="messageHtml" />
-          </TruncatedContent>
-          <div v-if="!compact && likesCount > 0" class="msg-reactions">
-            <Tooltip :text="likesTooltip">
-              <button class="reaction-badge" :class="{ 'my-reaction': isLikedByMe }" @click="$emit('like')">
-                <SvgIcon name="heartEmpty" class="reaction-heart" />
-                <span class="reaction-count">{{ likesCount }}</span>
-              </button>
-            </Tooltip>
+      <!-- Full message (with avatar and header) -->
+      <div v-else class="msg-layout" :class="{ 'msg-layout-compact': compact }">
+        <router-link
+          v-if="!compact"
+          :to="{
+            name: 'profile',
+            params: { username: message.author.username },
+          }"
+          class="msg-avatar-link"
+        >
+          <AvatarImg
+            :picture="message.author.picture"
+            :alt="message.author.username"
+            :size="72"
+            img-class="msg-avatar"
+          />
+        </router-link>
+        <div class="msg-body">
+          <div class="msg-header" :class="{ 'msg-header-compact': compact }">
+            <!-- Compact: time first, then name -->
+            <template v-if="compact">
+              <Tooltip :text="fullDateTooltip">
+                <span class="msg-time-group">
+                  <SvgIcon
+                    v-if="hasEdits"
+                    name="pencil"
+                    class="msg-edited-icon"
+                  />
+                  <span v-else class="msg-icon-placeholder" />
+                  <span class="msg-time">{{ formattedTime }}</span>
+                </span>
+              </Tooltip>
+              <router-link
+                :to="{
+                  name: 'profile',
+                  params: { username: message.author.username },
+                }"
+                class="msg-author"
+                :class="{ online: isOnline }"
+                >{{ message.author.username }}</router-link
+              >
+              <Tooltip v-if="likesCount > 0" :text="likesTooltip">
+                <button
+                  v-if="canLike"
+                  class="msg-likes-inline"
+                  :class="{ 'my-like': isLikedByMe }"
+                  :aria-label="reactionAriaLabel"
+                  @click="$emit('like')"
+                >
+                  <SvgIcon name="heartEmpty" />{{ likesCount }}
+                </button>
+                <span
+                  v-else
+                  class="msg-likes-inline msg-likes-inline-static"
+                  :class="{ 'my-like': isLikedByMe }"
+                  :aria-label="reactionAriaLabel"
+                >
+                  <SvgIcon name="heartEmpty" />{{ likesCount }}
+                </span>
+              </Tooltip>
+            </template>
+            <!-- Normal: name first, then time -->
+            <template v-else>
+              <router-link
+                :to="{
+                  name: 'profile',
+                  params: { username: message.author.username },
+                }"
+                class="msg-author"
+                :class="{ online: isOnline }"
+                >{{ message.author.username }}</router-link
+              >
+              <Tooltip :text="fullDateTooltip">
+                <span class="msg-time-group">
+                  <span class="msg-time">{{ formattedTime }}</span>
+                  <SvgIcon
+                    v-if="hasEdits"
+                    name="pencil"
+                    class="msg-edited-icon"
+                  />
+                  <span v-else class="msg-icon-placeholder" />
+                </span>
+              </Tooltip>
+            </template>
           </div>
-        </template>
-        <div v-else class="msg-edit">
-          <BBCodeEditor v-model="localEditText" context="message" placeholder="Редактирование сообщения..." :min-height="60" :max-height="200" @submit="handleEditSubmit" @keydown="handleEditKeydown" />
-          <div class="msg-edit-actions">
-            <button type="button" class="msg-edit-btn" @click="$emit('cancel-edit')">Отмена</button>
-            <button type="button" class="msg-edit-btn" @click="handleEditSubmit">Сохранить</button>
+
+          <template v-if="!isEditing">
+            <TruncatedContent
+              class="msg-content"
+              :truncatable="true"
+              :max-height="maxHeight"
+              :watch-key="messageHtml"
+              :on-content-mounted="initMessageBbcode"
+            >
+              <div class="msg-text bbcode-content" v-html="messageHtml" />
+            </TruncatedContent>
+            <div v-if="!compact && likesCount > 0" class="msg-reactions">
+              <Tooltip :text="likesTooltip">
+                <button
+                  v-if="canLike"
+                  class="reaction-badge"
+                  :class="{ 'my-reaction': isLikedByMe }"
+                  :aria-label="reactionAriaLabel"
+                  @click="$emit('like')"
+                >
+                  <SvgIcon name="heartEmpty" class="reaction-heart" />
+                  <span class="reaction-count">{{ likesCount }}</span>
+                </button>
+                <span
+                  v-else
+                  class="reaction-badge reaction-badge-static"
+                  :class="{ 'my-reaction': isLikedByMe }"
+                  :aria-label="reactionAriaLabel"
+                >
+                  <SvgIcon name="heartEmpty" class="reaction-heart" />
+                  <span class="reaction-count">{{ likesCount }}</span>
+                </span>
+              </Tooltip>
+            </div>
+          </template>
+          <div v-else class="msg-edit">
+            <BBCodeEditor
+              v-model="localEditText"
+              context="message"
+              placeholder="Редактирование сообщения..."
+              :min-height="60"
+              :max-height="200"
+              @submit="handleEditSubmit"
+              @keydown="handleEditKeydown"
+            />
+            <div class="msg-edit-actions">
+              <button
+                type="button"
+                class="msg-edit-btn"
+                @click="$emit('cancel-edit')"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                class="msg-edit-btn"
+                @click="handleEditSubmit"
+              >
+                Сохранить
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </template>
+    </template>
   </div>
 </template>
 
@@ -326,22 +513,21 @@ function initMessageBbcode(el: HTMLElement) {
   flex-shrink: 0
   align-self: flex-start
 
+// Full-layout avatar: 72px — chat is more spacious than comments (which use 56).
 .msg-avatar
-  width: 64px
-  height: 64px
-  border-radius: 50%
+  width: 72px
+  height: 72px
   object-fit: cover
   display: block
 
 .msg-avatar-placeholder
   flex-shrink: 0
-  width: 64px
-  height: 64px
+  width: 72px
+  height: 72px
 
 .deleted-avatar
-  width: 64px
-  height: 64px
-  border-radius: 50%
+  width: 72px
+  height: 72px
   color: $border
 
 .msg-author
@@ -427,8 +613,7 @@ function initMessageBbcode(el: HTMLElement) {
   margin-top: $small
 
 .msg-edit-btn
-  font-size: $secondary-font-size
-  +secondary-button
+  +button
 
 .msg-reactions
   display: flex
@@ -464,6 +649,17 @@ function initMessageBbcode(el: HTMLElement) {
     svg
       fill: currentColor
 
+// Non-interactive variant (guests / message author): count only, no actions
+.reaction-badge-static
+  cursor: default
+  &:hover
+    background-color: $hover-overlay
+    svg
+      filter: none
+      transform: none
+  &:active
+    transform: none
+
 .reaction-count
   font-size: $secondary-font-size
 
@@ -487,12 +683,18 @@ function initMessageBbcode(el: HTMLElement) {
   &:hover
     filter: brightness($hover-brightness)
 
+// Non-interactive variant (guests / message author): count only, no actions
+.msg-likes-inline-static
+  cursor: default
+  &:hover
+    filter: none
+
 // Continuation — time gutter
 .msg-continuation
   align-items: baseline
 
 .msg-time-gutter
-  width: 64px
+  width: 72px
   flex-shrink: 0
   display: flex
   justify-content: center
@@ -512,32 +714,44 @@ function initMessageBbcode(el: HTMLElement) {
 // ============================================================================
 // Compact layout — controlled by `compact` prop
 // ============================================================================
+// Compact: fixed time gutter so author names and content align across rows.
+// Gutter holds the (optional) edit/trash icon + the time, right-aligned.
+$compact-time-gutter: 62px
+
 .chat-message.compact
   .msg-layout-compact
     display: block
   .msg-body
     display: block
+  // Single-row header: time gutter + author + likes share one baseline
   .msg-header-compact
-    display: inline-flex
-    align-items: center
+    display: flex
+    align-items: baseline
     gap: $small
     margin-bottom: 0
-    line-height: 1
+    line-height: 1.4
+  // Baseline (not center) so the time text sits on the same line as the
+  // username — both anchor to the header's shared baseline. The optional
+  // edit/trash icon stays vertically centered against the time text.
   .msg-time-group
+    flex-shrink: 0
     display: inline-flex
-    align-items: center
+    align-items: baseline
+    justify-content: flex-end
     gap: 6px
-    margin-right: 0
-    min-width: 62px
+    width: $compact-time-gutter
+  .msg-time-group .msg-edited-icon,
+  .msg-time-group .msg-icon-placeholder
+    align-self: center
   .msg-author
     display: inline-flex
-    align-items: center
+    align-items: baseline
   .msg-content
     display: block
-    margin-left: calc(62px + #{$small})
+    margin-left: calc(#{$compact-time-gutter} + #{$small})
     margin-top: 0
   .msg-edit
-    margin-left: calc(62px + #{$small})
+    margin-left: calc(#{$compact-time-gutter} + #{$small})
   .msg-text
     display: block
   .msg-text :deep(.bb-quote),
@@ -568,4 +782,3 @@ function initMessageBbcode(el: HTMLElement) {
       &:hover
         text-decoration: underline
 </style>
-

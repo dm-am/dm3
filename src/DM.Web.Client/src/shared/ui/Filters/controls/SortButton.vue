@@ -105,7 +105,9 @@ onUnmounted(() => {
       >
         <span class="sort-option-content">
           <span class="sort-option-label">{{ option.label }}</span>
-          <span v-if="option.hint" class="sort-option-hint">{{ option.hint }}</span>
+          <span v-if="option.hint" class="sort-option-hint">{{
+            option.hint
+          }}</span>
         </span>
       </button>
 
@@ -119,14 +121,24 @@ onUnmounted(() => {
         @click="toggleSortOrder"
       >
         <SvgIcon :name="sortIcon" class="sort-direction-icon" />
-        <span>{{ sortOrder === "asc" ? "По возрастанию" : "По убыванию" }}</span>
+        <span>{{
+          sortOrder === "asc" ? "По возрастанию" : "По убыванию"
+        }}</span>
       </button>
     </div>
   </div>
 </template>
 
 <style scoped lang="sass">
+@import "src/assets/styles/Inputs"
 @import "src/assets/styles/Filters"
 
 +sort-control
+
+// Button visual shared with FilterButton through the unified +button mixin —
+// guarantees identical colors, hover, active, disabled states.
+.sort-btn
+  justify-content: flex-start
+  gap: $small
+  +button
 </style>

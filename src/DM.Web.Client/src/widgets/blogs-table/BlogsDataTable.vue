@@ -9,6 +9,7 @@ import {
   useBlogsStore,
   useBlogDisplay,
   BlogStatusBadge,
+  type Blog,
 } from "@/entities/blog";
 import { BlogsFilter, useBlogsFilter } from "@/features/blog-filter";
 import type { BlogsSearchParams } from "@/features/blog-filter";
@@ -19,11 +20,13 @@ const blogsStore = useBlogsStore();
 const { searchResult, searchLoading, searchError } = storeToRefs(blogsStore);
 
 // filterState is computed from URL (single source of truth, no sync needed)
-const { filterState, searchParams, setSort, hasActiveFilters } = useBlogsFilter();
+const { filterState, searchParams, hasActiveFilters } = useBlogsFilter();
 
 // Two-state empty text
 const emptyText = computed(() =>
-  hasActiveFilters.value ? "Блогов по заданным фильтрам не найдено" : "Блогов пока нет"
+  hasActiveFilters.value
+    ? "Блогов по заданным фильтрам не найдено"
+    : "Блогов пока нет",
 );
 const {
   buildTooltip,
@@ -40,9 +43,21 @@ const sortableColumnKeys = new Set(["title", "status"]);
 
 // Define table columns (unified with GamesDataTable)
 const columns: Column[] = [
-  { key: "title", label: "Название", width: "40%", align: "left", sortable: true },
+  {
+    key: "title",
+    label: "Название",
+    width: "40%",
+    align: "left",
+    sortable: true,
+  },
   { key: "authors", label: "Ведущие", width: "25%", align: "left" },
-  { key: "status", label: "Статус блога", width: "25%", align: "left", sortable: true },
+  {
+    key: "status",
+    label: "Статус блога",
+    width: "25%",
+    align: "left",
+    sortable: true,
+  },
   { key: "readers", label: "Читатели", width: "10%", align: "center" },
 ];
 
@@ -57,11 +72,6 @@ const currentSort = computed<SortState | undefined>(() => {
   }
   return undefined;
 });
-
-// Handle column header click for sorting
-function handleSort(column: Column, direction: "asc" | "desc") {
-  setSort(column.key, direction);
-}
 
 // Computed blogs array
 const blogs = computed(() => searchResult.value?.resources ?? []);
@@ -93,6 +103,11 @@ function buildAssistantTooltip(assistants: { username: string }[]): string {
   return `Ассистент${assistants.length > 1 ? "ы" : ""}: ${names}`;
 }
 
+// Closed blogs never get the green "new" highlight (matches BlogLink)
+function isNewHighlight(blog: Blog): boolean {
+  return blog.status !== "Closed" && isNew(blog);
+}
+
 // Fetch blogs when search params key changes (immediate for initial load)
 watch(
   paramsKey,
@@ -118,8 +133,10 @@ function handlePrefetch(page: number) {
       {{ searchError }}
     </div>
 
-    <!-- Table -->
+    <!-- Table. Hidden when the request failed and there is nothing to show,
+         so the empty-state text never appears next to the error message -->
     <DataTable
+      v-if="!searchError || blogs.length > 0"
       id="results"
       :columns="columns"
       :data="blogs"
@@ -132,41 +149,52 @@ function handlePrefetch(page: number) {
       "
       :sort="currentSort"
       :empty-text="emptyText"
-      @sort="handleSort"
     >
       <!-- Title column: Title (unread/comments) -->
-      <!-- TODO: Change to { name: 'blog', params: { id: row.id } } when blog detail page exists -->
       <template #cell-title="{ row }">
         <Tooltip :text="buildTooltip(row)">
           <router-link
-            :to="{ name: 'blogs' }"
-            :class="['blog-link', { 'new-item': isNew(row) }]"
+            :to="{ name: 'blog', params: { id: row.id } }"
+            :class="['blog-link', { 'new-item': isNewHighlight(row) }]"
           >
-            <span v-if="filterState.search" v-html="highlightMatch(row.title, filterState.search)"></span>
+            <span
+              v-if="filterState.search"
+              v-html="highlightMatch(row.title, filterState.search)"
+            ></span>
             <template v-else>{{ row.title }}</template>
-          </router-link
-          >
-        </Tooltip>{{ " "
+          </router-link> </Tooltip
+        >{{ " "
         }}<span class="counters"
           ><span class="muted">(</span
-          ><Tooltip :text="formatUnreadPublicationsTooltip(getUnreadPublications(row))">
-            <router-link :to="{ name: 'blogs' }">{{
-              getUnreadPublications(row)
-            }}</router-link>
-          </Tooltip
+          ><Tooltip
+            :text="formatUnreadPublicationsTooltip(getUnreadPublications(row))"
+          >
+            <router-link
+              :to="{ name: 'blog', params: { id: row.id } }"
+              :aria-label="
+                formatUnreadPublicationsTooltip(getUnreadPublications(row))
+              "
+              >{{ getUnreadPublications(row) }}</router-link
+            > </Tooltip
           ><span class="muted">/</span
           ><Tooltip :text="formatUnreadCommentsTooltip(getUnreadComments(row))">
-            <router-link :to="{ name: 'blogs' }">{{
-              getUnreadComments(row)
-            }}</router-link>
-          </Tooltip
+            <router-link
+              :to="{ name: 'blog', params: { id: row.id } }"
+              :aria-label="formatUnreadCommentsTooltip(getUnreadComments(row))"
+              >{{ getUnreadComments(row) }}</router-link
+            > </Tooltip
           ><span class="muted">)</span></span
         >
       </template>
 
       <!-- Authors column (unified with games "Ведущие") -->
       <template #cell-authors="{ row }">
-        <UserLink v-if="row.author" :user="row.author" :search-query="filterState.search" hide-badge /><Tooltip
+        <UserLink
+          v-if="row.author"
+          :user="row.author"
+          :search-query="filterState.search"
+          hide-badge
+        /><Tooltip
           v-if="row.assistants?.length"
           :text="buildAssistantTooltip(row.assistants)"
         >
@@ -191,7 +219,10 @@ function handlePrefetch(page: number) {
       </template>
 
       <!-- Footer with pagination -->
-      <template v-if="searchResult?.paging && searchResult.paging.pages > 1" #footer>
+      <template
+        v-if="searchResult?.paging && searchResult.paging.pages > 1"
+        #footer
+      >
         <Paging
           :paging="searchResult.paging"
           :to="{ name: 'blogs' }"

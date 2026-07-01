@@ -3,18 +3,17 @@ import { ref, computed } from "vue";
 import { storeToRefs } from "pinia";
 import type { Topic } from "@/entities/forum";
 import { useUserStore } from "@/entities/user";
-import { useUiStore } from "@/shared/stores/ui";
 import { UserRole } from "@/shared/api/models/community";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { TruncatedContent } from "@/shared/ui/TruncatedContent";
 import dayjs from "dayjs";
-import { defaultAvatarUrl as defaultPicture } from "@/shared/lib/utils/icons";
 import { SvgIcon } from "@/shared/ui/Icon";
 import {
   initBbcodeInteractive,
   cleanupBbcodeInteractive,
   trimHtmlWhitespace,
 } from "@/shared/lib/utils/bbcodeInteractive";
+import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
 
 const props = withDefaults(
   defineProps<{
@@ -36,17 +35,9 @@ const emit = defineEmits<{
   warn: [id: string];
 }>();
 
-const ONLINE_THRESHOLD_MINUTES = 5;
-
 const { user: currentUser } = storeToRefs(useUserStore());
-const { isCompactLayout } = storeToRefs(useUiStore());
 
 const showLikesPopup = ref(false);
-
-// Computed
-const authorPicture = computed(
-  () => props.topic.author?.picture?.mediumUrl || props.topic.author?.picture?.smallUrl || defaultPicture,
-);
 
 const formattedDate = computed(() => {
   if (!props.topic.createdUtc) return "";
@@ -90,7 +81,10 @@ const likesCount = computed(() => props.topic.likes?.length ?? 0);
 const isAuthorOnline = computed(() => {
   const lastActivityUtc = props.topic.author?.lastActivityUtc;
   if (!lastActivityUtc) return false;
-  return dayjs().diff(dayjs(lastActivityUtc), "minute", true) <= ONLINE_THRESHOLD_MINUTES;
+  return (
+    dayjs().diff(dayjs(lastActivityUtc), "minute", true) <=
+    ONLINE_THRESHOLD_MINUTES
+  );
 });
 
 const roleBadge = computed(() => {
@@ -140,90 +134,108 @@ function handleWarn() {
 </script>
 
 <template>
-  <div class="topic" :class="{ compact: isCompactLayout }">
+  <div class="topic">
     <!-- Title -->
     <h3 class="topic-title">
-      <router-link :to="{ name: 'topic', params: { alias: topic.board?.alias, num: topic.topicNumber } }">
+      <router-link
+        :to="{
+          name: 'topic',
+          params: { alias: topic.board?.alias, num: topic.topicNumber },
+        }"
+      >
         {{ topic.title }}
       </router-link>
     </h3>
 
-    <div class="topic-content">
-      <!-- Avatar (non-compact only) -->
-      <router-link
-        v-if="!isCompactLayout && topic.author"
-        :to="{ name: 'profile', params: { username: topic.author.username } }"
-        class="avatar-link"
+    <!-- Description -->
+    <div class="topic-description">
+      <TruncatedContent
+        :truncatable="truncatable"
+        :max-height="maxHeight"
+        :watch-key="topicDescriptionHtml"
+        :on-content-mounted="initTopicBbcode"
       >
-        <img :src="authorPicture" :alt="topic.author.username" class="avatar" />
-      </router-link>
+        <div class="topic-text bbcode-content" v-html="topicDescriptionHtml" />
+      </TruncatedContent>
+    </div>
 
-      <div class="topic-body">
-        <!-- Description -->
-        <div class="topic-description">
-          <TruncatedContent
-            :truncatable="truncatable"
-            :max-height="maxHeight"
-            :watch-key="topicDescriptionHtml"
-            :on-content-mounted="initTopicBbcode"
+    <!-- Footer: Author info + Actions -->
+    <div class="topic-footer">
+      <span v-if="topic.author" class="author-info"
+        >Автор:
+        <router-link
+          :to="{
+            name: 'profile',
+            params: { username: topic.author.username },
+          }"
+          class="author-link"
+          >{{ topic.author.username }}</router-link
+        ><template v-if="roleBadge">
+          [<Tooltip :text="roleBadge.title"
+            ><b class="role-letter">{{ roleBadge.label }}</b></Tooltip
+          >]</template
+        >
+        [<span :class="isAuthorOnline ? 'online' : 'offline'">{{
+          isAuthorOnline ? "online" : "offline"
+        }}</span
+        >], {{ formattedDate
+        }}<template v-if="isEdited">
+          | Отредактировано {{ formattedEditDate }}</template
+        >
+        | Комментарии:
+        <router-link
+          :to="{
+            name: 'topic',
+            params: { alias: topic.board?.alias, num: topic.topicNumber },
+          }"
+          class="comments-link"
+          >{{ topic.commentsCount }}</router-link
+        ><template v-if="topic.unreadCommentsCount">
+          (<router-link
+            :to="{
+              name: 'topic',
+              params: { alias: topic.board?.alias, num: topic.topicNumber },
+              query: { unread: 1 },
+            }"
+            class="unread-link"
+            >{{ topic.unreadCommentsCount }}</router-link
+          >)</template
+        ></span
+      >
+
+      <!-- Actions -->
+      <span class="topic-actions">
+        <span
+          v-if="canLike || likesCount > 0"
+          class="likes-container"
+          @mouseenter="showLikesPopup = true"
+          @mouseleave="showLikesPopup = false"
+        >
+          <button
+            class="like-btn"
+            :class="{ liked: isLikedByMe }"
+            :disabled="!canLike"
+            @click="toggleLike"
           >
-            <div class="topic-text bbcode-content" v-html="topicDescriptionHtml" />
-          </TruncatedContent>
-        </div>
-
-        <!-- Footer: Author info + Actions -->
-        <div class="topic-footer">
-          <span v-if="topic.author" class="author-info"
-            >Автор: <router-link
-              :to="{ name: 'profile', params: { username: topic.author.username } }"
-              class="author-link"
-            >{{ topic.author.username }}</router-link
-            ><template v-if="roleBadge"
-              > [<Tooltip :text="roleBadge.title"><b class="role-letter">{{ roleBadge.label }}</b></Tooltip>]</template
-            > [<span :class="isAuthorOnline ? 'online' : 'offline'">{{ isAuthorOnline ? "online" : "offline" }}</span
-            >], {{ formattedDate }}<template v-if="isEdited"
-              > | Отредактировано {{ formattedEditDate }}</template
-            > | Комментарии: <router-link
-              :to="{ name: 'topic', params: { alias: topic.board?.alias, num: topic.topicNumber } }"
-              class="comments-link"
-            >{{ topic.commentsCount }}</router-link
-            ><template v-if="topic.unreadCommentsCount"
-              > (<router-link
-                :to="{ name: 'topic', params: { alias: topic.board?.alias, num: topic.topicNumber }, query: { unread: 1 } }"
-                class="unread-link"
-              >{{ topic.unreadCommentsCount }}</router-link
-            >)</template
-          ></span>
-
-          <!-- Actions -->
-          <span class="topic-actions">
-            <span
-              v-if="canLike || likesCount > 0"
-              class="likes-container"
-              @mouseenter="showLikesPopup = true"
-              @mouseleave="showLikesPopup = false"
+            <SvgIcon name="heartFilled" class="like-icon" />
+            <span v-if="likesCount > 0" class="likes-count">{{
+              likesCount
+            }}</span>
+          </button>
+          <div v-if="showLikesPopup && likesCount > 0" class="likes-popup">
+            <div
+              v-for="liker in topic.likes"
+              :key="liker.username"
+              class="liker"
             >
-              <button
-                class="like-btn"
-                :class="{ liked: isLikedByMe }"
-                :disabled="!canLike"
-                @click="toggleLike"
-              >
-                <SvgIcon name="heartFilled" class="like-icon" />
-                <span v-if="likesCount > 0" class="likes-count">{{ likesCount }}</span>
-              </button>
-              <div v-if="showLikesPopup && likesCount > 0" class="likes-popup">
-                <div v-for="liker in topic.likes" :key="liker.username" class="liker">
-                  {{ liker.username }}
-                </div>
-              </div>
-            </span>
-            <button v-if="canWarn" class="action-btn warn-btn" @click="handleWarn">
-              пред.
-            </button>
-          </span>
-        </div>
-      </div>
+              {{ liker.username }}
+            </div>
+          </div>
+        </span>
+        <button v-if="canWarn" class="action-btn warn-btn" @click="handleWarn">
+          Предупреждение
+        </button>
+      </span>
     </div>
   </div>
 </template>
@@ -253,26 +265,6 @@ function handleWarn() {
 
     &:hover
       color: $link-hover
-
-.topic-content
-  display: flex
-  gap: $medium
-
-.topic.compact .topic-content
-  display: block
-
-.avatar-link
-  flex-shrink: 0
-
-.avatar
-  width: 64px
-  height: 64px
-  border-radius: 50%
-  object-fit: cover
-
-.topic-body
-  flex: 1
-  min-width: 0
 
 .topic-description
   word-wrap: break-word

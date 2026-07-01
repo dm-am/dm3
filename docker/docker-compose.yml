@@ -45,6 +45,15 @@ x-workload-env: &workload-env
   DM_CdnConfiguration__Folder:
   DM_CdnConfiguration__Provider: Minio
 
+  # === Image transforms (imgproxy) ===
+  # Endpoint = публичный URL imgproxy (фронт обращается напрямую).
+  # Key/Salt — HMAC-SHA256 signing для anti-abuse (anyone could otherwise
+  # request любой transform и сжечь CPU).
+  DM_ImageProxyConfiguration__Endpoint: ${IMGPROXY_PUBLIC_URL:-http://localhost:8080}
+  DM_ImageProxyConfiguration__Key: ${IMGPROXY_KEY}
+  DM_ImageProxyConfiguration__Salt: ${IMGPROXY_SALT}
+  DM_ImageProxyConfiguration__SourceUrlPrefix: s3://dm-uploads/
+
   # === Email ===
   DM_EmailConfiguration__ServerHost: ${MAIL_HOST:-dm-mailhog}
   DM_EmailConfiguration__ServerPort: ${MAIL_PORT:-1025}
@@ -252,6 +261,49 @@ services:
         limits:
           memory: 256M
           cpus: '0.5'
+
+  # --- Infrastructure: Image transforms (imgproxy) ---
+  # On-the-fly resize + format negotiation (AVIF/WebP/JPEG via Accept header).
+  # Reads from MinIO via S3 protocol, серверу аватаров достаточно хранить
+  # один source-file на upload — все thumbs генерируются по требованию.
+  imgproxy:
+    container_name: 'dm-imgproxy'
+    image: 'darthsim/imgproxy:v3.27'
+    ports:
+      - '8080:8080'
+    environment:
+      IMGPROXY_KEY: ${IMGPROXY_KEY}
+      IMGPROXY_SALT: ${IMGPROXY_SALT}
+      # S3 source — читаем напрямую из MinIO, без HTTP-роундтрипа.
+      IMGPROXY_USE_S3: 'true'
+      IMGPROXY_S3_ENDPOINT: 'http://dm-minio:9000'
+      IMGPROXY_S3_REGION: 'us-east-1'
+      IMGPROXY_S3_BUCKET_LOOKUP_TYPE: 'force-path-style'
+      AWS_ACCESS_KEY_ID: 'minio'
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      # Format negotiation via Accept header.
+      IMGPROXY_AUTO_WEBP: 'true'
+      IMGPROXY_AUTO_AVIF: 'true'
+      # Anti-abuse: max input size 10 MB, max output dimensions 2048×2048.
+      IMGPROXY_MAX_SRC_RESOLUTION: '50'      # MP
+      IMGPROXY_MAX_SRC_FILE_SIZE: '10485760' # bytes = 10 MB
+      # Output cache hints — фронтенд + CDN кешируют immutable.
+      IMGPROXY_TTL: '31536000'
+    healthcheck:
+      test: ["CMD", "imgproxy", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '1.0'
 
   # --- Infrastructure: Tracing ---
 

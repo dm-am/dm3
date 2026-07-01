@@ -397,7 +397,7 @@ DM.Domain.Core/
 ├── Subscriptions/        # ISubscriptionRepository (cross-module)
 ├── Tokens/               # Token, CreateToken (shared DTO)
 ├── UnreadCounters/       # IUnreadCountersRepository (cross-module)
-├── Uploads/              # IPublicImageService (cross-module)
+├── Uploads/              # IImageProcessingService, IUploadGarbageCollector (cross-module)
 └── Users/                # IUserLookupService (cross-module)
 ```
 

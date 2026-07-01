@@ -14,7 +14,7 @@
 // an un-linked title than crash the page.
 import { computed } from "vue";
 import { Tooltip } from "@/shared/ui/Tooltip";
-import type { Game, GameRef } from "../model/types";
+import { GameStatus, type Game, type GameRef } from "../model/types";
 import { useGameDisplay } from "../model/useGameDisplay";
 
 const props = withDefaults(
@@ -22,16 +22,25 @@ const props = withDefaults(
     game: Game | GameRef;
     /** Apply the sidebar's green "new game" highlight to the link text */
     highlightNew?: boolean;
+    /** Render closed games in muted gray until hover (sidebar affordance) */
+    mutedClosed?: boolean;
   }>(),
   {
     highlightNew: false,
+    mutedClosed: false,
   },
 );
 
 const { buildTooltip, isNew } = useGameDisplay();
 
 const tooltip = computed(() => buildTooltip(props.game));
-const isNewGame = computed(() => props.highlightNew && isNew(props.game));
+const isClosedGame = computed(
+  () => props.mutedClosed && props.game.status === GameStatus.Closed,
+);
+// Закрытая игра не подсвечивается как новая — muted приоритетнее.
+const isNewGame = computed(
+  () => props.highlightNew && !isClosedGame.value && isNew(props.game),
+);
 
 // Resolved route identifier. Prefer the SEO-friendly publicId; fall back
 // to the raw id. Both may be missing on a malformed or partially-loaded
@@ -46,9 +55,7 @@ const routeId = computed(() => {
 });
 
 const to = computed(() =>
-  routeId.value
-    ? { name: "game", params: { id: routeId.value } }
-    : undefined,
+  routeId.value ? { name: "game", params: { id: routeId.value } } : undefined,
 );
 </script>
 
@@ -57,9 +64,14 @@ const to = computed(() =>
     <router-link
       v-if="to"
       :to="to"
-      :class="{ 'new-game': isNewGame }"
-    >{{ game.title }}</router-link>
-    <span v-else :class="{ 'new-game': isNewGame }">{{ game.title }}</span>
+      :class="{ 'new-game': isNewGame, 'closed-game': isClosedGame }"
+      >{{ game.title }}</router-link
+    >
+    <span
+      v-else
+      :class="{ 'new-game': isNewGame, 'closed-game': isClosedGame }"
+      >{{ game.title }}</span
+    >
   </Tooltip>
 </template>
 
@@ -70,4 +82,10 @@ const to = computed(() =>
   color: $accent-green
   &:hover
     color: $accent-green-hover
+
+// Закрытые игры: приглушенный серый, при hover — обычное link-поведение.
+.closed-game
+  color: $text-muted
+  &:hover
+    color: $link-hover
 </style>

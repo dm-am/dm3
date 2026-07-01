@@ -30,9 +30,20 @@ public class Upload : ISoftDeletable
     public DateTimeOffset? ConfirmedUtc { get; set; }
 
     /// <summary>
-    /// Linked entity identifier
+    /// Target user (для Type=UserAvatar). Mutually exclusive с TargetCharacterId и TargetPostId.
+    /// Type-discriminated по <see cref="Type"/>; CHECK-constraint в БД обеспечивает консистентность.
     /// </summary>
-    public Guid? EntityId { get; set; }
+    public Guid? TargetUserId { get; set; }
+
+    /// <summary>
+    /// Target character (для Type=CharacterAvatar). Mutually exclusive с TargetUserId и TargetPostId.
+    /// </summary>
+    public Guid? TargetCharacterId { get; set; }
+
+    /// <summary>
+    /// Target post (для Type=PostAttachment). Mutually exclusive с TargetUserId и TargetCharacterId.
+    /// </summary>
+    public Guid? TargetPostId { get; set; }
 
     /// <summary>
     /// Owner identifier
@@ -66,28 +77,21 @@ public class Upload : ISoftDeletable
     public long SizeBytes { get; set; }
 
     /// <summary>
-    /// S3 object key (for presigned URL workflow)
+    /// S3 object key. Hash-based, immutable: для thumbnails ключи выводятся
+    /// заменой расширения и добавлением суффикса (_m/_s). Используется
+    /// GC и cleanup-логикой; FilePath/MediumFilePath/SmallFilePath — public URL
+    /// для рендера.
     /// </summary>
     [MaxLength(500)]
     public string ObjectKey { get; set; } = null!;
 
     /// <summary>
-    /// Path to download or view the file (public URL)
+    /// Public URL к source-файлу (≤1024 px, EXIF-stripped). Один файл per
+    /// upload — thumbnail-варианты генерируются on-the-fly через imgproxy
+    /// при serving, не пре-генерируются.
     /// </summary>
     [MaxLength(500)]
     public string? FilePath { get; set; }
-
-    /// <summary>
-    /// Medium size file path (for images)
-    /// </summary>
-    [MaxLength(500)]
-    public string? MediumFilePath { get; set; }
-
-    /// <summary>
-    /// Small/thumbnail file path (for images)
-    /// </summary>
-    [MaxLength(500)]
-    public string? SmallFilePath { get; set; }
 
     /// <summary>
     /// Display name for the file
@@ -116,8 +120,8 @@ public class Upload : ISoftDeletable
     [ForeignKey(nameof(DeletedByUserId))]
     public virtual User? DeletedBy { get; set; }
 
-    // NOTE: EntityId is a polymorphic FK that can reference User, Game, Character, or Post
-    // depending on UploadType. No navigation properties are defined to avoid EF Core
-    // creating FK constraints on a polymorphic column. Referential integrity is managed
-    // by application logic.
+    // Navigation-свойства для target-колонок не определены умышленно:
+    // FK-constraints настраиваются через OnModelCreating, а navigation
+    // на стороне Upload не нужны (consumers всегда ходят с owner-side
+    // через User.AvatarUploadId / Character.AvatarUploadId).
 }

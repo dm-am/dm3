@@ -1,4 +1,4 @@
-export * from "./content-message";
+export * from "./chat-message";
 export * from "./footer";
 export * from "./header";
 export * from "./sidebar";

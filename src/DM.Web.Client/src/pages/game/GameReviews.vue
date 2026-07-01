@@ -10,7 +10,10 @@ import { ContentText } from "@/shared/ui";
 import { UserLink } from "@/entities/user";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import Paging from "@/shared/ui/Paging/Paging.vue";
-import { ExpandableList, type ExpandableItem } from "@/shared/ui/ExpandableList";
+import {
+  ExpandableList,
+  type ExpandableItem,
+} from "@/shared/ui/ExpandableList";
 import dayjs from "dayjs";
 
 const route = useRoute();
@@ -44,7 +47,9 @@ async function fetchReviews() {
   if (!gameId.value) return;
   loading.value = true;
   try {
-    const { data } = await gameApi.getGameReviews(gameId.value, { number: page.value });
+    const { data } = await gameApi.getGameReviews(gameId.value, {
+      number: page.value,
+    });
     reviews.value = data ?? null;
   } finally {
     loading.value = false;
@@ -56,7 +61,10 @@ async function submitReview() {
   submitting.value = true;
   error.value = null;
   try {
-    const { data, error: apiError } = await gameApi.createGameReview(gameId.value, { text: newReviewText.value.trim() });
+    const { data, error: apiError } = await gameApi.createGameReview(
+      gameId.value,
+      { text: newReviewText.value.trim() },
+    );
     if (data) {
       newReviewText.value = "";
       await fetchReviews();
@@ -80,7 +88,11 @@ watch(page, fetchReviews);
   <div class="game-reviews">
     <SecondaryText v-if="loading">Загрузка...</SecondaryText>
 
-    <SecondaryText v-else-if="reviews && !reviews.resources.length && !authStore.isAuthenticated">
+    <SecondaryText
+      v-else-if="
+        reviews && !reviews.resources.length && !authStore.isAuthenticated
+      "
+    >
       Рецензий на эту игру пока нет
     </SecondaryText>
 
@@ -134,6 +146,7 @@ watch(page, fetchReviews);
 <style scoped lang="sass">
 @import "src/assets/styles/Variables"
 @import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 
 .game-reviews
   padding: $small 0
@@ -174,17 +187,5 @@ watch(page, fetchReviews);
 
 .submit-btn
   margin-top: $small
-  padding: $button-padding
-  border: 1px solid $border
-  background: $bg-element
-  color: $link
-  cursor: pointer
-  font-size: $secondary-font-size
-  font-weight: $button-font-weight
-  &:hover
-    color: $link-hover
-    border-color: $link
-  &:disabled
-    opacity: 0.5
-    cursor: default
+  +button
 </style>

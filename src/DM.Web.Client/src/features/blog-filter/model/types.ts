@@ -85,7 +85,11 @@ export const DEFAULT_FILTER_STATE: BlogsFilterState = {
  */
 export const STATUS_OPTIONS = [
   { value: "any" as const, label: "Все статусы", hint: "Показать все блоги" },
-  { value: "Draft" as const, label: "Оформляется", hint: "Подготавливаемые блоги" },
+  {
+    value: "Draft" as const,
+    label: "Оформляется",
+    hint: "Оформляющиеся блоги",
+  },
   { value: "Active" as const, label: "Открыт", hint: "Активные блоги" },
   { value: "Closed" as const, label: "Закрыт", hint: "Закрытые блоги" },
 ] as const;

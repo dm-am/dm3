@@ -20,7 +20,7 @@ interface SubscriberData {
 export function buildSubscribersTooltip(
   data: SubscriberData,
   emptyText = "Нет подписчиков",
-  prefix = "Подписчики"
+  prefix = "Подписчики",
 ): string {
   const names = data.subscriberUsernames ?? [];
   const total = data.subscribersCount ?? 0;
@@ -28,9 +28,9 @@ export function buildSubscribersTooltip(
   if (total === 0) return emptyText;
   if (names.length === 0) return `${prefix}: ${total}`;
   if (names.length < total) {
-    return `${prefix}: ${names.join(', ')}... и еще ${total - names.length}`;
+    return `${prefix}: ${names.join(", ")}... и еще ${total - names.length}`;
   }
-  return `${prefix}: ${names.join(', ')}`;
+  return `${prefix}: ${names.join(", ")}`;
 }
 
 /**
@@ -47,7 +47,7 @@ export function buildReadersTooltip(data: SubscriberData): string {
  */
 export function buildLikesTooltip(usernames: string[]): string {
   if (usernames.length === 0) return "";
-  return `Оценили: ${usernames.join(', ')}`;
+  return `Оценили: ${usernames.join(", ")}`;
 }
 
 interface StatusByType {
@@ -63,7 +63,7 @@ interface StatusByType {
  */
 export function buildStatusLines(
   byStatus: StatusByType | undefined,
-  suffix: string
+  suffix: string,
 ): string[] {
   if (!byStatus) return [];
   const lines: string[] = [];

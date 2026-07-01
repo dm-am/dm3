@@ -11,6 +11,7 @@ export enum EventType {
   // Community events (1-99)
   NewUser = 1,
   ActivatedUser = 2,
+  UserAvatarChanged = 24,
   NewMessage = 11,
   ChangedMessage = 12,
   LikedMessage = 13,

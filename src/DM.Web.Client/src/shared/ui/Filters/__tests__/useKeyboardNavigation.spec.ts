@@ -39,10 +39,11 @@ describe("useKeyboardNavigation", () => {
       const items = ref(["a", "b", "c"]);
       const onSelect = vi.fn();
 
-      const { highlightedIndex, handleKeydown, setHighlight } = useKeyboardNavigation({
-        items,
-        onSelect,
-      });
+      const { highlightedIndex, handleKeydown, setHighlight } =
+        useKeyboardNavigation({
+          items,
+          onSelect,
+        });
 
       setHighlight(2);
 
@@ -57,11 +58,12 @@ describe("useKeyboardNavigation", () => {
       const items = ref(["a", "b", "c"]);
       const onSelect = vi.fn();
 
-      const { highlightedIndex, handleKeydown, setHighlight } = useKeyboardNavigation({
-        items,
-        onSelect,
-        circular: false,
-      });
+      const { highlightedIndex, handleKeydown, setHighlight } =
+        useKeyboardNavigation({
+          items,
+          onSelect,
+          circular: false,
+        });
 
       // At start, can't go up
       setHighlight(0);
@@ -78,11 +80,12 @@ describe("useKeyboardNavigation", () => {
       const items = ref(["a", "b", "c"]);
       const onSelect = vi.fn();
 
-      const { highlightedIndex, handleKeydown, setHighlight } = useKeyboardNavigation({
-        items,
-        onSelect,
-        circular: true,
-      });
+      const { highlightedIndex, handleKeydown, setHighlight } =
+        useKeyboardNavigation({
+          items,
+          onSelect,
+          circular: true,
+        });
 
       // At end, wraps to start
       setHighlight(2);
@@ -256,10 +259,11 @@ describe("useKeyboardNavigation", () => {
       const items = ref(["a", "b", "c"]);
       const onSelect = vi.fn();
 
-      const { highlightedIndex, resetHighlight, setHighlight } = useKeyboardNavigation({
-        items,
-        onSelect,
-      });
+      const { highlightedIndex, resetHighlight, setHighlight } =
+        useKeyboardNavigation({
+          items,
+          onSelect,
+        });
 
       setHighlight(2);
       expect(highlightedIndex.value).toBe(2);

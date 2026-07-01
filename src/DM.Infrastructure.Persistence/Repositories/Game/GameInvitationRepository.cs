@@ -9,6 +9,7 @@ using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Invitations;
 using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
+using DM.Infrastructure.Persistence.Shared.Users;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
@@ -43,8 +44,7 @@ internal class GameInvitationRepository : IGameInvitationRepository
                     Role = g.Master.Role,
                     Status = g.Master.Status,
                     LastActivityUtc = g.Master.LastActivityUtc,
-                    SmallPictureUrl = g.Master.AvatarUpload != null ? (g.Master.AvatarUpload.SmallFilePath ?? g.Master.AvatarUpload.FilePath) : null,
-                    MediumPictureUrl = g.Master.AvatarUpload != null ? (g.Master.AvatarUpload.MediumFilePath ?? g.Master.AvatarUpload.FilePath) : null
+                    Picture = AvatarProjections.From(g.Master.AvatarUpload),
                 },
                 Role = GameRole.Master,
                 JoinedUtc = g.CreatedUtc
@@ -69,8 +69,7 @@ internal class GameInvitationRepository : IGameInvitationRepository
                     Role = g.Mentor.Role,
                     Status = g.Mentor.Status,
                     LastActivityUtc = g.Mentor.LastActivityUtc,
-                    SmallPictureUrl = g.Mentor.AvatarUpload != null ? (g.Mentor.AvatarUpload.SmallFilePath ?? g.Mentor.AvatarUpload.FilePath) : null,
-                    MediumPictureUrl = g.Mentor.AvatarUpload != null ? (g.Mentor.AvatarUpload.MediumFilePath ?? g.Mentor.AvatarUpload.FilePath) : null
+                    Picture = AvatarProjections.From(g.Mentor.AvatarUpload),
                 },
                 Role = GameRole.Mentor,
                 JoinedUtc = g.CreatedUtc
@@ -95,8 +94,7 @@ internal class GameInvitationRepository : IGameInvitationRepository
                     Role = ga.User.Role,
                     Status = ga.User.Status,
                     LastActivityUtc = ga.User.LastActivityUtc,
-                    SmallPictureUrl = ga.User.AvatarUpload != null ? (ga.User.AvatarUpload.SmallFilePath ?? ga.User.AvatarUpload.FilePath) : null,
-                    MediumPictureUrl = ga.User.AvatarUpload != null ? (ga.User.AvatarUpload.MediumFilePath ?? ga.User.AvatarUpload.FilePath) : null
+                    Picture = AvatarProjections.From(ga.User.AvatarUpload),
                 },
                 Role = GameRole.Assistant,
                 JoinedUtc = ga.JoinedUtc
@@ -118,8 +116,7 @@ internal class GameInvitationRepository : IGameInvitationRepository
                     Role = c.Author.Role,
                     Status = c.Author.Status,
                     LastActivityUtc = c.Author.LastActivityUtc,
-                    SmallPictureUrl = c.Author.AvatarUpload != null ? (c.Author.AvatarUpload.SmallFilePath ?? c.Author.AvatarUpload.FilePath) : null,
-                    MediumPictureUrl = c.Author.AvatarUpload != null ? (c.Author.AvatarUpload.MediumFilePath ?? c.Author.AvatarUpload.FilePath) : null
+                    Picture = AvatarProjections.From(c.Author.AvatarUpload),
                 },
                 Role = GameRole.Player,
                 JoinedUtc = c.CreatedUtc,
@@ -144,8 +141,7 @@ internal class GameInvitationRepository : IGameInvitationRepository
                     Role = s.Subscriber.Role,
                     Status = s.Subscriber.Status,
                     LastActivityUtc = s.Subscriber.LastActivityUtc,
-                    SmallPictureUrl = s.Subscriber.AvatarUpload != null ? (s.Subscriber.AvatarUpload.SmallFilePath ?? s.Subscriber.AvatarUpload.FilePath) : null,
-                    MediumPictureUrl = s.Subscriber.AvatarUpload != null ? (s.Subscriber.AvatarUpload.MediumFilePath ?? s.Subscriber.AvatarUpload.FilePath) : null
+                    Picture = AvatarProjections.From(s.Subscriber.AvatarUpload),
                 },
                 Role = GameRole.Reader,
                 JoinedUtc = s.CreatedUtc
@@ -409,8 +405,7 @@ internal class GameInvitationRepository : IGameInvitationRepository
         Role = user.Role,
         Status = user.Status,
         LastActivityUtc = user.LastActivityUtc,
-        SmallPictureUrl = user.AvatarUpload != null ? (user.AvatarUpload.SmallFilePath ?? user.AvatarUpload.FilePath) : null,
-        MediumPictureUrl = user.AvatarUpload != null ? (user.AvatarUpload.MediumFilePath ?? user.AvatarUpload.FilePath) : null
+        Picture = AvatarProjections.From(user.AvatarUpload),
     };
 
     private static GameRole MapTokenTypeToRole(TokenType type) => type switch

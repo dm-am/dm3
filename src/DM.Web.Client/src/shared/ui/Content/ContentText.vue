@@ -1,24 +1,42 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, nextTick } from "vue";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
+import { highlightDom, clearDomHighlight } from "@/shared/lib/utils/highlight";
 
-const props = defineProps<{
-  html: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    html: string;
+    /** Optional search query — highlights matches in rendered text */
+    searchQuery?: string;
+  }>(),
+  { searchQuery: "" },
+);
 
 const contentRef = ref<HTMLElement | null>(null);
 
-onMounted(() => {
+function processContent() {
   nextTick(() => {
+    if (!contentRef.value) return;
     initBbcodeInteractive(contentRef.value);
+    // Apply search highlighting after BBCode interactive init
+    clearDomHighlight(contentRef.value);
+    if (props.searchQuery) {
+      highlightDom(contentRef.value, props.searchQuery);
+    }
   });
-});
+}
 
+onMounted(processContent);
+watch(() => props.html, processContent);
 watch(
-  () => props.html,
+  () => props.searchQuery,
   () => {
     nextTick(() => {
-      initBbcodeInteractive(contentRef.value);
+      if (!contentRef.value) return;
+      clearDomHighlight(contentRef.value);
+      if (props.searchQuery) {
+        highlightDom(contentRef.value, props.searchQuery);
+      }
     });
   },
 );

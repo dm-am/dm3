@@ -2,23 +2,27 @@
   <SidebarBlock token="Partners">
     <template #title>Партнеры</template>
     <div v-once class="partners">
-      <a
+      <Tooltip
         v-for="partner in partners"
         :key="partner.name"
-        :href="partner.url"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="partner-link"
-        :title="partner.name"
+        :text="partner.name"
       >
-        <img :src="partner.logo" :alt="partner.name" class="partner-logo" />
-      </a>
+        <a
+          :href="partner.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="partner-link"
+        >
+          <img :src="partner.logo" :alt="partner.name" class="partner-logo" />
+        </a>
+      </Tooltip>
     </div>
   </SidebarBlock>
 </template>
 
 <script setup lang="ts">
 import SidebarBlock from "./SidebarBlock.vue";
+import { Tooltip } from "@/shared/ui/Tooltip";
 import loreLogo from "@/assets/images/partners/lore.png";
 import dndsuLogo from "@/assets/images/partners/dndsu.png";
 

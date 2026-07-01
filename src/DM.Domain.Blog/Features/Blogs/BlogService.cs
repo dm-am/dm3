@@ -301,6 +301,11 @@ internal class BlogService : IBlogService
             await _blacklistRepository.CopyFromPersonalBlacklist(createdBlog.Id, userId, ct);
         }
 
+        // Surface the creation as a system event. The author-subscription
+        // notification generator listens for this and decides — based on
+        // DraftVisibility — whether to fan out a "new blog" notification.
+        await _eventProducer.SendAsync(EventType.NewBlog, createdBlog.Id);
+
         return createdBlog;
     }
 
@@ -364,6 +369,23 @@ internal class BlogService : IBlogService
         }
 
         await FillPublicationUnreadCounters(new[] { publication });
+        return publication;
+    }
+
+    /// <inheritdoc />
+    public async Task<Publication?> GetBestUserPublication(string username, CancellationToken ct = default)
+    {
+        // Resolve username → UserId via the cross-module lookup so we keep
+        // the repository's parameter typed (Guid) — repositories never
+        // take usernames directly. Throws HttpException(410) on unknown
+        // user, which surfaces as a clean 404 to the API caller.
+        var user = await _userLookupService.GetAsync(username);
+
+        var publication = await _repository.GetBestUserPublication(user.UserId, ct);
+        if (publication != null)
+        {
+            await FillPublicationUnreadCounters(new[] { publication });
+        }
         return publication;
     }
 

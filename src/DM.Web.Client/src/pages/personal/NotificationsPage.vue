@@ -50,8 +50,8 @@ const getNotificationTypeLabel = (type: NotificationType): string => {
       return "Новый пост в игре";
     case NotificationType.UserMentioned:
       return "Упоминание";
-    case NotificationType.NewPublicationFromSubscribedAuthor:
-      return "Публикация автора";
+    case NotificationType.NewBlogFromSubscribedAuthor:
+      return "Новый блог автора";
     case NotificationType.NewTopicFromSubscribedAuthor:
       return "Топик от автора";
     case NotificationType.NewForumTopic:
@@ -78,7 +78,7 @@ const getNotificationLink = (notification: UserNotification): string | null => {
   switch (notification.eventType) {
     case NotificationType.NewPublication:
     case NotificationType.LikedPublication:
-    case NotificationType.NewPublicationFromSubscribedAuthor:
+    case NotificationType.NewBlogFromSubscribedAuthor:
       return payload.blogId ? `/blogs/${payload.blogId}` : null;
 
     case NotificationType.NewBlogComment:
@@ -213,7 +213,9 @@ onMounted(() => fetchNotifications());
       </button>
     </div>
 
-    <secondary-text v-if="loading && notifications.length === 0">Загрузка...</secondary-text>
+    <secondary-text v-if="loading && notifications.length === 0"
+      >Загрузка...</secondary-text
+    >
 
     <template v-else-if="notifications.length === 0">
       <secondary-text>Нет уведомлений</secondary-text>
@@ -389,7 +391,7 @@ onMounted(() => fetchNotifications());
   justify-content: center
 
   &:hover
-    background: $bg-element-hover
+    background: $hover-overlay
     color: $accent-red
 
 .load-more
@@ -406,9 +408,9 @@ onMounted(() => fetchNotifications());
   cursor: pointer
 
   &:hover:not(:disabled)
-    background: $bg-element-hover
+    background: $hover-overlay
 
   &:disabled
-    opacity: 0.5
-    cursor: not-allowed
+    opacity: $disabled-opacity
+    cursor: default
 </style>

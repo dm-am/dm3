@@ -50,6 +50,14 @@ export default new (class PersonalApi {
   }
 
   /**
+   * Сбросить мой аватар. Идемпотент: безопасно вызывать на пользователе
+   * без аватара.
+   */
+  public removeMyAvatar() {
+    return Api.delete("users/me/profile/avatar");
+  }
+
+  /**
    * Get current user's display preferences
    * Returns theme and paging settings
    */

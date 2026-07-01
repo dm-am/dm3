@@ -11,7 +11,8 @@
 Users ─────────┬────────>│  nginx → dm-api ─────┬───> PostgreSQL (dm3)                 │
 (dm.am)        │         │                      ├───> MongoDB (dm3)                    │
                │         │                      ├───> RabbitMQ                         │
-               │         │                      └───> MinIO (dm-uploads)               │
+               │         │                      ├───> MinIO (dm-uploads, source)       │
+               │         │                      └───> imgproxy (transform layer)       │
                │         │                                                             │
                │         │  Consumers: mail, search, notifications                     │
                │         └─────────────────────────────────────────────────────────────┘

@@ -19,3 +19,5 @@ export * from "./Tooltip";
 export * from "./EmptyState";
 export * from "./Skeleton";
 export * from "./TruncatedContent";
+export * from "./Tabs";
+export * from "./StatLine";

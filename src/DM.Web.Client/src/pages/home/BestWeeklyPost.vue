@@ -7,8 +7,11 @@
       show-navigation
       truncatable
     />
+    <SecondaryText v-else-if="store.bestError">
+      {{ store.bestError }}
+    </SecondaryText>
     <SecondaryText v-else-if="store.bestLoaded">
-      Нет оцененных постов за эту неделю
+      Оцененных постов за эту неделю пока нет
     </SecondaryText>
     <!-- Skeleton: reserves the height of one truncatable post card
          (navigation breadcrumb + two-column post card clamped to the
@@ -19,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import { GamePost } from "@/pages/game";
+import { GamePost } from "@/widgets/game-post";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { GamePostSkeleton } from "@/shared/ui/Skeleton";

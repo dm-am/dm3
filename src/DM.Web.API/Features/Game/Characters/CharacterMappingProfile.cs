@@ -1,5 +1,6 @@
 using AutoMapper;
 using DM.Domain.Game.Features.Characters;
+using DM.Web.API.Features.Community.Users;
 using DtoCharacter = DM.Domain.Game.Features.Games.Character;
 using DtoCharacterAttribute = DM.Domain.Game.Features.Games.CharacterAttribute;
 using DtoCharacterShort = DM.Domain.Game.Features.Games.CharacterShort;
@@ -15,15 +16,19 @@ internal class CharacterMappingProfile : Profile
     /// <inheritdoc />
     public CharacterMappingProfile()
     {
-        // Base Character mapping (lightweight, for lists)
-        CreateMap<DtoCharacter, Character>();
+        // Base Character mapping (lightweight, for lists).
+        // Picture — через AvatarPicture→UserPicture конвертер
+        // (имгпрокси thumbnails on the fly, см. AvatarPictureConverter).
+        CreateMap<DtoCharacter, Character>()
+            .ForMember(d => d.Picture, o => o.MapFrom(s => s.Picture));
 
-        // CharacterShort -> Character (for Post.Character)
-        // Note: PictureUrl IS mapped - it's enriched by PostRepository from Uploads table
+        // CharacterShort -> Character (for Post.Character).
+        // Picture заполняется батчем в PostRepository.EnrichWithCharacterPictures.
         CreateMap<DtoCharacterShort, Character>()
             .ForMember(d => d.TotalPostsCount, opt => opt.Ignore())
             .ForMember(d => d.Race, opt => opt.Ignore())
-            .ForMember(d => d.Class, opt => opt.Ignore());
+            .ForMember(d => d.Class, opt => opt.Ignore())
+            .ForMember(d => d.Picture, o => o.MapFrom(s => s.Picture));
 
         // CharacterDetails mapping (full)
         CreateMap<DtoCharacter, CharacterDetails>()

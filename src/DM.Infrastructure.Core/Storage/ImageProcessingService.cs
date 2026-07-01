@@ -1,17 +1,18 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
-using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using Amazon.S3;
-using Amazon.S3.Model;
-using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Uploads;
-using Microsoft.Extensions.Options;
+using DM.Infrastructure.Core.Tracing;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.Processing;
 
 namespace DM.Infrastructure.Core.Storage;
@@ -19,130 +20,177 @@ namespace DM.Infrastructure.Core.Storage;
 /// <inheritdoc />
 internal class ImageProcessingService : IImageProcessingService
 {
-    private static readonly Size MediumSize = new(400, 400);
-    private static readonly Size SmallSize = new(100, 100);
+    // --- Pipeline constants (SSOT для размеров и лимитов) ---
+    /// <summary>Максимальная сторона оригинала; все больше — downscale-ится.</summary>
+    public const int OriginalMaxDimension = ImageProcessingDefaults.OriginalMaxDimension;
+    /// <summary>Min-размер исходника (защита от мусорных upload'ов).</summary>
+    public const int MinDimension = 50;
+    /// <summary>Max-размер исходника по любой стороне (защита от decompression-bomb после декода).</summary>
+    public const int MaxDimension = 8192;
+    /// <summary>
+    /// Максимальная площадь декодированного изображения (W*H пикселей) —
+    /// защита от decompression-bomb атак (1 KB PNG, разворачивающийся
+    /// в 50000×50000). 67 миллионов пикселей ≈ 8K resolution.
+    /// </summary>
+    public const long MaxDecodedPixels = 64L * 1024 * 1024;
 
-    private static readonly string[] AllowedImageContentTypes =
+    // --- Format whitelist + magic-byte mapping (SSOT) ---
+    private static readonly Dictionary<string, string> ExtensionByContentType = new(StringComparer.OrdinalIgnoreCase)
     {
-        "image/jpeg", "image/png", "image/webp", "image/gif"
+        ["image/jpeg"] = ".jpg",
+        ["image/png"] = ".png",
+        ["image/webp"] = ".webp",
     };
-
-    private readonly IAmazonS3 _s3Client;
-    private readonly CdnConfiguration _cdnConfig;
-
-    public ImageProcessingService(
-        IAmazonS3 s3Client,
-        IOptions<CdnConfiguration> cdnOptions)
-    {
-        _s3Client = s3Client;
-        _cdnConfig = cdnOptions.Value;
-    }
-
-    /// <inheritdoc />
-    public void ValidateImageContentType(string contentType)
-    {
-        if (!AllowedImageContentTypes.Contains(contentType.ToLowerInvariant()))
-        {
-            throw new HttpBadRequestException(
-                new Dictionary<string, string>
-                {
-                    ["file"] = "Допустимые форматы изображений: JPEG, PNG, WebP, GIF"
-                });
-        }
-    }
 
     /// <inheritdoc />
     public bool IsImageType(UploadType type) =>
         type is UploadType.UserAvatar or UploadType.CharacterAvatar;
 
     /// <inheritdoc />
-    public async Task<(string mediumUrl, string smallUrl)> ProcessAndUploadThumbnails(
-        string objectKey, Func<string, string> generatePublicUrl)
+    public async Task<ProcessedImage> ProcessAsync(
+        Stream input,
+        string declaredContentType,
+        CancellationToken ct = default)
     {
-        // Download original from S3
-        var getResponse = await _s3Client.GetObjectAsync(_cdnConfig.BucketName, objectKey);
-        using var image = await Image.LoadAsync(getResponse.ResponseStream);
+        using var activity = DmActivitySource.Source.StartActivity(
+            "image.process",
+            ActivityKind.Internal);
+        activity?.SetTag("image.declared_content_type", declaredContentType);
 
-        // Validate dimensions
-        if (image.Width > 8192 || image.Height > 8192)
+        // 1. Magic-byte detection: НЕ доверяем client-provided content-type.
+        var buffered = await BufferStreamAsync(input, ct);
+        activity?.SetTag("image.input_size_bytes", buffered.Length);
+
+        IImageFormat format;
+        try
         {
-            throw new HttpBadRequestException(
-                new Dictionary<string, string>
-                {
-                    ["file"] = "Изображение слишком большое (максимум 8192x8192)"
-                });
+            format = await Image.DetectFormatAsync(new MemoryStream(buffered, writable: false), ct);
+        }
+        catch (UnknownImageFormatException)
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                ["file"] = "Файл не является изображением",
+            });
         }
 
-        if (image.Width < 50 || image.Height < 50)
+        var actualContentType = format.DefaultMimeType;
+        if (!ExtensionByContentType.TryGetValue(actualContentType, out var normalizedExtension))
         {
-            throw new HttpBadRequestException(
-                new Dictionary<string, string>
-                {
-                    ["file"] = "Изображение слишком маленькое (минимум 50x50)"
-                });
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                ["file"] = "Допустимые форматы: JPEG, PNG, WebP",
+            });
         }
 
-        // Resize original if too large (save storage)
-        if (image.Width > 1024 || image.Height > 1024)
+        // 2. Identify-only пас: размеры без полного декода (cheap).
+        ImageInfo info;
+        try
+        {
+            info = await Image.IdentifyAsync(new MemoryStream(buffered, writable: false), ct);
+        }
+        catch (Exception)
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                ["file"] = "Не удалось прочитать изображение",
+            });
+        }
+
+        if (info.Width < MinDimension || info.Height < MinDimension)
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                ["file"] = $"Изображение слишком маленькое (минимум {MinDimension}x{MinDimension})",
+            });
+        }
+
+        if (info.Width > MaxDimension || info.Height > MaxDimension)
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                ["file"] = $"Изображение слишком большое (максимум {MaxDimension}x{MaxDimension})",
+            });
+        }
+
+        // 3. Decompression-bomb защита: суммарная площадь до декода.
+        var pixelCount = (long)info.Width * info.Height;
+        if (pixelCount > MaxDecodedPixels)
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                ["file"] = "Изображение содержит слишком много пикселей",
+            });
+        }
+
+        // 4. Полный декод (теперь безопасный — размеры проверены).
+        using var image = await Image.LoadAsync(new MemoryStream(buffered, writable: false), ct);
+
+        // 5. Downscale если >1024 (Max-mode сохраняет aspect-ratio).
+        //    Это ВСЕГДА re-encode → EXIF metadata автоматически stripped
+        //    (ImageSharp по умолчанию не пишет EXIF при SaveAs*).
+        if (image.Width > OriginalMaxDimension || image.Height > OriginalMaxDimension)
         {
             image.Mutate(c => c.Resize(new ResizeOptions
             {
-                Size = new Size(1024, 1024),
-                Mode = ResizeMode.Max
+                Size = new Size(OriginalMaxDimension, OriginalMaxDimension),
+                Mode = ResizeMode.Max,
             }));
-
-            await using var resizedStream = new MemoryStream();
-            await image.SaveAsJpegAsync(resizedStream, new JpegEncoder { Quality = 90 });
-            resizedStream.Position = 0;
-            await UploadToS3(objectKey, resizedStream, "image/jpeg");
         }
 
-        // Center-crop to square
-        var cropRect = image.Height > image.Width
-            ? new Rectangle(0, (image.Height - image.Width) / 2, image.Width, image.Width)
-            : new Rectangle((image.Width - image.Height) / 2, 0, image.Height, image.Height);
+        // EXIF/IPTC/XMP стрипаются явно — даже если pictures были <1024,
+        // мы re-encode'аем оригинал чтобы выкинуть GPS, серийники и т.д.
+        image.Metadata.ExifProfile = null;
+        image.Metadata.IptcProfile = null;
+        image.Metadata.XmpProfile = null;
 
-        var jpegEncoder = new JpegEncoder { Quality = 85 };
+        var bytes = await EncodeAsync(image, actualContentType, ct);
+        activity?.SetTag("image.output_size_bytes", bytes.Length);
 
-        // Generate medium thumbnail (400x400)
-        var mediumKey = GetThumbnailKey(objectKey, "_m");
-        await using (var mediumStream = new MemoryStream())
-        {
-            await image.Clone(c => c.Crop(cropRect).Resize(MediumSize))
-                .SaveAsJpegAsync(mediumStream, jpegEncoder);
-            mediumStream.Position = 0;
-            await UploadToS3(mediumKey, mediumStream, "image/jpeg");
-        }
-
-        // Generate small thumbnail (100x100)
-        var smallKey = GetThumbnailKey(objectKey, "_s");
-        await using (var smallStream = new MemoryStream())
-        {
-            await image.Clone(c => c.Crop(cropRect).Resize(SmallSize))
-                .SaveAsJpegAsync(smallStream, jpegEncoder);
-            smallStream.Position = 0;
-            await UploadToS3(smallKey, smallStream, "image/jpeg");
-        }
-
-        return (generatePublicUrl(mediumKey), generatePublicUrl(smallKey));
+        return new ProcessedImage(
+            Bytes: bytes,
+            ContentType: actualContentType,
+            Extension: normalizedExtension);
     }
 
-    private async Task UploadToS3(string objectKey, Stream stream, string contentType)
+    private static async Task<byte[]> EncodeAsync(Image image, string contentType, CancellationToken ct)
     {
-        var putRequest = new PutObjectRequest
+        await using var ms = new MemoryStream();
+        // Re-encode в исходном формате — никакого silent-конвертирования.
+        // EXIF/IPTC/XMP уже сброшены в Metadata.
+        switch (contentType)
         {
-            BucketName = _cdnConfig.BucketName,
-            Key = objectKey,
-            InputStream = stream,
-            ContentType = contentType
-        };
-        await _s3Client.PutObjectAsync(putRequest);
+            case "image/jpeg":
+                await image.SaveAsJpegAsync(ms, new JpegEncoder { Quality = 90 }, ct);
+                break;
+            case "image/png":
+                await image.SaveAsPngAsync(ms, new PngEncoder
+                {
+                    CompressionLevel = PngCompressionLevel.BestCompression,
+                }, ct);
+                break;
+            case "image/webp":
+                await image.SaveAsWebpAsync(ms, new WebpEncoder
+                {
+                    Quality = 90,
+                    FileFormat = WebpFileFormatType.Lossy,
+                }, ct);
+                break;
+            default:
+                // unreachable — guard'или выше
+                throw new InvalidOperationException($"Unsupported content type {contentType}");
+        }
+        return ms.ToArray();
     }
 
-    private static string GetThumbnailKey(string objectKey, string suffix)
+    private static async Task<byte[]> BufferStreamAsync(Stream input, CancellationToken ct)
     {
-        var ext = Path.GetExtension(objectKey);
-        var baseName = objectKey[..^ext.Length];
-        return $"{baseName}{suffix}.jpg";
+        if (input is MemoryStream ms)
+        {
+            return ms.ToArray();
+        }
+        await using var buffer = new MemoryStream();
+        await input.CopyToAsync(buffer, ct);
+        return buffer.ToArray();
     }
 }

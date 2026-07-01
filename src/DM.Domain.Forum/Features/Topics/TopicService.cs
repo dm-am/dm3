@@ -178,20 +178,21 @@ internal class TopicService : ITopicService
             var cacheKey = $"topics:list:{board.Id:N}:take={query.Take}:ap={(int)accessPolicy}";
             topics = await _cache.GetOrCreateAsync(
                 cacheKey,
-                async () => await LoadListingAsync(board.Id, query, ct),
+                async () => await LoadListingAsync(board.Id, accessPolicy, query, ct),
                 CachePolicy.Medium);
         }
         else
         {
             // Regular path: count + fetch with full paging data. For
             // attached-only queries we skip the count (there is no paging UI).
+            var accessPolicy = _accessPolicyConverter.Convert(identity.User.Role);
             if (query.IsAttached != true)
             {
-                var totalCount = await _repository.Count(board.Id, query, ct);
+                var totalCount = await _repository.Count(board.Id, accessPolicy, query, ct);
                 pagingData = new PagingData(query, identity.Settings.Paging.TopicsPerPage, totalCount);
             }
 
-            topics = (await _repository.Get(board.Id, pagingData, query, ct)).ToArray();
+            topics = (await _repository.Get(board.Id, accessPolicy, pagingData, query, ct)).ToArray();
         }
 
         if (identity.User.IsAuthenticated)
@@ -217,10 +218,41 @@ internal class TopicService : ITopicService
     /// Deterministic loader for the cacheable-listing fast path. Skips
     /// the <c>SELECT COUNT(*)</c> round-trip entirely — cached listings
     /// are small (take &lt;= 20), and the home-page widgets do not need
-    /// pagination metadata.
+    /// pagination metadata. Access policy is plumbed through the cache key
+    /// at the caller, so this helper just forwards it to the repository.
     /// </summary>
-    private async Task<Topic[]> LoadListingAsync(Guid boardId, TopicsQuery query, CancellationToken ct) =>
-        (await _repository.Get(boardId, pagingData: null, query, ct)).ToArray();
+    private async Task<Topic[]> LoadListingAsync(Guid boardId, BoardAccessPolicy accessPolicy, TopicsQuery query, CancellationToken ct) =>
+        (await _repository.Get(boardId, accessPolicy, pagingData: null, query, ct)).ToArray();
+
+    /// <inheritdoc />
+    public async Task<(IEnumerable<Topic> topics, PagingResult? paging)> GetListAcrossBoardsAsync(
+        TopicsQuery query, CancellationToken ct = default)
+    {
+        var identity = _identityProvider.Current;
+        var accessPolicy = _accessPolicyConverter.Convert(identity.User.Role);
+
+        // Count over the access-policy-scoped result set so the paging
+        // total matches the rows the user actually sees.
+        var totalCount = await _repository.Count(boardId: null, accessPolicy, query, ct);
+        var pagingData = new PagingData(query, identity.Settings.Paging.TopicsPerPage, totalCount);
+
+        var topics = (await _repository.Get(boardId: null, accessPolicy, pagingData, query, ct)).ToArray();
+
+        if (identity.User.IsAuthenticated)
+        {
+            await _unreadCountersRepository.FillEntityCounters(topics, identity.User.UserId,
+                t => t.Id, t => t.UnreadCommentsCount);
+        }
+        else
+        {
+            foreach (var topic in topics)
+            {
+                topic.UnreadCommentsCount = topic.TotalCommentsCount;
+            }
+        }
+
+        return (topics, pagingData.Result);
+    }
 
     /// <summary>
     /// A listing query is cache-friendly when it has no dynamic filters

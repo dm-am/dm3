@@ -127,7 +127,10 @@ onUnmounted(() => {
         </span>
       </router-link>
       <router-link
-        :to="{ name: 'game-characters', params: { id: game.publicId || game.id } }"
+        :to="{
+          name: 'game-characters',
+          params: { id: game.publicId || game.id },
+        }"
         class="tabs-link"
       >
         Персонажи
@@ -136,7 +139,10 @@ onUnmounted(() => {
         </span>
       </router-link>
       <router-link
-        :to="{ name: 'game-comments', params: { id: game.publicId || game.id } }"
+        :to="{
+          name: 'game-comments',
+          params: { id: game.publicId || game.id },
+        }"
         class="tabs-link"
       >
         Комментарии

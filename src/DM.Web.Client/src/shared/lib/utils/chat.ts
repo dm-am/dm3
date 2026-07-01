@@ -8,6 +8,7 @@
 import dayjs from "dayjs";
 import type { Message } from "@/shared/api/models/common/message";
 import type { User } from "@/shared/api/models/common/user";
+import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
 
 // =============================================================================
 // Types
@@ -32,8 +33,8 @@ export type MessageOrSeparator = MessageWithContinuation | DateSeparator;
 /** Messages from same author within this period are grouped as continuation */
 export const CONTINUATION_TIME_LIMIT_MINUTES = 5;
 
-/** Users active within this period are shown as online */
-export const ONLINE_THRESHOLD_MINUTES = 5;
+/** Users active within this period are shown as online (single source: shared/lib/constants/user) */
+export { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
 
 /** Time limit for editing own messages (minutes) */
 export const EDIT_TIME_LIMIT_MINUTES = 15;
@@ -75,7 +76,9 @@ export function formatSeparatorDate(dateStr: string): string {
 // =============================================================================
 
 /** Type guard for date separator items */
-export function isDateSeparator(item: MessageOrSeparator): item is DateSeparator {
+export function isDateSeparator(
+  item: MessageOrSeparator,
+): item is DateSeparator {
   return "type" in item && (item as DateSeparator).type === "date-separator";
 }
 
@@ -152,7 +155,8 @@ export function getLikesTooltip(likes: User[]): string {
 
   if (count === 1) return `${names[0]} оценил(а) это`;
   if (count === 2) return `${names[0]} и ${names[1]} оценили это`;
-  if (count <= 5) return `${names.slice(0, -1).join(", ")} и ${names[count - 1]} оценили это`;
+  if (count <= 5)
+    return `${names.slice(0, -1).join(", ")} и ${names[count - 1]} оценили это`;
   return `${names.slice(0, 3).join(", ")} и еще ${count - 3} оценили это`;
 }
 
@@ -166,5 +170,7 @@ export function isUserOnline(
   thresholdMinutes = ONLINE_THRESHOLD_MINUTES,
 ): boolean {
   if (!lastActivityUtc) return false;
-  return dayjs().diff(dayjs(lastActivityUtc), "minute", true) <= thresholdMinutes;
+  return (
+    dayjs().diff(dayjs(lastActivityUtc), "minute", true) <= thresholdMinutes
+  );
 }

@@ -2,7 +2,9 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Games List Page", () => {
   test.describe("Page Structure", () => {
-    test("should display games table with required columns", async ({ page }) => {
+    test("should display games table with required columns", async ({
+      page,
+    }) => {
       await page.goto("/games");
 
       // Verify table exists
@@ -10,17 +12,27 @@ test.describe("Games List Page", () => {
       await expect(table).toBeVisible();
 
       // Verify column headers
-      await expect(page.getByRole("columnheader", { name: "Название" })).toBeVisible();
-      await expect(page.getByRole("columnheader", { name: "Ведущие" })).toBeVisible();
-      await expect(page.getByRole("columnheader", { name: "Статус игры" })).toBeVisible();
-      await expect(page.getByRole("columnheader", { name: "Участники" })).toBeVisible();
+      await expect(
+        page.getByRole("columnheader", { name: "Название" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("columnheader", { name: "Ведущие" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("columnheader", { name: "Статус игры" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("columnheader", { name: "Участники" }),
+      ).toBeVisible();
     });
 
     test("should display filter bar", async ({ page }) => {
       await page.goto("/games");
 
       // Search input
-      await expect(page.locator(".games-filter .search-container")).toBeVisible();
+      await expect(
+        page.locator(".games-filter .search-container"),
+      ).toBeVisible();
       await expect(page.getByPlaceholder("Поиск")).toBeVisible();
 
       // Filter button
@@ -34,7 +46,7 @@ test.describe("Games List Page", () => {
       await page.goto("/games");
 
       // Wait for table to load
-      await page.waitForSelector('#results');
+      await page.waitForSelector("#results");
 
       // Check if paging exists (may not if few games)
       const paging = page.locator(".paging-top, .paging-bottom");
@@ -116,7 +128,10 @@ test.describe("Games List Page", () => {
       await page.locator(".sort-btn").click();
 
       // Select "Популярность" option
-      await page.locator(".sort-option").filter({ hasText: "Популярность" }).click();
+      await page
+        .locator(".sort-option")
+        .filter({ hasText: "Популярность" })
+        .click();
 
       // URL should have sortBy=popularity
       await expect(page).toHaveURL(/sortBy=popularity/);
@@ -131,8 +146,12 @@ test.describe("Games List Page", () => {
       await page.locator(".sort-btn").click();
 
       // Popularity option should have hint about active readers
-      const popularityOption = page.locator(".sort-option").filter({ hasText: "Популярность" });
-      await expect(popularityOption.locator(".sort-option-hint")).toContainText("активных читателей");
+      const popularityOption = page
+        .locator(".sort-option")
+        .filter({ hasText: "Популярность" });
+      await expect(popularityOption.locator(".sort-option-hint")).toContainText(
+        "активных читателей",
+      );
     });
 
     test("should sort by title ascending", async ({ page }) => {
@@ -142,7 +161,10 @@ test.describe("Games List Page", () => {
       await page.locator(".sort-btn").click();
 
       // Select "Название" option
-      await page.locator(".sort-option").filter({ hasText: "Название" }).click();
+      await page
+        .locator(".sort-option")
+        .filter({ hasText: "Название" })
+        .click();
 
       // URL should have sortBy parameter
       await expect(page).toHaveURL(/sortBy=title/);
@@ -196,35 +218,57 @@ test.describe("Games List Page", () => {
       await page.getByRole("button", { name: "Фильтры" }).click();
 
       // Select "Статус игры"
-      await page.locator(".dropdown-item").filter({ hasText: "Статус игры" }).click();
+      await page
+        .locator(".dropdown-item")
+        .filter({ hasText: "Статус игры" })
+        .click();
 
       // Select "Оформляется" (Draft)
-      await page.locator(".dropdown-item").filter({ hasText: "Оформляется" }).click();
+      await page
+        .locator(".dropdown-item")
+        .filter({ hasText: "Оформляется" })
+        .click();
 
       // URL should update
       await expect(page).toHaveURL(/status=Draft/);
 
       // Bubble should appear
-      await expect(page.locator(".bubble").filter({ hasText: "Оформляется" })).toBeVisible();
+      await expect(
+        page.locator(".bubble").filter({ hasText: "Оформляется" }),
+      ).toBeVisible();
     });
 
-    test("should filter by Active status with recruitment", async ({ page }) => {
+    test("should filter by Active status with recruitment", async ({
+      page,
+    }) => {
       await page.goto("/games");
 
       // Open filter dropdown
       await page.getByRole("button", { name: "Фильтры" }).click();
 
       // Select "Статус игры"
-      await page.locator(".dropdown-item").filter({ hasText: "Статус игры" }).click();
+      await page
+        .locator(".dropdown-item")
+        .filter({ hasText: "Статус игры" })
+        .click();
 
       // Select "Идет игра" (Active - navigation)
-      await page.locator(".dropdown-item").filter({ hasText: "Идет игра" }).click();
+      await page
+        .locator(".dropdown-item")
+        .filter({ hasText: "Идет игра" })
+        .click();
 
       // Select "Набор игроков" to see sub-options
-      await page.locator(".dropdown-item").filter({ hasText: "Набор игроков" }).click();
+      await page
+        .locator(".dropdown-item")
+        .filter({ hasText: "Набор игроков" })
+        .click();
 
       // Select "Первый набор"
-      await page.locator(".dropdown-item").filter({ hasText: "Первый набор" }).click();
+      await page
+        .locator(".dropdown-item")
+        .filter({ hasText: "Первый набор" })
+        .click();
 
       // URL should update
       await expect(page).toHaveURL(/status=Active/);
@@ -238,13 +282,22 @@ test.describe("Games List Page", () => {
       await page.getByRole("button", { name: "Фильтры" }).click();
 
       // Select "Статус игры"
-      await page.locator(".dropdown-item").filter({ hasText: "Статус игры" }).click();
+      await page
+        .locator(".dropdown-item")
+        .filter({ hasText: "Статус игры" })
+        .click();
 
       // Select "Закрыта" (Closed - navigation)
-      await page.locator(".dropdown-item").filter({ hasText: /^Закрыта$/ }).click();
+      await page
+        .locator(".dropdown-item")
+        .filter({ hasText: /^Закрыта$/ })
+        .click();
 
       // Select "Заморожена" (Frozen)
-      await page.locator(".dropdown-item").filter({ hasText: "Заморожена" }).click();
+      await page
+        .locator(".dropdown-item")
+        .filter({ hasText: "Заморожена" })
+        .click();
 
       // URL should update
       await expect(page).toHaveURL(/status=Closed/);
@@ -255,7 +308,9 @@ test.describe("Games List Page", () => {
       await page.goto("/games?status=Active");
 
       // Status bubble should be visible
-      const statusBubble = page.locator(".bubble").filter({ hasText: "Статус игры" });
+      const statusBubble = page
+        .locator(".bubble")
+        .filter({ hasText: "Статус игры" });
       await expect(statusBubble).toBeVisible();
 
       // Click remove button on bubble
@@ -308,7 +363,9 @@ test.describe("Games List Page", () => {
       await expect(page).toHaveURL(/requiredTags=/);
 
       // Bubble should appear
-      await expect(page.locator(".bubble").filter({ hasText: "Тег:" })).toBeVisible();
+      await expect(
+        page.locator(".bubble").filter({ hasText: "Тег:" }),
+      ).toBeVisible();
     });
 
     test("should add excluded tag filter", async ({ page }) => {
@@ -318,7 +375,10 @@ test.describe("Games List Page", () => {
       await page.getByRole("button", { name: "Фильтры" }).click();
 
       // Select "Без тега"
-      await page.locator(".dropdown-item").filter({ hasText: "Без тега" }).click();
+      await page
+        .locator(".dropdown-item")
+        .filter({ hasText: "Без тега" })
+        .click();
 
       // Wait for groups to load and click first available group
       await page.waitForSelector(".dropdown-item");
@@ -334,14 +394,16 @@ test.describe("Games List Page", () => {
       await expect(page).toHaveURL(/excludedTags=/);
 
       // Bubble should appear
-      await expect(page.locator(".bubble").filter({ hasText: "Без тега:" })).toBeVisible();
+      await expect(
+        page.locator(".bubble").filter({ hasText: "Без тега:" }),
+      ).toBeVisible();
     });
 
     test("should click tag in game row to filter by it", async ({ page }) => {
       await page.goto("/games");
 
       // Wait for table to load
-      await page.waitForSelector('#results');
+      await page.waitForSelector("#results");
 
       // Find a tag link in the table
       const tagLink = page.locator(".tag-link").first();
@@ -362,7 +424,10 @@ test.describe("Games List Page", () => {
       await page.getByRole("button", { name: "Фильтры" }).click();
 
       // Select "Ведущие"
-      await page.locator(".dropdown-item").filter({ hasText: "Ведущие" }).click();
+      await page
+        .locator(".dropdown-item")
+        .filter({ hasText: "Ведущие" })
+        .click();
 
       // Should show search input for owners
       await expect(page.locator(".dropdown-search-input")).toBeVisible();
@@ -374,7 +439,10 @@ test.describe("Games List Page", () => {
 
       // Open filter dropdown and navigate to owners
       await page.getByRole("button", { name: "Фильтры" }).click();
-      await page.locator(".dropdown-item").filter({ hasText: "Ведущие" }).click();
+      await page
+        .locator(".dropdown-item")
+        .filter({ hasText: "Ведущие" })
+        .click();
 
       // Wait for owner suggestions to load
       await page.waitForSelector(".dropdown-item");
@@ -389,7 +457,9 @@ test.describe("Games List Page", () => {
         await expect(page).toHaveURL(/ownerUsernames=/);
 
         // Bubble should appear
-        await expect(page.locator(".bubble").filter({ hasText: "Ведущие:" })).toBeVisible();
+        await expect(
+          page.locator(".bubble").filter({ hasText: "Ведущие:" }),
+        ).toBeVisible();
       }
     });
   });
@@ -420,7 +490,10 @@ test.describe("Games List Page", () => {
       await page.locator(".dropdown-item").filter({ hasText: "Даты" }).click();
 
       // Select "Создание игры"
-      await page.locator(".dropdown-item").filter({ hasText: "Создание игры" }).click();
+      await page
+        .locator(".dropdown-item")
+        .filter({ hasText: "Создание игры" })
+        .click();
 
       // Should show date inputs
       await expect(page.locator(".date-input").first()).toBeVisible();
@@ -435,7 +508,10 @@ test.describe("Games List Page", () => {
 
       // Navigate to dates
       await page.locator(".dropdown-item").filter({ hasText: "Даты" }).click();
-      await page.locator(".dropdown-item").filter({ hasText: "Создание игры" }).click();
+      await page
+        .locator(".dropdown-item")
+        .filter({ hasText: "Создание игры" })
+        .click();
 
       // Fill date inputs
       await page.locator(".date-input").first().fill("2024-01-01");
@@ -449,7 +525,9 @@ test.describe("Games List Page", () => {
       await expect(page).toHaveURL(/createdToUtc=2024-12-31/);
 
       // Bubble should appear
-      await expect(page.locator(".bubble").filter({ hasText: "Создание игры:" })).toBeVisible();
+      await expect(
+        page.locator(".bubble").filter({ hasText: "Создание игры:" }),
+      ).toBeVisible();
     });
   });
 
@@ -474,7 +552,10 @@ test.describe("Games List Page", () => {
       await page.getByRole("button", { name: "Фильтры" }).click();
 
       // Navigate to status
-      await page.locator(".dropdown-item").filter({ hasText: "Статус игры" }).click();
+      await page
+        .locator(".dropdown-item")
+        .filter({ hasText: "Статус игры" })
+        .click();
 
       // Should show nav header
       await expect(page.locator(".dropdown-nav-header")).toBeVisible();
@@ -521,7 +602,7 @@ test.describe("Games List Page", () => {
       await page.goto("/games");
 
       // Wait for table
-      await page.waitForSelector('#results');
+      await page.waitForSelector("#results");
 
       // Check if pagination exists
       const nextPageLink = page.locator(".paging-bottom a").last();
@@ -537,7 +618,7 @@ test.describe("Games List Page", () => {
       await page.goto("/games?status=Active");
 
       // Wait for table
-      await page.waitForSelector('#results');
+      await page.waitForSelector("#results");
 
       // Check if pagination exists
       const nextPageLink = page.locator(".paging-bottom a").last();
@@ -552,13 +633,17 @@ test.describe("Games List Page", () => {
 
   test.describe("URL State Persistence", () => {
     test("should restore filters from URL", async ({ page }) => {
-      await page.goto("/games?status=Active&search=тест&sortBy=title&sortOrder=asc");
+      await page.goto(
+        "/games?status=Active&search=тест&sortBy=title&sortOrder=asc",
+      );
 
       // Search input should have value
       await expect(page.getByPlaceholder("Поиск")).toHaveValue("тест");
 
       // Status bubble should be visible
-      await expect(page.locator(".bubble").filter({ hasText: "Статус игры" })).toBeVisible();
+      await expect(
+        page.locator(".bubble").filter({ hasText: "Статус игры" }),
+      ).toBeVisible();
 
       // Sort button should show "Название"
       await expect(page.locator(".sort-btn")).toContainText("Название");
@@ -578,15 +663,19 @@ test.describe("Games List Page", () => {
   });
 
   test.describe("Empty States", () => {
-    test("should show empty message when no games match filters", async ({ page }) => {
+    test("should show empty message when no games match filters", async ({
+      page,
+    }) => {
       // Use a very specific search that likely won't match anything
       await page.goto("/games?search=xyznonexistentgame123456789");
 
       // Wait for table to load
-      await page.waitForSelector('#results');
+      await page.waitForSelector("#results");
 
       // Should show empty message
-      await expect(page.getByText("Нет игр по заданным фильтрам")).toBeVisible();
+      await expect(
+        page.getByText("Нет игр по заданным фильтрам"),
+      ).toBeVisible();
     });
   });
 
@@ -595,7 +684,7 @@ test.describe("Games List Page", () => {
       await page.goto("/games");
 
       // Wait for table to load
-      await page.waitForSelector('#results');
+      await page.waitForSelector("#results");
 
       // Participants column should show slots and reader count
       const participantsCell = page.locator(".participants").first();
@@ -611,7 +700,7 @@ test.describe("Games List Page", () => {
       await page.goto("/games");
 
       // Wait for table to load
-      await page.waitForSelector('#results');
+      await page.waitForSelector("#results");
 
       // Find reader count element
       const readersCount = page.locator(".readers-count").first();
@@ -627,7 +716,7 @@ test.describe("Games List Page", () => {
     test("should show loading state during data fetch", async ({ page }) => {
       // Slow down network to see loading
       await page.route("**/v1/games**", async (route) => {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 500));
         await route.continue();
       });
 
@@ -635,7 +724,7 @@ test.describe("Games List Page", () => {
 
       // Table should show loading state
       // Note: exact selector depends on DataTable implementation
-      const table = page.locator('#results');
+      const table = page.locator("#results");
       await expect(table).toBeVisible();
     });
   });

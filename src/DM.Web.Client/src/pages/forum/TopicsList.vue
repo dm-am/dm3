@@ -10,22 +10,33 @@ import { useBoardsStore, type Topic } from "@/entities/forum";
 import { UserLink } from "@/entities/user";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import { TopicsFilter, useTopicsFilter } from "@/features/topic-filter";
+import { highlightMatch } from "@/shared/lib/utils/highlight";
 import BoardNavigation from "./BoardNavigation.vue";
 import PinnedTopicsManager from "./PinnedTopicsManager.vue";
 import { useAuthStore } from "@/shared/stores";
+import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
+import LeadText from "@/shared/ui/Layout/LeadText.vue";
 import { UserRole } from "@/shared/api/models/common";
 
 const route = useRoute();
 const store = useBoardsStore();
-const { topics, attachedTopics, topicsLoading, selectedBoard, moderators } = storeToRefs(store);
+const { topics, attachedTopics, topicsLoading, topicsError, selectedBoard } =
+  storeToRefs(store);
 const { user } = storeToRefs(useAuthStore());
 
+// Section leaf owns the document title (the board name). TopicPage owns it on
+// the topic subroute — the two are mutually exclusive router views, so there
+// is no parent/child title conflict.
+useDocumentTitle(() => selectedBoard.value?.title);
+
 // Filter composable
-const { searchParams, hasActiveFilters } = useTopicsFilter();
+const { filterState, searchParams, hasActiveFilters } = useTopicsFilter();
 
 // Two-state empty text
 const emptyText = computed(() =>
-  hasActiveFilters.value ? "Топиков по заданным фильтрам не найдено" : "Топиков пока нет"
+  hasActiveFilters.value
+    ? "Топиков по заданным фильтрам не найдено"
+    : "Топиков пока нет",
 );
 
 // Moderator actions state
@@ -38,28 +49,55 @@ const canModerate = computed(() => {
   if (!user.value) return false;
 
   // Global moderators/admins
-  const isGlobalModerator = user.value.roles?.some((r: UserRole) =>
-    [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(r),
-  ) ?? false;
+  const isGlobalModerator =
+    user.value.roles?.some((r: UserRole) =>
+      [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(
+        r,
+      ),
+    ) ?? false;
   if (isGlobalModerator) return true;
 
   // Board-specific moderators
   const boardModerators = selectedBoard.value?.moderators ?? [];
-  return boardModerators.some(m => m.username === user.value?.username);
+  return boardModerators.some((m) => m.username === user.value?.username);
 });
 
-// Columns for topics table (with conditional actions column)
+// Columns for topics table. Likes column is always rendered so the
+// "sort by likes" filter has a visible target — the column doubles as
+// confirmation of the active sort. Moderator actions column tacks onto
+// the end only when the viewer can moderate this board.
 const columns = computed<Column[]>(() => {
+  // Alignment principle: identifier/text and date columns left, short numeric
+  // columns center. Widths sum to ~100%; "Дата создания" gets enough room for
+  // the "DD.MM.YYYY в HH:mm" format.
   const base: Column[] = [
-    { key: "title", label: "Топик", width: canModerate.value ? "35%" : "45%", align: "left" },
-    { key: "author", label: "Автор", width: "17%", align: "left" },
-    { key: "comments", label: "Комментарии", width: "9%", align: "center" },
-    { key: "created", label: "Дата создания", width: "13%", align: "center", hideOnMobile: true },
-    { key: "lastActivity", label: "Последняя активность", width: "16%", align: "center", hideOnMobile: true },
+    {
+      key: "title",
+      label: "Топик",
+      width: canModerate.value ? "30%" : "38%",
+      align: "left",
+    },
+    { key: "author", label: "Автор", width: "16%", align: "left" },
+    { key: "comments", label: "Комментарии", width: "10%", align: "center" },
+    { key: "likes", label: "Лайки", width: "8%", align: "center" },
+    {
+      key: "created",
+      label: "Дата создания",
+      width: "14%",
+      align: "left",
+      hideOnMobile: true,
+    },
+    {
+      key: "lastActivity",
+      label: "Последняя активность",
+      width: "14%",
+      align: "left",
+      hideOnMobile: true,
+    },
   ];
 
   if (canModerate.value) {
-    base.push({ key: "actions", label: "", width: "10%", align: "center" });
+    base.push({ key: "actions", label: "", width: "8%", align: "center" });
   }
 
   return base;
@@ -161,14 +199,18 @@ async function handleSavePinnedOrder(topicIds: string[]) {
     <!-- Board Navigation -->
     <BoardNavigation />
 
-    <!-- Moderators section -->
-    <div v-if="moderators?.length" class="moderators-section">
-      <span class="moderators-label">Модераторы раздела:</span>
-      <template v-for="(user, idx) in moderators" :key="user.username">
-        <span v-if="idx > 0">, </span>
-        <UserLink :user="user" />
-      </template>
-    </div>
+    <!-- Moderators caption (muted, like other secondary lines). Rendered from
+         the board payload — the board already carries its moderators, so no
+         separate request is needed. Explicit space after the colon so a copied
+         selection reads "Модераторы раздела: Name", not glued. -->
+    <LeadText v-if="selectedBoard?.moderators?.length" class="moderators-line">
+      Модераторы раздела:{{ " "
+      }}<template
+        v-for="(moderator, idx) in selectedBoard.moderators"
+        :key="moderator.username"
+        ><span v-if="idx > 0">, </span><UserLink :user="moderator"
+      /></template>
+    </LeadText>
 
     <!-- Moderator actions -->
     <div v-if="canModerate && attachedTopics?.length" class="moderator-actions">
@@ -183,37 +225,65 @@ async function handleSavePinnedOrder(topicIds: string[]) {
     <!-- Filter controls -->
     <TopicsFilter />
 
-    <!-- Topics table -->
+    <!-- Error state: a failed load must not be presented as an empty list.
+         Shown only when there are no stale rows to keep on screen
+         (stale-while-revalidate keeps already-loaded topics otherwise). -->
+    <div v-if="topicsError && !displayTopics.length" class="error-message">
+      Не удалось загрузить топики. Попробуйте обновить страницу.
+    </div>
+
+    <!-- Topics table. Treat "board not yet resolved" as loading so the empty
+         state never flashes before topics can be fetched. -->
     <DataTable
+      v-else
       :columns="columns"
       :data="displayTopics"
-      :loading="topicsLoading"
+      :loading="topicsLoading || !selectedBoard"
       :empty-text="emptyText"
     >
       <template #cell-title="{ row }">
         <Tooltip v-if="row.description" :text="row.description">
           <router-link
             :to="topicLink(row)"
-            :class="['topic-link', { pinned: row.isPinned, closed: row.isClosed }]"
+            :class="[
+              'topic-link',
+              { pinned: row.isPinned, closed: row.isClosed },
+            ]"
           >
             <SvgIcon v-if="row.isPinned" name="pin" class="topic-icon" />
             <SvgIcon v-if="row.isClosed" name="locked" class="topic-icon" />
-            {{ row.title }}
+            <span
+              v-if="filterState.search"
+              v-html="highlightMatch(row.title, filterState.search)"
+            />
+            <template v-else>{{ row.title }}</template>
           </router-link>
         </Tooltip>
         <router-link
           v-else
           :to="topicLink(row)"
-          :class="['topic-link', { pinned: row.isPinned, closed: row.isClosed }]"
+          :class="[
+            'topic-link',
+            { pinned: row.isPinned, closed: row.isClosed },
+          ]"
         >
           <SvgIcon v-if="row.isPinned" name="pin" class="topic-icon" />
           <SvgIcon v-if="row.isClosed" name="locked" class="topic-icon" />
-          {{ row.title }}
+          <span
+            v-if="filterState.search"
+            v-html="highlightMatch(row.title, filterState.search)"
+          />
+          <template v-else>{{ row.title }}</template>
         </router-link>
       </template>
 
       <template #cell-author="{ row }">
-        <UserLink :user="row.author!" />
+        <UserLink
+          v-if="row.author"
+          :user="row.author"
+          :search-query="filterState.search"
+        />
+        <span v-else class="muted">удаленный пользователь</span>
       </template>
 
       <template #cell-comments="{ row }">
@@ -221,16 +291,23 @@ async function handleSavePinnedOrder(topicIds: string[]) {
           ><router-link :to="topicLink(row)">{{
             row.commentsCount
           }}</router-link></Tooltip
-        ><span class="muted"> (</span
-        ><template v-if="row.unreadCommentsCount"
-          ><Tooltip :text="`Непрочитанных комментариев: ${row.unreadCommentsCount}`"
-            ><router-link :to="`${topicLink(row)}#comment-${row.lastComment?.id}`" class="unread">{{
-              row.unreadCommentsCount
-            }}</router-link></Tooltip
-          ></template
-        ><template v-else
-          ><span class="muted">0</span></template
-        ><span class="muted">)</span>
+        ><!-- Unread suffix only for authenticated viewers with unread comments.
+             Guests have no "unread" concept, so they see just the total. -->
+        <template v-if="user && row.unreadCommentsCount"
+          ><span class="muted"> (</span
+          ><Tooltip
+            :text="`Непрочитанных комментариев: ${row.unreadCommentsCount}`"
+            ><router-link
+              :to="`${topicLink(row)}#comment-${row.lastComment?.id}`"
+              class="unread"
+              >{{ row.unreadCommentsCount }}</router-link
+            ></Tooltip
+          ><span class="muted">)</span></template
+        >
+      </template>
+
+      <template #cell-likes="{ row }">
+        <span>{{ row.likesCount }}</span>
       </template>
 
       <template #cell-created="{ row }">
@@ -239,12 +316,17 @@ async function handleSavePinnedOrder(topicIds: string[]) {
 
       <template #cell-lastActivity="{ row }">
         <template v-if="row.lastComment">
-          <Tooltip :text="row.lastComment.author.username">
+          <Tooltip
+            :text="row.lastComment.author?.username ?? 'удаленный пользователь'"
+          >
             <router-link
               :to="`${topicLink(row)}#comment-${row.lastComment.id}`"
               class="last-activity-link"
             >
-              <HumanDate :date="row.lastComment.createdUtc" format="DD.MM.YYYY [в] HH:mm" />
+              <HumanDate
+                :date="row.lastComment.createdUtc"
+                format="DD.MM.YYYY [в] HH:mm"
+              />
             </router-link>
           </Tooltip>
         </template>
@@ -255,7 +337,10 @@ async function handleSavePinnedOrder(topicIds: string[]) {
         <Tooltip :text="row.isPinned ? 'Открепить топик' : 'Закрепить топик'">
           <button
             class="pin-button"
-            :class="{ pinned: row.isPinned, loading: pinningTopicId === row.id }"
+            :class="{
+              pinned: row.isPinned,
+              loading: pinningTopicId === row.id,
+            }"
             :disabled="pinningTopicId !== null"
             @click="handleTogglePin(row)"
           >
@@ -264,7 +349,7 @@ async function handleSavePinnedOrder(topicIds: string[]) {
         </Tooltip>
       </template>
 
-      <template v-if="topics?.paging && topics.paging.pages > 1 && !hasActiveFilters" #footer>
+      <template v-if="topics?.paging && topics.paging.pages > 1" #footer>
         <Paging
           :paging="topics.paging"
           :to="{ name: 'forum', params: { alias: route.params.alias } }"
@@ -288,19 +373,12 @@ async function handleSavePinnedOrder(topicIds: string[]) {
 <style scoped lang="sass">
 @import "@/assets/styles/Variables"
 @import "@/assets/styles/Themes"
+@import "@/assets/styles/Inputs"
 
 .topics-page
   display: flex
   flex-direction: column
   gap: $small
-
-.moderators-section
-  margin-bottom: $small
-  font-size: 14px
-
-.moderators-label
-  color: $text-muted
-  margin-right: $small
 
 .topic-link
   color: $link
@@ -324,6 +402,8 @@ async function handleSavePinnedOrder(topicIds: string[]) {
 
 .unread
   color: $link
+  &:hover
+    color: $link-hover
 
 .last-activity-link
   color: $link
@@ -331,17 +411,8 @@ async function handleSavePinnedOrder(topicIds: string[]) {
     color: $link-hover
 
 .pin-button
-  background: none
-  border: 1px solid $border
-  border-radius: 4px
-  padding: 4px 8px
-  cursor: pointer
-  color: $text-muted
-  transition: opacity 0.2s ease
-
-  &:hover:not(:disabled)
-    color: $link
-    border-color: $link
+  padding: $minor $small
+  +button
 
   &.pinned
     color: $link
@@ -351,9 +422,12 @@ async function handleSavePinnedOrder(topicIds: string[]) {
     opacity: 0.5
     cursor: wait
 
-  &:disabled
-    cursor: not-allowed
-    opacity: 0.5
+.error-message
+  padding: $medium
+  color: $text-on-red
+  background-color: $bg-highlight-red
+  border-radius: $border-radius
+  margin-bottom: $medium
 
 .moderator-actions
   display: flex
@@ -363,16 +437,6 @@ async function handleSavePinnedOrder(topicIds: string[]) {
 .manage-pinned-button
   display: inline-flex
   align-items: center
-  gap: 6px
-  padding: $small $medium
-  background: transparent
-  border: 1px solid $link
-  border-radius: 4px
-  color: $link
-  font-size: 14px
-  cursor: pointer
-
-  &:hover
-    background: $link
-    color: white
+  gap: $small
+  +button
 </style>

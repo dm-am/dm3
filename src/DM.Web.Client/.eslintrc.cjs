@@ -18,4 +18,9 @@ module.exports = {
   parserOptions: {
     ecmaVersion: "latest",
   },
+  rules: {
+    // The design system deliberately uses single-word names for shared UI
+    // primitives (Button, Tooltip, Tabs, Form, Paging, Header, Footer, ...).
+    "vue/multi-word-component-names": "off",
+  },
 };

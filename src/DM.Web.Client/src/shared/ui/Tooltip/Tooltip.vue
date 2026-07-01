@@ -4,6 +4,8 @@
     class="tooltip-trigger"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
+    @focusin="handleFocusIn"
+    @focusout="handleFocusOut"
     @touchstart="handleTouchStart"
     @keydown.esc="hide"
     :aria-describedby="isVisible ? tooltipId : undefined"
@@ -100,7 +102,11 @@ function measureTextWidth(text: string, font: string): number {
 }
 
 // Simulate word wrapping and find widest line (respects \n as forced line breaks)
-function getWidestLineWidth(text: string, font: string, maxWidth: number): number {
+function getWidestLineWidth(
+  text: string,
+  font: string,
+  maxWidth: number,
+): number {
   // Split by newlines first (white-space: pre-line preserves them)
   const paragraphs = text.split(/\n/);
   let widestWidth = 0;
@@ -153,7 +159,8 @@ function measureAndShrink() {
     const paddingRight = parseFloat(style.paddingRight) || 0;
     const borderLeft = parseFloat(style.borderLeftWidth) || 0;
     const borderRight = parseFloat(style.borderRightWidth) || 0;
-    const horizontalExtra = paddingLeft + paddingRight + borderLeft + borderRight;
+    const horizontalExtra =
+      paddingLeft + paddingRight + borderLeft + borderRight;
 
     // Max text width (content area)
     const maxTextWidth = MAX_TOOLTIP_WIDTH - horizontalExtra;
@@ -215,6 +222,21 @@ function handleTooltipMouseLeave() {
   hideTimer = setTimeout(hide, props.delay);
 }
 
+// Keyboard: show immediately on focus (no delay), hide when focus leaves
+function handleFocusIn() {
+  if (props.disabled) return;
+  clearAllTimers();
+  show();
+}
+
+function handleFocusOut(e: FocusEvent) {
+  // Ignore focus moves within the trigger (e.g. between its children)
+  const next = e.relatedTarget as Node | null;
+  if (next && triggerRef.value?.contains(next)) return;
+  clearAllTimers();
+  hide();
+}
+
 // Touch: show immediately, hide on touch outside
 function handleTouchStart() {
   if (props.disabled) return;
@@ -237,7 +259,9 @@ function handleDocumentTouch(e: TouchEvent) {
 }
 
 onMounted(() => {
-  document.addEventListener("touchstart", handleDocumentTouch, { passive: true });
+  document.addEventListener("touchstart", handleDocumentTouch, {
+    passive: true,
+  });
 });
 
 // Update position when tooltip becomes visible

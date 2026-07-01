@@ -10,7 +10,11 @@ import {
   dateToApiStart,
   dateToApiEnd,
 } from "@/shared/lib/filters";
-import type { TopicsFilterState, TopicsSearchParams, SortByValue } from "./types";
+import type {
+  TopicsFilterState,
+  TopicsSearchParams,
+  SortByValue,
+} from "./types";
 import { SORT_OPTIONS } from "./types";
 
 // =============================================================================
@@ -54,7 +58,10 @@ type TopicsFilterAction =
 // PURE REDUCER
 // =============================================================================
 
-function reducer(state: TopicsFilterState, action: TopicsFilterAction): TopicsFilterState {
+function reducer(
+  state: TopicsFilterState,
+  action: TopicsFilterAction,
+): TopicsFilterState {
   // Clone state with new Set to avoid mutation
   const newState: TopicsFilterState = {
     ...state,
@@ -140,7 +147,11 @@ function parseQueryToState(query: LocationQuery): TopicsFilterState {
 
   state.createdFromUtc = parseDateFromUrl(query.createdFromUtc as string);
   state.createdToUtc = parseDateFromUrl(query.createdToUtc as string);
-  state.sortBy = validateSortField(query.sortBy as string, validSortByValues, "lastActivity") as SortByValue;
+  state.sortBy = validateSortField(
+    query.sortBy as string,
+    validSortByValues,
+    "lastActivity",
+  ) as SortByValue;
   state.sortOrder = parseSortDirection(query.sortOrder as string, "desc");
 
   return state;
@@ -164,7 +175,10 @@ function buildQueryFromState(state: TopicsFilterState): Record<string, string> {
 // MODULE-LEVEL DISPATCHER
 // =============================================================================
 
-const dispatcher = createFilterDispatcher<TopicsFilterState, TopicsFilterAction>({
+const dispatcher = createFilterDispatcher<
+  TopicsFilterState,
+  TopicsFilterAction
+>({
   buildQuery: buildQueryFromState,
   name: "useTopicsFilter",
 });
@@ -188,7 +202,9 @@ export function useTopicsFilter(): TopicsFilterComposable {
 
   dispatcher.setRouter(router);
 
-  const filterState = computed<TopicsFilterState>(() => parseQueryToState(route.query));
+  const filterState = computed<TopicsFilterState>(() =>
+    parseQueryToState(route.query),
+  );
 
   const getCurrentState = () => filterState.value;
 
@@ -203,8 +219,10 @@ export function useTopicsFilter(): TopicsFilterComposable {
     if (state.authors.size > 0) params.authors = [...state.authors];
 
     // Convert dates to ISO 8601 with time for API
-    if (state.createdFromUtc) params.createdFromUtc = dateToApiStart(state.createdFromUtc);
-    if (state.createdToUtc) params.createdToUtc = dateToApiEnd(state.createdToUtc);
+    if (state.createdFromUtc)
+      params.createdFromUtc = dateToApiStart(state.createdFromUtc);
+    if (state.createdToUtc)
+      params.createdToUtc = dateToApiEnd(state.createdToUtc);
 
     params.sortBy = state.sortBy;
     params.sortOrder = state.sortOrder;
@@ -232,9 +250,12 @@ export function useTopicsFilter(): TopicsFilterComposable {
   });
 
   // Action dispatchers
-  const setSearch = (search: string) => dispatch({ type: "SET_SEARCH", search });
-  const addAuthor = (username: string) => dispatch({ type: "ADD_AUTHOR", username });
-  const removeAuthor = (username: string) => dispatch({ type: "REMOVE_AUTHOR", username });
+  const setSearch = (search: string) =>
+    dispatch({ type: "SET_SEARCH", search });
+  const addAuthor = (username: string) =>
+    dispatch({ type: "ADD_AUTHOR", username });
+  const removeAuthor = (username: string) =>
+    dispatch({ type: "REMOVE_AUTHOR", username });
   const clearAuthors = () => dispatch({ type: "CLEAR_AUTHORS" });
   const setDateRange = (from: string | null, to: string | null) =>
     dispatch({ type: "SET_DATE_RANGE", from, to });

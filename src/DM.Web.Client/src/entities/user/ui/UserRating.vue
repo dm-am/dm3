@@ -1,37 +1,92 @@
 <script setup lang="ts">
-import type { User } from "../model/types";
+import { computed } from "vue";
+import type { User, UserRef } from "../model/types";
+import { Tooltip } from "@/shared/ui/Tooltip";
 
-defineProps<{ user: User }>();
+const props = defineProps<{
+  user: User | UserRef;
+}>();
+
+const rating = computed(() => {
+  const r = (props.user as User).rating;
+  if (!r) return null;
+  return {
+    reviewSum: r.postReviewScoreSum ?? 0,
+    postCount: r.totalPosts ?? 0,
+  };
+});
+
+const reviewSumDisplay = computed(() => {
+  if (!rating.value) return "";
+  const v = rating.value.reviewSum;
+  return v > 0 ? `+${v}` : String(v);
+});
+
+const reviewSumClass = computed(() => {
+  if (!rating.value) return "muted";
+  if (rating.value.reviewSum > 0) return "positive";
+  if (rating.value.reviewSum < 0) return "negative";
+  return "muted";
+});
+
+const target = computed(() => ({
+  name: "received-reviews" as const,
+  params: { username: props.user.username },
+}));
 </script>
 
 <template>
-  <router-link
-    class="rating"
-    :to="{ name: 'profile', params: { username: user.username } }"
+  <span v-if="rating" class="user-rating">
+    <Tooltip text="Сумма полученных оценок"
+      ><router-link :to="target" class="review-sum" :class="reviewSumClass">{{
+        reviewSumDisplay
+      }}</router-link></Tooltip
+    ><span class="sep">/</span
+    ><Tooltip text="Количество постов"
+      ><span class="post-count">{{ rating.postCount }}</span></Tooltip
+    >
+  </span>
+  <router-link v-else :to="target" class="user-rating user-rating-na"
+    >n/a</router-link
   >
-    <template v-if="user.rating">
-      <span
-        :class="{
-          quality: true,
-          positive: user.rating.postReviewScoreSum > 0,
-          negative: user.rating.postReviewScoreSum < 0,
-        }"
-        >{{ user.rating.postReviewScoreSum }}</span
-      >/{{ user.rating.totalPosts }}
-    </template>
-    <template v-else>скрыт</template>
-  </router-link>
 </template>
 
 <style scoped lang="sass">
 @import "src/assets/styles/Themes"
 
-.quality
+.user-rating
+  white-space: nowrap
+
+.review-sum
   font-weight: bold
+  color: $link
+  text-decoration: none
 
-.positive
-  color: $accent-green
+  &.positive
+    color: $accent-green
 
-.negative
-  color: $accent-red
+  &.negative
+    color: $accent-red
+
+  &.muted
+    color: $text-muted
+
+  &:hover
+    text-decoration: underline
+
+.sep
+  color: $text-muted
+  margin: 0 0.15em
+
+.post-count
+  color: $text
+  cursor: help
+
+.user-rating-na
+  font-weight: bold
+  color: $text-muted
+  text-decoration: none
+
+  &:hover
+    text-decoration: underline
 </style>

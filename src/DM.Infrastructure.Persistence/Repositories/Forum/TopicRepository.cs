@@ -42,83 +42,27 @@ internal class TopicRepository : ITopicRepository
     // --- READ ---
 
     /// <inheritdoc />
-    public Task<int> Count(Guid boardId, TopicsQuery query, CancellationToken ct = default)
+    public Task<int> Count(Guid? boardId, BoardAccessPolicy accessPolicy, TopicsQuery query, CancellationToken ct = default)
     {
         var dbQuery = _dbContext.Topics
             .TagWith("DM.Forum.TopicsCount")
-            .Where(t => !t.IsRemoved && t.BoardId == boardId);
+            .Where(t => !t.IsRemoved);
 
-        // Filter by attached status
-        if (query.IsAttached.HasValue)
-        {
-            dbQuery = dbQuery.Where(t => t.IsAttached == query.IsAttached.Value);
-        }
-
-        // Search by title
-        if (!string.IsNullOrWhiteSpace(query.Search))
-        {
-            var searchTerm = query.Search.Trim();
-            dbQuery = dbQuery.Where(t => EF.Functions.ILike(t.Title, $"%{searchTerm}%"));
-        }
-
-        // Filter by authors (OR logic)
-        if (query.Authors is { Count: > 0 })
-        {
-            var authorNames = query.Authors.Select(a => a.ToLowerInvariant()).ToArray();
-            dbQuery = dbQuery.Where(t => authorNames.Contains(t.Author.Username.ToLower()));
-        }
-
-        // Filter by created date range
-        if (query.CreatedFromUtc.HasValue)
-        {
-            dbQuery = dbQuery.Where(t => t.CreatedUtc >= query.CreatedFromUtc.Value);
-        }
-
-        if (query.CreatedToUtc.HasValue)
-        {
-            dbQuery = dbQuery.Where(t => t.CreatedUtc <= query.CreatedToUtc.Value);
-        }
+        dbQuery = ApplyScope(dbQuery, boardId, accessPolicy);
+        dbQuery = ApplyFilters(dbQuery, query);
 
         return dbQuery.CountAsync(ct);
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Topic>> Get(Guid boardId, PagingData? pagingData, TopicsQuery query, CancellationToken ct = default)
+    public async Task<IEnumerable<Topic>> Get(Guid? boardId, BoardAccessPolicy accessPolicy, PagingData? pagingData, TopicsQuery query, CancellationToken ct = default)
     {
         var dbQuery = _dbContext.Topics
-            .TagWith("DM.Forum.TopicsList")
-            .Where(t => !t.IsRemoved && t.BoardId == boardId);
+            .TagWith(boardId.HasValue ? "DM.Forum.TopicsList" : "DM.Forum.TopicsList.CrossBoard")
+            .Where(t => !t.IsRemoved);
 
-        // Filter by attached status
-        if (query.IsAttached.HasValue)
-        {
-            dbQuery = dbQuery.Where(t => t.IsAttached == query.IsAttached.Value);
-        }
-
-        // Search by title
-        if (!string.IsNullOrWhiteSpace(query.Search))
-        {
-            var searchTerm = query.Search.Trim();
-            dbQuery = dbQuery.Where(t => EF.Functions.ILike(t.Title, $"%{searchTerm}%"));
-        }
-
-        // Filter by authors (OR logic)
-        if (query.Authors is { Count: > 0 })
-        {
-            var authorNames = query.Authors.Select(a => a.ToLowerInvariant()).ToArray();
-            dbQuery = dbQuery.Where(t => authorNames.Contains(t.Author.Username.ToLower()));
-        }
-
-        // Filter by created date range
-        if (query.CreatedFromUtc.HasValue)
-        {
-            dbQuery = dbQuery.Where(t => t.CreatedUtc >= query.CreatedFromUtc.Value);
-        }
-
-        if (query.CreatedToUtc.HasValue)
-        {
-            dbQuery = dbQuery.Where(t => t.CreatedUtc <= query.CreatedToUtc.Value);
-        }
+        dbQuery = ApplyScope(dbQuery, boardId, accessPolicy);
+        dbQuery = ApplyFilters(dbQuery, query);
 
         // Sort by LastActivityUtc needs the raw LastComment relation so
         // we sort in SQL BEFORE the Topic DTO projection. AutoMapper's
@@ -134,6 +78,18 @@ internal class TopicRepository : ITopicRepository
             ("created", false) => dbQuery.OrderBy(t => t.CreatedUtc),
             ("title", true) => dbQuery.OrderByDescending(t => t.Title),
             ("title", false) => dbQuery.OrderBy(t => t.Title),
+            // Sort by likes uses a subquery on the Likes table. The same
+            // count is materialised below into LikesCount via a single
+            // batched GROUP BY — but the sort happens inside SQL so the
+            // ordering is consistent with the projected count.
+            ("likes", true) => dbQuery.OrderByDescending(t => _dbContext.Likes.Count(l =>
+                !l.IsRemoved &&
+                l.EntityId == t.TopicId &&
+                l.EntityType == Domain.Core.Enums.LikeEntityType.Topic)),
+            ("likes", false) => dbQuery.OrderBy(t => _dbContext.Likes.Count(l =>
+                !l.IsRemoved &&
+                l.EntityId == t.TopicId &&
+                l.EntityType == Domain.Core.Enums.LikeEntityType.Topic)),
             // Sort by LastActivityUtc = LastComment?.CreatedUtc ?? CreatedUtc.
             // EF translates the coalesce into a single ORDER BY expression.
             (_, true) => dbQuery.OrderByDescending(t =>
@@ -158,10 +114,10 @@ internal class TopicRepository : ITopicRepository
             .ProjectTo<Topic>(_mapper.ConfigurationProvider)
             .ToArrayAsync(ct);
 
-        // Fill TotalCommentsCount in a single batched GROUP BY instead of
-        // a correlated subquery per row (PERFORMANCE.md → "Avoid inline
-        // aggregations"). For a page of N topics we trade N subqueries
-        // for 1 indexed lookup.
+        // Fill TotalCommentsCount + LikesCount in two batched GROUP BY
+        // queries instead of correlated subqueries per row (PERFORMANCE.md
+        // → "Avoid inline aggregations"). For a page of N topics we trade
+        // 2N subqueries for 2 indexed lookups.
         //
         // topicIds is a List<Guid>, NOT Guid[] — EF Core's LINQ
         // translator has a Guid[] edge case that throws TypeLoadException
@@ -176,36 +132,138 @@ internal class TopicRepository : ITopicRepository
                 .Select(g => new { EntityId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.EntityId, x => x.Count, ct);
 
+            var likeCounts = await _dbContext.Likes
+                .AsNoTracking()
+                .Where(l =>
+                    !l.IsRemoved &&
+                    l.EntityType == Domain.Core.Enums.LikeEntityType.Topic &&
+                    topicIds.Contains(l.EntityId))
+                .GroupBy(l => l.EntityId)
+                .Select(g => new { EntityId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.EntityId, x => x.Count, ct);
+
             foreach (var topic in topics)
             {
                 commentCounts.TryGetValue(topic.Id, out var count);
                 topic.TotalCommentsCount = count;
+                likeCounts.TryGetValue(topic.Id, out var likes);
+                topic.LikesCount = likes;
             }
         }
 
         return topics;
     }
 
+    /// <summary>
+    /// Scope predicate: either a single board (per-board listing) or all
+    /// boards visible to the current viewer (cross-board listing — used by
+    /// the user profile's Topics tab). The access-policy bitmask is the
+    /// same one already used by <see cref="Get(Guid, BoardAccessPolicy, CancellationToken)"/>
+    /// and the single-topic lookup, so visibility is consistent across paths.
+    /// </summary>
+    private static IQueryable<Entities.Forum.Topic> ApplyScope(
+        IQueryable<Entities.Forum.Topic> dbQuery, Guid? boardId, BoardAccessPolicy accessPolicy)
+    {
+        return boardId.HasValue
+            ? dbQuery.Where(t => t.BoardId == boardId.Value)
+            : dbQuery.Where(t => (t.Board.ViewPolicy & accessPolicy) != BoardAccessPolicy.None);
+    }
+
+    /// <summary>
+    /// Shared filter predicates for both count and listing queries — kept
+    /// in one place so a new filter (added to TopicsQuery) automatically
+    /// affects pagination AND the listing without diverging.
+    /// </summary>
+    private static IQueryable<Entities.Forum.Topic> ApplyFilters(
+        IQueryable<Entities.Forum.Topic> dbQuery, TopicsQuery query)
+    {
+        if (query.IsAttached.HasValue)
+        {
+            dbQuery = dbQuery.Where(t => t.IsAttached == query.IsAttached.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var searchTerm = query.Search.Trim();
+            dbQuery = dbQuery.Where(t => EF.Functions.ILike(t.Title, $"%{searchTerm}%"));
+        }
+
+        if (query.Authors is { Count: > 0 })
+        {
+            var authorNames = query.Authors.Select(a => a.ToLowerInvariant()).ToArray();
+            dbQuery = dbQuery.Where(t => authorNames.Contains(t.Author.Username.ToLower()));
+        }
+
+        if (query.CreatedFromUtc.HasValue)
+        {
+            dbQuery = dbQuery.Where(t => t.CreatedUtc >= query.CreatedFromUtc.Value);
+        }
+
+        if (query.CreatedToUtc.HasValue)
+        {
+            dbQuery = dbQuery.Where(t => t.CreatedUtc <= query.CreatedToUtc.Value);
+        }
+
+        return dbQuery;
+    }
+
     /// <inheritdoc />
     public async Task<Topic?> Get(Guid topicId, BoardAccessPolicy accessPolicy, CancellationToken ct = default)
     {
-        return await _dbContext.Topics
+        var topic = await _dbContext.Topics
             .TagWith("DM.Forum.Topic")
             .Where(t => !t.IsRemoved && t.TopicId == topicId &&
                         (t.Board.ViewPolicy & accessPolicy) != BoardAccessPolicy.None)
+            .AsNoTracking()
             .ProjectTo<Topic>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
+
+        await FillCounts(topic, ct);
+        return topic;
     }
 
     /// <inheritdoc />
     public async Task<Topic?> GetByBoardAndNumber(Guid boardId, int topicNumber, BoardAccessPolicy accessPolicy, CancellationToken ct = default)
     {
-        return await _dbContext.Topics
+        var topic = await _dbContext.Topics
             .TagWith("DM.Forum.TopicByBoardAndNumber")
             .Where(t => !t.IsRemoved && t.BoardId == boardId && t.TopicNumber == topicNumber &&
                         (t.Board.ViewPolicy & accessPolicy) != BoardAccessPolicy.None)
+            .AsNoTracking()
             .ProjectTo<Topic>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
+
+        await FillCounts(topic, ct);
+        return topic;
+    }
+
+    /// <summary>
+    /// Backfill <see cref="Topic.TotalCommentsCount"/> and
+    /// <see cref="Topic.LikesCount"/> for a single topic — the same counts
+    /// the list path materialises via batched GROUP BY. The mapping profile
+    /// intentionally ignores these to avoid per-row correlated subqueries, so
+    /// the single-topic page would otherwise show 0. See the list path above
+    /// and TopicMappingProfile for the rationale.
+    /// </summary>
+    private async Task FillCounts(Topic? topic, CancellationToken ct)
+    {
+        if (topic == null)
+        {
+            return;
+        }
+
+        topic.TotalCommentsCount = await _dbContext.Comments
+            .AsNoTracking()
+            .Where(c => c.EntityId == topic.Id && !c.IsRemoved)
+            .CountAsync(ct);
+
+        topic.LikesCount = await _dbContext.Likes
+            .AsNoTracking()
+            .Where(l =>
+                !l.IsRemoved &&
+                l.EntityType == Domain.Core.Enums.LikeEntityType.Topic &&
+                l.EntityId == topic.Id)
+            .CountAsync(ct);
     }
 
     // --- WRITE ---

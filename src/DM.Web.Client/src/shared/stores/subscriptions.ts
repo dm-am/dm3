@@ -84,6 +84,12 @@ export const useSubscriptionsStore = defineStore("subscriptions", () => {
     await all.fetch();
   };
 
+  // Update settings on an existing subscription
+  const updateSettings = async (subscriptionId: string, settings: number) => {
+    await SubscriptionApi.updateSettings(subscriptionId, { settings });
+    await all.fetch();
+  };
+
   // Unsubscribe by target
   const unsubscribeByTarget = async (
     targetType: SubscriptionTargetType,
@@ -121,5 +127,6 @@ export const useSubscriptionsStore = defineStore("subscriptions", () => {
     subscribe,
     unsubscribe,
     unsubscribeByTarget,
+    updateSettings,
   };
 });

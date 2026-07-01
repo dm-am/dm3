@@ -8,7 +8,7 @@ import { storeToRefs } from "pinia";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 
 const store = usePollsStore();
-const { activePolls } = storeToRefs(store);
+const { activePolls, activePollsError } = storeToRefs(store);
 
 onMounted(() => store.fetchActivePolls());
 </script>
@@ -16,9 +16,15 @@ onMounted(() => store.fetchActivePolls());
 <template>
   <SidebarBlock token="ActivePolls">
     <template #title>Активные опросы</template>
-    <SidebarSkeleton v-if="activePolls === null" :lines="3" />
+    <SidebarSkeleton
+      v-if="activePolls === null && !activePollsError"
+      :lines="3"
+    />
+    <SecondaryText v-else-if="activePolls === null">
+      Не удалось загрузить
+    </SecondaryText>
     <SecondaryText v-else-if="activePolls.length === 0">
-      Нет активных опросов
+      Активных опросов пока нет
     </SecondaryText>
     <Poll v-else v-for="poll in activePolls" :key="poll.id" :poll="poll" />
     <div class="separator">

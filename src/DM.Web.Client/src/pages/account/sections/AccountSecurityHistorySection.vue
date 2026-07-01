@@ -71,7 +71,6 @@ async function loadEvents() {
   }
 }
 
-
 function eventTitle(type: SecurityEventType): string {
   switch (type) {
     case "LoginSuccess":

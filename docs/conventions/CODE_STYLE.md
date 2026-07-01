@@ -28,7 +28,7 @@
 | Идентификатор пользователя | `Username` | `Login`, `UserLogin` |
 | Собственный ID сущности | `Id` | `NoteId`, `TicketId` |
 | Дата изменения | `ModifiedUtc` | `UpdatedUtc`, `EditedUtc`, `LastUpdateUtc` |
-| Счётчики (множественное) | `LoginsCount`, `SharedIpsCount` | `LoginCount`, `SharedIpCount` |
+| Счетчики (множественное) | `LoginsCount`, `SharedIpsCount` | `LoginCount`, `SharedIpCount` |
 | Автор | `AuthorUsername`, `Author` | `AuthorLogin` |
 | Мастер игры | `MasterUsername`, `Master` | `MasterLogin` |
 
@@ -175,7 +175,7 @@
 **WCAG требования** (1.4.13):
 - Появляется на hover И focus
 - Закрывается по ESC
-- Остаётся при наведении на сам tooltip
+- Остается при наведении на сам tooltip
 
 **НЕ используй** native `title` атрибут — он не доступен для клавиатуры/touch.
 
@@ -294,7 +294,7 @@ import { SvgIcon } from "@/shared/ui/Icon";
 ### НЕ делай
 
 - ❌ `$accent-green` для toast-success — в dark theme контраст 1:1
-- ❌ `$text-on-green` — это цвет для текста НА зелёном фоне интерфейса
+- ❌ `$text-on-green` — это цвет для текста НА зеленом фоне интерфейса
 - ❌ Разные цвета для light/dark без проверки контрастности
 
 ---
@@ -303,18 +303,11 @@ import { SvgIcon } from "@/shared/ui/Icon";
 
 ### Принцип
 
-**Никаких спиннеров.** Используй текст "Загрузка..." через `<secondary-text>`.
-
-### Правильно
-
-```vue
-<secondary-text v-if="loading">Загрузка...</secondary-text>
-```
+**Skeleton-first.** Предпочитаем скелетоны, повторяющие layout будущего контента. SSOT: [UI_STANDARDS.md](./UI_STANDARDS.md) → «Loading State Standards» (там же — когда допустим текст «Загрузка...»).
 
 ### НЕ делай
 
 - ❌ CSS-спиннеры / анимированные индикаторы
-- ❌ Skeleton loaders
 - ❌ Компоненты типа `LoadingSpinner`
 - ❌ Иконки загрузки
 
@@ -322,15 +315,15 @@ import { SvgIcon } from "@/shared/ui/Icon";
 
 ## Frontend: CSS Transitions
 
-- **`transition: all` запрещён.** Всегда перечислять свойства явно (performance и predictability).
-- Переключение темы анимируется через **View Transition API**, не через CSS transitions. Подробности: [UI_STANDARDS.md](./UI_STANDARDS.md) → «Переключение темы».
+- **`transition: all` запрещен.** Всегда перечислять свойства явно (performance и predictability).
+- Переключение темы — **мгновенный snap** CSS-переменных (без анимации, через временную блокировку transitions). Подробности: [UI_STANDARDS.md](./UI_STANDARDS.md) → «Переключение темы».
 - Для hover/expand/collapse — использовать миксины `+transition-safe()` / `+transition-safe-multi()` из `_Animations.sass`, которые уважают `prefers-reduced-motion`.
 
 ---
 
 ## Frontend: безопасный `v-html`
 
-`v-html` разрешён **только** на полях, которые сервер уже отрендерил как HTML (поля, сериализованные из BbText DTO). Раз-сырой пользовательский текст биндить через `v-html` **запрещено** — это XSS-vector и, для BBCode-контента, обход permission-фильтрации.
+`v-html` разрешен **только** на полях, которые сервер уже отрендерил как HTML (поля, сериализованные из BbText DTO). Раз-сырой пользовательский текст биндить через `v-html` **запрещено** — это XSS-vector и, для BBCode-контента, обход permission-фильтрации.
 
 Клиентский BBCode-renderer существует **только как внутренний инструмент редактора** для переключения между режимами WYSIWYG и raw BBCode. Любой другой импорт клиентского BBCode-рендерера — ошибка. Display-компоненты (чат, комментарии, посты, топики, профили) должны получать готовый HTML от сервера.
 

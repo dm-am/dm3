@@ -192,7 +192,9 @@ async function liftBan(banId: string) {
         >
           ({{ violations.activeWarningPoints }} активных баллов)
         </span>
-        <span class="mod-expand-icon">{{ showWarnings ? symbols.triangleDown : symbols.triangleRight }}</span>
+        <span class="mod-expand-icon">{{
+          showWarnings ? symbols.triangleDown : symbols.triangleRight
+        }}</span>
       </div>
 
       <div v-if="showWarnings" class="mod-violations_list">
@@ -240,7 +242,9 @@ async function liftBan(banId: string) {
               : " — перманентный"
           }})
         </span>
-        <span class="mod-expand-icon">{{ showBans ? symbols.triangleDown : symbols.triangleRight }}</span>
+        <span class="mod-expand-icon">{{
+          showBans ? symbols.triangleDown : symbols.triangleRight
+        }}</span>
       </div>
 
       <div v-if="showBans" class="mod-violations_list">
@@ -459,7 +463,7 @@ async function liftBan(banId: string) {
 .mod-inline-form
   margin-top: $medium
   padding: $medium
-  background: $bg-element-hover
+  background: $overlay-subtle
   border-radius: $border-radius
 
 .mod-inline-form_title

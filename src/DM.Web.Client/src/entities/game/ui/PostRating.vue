@@ -5,7 +5,9 @@ const props = defineProps<{
   rating: number | null | undefined;
 }>();
 
-const hasRating = computed(() => props.rating !== null && props.rating !== undefined);
+const hasRating = computed(
+  () => props.rating !== null && props.rating !== undefined,
+);
 
 const ratingText = computed(() => {
   const r = props.rating;
@@ -24,7 +26,9 @@ const ratingClass = computed(() => {
 </script>
 
 <template>
-  <span v-if="hasRating" class="post-rating" :class="ratingClass">{{ ratingText }}</span>
+  <span v-if="hasRating" class="post-rating" :class="ratingClass">{{
+    ratingText
+  }}</span>
 </template>
 
 <style scoped lang="sass">

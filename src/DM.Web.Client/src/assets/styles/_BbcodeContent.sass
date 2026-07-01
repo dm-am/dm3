@@ -82,7 +82,7 @@
   // Links
   // ──────────────────────────────────────────────────────────────────────────
 
-  a:not(.spoiler-head):not(.nsfw-head)
+  a:not(.spoiler-head)
     color: $link
     text-decoration: none
     &:hover
@@ -199,14 +199,17 @@
   // Frontend: NodeView with same structure + 18+ overlay
   // ──────────────────────────────────────────────────────────────────────────
 
-  // Toggle - block element so it creates its own line break
+  // Toggle - block element so it creates its own line break.
+  // Цвет — обычный $link, как у любых ссылок на сайте (без красного
+  // акцента у самого триггера; красный остается в .nsfw-warning над
+  // скрытым блоком).
   .nsfw-head
     display: block
-    color: $accent-red
+    color: $link
     cursor: pointer
     text-decoration: none
     &:hover
-      color: $accent-red-hover
+      color: $link-hover
       text-decoration: underline
 
   // NSFW content - same as spoiler (yellow, dashed border)
@@ -219,13 +222,13 @@
     &.hidden
       display: none
 
-  // 18+ overlay - height by content, vertically centered
+  // 18+ overlay — закрывает ВЕСЬ блок NSFW-контента, а не только
+  // горизонтальную полоску по центру. inset:0 = top/right/bottom/left:0
+  // относительно .nsfw-content-wrapper (position: relative). Plus
+  // backdrop-blur размывает контент под ним.
   .nsfw-overlay
     position: absolute
-    top: 50%
-    left: calc(#{$minor} + 1px)
-    right: calc(#{$minor} + 1px)
-    transform: translateY(-50%)
+    inset: 0
     z-index: 1
     background-color: $nsfw-overlay
     backdrop-filter: blur(8px)

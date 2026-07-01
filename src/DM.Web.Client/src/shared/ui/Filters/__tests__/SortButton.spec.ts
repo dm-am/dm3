@@ -14,8 +14,18 @@ const SvgIconStub = {
 
 describe("SortButton", () => {
   const defaultOptions = [
-    { value: "created", label: "Дата", hint: "По дате создания", defaultDirection: "desc" as const },
-    { value: "name", label: "Название", hint: "По алфавиту", defaultDirection: "asc" as const },
+    {
+      value: "created",
+      label: "Дата",
+      hint: "По дате создания",
+      defaultDirection: "desc" as const,
+    },
+    {
+      value: "name",
+      label: "Название",
+      hint: "По алфавиту",
+      defaultDirection: "asc" as const,
+    },
     { value: "rating", label: "Рейтинг", defaultDirection: "desc" as const },
   ];
 
@@ -128,7 +138,9 @@ describe("SortButton", () => {
       const wrapper = mountComponent();
       await wrapper.find(".sort-btn").trigger("click");
 
-      const nameOption = wrapper.findAll(".sort-option:not(.sort-direction)")[1];
+      const nameOption = wrapper.findAll(
+        ".sort-option:not(.sort-direction)",
+      )[1];
       await nameOption.trigger("click");
 
       expect(wrapper.emitted("update:sortBy")).toBeTruthy();
@@ -139,7 +151,9 @@ describe("SortButton", () => {
       const wrapper = mountComponent();
       await wrapper.find(".sort-btn").trigger("click");
 
-      const nameOption = wrapper.findAll(".sort-option:not(.sort-direction)")[1];
+      const nameOption = wrapper.findAll(
+        ".sort-option:not(.sort-direction)",
+      )[1];
       await nameOption.trigger("click");
 
       expect(wrapper.emitted("update:sortOrder")).toBeTruthy();
@@ -180,7 +194,9 @@ describe("SortButton", () => {
       const wrapper = mountComponent({ sortOrder: "asc" });
       await wrapper.find(".sort-btn").trigger("click");
 
-      expect(wrapper.find(".sort-direction").text()).toContain("По возрастанию");
+      expect(wrapper.find(".sort-direction").text()).toContain(
+        "По возрастанию",
+      );
     });
 
     it("emits toggled direction on click", async () => {

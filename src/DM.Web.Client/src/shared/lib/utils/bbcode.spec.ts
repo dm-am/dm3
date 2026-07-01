@@ -331,7 +331,7 @@ describe("BBCode Tab and Cut", () => {
     it("standalone [cut] is silently stripped from rendered HTML", () => {
       const html = bbcodeToHtml("before[cut]after");
       expect(html).not.toContain("[cut]");
-      expect(html).not.toContain("data-bb-tag=\"cut\"");
+      expect(html).not.toContain('data-bb-tag="cut"');
       expect(html).toContain("before");
       expect(html).toContain("after");
     });

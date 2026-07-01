@@ -16,4 +16,10 @@ public interface IPersonalProfileApiService
     /// Update current user's profile
     /// </summary>
     Task<PersonalProfile> UpdateMyProfile(UpdateProfile profile);
+
+    /// <summary>
+    /// Сбросить аватар текущего пользователя (унлинк + GC старого Upload).
+    /// Идемпотент: если аватара нет — no-op.
+    /// </summary>
+    Task RemoveMyAvatar();
 }

@@ -6,32 +6,31 @@
     aria-label="Статистика сайта"
   >
     <div class="stat-row">
-      Пользователей: {{ formatNumber(users.value) }}
-      <span class="bracket">[</span
-      ><span class="delta">+{{ users.todayDelta }}</span
+      Пользователей: {{ statValue(users.value) }} <span class="bracket">[</span
+      ><span class="delta">{{ deltaValue(users.todayDelta) }}</span
       ><span class="bracket">]</span>, онлайн:
-      <span class="online">{{ online }}</span>
+      <span class="online">{{ statsUnavailable ? "n/a" : online }}</span>
     </div>
     <div class="stat-row">
-      Персонажей: {{ formatNumber(characters.value) }}
+      Персонажей: {{ statValue(characters.value) }}
       <span class="bracket">[</span
-      ><span class="delta">+{{ characters.todayDelta }}</span
+      ><span class="delta">{{ deltaValue(characters.todayDelta) }}</span
       ><span class="bracket">]</span>
     </div>
     <div class="stat-row">
-      Игр: {{ formatNumber(games.value) }} <span class="bracket">[</span
-      ><span class="delta">+{{ games.todayDelta }}</span
-      ><span class="bracket">]</span>, постов: {{ formatNumber(posts.value) }}
+      Игр: {{ statValue(games.value) }} <span class="bracket">[</span
+      ><span class="delta">{{ deltaValue(games.todayDelta) }}</span
+      ><span class="bracket">]</span>, постов: {{ statValue(posts.value) }}
       <span class="bracket">[</span
-      ><span class="delta">+{{ posts.todayDelta }}</span
+      ><span class="delta">{{ deltaValue(posts.todayDelta) }}</span
       ><span class="bracket">]</span>
     </div>
     <div class="stat-row">
-      Блогов: {{ formatNumber(blogs.value) }} <span class="bracket">[</span
-      ><span class="delta">+{{ blogs.todayDelta }}</span
+      Блогов: {{ statValue(blogs.value) }} <span class="bracket">[</span
+      ><span class="delta">{{ deltaValue(blogs.todayDelta) }}</span
       ><span class="bracket">]</span>, публикаций:
-      {{ formatNumber(publications.value) }} <span class="bracket">[</span
-      ><span class="delta">+{{ publications.todayDelta }}</span
+      {{ statValue(publications.value) }} <span class="bracket">[</span
+      ><span class="delta">{{ deltaValue(publications.todayDelta) }}</span
       ><span class="bracket">]</span>
     </div>
   </div>
@@ -41,23 +40,49 @@
        so nothing shifts vertically when the numbers arrive. -->
   <div v-else class="site-stats-skeleton" aria-hidden="true">
     <div class="skeleton-row"><span class="skeleton-text" /></div>
-    <div class="skeleton-row"><span class="skeleton-text skeleton-short" /></div>
-    <div class="skeleton-row"><span class="skeleton-text skeleton-medium" /></div>
+    <div class="skeleton-row">
+      <span class="skeleton-text skeleton-short" />
+    </div>
+    <div class="skeleton-row">
+      <span class="skeleton-text skeleton-medium" />
+    </div>
     <div class="skeleton-row"><span class="skeleton-text" /></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue";
+import { computed, onMounted, onUnmounted } from "vue";
 import { storeToRefs } from "pinia";
 import { useStatisticsStore } from "@/shared/stores/statistics";
 
 const store = useStatisticsStore();
-const { loaded, online, users, characters, games, posts, blogs, publications } =
-  storeToRefs(store);
+const {
+  stats,
+  loaded,
+  online,
+  users,
+  characters,
+  games,
+  posts,
+  blogs,
+  publications,
+} = storeToRefs(store);
+
+// Stats failed to load and there is no previously fetched data to show.
+// The block stays visible with "n/a" per value instead of fake zeros;
+// stale numbers from an earlier successful poll keep showing as is.
+const statsUnavailable = computed(() => stats.value === null);
 
 function formatNumber(value: number): string {
   return value.toLocaleString("ru-RU");
+}
+
+function statValue(value: number): string {
+  return statsUnavailable.value ? "n/a" : formatNumber(value);
+}
+
+function deltaValue(value: number): string {
+  return statsUnavailable.value ? "n/a" : `+${value}`;
 }
 
 // Handle tab visibility changes - stop polling when tab is not visible

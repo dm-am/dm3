@@ -116,14 +116,10 @@ const {
       <button
         type="button"
         class="scroll-nav-btn toggle-all-btn"
-        :aria-label="
-          allExpandablesExpanded ? 'Свернуть все' : 'Развернуть все'
-        "
+        :aria-label="allExpandablesExpanded ? 'Свернуть все' : 'Развернуть все'"
         @click="toggleAllExpandables"
       >
-        <SvgIcon
-          :name="allExpandablesExpanded ? 'collapseAll' : 'expandAll'"
-        />
+        <SvgIcon :name="allExpandablesExpanded ? 'collapseAll' : 'expandAll'" />
       </button>
     </Tooltip>
     <div class="scroll-buttons">
@@ -162,11 +158,7 @@ const {
     </Tooltip>
 
     <!-- Settings bubble -->
-    <div
-      v-if="isSettingsOpen"
-      ref="settingsBubble"
-      class="settings-bubble"
-    >
+    <div v-if="isSettingsOpen" ref="settingsBubble" class="settings-bubble">
       <div class="bubble-tail" />
       <div class="bubble-content">
         <!-- Message layout toggle -->
@@ -178,6 +170,7 @@ const {
                 type="button"
                 class="layout-toggle-btn"
                 :class="{ active: isCompactLayout }"
+                aria-label="Компактная верстка сообщений"
                 @click="setMessageLayout('compact')"
               >
                 <SvgIcon name="layoutCompact" />
@@ -188,6 +181,7 @@ const {
                 type="button"
                 class="layout-toggle-btn"
                 :class="{ active: !isCompactLayout }"
+                aria-label="Полная верстка сообщений"
                 @click="setMessageLayout('full')"
               >
                 <SvgIcon name="layoutList" />
@@ -202,7 +196,12 @@ const {
           <span class="settings-label">Тема</span>
           <div class="settings-control">
             <label class="theme-switch">
-              <input type="checkbox" :checked="isDarkTheme" @change="toggleTheme" />
+              <input
+                type="checkbox"
+                :checked="isDarkTheme"
+                aria-label="Темная тема"
+                @change="toggleTheme"
+              />
               <span class="slider" />
             </label>
           </div>
@@ -220,7 +219,9 @@ const {
               :disabled="!canSwitch || isTransferring"
               @click="switchRegion"
             >
-              <span v-if="currentRegion?.id === 'main'" class="flag-icon">🇷🇺</span>
+              <span v-if="currentRegion?.id === 'main'" class="flag-icon"
+                >🇷🇺</span
+              >
               <span v-else class="globe-icon">🌐︎</span>
             </button>
           </div>
@@ -298,7 +299,7 @@ const {
   border: 1px solid $border
   border-radius: $border-radius
   padding: $small $medium
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15)
+  box-shadow: 0 2px 8px $shadow-color
   white-space: nowrap
 
 .bubble-tail
@@ -424,7 +425,7 @@ const {
     color: $link-nav-hover
 
   &:disabled
-    cursor: not-allowed
+    cursor: default
     opacity: 0.4
 
   &.is-loading

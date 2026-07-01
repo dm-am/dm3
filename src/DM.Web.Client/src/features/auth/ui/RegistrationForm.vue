@@ -316,6 +316,13 @@ const handleRecovery = () => {
               rel="noopener"
               @click="rulesViewed = true"
               >правила сайта</a
+            >, условия
+            <a href="/agreement" target="_blank" rel="noopener"
+              >Пользовательского соглашения</a
+            >
+            и
+            <a href="/privacy" target="_blank" rel="noopener"
+              >Политики конфиденциальности</a
             ></span
           >
         </div>

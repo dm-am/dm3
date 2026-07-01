@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useUserStore } from "@/entities/user";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
@@ -14,6 +14,7 @@ import AssistantSelector from "./AssistantSelector.vue";
 import { gameApi } from "@/entities/game";
 import { CommentariesAccessMode, type Game } from "@/entities/game";
 
+const route = useRoute();
 const router = useRouter();
 const { user } = storeToRefs(useUserStore());
 
@@ -63,7 +64,7 @@ async function handleSubmit() {
     const { data, error: apiError } = await gameApi.createGame(gameData);
 
     if (apiError) {
-      error.value = apiError.title || "Failed to create game";
+      error.value = apiError.title || "Не удалось создать игру";
       return;
     }
 
@@ -81,7 +82,10 @@ async function handleSubmit() {
 
   <div v-if="!user" class="login-required">
     <p>
-      Для создания игры необходимо <router-link to="/?action=login">войти</router-link>
+      Для создания игры необходимо
+      <router-link :to="{ query: { ...route.query, action: 'login' } }"
+        >войти</router-link
+      >
     </p>
   </div>
 

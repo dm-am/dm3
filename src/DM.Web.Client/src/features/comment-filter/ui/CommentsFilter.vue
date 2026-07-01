@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { vClickOutside } from "@/shared/directives";
-import { useCommentsFilter, SORT_OPTIONS, DEFAULT_SORT } from "../";
+import { useCommentsFilter, SORT_OPTIONS } from "../";
 import { useFilterSearch, useFilterDropdown } from "@/shared/lib/composables";
 import { formatDateRangeForDisplay } from "@/shared/lib/filters";
 import {
@@ -35,7 +35,7 @@ const {
 
 const { localInput, handleInput, applySearch, clearSearch } = useFilterSearch(
   computed(() => filterState.value.search),
-  setSearch
+  setSearch,
 );
 
 // =============================================================================
@@ -57,7 +57,11 @@ function closeDropdown() {
 // Root level filter options
 const filterOptions = [
   { key: "author", label: "Автор", hint: "Фильтр по автору комментария" },
-  { key: "dateRange", label: "Дата создания", hint: "Фильтр по периоду создания" },
+  {
+    key: "dateRange",
+    label: "Дата создания",
+    hint: "Фильтр по периоду создания",
+  },
 ];
 
 function selectRootItem(key: string) {
@@ -120,7 +124,10 @@ function handleSortOrderChange(order: "asc" | "desc") {
 // =============================================================================
 
 const hasDateFilter = computed(() => {
-  return filterState.value.createdFromUtc !== null || filterState.value.createdToUtc !== null;
+  return (
+    filterState.value.createdFromUtc !== null ||
+    filterState.value.createdToUtc !== null
+  );
 });
 
 const dateFilterLabel = computed(() => {
@@ -130,21 +137,18 @@ const dateFilterLabel = computed(() => {
   });
 });
 
+// Sort is driven by the SortButton, not the filter bubbles — it must NOT
+// trigger the "Сбросить" row (consistent with Games / Pulse / Polls).
 const hasBubbles = computed(() => {
   const state = filterState.value;
-  return (
-    state.authors.size > 0 ||
-    hasDateFilter.value ||
-    state.sortBy !== DEFAULT_SORT.sortBy ||
-    state.sortOrder !== DEFAULT_SORT.sortOrder
-  );
+  return state.authors.size > 0 || hasDateFilter.value;
 });
 
 // Authors bubble values
 const authorsBubbleValues = computed(() =>
   [...filterState.value.authors]
     .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), "ru"))
-    .map((author) => ({ id: author, label: author }))
+    .map((author) => ({ id: author, label: author })),
 );
 
 function handleRemoveAuthor(id: string) {
@@ -217,6 +221,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
             :selected-users="filterState.authors"
             placeholder="Поиск автора"
             @add="handleAddAuthor"
+            @remove="handleRemoveAuthor"
           />
 
           <!-- Date range picker -->

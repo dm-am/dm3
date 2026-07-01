@@ -10,7 +10,12 @@ export function useTooltip(
   placement: Ref<TooltipPlacement>,
 ) {
   const isVisible = ref(false);
-  const position = ref<TooltipPosition>({ top: 0, left: 0, placement: "top", arrowOffset: 0 });
+  const position = ref<TooltipPosition>({
+    top: 0,
+    left: 0,
+    placement: "top",
+    arrowOffset: 0,
+  });
 
   function calculatePosition(): TooltipPosition {
     if (!triggerRef.value || !tooltipRef.value) {
@@ -82,9 +87,10 @@ export function useTooltip(
 
     // Calculate arrow offset (how much tooltip shifted from ideal centered position)
     // Positive = arrow moves right, Negative = arrow moves left
-    const arrowOffset = (finalPlacement === "top" || finalPlacement === "bottom")
-      ? left - clampedLeft
-      : 0;
+    const arrowOffset =
+      finalPlacement === "top" || finalPlacement === "bottom"
+        ? left - clampedLeft
+        : 0;
 
     // Clamp vertical position to viewport
     top = Math.max(
@@ -111,7 +117,10 @@ export function useTooltip(
   // Handle scroll and resize
   // Use capture: true to catch scroll events from nested scrollable containers
   onMounted(() => {
-    window.addEventListener("scroll", updatePosition, { passive: true, capture: true });
+    window.addEventListener("scroll", updatePosition, {
+      passive: true,
+      capture: true,
+    });
     window.addEventListener("resize", updatePosition, { passive: true });
   });
 

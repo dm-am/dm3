@@ -12,6 +12,8 @@ export interface Column {
   align?: "left" | "center" | "right";
   /** Whether column is sortable */
   sortable?: boolean;
+  /** Sort direction applied when first sorting by this column (default "asc") */
+  defaultDirection?: "asc" | "desc";
   /** Whether to hide on mobile screens */
   hideOnMobile?: boolean;
 }

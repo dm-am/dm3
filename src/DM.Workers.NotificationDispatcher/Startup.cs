@@ -87,6 +87,21 @@ public class Startup
         var communityAssembly = typeof(PollIntention).Assembly;
         builder.RegisterDefaultTypes(communityAssembly);
         builder.RegisterMapper(communityAssembly);
+
+        // IIdentityProvider — нужен NotificationService для Read/Mark методов,
+        // которые в worker-контексте не вызываются (используется только
+        // CreateAsync). Регистрируем тот же IdentityProvider, что в API,
+        // чтобы DI разрешил конструктор; Current остается null до первого
+        // обращения (доступ к нему в worker'е не происходит).
+        var accountAssembly = typeof(DM.Domain.Account.Authorization.AccountIntention).Assembly;
+        builder.RegisterDefaultTypes(accountAssembly);
+        builder.RegisterMapper(accountAssembly);
+        var identityProviderType = accountAssembly.GetType("DM.Domain.Account.Features.Identity.IdentityProvider")!;
+        builder.RegisterType(identityProviderType)
+            .AsSelf()
+            .AsImplementedInterfaces()
+            .InstancePerLifetimeScope();
+
         builder.RegisterModuleOnce<MailModule>();
 
         // Email notification sender

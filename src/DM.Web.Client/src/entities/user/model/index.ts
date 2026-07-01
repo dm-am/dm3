@@ -9,3 +9,8 @@ export { useCommunityStore, UserActivityFilter } from "./communityStore";
 
 // Display composable for user formatting
 export { useUserDisplay } from "./useUserDisplay";
+
+// Avatar upload/reset composable — единый источник логики upload/reset
+// (drag-drop, paste, compression, progress). Используется ProfilePicture
+// overlay на странице профиля.
+export { useAvatarUpload, AVATAR_ACCEPT } from "./useAvatarUpload";

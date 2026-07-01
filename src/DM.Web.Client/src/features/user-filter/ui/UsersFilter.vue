@@ -8,9 +8,13 @@ import {
   HONORARY_OPTIONS,
   EXPERIENCE_OPTIONS,
   SORT_OPTIONS,
-  DEFAULT_FILTER_STATE,
 } from "../model";
-import type { ActivityFilter, RoleFilter, HonoraryFilter, ExperienceFilter } from "../model";
+import type {
+  ActivityFilter,
+  RoleFilter,
+  HonoraryFilter,
+  ExperienceFilter,
+} from "../model";
 import { UserRole } from "@/entities/user";
 import { formatDateForDisplay } from "@/shared/lib/filters";
 import { useFilterSearch, useFilterDropdown } from "@/shared/lib/composables";
@@ -52,7 +56,7 @@ const {
 
 const { localInput, handleInput, applySearch } = useFilterSearch(
   computed(() => filterState.value.search),
-  setSearch
+  setSearch,
 );
 
 // =============================================================================
@@ -245,7 +249,9 @@ function handleSortOrderChange(order: "asc" | "desc") {
 // Activity bubble
 const hasActivityFilter = computed(() => filterState.value.activity !== "all");
 const activityLabel = computed(() => {
-  const isOnline = filterState.value.activity === "active" && filterState.value.onlineFilter === "online";
+  const isOnline =
+    filterState.value.activity === "active" &&
+    filterState.value.onlineFilter === "online";
   const displayValue = isOnline ? "online" : filterState.value.activity;
   const opt = ACTIVITY_OPTIONS.find((o) => o.value === displayValue);
   return opt?.label ?? filterState.value.activity;
@@ -256,7 +262,10 @@ const hasRoleFilter = computed(() => filterState.value.role !== "all");
 const roleLabel = computed(() => {
   const opt = ROLE_OPTIONS.find((o) => o.value === filterState.value.role);
   let label = opt?.label ?? String(filterState.value.role);
-  if (filterState.value.role === UserRole.RegularUser && filterState.value.honorary === "honorary") {
+  if (
+    filterState.value.role === UserRole.RegularUser &&
+    filterState.value.honorary === "honorary"
+  ) {
     const honoraryOpt = HONORARY_OPTIONS.find((o) => o.value === "honorary");
     label = honoraryOpt?.label ?? "Почетные";
   }
@@ -264,54 +273,82 @@ const roleLabel = computed(() => {
 });
 
 // Experience bubble
-const hasExperienceFilter = computed(() => filterState.value.experience !== "all");
+const hasExperienceFilter = computed(
+  () => filterState.value.experience !== "all",
+);
 const experienceLabel = computed(() => {
-  const opt = EXPERIENCE_OPTIONS.find((o) => o.value === filterState.value.experience);
+  const opt = EXPERIENCE_OPTIONS.find(
+    (o) => o.value === filterState.value.experience,
+  );
   return opt?.label ?? filterState.value.experience;
 });
 
 // Rating bubble
-const hasRatingFilter = computed(() => filterState.value.ratingMin !== null || filterState.value.ratingMax !== null);
+const hasRatingFilter = computed(
+  () =>
+    filterState.value.ratingMin !== null ||
+    filterState.value.ratingMax !== null,
+);
 const ratingLabel = computed(() => {
   const { ratingMin, ratingMax } = filterState.value;
-  if (ratingMin !== null && ratingMax !== null) return `${ratingMin} — ${ratingMax}`;
+  if (ratingMin !== null && ratingMax !== null)
+    return `${ratingMin} — ${ratingMax}`;
   if (ratingMin !== null) return `от ${ratingMin}`;
   if (ratingMax !== null) return `до ${ratingMax}`;
   return "";
 });
 
 // Games hosting bubble
-const hasGamesHostingFilter = computed(() => filterState.value.gamesHostingMin !== null || filterState.value.gamesHostingMax !== null);
+const hasGamesHostingFilter = computed(
+  () =>
+    filterState.value.gamesHostingMin !== null ||
+    filterState.value.gamesHostingMax !== null,
+);
 const gamesHostingLabel = computed(() => {
   const { gamesHostingMin, gamesHostingMax } = filterState.value;
-  if (gamesHostingMin !== null && gamesHostingMax !== null) return `${gamesHostingMin} — ${gamesHostingMax}`;
+  if (gamesHostingMin !== null && gamesHostingMax !== null)
+    return `${gamesHostingMin} — ${gamesHostingMax}`;
   if (gamesHostingMin !== null) return `от ${gamesHostingMin}`;
   if (gamesHostingMax !== null) return `до ${gamesHostingMax}`;
   return "";
 });
 
 // Games playing bubble
-const hasGamesPlayingFilter = computed(() => filterState.value.gamesPlayingMin !== null || filterState.value.gamesPlayingMax !== null);
+const hasGamesPlayingFilter = computed(
+  () =>
+    filterState.value.gamesPlayingMin !== null ||
+    filterState.value.gamesPlayingMax !== null,
+);
 const gamesPlayingLabel = computed(() => {
   const { gamesPlayingMin, gamesPlayingMax } = filterState.value;
-  if (gamesPlayingMin !== null && gamesPlayingMax !== null) return `${gamesPlayingMin} — ${gamesPlayingMax}`;
+  if (gamesPlayingMin !== null && gamesPlayingMax !== null)
+    return `${gamesPlayingMin} — ${gamesPlayingMax}`;
   if (gamesPlayingMin !== null) return `от ${gamesPlayingMin}`;
   if (gamesPlayingMax !== null) return `до ${gamesPlayingMax}`;
   return "";
 });
 
 // Blogs hosting bubble
-const hasBlogsFilter = computed(() => filterState.value.blogsHostingMin !== null || filterState.value.blogsHostingMax !== null);
+const hasBlogsFilter = computed(
+  () =>
+    filterState.value.blogsHostingMin !== null ||
+    filterState.value.blogsHostingMax !== null,
+);
 const blogsLabel = computed(() => {
   const { blogsHostingMin, blogsHostingMax } = filterState.value;
-  if (blogsHostingMin !== null && blogsHostingMax !== null) return `${blogsHostingMin} — ${blogsHostingMax}`;
+  if (blogsHostingMin !== null && blogsHostingMax !== null)
+    return `${blogsHostingMin} — ${blogsHostingMax}`;
   if (blogsHostingMin !== null) return `от ${blogsHostingMin}`;
   if (blogsHostingMax !== null) return `до ${blogsHostingMax}`;
   return "";
 });
 
 // Registration date bubble
-const hasRegisteredFilter = computed(() => filterState.value.registeredFromUtc !== null || filterState.value.registeredToUtc !== null);
+const hasRegisteredFilter = computed(
+  () =>
+    filterState.value.registeredFromUtc !== null ||
+    filterState.value.registeredToUtc !== null,
+);
 const registeredLabel = computed(() => {
   const from = formatDateForDisplay(filterState.value.registeredFromUtc);
   const to = formatDateForDisplay(filterState.value.registeredToUtc);
@@ -321,9 +358,9 @@ const registeredLabel = computed(() => {
   return "";
 });
 
+// Sort is driven by the SortButton, not the filter bubbles — it must NOT
+// trigger the "Сбросить" row (consistent with Games / Pulse / Polls).
 const hasBubbles = computed(() => {
-  const state = filterState.value;
-  const def = DEFAULT_FILTER_STATE;
   return (
     hasActivityFilter.value ||
     hasRoleFilter.value ||
@@ -332,9 +369,7 @@ const hasBubbles = computed(() => {
     hasGamesHostingFilter.value ||
     hasGamesPlayingFilter.value ||
     hasBlogsFilter.value ||
-    hasRegisteredFilter.value ||
-    state.sortBy !== def.sortBy ||
-    state.sortOrder !== def.sortOrder
+    hasRegisteredFilter.value
   );
 });
 
@@ -472,8 +507,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
             :min-value="filterState.ratingMin"
             :max-value="filterState.ratingMax"
             :allow-negative="true"
-            min-label="От:"
-            max-label="До:"
             @apply="handleRatingApply"
           />
 
@@ -482,8 +515,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
             v-if="navPath?.filter === 'gamesHosting'"
             :min-value="filterState.gamesHostingMin"
             :max-value="filterState.gamesHostingMax"
-            min-label="От:"
-            max-label="До:"
             @apply="handleGamesHostingApply"
           />
 
@@ -492,8 +523,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
             v-if="navPath?.filter === 'gamesPlaying'"
             :min-value="filterState.gamesPlayingMin"
             :max-value="filterState.gamesPlayingMax"
-            min-label="От:"
-            max-label="До:"
             @apply="handleGamesPlayingApply"
           />
 
@@ -502,8 +531,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
             v-if="navPath?.filter === 'blogs'"
             :min-value="filterState.blogsHostingMin"
             :max-value="filterState.blogsHostingMax"
-            min-label="От:"
-            max-label="До:"
             @apply="handleBlogsApply"
           />
 

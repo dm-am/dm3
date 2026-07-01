@@ -1,5 +1,10 @@
 import { UserRole } from "@/entities/user";
 
+// Single source of truth for the API search param shape lives in the entity
+// layer (FSD: feature imports from entity). Re-exported here so existing
+// `@/features/user-filter` consumers keep working.
+export type { UsersSearchParams } from "@/entities/user/model/communityStore";
+
 /**
  * Activity filter values
  * - active: only users with recent activity
@@ -95,32 +100,6 @@ export interface UsersFilterState {
 }
 
 /**
- * API search parameters for users
- */
-export interface UsersSearchParams {
-  search?: string;
-  activity?: ActivityFilter;
-  isOnline?: boolean;
-  role?: UserRole;
-  isHonorary?: boolean;
-  isNewbie?: boolean;
-  minRating?: number;
-  maxRating?: number;
-  minGamesHosting?: number;
-  maxGamesHosting?: number;
-  minGamesPlaying?: number;
-  maxGamesPlaying?: number;
-  minBlogsHosting?: number;
-  maxBlogsHosting?: number;
-  registeredFromUtc?: string;
-  registeredToUtc?: string;
-  sortBy?: string;
-  sortOrder?: string;
-  number?: number;
-  size?: number;
-}
-
-/**
  * Default filter state
  */
 export const DEFAULT_FILTER_STATE: UsersFilterState = {
@@ -150,9 +129,21 @@ export const DEFAULT_FILTER_STATE: UsersFilterState = {
  */
 export const ACTIVITY_OPTIONS = [
   { value: "online" as const, label: "Онлайн", hint: "Сейчас на сайте" },
-  { value: "active" as const, label: "Активные", hint: "Были на сайте за последний месяц" },
-  { value: "inactive" as const, label: "Неактивные", hint: "Не были на сайте более месяца" },
-  { value: "all" as const, label: "Все пользователи", hint: "Все зарегистрированные пользователи" },
+  {
+    value: "active" as const,
+    label: "Активные",
+    hint: "Были на сайте за последний месяц",
+  },
+  {
+    value: "inactive" as const,
+    label: "Неактивные",
+    hint: "Не были на сайте более месяца",
+  },
+  {
+    value: "all" as const,
+    label: "Все пользователи",
+    hint: "Все зарегистрированные пользователи",
+  },
 ] as const;
 
 /**
@@ -160,11 +151,28 @@ export const ACTIVITY_OPTIONS = [
  */
 export const ROLE_OPTIONS = [
   { value: "all" as const, label: "Все роли", hint: "Без фильтрации по роли" },
-  { value: UserRole.RegularUser, label: "Пользователь", hint: "Обычные пользователи", hasSubOptions: true },
-  { value: UserRole.Mentor, label: "Наставник", hint: "Наставники для новичков" },
+  {
+    value: UserRole.RegularUser,
+    label: "Пользователь",
+    hint: "Обычные пользователи",
+    hasSubOptions: true,
+  },
+  {
+    value: UserRole.Mentor,
+    label: "Наставник",
+    hint: "Наставники для новичков",
+  },
   { value: UserRole.Moderator, label: "Модератор", hint: "Модераторы" },
-  { value: UserRole.SeniorModerator, label: "Старший модератор", hint: "Старшие модераторы" },
-  { value: UserRole.Admin, label: "Администратор", hint: "Администраторы сайта" },
+  {
+    value: UserRole.SeniorModerator,
+    label: "Старший модератор",
+    hint: "Старшие модераторы",
+  },
+  {
+    value: UserRole.Admin,
+    label: "Администратор",
+    hint: "Администраторы сайта",
+  },
 ] as const;
 
 /**
@@ -172,7 +180,11 @@ export const ROLE_OPTIONS = [
  */
 export const HONORARY_OPTIONS = [
   { value: "all" as const, label: "Все", hint: "Все обычные пользователи" },
-  { value: "honorary" as const, label: "Почетные", hint: "Бывшие члены команды сайта" },
+  {
+    value: "honorary" as const,
+    label: "Почетные",
+    hint: "Бывшие члены команды сайта",
+  },
 ] as const;
 
 /**
@@ -183,7 +195,6 @@ export const EXPERIENCE_OPTIONS = [
   { value: "newbie" as const, label: "Новички", hint: "Менее 100 постов" },
   { value: "experienced" as const, label: "Опытные", hint: "100+ постов" },
 ] as const;
-
 
 /**
  * Sort options

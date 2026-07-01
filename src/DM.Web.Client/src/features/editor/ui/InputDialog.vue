@@ -311,7 +311,7 @@ function handleBackdropClick(e: MouseEvent) {
   &:focus
     outline: none
     border-style: solid
-    border-color: $button-border-hover
+    border-color: $border-focus
 
   &::placeholder
     color: $text-muted

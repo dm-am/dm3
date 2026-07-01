@@ -1,2 +1,5 @@
 export * from "./types";
-export { useReviewsFilter, type ReviewsFilterComposable } from "./useReviewsFilter";
+export {
+  useReviewsFilter,
+  type ReviewsFilterComposable,
+} from "./useReviewsFilter";

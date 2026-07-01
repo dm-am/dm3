@@ -38,7 +38,6 @@
 .skeleton-avatar
   width: $grid-step * 30  // 120px - matches ProfileHeader
   height: $grid-step * 30
-  border-radius: $border-radius
   flex-shrink: 0
   +skeleton-shimmer
 

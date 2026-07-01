@@ -3,7 +3,7 @@ import { Tooltip } from "@/shared/ui/Tooltip";
 import { useGameDisplay } from "../model/useGameDisplay";
 
 const props = defineProps<{
-  /** Game ID for navigation */
+  /** Game Guid id (NOT publicId) - first-unread routes bind it as a Guid */
   gameId: string;
   /** Number of unread posts */
   unreadPostsCount?: number;
@@ -11,12 +11,16 @@ const props = defineProps<{
   unreadCommentsCount?: number;
 }>();
 
-const { formatUnreadPostsTooltip, formatUnreadCommentsTooltip } = useGameDisplay();
+const { formatUnreadPostsTooltip, formatUnreadCommentsTooltip } =
+  useGameDisplay();
 </script>
 
 <template>
   <span v-if="unreadPostsCount || unreadCommentsCount" class="unread-counters">
-    <Tooltip v-if="unreadPostsCount" :text="formatUnreadPostsTooltip(unreadPostsCount)">
+    <Tooltip
+      v-if="unreadPostsCount"
+      :text="formatUnreadPostsTooltip(unreadPostsCount)"
+    >
       <router-link
         :to="{ name: 'game-first-unread-post', params: { id: gameId } }"
         class="counter posts"
@@ -24,7 +28,10 @@ const { formatUnreadPostsTooltip, formatUnreadCommentsTooltip } = useGameDisplay
         {{ unreadPostsCount }}
       </router-link>
     </Tooltip>
-    <Tooltip v-if="unreadCommentsCount" :text="formatUnreadCommentsTooltip(unreadCommentsCount)">
+    <Tooltip
+      v-if="unreadCommentsCount"
+      :text="formatUnreadCommentsTooltip(unreadCommentsCount)"
+    >
       <router-link
         :to="{ name: 'game-first-unread-comment', params: { id: gameId } }"
         class="counter comments"

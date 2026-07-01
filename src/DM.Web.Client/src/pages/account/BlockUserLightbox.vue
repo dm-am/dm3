@@ -83,6 +83,6 @@ async function submit() {
 
 input.locked
   background-color: $bg-element
-  cursor: not-allowed
+  cursor: default
   opacity: 0.8
 </style>

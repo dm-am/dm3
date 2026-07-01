@@ -34,5 +34,10 @@ internal class PersonalMappingProfile : Profile
         // Notification -> RealtimeNotification
         CreateMap<Notification, RealtimeNotification>()
             .ForMember(d => d.RecipientIds, s => s.MapFrom(n => n.UsersInterested));
+
+        // CreateNotificationEntity -> RealtimeNotification — путь для SignalR
+        // push'а сразу после CreateAsync, минуя повторный DB-fetch.
+        CreateMap<CreateNotificationEntity, RealtimeNotification>()
+            .ForMember(d => d.RecipientIds, s => s.MapFrom(n => n.UsersInterested));
     }
 }

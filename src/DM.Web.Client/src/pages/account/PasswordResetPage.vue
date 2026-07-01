@@ -90,7 +90,7 @@ function goHome() {
 }
 
 function goToRecovery() {
-  router.push("/?action=login&recovery=true");
+  router.push("/?action=recovery");
 }
 
 function goToLogin() {

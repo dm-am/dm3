@@ -42,7 +42,9 @@ test.describe("Forum Topics", () => {
       await page.waitForURL(/\/forum\//);
 
       // Clicked board should now be active
-      await expect(page.locator(".board-link.active")).toContainText(boardText || "");
+      await expect(page.locator(".board-link.active")).toContainText(
+        boardText || "",
+      );
     }
   });
 });
@@ -121,7 +123,9 @@ test.describe("Forum Topics Filters", () => {
     await expect(page).toHaveURL(/sortOrder=desc/);
   });
 
-  test("should show clear filters button when filters active", async ({ page }) => {
+  test("should show clear filters button when filters active", async ({
+    page,
+  }) => {
     // Initially no clear button
     await expect(page.locator(".clear-filters-button")).not.toBeVisible();
 
@@ -133,7 +137,9 @@ test.describe("Forum Topics Filters", () => {
     await expect(page.locator(".clear-filters-button")).toBeVisible();
   });
 
-  test("should reset all filters when clicking clear filters", async ({ page }) => {
+  test("should reset all filters when clicking clear filters", async ({
+    page,
+  }) => {
     // Activate filters
     await page.locator(".search-input").fill("test");
     await page.locator(".sort-select").selectOption("created");

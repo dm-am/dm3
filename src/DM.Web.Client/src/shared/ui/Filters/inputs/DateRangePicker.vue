@@ -56,9 +56,15 @@ watch(
 // Check if any date is set
 const hasValues = computed(() => !!fromInput.value || !!toInput.value);
 
+const isInvalidRange = computed(() => {
+  return (
+    !!fromInput.value && !!toInput.value && fromInput.value > toInput.value
+  );
+});
+
 // Check if apply button should be enabled
 const canApply = computed(() => {
-  // Can apply if values differ from props
+  if (isInvalidRange.value) return false;
   const fromChanged = (fromInput.value || null) !== props.fromValue;
   const toChanged = (toInput.value || null) !== props.toValue;
   return fromChanged || toChanged;
@@ -91,11 +97,17 @@ function handleClear() {
       <input v-model="toInput" type="date" class="date-input" />
     </div>
     <div class="date-actions">
-      <FilterApplyButton :disabled="!canApply && !hasValues" @click="handleApply" />
+      <FilterApplyButton
+        :disabled="!canApply && !hasValues"
+        :disabled-reason="
+          isInvalidRange ? 'Начало не может быть позже конца' : undefined
+        "
+        @click="handleApply"
+      />
       <FilterApplyButton
         v-if="showClear"
         label="Сбросить"
-        variant="secondary"
+        variant="clear"
         @click="handleClear"
       />
     </div>

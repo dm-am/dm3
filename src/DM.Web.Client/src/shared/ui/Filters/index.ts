@@ -18,18 +18,10 @@ export {
 } from "./inputs";
 
 // Bubbles
-export {
-  FilterBubble,
-  ExpandableBubble,
-  BubblesRow,
-} from "./bubbles";
+export { FilterBubble, ExpandableBubble, BubblesRow } from "./bubbles";
 
 // Controls
-export {
-  SortButton,
-  FilterButton,
-  FilterDropdown,
-} from "./controls";
+export { SortButton, FilterButton, FilterDropdown } from "./controls";
 
 // Composables
 export {
