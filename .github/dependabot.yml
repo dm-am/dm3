@@ -1,0 +1,56 @@
+version: 2
+
+# Security patches arrive as PRs instead of being discovered by an audit six
+# months later. Grouped so a routine version bump is one review, not thirty.
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dotnet-runtime:
+        patterns:
+          - "Microsoft.Extensions.*"
+          - "Microsoft.EntityFrameworkCore*"
+          - "System.*"
+      opentelemetry:
+        patterns:
+          - "OpenTelemetry*"
+      test-stack:
+        patterns:
+          - "xunit*"
+          - "Moq"
+          - "FluentAssertions"
+          - "Testcontainers*"
+          - "Microsoft.NET.Test.Sdk"
+
+  - package-ecosystem: npm
+    directory: /src/DM.Web.Client
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      vue:
+        patterns:
+          - "vue"
+          - "vue-*"
+          - "@vue/*"
+          - "pinia"
+      tiptap:
+        patterns:
+          - "@tiptap/*"
+      tooling:
+        patterns:
+          - "vite"
+          - "vitest"
+          - "@vitejs/*"
+          - "eslint*"
+          - "@typescript-eslint/*"
+          - "prettier"
+          - "typescript"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

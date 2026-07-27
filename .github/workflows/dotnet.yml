@@ -6,9 +6,21 @@ on:
   pull_request:
     branches: [ main, dev ]
 
+# Least privilege by default; the publish job widens it for itself only.
+permissions:
+  contents: read
+
+# A newer push to the same branch supersedes the run in flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # Image names must match what docker/docker-compose.yml pulls
+  # (ghcr.io/<owner>/dm-api, dm-worker-*), otherwise CI publishes artifacts
+  # no deployment ever consumes.
+  IMAGE_PREFIX: ${{ github.repository_owner }}/dm
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -22,10 +34,12 @@ jobs:
         dotnet-version: 8.0.x
     - name: Restore dependencies
       run: dotnet restore
+    # Release is what ships (docker/app.Dockerfile publishes -c Release), so it
+    # is what gets compiled and tested here.
     - name: Build
-      run: dotnet build --no-restore
+      run: dotnet build --no-restore -c Release
     - name: Test
-      run: dotnet test --no-build --verbosity normal --logger trx --results-directory TestResults --collect:"Code Coverage"
+      run: dotnet test --no-build -c Release --verbosity normal --logger trx --results-directory TestResults --collect:"XPlat Code Coverage"
     - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
@@ -37,7 +51,8 @@ jobs:
       if: always()
       with:
         name: coverage-reports
-        path: TestResults/**/*.coverage
+        path: TestResults/**/coverage.cobertura.xml
+        if-no-files-found: error
 
   frontend:
     runs-on: ubuntu-latest
@@ -52,6 +67,8 @@ jobs:
         cache: 'npm'
         cache-dependency-path: src/DM.Web.Client/package-lock.json
     - run: npm ci
+    - name: Lint
+      run: npm run lint:ci
     - run: npm run type-check
     - run: npm run build
     - run: npm run test:coverage
@@ -71,18 +88,21 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
+    # Gate, not a report: any advisory outside the reviewed allow-list fails
+    # the job. Entries live in .github/vulnerability-allowlist.txt with the
+    # reason they are accepted.
     - name: .NET vulnerable packages
-      run: dotnet list package --vulnerable --include-transitive 2>&1 | tee /tmp/dotnet-audit.txt
+      run: ./scripts/check-vulnerable-packages.sh
     - uses: actions/setup-node@v4
       with:
         node-version: '20'
         cache: 'npm'
         cache-dependency-path: src/DM.Web.Client/package-lock.json
     - name: npm audit
-      run: cd src/DM.Web.Client && npm ci && npm audit --audit-level=high || true
+      run: cd src/DM.Web.Client && npm ci && npm audit --audit-level=high
 
   publish:
-    needs: [build, frontend]
+    needs: [build, frontend, dependency-scan]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
     permissions:
@@ -93,14 +113,19 @@ jobs:
         include:
           - project: DM.Web.API
             image_suffix: api
-          - project: DM.Services.Mail.Sender.Consumer
-            image_suffix: consumer-mail
-          - project: DM.Services.Search.Consumer
-            image_suffix: consumer-search
-          - project: DM.Services.Notifications.Consumer
-            image_suffix: consumer-notification
+          - project: DM.Workers.Mail
+            image_suffix: worker-mail
+          - project: DM.Workers.SearchIndexer
+            image_suffix: worker-search
+          - project: DM.Workers.NotificationDispatcher
+            image_suffix: worker-notification
     steps:
     - uses: actions/checkout@v4
+
+    # A renamed or mistyped project must fail here in one second, not five
+    # minutes later inside a Docker restore layer.
+    - name: Verify project exists
+      run: test -f "src/${{ matrix.project }}/${{ matrix.project }}.csproj"
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -116,7 +141,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.image_suffix }}
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.image_suffix }}
         tags: |
           type=sha,prefix=
           type=ref,event=branch

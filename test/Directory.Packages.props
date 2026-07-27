@@ -1,18 +1,12 @@
 <Project>
-    <PropertyGroup>
-        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    </PropertyGroup>
-    
+    <!-- Inherit every version from the solution-wide file. A second independent
+         package list here let test and src drift apart, and kept transitive
+         pinning — and therefore security patches — from ever reaching the test
+         projects. Only packages that exist nowhere in src belong below. -->
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Packages.props', '$(MSBuildThisFileDirectory)../'))" />
+
     <ItemGroup>
-        <PackageVersion Include="AutoMapper" Version="13.0.1" />
-        <PackageVersion Include="FluentAssertions" Version="6.12.0" />
-        <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.8" />
-        <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.8" />
         <PackageVersion Include="Microsoft.Data.Sqlite" Version="8.0.8" />
         <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.8" />
-        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.0" />
-        <PackageVersion Include="Moq" Version="4.20.70" />
-        <PackageVersion Include="xunit" Version="2.9.0" />
-        <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
     </ItemGroup>
 </Project>
