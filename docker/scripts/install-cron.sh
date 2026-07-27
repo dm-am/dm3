@@ -19,18 +19,23 @@ touch "$LOG_FILE"
 
 # Install crontab entries
 CRON_MARKER="# DM3 automated backups"
+# verify-backup.sh runs last and exits non-zero when an artefact is missing,
+# tiny or corrupted. A backup nobody verifies is not a backup: without this
+# entry the first sign of trouble is a failed restore.
 CRON_JOBS="$CRON_MARKER
 0 2 * * * $SCRIPT_DIR/backup-postgres.sh >> $LOG_FILE 2>&1
 0 3 * * * $SCRIPT_DIR/backup-mongodb.sh >> $LOG_FILE 2>&1
-0 4 * * * $SCRIPT_DIR/backup-minio.sh >> $LOG_FILE 2>&1"
+0 4 * * * $SCRIPT_DIR/backup-minio.sh >> $LOG_FILE 2>&1
+0 5 * * * $SCRIPT_DIR/verify-backup.sh >> $LOG_FILE 2>&1"
 
 # Remove old DM3 cron entries if present, then add new ones
-(crontab -l 2>/dev/null | grep -v "$CRON_MARKER" | grep -v "backup-postgres.sh" | grep -v "backup-mongodb.sh" | grep -v "backup-minio.sh"; echo "$CRON_JOBS") | crontab -
+(crontab -l 2>/dev/null | grep -v "$CRON_MARKER" | grep -v "backup-postgres.sh" | grep -v "backup-mongodb.sh" | grep -v "backup-minio.sh" | grep -v "verify-backup.sh"; echo "$CRON_JOBS") | crontab -
 
 echo "Backup cron jobs installed:"
 echo "  02:00 - PostgreSQL backup"
 echo "  03:00 - MongoDB backup"
 echo "  04:00 - MinIO backup"
+echo "  05:00 - Verify last night's backups (non-zero exit on failure)"
 echo "  Log file: $LOG_FILE"
 
 # Setup logrotate
