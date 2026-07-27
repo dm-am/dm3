@@ -250,14 +250,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("AvatarUploadId");
 
-                    b.HasIndex("Email")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Users_Email_Lower");
-
-                    b.HasIndex("Username")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Users_Username_Lower");
-
                     b.ToTable("Users");
                 });
 
