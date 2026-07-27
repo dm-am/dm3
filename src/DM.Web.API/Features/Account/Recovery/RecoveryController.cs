@@ -3,6 +3,7 @@ using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Exceptions;
 using DM.Web.API.Shared.Dto;
+using Microsoft.Extensions.Logging;
 using DM.Web.API.Features.Community.Users;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -29,13 +30,17 @@ namespace DM.Web.API.Features.Account.Recovery;
 public class RecoveryController : ControllerBase
 {
     private readonly IRecoveryApiService _recoveryService;
+    private readonly ILogger<RecoveryController> _logger;
 
     /// <summary>
     /// Creates a new instance of RecoveryController
     /// </summary>
-    public RecoveryController(IRecoveryApiService recoveryService)
+    public RecoveryController(
+        IRecoveryApiService recoveryService,
+        ILogger<RecoveryController> logger)
     {
         _recoveryService = recoveryService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -45,12 +50,17 @@ public class RecoveryController : ControllerBase
     /// Initiates recovery process based on email status:
     /// - **Active account**: Sends password reset link
     /// - **Pending activation**: Resends activation email
-    /// - **Not found**: Returns success to prevent enumeration
+    /// - **Not found**: Reports that the email is not registered
     ///
     /// The response status indicates what action was taken:
     /// - `PasswordResetSent`: Reset link sent to email
     /// - `ActivationResent`: Activation link sent to email
-    /// - `NotFound`: Email not in system (shown to prevent enumeration)
+    /// - `NotFound`: Email not in system
+    ///
+    /// The three statuses are distinguishable, so the endpoint tells the caller
+    /// whether an address is registered. That is deliberate — the form has to be
+    /// able to say that an address was mistyped — and it is a recorded exception
+    /// to the non-disclosure rule, see docs/conventions/SECURITY.md.
     /// </remarks>
     /// <param name="request">Email address to recover</param>
     /// <response code="200">Recovery request processed</response>
@@ -60,8 +70,12 @@ public class RecoveryController : ControllerBase
     [ProducesResponseType(typeof(RecoveryResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
-    public async Task<IActionResult> RequestRecovery([FromBody] RecoveryRequest request) =>
-        Ok(await _recoveryService.Recover(request));
+    public async Task<IActionResult> RequestRecovery([FromBody] RecoveryRequest request)
+    {
+        var result = await _recoveryService.Recover(request);
+        _logger.IdentifierDisclosed(HttpContext, "recovery", result.Status.ToString());
+        return Ok(result);
+    }
 
     /// <summary>
     /// Get password reset token status
