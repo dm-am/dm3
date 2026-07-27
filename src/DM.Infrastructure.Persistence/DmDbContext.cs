@@ -467,19 +467,14 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<UserProfileNote>()
             .HasIndex(n => new { n.OwnerId, n.SubjectUserId }).IsUnique();
 
-        // Case-insensitive username and email indexes for efficient lookups in PostgreSQL
-        if (isPostgres)
-        {
-            modelBuilder.Entity<User>()
-                .HasIndex(u => u.Username)
-                .HasDatabaseName("IX_Users_Username_Lower")
-                .IsUnique();
-
-            modelBuilder.Entity<User>()
-                .HasIndex(u => u.Email)
-                .HasDatabaseName("IX_Users_Email_Lower")
-                .IsUnique();
-        }
+        // Username and email are looked up case-insensitively everywhere
+        // (lower(column) = lower(value)), so the indexes that serve those
+        // lookups are expression indexes on lower(...). EF cannot express an
+        // index over an expression, so they are created by raw SQL in the
+        // migration — see the IX_Users_*_Lower statements there. Declaring a
+        // plain HasIndex here instead would build a b-tree over the raw column
+        // that no case-insensitive predicate can use, which is exactly the
+        // state this replaced: the name said Lower, the index did not.
 
         // Composite index on Token(UserId, Type) - for frequent "find user's tokens by type" queries
         modelBuilder.Entity<Token>()
