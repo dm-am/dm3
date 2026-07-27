@@ -175,10 +175,18 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     /// <inheritdoc />
     public async Task FlushAsync(Guid userId, UnreadEntryType entryType, Guid entityId)
     {
+        // Any user's counter for this entity carries the ParentId this one needs.
+        // When there is none, the entity was never counted for anyone: there is
+        // nothing to mark as read, and writing a marker with an invented ParentId
+        // would hide it from FlushAllAsync, which filters by exactly that field.
         var counter = await Collection.Find(
                 Filter.Eq(c => c.EntityId, entityId) &
                 Filter.Eq(c => c.EntryType, entryType))
             .FirstOrDefaultAsync();
+        if (counter == null)
+        {
+            return;
+        }
 
         await Collection
             .ReplaceOneAsync(
