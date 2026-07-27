@@ -440,6 +440,8 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         foreach (var oldUpload in oldUploads)
         {
             oldUpload.IsRemoved = true;
+            // Starts the sweeper's grace period; see UnlinkAvatarUpload below.
+            oldUpload.DeletedUtc = _dateTimeProvider.Now;
         }
 
         // Link new upload to user
