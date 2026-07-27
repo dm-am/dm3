@@ -1,2 +1,8 @@
 10038	IGNORE	(Content Security Policy - API doesn't serve HTML)
 10098	IGNORE	(Cross-Domain Misconfiguration - expected for API)
+10003	IGNORE	(Vulnerable JS Library - Swagger UI bundled assets; UseSwaggerUI is registered only when the environment is Development, so it never reaches production)
+10049	IGNORE	(Storable and Cacheable Content - public GET endpoints are meant to be cacheable; session-bearing responses are marked no-store separately)
+10096	IGNORE	(Timestamp Disclosure - matches numeric ids and counters that merely look like Unix epochs; no timestamp here is secret)
+10109	IGNORE	(Modern Web Application - informational, reports that the target behaves like an SPA; not a defect)
+90004	IGNORE	(Cross-Origin-Embedder-Policy - require-corp would block images served from MinIO/imgproxy on another origin; deliberately unset)
+10055	IGNORE	(CSP wildcard - img-src keeps the https: scheme source because [img] renders user-supplied external URLs verbatim; narrowing it requires proxying every external image first. NOTE: this rule id also covers "directive with no fallback", which is why form-action/base-uri/object-src/frame-src are now set explicitly in SecurityHeadersMiddleware rather than relied upon here)

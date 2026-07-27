@@ -64,7 +64,10 @@ public class SecurityHeadersMiddleware
         // - font-src 'self': Only allow fonts from same origin
         // - connect-src 'self' wss:: Allow AJAX/WebSocket connections to same origin and secure WebSockets
         // - frame-ancestors 'none': Prevent embedding in frames (complements X-Frame-Options)
-        headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' wss:; frame-ancestors 'none'";
+        // form-action, base-uri, object-src and frame-src are listed explicitly:
+        // none of them falls back to default-src, so leaving them out means they
+        // are simply unrestricted (flagged by ZAP rule 10055).
+        headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' wss:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'";
 
         // HSTS: Force HTTPS for one year (production only, not on localhost)
         if (_environment.IsProduction() && !IsLocalhost(context.Request.Host))

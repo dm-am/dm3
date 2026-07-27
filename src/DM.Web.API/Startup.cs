@@ -407,6 +407,12 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             Environment.Exit(0);
         }
         
+        // First in the pipeline: a security header is only worth anything if it
+        // is on EVERY response. Registered after UseSwaggerUI it was skipped for
+        // every statically served Swagger asset, which is how the OWASP baseline
+        // scan found /swagger-ui.css with no headers at all.
+        appBuilder.UseMiddleware<SecurityHeadersMiddleware>();
+
         // Swagger only in development (security: hide API documentation in production)
         if (_environment.IsDevelopment())
         {
@@ -418,7 +424,6 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         appBuilder
             .UseResponseCompression()
             .UseResponseCaching()
-            .UseMiddleware<SecurityHeadersMiddleware>()
             .UseMiddleware<CorrelationMiddleware>()
             .UseMiddleware<ErrorHandlingMiddleware>()
             .UseCors(b => b
