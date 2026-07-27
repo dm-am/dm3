@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using DM.Infrastructure.Core.Configuration;
@@ -54,9 +56,11 @@ public class WebhookController : ControllerBase
     /// <param name="payload">Raw webhook payload</param>
     /// <response code="200">Webhook processed</response>
     /// <response code="403">Invalid secret</response>
+    /// <response code="404">Webhook secret is not configured for this type</response>
     [HttpPost("{type}/{secret}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> HandleWebhook(string type, string secret, [FromBody] JsonElement payload)
     {
         var normalizedType = type.ToLowerInvariant();
@@ -69,8 +73,22 @@ public class WebhookController : ControllerBase
             _ => null
         };
 
-        // In dev mode (no secret configured), accept any request
-        if (!string.IsNullOrEmpty(expectedSecret) && secret != expectedSecret)
+        // Fail closed. An unconfigured secret used to mean "accept anything",
+        // and an unconfigured secret is the shipped default — so the endpoint
+        // was open to anyone who could guess the path. Without a secret the
+        // webhook simply does not exist.
+        if (string.IsNullOrEmpty(expectedSecret))
+        {
+            _logger.LogWarning(
+                "Webhook for {Type} received but no secret is configured; rejecting", type);
+            return NotFound();
+        }
+
+        // Fixed-time comparison: a plain != leaks the shared secret one byte at
+        // a time to anyone who can measure the response.
+        var provided = Encoding.UTF8.GetBytes(secret ?? string.Empty);
+        var expected = Encoding.UTF8.GetBytes(expectedSecret);
+        if (!CryptographicOperations.FixedTimeEquals(provided, expected))
         {
             _logger.LogWarning("Invalid webhook secret for {Type}", type);
             return StatusCode(403, new { error = "Invalid webhook secret" });
