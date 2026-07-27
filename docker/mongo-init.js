@@ -1,6 +1,13 @@
 // MongoDB Initialization Script for DM3
 // This script runs automatically on first container startup
 // Documentation: docs/backend/OPTIMIZATION_OWN_GAMES.md
+//
+// This script is only the fast path for a fresh data volume: Mongo executes
+// /docker-entrypoint-initdb.d exactly once, when the volume is empty, so nothing changed
+// here can ever reach an already deployed database. The authority for the index set is
+// MongoIndexInitializer (src/DM.Infrastructure.Persistence/MongoIntegration), which asserts
+// the same indexes on every application startup and therefore also heals existing databases.
+// Keep the two in sync; on any disagreement the application wins.
 
 // Switch to the application database
 db = db.getSiblingDB('dm3');
@@ -44,22 +51,24 @@ print('UnreadCounters indexes created');
 
 // ============================================================================
 // UserSessions Collection - Authentication performance
+// Used by: AuthenticationRepository
 // ============================================================================
 
+// Index for FindUserSession - runs on EVERY authenticated request
+// Query: ElemMatch(Sessions, s => s.Id = X); same predicate in RefreshSession
+// Session.Id is stored as the "_id" element of the embedded document, hence "Sessions._id"
+// Every other query of this collection filters by the document _id (the user identifier)
 db.UserSessions.createIndex(
-    { UserId: 1, IsActive: 1 },
-    { name: "IX_UserSessions_User_Active", background: true }
-);
-
-db.UserSessions.createIndex(
-    { ExpirationDate: 1 },
-    { name: "IX_UserSessions_Expiration", background: true }
+    { "Sessions._id": 1 },
+    { name: "IX_UserSessions_SessionId", background: true }
 );
 
 print('UserSessions indexes created');
 
 // ============================================================================
 // UserSettings Collection
+// Used by: UserSettingsRepository, AuthenticationRepository
+// Query: UserId = X (UserId is not the document _id)
 // ============================================================================
 
 db.UserSettings.createIndex(
@@ -71,33 +80,51 @@ print('UserSettings indexes created');
 
 // ============================================================================
 // RealtimeNotifications Collection
+// Used by: NotificationRepository
 // ============================================================================
 
+// Index for Count, CountUnread and GetNotifications
+// Query: UsersInterested CONTAINS X, sorted by CreatedUtc descending
 db.RealtimeNotifications.createIndex(
-    { UserId: 1, IsRead: 1, CreateDate: -1 },
-    { name: "IX_RealtimeNotifications_User_Read_Date", background: true }
+    { UsersInterested: 1, CreatedUtc: -1 },
+    { name: "IX_RealtimeNotifications_Interested_Created", background: true }
 );
 
+// Index for MarkAsRead(notificationId, userId)
+// Query: NotificationId = X (NotificationId is not the document _id)
 db.RealtimeNotifications.createIndex(
-    { UserId: 1, IsRemoved: 1 },
-    { name: "IX_RealtimeNotifications_User_Removed", background: true }
+    { NotificationId: 1 },
+    { name: "IX_RealtimeNotifications_NotificationId", background: true }
 );
 
 print('RealtimeNotifications indexes created');
 
 // ============================================================================
 // Polls Collection
+// Used by: PollRepository
+// Get(id) filters by the document _id
 // ============================================================================
 
+// Index for Count and Get - every list query filters removed polls out
+// Query: IsRemoved = false, range over StartsUtc, default sort by StartsUtc
 db.Polls.createIndex(
-    { TopicId: 1 },
-    { name: "IX_Polls_TopicId", background: true }
+    { IsRemoved: 1, StartsUtc: 1 },
+    { name: "IX_Polls_Removed_Starts", background: true }
+);
+
+// Index for the same list query sorted by EndsUtc and for the "closed" status filter
+// Query: IsRemoved = false, range over EndsUtc
+db.Polls.createIndex(
+    { IsRemoved: 1, EndsUtc: 1 },
+    { name: "IX_Polls_Removed_Ends", background: true }
 );
 
 print('Polls indexes created');
 
 // ============================================================================
 // AttributeSchemata Collection (Game character attribute schemas)
+// Used by: AttributeSchemaRepository
+// Query: Type = Public OR UserId = X
 // ============================================================================
 
 db.AttributeSchemata.createIndex(
@@ -109,6 +136,8 @@ print('AttributeSchemata indexes created');
 
 // ============================================================================
 // Dice Collection (Dice roll results)
+// Used by: DiceRollRepository
+// Query: PostId = X / PostId IN [...]
 // ============================================================================
 
 db.Dice.createIndex(
@@ -126,10 +155,10 @@ print('');
 print('=== MongoDB Indexes Created Successfully ===');
 print('Collections indexed:');
 print('  - UnreadCounters (4 indexes) - CRITICAL for sidebar performance');
-print('  - UserSessions (2 indexes)');
+print('  - UserSessions (1 index) - CRITICAL for every authenticated request');
 print('  - UserSettings (1 index)');
 print('  - RealtimeNotifications (2 indexes)');
-print('  - Polls (1 index)');
+print('  - Polls (2 indexes)');
 print('  - AttributeSchemata (1 index)');
 print('  - Dice (1 index)');
 print('');
