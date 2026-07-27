@@ -13,8 +13,8 @@
 | **Pattern** | BFF (Backend-For-Frontend) |
 | **Токен** | HttpOnly cookie `dm_session` |
 | **Шифрование** | AES-256-GCM |
-| **Хеширование** | PBKDF2-SHA256, 600K итераций |
-| **CSRF защита** | SameSite=Strict |
+| **Хеширование** | Argon2id (см. [SECURITY.md](../conventions/SECURITY.md)) |
+| **CSRF защита** | SameSite=Lax + CSRF middleware |
 | **Сессии** | MongoDB |
 
 ---
@@ -47,10 +47,10 @@ PostgreSQL          MongoDB
 ### Flow: Email → Имя пользователя
 
 ```
-1. POST /v1/account {email, password}       → PendingRegistration (с TokenId)
-2. Email со ссылкой                         → /activate/{token}
-3. GET /v1/account/activate/{token}         → Показать форму выбора Login
-4. POST /v1/account/activate {token, login} → Создать User, auto-login
+1. Регистрация email + пароля       → PendingRegistration (с TokenId)
+2. Email со ссылкой активации        → страница выбора Login
+3. Просмотр активации по токену      → форма выбора Login
+4. Подтверждение активации + login   → Создать User, auto-login
 ```
 
 ### Защита от сквоттинга
@@ -66,12 +66,7 @@ PostgreSQL          MongoDB
 
 ### Пароли
 
-| Параметр | Значение |
-|----------|----------|
-| Алгоритм | PBKDF2-SHA256 |
-| Итерации | 600,000 |
-| Salt | 32 bytes |
-| Hash | 32 bytes |
+Параметры хеширования (алгоритм, memory cost, итерации, salt) — единый источник [SECURITY.md](../conventions/SECURITY.md#требования-к-хешированию-паролей).
 
 ### Токены
 
@@ -113,7 +108,7 @@ NIST SP 800-63B-4 (2024): composition rules не требуются при си�
 | Атака | Защита |
 |-------|--------|
 | XSS | HttpOnly cookies, CSP headers |
-| CSRF | SameSite=Strict, CSRF middleware |
+| CSRF | SameSite=Lax, CSRF middleware |
 | Brute-force | Progressive delay + **блокировка** (15 попыток → 30 мин) |
 | Timing | FixedTimeEquals |
 | Token forgery | AES-GCM auth tag |

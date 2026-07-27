@@ -162,10 +162,11 @@ export default new (class GlobalChatApi {
   }
 
   /**
-   * Get event details
+   * Get event details.
+   * Backend wraps the resource in an Envelope ({ resource }).
    */
   public getEvent(id: string) {
-    return Api.get<GlobalChatEvent>(`global-chat/events/${id}`);
+    return Api.get<Envelope<GlobalChatEvent>>(`global-chat/events/${id}`);
   }
 
   /**
@@ -178,7 +179,7 @@ export default new (class GlobalChatApi {
     duration?: string;
     isOpen: boolean;
   }) {
-    return Api.post<GlobalChatEvent>("global-chat/events", data);
+    return Api.post<Envelope<GlobalChatEvent>>("global-chat/events", data);
   }
 
   /**
@@ -194,7 +195,10 @@ export default new (class GlobalChatApi {
       isOpen?: boolean;
     },
   ) {
-    return Api.patch<GlobalChatEvent>(`global-chat/events/${id}`, data);
+    return Api.patch<Envelope<GlobalChatEvent>>(
+      `global-chat/events/${id}`,
+      data,
+    );
   }
 
   /**
@@ -208,44 +212,52 @@ export default new (class GlobalChatApi {
    * Start an event (organizer only)
    */
   public startEvent(id: string) {
-    return Api.post<GlobalChatEvent>(`global-chat/events/${id}/start`);
+    return Api.post<Envelope<GlobalChatEvent>>(
+      `global-chat/events/${id}/start`,
+    );
   }
 
   /**
    * End an event (organizer only)
    */
   public endEvent(id: string) {
-    return Api.post<GlobalChatEvent>(`global-chat/events/${id}/end`);
+    return Api.post<Envelope<GlobalChatEvent>>(`global-chat/events/${id}/end`);
   }
 
   /**
    * Join an open event
    */
   public joinEvent(id: string) {
-    return Api.post<GlobalChatEvent>(`global-chat/events/${id}/join`);
+    return Api.post<Envelope<GlobalChatEvent>>(`global-chat/events/${id}/join`);
   }
 
   /**
    * Leave an event
    */
   public leaveEvent(id: string) {
-    return Api.post<GlobalChatEvent>(`global-chat/events/${id}/leave`);
+    return Api.post<Envelope<GlobalChatEvent>>(
+      `global-chat/events/${id}/leave`,
+    );
   }
 
   /**
    * Add participant to closed event (organizer only)
    */
   public addEventParticipant(eventId: string, username: string) {
-    return Api.post<GlobalChatEvent>(
+    return Api.post<Envelope<GlobalChatEvent>>(
       `global-chat/events/${eventId}/participants`,
       { username },
     );
   }
 
   /**
-   * Remove participant from event (organizer only)
+   * Remove participant from event (organizer only).
+   * The backend route addresses participants by username (login), same as
+   * other per-user resources (e.g. users/me/blacklist/{username}).
    */
-  public removeEventParticipant(eventId: string, userId: string) {
-    return Api.delete(`global-chat/events/${eventId}/participants/${userId}`);
+  public removeEventParticipant(eventId: string, username: string) {
+    return Api.delete(
+      `global-chat/events/${eventId}/participants/${encodeURIComponent(username)}`,
+    );
   }
 })();

@@ -3,11 +3,17 @@
  * RulesBans - ban mechanics section
  */
 
+import { onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import {
   ExpandableList,
   type ExpandableItem,
 } from "@/shared/ui/ExpandableList";
+import type { ExpandableListExpose } from "./expandableListRef";
+
+const route = useRoute();
+const listRef = ref<ExpandableListExpose | null>(null);
 
 const sections: ExpandableItem[] = [
   {
@@ -53,12 +59,23 @@ const sections: ExpandableItem[] = [
     title: "Обжалование",
   },
 ];
+
+// Deep-link support: #<item-id> (e.g. "#points") auto-expands the matching
+// row on mount. Scrolling itself is handled globally by the router
+// (router.ts already does document.getElementById(hash) on every
+// navigation) — this only adds the expand-on-arrival behavior.
+onMounted(() => {
+  const id = route.hash.slice(1);
+  if (id && sections.some((section) => section.id === id)) {
+    listRef.value?.expandItem(id);
+  }
+});
 </script>
 
 <template>
-  <section class="rules-bans">
+  <section id="bans" class="rules-bans">
     <BlockTitle>Как работают баны</BlockTitle>
-    <ExpandableList :items="sections" :allow-multiple="true">
+    <ExpandableList ref="listRef" :items="sections" :allow-multiple="true">
       <template #item-appeal>
         <ul>
           <li>
@@ -79,8 +96,6 @@ const sections: ExpandableItem[] = [
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-
 .rules-bans
   margin: $big 0
 </style>

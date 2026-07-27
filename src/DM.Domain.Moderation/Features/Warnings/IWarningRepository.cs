@@ -34,4 +34,9 @@ public interface IWarningRepository
     /// Get total warning points for a user (non-removed warnings)
     /// </summary>
     Task<int> GetUserWarningPoints(Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get per-user aggregates of active warning points (only users with points > 0)
+    /// </summary>
+    Task<IEnumerable<UserWarningSummary>> GetActiveWarningSummaries(CancellationToken ct = default);
 }

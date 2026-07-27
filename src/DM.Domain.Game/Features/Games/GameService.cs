@@ -144,11 +144,6 @@ internal class GameService : IGameService
             Status = createGame.Draft ? ModuleStatus.Draft : ModuleStatus.Active,
             DraftVisibility = createGame.DraftVisibility,
             ActivatedUtc = createGame.Draft ? null : now,
-            HideTemper = createGame.HideTemper,
-            HideSkills = createGame.HideSkills,
-            HideInventory = createGame.HideInventory,
-            HideStory = createGame.HideStory,
-            DisableAlignment = createGame.DisableAlignment,
             HideDiceResult = createGame.HideDiceResult,
             ShowPrivateMessages = createGame.ShowPrivateMessages,
             HidePostStats = createGame.HidePostStats,
@@ -226,12 +221,22 @@ internal class GameService : IGameService
     public async Task<(IEnumerable<Game> games, PagingResult paging)> GetGamesAsync(GamesQuery query)
     {
         await _gamesQueryValidator.ValidateAndThrowAsync(query);
+
+        // Premoderation filter is a moderation worklist capability (Mentor+),
+        // guarded by the same targetless intention as taking a game into
+        // premoderation. Without this gate the public list would become an
+        // enumeration channel for games hidden by the Read intention.
+        if (query.PremoderationStatuses is { Count: > 0 })
+        {
+            _intentionManager.ThrowIfForbidden(GameIntention.SetStatusModeration);
+        }
+
         var identity = _identityProvider.Current;
         var currentUserId = identity.User.UserId;
         var isAnonymous = !identity.User.IsAuthenticated;
         var pageSize = identity.Settings.Paging.EntitiesPerPage;
 
-        // Only cache simple anonymous queries (no search, no complex filters)
+        // Only cache simple anonymous queries (no search, no complex filters, no date ranges)
         var canCache = isAnonymous
             && query.Skip == 0
             && string.IsNullOrEmpty(query.Search)
@@ -239,7 +244,12 @@ internal class GameService : IGameService
             && query.OptionalTags == null
             && query.ExcludedTags == null
             && (query.OwnerUsernames == null || query.OwnerUsernames.Count == 0)
-            && string.IsNullOrEmpty(query.PlayerUsername);
+            && string.IsNullOrEmpty(query.PlayerUsername)
+            && query.Participating != true
+            && !query.CreatedFromUtc.HasValue && !query.CreatedToUtc.HasValue
+            && !query.ActivatedFromUtc.HasValue && !query.ActivatedToUtc.HasValue
+            && !query.ClosedFromUtc.HasValue && !query.ClosedToUtc.HasValue
+            && !query.RecruitmentStartedFromUtc.HasValue && !query.RecruitmentStartedToUtc.HasValue;
 
         if (canCache)
         {
@@ -247,7 +257,8 @@ internal class GameService : IGameService
             var recruitingPart = query.RecruitmentFilter.HasValue ? $"_recruiting_{query.RecruitmentFilter.Value}" : "";
             var closedReasonPart = query.ClosedReasonFilter.HasValue ? $"_closedReason_{query.ClosedReasonFilter.Value}" : "";
             var sortPart = !string.IsNullOrEmpty(query.SortBy) ? $"_sort_{query.SortBy}_{query.SortOrder ?? "desc"}" : "";
-            var cacheKey = $"{GamesByStatusCacheKeyPrefix}{statusPart}{recruitingPart}{closedReasonPart}{sortPart}";
+            var takePart = $"_take_{query.Take}";
+            var cacheKey = $"{GamesByStatusCacheKeyPrefix}{statusPart}{recruitingPart}{closedReasonPart}{sortPart}{takePart}";
             var cached = await _cache.GetOrCreateAsync(cacheKey, async e =>
             {
                 e.AbsoluteExpirationRelativeToNow = CachePolicy.Medium;
@@ -541,11 +552,6 @@ internal class GameService : IGameService
             SystemName = updateGame.SystemName,
             NarrativeSetting = updateGame.NarrativeSetting,
             Info = updateGame.Info,
-            HideTemper = updateGame.HideTemper,
-            HideSkills = updateGame.HideSkills,
-            HideInventory = updateGame.HideInventory,
-            HideStory = updateGame.HideStory,
-            DisableAlignment = updateGame.DisableAlignment,
             HideDiceResult = updateGame.HideDiceResult,
             ShowPrivateMessages = updateGame.ShowPrivateMessages,
             HidePostStats = updateGame.HidePostStats,
@@ -564,14 +570,190 @@ internal class GameService : IGameService
         return result;
     }
 
+    public async Task<GameDetails> ChangeStatusAsync(Guid gameId, GameStatusTransition transition)
+    {
+        var game = await GetDetailsAsync(gameId);
+        var now = _dateTimeProvider.Now;
+        var update = new UpdateGameEntity { GameId = gameId, UpdatedUtc = now };
+        EventType statusEvent;
+
+        switch (transition)
+        {
+            case GameStatusTransition.Start:
+                RequireStatus(game, ModuleStatus.Draft, transition);
+                _intentionManager.ThrowIfForbidden(GameIntention.SetStatusActive, game);
+                update.Status = ModuleStatus.Active;
+                if (!game.ActivatedUtc.HasValue) update.ActivatedUtc = now;
+                statusEvent = EventType.StatusGameActive;
+                break;
+
+            case GameStatusTransition.Freeze:
+                RequireStatus(game, ModuleStatus.Active, transition);
+                _intentionManager.ThrowIfForbidden(GameIntention.SetStatusClosed, game);
+                update.Status = ModuleStatus.Closed;
+                update.ClosedReason = ClosedReason.Frozen;
+                update.ClosedUtc = now;
+                update.IsRecruitmentOpen = false;
+                statusEvent = EventType.StatusGameFrozen;
+                break;
+
+            case GameStatusTransition.Finish:
+                RequireStatus(game, ModuleStatus.Active, transition);
+                _intentionManager.ThrowIfForbidden(GameIntention.SetStatusClosed, game);
+                update.Status = ModuleStatus.Closed;
+                update.ClosedReason = ClosedReason.Finished;
+                update.ClosedUtc = now;
+                update.IsRecruitmentOpen = false;
+                statusEvent = EventType.StatusGameFinished;
+                break;
+
+            case GameStatusTransition.Close:
+                // Active -> Closed+None, or Closed+Frozen -> Closed+None
+                if (game.Status != ModuleStatus.Active &&
+                    !(game.Status == ModuleStatus.Closed && game.ClosedReason == ClosedReason.Frozen))
+                {
+                    throw IllegalTransition(transition, game);
+                }
+                _intentionManager.ThrowIfForbidden(GameIntention.SetStatusClosed, game);
+                update.Status = ModuleStatus.Closed;
+                update.ClosedReason = ClosedReason.None;
+                update.IsRecruitmentOpen = false;
+                if (!game.ClosedUtc.HasValue) update.ClosedUtc = now;
+                statusEvent = EventType.StatusGameClosed;
+                break;
+
+            case GameStatusTransition.Reopen:
+                RequireStatus(game, ModuleStatus.Closed, transition);
+                _intentionManager.ThrowIfForbidden(GameIntention.SetStatusActive, game);
+                update.Status = ModuleStatus.Active;
+                update.ClosedReason = ClosedReason.None;
+                update.ClearClosedUtc = true;
+                if (!game.ActivatedUtc.HasValue) update.ActivatedUtc = now;
+                statusEvent = EventType.StatusGameActive;
+                break;
+
+            default:
+                throw new HttpException(HttpStatusCode.BadRequest, "Unknown status transition");
+        }
+
+        var result = await _repository.Update(update);
+        await _producer.SendAsync(new List<EventType> { EventType.ChangedGame, statusEvent }, gameId);
+        return result;
+    }
+
+    public async Task<GameDetails> ChangePremoderationAsync(string id, GamePremoderationTransition transition)
+    {
+        // Site-wide Mentor+ gate (parameterless intention). The per-game read
+        // path hides premoderation-pending games from non-curators, so resolve
+        // the id and fetch via the repository (which admits the assigned mentor)
+        // rather than the Read-gated GetDetailsAsync / GetDetailsByPublicIdAsync
+        // — otherwise the very game this endpoint exists to moderate would be
+        // hidden from the mentor.
+        _intentionManager.ThrowIfForbidden(GameIntention.SetStatusModeration);
+
+        var currentUserId = _identityProvider.Current.User.UserId;
+        var game = Guid.TryParse(id, out var guid)
+            ? await _repository.GetGameDetails(guid, currentUserId)
+            : await _repository.GetGameDetailsByPublicId(id, currentUserId);
+        if (game == null)
+        {
+            throw new HttpException(HttpStatusCode.Gone, "Game not found");
+        }
+
+        var gameId = game.Id;
+        var update = new UpdateGameEntity { GameId = gameId, UpdatedUtc = _dateTimeProvider.Now };
+
+        switch (transition)
+        {
+            case GamePremoderationTransition.SendToPremoderation:
+                if (game.PremoderationStatus != PremoderationStatus.AwaitingEdits)
+                {
+                    throw new HttpException(HttpStatusCode.BadRequest,
+                        $"Cannot send to premoderation from status '{game.PremoderationStatus}'");
+                }
+                update.PremoderationStatus = PremoderationStatus.AwaitingApproval;
+                update.MentorId = currentUserId;
+                update.SetMentorId = true;
+                break;
+
+            case GamePremoderationTransition.RemoveFromPremoderation:
+                if (game.PremoderationStatus != PremoderationStatus.AwaitingApproval)
+                {
+                    throw new HttpException(HttpStatusCode.BadRequest,
+                        $"Cannot remove from premoderation from status '{game.PremoderationStatus}'");
+                }
+                update.PremoderationStatus = PremoderationStatus.Approved;
+                update.MentorId = null;
+                update.SetMentorId = true;
+                break;
+
+            default:
+                throw new HttpException(HttpStatusCode.BadRequest, "Unknown premoderation transition");
+        }
+
+        var result = await _repository.Update(update);
+        await _producer.SendAsync(new List<EventType> { EventType.ChangedGame, EventType.StatusGameModeration }, gameId);
+        return result;
+    }
+
+    public async Task<GameDetails> ResetRecruitmentDateAsync(Guid gameId)
+    {
+        // Admin-only action; the controller enforces the role. Read-gate still
+        // applies (active games are public, so an admin can always fetch them).
+        var game = await GetDetailsAsync(gameId);
+        var update = new UpdateGameEntity
+        {
+            GameId = game.Id,
+            UpdatedUtc = _dateTimeProvider.Now,
+            ClearRecruitmentStartedUtc = true
+        };
+
+        var result = await _repository.Update(update);
+        await _producer.SendAsync(EventType.ChangedGame, gameId);
+        return result;
+    }
+
+    private static void RequireStatus(Game game, ModuleStatus expected, GameStatusTransition transition)
+    {
+        if (game.Status != expected)
+        {
+            throw IllegalTransition(transition, game);
+        }
+    }
+
+    private static HttpException IllegalTransition(GameStatusTransition transition, Game game) =>
+        new(HttpStatusCode.BadRequest,
+            $"Transition '{transition}' is not allowed from status '{game.Status}'" +
+            (game.Status == ModuleStatus.Closed ? $" ({game.ClosedReason})" : ""));
+
     #endregion
 
     #region Delete
 
     public async Task DeleteAsync(Guid gameId)
     {
-        var gameToRemove = await GetAsync(gameId);
+        var gameToRemove = await GetDetailsAsync(gameId);
         _intentionManager.ThrowIfForbidden(GameIntention.Delete, gameToRemove);
+
+        var currentUser = _identityProvider.Current.User;
+        var isPrivilegedModerator = currentUser.Role >= UserRole.SeniorModerator;
+
+        // Master self-delete is restricted (SeniorModerator+ bypasses it): a
+        // master may only delete a game while it is still a draft, or while it
+        // is barely started — fewer than 10 posts and none of them rated.
+        if (!isPrivilegedModerator && gameToRemove.Master.UserId == currentUser.UserId &&
+            gameToRemove.Status != ModuleStatus.Draft)
+        {
+            var postCounts = await _repository.GetTotalPostCounts(new[] { gameId });
+            var totalPosts = postCounts.TryGetValue(gameId, out var pc) ? pc : 0;
+            var hasRatedPosts = gameToRemove.PostReviewsCount > 0;
+            if (totalPosts >= 10 || hasRatedPosts)
+            {
+                throw new HttpException(HttpStatusCode.Forbidden,
+                    "The game can no longer be deleted: it has 10 or more posts, or some posts are rated");
+            }
+        }
+
         await _repository.Delete(gameId);
         await _producer.SendAsync(EventType.DeletedGame, gameId);
     }
@@ -670,6 +852,7 @@ internal class GameService : IGameService
         var parts = new List<string>
         {
             query.Skip.ToString(),
+            query.Take.ToString(),
             query.Search ?? "",
             query.SortBy ?? "",
             query.SortOrder ?? "",
@@ -681,13 +864,17 @@ internal class GameService : IGameService
             query.ExcludedTags != null ? string.Join(",", query.ExcludedTags) : "",
             query.OwnerUsernames != null ? string.Join(",", query.OwnerUsernames) : "",
             query.PlayerUsername ?? "",
+            query.PlayerParticipation?.ToString() ?? "",
             query.Participating?.ToString() ?? "",
-            query.CreatedFrom?.ToString("O") ?? "",
-            query.CreatedTo?.ToString("O") ?? "",
-            query.ActivatedFrom?.ToString("O") ?? "",
-            query.ActivatedTo?.ToString("O") ?? "",
-            query.ClosedFrom?.ToString("O") ?? "",
-            query.ClosedTo?.ToString("O") ?? ""
+            query.CreatedFromUtc?.ToString("O") ?? "",
+            query.CreatedToUtc?.ToString("O") ?? "",
+            query.ActivatedFromUtc?.ToString("O") ?? "",
+            query.ActivatedToUtc?.ToString("O") ?? "",
+            query.ClosedFromUtc?.ToString("O") ?? "",
+            query.ClosedToUtc?.ToString("O") ?? "",
+            query.RecruitmentStartedFromUtc?.ToString("O") ?? "",
+            query.RecruitmentStartedToUtc?.ToString("O") ?? "",
+            query.PremoderationStatuses != null ? string.Join(",", query.PremoderationStatuses) : ""
         };
         return string.Join("|", parts).GetHashCode().ToString();
     }

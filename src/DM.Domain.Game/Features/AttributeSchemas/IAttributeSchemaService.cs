@@ -29,10 +29,17 @@ public interface IAttributeSchemaService
     Task<IEnumerable<AttributeSchema>> GetAllAsync();
 
     /// <summary>
-    /// Get certain attribute schema
+    /// Get certain attribute schema without a read gate (internal render paths only)
     /// </summary>
     /// <param name="schemaId">Schema identifier</param>
     Task<AttributeSchema> GetAsync(Guid schemaId);
+
+    /// <summary>
+    /// Get certain attribute schema for the current user, enforcing the read gate
+    /// (public, author, or participant/lead of a game referencing the schema)
+    /// </summary>
+    /// <param name="schemaId">Schema identifier</param>
+    Task<AttributeSchema> GetForUserAsync(Guid schemaId);
 
     #endregion
 

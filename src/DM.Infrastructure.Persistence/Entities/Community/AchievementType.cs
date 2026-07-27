@@ -6,8 +6,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace DM.Infrastructure.Persistence.Entities.Community;
 
 /// <summary>
-/// DAL для тира достижения. Тонкая запись: все, что одинаково для всех
-/// тиров цепочки (Icon, Description, Metric, SortOrder) — на категории.
+/// DAL for an achievement tier. A thin record: everything shared by all
+/// tiers of the chain (Icon, Description, Metric, SortOrder) lives on the category.
 /// </summary>
 [Table("AchievementTypes")]
 public class AchievementType

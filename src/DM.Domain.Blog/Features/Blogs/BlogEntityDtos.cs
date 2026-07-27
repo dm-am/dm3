@@ -75,6 +75,49 @@ public class UpdateBlogEntity
     public bool? CommentsEnabled { get; set; }
 
     /// <summary>
+    /// Blog status (if changed)
+    /// </summary>
+    public ModuleStatus? Status { get; set; }
+
+    /// <summary>
+    /// Reason why the blog was closed (if changed)
+    /// </summary>
+    public ClosedReason? ClosedReason { get; set; }
+
+    /// <summary>
+    /// Activation timestamp (set on first activation)
+    /// </summary>
+    public DateTimeOffset? ActivatedUtc { get; set; }
+
+    /// <summary>
+    /// Closed timestamp (set when closing)
+    /// </summary>
+    public DateTimeOffset? ClosedUtc { get; set; }
+
+    /// <summary>
+    /// Whether to clear ClosedUtc (when reopening)
+    /// </summary>
+    public bool ClearClosedUtc { get; set; }
+
+    /// <summary>
+    /// Premoderation status (if changed)
+    /// </summary>
+    public PremoderationStatus? PremoderationStatus { get; set; }
+
+    /// <summary>
+    /// Curating mentor user id (only applied when <see cref="SetMentorId"/> is true;
+    /// null clears the curator). Kept separate from the nullable value so that the
+    /// repository can distinguish "leave the current mentor untouched" from
+    /// "explicitly set the mentor to null".
+    /// </summary>
+    public Guid? MentorId { get; set; }
+
+    /// <summary>
+    /// Whether <see cref="MentorId"/> should be written (set or cleared).
+    /// </summary>
+    public bool SetMentorId { get; set; }
+
+    /// <summary>
     /// Update timestamp
     /// </summary>
     public DateTimeOffset UpdatedUtc { get; set; }

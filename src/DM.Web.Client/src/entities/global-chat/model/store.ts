@@ -1,6 +1,10 @@
 import { defineStore, storeToRefs } from "pinia";
-import { ref } from "vue";
-import type { GlobalChatMessage } from "./types";
+import { computed, ref } from "vue";
+import type {
+  GlobalChatEvent,
+  GlobalChatEventSummary,
+  GlobalChatMessage,
+} from "./types";
 import globalChatApi from "../api/globalChatApi";
 import { useAuthStore } from "@/shared/stores";
 
@@ -15,6 +19,12 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   const hasMoreBefore = ref(true);
   const hasMoreAfter = ref(false);
   const highlightedMessageId = ref<string | null>(null);
+  /** Errors from history pagination (fetchMoreBefore/fetchMoreAfter) — kept
+   * separate from `error` (initial-load error) so a failed page-2 request
+   * doesn't wipe already-rendered messages; surfaced inline at the sentinel
+   * with a retry, per the site's stale-content-stays-visible convention. */
+  const errorBefore = ref<string | null>(null);
+  const errorAfter = ref<string | null>(null);
 
   // Cursors for pagination
   const prevCursor = ref<string | null>(null);
@@ -72,11 +82,19 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     if (loadingBefore.value || !hasMoreBefore.value || !prevCursor.value)
       return;
     loadingBefore.value = true;
+    errorBefore.value = null;
     try {
-      const { data } = await globalChatApi.getMessagesBefore(
+      const { data, error: apiError } = await globalChatApi.getMessagesBefore(
         prevCursor.value,
         50,
       );
+      if (apiError) {
+        // Network/server failure — keep hasMoreBefore as-is so the sentinel
+        // stays mounted and the user can retry, instead of silently
+        // disabling pagination forever.
+        errorBefore.value = "Не удалось загрузить сообщения";
+        return;
+      }
       if (data && data.resources.length > 0) {
         messages.value = [...data.resources, ...messages.value];
         prevCursor.value = data.paging?.prevCursor ?? null;
@@ -94,11 +112,16 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   async function fetchMoreAfter() {
     if (loadingAfter.value || !hasMoreAfter.value || !nextCursor.value) return;
     loadingAfter.value = true;
+    errorAfter.value = null;
     try {
-      const { data } = await globalChatApi.getMessagesAfter(
+      const { data, error: apiError } = await globalChatApi.getMessagesAfter(
         nextCursor.value,
         50,
       );
+      if (apiError) {
+        errorAfter.value = "Не удалось загрузить сообщения";
+        return;
+      }
       if (data && data.resources.length > 0) {
         messages.value = [...messages.value, ...data.resources];
         nextCursor.value = data.paging?.nextCursor ?? null;
@@ -110,6 +133,38 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
       }
     } finally {
       loadingAfter.value = false;
+    }
+  }
+
+  // Poll for messages newer than the last loaded one, regardless of
+  // hasMoreAfter/nextCursor — those reflect the initial page load's cursor
+  // (which is null/false once we're caught up to "latest"), so they can't be
+  // reused to detect messages that arrived afterwards. Used by guest polling
+  // (no SignalR access) as a fallback for realtime updates. No-ops silently
+  // on failure — this runs unattended on a timer, not user-initiated.
+  //
+  // The raw message GUID passed as `lastMessage.id` is not a valid opaque
+  // cursor for the backend CursorService — when it fails to decode it, it
+  // falls back to returning the latest page instead of erroring. That
+  // fallback response's paging metadata describes the latest page, not
+  // "after lastMessage.id", so it must not overwrite nextCursor/hasMoreAfter
+  // (those stay owned by fetchMessages/fetchMoreAfter). Only genuinely new
+  // messages (not already in messagesById) are appended.
+  async function pollForNewer() {
+    const lastMessage = messages.value[messages.value.length - 1];
+    if (!lastMessage) return;
+    try {
+      const { data } = await globalChatApi.getMessagesAfter(lastMessage.id, 50);
+      if (data && data.resources.length > 0) {
+        const fresh = data.resources.filter((m) => !messagesById.has(m.id));
+        if (fresh.length > 0) {
+          messages.value = [...messages.value, ...fresh];
+          syncMessagesMap();
+          trimOldMessages();
+        }
+      }
+    } catch {
+      // Silent — next poll tick will retry.
     }
   }
 
@@ -140,13 +195,27 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     }
   }
 
+  /** True when navigateToDate actually landed on the requested archive date
+   * (vs falling back to the latest messages — no history near that date, or
+   * a request failure). Callers use this to avoid presenting the latest
+   * window as if it were the picked day. */
+  const landedOnRequestedDate = ref(false);
+
   // Navigate to messages for a specific date
   async function navigateToDate(date: string) {
     loading.value = true;
     error.value = null;
+    landedOnRequestedDate.value = false;
     try {
-      // Convert date to ISO 8601 UTC timestamp (start of day)
-      const timestampUtc = new Date(date + "T00:00:00Z").toISOString();
+      // Anchor from LOCAL midnight (not UTC midnight) so "Перейти к дате"
+      // lands on the day the guest actually picked in their own timezone —
+      // a UTC anchor resolves to the previous local day for users east of
+      // UTC (and the next local day for some users west of it near DST
+      // edges). The exact first-of-day message is then resolved client-side
+      // (GlobalChatPage.loadArchiveDate) once results are in, since the
+      // backend's nearest-cursor window can still start slightly before the
+      // requested day.
+      const timestampUtc = new Date(`${date}T00:00:00`).toISOString();
       const { data, error: apiError } = await globalChatApi.getMessagesNearDate(
         timestampUtc,
         50,
@@ -161,8 +230,11 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
         nextCursor.value = data.paging?.nextCursor ?? null;
         hasMoreBefore.value = data.paging?.hasPrev ?? false;
         hasMoreAfter.value = data.paging?.hasNext ?? false;
-        // Highlight the first message in the result
-        highlightedMessageId.value = data.resources[0]?.id ?? null;
+        // Highlighting/scroll target resolution is owned by the page
+        // (GlobalChatPage.loadArchiveDate resolves the exact first-of-day
+        // message client-side and highlights it directly) — no store-level
+        // highlightedMessageId here, avoiding a race with that logic.
+        landedOnRequestedDate.value = true;
         syncMessagesMap();
       } else {
         // No messages found near the date, load latest
@@ -263,6 +335,54 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // Chat events (shared by the announcement banner and the input hint)
+  // ─────────────────────────────────────────────────────────────
+  const events = ref<GlobalChatEventSummary[]>([]);
+  /** Full event details cache, keyed by event id (lazy-loaded on demand). */
+  const eventDetails = ref<Record<string, GlobalChatEvent>>({});
+  const eventDetailsLoading = ref<Record<string, boolean>>({});
+
+  /** The single Live event, if one is running (backend allows at most one). */
+  const liveEvent = computed(
+    () => events.value.find((e) => e.status === "Live") ?? null,
+  );
+
+  /** Scheduled (not yet started) events, soonest first. Feeds the
+   * "Ближайший эвент" row and its expandable section above the chat; the
+   * Live event is deliberately excluded — it lives in the in-frame live
+   * banner instead. */
+  const upcomingEvents = computed(() =>
+    events.value
+      .filter((e) => e.status === "Scheduled")
+      .slice()
+      .sort((a, b) => (a.startsUtc < b.startsUtc ? -1 : 1)),
+  );
+
+  // Silent on failure — events are supplementary, not primary content.
+  async function fetchEvents() {
+    const { data, error: apiError } = await globalChatApi.getEvents();
+    if (apiError) return;
+    events.value = data?.resources ?? [];
+  }
+
+  async function fetchEventDetails(
+    id: string,
+    force = false,
+  ): Promise<GlobalChatEvent | null> {
+    if (!force && eventDetails.value[id]) return eventDetails.value[id];
+    if (eventDetailsLoading.value[id]) return null;
+    eventDetailsLoading.value[id] = true;
+    try {
+      const { data, error: apiError } = await globalChatApi.getEvent(id);
+      if (apiError || !data?.resource) return null;
+      eventDetails.value[id] = data.resource;
+      return data.resource;
+    } finally {
+      eventDetailsLoading.value[id] = false;
+    }
+  }
+
   async function unlikeMessage(id: string) {
     await globalChatApi.unlikeMessage(id);
     // Backend returns 204 No Content, so update likes locally
@@ -288,15 +408,19 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     error,
     loadingBefore,
     loadingAfter,
+    errorBefore,
+    errorAfter,
     sending,
     hasMoreBefore,
     hasMoreAfter,
     highlightedMessageId,
+    landedOnRequestedDate,
     prevCursor,
     nextCursor,
     fetchMessages,
     fetchMoreBefore,
     fetchMoreAfter,
+    pollForNewer,
     navigateToMessage,
     navigateToDate,
     jumpToLatest,
@@ -309,5 +433,11 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     deleteMessage,
     likeMessage,
     unlikeMessage,
+    events,
+    eventDetails,
+    liveEvent,
+    upcomingEvents,
+    fetchEvents,
+    fetchEventDetails,
   };
 });

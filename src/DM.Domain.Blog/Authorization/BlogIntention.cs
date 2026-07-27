@@ -68,5 +68,25 @@ public enum BlogIntention
     /// <summary>
     /// Create comment on blog
     /// </summary>
-    CreateComment
+    CreateComment,
+
+    /// <summary>
+    /// Handle premoderation (mentor approval/rejection)
+    /// </summary>
+    SetStatusModeration,
+
+    /// <summary>
+    /// View a blog that is pending premoderation (not yet approved)
+    /// </summary>
+    ViewPremoderationPending,
+
+    /// <summary>
+    /// Move blog to active (start / reopen)
+    /// </summary>
+    SetStatusActive,
+
+    /// <summary>
+    /// Close the blog (close / freeze / finish)
+    /// </summary>
+    SetStatusClosed
 }

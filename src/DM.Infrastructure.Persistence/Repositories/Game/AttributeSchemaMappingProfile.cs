@@ -41,6 +41,7 @@ internal class SpecificationConverter : ITypeConverter<DbSpecification, DtoAttri
             Title = source.Title,
             Type = ResolveType(source),
             Required = source.Constraints.Required,
+            Order = source.Order,
             IsDescriptor = source.IsDescriptor,
             IsHidden = source.IsHidden
         };
@@ -48,8 +49,7 @@ internal class SpecificationConverter : ITypeConverter<DbSpecification, DtoAttri
         switch (source.Constraints)
         {
             case NumberAttributeConstraints numberConstraints:
-                result.MinValue = numberConstraints.MinValue;
-                result.MaxValue = numberConstraints.MaxValue;
+                result.MaxLength = numberConstraints.MaxLength;
                 result.Values = [];
                 return result;
             case StringAttributeConstraints stringConstraints:
@@ -63,7 +63,8 @@ internal class SpecificationConverter : ITypeConverter<DbSpecification, DtoAttri
                     Modifier = v.Modifier
                 });
                 return result;
-            case BbCodeAttributeConstraints _:
+            case BbCodeAttributeConstraints bbCodeConstraints:
+                result.MaxLength = bbCodeConstraints.MaxLength;
                 result.Values = [];
                 return result;
             default:
@@ -75,9 +76,11 @@ internal class SpecificationConverter : ITypeConverter<DbSpecification, DtoAttri
         source.Constraints switch
         {
             NumberAttributeConstraints _ => AttributeSpecificationType.Number,
-            StringAttributeConstraints _ => AttributeSpecificationType.String,
-            ListAttributeConstraints _ => AttributeSpecificationType.List,
+            StringAttributeConstraints _ => AttributeSpecificationType.Text,
+            ListAttributeConstraints { Kind: ListValueKind.Number } => AttributeSpecificationType.NumberList,
+            ListAttributeConstraints { Kind: ListValueKind.TextNumber } => AttributeSpecificationType.TextNumberList,
+            ListAttributeConstraints _ => AttributeSpecificationType.TextList,
             BbCodeAttributeConstraints _ => AttributeSpecificationType.BbCode,
-            _ => AttributeSpecificationType.Number
+            _ => AttributeSpecificationType.Text
         };
 }

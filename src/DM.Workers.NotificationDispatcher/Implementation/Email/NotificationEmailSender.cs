@@ -62,6 +62,10 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
         [EventType.LikedBlogComment] = "???? ?? ??????????? ? ?????",
         [EventType.NewPublicationComment] = "????? ??????????? ? ??????????",
         [EventType.LikedPublicationComment] = "???? ?? ??????????? ? ??????????",
+        [EventType.StatusBlogActive] = "Блог открыт",
+        [EventType.StatusBlogClosed] = "Блог закрыт",
+        [EventType.StatusBlogFrozen] = "Блог заморожен",
+        [EventType.StatusBlogFinished] = "Блог завершен",
 
         // Messages
         [EventType.NewMessage] = "????? ?????????",
@@ -154,8 +158,8 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
 
                 // Send the email
                 var subject = EventTypeSubjects.TryGetValue(eventType, out var subj)
-                    ? $"DM.AM: {subj}"
-                    : $"DM.AM: ???????????";
+                    ? $"Dungeon Master: {subj}"
+                    : "Dungeon Master: Уведомление";
 
                 var body = BuildEmailBody(eventType, notification.Metadata);
 
@@ -186,13 +190,13 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
 
         // Header
         sb.AppendLine("<div style=\"background: #4a90d9; color: white; padding: 20px; text-align: center;\">");
-        sb.AppendLine("<h1 style=\"margin: 0;\">DM.AM</h1>");
+        sb.AppendLine("<h1 style=\"margin: 0;\">Dungeon Master</h1>");
         sb.AppendLine("</div>");
 
         // Content
         sb.AppendLine("<div style=\"padding: 20px; background: #f9f9f9;\">");
 
-        var subject = EventTypeSubjects.TryGetValue(eventType, out var subj) ? subj : "???????????";
+        var subject = EventTypeSubjects.TryGetValue(eventType, out var subj) ? subj : "Уведомление";
         sb.AppendLine($"<h2 style=\"color: #333;\">{subject}</h2>");
 
         // Format metadata as readable content
@@ -236,8 +240,8 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
 
         // Footer
         sb.AppendLine("<div style=\"padding: 15px; background: #eee; text-align: center; color: #666; font-size: 12px;\">");
-        sb.AppendLine("<p>??? ?????????????? ??????????? ? ????? <a href=\"https://dm.am\">DM.AM</a></p>");
-        sb.AppendLine("<p>?? ?????? ????????? email-??????????? ? ?????????? ???????.</p>");
+        sb.AppendLine("<p>Это автоматическое уведомление с сайта <a href=\"https://dm.am\">Dungeon Master</a></p>");
+        sb.AppendLine("<p>Вы можете отключить email-уведомления в настройках профиля.</p>");
         sb.AppendLine("</div>");
 
         sb.AppendLine("</div></body></html>");

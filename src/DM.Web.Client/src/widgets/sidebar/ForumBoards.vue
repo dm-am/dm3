@@ -5,33 +5,34 @@ import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { useBoardsStore } from "@/entities/forum";
 import { useUserStore } from "@/entities/user";
-import { onMounted, ref, watch } from "vue";
+import { onMounted, watch } from "vue";
 import { storeToRefs } from "pinia";
+import { useRoute } from "vue-router";
 
 const store = useBoardsStore();
-const { boards } = storeToRefs(store);
+const { boards, boardsError } = storeToRefs(store);
 const userStore = useUserStore();
-
-// Detect failure locally: when the fetch settles and the list is still
-// null, the request failed (prevents an eternal skeleton).
-const failed = ref(false);
+const route = useRoute();
 
 // Fetch on mount (uses cache with stale-while-revalidate)
-onMounted(async () => {
-  await store.fetchBoards();
-  failed.value = boards.value === null;
-});
+onMounted(() => store.fetchBoards());
 
 // Refetch only on actual login/logout to update unread counts
 watch(
   () => userStore.user?.username,
-  async (newUsername, oldUsername) => {
+  (newUsername, oldUsername) => {
     // Only refetch if user actually logged in or out
     if ((newUsername && !oldUsername) || (!newUsername && oldUsername)) {
-      await store.fetchBoards();
-      failed.value = boards.value === null;
+      store.fetchBoards(true);
     }
   },
+);
+
+// Re-trigger on navigation so a failed fetch gets another chance once the
+// TTL cache considers it stale, without requiring a full page reload.
+watch(
+  () => route.fullPath,
+  () => store.fetchBoards(),
 );
 
 // For guests the backend returns total counts (nothing can be unread),
@@ -45,17 +46,22 @@ function commentsTooltip(count: number): string {
 </script>
 
 <template>
-  <SidebarBlock token="ForumBoards">
+  <SidebarBlock token="ForumBoards" title="Форум">
     <template #title>Форум</template>
-    <SidebarSkeleton v-if="boards === null && !failed" :lines="6" />
-    <SecondaryText v-else-if="boards === null">
-      Не удалось загрузить
-    </SecondaryText>
-    <SecondaryText v-else-if="boards.length === 0">
-      Разделов форума пока нет
-    </SecondaryText>
-    <div v-else v-for="forum in boards" :key="forum.id" class="board-link">
-      <span class="muted">- </span
+    <SidebarSkeleton v-if="boards === null && !boardsError" :lines="6" />
+    <li v-else-if="boards === null" class="error-row">
+      <SecondaryText
+        >Не удалось загрузить
+        <button type="button" class="retry" @click="store.fetchBoards(true)">
+          Повторить
+        </button></SecondaryText
+      >
+    </li>
+    <li v-else-if="boards.length === 0">
+      <SecondaryText>Разделов форума пока нет</SecondaryText>
+    </li>
+    <li v-else v-for="forum in boards" :key="forum.id" class="board-link">
+      <span class="muted" aria-hidden="true">- </span
       ><Tooltip :text="forum.description || undefined"
         ><router-link :to="{ name: 'forum', params: { alias: forum.alias } }">{{
           forum.title
@@ -69,12 +75,12 @@ function commentsTooltip(count: number): string {
           ></Tooltip
         ><span class="bracket">)</span></span
       >
-    </div>
+    </li>
   </SidebarBlock>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 
 .muted
   color: $text-muted
@@ -85,4 +91,8 @@ function commentsTooltip(count: number): string {
 
 .bracket
   color: $text-muted
+
+.retry
+  margin-left: $small
+  +inline-link-button
 </style>

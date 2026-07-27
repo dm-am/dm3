@@ -1,4 +1,4 @@
-import type { ListEnvelope, PagingQuery } from "./models/common";
+import type { Envelope, ListEnvelope, PagingQuery } from "./models/common";
 import type {
   WebsiteTestimonial,
   WebsiteTestimonialId,
@@ -13,9 +13,8 @@ import type {
   UserRole,
   UsernameHistoryEntry,
   LiveStats,
+  Leaderboards,
   UserProfileNote,
-  PublicWarning,
-  PublicBan,
   UserEndorsement,
   UserEndorsementId,
   CreateUserEndorsementRequest,
@@ -23,7 +22,6 @@ import type {
 } from "./models/community";
 import { UserActivityFilter } from "./models/community";
 import Api from "./client";
-import { RENDER_AUDIENCE } from "./audience";
 
 export default new (class CommunityApi {
   // Note: Poll methods moved to @/entities/poll/api/pollApi.ts
@@ -32,7 +30,7 @@ export default new (class CommunityApi {
    * Fetch users with the full search/filter/sort param set.
    *
    * The store (communityStore) builds backend-shaped params (q, activity,
-   * role, isOnline, isHonorary, isNewbie, rating/games/blogs ranges,
+   * role, isOnline, isNewbie, rating/games/blogs ranges,
    * registeredFrom/To, sort, sortOrder, take/skip) and passes them straight
    * through here — we must NOT drop unknown keys (a prior version cherry-picked
    * only a handful and silently lost every filter). Mirrors how
@@ -89,13 +87,6 @@ export default new (class CommunityApi {
   }
   public getUserProfile(username: Username) {
     return Api.get<UserProfile>(`users/${username}/profile`);
-  }
-  public getUserForUpdate(username: Username) {
-    return Api.get<User>(
-      `users/${username}`,
-      undefined,
-      RENDER_AUDIENCE.AuthorEdit,
-    );
   }
 
   /**
@@ -185,6 +176,18 @@ export default new (class CommunityApi {
     });
   }
 
+  /**
+   * Get leaderboards for a calendar period (public endpoint).
+   * GET /v1/leaderboards/{year} for a year, /v1/leaderboards/{year}/{month}
+   * for a month. Response is wrapped in Envelope ({ resource: ... }).
+   */
+  public getLeaderboards(year: number, month?: number) {
+    const path = month
+      ? `leaderboards/${year}/${month}`
+      : `leaderboards/${year}`;
+    return Api.get<Envelope<Leaderboards>>(path);
+  }
+
   /** Get personal note about a user (viewer's own note) */
   public getUserProfileNote(username: Username) {
     return Api.get<UserProfileNote>(`users/me/notes/${username}`);
@@ -200,17 +203,11 @@ export default new (class CommunityApi {
     return Api.delete(`users/me/notes/${username}`);
   }
 
-  /** Get public warnings for a user */
-  public getWarnings(username: Username) {
-    return Api.get<ListEnvelope<PublicWarning>>(`users/${username}/warnings`);
-  }
+  // Public warnings/bans moved to moderationApi (getWarnings/getBans) —
+  // these ListEnvelope-typed methods never matched the actual wire
+  // contract (bare object, not a list envelope) and had no callers.
 
-  /** Get public bans for a user */
-  public getBans(username: Username) {
-    return Api.get<ListEnvelope<PublicBan>>(`users/${username}/bans`);
-  }
-
-  /** Get endorsements written about a user (он — recipient). */
+  /** Get endorsements written about a user (they are the recipient). */
   public getUserEndorsements(
     username: Username,
     q?: PagingQuery & {
@@ -225,7 +222,7 @@ export default new (class CommunityApi {
     );
   }
 
-  /** Get endorsements written BY a user (он — author). */
+  /** Get endorsements written BY a user (they are the author). */
   public getWrittenUserEndorsements(
     username: Username,
     q?: PagingQuery & {
@@ -241,9 +238,9 @@ export default new (class CommunityApi {
   }
 
   /**
-   * Один builder для query-string'а обоих endpoint'ов рекомендаций
-   * (полученные / написанные) — при добавлении нового параметра на BE
-   * правится одно место.
+   * One builder for the query string of both endorsement endpoints
+   * (received / given) — when a new param is added on the BE,
+   * only one place changes.
    */
   private buildEndorsementParams(
     q?: PagingQuery & {

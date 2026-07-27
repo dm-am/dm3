@@ -53,6 +53,31 @@ public interface ITopicRepository
     /// <param name="ct">Cancellation token</param>
     Task<Topic?> GetByBoardAndNumber(Guid boardId, int topicNumber, BoardAccessPolicy accessPolicy, CancellationToken ct = default);
 
+    /// <summary>
+    /// Whether a topic row exists at all, INCLUDING removed ones — lets the
+    /// service tell a deleted topic (410 Gone) from one that never existed
+    /// (404 Not Found).
+    /// </summary>
+    Task<bool> Exists(Guid topicId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Whether a topic row with this board number exists at all, INCLUDING
+    /// removed ones — same 410-vs-404 distinction for number lookups.
+    /// </summary>
+    Task<bool> ExistsByBoardAndNumber(Guid boardId, int topicNumber, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get the user's most-liked topic across every board visible to the
+    /// viewer. Soft-deleted topics are excluded, and the access-policy mask
+    /// filters out topics on boards the viewer cannot see — so the profile
+    /// widget never surfaces content behind a board the viewer lacks access
+    /// to. Returns null when the user has no visible topics at all.
+    /// </summary>
+    /// <param name="authorId">Author user ID</param>
+    /// <param name="accessPolicy">Board access policy of the viewer</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<Topic?> GetBestUserTopic(Guid authorId, BoardAccessPolicy accessPolicy, CancellationToken ct = default);
+
     // --- WRITE ---
 
     /// <summary>

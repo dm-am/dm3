@@ -83,21 +83,9 @@ test.describe("Sidebars", () => {
       authenticatedPage,
     }) => {
       const ownedGames = authenticatedPage.locator(".owned-games");
-      // Check for role categories if games exist
-      const mentorSection = ownedGames
-        .locator(".games-category")
-        .filter({ hasText: "Наставник" });
-      const masterSection = ownedGames
-        .locator(".games-category")
-        .filter({ hasText: "Мастер" });
-      const playerSection = ownedGames
-        .locator(".games-category")
-        .filter({ hasText: "Игрок" });
-      const readerSection = ownedGames
-        .locator(".games-category")
-        .filter({ hasText: "Читатель" });
 
-      // At least one category should exist or empty state
+      // At least one role category (Наставник / Мастер / Игрок / Читатель)
+      // should exist, or the empty state
       const hasContent = await ownedGames
         .locator(".game-link, .empty-state")
         .count();
@@ -286,12 +274,8 @@ test.describe("Sidebars", () => {
       const games = section.locator(".game-link");
 
       if ((await games.count()) > 0) {
-        const firstGame = games.first();
-        // Should have activity indicator
-        const activityTime = firstGame.locator(
-          ".activity-time, .last-post-time",
-        );
-        // Activity time may or may not be visible depending on game data
+        // The first game should have an activity indicator, but the
+        // activity time may or may not be rendered depending on game data
       }
     });
   });
@@ -372,10 +356,7 @@ test.describe("Sidebars", () => {
 
       const poll = authenticatedPage.locator(".poll").first();
       if (await poll.isVisible().catch(() => false)) {
-        const voteButton = poll
-          .locator("button")
-          .filter({ hasText: /голосовать/i });
-        // Button should be visible if user hasn't voted
+        // The "голосовать" button should be visible if user hasn't voted
       }
     });
 
@@ -384,9 +365,8 @@ test.describe("Sidebars", () => {
 
       const poll = authenticatedPage.locator(".poll").first();
       if (await poll.isVisible().catch(() => false)) {
-        // If user has voted, results should be shown
-        const results = poll.locator(".poll-results, .vote-count");
-        // May or may not be visible depending on vote state
+        // If user has voted, results should be shown - may or may not be
+        // visible depending on vote state
       }
     });
   });
@@ -531,7 +511,6 @@ test.describe("Sidebars", () => {
       const gameLink = page.locator(".game-link").first();
 
       if (await gameLink.isVisible().catch(() => false)) {
-        const master = gameLink.locator(".master-name, .author");
         // Master name may be shown
       }
     });
@@ -543,9 +522,8 @@ test.describe("Sidebars", () => {
 
       const gameLink = authenticatedPage.locator(".game-link").first();
       if (await gameLink.isVisible().catch(() => false)) {
-        // Unread indicator shown for subscribed games with new content
-        const unread = gameLink.locator(".unread-indicator, .unread-count");
-        // May or may not be visible
+        // Unread indicator shown for subscribed games with new content -
+        // may or may not be visible
       }
     });
   });
@@ -580,14 +558,8 @@ test.describe("Sidebars", () => {
       await page.setViewportSize({ width: 375, height: 667 });
       await page.goto("/");
 
-      // Sidebars should be hidden or collapsible on mobile
-      const leftSidebar = page.locator(".left-sidebar");
-      const rightSidebar = page.locator(".right-sidebar");
-
-      // Either hidden or transformed into mobile menu
-      const leftVisible = await leftSidebar.isVisible().catch(() => false);
-      const rightVisible = await rightSidebar.isVisible().catch(() => false);
-
+      // Sidebars should be hidden or collapsible on mobile - either hidden
+      // or transformed into a mobile menu.
       // On mobile, sidebars are typically hidden or in a hamburger menu
       // This test verifies the responsive behavior exists
     });

@@ -3,44 +3,45 @@ using System.Collections.Generic;
 namespace DM.Domain.Community.Features.Icons;
 
 /// <summary>
-/// Реестр имен иконок из game-icons.net спрайта. Синхронизируется
-/// вручную с frontend-манифестом <c>src/DM.Web.Client/src/shared/ui/Icon/gameIcons.ts</c>
-/// при добавлении новой SVG. Используется валидацией Award/Achievement
-/// типов: при попытке сохранить тип с неизвестным именем сервис кидает
-/// 400 — лучше явный отказ для админа, чем сломанная иконка для
-/// пользователя.
+/// Registry of icon names from the game-icons.net sprite. Kept in sync
+/// manually with the frontend manifest <c>src/DM.Web.Client/src/shared/ui/Icon/gameIcons.ts</c>
+/// when a new SVG is added. Used by Award/Achievement type validation:
+/// when saving a type with an unknown name the service throws
+/// 400 — an explicit rejection for the admin is better than a broken icon
+/// for the user.
 ///
-/// Атрибуция (CC BY 3.0): Lorc, Delapouite, Skoll, darkzaitzev и
-/// контрибьюторы game-icons.net.
+/// Attribution (CC BY 3.0): Lorc, Delapouite, Skoll, darkzaitzev and
+/// game-icons.net contributors.
 /// </summary>
 public static class GameIconCatalog
 {
-    /// <summary>Допустимые имена иконок (kebab-case, ровно как файл).</summary>
+    /// <summary>Allowed icon names (kebab-case, exactly as the file).</summary>
     public static readonly IReadOnlySet<string> Names = new HashSet<string>
     {
-        "laurels",        // лавровый венок — летний литконкурс / высший тир
-        "trophy-cup",     // кубок — зимний литконкурс
-        "scroll-quill",   // свиток с пером — игровые посты
-        "hourglass",      // песочные часы — выслуга лет
-        "medal",          // медаль — general purpose
-        "ribbon-medal",   // медаль на ленте — спец-награды (угадайка)
-        "healing",        // целительский крест — рейтинг (постовые отзывы)
-        "scepter",        // скипетр — игры в роли ведущего
-        "sword",          // меч — игры в роли игрока
-        "book",           // книга — блоги
-        "papers",         // бумаги — публикации (статьи внутри блогов)
-        "stabbed-note",   // заколотая записка — топики
-        "discussion",     // беседующие головы — комментарии
-        "talk",           // диалог — глобальный чат
-        "heart-organ",    // анатомическое сердце — суммарные лайки на контенте
-        "plastic-duck",   // пластиковая уточка — баны (мем про утят-террористов)
-        "walking-boot",   // походный сапог — дропы (ушел из игры)
-        "quill-ink",      // перо в чернильнице — «лучший критик» конкурса
-        "magnifying-glass", // лупа — «угадайка» (определил больше всех авторов)
-        "palette",        // палитра — место в арт-конкурсе (аналог trophy-cup)
+        "laurels",        // laurel wreath — summer literary contest / top tier
+        "trophy-cup",     // cup — winter literary contest
+        "scroll-quill",   // scroll with quill — game posts
+        "hourglass",      // hourglass — years of service
+        "medal",          // medal — general purpose
+        "ribbon-medal",   // ribbon medal — special awards (the guessing game)
+        "healing",        // healer's cross — rating (post reviews)
+        "scepter",        // scepter — games as a game master
+        "sword",          // sword — games as a player
+        "book",           // book — blogs
+        "papers",         // papers — publications (articles inside blogs)
+        "stabbed-note",   // stabbed note — topics
+        "discussion",     // talking heads — comments
+        "talk",           // dialog — global chat
+        "heart-organ",    // anatomical heart — total likes on content
+        "plastic-duck",   // plastic duck — bans (the duckling-terrorists meme)
+        "walking-boot",   // walking boot — drops (left the game)
+        "quill-ink",      // quill in inkwell — contest "best critic" award
+        "magnifying-glass", // magnifier — the guessing game (identified the most authors)
+        "palette",        // palette — art contest placement (trophy-cup analog)
+        "goblin",         // goblin — the "Почетный гоблин" award
     };
 
-    /// <summary>True если имя иконки известно спрайту.</summary>
+    /// <summary>True if the icon name is known to the sprite.</summary>
     public static bool IsValid(string iconName) =>
         !string.IsNullOrWhiteSpace(iconName) && Names.Contains(iconName);
 }

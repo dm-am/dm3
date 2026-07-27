@@ -3,9 +3,9 @@ using BBCodeParser;
 namespace DM.Infrastructure.Core.Parsing;
 
 /// <summary>
-/// BBCode parsers provider. Surfaces are the primary selector for new code;
-/// the legacy "Current*" properties are retained for callers that have not
-/// yet been migrated to the surface model.
+/// BBCode parsers provider. Surfaces are the primary selector; the two
+/// surface-agnostic "Current*" properties are retained only for the search
+/// indexer, which renders text without a per-content surface.
 /// </summary>
 public interface IBbParserProvider
 {
@@ -36,29 +36,4 @@ public interface IBbParserProvider
     /// Parser for game information
     /// </summary>
     IBbParser CurrentInfo { get; }
-
-    /// <summary>
-    /// Parser for private chat messages
-    /// </summary>
-    IBbParser CurrentChatMessage { get; }
-
-    /// <summary>
-    /// Parser for game posts
-    /// </summary>
-    IBbParser CurrentPost { get; }
-
-    /// <summary>
-    /// Parser for game posts (NSFW)
-    /// </summary>
-    IBbParser CurrentSafePost { get; }
-
-    /// <summary>
-    /// Parser for post reviews (NSFW)
-    /// </summary>
-    IBbParser CurrentSafeRating { get; }
-
-    /// <summary>
-    /// Parser for chat messages
-    /// </summary>
-    IBbParser CurrentGeneralChat { get; }
 }

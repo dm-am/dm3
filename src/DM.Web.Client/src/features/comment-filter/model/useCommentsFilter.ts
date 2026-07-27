@@ -200,7 +200,7 @@ const dispatcher = createFilterDispatcher<
 export function useCommentsFilter(): CommentsFilterComposable {
   const route = useRoute();
   const router = useRouter();
-  const { entitiesPerPage } = usePaging();
+  const { commentsPerPage } = usePaging();
 
   dispatcher.setRouter(router);
 
@@ -236,7 +236,7 @@ export function useCommentsFilter(): CommentsFilterComposable {
       if (!isNaN(num) && num > 0) params.number = num;
     }
 
-    params.size = entitiesPerPage.value;
+    params.size = commentsPerPage.value;
     return params;
   });
 

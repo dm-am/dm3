@@ -3,31 +3,31 @@ using System.ComponentModel;
 namespace DM.Domain.Core.Enums;
 
 /// <summary>
-/// Status of a moderation ticket
+/// Status of a moderation ticket ("обращение")
 /// </summary>
 public enum TicketStatus
 {
     /// <summary>
-    /// Ticket is new and awaiting review
+    /// Ticket is waiting for a moderation response
     /// </summary>
-    [Description("Открыт")]
-    Open = 0,
+    [Description("Ожидает ответа модерации")]
+    WaitingForModeration = 0,
 
     /// <summary>
-    /// Ticket is being reviewed by a moderator
+    /// Moderation has answered and is waiting for the user
     /// </summary>
-    [Description("В работе")]
-    InProgress = 1,
+    [Description("Ожидает ответа пользователя")]
+    WaitingForUser = 1,
 
     /// <summary>
-    /// Ticket has been resolved with action taken
+    /// Ticket conversation is finished
     /// </summary>
-    [Description("Решен")]
-    Resolved = 2,
+    [Description("Закрыто")]
+    Closed = 2,
 
     /// <summary>
-    /// Ticket was closed without action (invalid report, etc.)
+    /// Ticket was marked as spam
     /// </summary>
-    [Description("Отклонен")]
-    Rejected = 3
+    [Description("Спам")]
+    Spam = 3
 }

@@ -4,26 +4,44 @@
 import type {
   Envelope,
   ListEnvelope,
+  CursorEnvelope,
   PagingQuery,
   Comment,
+  Message,
   User,
 } from "@/shared/api/models/common";
 import type {
   Game,
   GameRef,
   GameUser,
+  CreateGameInput,
   AttributeSchema,
   Tag,
   Character,
+  CharacterInput,
+  ApiCharacterStatus,
   Room,
+  RoomAccess,
+  PendingPost,
   Post,
   Invitation,
   PostReview,
   FirstUnreadPostResult,
   FirstUnreadCommentResult,
+  ChatRoom,
+  NotepadEntry,
+  CreateNotepadEntryInput,
+  UpdateNotepadEntryInput,
+  CreateRoomInput,
+  PostPendencyInput,
+  CreatePostInput,
+  UpdatePostInput,
+  GameStatusTransition,
+  GamePremoderationTransition,
 } from "../model/types";
 import type { GameReview } from "@/shared/api/models/game/reviews";
 import { Api } from "@/shared/api";
+import { RENDER_AUDIENCE } from "@/shared/api/audience";
 
 /**
  * Search params for games API
@@ -64,8 +82,18 @@ export interface GamesSearchParams {
   /** Hosts filter - master OR assistant (OR logic) */
   hostUsernames?: string[];
 
-  /** Player filter — games where this user owns an active character */
+  /** Player filter — games where this user participates as a player;
+   * which participation kinds match is set by playerParticipation
+   * (active characters by default) */
   playerUsername?: string;
+
+  /**
+   * Participation scope for playerUsername: "Active" (default) — only games
+   * where the user has an active character; "Any" — also games where the
+   * user only has retired characters or an application under review
+   * (declined applications never match). Ignored without playerUsername.
+   */
+  playerParticipation?: "Active" | "Any";
 
   /**
    * If true, returns games the current authenticated user participates in
@@ -140,20 +168,24 @@ class GameApi {
       queryParams.authorUsernames = params.hostUsernames;
     if (params.playerUsername)
       queryParams.playerUsername = params.playerUsername;
+    if (params.playerParticipation)
+      queryParams.playerParticipation = params.playerParticipation;
     if (params.participating) queryParams.participating = true;
 
-    // Date range filters
-    if (params.createdFromUtc) queryParams.createdFrom = params.createdFromUtc;
-    if (params.createdToUtc) queryParams.createdTo = params.createdToUtc;
+    // Date range filters (wire names match the API query fields)
+    if (params.createdFromUtc)
+      queryParams.createdFromUtc = params.createdFromUtc;
+    if (params.createdToUtc) queryParams.createdToUtc = params.createdToUtc;
     if (params.activatedFromUtc)
-      queryParams.activatedFrom = params.activatedFromUtc;
-    if (params.activatedToUtc) queryParams.activatedTo = params.activatedToUtc;
-    if (params.closedFromUtc) queryParams.closedFrom = params.closedFromUtc;
-    if (params.closedToUtc) queryParams.closedTo = params.closedToUtc;
+      queryParams.activatedFromUtc = params.activatedFromUtc;
+    if (params.activatedToUtc)
+      queryParams.activatedToUtc = params.activatedToUtc;
+    if (params.closedFromUtc) queryParams.closedFromUtc = params.closedFromUtc;
+    if (params.closedToUtc) queryParams.closedToUtc = params.closedToUtc;
     if (params.recruitmentStartedFromUtc)
-      queryParams.recruitmentStartedFrom = params.recruitmentStartedFromUtc;
+      queryParams.recruitmentStartedFromUtc = params.recruitmentStartedFromUtc;
     if (params.recruitmentStartedToUtc)
-      queryParams.recruitmentStartedTo = params.recruitmentStartedToUtc;
+      queryParams.recruitmentStartedToUtc = params.recruitmentStartedToUtc;
 
     // Always send sortBy and sortOrder to ensure consistent ordering
     queryParams.sortBy = params.sortBy || "created";
@@ -222,16 +254,6 @@ class GameApi {
     });
   }
 
-  public getGamesByMaster(username: string) {
-    return Api.get<ListEnvelope<Game>>("games", {
-      masterUsernames: [username],
-    });
-  }
-
-  public getGamesByPlayer(username: string) {
-    return Api.get<ListEnvelope<Game>>("games", { playerUsername: username });
-  }
-
   /**
    * Get popular games sorted by subscriber count (lightweight refs for sidebar)
    */
@@ -269,7 +291,7 @@ class GameApi {
     authorUsernames?: string;
     /**
      * Restrict to posts that have at least one review by this user.
-     * Используется страницей профиля «Оценил чужих постов».
+     * Used by the profile page "Оценил чужих постов".
      */
     reviewerUsername?: string;
     createdAfter?: string;
@@ -314,14 +336,21 @@ class GameApi {
     return Api.get<Post>(`posts/${postId}`);
   }
 
-  public createPost(roomId: string, post: Partial<Post>) {
+  public createPost(roomId: string, post: CreatePostInput) {
     return Api.post<Post>(`rooms/${roomId}/posts`, post);
   }
 
-  public updatePost(postId: string, post: Partial<Post>) {
-    return Api.patch<Post>(`posts/${postId}`, post);
+  /**
+   * Edit a post's text (PATCH v1/posts/{id}). Backend gates the change to the
+   * author or a global moderator+ (PostIntention.EditText); the 15-minute
+   * author window is a client-side affordance mirrored in GamePost. The body
+   * is a partial Post — only gameText/metagameText are round-tripped.
+   */
+  public updatePost(postId: string, patch: UpdatePostInput) {
+    return Api.patch<Envelope<Post>>(`posts/${postId}`, patch);
   }
 
+  /** Soft-delete a post (author or moderator+; PostIntention.Delete). */
   public deletePost(postId: string) {
     return Api.delete(`posts/${postId}`);
   }
@@ -374,15 +403,35 @@ class GameApi {
     return Api.post<Comment>(`games/${gameId}/comments`, comment);
   }
 
-  public updateGameComment(commentId: string, comment: { text: string }) {
-    return Api.patch<Comment>(`games/comments/${commentId}`, comment);
+  public updateGameComment(id: string, comment: { text: string }) {
+    return Api.patch<Envelope<Comment>>(`games/comments/${id}`, comment);
   }
 
-  public deleteGameComment(commentId: string) {
-    return Api.delete(`games/comments/${commentId}`);
+  public deleteGameComment(id: string) {
+    return Api.delete(`games/comments/${id}`);
   }
 
-  // Game reviews (рецензии на игру)
+  /**
+   * Fetch a comment's raw BBCode source for the editor (AuthorEdit audience
+   * round-trips [private]/[mod] for the author).
+   */
+  public getGameCommentForEdit(id: string) {
+    return Api.get<Envelope<Comment>>(
+      `games/comments/${id}`,
+      undefined,
+      RENDER_AUDIENCE.AuthorEdit,
+    );
+  }
+
+  public likeGameComment(id: string) {
+    return Api.post<Envelope<User>>(`games/comments/${id}/likes`);
+  }
+
+  public unlikeGameComment(id: string) {
+    return Api.delete(`games/comments/${id}/likes`);
+  }
+
+  // Game reviews (reviews of the game itself)
   public getGameReviews(gameId: string, paging?: PagingQuery) {
     const queryParams: Record<string, number | undefined> = {};
     const pageSize = paging?.take ?? 20;
@@ -407,14 +456,6 @@ class GameApi {
     return Api.get<ListEnvelope<GameUser>>(`games/${gameId}/users`);
   }
 
-  public getAssistants(gameId: string) {
-    return Api.get<ListEnvelope<GameUser>>(`games/${gameId}/users/assistants`);
-  }
-
-  public getReaders(gameId: string) {
-    return Api.get<ListEnvelope<User>>(`games/${gameId}/readers`);
-  }
-
   public subscribe(id: string) {
     return Api.post<User>(`games/${id}/readers`);
   }
@@ -432,15 +473,69 @@ class GameApi {
   }
 
   public createSchema(schema: AttributeSchema) {
-    return Api.post<AttributeSchema>("schemas", schema);
+    // The create endpoint wraps the payload in a single-resource envelope
+    return Api.post<Envelope<AttributeSchema>>("schemas", schema);
   }
 
-  public createGame(game: Game) {
-    return Api.post<Game>("games", game);
+  public updateSchema(id: string, schema: Partial<AttributeSchema>) {
+    return Api.patch<AttributeSchema>(`schemas/${id}`, schema);
   }
 
-  public createCharacter(id: string, character: Character) {
+  public createGame(game: CreateGameInput) {
+    // The create endpoint wraps the payload in a single-resource envelope
+    return Api.post<Envelope<Game>>("games", game);
+  }
+
+  public deleteGame(id: string) {
+    return Api.delete(`games/${id}`);
+  }
+
+  public createCharacter(id: string, character: CharacterInput) {
     return Api.post<Character>(`games/${id}/characters`, character);
+  }
+
+  public updateCharacter(characterId: string, character: CharacterInput) {
+    return Api.patch<Character>(`characters/${characterId}`, character);
+  }
+
+  /**
+   * Get a single character with its attributes for editing. AuthorEdit
+   * audience: BBCode attribute values come back as raw BBCode source (in
+   * valueBbText) instead of display HTML, so they can seed the editor and
+   * round-trip safely.
+   */
+  public getCharacterForEdit(characterId: string) {
+    return Api.get<Envelope<Character>>(
+      `characters/${characterId}`,
+      undefined,
+      RENDER_AUDIENCE.AuthorEdit,
+    );
+  }
+
+  /**
+   * Change a character's lifecycle status (retire / leave / exile / return to
+   * active) without touching its attributes. Attributes and privacy are
+   * intentionally omitted: the backend treats an absent `attributes` as "leave
+   * unchanged" (an empty array would clear them), and a status-only edit must
+   * never round-trip the server-rendered BbCode attribute values. `name` is
+   * resent from the loaded character to satisfy update validation.
+   */
+  public updateCharacterStatus(
+    characterId: string,
+    status: {
+      name: string;
+      status: ApiCharacterStatus;
+      isDead?: boolean;
+      isPlayerLeft?: boolean;
+      isPlayerExiled?: boolean;
+    },
+  ) {
+    return Api.patch<Character>(`characters/${characterId}`, status);
+  }
+
+  /** Soft-delete a character (master or owner). */
+  public deleteCharacter(characterId: string) {
+    return Api.delete(`characters/${characterId}`);
   }
 
   // Invitations
@@ -456,6 +551,12 @@ class GameApi {
 
   public inviteReader(gameId: string, username: string) {
     return Api.post<Invitation>(`games/${gameId}/invitations/readers`, {
+      username,
+    });
+  }
+
+  public inviteAssistant(gameId: string, username: string) {
+    return Api.post<Invitation>(`games/${gameId}/invitations/assistants`, {
       username,
     });
   }
@@ -486,6 +587,144 @@ class GameApi {
 
   public markCommentsAsRead(gameId: string) {
     return Api.delete(`games/${gameId}/comments/unread`);
+  }
+
+  // === Chat rooms (message-based OOC rooms, cursor pagination) ===
+
+  public getChatRooms(gameId: string) {
+    return Api.get<ListEnvelope<ChatRoom>>(`games/${gameId}/chat-rooms`);
+  }
+
+  /**
+   * Get chat room messages with CURSOR pagination (not skip/take).
+   * Pass the CursorPaging.nextCursor/prevCursor from a prior page to walk.
+   */
+  public getChatMessages(id: string, cursor?: string, limit: number = 50) {
+    return Api.get<CursorEnvelope<Message>>(`chat-rooms/${id}/messages`, {
+      cursor,
+      limit,
+    });
+  }
+
+  public sendChatMessage(id: string, text: string) {
+    return Api.post<Message>(`chat-rooms/${id}/messages`, { text });
+  }
+
+  public markChatRoomRead(id: string) {
+    return Api.delete(`chat-rooms/${id}/messages/unread`);
+  }
+
+  // === Game master notepad (GameNotepadController) ===
+
+  public getNotepad(gameId: string) {
+    return Api.get<ListEnvelope<NotepadEntry>>(`games/${gameId}/notepad`);
+  }
+
+  public createNote(gameId: string, input: CreateNotepadEntryInput) {
+    return Api.post<Envelope<NotepadEntry>>(`games/${gameId}/notepad`, input);
+  }
+
+  public updateNote(
+    gameId: string,
+    entryId: string,
+    input: UpdateNotepadEntryInput,
+  ) {
+    return Api.patch<NotepadEntry>(`games/${gameId}/notepad/${entryId}`, input);
+  }
+
+  public deleteNote(gameId: string, entryId: string) {
+    return Api.delete(`games/${gameId}/notepad/${entryId}`);
+  }
+
+  // === Game blacklist ===
+
+  public getBlacklist(gameId: string) {
+    return Api.get<ListEnvelope<User>>(`games/${gameId}/blacklist`);
+  }
+
+  public addToBlacklist(gameId: string, username: string) {
+    return Api.post<Envelope<User>>(`games/${gameId}/blacklist`, { username });
+  }
+
+  public removeFromBlacklist(gameId: string, login: string) {
+    return Api.delete(`games/${gameId}/blacklist/${login}`);
+  }
+
+  // === Room CRUD & accesses ===
+
+  public createRoom(gameId: string, room: CreateRoomInput) {
+    return Api.post<Envelope<Room>>(`games/${gameId}/rooms`, room);
+  }
+
+  public updateRoom(id: string, room: Partial<Room>) {
+    return Api.patch<Envelope<Room>>(`rooms/${id}`, room);
+  }
+
+  public deleteRoom(id: string) {
+    return Api.delete(`rooms/${id}`);
+  }
+
+  /**
+   * Archive a room. The backend Room.Type is nullable, so an omitted Type on
+   * this partial PATCH leaves the stored value unchanged — we send only the
+   * IsArchived flag.
+   */
+  public archiveRoom(id: string) {
+    return Api.patch<Envelope<Room>>(`rooms/${id}`, { isArchived: true });
+  }
+
+  public unarchiveRoom(id: string) {
+    return Api.patch<Envelope<Room>>(`rooms/${id}`, { isArchived: false });
+  }
+
+  public createRoomAccess(roomId: string, access: Partial<RoomAccess>) {
+    return Api.post<Envelope<RoomAccess>>(`rooms/${roomId}/accesses`, access);
+  }
+
+  public deleteRoomAccess(accessId: string) {
+    return Api.delete(`rooms/accesses/${accessId}`);
+  }
+
+  // === Post pendencies (turn-tracking) ===
+
+  public createPendency(roomId: string, pendency: PostPendencyInput) {
+    return Api.post<Envelope<PendingPost>>(
+      `rooms/${roomId}/pendencies`,
+      pendency,
+    );
+  }
+
+  public deletePendency(pendencyId: string) {
+    return Api.delete(`rooms/pendencies/${pendencyId}`);
+  }
+
+  // === Game users (Master-only removal) ===
+
+  public removeAssistant(gameId: string, username: string) {
+    return Api.delete(`games/${gameId}/users/assistants/${username}`);
+  }
+
+  // === Game mutations ===
+
+  public updateGame(id: string, patch: Partial<Game>) {
+    return Api.patch<Envelope<Game>>(`games/${id}/details`, patch);
+  }
+
+  public transitionStatus(id: string, transition: GameStatusTransition) {
+    return Api.post<Envelope<Game>>(`games/${id}/status`, { transition });
+  }
+
+  public changePremoderation(
+    id: string,
+    transition: GamePremoderationTransition,
+  ) {
+    return Api.post<Envelope<Game>>(`games/${id}/premoderation`, {
+      transition,
+    });
+  }
+
+  public resetRecruitment(id: string) {
+    return Api.post<Envelope<Game>>(`games/${id}/reset-recruitment-date`);
   }
 }
 

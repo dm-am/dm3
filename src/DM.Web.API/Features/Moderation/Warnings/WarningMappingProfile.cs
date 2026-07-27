@@ -33,9 +33,24 @@ internal class WarningMappingProfile : Profile
             .ForMember(d => d.ExpiresUtc, s => s.MapFrom(b => b.EndedUtc))
             .ForMember(d => d.Comment, s => s.MapFrom(b => b.Comment))
             .ForMember(d => d.IsActive, s => s.MapFrom(b => !b.IsRemoved && b.EndedUtc > System.DateTimeOffset.UtcNow))
+            .ForMember(d => d.IsLifted, s => s.MapFrom(b => b.IsRemoved))
             .ForMember(d => d.IsVoluntary, s => s.MapFrom(b => b.IsVoluntary))
             .ForMember(d => d.LiftedUtc, s => s.Ignore())
             .ForMember(d => d.LiftedBy, s => s.Ignore());
+
+        // Trimmed public views: no reason/comment, no moderator identity,
+        // no causation entity refs — anonymous profile visitors only see
+        // the aggregate facts
+        CreateMap<DomainWarning, PublicWarning>()
+            .ForMember(d => d.Points, s => s.MapFrom(w => w.Points))
+            .ForMember(d => d.CreatedUtc, s => s.MapFrom(w => w.CreatedUtc))
+            .ForMember(d => d.IsActive, s => s.MapFrom(w => !w.IsRemoved));
+
+        CreateMap<DomainBan, PublicBan>()
+            .ForMember(d => d.Type, s => s.MapFrom(b => MapBanType(b)))
+            .ForMember(d => d.StartedUtc, s => s.MapFrom(b => b.StartedUtc))
+            .ForMember(d => d.ExpiresUtc, s => s.MapFrom(b => b.EndedUtc))
+            .ForMember(d => d.IsActive, s => s.MapFrom(b => !b.IsRemoved && b.EndedUtc > System.DateTimeOffset.UtcNow));
     }
 
     private static BanType MapBanType(DomainBan ban)

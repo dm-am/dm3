@@ -58,26 +58,20 @@ internal class ModerationProfileApiService : IModerationProfileApiService
         if (user == null)
             throw new HttpException(HttpStatusCode.NotFound, $"User '{login}' not found");
 
-        // Run queries in parallel — conditional on role
-        var linkedProfilesTask = _loginRecordRepository.GetLinkedProfiles(user.UserId);
-        var modNotesTask = _modNoteApiService.GetNotes(login);
-        var warningsTask = _warningApiService.GetUserWarnings(login);
-        var banStatusTask = _banApiService.GetUserBanStatus(login);
+        // Sequential on purpose: every query below runs on this request's
+        // single DbContext, and EF forbids concurrent operations on one
+        // context. Admin-only queries are skipped for lower roles.
+        var linkedProfiles = await _loginRecordRepository.GetLinkedProfiles(user.UserId);
+        var modNotes = await _modNoteApiService.GetNotes(login);
+        var warningsInfo = await _warningApiService.GetUserWarnings(login);
+        var banStatus = await _banApiService.GetUserBanStatus(login);
 
-        var ipsTask = isAdmin
-            ? _loginRecordRepository.GetUserIps(user.UserId)
-            : Task.FromResult<IReadOnlyList<DomainUserIpInfo>>(null!);
-        var loginHistoryTask = isAdmin
-            ? _loginRecordRepository.GetLoginHistory(user.UserId)
-            : Task.FromResult<IReadOnlyList<UserLoginRecord>>(null!);
-
-        await Task.WhenAll(
-            linkedProfilesTask, modNotesTask, warningsTask,
-            banStatusTask, ipsTask, loginHistoryTask);
-
-        var warningsInfo = warningsTask.Result;
-        var banStatus = banStatusTask.Result;
-        var modNotes = modNotesTask.Result;
+        var ips = isAdmin
+            ? MapIpInfos(await _loginRecordRepository.GetUserIps(user.UserId))
+            : null;
+        var loginHistory = isAdmin
+            ? MapLoginHistory(await _loginRecordRepository.GetLoginHistory(user.UserId))
+            : null;
 
         return new Envelope<ModerationProfileDto>(new ModerationProfileDto
         {
@@ -87,11 +81,11 @@ internal class ModerationProfileApiService : IModerationProfileApiService
 
             // Admin-only fields (null for non-admin callers)
             Email = isAdmin ? user.Email : null,
-            IpAddresses = isAdmin ? MapIpInfos(ipsTask.Result) : null,
-            LoginHistory = isAdmin ? MapLoginHistory(loginHistoryTask.Result) : null,
+            IpAddresses = ips,
+            LoginHistory = loginHistory,
 
             // Moderator+ fields
-            LinkedProfiles = MapLinkedProfiles(linkedProfilesTask.Result),
+            LinkedProfiles = MapLinkedProfiles(linkedProfiles),
             ModeratorNotes = MapModNotes(modNotes, caller.UserId, isSeniorMod),
 
             Violations = new ViolationSummaryDto
@@ -166,7 +160,7 @@ internal class ModerationProfileApiService : IModerationProfileApiService
             AuthorId = n.Author?.Id ?? Guid.Empty,
             Text = n.Text,
             CreatedUtc = n.CreatedUtc,
-            UpdatedUtc = n.UpdatedUtc,
+            ModifiedUtc = n.ModifiedUtc,
             CanEdit = isSeniorMod || (n.Author?.Id == callerId),
             CanDelete = isSeniorMod || (n.Author?.Id == callerId)
         }).ToList();

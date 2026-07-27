@@ -22,15 +22,15 @@ import type {
 import Api from "./client";
 
 /**
- * API клиент для каталогов наград/достижений и пользовательских записей.
+ * API client for the award/achievement catalogs and user records.
  *
- * Endpoint-структура:
- *   GET  v1/award-types                              — публичный каталог
- *   GET  v1/contest-series                           — публичный каталог
- *   GET  v1/users/{u}/awards                         — публичные награды
- *   GET  v1/achievement-categories                   — публичный каталог
- *   GET  v1/achievement-types                        — публичный каталог
- *   GET  v1/users/{u}/achievements                   — публичные + lazy-eval
+ * Endpoint structure:
+ *   GET  v1/award-types                              — public catalog
+ *   GET  v1/contest-series                           — public catalog
+ *   GET  v1/users/{u}/awards                         — public awards
+ *   GET  v1/achievement-categories                   — public catalog
+ *   GET  v1/achievement-types                        — public catalog
+ *   GET  v1/users/{u}/achievements                   — public + lazy-eval
  *   POST/PATCH/DELETE v1/moderation/award-types       — SeniorMod
  *   POST/PATCH/DELETE v1/moderation/contest-series    — SeniorMod
  *   POST/PATCH/DELETE v1/moderation/achievement-types — SeniorMod
@@ -38,7 +38,7 @@ import Api from "./client";
  *   POST/DELETE      v1/moderation/users/{u}/awards   — SeniorMod
  */
 export default new (class AchievementApi {
-  // ---- Achievements: публичное чтение ----
+  // ---- Achievements: public read ----
 
   public getAchievementCategories() {
     return Api.get<AchievementCategoriesResponse>("achievement-categories");
@@ -54,7 +54,7 @@ export default new (class AchievementApi {
     );
   }
 
-  // ---- Achievements: модерация (SeniorMod) ----
+  // ---- Achievements: moderation (SeniorMod) ----
 
   public updateAchievementCategory(
     id: string,
@@ -84,7 +84,7 @@ export default new (class AchievementApi {
     return Api.delete(`moderation/achievement-types/${id}`);
   }
 
-  // ---- Awards: публичное чтение ----
+  // ---- Awards: public read ----
 
   public getAwardTypes() {
     return Api.get<AwardTypesResponse>("award-types");
@@ -100,7 +100,7 @@ export default new (class AchievementApi {
     );
   }
 
-  // ---- Awards: модерация (SeniorMod) ----
+  // ---- Awards: moderation (SeniorMod) ----
 
   public createAwardType(body: CreateAwardTypeRequest) {
     return Api.post<AwardTypeEnvelope>("moderation/award-types", body);

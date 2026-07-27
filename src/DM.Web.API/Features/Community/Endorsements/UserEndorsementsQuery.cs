@@ -3,22 +3,26 @@ using DM.Domain.Core.Dto;
 namespace DM.Web.API.Features.Community.Endorsements;
 
 /// <summary>
-/// Search / sort / paging для GET-endpoint'ов рекомендаций
-/// (как полученных, так и написанных). Контракт зеркалит
-/// FE-композабл <c>useReviewsFilter</c>: дефолтная сортировка =
-/// дата desc, поиск необязательный.
+/// Search / sort / paging for the endorsement GET endpoints
+/// (both received and given). The contract mirrors the
+/// FE composable <c>useReviewsFilter</c>: default sort =
+/// date desc, search optional.
 /// </summary>
 public class UserEndorsementsQuery : PagingQuery
 {
     /// <summary>
-    /// Подстрочный поиск (case-insensitive) по тексту рекомендации,
-    /// имени автора и имени получателя. Пусто = без поиска.
+    /// Substring search (case-insensitive) over the endorsement text,
+    /// author name and recipient name. Empty = no search.
     /// </summary>
     public string? Search { get; set; }
 
-    /// <summary>Поле сортировки: <c>created</c> или <c>author</c>. Дефолт — created.</summary>
+    /// <summary>
+    /// Sort field: <c>created</c> or <c>author</c>. Default — created.
+    /// <c>author</c> sorts by counterparty name: for "received" —
+    /// by the author, for "given" — by the recipient.
+    /// </summary>
     public string? SortBy { get; set; }
 
-    /// <summary>Направление сортировки: <c>asc</c> или <c>desc</c>. Дефолт — desc.</summary>
+    /// <summary>Sort direction: <c>asc</c> or <c>desc</c>. Default — desc.</summary>
     public string? SortOrder { get; set; }
 }

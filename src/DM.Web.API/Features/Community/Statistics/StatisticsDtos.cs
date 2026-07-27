@@ -146,6 +146,29 @@ public class Leaderboards
     /// Top games by posts count
     /// </summary>
     public LeaderboardEntry[] TopGamesByPosts { get; set; } = Array.Empty<LeaderboardEntry>();
+
+    /// <summary>
+    /// Top players by written text volume (sum of in-character post characters).
+    /// The "Самый многопишущий игрок" board from the statistics content block.
+    /// </summary>
+    public LeaderboardEntry[] TopPlayersByVolume { get; set; } = Array.Empty<LeaderboardEntry>();
+
+    /// <summary>
+    /// Top blogs by total rating (sum of likes received on the blog's
+    /// publications). The blog analog of TopGamesByRating.
+    /// </summary>
+    public LeaderboardEntry[] TopBlogsByRating { get; set; } = Array.Empty<LeaderboardEntry>();
+
+    /// <summary>
+    /// Top blogs by publications count. The blog analog of TopGamesByPosts.
+    /// </summary>
+    public LeaderboardEntry[] TopBlogsByPosts { get; set; } = Array.Empty<LeaderboardEntry>();
+
+    /// <summary>
+    /// Top blog authors by written text volume (sum of publication Content
+    /// characters). The blog analog of TopPlayersByVolume.
+    /// </summary>
+    public LeaderboardEntry[] TopBlogAuthorsByVolume { get; set; } = Array.Empty<LeaderboardEntry>();
 }
 
 /// <summary>
@@ -154,7 +177,8 @@ public class Leaderboards
 public class LeaderboardEntry
 {
     /// <summary>
-    /// Position in the leaderboard (1-based)
+    /// Ordinal rank (1-based, no gaps). Ties are ordered deterministically
+    /// by name, each entry keeping its own number.
     /// </summary>
     public int Rank { get; set; }
 
@@ -164,17 +188,19 @@ public class LeaderboardEntry
     public Guid EntityId { get; set; }
 
     /// <summary>
+    /// Short public identifier for game and blog entries (5-letter id used in
+    /// canonical URLs). Null for player entries.
+    /// </summary>
+    public string? PublicId { get; set; }
+
+    /// <summary>
     /// Display name (login or game title)
     /// </summary>
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
-    /// Picture URL (avatar or game cover)
-    /// </summary>
-    public string? PictureUrl { get; set; }
-
-    /// <summary>
-    /// Score value (rating sum or posts count)
+    /// Score value (rating sum, posts count or character volume).
+    /// Always positive: boards celebrate positive achievement only.
     /// </summary>
     public int Score { get; set; }
 }
@@ -193,211 +219,6 @@ public class Period
     /// Month (null for yearly periods)
     /// </summary>
     public int? Month { get; set; }
-}
-
-#endregion
-
-#region Reports
-
-/// <summary>
-/// Period report with aggregated statistics
-/// </summary>
-public class PeriodReport
-{
-    /// <summary>
-    /// Report period
-    /// </summary>
-    public Period Period { get; set; } = new();
-
-    /// <summary>
-    /// Number of new user registrations
-    /// </summary>
-    public int Registrations { get; set; }
-
-    /// <summary>
-    /// Number of new games created
-    /// </summary>
-    public int GamesCreated { get; set; }
-
-    /// <summary>
-    /// Number of new game posts
-    /// </summary>
-    public int GamePosts { get; set; }
-
-    /// <summary>
-    /// Number of reviews given
-    /// </summary>
-    public int Reviews { get; set; }
-
-    /// <summary>
-    /// Average daily active users
-    /// </summary>
-    public int AverageDailyUsers { get; set; }
-}
-
-/// <summary>
-/// Period comparison results
-/// </summary>
-public class PeriodComparison
-{
-    /// <summary>
-    /// First period
-    /// </summary>
-    public PeriodReport Period1 { get; set; } = new();
-
-    /// <summary>
-    /// Second period
-    /// </summary>
-    public PeriodReport Period2 { get; set; } = new();
-
-    /// <summary>
-    /// Growth percentages
-    /// </summary>
-    public GrowthMetrics Growth { get; set; } = new();
-}
-
-/// <summary>
-/// Growth metrics between periods
-/// </summary>
-public class GrowthMetrics
-{
-    /// <summary>
-    /// Registration growth percentage
-    /// </summary>
-    public double RegistrationsGrowth { get; set; }
-
-    /// <summary>
-    /// Games creation growth percentage
-    /// </summary>
-    public double GamesGrowth { get; set; }
-
-    /// <summary>
-    /// Posts growth percentage
-    /// </summary>
-    public double PostsGrowth { get; set; }
-
-    /// <summary>
-    /// Reviews growth percentage
-    /// </summary>
-    public double ReviewsGrowth { get; set; }
-}
-
-#endregion
-
-#region Legacy (Backward Compatibility)
-
-/// <summary>
-/// Legacy community statistics response (prefer LiveStats, Leaderboards, PeriodReport)
-/// </summary>
-public class CommunityStats
-{
-    /// <summary>
-    /// Current statistics
-    /// </summary>
-    public CurrentStats Current { get; set; } = new();
-
-    /// <summary>
-    /// Monthly statistics
-    /// </summary>
-    public PeriodStats Monthly { get; set; } = new();
-
-    /// <summary>
-    /// Yearly statistics
-    /// </summary>
-    public PeriodStats Yearly { get; set; } = new();
-
-    /// <summary>
-    /// Year-over-year comparison
-    /// </summary>
-    public YearComparison Comparison { get; set; } = new();
-}
-
-/// <summary>
-/// Legacy current statistics snapshot (prefer LiveStats)
-/// </summary>
-public class CurrentStats
-{
-    /// <summary>
-    /// Total registered users
-    /// </summary>
-    public int TotalUsers { get; set; }
-
-    /// <summary>
-    /// Users online now
-    /// </summary>
-    public int OnlineUsers { get; set; }
-
-    /// <summary>
-    /// Total active games
-    /// </summary>
-    public int ActiveGames { get; set; }
-
-    /// <summary>
-    /// Total games (all statuses)
-    /// </summary>
-    public int TotalGames { get; set; }
-
-    /// <summary>
-    /// Total game posts
-    /// </summary>
-    public int TotalPosts { get; set; }
-
-    /// <summary>
-    /// Total forum topics
-    /// </summary>
-    public int TotalTopics { get; set; }
-}
-
-/// <summary>
-/// Legacy statistics for a time period (prefer PeriodReport)
-/// </summary>
-public class PeriodStats
-{
-    /// <summary>
-    /// New users registered
-    /// </summary>
-    public int NewUsers { get; set; }
-
-    /// <summary>
-    /// New games created
-    /// </summary>
-    public int NewGames { get; set; }
-
-    /// <summary>
-    /// New game posts
-    /// </summary>
-    public int NewPosts { get; set; }
-
-    /// <summary>
-    /// New forum topics
-    /// </summary>
-    public int NewTopics { get; set; }
-
-    /// <summary>
-    /// New forum comments
-    /// </summary>
-    public int NewComments { get; set; }
-}
-
-/// <summary>
-/// Legacy year-over-year comparison (prefer PeriodComparison)
-/// </summary>
-public class YearComparison
-{
-    /// <summary>
-    /// User growth percentage
-    /// </summary>
-    public double UsersGrowth { get; set; }
-
-    /// <summary>
-    /// Games growth percentage
-    /// </summary>
-    public double GamesGrowth { get; set; }
-
-    /// <summary>
-    /// Posts growth percentage
-    /// </summary>
-    public double PostsGrowth { get; set; }
 }
 
 #endregion

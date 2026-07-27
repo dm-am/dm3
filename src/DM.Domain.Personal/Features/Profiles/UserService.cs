@@ -200,9 +200,9 @@ internal class UserService : IUserService
             await _repository.LinkAvatarUpload(user.UserId, confirmedUploadId.Value);
             await _uploadsCleanup.CollectObsoleteAsync(user.UserId);
 
-            // Broadcast в открытые вкладки чтобы аватары в чатах/комментариях
-            // обновились без перезагрузки. Best-effort, не падаем если SignalR-down.
-            // Payload содержит только userId — клиент перезагружает свои данные.
+            // Broadcast to open tabs so avatars in chats/comments
+            // refresh without a reload. Best-effort, do not fail if SignalR is down.
+            // The payload contains only userId — the client reloads its own data.
             await _avatarBroadcaster.BroadcastAvatarChangedAsync(user.UserId);
         }
 
@@ -252,19 +252,19 @@ internal class UserService : IUserService
     /// <inheritdoc />
     public async Task RemoveAvatarAsync(Guid userId)
     {
-        // Intent check: только сам юзер (или админ) может сбросить аватар.
+        // Intent check: only the user themselves (or an admin) may reset the avatar.
         var user = await GetAsync(userId);
         _intentionManager.ThrowIfForbidden(UserIntention.Edit, user);
 
         await _repository.UnlinkAvatarUpload(userId);
 
-        // Best-effort cleanup (S3 + DB cleanup делает фоновый GC worker).
+        // Best-effort cleanup (S3 + DB cleanup is done by the background GC worker).
         await _uploadsCleanup.CollectObsoleteAsync(userId);
 
         await _cache.InvalidateAsync($"user_details_{userId}");
         await _cache.InvalidateAsync($"user_{user.Username}");
 
-        // Push в открытые вкладки — теперь аватар null/default.
+        // Push to open tabs — the avatar is now null/default.
         await _avatarBroadcaster.BroadcastAvatarChangedAsync(userId);
     }
 

@@ -1,10 +1,12 @@
 using System;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 using DM.Domain.Moderation.Features.Warnings;
@@ -36,12 +38,8 @@ public class BanServiceShould : UnitTestBase
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
 
-        var moderatorIdentity = Identity.Success(
-            new AuthenticatedUser { UserId = _moderatorUserId, Role = UserRole.Moderator, Username = "Moderator" },
-            new Session { Id = Guid.NewGuid() },
-            new UserSettings(),
-            "token");
-        _identityProvider.Setup(p => p.Current).Returns(moderatorIdentity);
+        // Ban creation and lifting require SeniorModerator, so tests default to it
+        SetCurrentUser(UserRole.SeniorModerator);
         _dateTimeProvider.Setup(d => d.Now).Returns(_now);
         _guidFactory.Setup(g => g.Create()).Returns(_banId);
 
@@ -51,6 +49,16 @@ public class BanServiceShould : UnitTestBase
             _identityProvider.Object,
             _guidFactory.Object,
             _dateTimeProvider.Object);
+    }
+
+    private void SetCurrentUser(UserRole role)
+    {
+        var identity = Identity.Success(
+            new AuthenticatedUser { UserId = _moderatorUserId, Role = role, Username = "Moderator" },
+            new Session { Id = Guid.NewGuid() },
+            new UserSettings(),
+            "token");
+        _identityProvider.Setup(p => p.Current).Returns(identity);
     }
 
     [Fact]
@@ -83,6 +91,7 @@ public class BanServiceShould : UnitTestBase
     [Fact]
     public async Task AllowModeratorToViewAllActiveBans()
     {
+        SetCurrentUser(UserRole.Moderator);
         _banRepository.Setup(r => r.GetAllActiveBans(It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
@@ -93,20 +102,40 @@ public class BanServiceShould : UnitTestBase
     }
 
     [Fact]
-    public async Task ThrowWhenNonModeratorTriesToCreateNonVoluntaryBan()
+    public async Task ThrowWhenNonModeratorTriesToViewBanHistory()
     {
-        var userIdentity = Identity.Success(
-            new AuthenticatedUser { UserId = Guid.NewGuid(), Role = UserRole.RegularUser, Username = "User" },
-            new Session { Id = Guid.NewGuid() },
-            new UserSettings(),
-            "token");
-        _identityProvider.Setup(p => p.Current).Returns(userIdentity);
+        SetCurrentUser(UserRole.RegularUser);
+
+        var act = () => _service.GetBanHistory(0, 20);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Only moderators can view ban history");
+    }
+
+    [Fact]
+    public async Task AllowModeratorToViewBanHistory()
+    {
+        SetCurrentUser(UserRole.Moderator);
+        _banRepository.Setup(r => r.GetBanHistory(0, 20, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(([], 0));
+
+        var (bans, totalCount) = await _service.GetBanHistory(0, 20);
+
+        bans.Should().BeEmpty();
+        totalCount.Should().Be(0);
+        _banRepository.Verify(r => r.GetBanHistory(0, 20, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ThrowWhenModeratorTriesToCreateNonVoluntaryBan()
+    {
+        SetCurrentUser(UserRole.Moderator);
 
         var createBan = new CreateBan { Username = "Target", IsVoluntary = false, DurationHours = 24 };
         var act = () => _service.CreateBan(createBan);
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Only moderators can create bans");
+            .WithMessage("Only senior moderators can create bans");
     }
 
     [Fact]
@@ -159,6 +188,83 @@ public class BanServiceShould : UnitTestBase
     }
 
     [Fact]
+    public async Task PersistDemocraticBanScopeWhenRequested()
+    {
+        var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
+        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
+        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Ban?)null);
+
+        CreateBanEntity? capturedEntity = null;
+        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
+            .Callback<CreateBanEntity, CancellationToken>((e, _) => capturedEntity = e)
+            .ReturnsAsync(new Ban());
+
+        var createBan = new CreateBan
+        {
+            Username = "Target",
+            DurationHours = 24,
+            Comment = "Democratic ban",
+            AccessRestrictionPolicy = AccessPolicy.DemocraticBan
+        };
+
+        await _service.CreateBan(createBan);
+
+        capturedEntity.Should().NotBeNull();
+        capturedEntity!.AccessRestrictionPolicy.Should().Be(AccessPolicy.DemocraticBan);
+    }
+
+    [Fact]
+    public async Task DefaultBanScopeToFullBan()
+    {
+        var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
+        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
+        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Ban?)null);
+
+        CreateBanEntity? capturedEntity = null;
+        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
+            .Callback<CreateBanEntity, CancellationToken>((e, _) => capturedEntity = e)
+            .ReturnsAsync(new Ban());
+
+        // No AccessRestrictionPolicy set → the DTO default (FullBan) applies.
+        var createBan = new CreateBan { Username = "Target", DurationHours = 24, Comment = "Spam" };
+
+        await _service.CreateBan(createBan);
+
+        capturedEntity.Should().NotBeNull();
+        capturedEntity!.AccessRestrictionPolicy.Should().Be(AccessPolicy.FullBan);
+    }
+
+    [Fact]
+    public async Task CoerceUnsupportedBanScopeToFullBan()
+    {
+        var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
+        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
+        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Ban?)null);
+
+        CreateBanEntity? capturedEntity = null;
+        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
+            .Callback<CreateBanEntity, CancellationToken>((e, _) => capturedEntity = e)
+            .ReturnsAsync(new Ban());
+
+        // A scope that is neither Democratic nor Full falls back to FullBan.
+        var createBan = new CreateBan
+        {
+            Username = "Target",
+            DurationHours = 24,
+            Comment = "Spam",
+            AccessRestrictionPolicy = AccessPolicy.GlobalChatBan
+        };
+
+        await _service.CreateBan(createBan);
+
+        capturedEntity.Should().NotBeNull();
+        capturedEntity!.AccessRestrictionPolicy.Should().Be(AccessPolicy.FullBan);
+    }
+
+    [Fact]
     public async Task CreatePermanentBanWhenNoDurationProvided()
     {
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
@@ -206,24 +312,71 @@ public class BanServiceShould : UnitTestBase
     }
 
     [Fact]
-    public async Task ThrowWhenNonModeratorTriesToLiftBan()
+    public async Task ThrowWhenModeratorTriesToLiftBan()
     {
-        var userIdentity = Identity.Success(
-            new AuthenticatedUser { UserId = Guid.NewGuid(), Role = UserRole.RegularUser, Username = "User" },
-            new Session { Id = Guid.NewGuid() },
-            new UserSettings(),
-            "token");
-        _identityProvider.Setup(p => p.Current).Returns(userIdentity);
+        SetCurrentUser(UserRole.Moderator);
 
         var act = () => _service.LiftBan(_banId);
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Only moderators can lift bans");
+            .WithMessage("Only senior moderators can lift bans");
     }
 
     [Fact]
-    public async Task LiftBanSuccessfully()
+    public async Task ThrowNotFoundWhenLiftingMissingBan()
     {
+        _banRepository.Setup(r => r.Get(_banId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Ban?)null);
+
+        var act = () => _service.LiftBan(_banId);
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task LiftTemporaryBanAsSeniorModerator()
+    {
+        _banRepository.Setup(r => r.Get(_banId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Ban { BanId = _banId, EndedUtc = _now.AddDays(7) });
+
+        await _service.LiftBan(_banId);
+
+        _banRepository.Verify(r => r.Remove(_banId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ForbidSeniorModeratorFromLiftingPermanentBan()
+    {
+        // Permanent bans are stored with a far-future end date
+        _banRepository.Setup(r => r.Get(_banId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Ban { BanId = _banId, EndedUtc = _now.AddYears(100) });
+
+        var act = () => _service.LiftBan(_banId);
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+        _banRepository.Verify(r => r.Remove(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AllowAdminToLiftPermanentBan()
+    {
+        SetCurrentUser(UserRole.Admin);
+        _banRepository.Setup(r => r.Get(_banId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Ban { BanId = _banId, EndedUtc = _now.AddYears(100) });
+
+        await _service.LiftBan(_banId);
+
+        _banRepository.Verify(r => r.Remove(_banId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AllowSeniorModeratorToLiftPermanentVoluntaryBan()
+    {
+        _banRepository.Setup(r => r.Get(_banId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Ban { BanId = _banId, EndedUtc = _now.AddYears(100), IsVoluntary = true });
+
         await _service.LiftBan(_banId);
 
         _banRepository.Verify(r => r.Remove(_banId, It.IsAny<CancellationToken>()), Times.Once);

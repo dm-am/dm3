@@ -147,11 +147,10 @@ HTTP Request → Middleware Pipeline → Controller → Service → Repository �
 3. ErrorHandlingMiddleware (exceptions → ProblemDetails)
 4. CORS
 5. CsrfProtectionMiddleware (Origin/Referer validation)
-6. BotApiKeyMiddleware (bot authentication)
-7. RateLimiter (100 req/min global, 5 req/min auth)
-8. AuthenticationMiddleware (Cookie → Identity)
-9. Authorization
-10. Routing → Controllers + SignalR Hub
+6. RateLimiter (100 req/min global, 5 req/min auth)
+7. AuthenticationMiddleware (Cookie → Identity)
+8. Authorization
+9. Routing → Controllers + SignalR Hub
 
 ---
 

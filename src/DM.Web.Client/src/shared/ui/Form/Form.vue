@@ -5,9 +5,12 @@
       <slot name="controls" />
     </div>
     <div v-else-if="action" class="controls">
-      <Button :disabled="valid === false" :loading="loading">{{
-        action
-      }}</Button>
+      <Button
+        variant="primary"
+        :disabled="valid === false"
+        :loading="loading"
+        >{{ action }}</Button
+      >
       <Button v-if="cancel" type="button" @click="handleCancel">
         {{ cancel }}
       </Button>

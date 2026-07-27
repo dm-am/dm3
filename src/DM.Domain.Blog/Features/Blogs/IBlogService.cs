@@ -28,6 +28,8 @@ public interface IBlogService
     /// <param name="closedFromUtc">Closed date range start</param>
     /// <param name="closedToUtc">Closed date range end</param>
     /// <param name="excludeOwnerIds">Optional owner IDs to exclude (for blacklist filtering)</param>
+    /// <param name="premoderationStatus">Optional premoderation status filter
+    /// (honored only for Mentor+ callers, silently ignored otherwise)</param>
     /// <param name="ct">Cancellation token</param>
     Task<(IEnumerable<Blog> blogs, PagingResult paging)> GetPublicBlogs(
         PagingQuery query,
@@ -43,6 +45,7 @@ public interface IBlogService
         DateTimeOffset? closedFromUtc = null,
         DateTimeOffset? closedToUtc = null,
         IReadOnlyCollection<Guid>? excludeOwnerIds = null,
+        PremoderationStatus? premoderationStatus = null,
         CancellationToken ct = default);
 
     /// <summary>
@@ -143,6 +146,21 @@ public interface IBlogService
     Task<Rubric> CreateRubric(CreateRubric createRubric, CancellationToken ct = default);
 
     /// <summary>
+    /// Rename a rubric (and optionally change its sort order). Gated to the
+    /// blog owner, mirroring how rubrics are created and deleted.
+    /// </summary>
+    Task<Rubric> UpdateRubric(UpdateRubric updateRubric, CancellationToken ct = default);
+
+    /// <summary>
+    /// Reorder the rubrics of a blog. The position of each id in
+    /// <paramref name="orderedRubricIds"/> becomes the rubric's sort order.
+    /// Gated to the blog owner, mirroring the other rubric operations.
+    /// </summary>
+    /// <returns>The rubrics in their new order</returns>
+    Task<IEnumerable<Rubric>> ReorderRubrics(
+        Guid blogId, IReadOnlyList<Guid> orderedRubricIds, CancellationToken ct = default);
+
+    /// <summary>
     /// Delete rubric
     /// </summary>
     Task DeleteRubric(Guid rubricId, CancellationToken ct = default);
@@ -198,4 +216,29 @@ public interface IBlogService
     /// Get blogs where current user is owner, mentor, or assistant
     /// </summary>
     Task<IEnumerable<Blog>> GetOwnBlogsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Apply a premoderation transition (send to / remove from premoderation).
+    /// Gated Mentor+. The public id is resolved via the repository (ungated) so
+    /// a premoderation-pending blog stays reachable for the non-curator mentor.
+    /// </summary>
+    /// <param name="id">Blog public id (5 letters) or GUID</param>
+    /// <param name="transition">Requested transition</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<Blog> ChangePremoderationAsync(
+        string id, BlogPremoderationTransition transition, CancellationToken ct = default);
+
+    /// <summary>
+    /// Apply a status transition (start / freeze / finish / close / reopen)
+    /// on the blog state machine. Illegal transitions are rejected with 400
+    /// before authorization; the transition itself is gated by the blog lead
+    /// bucket (owner + assistants). The public id is resolved via the
+    /// repository (ungated) so the owner of a premoderation-pending or
+    /// private-draft blog can still operate on it.
+    /// </summary>
+    /// <param name="id">Blog public id (5 letters) or GUID</param>
+    /// <param name="transition">Requested transition</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<Blog> ChangeStatusAsync(
+        string id, BlogStatusTransition transition, CancellationToken ct = default);
 }

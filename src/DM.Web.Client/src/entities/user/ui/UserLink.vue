@@ -1,47 +1,9 @@
 <script setup lang="ts">
 import type { User, UserRef } from "../model/types";
-import { UserRole } from "../model/types";
 import { computed } from "vue";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
-
-/**
- * Role badge configuration (same as useUserDisplay)
- * [А], [С], [М], [Н], [Р] - gray brackets, green bold letter
- */
-type RoleBadge = {
-  letter: string;
-  label: string;
-  cssClass: string;
-};
-
-const ROLE_BADGES: Partial<Record<UserRole, RoleBadge>> = {
-  [UserRole.Admin]: {
-    letter: "А",
-    label: "Администратор",
-    cssClass: "role-admin",
-  },
-  [UserRole.SeniorModerator]: {
-    letter: "С",
-    label: "Старший модератор",
-    cssClass: "role-senior-moderator",
-  },
-  [UserRole.Moderator]: {
-    letter: "М",
-    label: "Модератор",
-    cssClass: "role-moderator",
-  },
-  [UserRole.Mentor]: {
-    letter: "Н",
-    label: "Наставник",
-    cssClass: "role-mentor",
-  },
-  [UserRole.System]: {
-    letter: "Р",
-    label: "Робот-администратор",
-    cssClass: "role-system",
-  },
-};
+import { getRoleBadge, type RoleBadge } from "@/shared/config/roles";
 
 const props = defineProps<{
   user: User | UserRef;
@@ -55,15 +17,10 @@ const highlightedUsername = computed(() => {
   return highlightMatch(props.user.username, props.searchQuery);
 });
 
-// Type guard to check if we have a full User (has usernameHistory property)
-function isFullUser(u: User | UserRef): u is User {
-  return "usernameHistory" in u;
-}
-
 // Role badge for staff and system users
 const roleBadge = computed((): RoleBadge | null => {
   if (props.hideBadge) return null;
-  return ROLE_BADGES[props.user.role] ?? null;
+  return getRoleBadge(props.user.role);
 });
 </script>
 
@@ -79,7 +36,7 @@ const roleBadge = computed((): RoleBadge | null => {
 
     <span v-if="roleBadge" class="role-badge"
       >{{ " " }}<span class="bracket">[</span
-      ><Tooltip :text="roleBadge.label"
+      ><Tooltip :text="roleBadge.label" focusable
         ><span class="letter" :class="roleBadge.cssClass">{{
           roleBadge.letter
         }}</span></Tooltip
@@ -89,13 +46,11 @@ const roleBadge = computed((): RoleBadge | null => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 .user-link
   word-wrap: break-word
   // .search-highlight styled globally in Reset.sass
 
-// Role badges: [А], [С], [М], [Н], [Р] - gray brackets, green bold letter
+// Role badges: [А], [С], [М], [Н] - gray brackets, green bold letter
 .role-badge
   display: inline
   white-space: nowrap

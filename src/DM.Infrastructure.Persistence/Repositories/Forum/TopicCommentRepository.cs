@@ -9,6 +9,7 @@ using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Forum.Features.Comments;
+using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Forum;
@@ -88,7 +89,7 @@ internal class TopicCommentRepository : ITopicCommentRepository
 
         if (commentsQuery.CreatedToUtc.HasValue)
         {
-            query = query.Where(c => c.CreatedUtc <= commentsQuery.CreatedToUtc.Value);
+            query = query.WhereAtOrBefore(c => c.CreatedUtc, commentsQuery.CreatedToUtc.Value);
         }
 
         // Search by text content

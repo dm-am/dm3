@@ -2,49 +2,25 @@
   <!-- Visually hidden page heading: the landing has no visible h1 by
        design, but screen readers and SEO need the document outline to
        start at h1 before the h2 block titles below. -->
-  <h1 class="visually-hidden">DM.AM — текстовые ролевые игры</h1>
-  <block-title v-once>Наши пользователи о нас</block-title>
+  <h1 class="visually-hidden">Dungeon Master — текстовые ролевые игры</h1>
+  <BlockTitle v-once>Наши пользователи о нас</BlockTitle>
   <RandomTestimonials />
   <p class="reviews-links" v-once>
     Со всеми отзывами можно ознакомиться
     <router-link to="/testimonials"
       ><strong>на отдельной странице</strong></router-link
     >. Будем рады, если поделитесь и своим —
-    <router-link to="/forum/general/1"
+    <router-link :to="TESTIMONIALS_FORUM_TOPIC"
       ><strong>в топике на форуме</strong></router-link
     >.
   </p>
-  <div class="separator" v-once aria-hidden="true">
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - -
-  </div>
+  <DashSeparator />
   <RecentNews />
-  <div class="separator" v-once aria-hidden="true">
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - -
-  </div>
+  <DashSeparator />
   <BestWeeklyPost />
-  <div class="separator" v-once aria-hidden="true">
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - -
-  </div>
+  <DashSeparator />
   <LatestRatedPost />
-  <div class="separator" v-once aria-hidden="true">
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    - - - - - -
-  </div>
+  <DashSeparator />
   <p class="discovery">
     Хотите увидеть, как еще играют на площадке? Загляните в Пульс — там вы
     найдете
@@ -62,6 +38,8 @@ import BestWeeklyPost from "./BestWeeklyPost.vue";
 import LatestRatedPost from "./LatestRatedPost.vue";
 import RecentNews from "./RecentNews.vue";
 import { getWeekStartUtc } from "@/shared/lib/utils/datetime";
+import { DashSeparator } from "@/shared/ui/DashSeparator";
+import { TESTIMONIALS_FORUM_TOPIC } from "@/shared/config/wellKnownRoutes";
 import dayjs from "dayjs";
 
 const bestPostsLink = computed(() => {
@@ -71,21 +49,8 @@ const bestPostsLink = computed(() => {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
-.separator
-  margin: $small 0
-  color: $text-muted
-  white-space: nowrap
-  overflow: hidden
-  max-width: 100%
-  width: 0
-  min-width: 100%
-  user-select: none
-
 .reviews-links
-  margin: 12px 0 $medium
+  margin: $small 0 $medium
   color: $text
   line-height: 1.6
   a

@@ -67,6 +67,29 @@ public interface IGameApiService
     Task<Envelope<GameDetails>> Update(Guid gameId, GameDetails game);
 
     /// <summary>
+    /// Apply a game status transition (start / freeze / finish / close / reopen)
+    /// </summary>
+    /// <param name="gameId">Game identifier</param>
+    /// <param name="request">Requested transition</param>
+    /// <returns>Envelope for updated game details</returns>
+    Task<Envelope<GameDetails>> ChangeStatus(Guid gameId, GameStatusChangeRequest request);
+
+    /// <summary>
+    /// Apply a premoderation transition (send to / remove from premoderation)
+    /// </summary>
+    /// <param name="id">Game public id (5 letters) or GUID</param>
+    /// <param name="request">Requested transition</param>
+    /// <returns>Envelope for updated game details</returns>
+    Task<Envelope<GameDetails>> ChangePremoderation(string id, GamePremoderationChangeRequest request);
+
+    /// <summary>
+    /// Reset the recruitment start date (admin only)
+    /// </summary>
+    /// <param name="gameId">Game identifier</param>
+    /// <returns>Envelope for updated game details</returns>
+    Task<Envelope<GameDetails>> ResetRecruitmentDate(Guid gameId);
+
+    /// <summary>
     /// Delete existing game
     /// </summary>
     /// <param name="gameId">Game identifier</param>

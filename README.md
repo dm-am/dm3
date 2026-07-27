@@ -45,6 +45,7 @@ cd src/DM.Web.Client && npm install && npm run dev
 | [AUTHENTICATION](./docs/architecture/AUTHENTICATION.md) | "Как работает вход? Какие параметры безопасности?" |
 | [AUTHORIZATION](./docs/architecture/AUTHORIZATION.md) | "Какие роли? Кто что может?" |
 | [UPLOADS](./docs/architecture/UPLOADS.md) | "Как работает upload аватаров? Какие варианты, форматы, защиты?" |
+| [BBCODE_RENDERING](./docs/architecture/BBCODE_RENDERING.md) | "Как рендерится BBCode? Кто видит приватные теги?" |
 
 ### conventions/ — Правила разработки
 
@@ -73,6 +74,7 @@ cd src/DM.Web.Client && npm install && npm run dev
 |----------|------------|
 | [ROADMAP](./docs/plans/ROADMAP.md) | "Что готово? Что в работе? Что планируется?" |
 | [DM2_MIGRATION](./docs/plans/DM2_MIGRATION.md) | "Как мигрировать данные со старого сайта?" |
+| [ERROR_PAGES_AND_LORE](./docs/plans/ERROR_PAGES_AND_LORE.md) | "Как оформлены страницы ошибок? Какой лор и достижения?" |
 
 ### references/ — Справка
 

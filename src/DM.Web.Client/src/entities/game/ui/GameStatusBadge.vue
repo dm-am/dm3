@@ -1,21 +1,16 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { GameStatus, ClosedReason } from "../model/types";
-import { Tooltip } from "@/shared/ui/Tooltip";
 
 const props = defineProps<{
   /** Game status */
   status: GameStatus | string;
   /** Whether game is recruiting players */
   isRecruiting?: boolean;
-  /** Whether this is a subsequent recruitment (донабор) */
+  /** Whether this is a subsequent recruitment ("донабор") */
   isSubsequent?: boolean;
   /** Closed reason (for Closed status) */
   closedReason?: ClosedReason | string;
-  /** Current player count */
-  pcCount?: number;
-  /** Player limit (max slots) */
-  pcLimit?: number;
 }>();
 
 // Status checks
@@ -55,44 +50,17 @@ const statusDisplay = computed<string>(() => {
   }
   return String(props.status);
 });
-
-// Show slots info for Active games with open recruitment and limit
-const showSlots = computed(() => {
-  return (
-    isActive.value &&
-    props.isRecruiting &&
-    props.pcLimit != null &&
-    props.pcLimit > 0
-  );
-});
-
-// Slots display: [current/limit]
-const slotsDisplay = computed(() => {
-  if (!showSlots.value) return "";
-  const current = props.pcCount ?? 0;
-  const limit = props.pcLimit ?? 0;
-  return `[${current}/${limit}]`;
-});
 </script>
 
 <template>
   <span class="game-status">
-    {{ statusDisplay
-    }}<Tooltip v-if="showSlots" text="Персонажей / мест">
-      <span class="slots-info">&nbsp;{{ slotsDisplay }}</span>
-    </Tooltip>
+    {{ statusDisplay }}
   </span>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 .game-status
   display: inline
   word-wrap: break-word
-
-.slots-info
-  color: $text-muted
-  cursor: help
 </style>
 <!-- SVG icons moved to shared/lib/utils/icons.ts: gameFinished, gameFrozen -->

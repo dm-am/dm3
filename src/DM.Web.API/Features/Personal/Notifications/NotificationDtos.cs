@@ -141,24 +141,3 @@ public enum NotificationChannel
     /// </summary>
     Discord = 3
 }
-
-/// <summary>
-/// Request to verify a bot linking code (called by bot backend)
-/// </summary>
-public class VerifyBotLinkRequest
-{
-    /// <summary>
-    /// Verification code entered by user in the bot
-    /// </summary>
-    public string Code { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Channel type (telegram or discord)
-    /// </summary>
-    public string ChannelType { get; set; } = string.Empty;
-
-    /// <summary>
-    /// External user ID from the bot platform
-    /// </summary>
-    public string ExternalId { get; set; } = string.Empty;
-}

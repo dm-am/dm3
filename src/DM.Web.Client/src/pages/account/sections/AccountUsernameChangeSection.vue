@@ -83,22 +83,22 @@
           одобрения вы получите ссылку на выбор нового имени.
         </p>
 
-        <div class="form-group">
-          <label class="form-label">Причина смены</label>
+        <FormField
+          label="Причина смены"
+          name="username-reason"
+          :errors="submitError ? [submitError] : []"
+        >
           <textarea
+            id="username-reason"
             v-model="reason"
             :disabled="submitting"
-            class="form-textarea"
             rows="3"
             maxlength="500"
             placeholder="Объясните, почему хотите сменить имя..."
           ></textarea>
           <div class="char-count">{{ reason.length }}/500</div>
-        </div>
-
-        <div v-if="submitError" class="error-message" role="alert">
-          {{ submitError }}
-        </div>
+          <template #hint>Причина смены имени видна модераторам</template>
+        </FormField>
 
         <div class="form-note">
           Заявка будет рассмотрена модераторами. Обычно это занимает 1-3 дня.
@@ -115,9 +115,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
-import dayjs from "dayjs";
+import { formatDate } from "@/shared/lib/utils/datetime";
 import { AccountApi } from "@/shared/api";
 import Button from "@/shared/ui/Button/Button.vue";
+import { FormField } from "@/shared/ui/Form";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { User } from "@/shared/api/models/community";
 import type { UsernameChangeRequest } from "@/shared/api/models/account";
@@ -160,10 +161,6 @@ async function loadExistingRequest() {
   }
 }
 
-function formatDate(dateStr: string): string {
-  return dayjs(dateStr).format("DD.MM.YYYY");
-}
-
 async function submitRequest() {
   if (!canSubmit.value) return;
 
@@ -190,8 +187,7 @@ async function submitRequest() {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 @import "../AccountPage.styles"
 
 .username-change-content
@@ -218,15 +214,15 @@ async function submitRequest() {
   margin-bottom: $medium
 
   &--pending
-    background-color: rgba($link, 0.1)
+    background-color: $link-muted
     border: 1px solid $link
 
   &--rejected
-    background-color: rgba($accent-red, 0.1)
+    background-color: $accent-red-muted
     border: 1px solid $accent-red
 
   &--approved
-    background-color: rgba($accent-green, 0.1)
+    background-color: $accent-green-muted
     border: 1px solid $accent-green
 
 .status-header
@@ -290,35 +286,6 @@ async function submitRequest() {
   color: $text-muted
   font-size: $secondary-font-size
 
-.form-group
-  display: flex
-  flex-direction: column
-  gap: $tiny
-
-.form-label
-  font-weight: 500
-  color: $text
-
-.form-textarea
-  width: 100%
-  padding: $small
-  border: 1px solid $border
-  border-radius: $border-radius
-  background-color: $bg
-  color: $text
-  font-family: inherit
-  font-size: inherit
-  resize: vertical
-  min-height: 80px
-
-  &:focus
-    outline: none
-    border-color: $link
-
-  &:disabled
-    opacity: 0.6
-    cursor: default
-
 .char-count
   font-size: $secondary-font-size
   color: $text-muted
@@ -327,12 +294,4 @@ async function submitRequest() {
 .form-note
   font-size: $secondary-font-size
   color: $text-muted
-
-.error-message
-  padding: $small
-  background-color: rgba($accent-red, 0.1)
-  border: 1px solid $accent-red
-  border-radius: $border-radius
-  color: $accent-red
-  font-size: $secondary-font-size
 </style>

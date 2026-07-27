@@ -184,8 +184,6 @@ watch(
 </script>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Variables"
-
 .username-input
   width: 100%
 

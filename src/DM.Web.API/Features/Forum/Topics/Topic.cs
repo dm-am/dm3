@@ -96,6 +96,31 @@ public class Topic
     /// can show the column without hydrating each topic's full Likes list.
     /// </summary>
     public int LikesCount { get; set; }
+
+    /// <summary>
+    /// Set when this topic is an auto-created period digest ("Итоги …"):
+    /// the closed statistics period it summarizes. The client renders the
+    /// period's leaderboards inside the topic from the statistics API — the
+    /// topic text itself carries no board data (SSOT: the boards are always
+    /// computed, never copied into content).
+    /// </summary>
+    public PeriodDigestRef? PeriodDigest { get; set; }
+}
+
+/// <summary>
+/// Closed statistics period a digest topic summarizes
+/// </summary>
+public class PeriodDigestRef
+{
+    /// <summary>
+    /// Calendar year
+    /// </summary>
+    public int Year { get; set; }
+
+    /// <summary>
+    /// Calendar month (1-12); null for a yearly digest
+    /// </summary>
+    public int? Month { get; set; }
 }
 
 /// <summary>

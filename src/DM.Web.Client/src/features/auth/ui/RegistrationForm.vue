@@ -8,11 +8,12 @@ import {
   useValidatedField,
   validators,
 } from "@/shared/lib/composables/useValidatedField";
-import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
+import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import {
   PasswordInput,
   PasswordStrengthIndicator,
 } from "@/shared/ui/PasswordInput";
+import { Tooltip } from "@/shared/ui/Tooltip";
 import { AccountApi } from "@/shared/api";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 
@@ -32,8 +33,12 @@ const honeypot = ref("");
 const formLoadTime = ref(0);
 const emailInputRef = ref<HTMLInputElement | null>(null);
 const passwordInputRef = ref<InstanceType<typeof PasswordInput> | null>(null);
+// Consent is split in two: the site rules checkbox unlocks only after the
+// rules link was actually opened (rulesViewed), while the legal-terms
+// checkbox (agreement + privacy) is freely checkable.
 const rulesViewed = ref(false);
 const acceptedRules = ref(false);
+const acceptedTerms = ref(false);
 
 // Email conflict states (for showing action links)
 const emailTaken = ref(false);
@@ -67,7 +72,6 @@ const {
   password: newPassword,
   hibpStatus,
   isValid: isPasswordValid,
-  isChecking: hibpChecking,
   onInput: onPasswordInput,
   onBlur: onPasswordBlur,
   reset: resetPassword,
@@ -78,9 +82,9 @@ const canSubmitEmail = computed(
   () => emailField.isReady.value && !emailTaken.value && !emailPending.value,
 );
 
-// Can register (HIBP must pass)
+// Can register (HIBP must pass, both consents given)
 const canSubmitPassword = computed(
-  () => isPasswordValid.value && acceptedRules.value,
+  () => isPasswordValid.value && acceptedRules.value && acceptedTerms.value,
 );
 
 onMounted(() => {
@@ -165,6 +169,7 @@ const clearForm = () => {
   emailTaken.value = false;
   emailPending.value = false;
   acceptedRules.value = false;
+  acceptedTerms.value = false;
   step.value = "email";
 };
 
@@ -188,8 +193,8 @@ const handleRecovery = () => {
 </script>
 
 <template>
-  <Lightbox narrow @before-close="clearForm">
-    <lightbox-title>Регистрация</lightbox-title>
+  <Dialog narrow @before-close="clearForm">
+    <dialog-title>Регистрация</dialog-title>
 
     <!-- Step 1: Email -->
     <template v-if="step === 'email'">
@@ -197,15 +202,19 @@ const handleRecovery = () => {
         <p><strong>Создание дополнительных аккаунтов запрещено.</strong></p>
         <p>
           Если вы утратили доступ к аккаунту, воспользуйтесь
-          <a
-            href="#"
-            @click.prevent="
+          <button
+            type="button"
+            class="inline-link"
+            @click="
               emit('openRecovery', emailField.value.value.trim() || undefined)
             "
-            >восстановлением доступа</a
           >
+            восстановлением доступа
+          </button>
           или обратитесь в
-          <a href="#" @click.prevent="goToSupport">поддержку</a>.
+          <button type="button" class="inline-link" @click="goToSupport">
+            поддержку</button
+          >.
         </p>
       </div>
 
@@ -223,20 +232,22 @@ const handleRecovery = () => {
         >
           <template #label>
             <label for="email">Почта</label>
-            <a
+            <button
               v-if="emailTaken"
-              href="#"
-              @click.prevent="handleLogin"
+              type="button"
               class="field-action"
-              >Войти?</a
+              @click="handleLogin"
             >
-            <a
+              Войти?
+            </button>
+            <button
               v-else-if="emailPending"
-              href="#"
-              @click.prevent="handleRecovery"
+              type="button"
               class="field-action"
-              >Отправить повторное письмо?</a
+              @click="handleRecovery"
             >
+              Отправить повторное письмо?
+            </button>
           </template>
           <input
             ref="emailInputRef"
@@ -267,7 +278,9 @@ const handleRecovery = () => {
       <div class="email-display">
         <div class="email-display__label">
           <span>Почта</span>
-          <a href="#" @click.prevent="goBack">Изменить</a>
+          <button type="button" class="inline-link" @click="goBack">
+            Изменить
+          </button>
         </div>
         <div class="email-display__value">{{ emailField.value.value }}</div>
       </div>
@@ -301,14 +314,21 @@ const handleRecovery = () => {
           />
         </form-field>
 
+        <!-- Rules consent stays locked until the rules were actually
+             opened; the legal-terms consent below is freely checkable. -->
         <div class="rules-checkbox">
-          <input
-            type="checkbox"
-            v-model="acceptedRules"
-            :disabled="!rulesViewed"
-            id="acceptedRules"
-          />
-          <span
+          <Tooltip
+            text="Сначала откройте правила сайта"
+            :disabled="rulesViewed"
+          >
+            <input
+              type="checkbox"
+              v-model="acceptedRules"
+              :disabled="!rulesViewed"
+              id="acceptedRules"
+            />
+          </Tooltip>
+          <label for="acceptedRules"
             >Я принимаю
             <a
               href="/rules"
@@ -316,14 +336,21 @@ const handleRecovery = () => {
               rel="noopener"
               @click="rulesViewed = true"
               >правила сайта</a
-            >, условия
+            ></label
+          >
+        </div>
+
+        <div class="rules-checkbox">
+          <input type="checkbox" v-model="acceptedTerms" id="acceptedTerms" />
+          <label for="acceptedTerms"
+            >Я принимаю условия
             <a href="/agreement" target="_blank" rel="noopener"
               >Пользовательского соглашения</a
             >
             и
             <a href="/privacy" target="_blank" rel="noopener"
               >Политики конфиденциальности</a
-            ></span
+            ></label
           >
         </div>
 
@@ -337,24 +364,35 @@ const handleRecovery = () => {
         />
       </Form>
     </template>
-  </Lightbox>
+  </Dialog>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 
 a
   font-weight: bold
 
+// Button-as-link, bold weight — matches the surrounding sentence's <a> tags.
+// font-weight overrides the mixin's "font: inherit" (the shorthand resets
+// weight), so it must stay after the include; the "&" block keeps the CSS
+// cascade order explicit (avoids the Sass mixed-decls deprecation).
+.inline-link
+  +inline-link-button
+  &
+    font-weight: bold
+
 .field-action
-  font-weight: normal
+  +inline-link-button
+  &
+    font-weight: normal
 
 .registration-info
   margin-bottom: $medium
   padding: $small $medium
-  border: 1px solid $border-accent-red
+  border: 1px solid $border
   border-radius: $border-radius
+  color: $text-muted
   font-size: $secondary-font-size
   line-height: 1.5
 
@@ -400,8 +438,17 @@ a
 .rules-checkbox
   margin-top: $medium
   display: flex
-  align-items: center
+  align-items: flex-start
   gap: $small
+
+  // The two consent rows read as one group: tighter rhythm between them
+  & + .rules-checkbox
+    margin-top: $small
+
+  // Tooltip wraps the checkbox in an inline span; keep it aligned with the
+  // first line of the (often multi-line) label text next to it
+  :deep(.tooltip-trigger)
+    margin-top: 2px
 
   input[type="checkbox"]:disabled
     &::before

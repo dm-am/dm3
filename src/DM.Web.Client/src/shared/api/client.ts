@@ -130,8 +130,8 @@ class Api {
   }
 
   /*
-   Поскольку мы отслеживаем прогресс только отправки файла на сервер с клиента,
-   обработчик прогресса "зависает" на 99% до момента получения окончательного ответа от сервера.
+   Since we only track the progress of sending the file from the client to the server,
+   the progress handler "hangs" at 99% until the final server response arrives.
   */
   public postFile<T>(
     url: string,

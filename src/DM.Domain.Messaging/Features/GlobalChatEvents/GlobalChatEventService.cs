@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Messaging.Authorization;
@@ -52,6 +53,12 @@ internal class GlobalChatEventService : IGlobalChatEventService
         _intentionManager.ThrowIfForbidden(GlobalChatEventIntention.Create);
 
         var userId = _identityProvider.Current.User.UserId;
+        // Event descriptions render on the Comment surface where [mod] is a
+        // green mod block. Event authoring is moderator-gated already, so this
+        // is defensive: strip [mod] if the author is somehow below Moderator.
+        if (!string.IsNullOrEmpty(createGlobalChatEvent.Description))
+            createGlobalChatEvent.Description = ModBlockSanitizer.SanitizeForAuthor(
+                createGlobalChatEvent.Description, _identityProvider.Current.User.Role);
         var chatEvent = _factory.Create(createGlobalChatEvent, userId);
         var creatorParticipant = _factory.CreateParticipant(chatEvent.GlobalChatEventId, userId, isOrganizer: true);
 
@@ -90,11 +97,18 @@ internal class GlobalChatEventService : IGlobalChatEventService
         var chatEvent = await GetAsync(updateGlobalChatEvent.Id).ConfigureAwait(false);
         _intentionManager.ThrowIfForbidden(GlobalChatEventIntention.Update, chatEvent);
 
+        var description = updateGlobalChatEvent.Description;
+        // Event descriptions render on the Comment surface where [mod] is a
+        // green mod block; defensive strip for a below-Moderator editor.
+        if (!string.IsNullOrEmpty(description))
+            description = ModBlockSanitizer.SanitizeForAuthor(
+                description, _identityProvider.Current.User.Role);
+
         var updateEntity = new UpdateGlobalChatEventEntity
         {
             GlobalChatEventId = updateGlobalChatEvent.Id,
             Title = updateGlobalChatEvent.Title,
-            Description = updateGlobalChatEvent.Description,
+            Description = description,
             StartsUtc = updateGlobalChatEvent.StartsUtc,
             Duration = updateGlobalChatEvent.Duration,
             IsOpen = updateGlobalChatEvent.IsOpen

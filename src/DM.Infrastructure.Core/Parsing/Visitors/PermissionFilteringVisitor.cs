@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using BBCodeParser.Nodes;
-using DM.Domain.Core.Enums;
 
 namespace DM.Infrastructure.Core.Parsing.Visitors;
 
@@ -11,18 +10,20 @@ namespace DM.Infrastructure.Core.Parsing.Visitors;
 /// <see cref="NodeTree.ToHtml(System.Func{Node, bool}, System.Func{Node, string, string})"/>
 /// that enforce DM3's privacy tag visibility rules.
 ///
+/// The only privacy-sensitive tag is [private] (game posts). [mod] is not
+/// filtered here: it is public on read (everyone sees an authored mod
+/// block) and restricted on write (unauthorized [mod] is unwrapped at save
+/// time by ModBlockSanitizer, so it never reaches stored content).
+///
 /// This is not a mutating visitor — the delegates returned here are pure
 /// functions of the node and the render context, invoked by the tree
-/// walker during emission. Stripping a [private] / [mod] block means
-/// the filter returns false for the corresponding <see cref="TagNode"/>;
-/// the walker then skips the entire subtree (zero-information erase,
-/// no placeholder, no marker comment, no gap).
+/// walker during emission. Stripping a [private] block means the filter
+/// returns false for the corresponding <see cref="TagNode"/>; the walker
+/// then skips the entire subtree (zero-information erase, no placeholder,
+/// no marker comment, no gap).
 /// </summary>
 public static class PermissionFilteringVisitor
 {
-    /// <summary>Tag name for the moderator visual block.</summary>
-    public const string ModTagName = "mod";
-
     /// <summary>Tag name for the private addressee block.</summary>
     public const string PrivateTagName = "private";
 
@@ -56,9 +57,10 @@ public static class PermissionFilteringVisitor
 
     /// <summary>
     /// Check whether a tag name is privacy-sensitive (subject to filtering).
+    /// Only [private] qualifies — [mod] is public on read.
     /// </summary>
     public static bool IsPrivacySensitiveTag(string? tagName) =>
-        tagName is ModTagName or PrivateTagName;
+        tagName is PrivateTagName;
 
     // ───────────────────────────────────────────────────────────────────
     // FILTER: which nodes are visible to the current viewer
@@ -84,24 +86,13 @@ public static class PermissionFilteringVisitor
         if (ctx.Audience == RenderAudience.AuthorEdit)
             return true;
 
-        // Display audience: per-tag rules.
+        // Display audience: per-tag rules. [private] is the only
+        // privacy-sensitive tag; every other tag already returned true above.
         return tagName switch
         {
-            ModTagName => IsModVisible(ctx),
             PrivateTagName => IsPrivateVisible(tagNode, ctx),
             _ => true
         };
-    }
-
-    private static bool IsModVisible(RenderContext ctx)
-    {
-        // [mod] is only meaningful in forum/comment/global chat surfaces.
-        // Defense-in-depth: if a [mod] node somehow ended up in a surface
-        // where it isn't allowed, strip it.
-        if (ctx.Surface is not (BbSurface.ForumTopic or BbSurface.Comment or BbSurface.GlobalChatMessage))
-            return false;
-
-        return ctx.Viewer is { Role: >= UserRole.Moderator };
     }
 
     private static bool IsPrivateVisible(TagNode tagNode, RenderContext ctx)
@@ -153,18 +144,20 @@ public static class PermissionFilteringVisitor
     private static string Transform(Node node, string rendered, RenderContext ctx) => rendered;
 
     // ───────────────────────────────────────────────────────────────────
-    // Utility: string-scan source for privacy-sensitive tag markers.
-    // Cheap enough at source size that we do it on every render; cache
-    // lookups then skip the heavy per-user buckets when possible.
+    // Utility: string-scan source for the [private] marker. Cheap enough at
+    // source size that we do it on every render; cache lookups then skip the
+    // heavy per-user buckets when the content has no [private]. [mod] is no
+    // longer scanned — it renders identically for every viewer, so it never
+    // forces a per-user bucket.
     // ───────────────────────────────────────────────────────────────────
 
     private static bool SourceContainsPrivacyTagMarker(string? source)
     {
         if (string.IsNullOrEmpty(source)) return false;
-        // Case-insensitive search for "[private" or "[mod" followed by
-        // an attribute / closing bracket. A bare "[mod]" or "[mod=foo]"
-        // both match. Inside [noparse] blocks this over-counts, which
-        // only affects bucketing (never filtering correctness).
+        // Case-insensitive search for "[private" followed by an attribute /
+        // closing bracket. A bare "[private]" or "[private=foo]" both match.
+        // Inside [noparse] blocks this over-counts, which only affects
+        // bucketing (never filtering correctness).
         var span = source.AsSpan();
         for (var i = 0; i < span.Length - 3; i++)
         {
@@ -172,12 +165,6 @@ public static class PermissionFilteringVisitor
             if (StartsWithIgnoreCase(span[(i + 1)..], "private"))
             {
                 var next = i + 1 + "private".Length;
-                if (next < span.Length && (span[next] == ']' || span[next] == '=' || span[next] == ' '))
-                    return true;
-            }
-            else if (StartsWithIgnoreCase(span[(i + 1)..], "mod"))
-            {
-                var next = i + 1 + "mod".Length;
                 if (next < span.Length && (span[next] == ']' || span[next] == '=' || span[next] == ' '))
                     return true;
             }

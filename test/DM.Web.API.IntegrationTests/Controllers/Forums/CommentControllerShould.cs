@@ -32,10 +32,11 @@ public class CommentControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Get comments from non-existent topic should return Gone
+    /// Get comments of a topic id that never existed should return NotFound.
+    /// Gone (410) is reserved for a topic row that exists but is soft-deleted.
     /// </summary>
     [Fact]
-    public async Task GetForumComments_WithNonExistentTopic_ReturnsGone()
+    public async Task GetForumComments_WithNonExistentTopic_ReturnsNotFound()
     {
         // Arrange
         var nonExistentTopicId = Guid.NewGuid();
@@ -44,7 +45,7 @@ public class CommentControllerShould : IntegrationTestBase
         var response = await Client.GetAsync($"/v1/topics/{nonExistentTopicId}/comments");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     #endregion

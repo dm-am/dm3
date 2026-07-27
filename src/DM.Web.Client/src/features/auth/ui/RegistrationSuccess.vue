@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
-import Lightbox from "@/shared/ui/Layout/Lightbox.vue";
-import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
+import Dialog from "@/shared/ui/Layout/Dialog.vue";
+import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 
 const props = defineProps<{
   email: string;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: "confirm"): void;
 }>();
 
@@ -20,9 +21,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <Lightbox>
+  <Dialog auto>
     <div class="success-content">
-      <lightbox-title>Проверьте почту</lightbox-title>
+      <dialog-title>Проверьте почту</dialog-title>
 
       <p class="main-text">
         Мы отправили письмо на <strong>{{ email }}</strong> со ссылкой для
@@ -30,14 +31,15 @@ onMounted(() => {
       </p>
 
       <p class="expiry-note">Ссылка действительна 48 часов</p>
+
+      <Button type="button" class="confirm-btn" @click="emit('confirm')">
+        Закрыть
+      </Button>
     </div>
-  </Lightbox>
+  </Dialog>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .success-content
   text-align: center
 
@@ -46,14 +48,10 @@ onMounted(() => {
   line-height: 1.5
 
 .expiry-note
-  margin: 0
+  margin: 0 0 $medium
   color: $text-muted
   font-size: $secondary-font-size
-</style>
 
-<style lang="sass">
-// Global style for success lightbox (teleported modal)
-.lightbox:has(.success-content)
-  width: auto !important
-  max-width: 320px !important
+.confirm-btn
+  width: 100%
 </style>

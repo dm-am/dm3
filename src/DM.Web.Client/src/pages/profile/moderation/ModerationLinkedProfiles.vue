@@ -1,15 +1,11 @@
 ﻿<script setup lang="ts">
 import type { LinkedProfile } from "@/shared/api/models/moderation";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import dayjs from "dayjs";
+import { formatDate } from "@/shared/lib/utils/datetime";
 
 defineProps<{
   profiles: LinkedProfile[];
 }>();
-
-function formatDate(dateStr: string): string {
-  return dayjs(dateStr).format("DD.MM.YYYY");
-}
 </script>
 
 <template>
@@ -25,7 +21,7 @@ function formatDate(dateStr: string): string {
           {{ p.username }}
         </router-link>
         <secondary-text>
-          {{ p.sharedIpsCount }} общих IP · последний
+          {{ p.sharedIpsCount }} общих IP, последний
           {{ formatDate(p.lastSharedLoginUtc) }}
         </secondary-text>
       </div>
@@ -36,9 +32,6 @@ function formatDate(dateStr: string): string {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .mod-section
   margin-bottom: $medium
 

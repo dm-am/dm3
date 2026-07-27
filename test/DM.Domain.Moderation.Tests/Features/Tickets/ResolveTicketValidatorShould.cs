@@ -23,7 +23,7 @@ public class ResolveTicketValidatorShould : UnitTestBase
     {
         var input = new ResolveTicket
         {
-            Status = TicketStatus.Resolved,
+            Status = TicketStatus.Closed,
             Answer = "Valid answer"
         };
 
@@ -32,31 +32,31 @@ public class ResolveTicketValidatorShould : UnitTestBase
     }
 
     [Fact]
-    public void FailWhenStatusIsOpen()
+    public void FailWhenStatusIsWaitingForModeration()
     {
         var input = new ResolveTicket
         {
-            Status = TicketStatus.Open,
+            Status = TicketStatus.WaitingForModeration,
             Answer = "Valid answer"
         };
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Status)
-            .WithErrorMessage("Status must be a resolution status (Resolved, Rejected, etc.)");
+            .WithErrorMessage("Status must be a resolution status (Closed or Spam)");
     }
 
     [Fact]
-    public void FailWhenStatusIsInProgress()
+    public void FailWhenStatusIsWaitingForUser()
     {
         var input = new ResolveTicket
         {
-            Status = TicketStatus.InProgress,
+            Status = TicketStatus.WaitingForUser,
             Answer = "Valid answer"
         };
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Status)
-            .WithErrorMessage("Status must be a resolution status (Resolved, Rejected, etc.)");
+            .WithErrorMessage("Status must be a resolution status (Closed or Spam)");
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public class ResolveTicketValidatorShould : UnitTestBase
     {
         var input = new ResolveTicket
         {
-            Status = TicketStatus.Resolved,
+            Status = TicketStatus.Closed,
             Answer = ""
         };
 
@@ -78,7 +78,7 @@ public class ResolveTicketValidatorShould : UnitTestBase
     {
         var input = new ResolveTicket
         {
-            Status = TicketStatus.Resolved,
+            Status = TicketStatus.Closed,
             Answer = new string('x', 2001)
         };
 
@@ -92,10 +92,10 @@ public class ResolveTicketValidatorShould : UnitTestBase
     {
         var input = new ResolveTicket
         {
-            Status = TicketStatus.Resolved,
+            Status = TicketStatus.Closed,
             Answer = "Valid answer",
             IssueWarning = true,
-            WarningPoints = 4,
+            WarningPoints = 1000,
             WarningText = "Valid warning"
         };
 
@@ -105,11 +105,47 @@ public class ResolveTicketValidatorShould : UnitTestBase
     }
 
     [Fact]
+    public void PassForZeroWarningPoints()
+    {
+        // 0 = verbal warning: recorded without points, within the 0-6 range.
+        var input = new ResolveTicket
+        {
+            Status = TicketStatus.Closed,
+            Answer = "Valid answer",
+            IssueWarning = true,
+            WarningPoints = 0,
+            WarningText = "Valid warning"
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldNotHaveValidationErrorFor(x => x.WarningPoints);
+    }
+
+    [Fact]
+    public void FailWhenBanDurationExceedsUpperBound()
+    {
+        // A ticket-issued ban is time-boxed; an absurd duration is rejected
+        // (also guards against a DateTimeOffset overflow when added to "now").
+        var input = new ResolveTicket
+        {
+            Status = TicketStatus.Closed,
+            Answer = "Valid answer",
+            IssueBan = true,
+            BanDurationHours = int.MaxValue,
+            BanComment = "Valid ban comment"
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(x => x.BanDurationHours)
+            .WithErrorMessage(ValidationError.Invalid);
+    }
+
+    [Fact]
     public void FailWhenWarningTextIsEmptyForWarning()
     {
         var input = new ResolveTicket
         {
-            Status = TicketStatus.Resolved,
+            Status = TicketStatus.Closed,
             Answer = "Valid answer",
             IssueWarning = true,
             WarningPoints = 2,
@@ -126,7 +162,7 @@ public class ResolveTicketValidatorShould : UnitTestBase
     {
         var input = new ResolveTicket
         {
-            Status = TicketStatus.Resolved,
+            Status = TicketStatus.Closed,
             Answer = "Valid answer",
             IssueBan = true,
             BanDurationHours = -1,
@@ -143,7 +179,7 @@ public class ResolveTicketValidatorShould : UnitTestBase
     {
         var input = new ResolveTicket
         {
-            Status = TicketStatus.Resolved,
+            Status = TicketStatus.Closed,
             Answer = "Valid answer",
             IssueBan = true,
             BanDurationHours = 24,
@@ -160,7 +196,7 @@ public class ResolveTicketValidatorShould : UnitTestBase
     {
         var input = new ResolveTicket
         {
-            Status = TicketStatus.Resolved,
+            Status = TicketStatus.Closed,
             Answer = "Valid answer",
             IssueWarning = true,
             WarningPoints = 2,
@@ -176,7 +212,7 @@ public class ResolveTicketValidatorShould : UnitTestBase
     {
         var input = new ResolveTicket
         {
-            Status = TicketStatus.Resolved,
+            Status = TicketStatus.Closed,
             Answer = "Valid answer",
             IssueBan = true,
             BanDurationHours = 48,

@@ -45,17 +45,6 @@ $table-gap: 1px
   &:hover
     background-image: linear-gradient($hover-overlay, $hover-overlay)
 
-// Avatar in table cells (consistent sizing)
-=table-avatar($size: 24px)
-  width: $size
-  height: $size
-  object-fit: cover
-  flex-shrink: 0
-
-=table-columns
-  & > *
-    padding: $table-cell-padding-v $table-cell-padding-h
-
 // Expandable row/details mixins (for interactive tables with click-to-expand)
 $expand-icon-size: 10px
 $expand-icon-width: 12px
@@ -68,7 +57,6 @@ $details-offset: 20px
   padding: $table-cell-padding-v $table-cell-padding-h
   background-color: $bg-element
   cursor: pointer
-  user-select: none
   transition: background-image $transition-normal
 
   &:hover
@@ -97,25 +85,6 @@ $details-offset: 20px
   white-space: normal
   word-wrap: break-word
   overflow-wrap: break-word
-
-=expandable-details-list
-  ul
-    margin: 0
-    padding-left: $medium
-    list-style: disc
-
-    li
-      margin: $minor 0
-      color: $text
-      font-size: $secondary-font-size
-
-=nested-list
-  margin: $minor 0 0 $medium
-  padding-left: 0
-  list-style: disc
-  li
-    margin: $minor 0
-    font-weight: normal
 
 // Mobile breakpoint
 $mobile-breakpoint: 600px

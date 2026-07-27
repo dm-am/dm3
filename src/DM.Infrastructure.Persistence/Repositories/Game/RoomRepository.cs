@@ -114,6 +114,7 @@ internal class RoomRepository : IRoomRepository
             ViewPrivateText = createRoom.ViewPrivateText,
             ViewDiceResults = createRoom.ViewDiceResults,
             DiceEnabled = createRoom.DiceEnabled,
+            IsArchived = createRoom.IsArchived,
             OrderNumber = createRoom.OrderNumber,
             PreviousRoomId = lastRoom?.RoomId,
             IsRemoved = false
@@ -161,6 +162,9 @@ internal class RoomRepository : IRoomRepository
 
         if (updateRoom.DiceEnabled.HasValue)
             room.DiceEnabled = updateRoom.DiceEnabled.Value;
+
+        if (updateRoom.IsArchived.HasValue)
+            room.IsArchived = updateRoom.IsArchived.Value;
 
         if (updateRoom.ShouldSetChatId)
             room.ChatId = updateRoom.ChatId;

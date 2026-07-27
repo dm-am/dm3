@@ -6,7 +6,8 @@ import { ref } from "vue";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import type { User, Username } from "./types";
 import { UserActivityFilter } from "./types";
-import { CommunityApi } from "@/shared/api";
+import { CommunityApi, unwrapResource } from "@/shared/api";
+import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 
 /**
  * Search parameters for users query (frontend model).
@@ -20,7 +21,6 @@ export interface UsersSearchParams {
   activity?: "active" | "inactive" | "all";
   isOnline?: boolean;
   role?: string;
-  isHonorary?: boolean;
   isNewbie?: boolean;
   minRating?: number;
   maxRating?: number;
@@ -55,7 +55,6 @@ export function createCacheKey(params: UsersSearchParams): string {
     activity: params.activity || "active",
     isOnline: params.isOnline,
     role: params.role || "",
-    isHonorary: params.isHonorary,
     isNewbie: params.isNewbie,
     minRating: params.minRating,
     maxRating: params.maxRating,
@@ -119,7 +118,6 @@ function buildApiParams(
 
   if (params.role && params.role !== "all") apiParams.role = params.role;
   if (params.isOnline === true) apiParams.isOnline = true;
-  if (params.isHonorary !== undefined) apiParams.isHonorary = params.isHonorary;
   if (params.isNewbie !== undefined) apiParams.isNewbie = params.isNewbie;
   if (params.minRating !== undefined) apiParams.minRating = params.minRating;
   if (params.maxRating !== undefined) apiParams.maxRating = params.maxRating;
@@ -155,10 +153,19 @@ export const useCommunityStore = defineStore("community", () => {
   const searchError = ref<string | null>(null);
   const lastSearchParams = ref<UsersSearchParams | null>(null);
 
+  // Request guard to discard stale out-of-order responses
+  const requestGuard = createRequestGuard();
+
   /**
    * Search users with caching (stale-while-revalidate)
    */
   async function searchUsers(params: UsersSearchParams): Promise<void> {
+    const requestId = requestGuard.next();
+
+    // Reset error before the cache lookup so a stale error never survives
+    // a cache-hit navigation.
+    searchError.value = null;
+
     lastSearchParams.value = params;
     const cacheKey = createCacheKey(params);
     const cached = searchCache.get(cacheKey);
@@ -177,18 +184,18 @@ export const useCommunityStore = defineStore("community", () => {
     }
 
     searchLoading.value = true;
-    searchError.value = null;
 
     const { data, error } = await CommunityApi.getUsers(buildApiParams(params));
+
+    // Ignore stale responses
+    if (!requestGuard.isCurrent(requestId)) {
+      return;
+    }
 
     searchLoading.value = false;
 
     if (error) {
-      if (error.status === 403) {
-        searchError.value = "Доступ запрещен";
-      } else {
-        searchError.value = "Ошибка загрузки данных";
-      }
+      searchError.value = "Не удалось загрузить пользователей";
       return;
     }
 
@@ -241,32 +248,17 @@ export const useCommunityStore = defineStore("community", () => {
     // Backend returns a `{ resource: UserProfile }` envelope. The API client
     // doesn't unwrap automatically (typed lie), so we extract here. Fall
     // through to `data` if the response is already unwrapped (defensive
-    // against API shape divergence between endpoints).
-    selectedUser.value = unwrapResource(data);
+    // against API shape divergence between endpoints). UserProfile is a
+    // structural superset of User, so the User read is safe even when
+    // /profile returns the richer DTO.
+    selectedUser.value = unwrapResource<User>(data);
     return true;
-  }
-
-  const editableUser = ref<User | null>(null);
-
-  async function fetchEditableUser(username: Username) {
-    const { data } = await CommunityApi.getUserForUpdate(username);
-    editableUser.value = unwrapResource(data);
-  }
-
-  function unwrapResource(payload: unknown): User | null {
-    if (!payload || typeof payload !== "object") return null;
-    // UserProfile is a structural superset of User, so the `as User` cast is
-    // safe even when /profile returns the richer DTO.
-    if ("resource" in payload) return (payload as { resource: User }).resource;
-    return payload as User;
   }
 
   return {
     selectedUser,
     loadingProfile,
     trySelectProfile,
-    editableUser,
-    fetchEditableUser,
     // Search API
     searchResult,
     searchLoading,

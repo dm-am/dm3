@@ -12,7 +12,6 @@ import type {
   Post,
   Character,
   GameStatus,
-  GameRole,
   GameRecruitment,
   GamePrivacySettings,
   CommentariesAccessMode,
@@ -96,10 +95,6 @@ const createMockRecruitment = (): GameRecruitment => ({
 });
 
 const createMockPrivacySettings = (): GamePrivacySettings => ({
-  viewTemper: true,
-  viewStory: true,
-  viewSkills: true,
-  viewInventory: true,
   viewPrivates: true,
   viewDice: true,
   commentariesAccess: "Public" as CommentariesAccessMode,

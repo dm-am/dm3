@@ -7,7 +7,7 @@ namespace DM.Domain.Community.Features.UserEndorsements;
 /// Domain DTO for user endorsement (positive recommendation of a user)
 /// </summary>
 /// <remarks>
-/// BBCode is supported in Text.
+/// Text is plain text (owner decision) - no BBCode rendering.
 /// Only positive text is allowed.
 /// One endorsement per author-target pair.
 /// NO likes support.
@@ -40,7 +40,7 @@ public class UserEndorsement
     public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
-    /// Endorsement text (BBCode supported, positive only)
+    /// Endorsement text (plain text, positive only)
     /// </summary>
     public string Text { get; set; } = string.Empty;
 }

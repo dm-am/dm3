@@ -59,7 +59,7 @@ internal class UserProfileNoteApiService : IUserProfileNoteApiService
             Username = dto.SubjectUsername,
             Text = dto.Text,
             CreatedUtc = dto.CreatedUtc,
-            UpdatedUtc = dto.UpdatedUtc
+            ModifiedUtc = dto.ModifiedUtc
         };
     }
 }

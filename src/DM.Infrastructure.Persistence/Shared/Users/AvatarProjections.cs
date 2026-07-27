@@ -6,23 +6,23 @@ using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
 namespace DM.Infrastructure.Persistence.Shared.Users;
 
 /// <summary>
-/// SSOT для projection'а source-файла аватара из <see cref="DbUpload"/>.
+/// SSOT for projecting the avatar source file from <see cref="DbUpload"/>.
 ///
-/// Возвращает single source: <see cref="AvatarPicture.SourceObjectKey"/>
-/// (для imgproxy URL builder'а на API-слое) и <see cref="AvatarPicture.SourceUrl"/>
-/// (прямой публичный URL для original-варианта без transform'а).
+/// Returns a single source: <see cref="AvatarPicture.SourceObjectKey"/>
+/// (for the imgproxy URL builder at the API layer) and <see cref="AvatarPicture.SourceUrl"/>
+/// (a direct public URL for the original variant without transforms).
 ///
-/// Thumbnail-варианты (small/medium) генерируются on-the-fly через imgproxy
-/// при serving — никаких пре-сгенерированных файлов в S3.
+/// Thumbnail variants (small/medium) are generated on-the-fly via imgproxy
+/// at serving time — no pre-generated files in S3.
 ///
-/// EF translates these expressions to SQL directly; нет inline-дублирования
-/// тернарных формул <c>u.AvatarUpload == null ? null : ...</c> в каждом репозитории.
+/// EF translates these expressions to SQL directly; no inline duplication of
+/// ternary formulas <c>u.AvatarUpload == null ? null : ...</c> in every repository.
 /// </summary>
 public static class AvatarProjections
 {
     /// <summary>
-    /// Конструктор <see cref="AvatarPicture"/> из nullable <see cref="DbUpload"/>.
-    /// Безопасен в EF Select — компилируется в SQL CASE / coalesce.
+    /// Constructor of <see cref="AvatarPicture"/> from a nullable <see cref="DbUpload"/>.
+    /// Safe in an EF Select — compiles to SQL CASE / coalesce.
     /// </summary>
     public static AvatarPicture From(DbUpload? upload) =>
         upload == null
@@ -34,8 +34,8 @@ public static class AvatarProjections
             };
 
     /// <summary>
-    /// EF-translatable Expression вариант — для случаев, когда нужна
-    /// именно Expression&lt;Func&gt; (например, в reusable selector pattern).
+    /// EF-translatable Expression variant — for cases that need
+    /// an actual Expression&lt;Func&gt; (e.g. in a reusable selector pattern).
     /// </summary>
     public static readonly Expression<System.Func<User, AvatarPicture>> FromUser = user =>
         user.AvatarUpload == null

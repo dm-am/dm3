@@ -7,7 +7,6 @@ import {
   type UserNotification,
 } from "@/shared/api/models/notifications";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { useToast } from "@/shared/lib/composables/useToast";
 
@@ -17,8 +16,6 @@ const loading = ref(false);
 const hasMore = ref(true);
 const skip = ref(0);
 const take = 20;
-
-const activeFilter = ref<"all" | "unread">("all");
 
 const filteredNotifications = computed(() => {
   return notifications.value;
@@ -92,28 +89,28 @@ const getNotificationLink = (notification: UserNotification): string | null => {
 
     case NotificationType.NewTopicInSubscribedBoard:
     case NotificationType.NewTopicFromSubscribedAuthor:
-      return payload.topicId ? `/forum/topics/${payload.topicId}` : null;
+      return payload.topicId ? `/forum-topic/${payload.topicId}` : null;
 
     case NotificationType.NewCommentInSubscribedTopic:
-      return payload.topicId ? `/forum/topics/${payload.topicId}` : null;
+      return payload.topicId ? `/forum-topic/${payload.topicId}` : null;
 
     case NotificationType.NewGameFromSubscribedAuthor:
     case NotificationType.NewGame:
-      return payload.gameId ? `/games/${payload.gameId}` : null;
+      return payload.gameId ? `/game/${payload.gameId}` : null;
 
     case NotificationType.NewPostInSubscribedGame:
-      return payload.gameId ? `/games/${payload.gameId}` : null;
+      return payload.gameId ? `/game/${payload.gameId}` : null;
 
     case NotificationType.NewCharacter:
-      return payload.gameId ? `/games/${payload.gameId}/characters` : null;
+      return payload.gameId ? `/game/${payload.gameId}/characters` : null;
 
     case NotificationType.LikedTopic:
     case NotificationType.NewForumTopic:
-      return payload.topicId ? `/forum/topics/${payload.topicId}` : null;
+      return payload.topicId ? `/forum-topic/${payload.topicId}` : null;
 
     case NotificationType.NewForumComment:
     case NotificationType.LikedForumComment:
-      return payload.topicId ? `/forum/topics/${payload.topicId}` : null;
+      return payload.topicId ? `/forum-topic/${payload.topicId}` : null;
 
     default:
       return null;
@@ -214,7 +211,7 @@ onMounted(() => fetchNotifications());
     </div>
 
     <secondary-text v-if="loading && notifications.length === 0"
-      >Загрузка...</secondary-text
+      >Загрузка…</secondary-text
     >
 
     <template v-else-if="notifications.length === 0">
@@ -263,7 +260,7 @@ onMounted(() => fetchNotifications());
         :disabled="loading"
         @click="fetchNotifications()"
       >
-        <template v-if="loading">Загрузка...</template>
+        <template v-if="loading">Загрузка…</template>
         <template v-else>Загрузить еще</template>
       </button>
     </div>

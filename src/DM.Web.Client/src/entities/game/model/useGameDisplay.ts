@@ -185,7 +185,7 @@ export function useGameDisplay() {
    *   list is PC-only by construction).
    * - Private rooms: sourced from room.accesses — each grant is
    *   either a character (character + owner pair) or a reader (user
-   *   only, rendered as "• username · читатель"). Characters whose
+   *   only, rendered as "- username — читатель"). Characters whose
    *   `isNpc` flag is true are skipped here. If `room.accesses` is
    *   missing, falls back to `room.claims` for character-based
    *   entries, same NPC filter applied.
@@ -208,11 +208,11 @@ export function useGameDisplay() {
             // Full is the common case, so we mark only ReadOnly explicitly.
             const owner = a.character.author?.username ?? "?";
             const suffix =
-              a.policy === RoomAccessPolicy.ReadOnly ? " · чтение" : "";
-            lines.push(`• ${a.character.name} (${owner})${suffix}`);
+              a.policy === RoomAccessPolicy.ReadOnly ? " — чтение" : "";
+            lines.push(`- ${a.character.name} (${owner})${suffix}`);
           } else if (a.user?.username) {
             // Readers are always ReadOnly by definition.
-            lines.push(`• ${a.user.username} · читатель`);
+            lines.push(`- ${a.user.username} — читатель`);
           }
         }
         return lines;
@@ -223,7 +223,7 @@ export function useGameDisplay() {
         if (c.character?.isNpc) continue; // PC-only
         const name = c.character?.name ?? "?";
         const owner = c.character?.author?.username ?? "?";
-        lines.push(`• ${name} (${owner})`);
+        lines.push(`- ${name} (${owner})`);
       }
       return lines;
     }
@@ -232,7 +232,7 @@ export function useGameDisplay() {
     // filters NPCs in the ActiveCharacters batch query, so this list
     // is already PC-only.
     for (const c of game?.activeCharacters ?? []) {
-      lines.push(`• ${c.name} (${c.ownerUsername})`);
+      lines.push(`- ${c.name} (${c.ownerUsername})`);
     }
     return lines;
   }
@@ -288,8 +288,8 @@ export function useGameDisplay() {
    * Pulse, game page). Matches the characters tooltip on the games table:
    *
    *   Персонажи:
-   *   • CharName (ownerUsername)
-   *   • CharName (ownerUsername)
+   *   - CharName (ownerUsername)
+   *   - CharName (ownerUsername)
    *
    *   Доступ: открытый
    *
@@ -405,6 +405,64 @@ export function useGameDisplay() {
     return diffMs < sevenDaysMs;
   }
 
+  /**
+   * Format slots display for status column: "[N/M]" or "[N/∞]"
+   * Moved verbatim from widgets/games-table/GamesDataTable.vue (SSOT extraction).
+   */
+  function formatSlots(row: {
+    recruitment?: { pcCount: number; pcLimit?: number | null };
+  }): string {
+    const pcCount = row.recruitment?.pcCount ?? 0;
+    const pcLimit = row.recruitment?.pcLimit;
+    return pcLimit != null ? `[${pcCount}/${pcLimit}]` : `[${pcCount}/∞]`;
+  }
+
+  /**
+   * Build slots tooltip with active characters list and free-slots summary.
+   * Moved verbatim from widgets/games-table/GamesDataTable.vue (SSOT extraction).
+   */
+  function buildSlotsTooltip(row: {
+    recruitment?: { pcCount: number; pcLimit?: number | null };
+    activeCharacters?: { name: string; ownerUsername: string }[];
+  }): string {
+    const chars = row.activeCharacters ?? [];
+    const pcCount = row.recruitment?.pcCount ?? 0;
+    const pcLimit = row.recruitment?.pcLimit;
+
+    const lines: string[] = [];
+
+    // Characters
+    if (chars.length > 0) {
+      lines.push("Персонажи:");
+      chars.forEach((c) => lines.push(`- ${c.name} (${c.ownerUsername})`));
+    } else {
+      lines.push("Нет персонажей");
+    }
+
+    // Free slots
+    if (pcLimit != null) {
+      const free = Math.max(0, pcLimit - pcCount);
+      if (free > 0) {
+        lines.push(`\nСвободных мест: ${free}`);
+      } else {
+        lines.push("\nМест нет");
+      }
+    } else {
+      lines.push("\nМест: без ограничений");
+    }
+
+    return lines.join("\n");
+  }
+
+  /**
+   * Build assistant(s) tooltip: "Ассистент: X" / "Ассистенты: X, Y".
+   * Moved verbatim from widgets/games-table/GamesDataTable.vue (SSOT extraction).
+   */
+  function buildAssistantTooltip(assistants: { username: string }[]): string {
+    const names = assistants.map((a) => a.username).join(", ");
+    return `Ассистент${assistants.length > 1 ? "ы" : ""}: ${names}`;
+  }
+
   return {
     formatPcCount,
     buildTooltip,
@@ -422,5 +480,8 @@ export function useGameDisplay() {
     formatStatusDate,
     formatStatusDateFull,
     isNew,
+    formatSlots,
+    buildSlotsTooltip,
+    buildAssistantTooltip,
   };
 }

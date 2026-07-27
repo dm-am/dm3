@@ -5,8 +5,6 @@
 <script setup lang="ts"></script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 .lead-text
   margin: 0 0 $medium
   // Ordinary body text — same color and size as the page content, not a

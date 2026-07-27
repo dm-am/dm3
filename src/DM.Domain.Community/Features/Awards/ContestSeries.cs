@@ -4,61 +4,61 @@ using DM.Domain.Core.Enums;
 namespace DM.Domain.Community.Features.Awards;
 
 /// <summary>
-/// Серия конкурса. Каждый конкурс — отдельная запись со сквозным
-/// глобальным <see cref="Number"/> в рамках типа. Награды (UserAward)
-/// ссылаются на серию через FK; типы наград (<see cref="AwardType"/>)
-/// timeless и не дублируются для каждого года.
+/// Contest series. Each contest is a separate record with a global
+/// sequential <see cref="Number"/> within its type. Awards (UserAward)
+/// reference the series via FK; award types (<see cref="AwardType"/>)
+/// are timeless and are not duplicated for each year.
 /// </summary>
 public class ContestSeries
 {
-    /// <summary>Идентификатор.</summary>
+    /// <summary>Identifier.</summary>
     public Guid Id { get; set; }
 
-    /// <summary>Тип конкурса (литературный, арт и т.д.).</summary>
+    /// <summary>Contest type (literary, art, etc.).</summary>
     public ContestType ContestType { get; set; }
 
     /// <summary>
-    /// Сквозной номер конкурса в рамках типа (23-й литературный, 1-й арт).
+    /// Sequential contest number within the type (23rd literary, 1st art).
     /// UNIQUE(ContestType, Number).
     /// </summary>
     public int Number { get; set; }
 
-    /// <summary>Год проведения (отображается в year-бейдже на тайле).</summary>
+    /// <summary>Year held (shown in the year badge on the tile).</summary>
     public int Year { get; set; }
 
-    /// <summary>Ссылка на форумный топик с итогами конкурса (опционально).</summary>
+    /// <summary>Link to the forum topic with contest results (optional).</summary>
     public string? TopicUrl { get; set; }
 
-    /// <summary>Активна = доступна для выдачи наград (в dropdown).</summary>
+    /// <summary>Active = available for granting awards (in the dropdown).</summary>
     public bool IsActive { get; set; }
 }
 
-/// <summary>Запрос на создание новой серии.</summary>
+/// <summary>Request to create a new series.</summary>
 public class CreateContestSeries
 {
-    /// <summary>Тип конкурса.</summary>
+    /// <summary>Contest type.</summary>
     public ContestType ContestType { get; set; }
-    /// <summary>Сквозной номер в рамках типа.</summary>
+    /// <summary>Sequential number within the type.</summary>
     public int Number { get; set; }
-    /// <summary>Год.</summary>
+    /// <summary>Year.</summary>
     public int Year { get; set; }
-    /// <summary>Ссылка на топик с итогами (опц).</summary>
+    /// <summary>Link to the results topic (optional).</summary>
     public string? TopicUrl { get; set; }
 }
 
-/// <summary>Запрос на частичное обновление серии.</summary>
+/// <summary>Request to partially update a series.</summary>
 public class UpdateContestSeries
 {
-    /// <summary>Идентификатор обновляемой записи.</summary>
+    /// <summary>Identifier of the record being updated.</summary>
     public Guid Id { get; set; }
-    /// <summary>Новый ContestType (null = не менять).</summary>
+    /// <summary>New ContestType (null = leave unchanged).</summary>
     public ContestType? ContestType { get; set; }
-    /// <summary>Новый Number (null = не менять).</summary>
+    /// <summary>New Number (null = leave unchanged).</summary>
     public int? Number { get; set; }
-    /// <summary>Новый Year (null = не менять).</summary>
+    /// <summary>New Year (null = leave unchanged).</summary>
     public int? Year { get; set; }
-    /// <summary>Новый TopicUrl (null = не менять; пустая строка = очистить).</summary>
+    /// <summary>New TopicUrl (null = leave unchanged; empty string = clear).</summary>
     public string? TopicUrl { get; set; }
-    /// <summary>Новый IsActive (null = не менять).</summary>
+    /// <summary>New IsActive (null = leave unchanged).</summary>
     public bool? IsActive { get; set; }
 }

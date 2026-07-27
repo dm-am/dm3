@@ -65,46 +65,6 @@ public class Character : ISoftDeletable, IHasEditHistory<CharacterEdit>
     public string Name { get; set; } = null!;
 
     /// <summary>
-    /// Race (e.g. elf, asari, human)
-    /// </summary>
-    public string? Race { get; set; }
-
-    /// <summary>
-    /// Class (e.g. wizard, sniper)
-    /// </summary>
-    public string? Class { get; set; }
-
-    /// <summary>
-    /// Old-school-D&amp;D stuff
-    /// </summary>
-    public Alignment? Alignment { get; set; }
-
-    /// <summary>
-    /// Appearance
-    /// </summary>
-    public string? Appearance { get; set; }
-
-    /// <summary>
-    /// Temper
-    /// </summary>
-    public string? Temper { get; set; }
-
-    /// <summary>
-    /// Life story
-    /// </summary>
-    public string? Story { get; set; }
-
-    /// <summary>
-    /// Skills
-    /// </summary>
-    public string? Skills { get; set; }
-
-    /// <summary>
-    /// Inventory
-    /// </summary>
-    public string? Inventory { get; set; }
-
-    /// <summary>
     /// NPC flag
     /// </summary>
     public bool IsNpc { get; set; }

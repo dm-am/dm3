@@ -1,21 +1,21 @@
 /**
- * Client-side image compression — режет аватар до 1024×1024 (max-side)
- * перед upload'ом, экономит bandwidth на mobile. Symmetric с backend
+ * Client-side image compression — cuts the avatar down to 1024×1024 (max side)
+ * before upload, saving bandwidth on mobile. Symmetric with the backend
  * OriginalMaxDimension=1024.
  *
- * Без зависимостей: чистый Canvas API. WebP output если браузер поддерживает,
- * иначе fallback на JPEG. Качество 90 — баланс размера и визуала.
+ * No dependencies: pure Canvas API. WebP output if the browser supports it,
+ * otherwise a JPEG fallback. Quality 90 — a size/visual balance.
  *
- * Если файл уже меньше лимита по размерам — возвращаем как есть (no-op).
+ * If the file is already under the size limits, it is returned as is (no-op).
  */
 
 const MAX_DIMENSION = 1024;
 const TARGET_QUALITY = 0.9;
-const MIN_COMPRESS_THRESHOLD_BYTES = 200 * 1024; // <200 KB — не сжимаем
+const MIN_COMPRESS_THRESHOLD_BYTES = 200 * 1024; // <200 KB — do not compress
 
 /**
- * Поддерживается ли WebP encoding в canvas.toBlob.
- * Тестируем 1×1 canvas → blob и читаем mime. Кешируется per-session.
+ * Whether WebP encoding is supported in canvas.toBlob.
+ * Test a 1×1 canvas → blob and read the mime. Cached per session.
  */
 let webpSupportPromise: Promise<boolean> | null = null;
 function isWebpSupported(): Promise<boolean> {
@@ -32,17 +32,17 @@ function isWebpSupported(): Promise<boolean> {
 }
 
 export interface CompressOptions {
-  /** Максимальная сторона. По умолчанию 1024 (sync с backend). */
+  /** Maximum side. Defaults to 1024 (in sync with the backend). */
   maxDimension?: number;
-  /** Quality 0..1 для lossy форматов. По умолчанию 0.9. */
+  /** Quality 0..1 for lossy formats. Defaults to 0.9. */
   quality?: number;
 }
 
 /**
- * Сжать изображение через Canvas. Возвращает новый File с расширением .webp
- * (или .jpg fallback) и оригинальным base-name. Если изображение и так
- * маленькое (площадь ≤ MAX×MAX и размер ≤ 200 KB), возвращает оригинальный
- * File без изменений (no-op).
+ * Compress an image via Canvas. Returns a new File with a .webp extension
+ * (or a .jpg fallback) and the original base name. If the image is already
+ * small (area ≤ MAX×MAX and size ≤ 200 KB), returns the original
+ * File unchanged (no-op).
  */
 export async function compressImage(
   file: File,
@@ -51,13 +51,13 @@ export async function compressImage(
   const maxDim = options.maxDimension ?? MAX_DIMENSION;
   const quality = options.quality ?? TARGET_QUALITY;
 
-  // Quick exit: маленькие файлы не трогаем — overhead compression > выигрыш.
+  // Quick exit: leave small files alone — compression overhead > gains.
   if (file.size <= MIN_COMPRESS_THRESHOLD_BYTES) {
     return file;
   }
 
   if (!file.type.startsWith("image/")) {
-    return file; // Не-image — не сжимаем.
+    return file; // Not an image — do not compress.
   }
 
   const bitmap = await createImageBitmapSafe(file);
@@ -65,10 +65,10 @@ export async function compressImage(
 
   try {
     if (bitmap.width <= maxDim && bitmap.height <= maxDim) {
-      return file; // Уже подходит по размерам.
+      return file; // Already fits the size limits.
     }
 
-    // Resize, сохраняем aspect ratio.
+    // Resize, preserving the aspect ratio.
     const scale = Math.min(maxDim / bitmap.width, maxDim / bitmap.height);
     const w = Math.round(bitmap.width * scale);
     const h = Math.round(bitmap.height * scale);
@@ -86,7 +86,7 @@ export async function compressImage(
 
     const blob = await canvasToBlob(canvas, outType, quality);
     if (!blob || blob.size >= file.size) {
-      // Сжатие не выгодно — возвращаем оригинал.
+      // Compression is not worth it — return the original.
       return file;
     }
 
@@ -110,8 +110,8 @@ function canvasToBlob(
 }
 
 /**
- * createImageBitmap с fallback на <img>+canvas для Safari, где
- * createImageBitmap может не поддерживать все форматы.
+ * createImageBitmap with an <img>+canvas fallback for Safari, where
+ * createImageBitmap may not support all formats.
  */
 async function createImageBitmapSafe(
   file: File,

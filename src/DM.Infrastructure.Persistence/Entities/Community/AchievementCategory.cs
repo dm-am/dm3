@@ -8,10 +8,10 @@ using DM.Domain.Core.Enums;
 namespace DM.Infrastructure.Persistence.Entities.Community;
 
 /// <summary>
-/// DAL для категории достижений (цепочки тиров одной метрики).
-/// SSOT для IconName, Description, Metric, SortOrder — все, что одинаково
-/// для всех 4 тиров цепочки. Тиры (AchievementType) хранят только то, что
-/// уникально на тир: Title, Threshold, Tier.
+/// DAL for an achievement category (a chain of tiers for one metric).
+/// SSOT for IconName, Description, Metric, SortOrder — everything shared
+/// by all 4 tiers of the chain. Tiers (AchievementType) store only what is
+/// unique per tier: Title, Threshold, Tier.
 /// </summary>
 [Table("AchievementCategories")]
 public class AchievementCategory

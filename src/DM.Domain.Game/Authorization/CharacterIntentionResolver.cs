@@ -8,8 +8,7 @@ namespace DM.Domain.Game.Authorization;
 
 /// <inheritdoc cref="IIntentionResolver" />
 internal class CharacterIntentionResolver :
-    IIntentionResolver<CharacterIntention, CharacterToUpdate>,
-    IIntentionResolver<CharacterIntention, (Character, GameDetails)>
+    IIntentionResolver<CharacterIntention, CharacterToUpdate>
 {
     /// <inheritdoc />
     public bool IsAllowed(IAuthorizationSubject user, CharacterIntention intention,
@@ -27,6 +26,9 @@ internal class CharacterIntentionResolver :
             CharacterIntention.EditPrivacySettings when characterOwned => gameActive,
             CharacterIntention.EditMasterSettings when gameOwned => true,
             CharacterIntention.Delete when characterOwned => gameActive,
+            // NPCs have no author (AuthorId is null), so ownership never
+            // matches — the master and assistants delete them instead.
+            CharacterIntention.Delete when gameOwned => target.IsNpc,
             CharacterIntention.Accept when gameOwned => target.Status == CharacterStatus.UnderReview ||
                                                         target.Status == CharacterStatus.Declined,
             CharacterIntention.Decline when gameOwned => target.Status == CharacterStatus.UnderReview,
@@ -35,44 +37,6 @@ internal class CharacterIntentionResolver :
             CharacterIntention.Exile when gameOwned => target.Status == CharacterStatus.Active,
             CharacterIntention.Leave when characterOwned => target.Status == CharacterStatus.Active,
             CharacterIntention.Return when characterOwned => target.Status == CharacterStatus.Retired && target.IsPlayerLeft,
-            _ => false
-        };
-    }
-
-    private static readonly CharacterIntention[] CharacterGameIntentions =
-    {
-        CharacterIntention.ViewTemper,
-        CharacterIntention.ViewStory,
-        CharacterIntention.ViewSkills,
-        CharacterIntention.ViewInventory
-    };
-
-    /// <inheritdoc />
-    public bool IsAllowed(IAuthorizationSubject user, CharacterIntention intention, (Character, GameDetails) target)
-    {
-        var (character, game) = target;
-
-        if (!CharacterGameIntentions.Contains(intention))
-        {
-            return false;
-        }
-
-        if (game.GetRoles(user.UserId).HasEditAccess())
-        {
-            return true;
-        }
-
-        if (character.Author.UserId == user.UserId)
-        {
-            return true;
-        }
-
-        return intention switch
-        {
-            CharacterIntention.ViewTemper when !game.HideTemper => true,
-            CharacterIntention.ViewStory when !game.HideStory => true,
-            CharacterIntention.ViewSkills when !game.HideSkills => true,
-            CharacterIntention.ViewInventory when !game.HideInventory => true,
             _ => false
         };
     }

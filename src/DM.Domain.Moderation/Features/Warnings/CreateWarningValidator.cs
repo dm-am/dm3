@@ -14,7 +14,7 @@ internal class CreateWarningValidator : AbstractValidator<CreateWarning>
             .NotEmpty().WithMessage(ValidationError.Empty);
 
         RuleFor(w => w.Points)
-            .InclusiveBetween(1, 3).WithMessage(ValidationError.Invalid);
+            .InclusiveBetween(0, 6).WithMessage(ValidationError.Invalid);
 
         RuleFor(w => w.Reason)
             .NotEmpty().WithMessage(ValidationError.Empty)

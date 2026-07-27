@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
@@ -104,6 +105,13 @@ internal class MessageService : IMessageService
             }
         }
 
+        // Global and game-room messages render on surfaces where [mod] is a
+        // green mod block; direct/group messages do not. Strip [mod] authored
+        // by a non-moderator in the former; Moderator+ may author it.
+        if (chat.Type is ChatType.Global or ChatType.GameRoom)
+            createMessage.Text = ModBlockSanitizer.SanitizeForAuthor(
+                createMessage.Text, _identityProvider.Current.User.Role);
+
         var message = _factory.Create(createMessage, userId);
 
         // If there's an active event, link the message to it
@@ -122,6 +130,12 @@ internal class MessageService : IMessageService
         await _unreadCountersRepository.IncrementExcludingAsync(
             chat.Id, UnreadEntryType.Message, userId);
         await _producer.SendAsync(EventType.NewMessage, message.MessageId);
+        if (chat.Type == ChatType.Global)
+        {
+            // Global chat is public: a dedicated event lets realtime
+            // consumers broadcast it to all connected clients
+            await _producer.SendAsync(EventType.NewGlobalChatMessage, message.MessageId);
+        }
 
         return result;
     }
@@ -160,10 +174,17 @@ internal class MessageService : IMessageService
 
         _intentionManager.ThrowIfForbidden(MessageIntention.Edit, message);
 
+        var text = updateMessage.Text?.Trim();
+        // Strip [mod] authored by a non-moderator when editing a message on a
+        // surface that renders it (global / game-room chat); Moderator+ may
+        // author it. Direct/group edits keep [mod] as literal text.
+        if (!string.IsNullOrEmpty(text) && message.ChatType is ChatType.Global or ChatType.GameRoom)
+            text = ModBlockSanitizer.SanitizeForAuthor(text, _identityProvider.Current.User.Role);
+
         var updateEntity = new UpdateMessageEntity
         {
             MessageId = updateMessage.MessageId,
-            Text = updateMessage.Text?.Trim()
+            Text = text
         };
 
         var updatedMessage = await _repository.Update(updateEntity);

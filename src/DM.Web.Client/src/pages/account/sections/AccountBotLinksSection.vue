@@ -71,7 +71,7 @@
           <p class="link-instructions">
             1. Откройте бота:
             <a :href="discordBotUrl" target="_blank" class="bot-link">
-              DM3 Bot
+              Dungeon Master Bot
             </a>
           </p>
           <p class="link-instructions">2. Отправьте команду:</p>
@@ -260,8 +260,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Inputs"
 @import "../AccountPage.styles"
 

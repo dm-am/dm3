@@ -1,12 +1,30 @@
 <script setup lang="ts">
+/**
+ * ModerationNotes — moderator notes about a user (product doc 4.2.2.20).
+ *
+ * Divergence from the doc, kept intentionally: the doc frames this as ONE
+ * note per profile, but the backend models it as a LIST of authored notes
+ * (each carries its own author, timestamps and per-note canEdit/canDelete —
+ * see ModeratedProfileNote / GET moderatorNotes). The multi-note model is the
+ * richer, correct one — several moderators can leave distinct, attributed
+ * notes over time rather than overwriting a single shared field — so it is
+ * preserved and flagged rather than collapsed to a single note.
+ *
+ * The note text is now authored with the BBCode editor (doc: "BBCode editor"),
+ * matching the warning/ban reason inputs. Display stays plain text: the
+ * moderation domain stores the raw text and does not server-render it (the
+ * warning reason on ModerationWarnings.vue is shown the same way). Rendering
+ * BBCode here would need a server-rendered HTML field on the note DTO.
+ */
 import { ref } from "vue";
 import type { ModNote } from "@/shared/api/models/moderation";
 import type { Username } from "@/shared/api/models/community";
 import { moderationApi } from "@/shared/api";
+import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import Button from "@/shared/ui/Button/Button.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
-import dayjs from "dayjs";
+import { formatDateFull } from "@/shared/lib/utils/datetime";
 
 const props = defineProps<{
   notes: ModNote[];
@@ -25,10 +43,6 @@ const creating = ref(false);
 
 const editingNoteId = ref<string | null>(null);
 const editText = ref("");
-
-function formatDateTime(dateStr: string): string {
-  return dayjs(dateStr).format("DD.MM.YYYY [в] HH:mm");
-}
 
 async function createNote() {
   if (!newNoteText.value.trim()) return;
@@ -88,31 +102,44 @@ async function deleteNote(noteId: string) {
     <div v-for="note in notes" :key="note.id" class="mod-note">
       <div class="mod-note_header">
         <strong>{{ note.authorUsername }}</strong>
-        <secondary-text>{{ formatDateTime(note.createdUtc) }}</secondary-text>
+        <secondary-text>{{ formatDateFull(note.createdUtc) }}</secondary-text>
         <secondary-text v-if="note.modifiedUtc">
-          (изменено {{ formatDateTime(note.modifiedUtc) }})
+          (изменено {{ formatDateFull(note.modifiedUtc) }})
         </secondary-text>
       </div>
 
       <template v-if="editingNoteId !== note.id">
         <div class="mod-note_text">{{ note.text }}</div>
         <div v-if="note.canEdit || note.canDelete" class="mod-note_actions">
-          <a v-if="note.canEdit" class="mod-action" @click="startEdit(note)">
+          <button
+            v-if="note.canEdit"
+            type="button"
+            class="mod-action"
+            @click="startEdit(note)"
+          >
             Изменить
-          </a>
-          <a
+          </button>
+          <button
             v-if="note.canDelete"
+            type="button"
             class="mod-action mod-action-danger"
             @click="deleteNote(note.id)"
           >
             Удалить
-          </a>
+          </button>
         </div>
       </template>
 
       <template v-else>
         <div class="mod-note_edit">
-          <textarea v-model="editText" rows="3" class="mod-textarea" />
+          <BBCodeEditor
+            v-model="editText"
+            context="common"
+            placeholder="Заметка модератора..."
+            :min-height="80"
+            :max-height="250"
+            :is-moderator="true"
+          />
           <div class="mod-note_edit-actions">
             <Button :disabled="!editText.trim()" @click="saveEdit(note.id)">
               Сохранить
@@ -124,11 +151,14 @@ async function deleteNote(noteId: string) {
     </div>
 
     <div v-if="canCreate" class="mod-note_create">
-      <textarea
+      <BBCodeEditor
         v-model="newNoteText"
-        rows="3"
+        context="common"
         placeholder="Заметка модератора..."
-        class="mod-textarea"
+        :min-height="80"
+        :max-height="250"
+        :is-moderator="true"
+        :disabled="creating"
       />
       <Button
         :disabled="!newNoteText.trim()"
@@ -142,10 +172,6 @@ async function deleteNote(noteId: string) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-@import "src/assets/styles/Inputs"
-
 .mod-section
   margin-bottom: $medium
 
@@ -175,7 +201,11 @@ async function deleteNote(noteId: string) {
   margin-top: $minor
 
 .mod-action
+  padding: 0
+  border: none
+  background: none
   cursor: pointer
+  font-family: inherit
   font-size: $secondary-font-size
   color: $link
   &:hover
@@ -189,12 +219,6 @@ async function deleteNote(noteId: string) {
 
 .mod-note_edit
   margin-top: $minor
-
-.mod-textarea
-  width: 100%
-  resize: vertical
-  box-sizing: border-box
-  +input()
 
 .mod-note_edit-actions
   display: flex

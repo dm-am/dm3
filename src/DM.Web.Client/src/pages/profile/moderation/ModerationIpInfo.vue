@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { useExpandableSection } from "@/shared/lib/composables";
 import { symbols } from "@/shared/lib/utils/icons";
 import type { UserIpInfo, LoginRecord } from "@/shared/api/models/moderation";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import dayjs from "dayjs";
+import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
 
 defineProps<{
   email?: string;
@@ -11,15 +12,16 @@ defineProps<{
   loginHistory?: LoginRecord[];
 }>();
 
+// Login-history table — a content expandable section (unified reveal
+// animation + the page-wide "Развернуть/Свернуть все" toggle).
 const showLoginHistory = ref(false);
-
-function formatDate(dateStr: string): string {
-  return dayjs(dateStr).format("DD.MM.YYYY");
-}
-
-function formatDateTime(dateStr: string): string {
-  return dayjs(dateStr).format("DD.MM.YYYY [в] HH:mm");
-}
+const historyZoneRef = ref<HTMLElement | null>(null);
+const { toggle: toggleLoginHistory, zoneBindings: historyZoneBindings } =
+  useExpandableSection({
+    el: historyZoneRef,
+    model: showLoginHistory,
+    label: "ModerationLoginHistory",
+  });
 </script>
 
 <template>
@@ -57,48 +59,58 @@ function formatDateTime(dateStr: string): string {
     </div>
 
     <div class="mod-subsection">
-      <h5
-        class="mod-subsection_title mod-collapsible"
-        @click="showLoginHistory = !showLoginHistory"
-      >
-        История входов ({{ loginHistory?.length ?? 0 }})
-        <span class="mod-expand-icon">{{
-          showLoginHistory ? symbols.triangleDown : symbols.triangleRight
-        }}</span>
+      <h5 class="mod-subsection_title">
+        <button
+          type="button"
+          class="mod-collapsible"
+          :aria-expanded="showLoginHistory"
+          @click="toggleLoginHistory()"
+        >
+          История входов ({{ loginHistory?.length ?? 0 }})
+          <span class="mod-expand-icon" aria-hidden="true">{{
+            showLoginHistory ? symbols.triangleDown : symbols.triangleRight
+          }}</span>
+        </button>
       </h5>
-      <table v-if="showLoginHistory && loginHistory?.length" class="mod-table">
-        <thead>
-          <tr>
-            <th>Дата</th>
-            <th>IP</th>
-            <th>Результат</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="record in loginHistory"
-            :key="`${record.loginUtc}-${record.ipAddress}`"
-            :class="{ 'mod-row-failed': !record.isSuccessful }"
-          >
-            <td>{{ formatDateTime(record.loginUtc) }}</td>
-            <td class="mod-ip">{{ record.ipAddress }}</td>
-            <td>
-              <span v-if="record.isSuccessful" class="mod-success">{{
-                symbols.checkmark
-              }}</span>
-              <span v-else class="mod-fail">{{ symbols.cross }}</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div
+        ref="historyZoneRef"
+        class="expand-zone"
+        v-bind="historyZoneBindings"
+      >
+        <table
+          v-if="showLoginHistory && loginHistory?.length"
+          class="mod-table"
+        >
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>IP</th>
+              <th>Результат</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="record in loginHistory"
+              :key="`${record.loginUtc}-${record.ipAddress}`"
+              :class="{ 'mod-row-failed': !record.isSuccessful }"
+            >
+              <td>{{ formatDateFull(record.loginUtc) }}</td>
+              <td class="mod-ip">{{ record.ipAddress }}</td>
+              <td>
+                <span v-if="record.isSuccessful" class="mod-success">{{
+                  symbols.checkmark
+                }}</span>
+                <span v-else class="mod-fail">{{ symbols.cross }}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .mod-section
   margin-bottom: $medium
 
@@ -124,9 +136,20 @@ function formatDateTime(dateStr: string): string {
   font-size: $secondary-font-size
   color: $heading-alt
 
+// Button reset so the toggle inside the <h5> looks exactly like the plain
+// heading text it replaced (full-width clickable row, inherited heading
+// font/color, no button chrome).
 .mod-collapsible
+  display: block
+  width: 100%
+  box-sizing: border-box
+  border: none
+  background: none
+  padding: 0
+  font: inherit
+  color: inherit
+  text-align: left
   cursor: pointer
-  user-select: none
   &:hover
     color: $link-hover
 

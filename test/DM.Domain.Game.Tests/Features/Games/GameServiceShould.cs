@@ -216,12 +216,13 @@ public class GameServiceShould : UnitTestBase
     public async Task AuthorizeDeleteGameAction()
     {
         var gameId = Guid.NewGuid();
-        var game = new GameDto
+        var game = new GameDetails
         {
             Id = gameId,
-            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
+            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
+            Recruitment = new GameRecruitment()
         };
-        _repository.Setup(r => r.GetGame(gameId, _currentUserId, It.IsAny<CancellationToken>())).ReturnsAsync(game);
+        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<CancellationToken>())).ReturnsAsync(game);
         _repository.Setup(r => r.Delete(gameId, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(gameId);
@@ -233,12 +234,13 @@ public class GameServiceShould : UnitTestBase
     public async Task PublishEventWhenDeletingGame()
     {
         var gameId = Guid.NewGuid();
-        var game = new GameDto
+        var game = new GameDetails
         {
             Id = gameId,
-            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
+            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
+            Recruitment = new GameRecruitment()
         };
-        _repository.Setup(r => r.GetGame(gameId, _currentUserId, It.IsAny<CancellationToken>())).ReturnsAsync(game);
+        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<CancellationToken>())).ReturnsAsync(game);
         _repository.Setup(r => r.Delete(gameId, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(gameId);

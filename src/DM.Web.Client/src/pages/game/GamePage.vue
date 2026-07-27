@@ -1,64 +1,20 @@
 <script setup lang="ts">
+// Thin game layout: the game title (H1) and a <router-view> for the active
+// sub-page. Status, system, setting, master and assistants live in the info
+// table (GameDetails), not duplicated in a header strip. All per-game
+// navigation and actions live in the left-sidebar GamePanel.
 import { computed, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
-import { useUserStore } from "@/entities/user";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
-import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { UserLink } from "@/entities/user";
-import Button from "@/shared/ui/Button/Button.vue";
-import { GameRole, GameStatus } from "@/entities/game";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
-const { user } = storeToRefs(useUserStore());
-const { game, gameLoading, gameError } = storeToRefs(gameStore);
+const { game, gameError } = storeToRefs(gameStore);
 
 const gameId = computed(() => route.params.id as string);
-
-const statusLabels: Partial<Record<GameStatus, string>> = {
-  [GameStatus.Draft]: "Черновик",
-  [GameStatus.Active]: "Активная",
-  [GameStatus.Closed]: "Закрыта",
-};
-
-const statusClass = computed(() => {
-  if (!game.value) return "";
-  switch (game.value.status) {
-    case GameStatus.Active:
-      return "status-active";
-    case GameStatus.Closed:
-      return "status-finished";
-    default:
-      return "";
-  }
-});
-
-const isSubscribed = computed(() => {
-  if (!game.value?.participation) return false;
-  return game.value.participation.includes(GameRole.Reader);
-});
-
-const isPlayer = computed(() => {
-  if (!game.value?.participation) return false;
-  return (
-    game.value.participation.includes(GameRole.Player) ||
-    game.value.participation.includes(GameRole.Mentor) ||
-    game.value.participation.includes(GameRole.Master)
-  );
-});
-
-const canSubscribe = computed(() => user.value && !isPlayer.value);
-
-async function handleSubscribe() {
-  if (isSubscribed.value) {
-    await gameStore.unsubscribe();
-  } else {
-    await gameStore.subscribe();
-  }
-}
 
 useFetchData(async () => {
   await gameStore.loadGame(gameId.value);
@@ -82,80 +38,7 @@ onUnmounted(() => {
 <template>
   <template v-if="game">
     <div class="game-header">
-      <div class="game-title-row">
-        <page-title>{{ game.title }}</page-title>
-        <span :class="['game-status', statusClass]">
-          {{ statusLabels[game.status] ?? game.status }}
-        </span>
-      </div>
-      <secondary-text class="game-meta">
-        <span v-if="game.system">{{ game.system }}</span>
-        <span v-if="game.system && game.setting"> / </span>
-        <span v-if="game.setting">{{ game.setting }}</span>
-        <span class="game-master">
-          Мастер: <user-link :user="game.master" />
-        </span>
-        <span v-if="game.fullAssistants?.length" class="game-assistant">
-          {{ game.fullAssistants.length === 1 ? "Ассистент" : "Ассистенты" }}:
-          <template
-            v-for="(assistant, index) in game.fullAssistants"
-            :key="assistant.id"
-          >
-            <user-link :user="assistant" /><span
-              v-if="index < game.fullAssistants.length - 1"
-              >,
-            </span>
-          </template>
-        </span>
-      </secondary-text>
-    </div>
-
-    <nav class="game-tabs">
-      <router-link
-        :to="{ name: 'game', params: { id: game.publicId || game.id } }"
-        class="tabs-link"
-      >
-        Информация
-      </router-link>
-      <router-link
-        :to="{ name: 'game-rooms', params: { id: game.publicId || game.id } }"
-        class="tabs-link"
-      >
-        Комнаты
-        <span v-if="game.unreadPostsCount" class="unread-badge">
-          {{ game.unreadPostsCount }}
-        </span>
-      </router-link>
-      <router-link
-        :to="{
-          name: 'game-characters',
-          params: { id: game.publicId || game.id },
-        }"
-        class="tabs-link"
-      >
-        Персонажи
-        <span v-if="game.unreadCharactersCount" class="unread-badge">
-          {{ game.unreadCharactersCount }}
-        </span>
-      </router-link>
-      <router-link
-        :to="{
-          name: 'game-comments',
-          params: { id: game.publicId || game.id },
-        }"
-        class="tabs-link"
-      >
-        Комментарии
-        <span v-if="game.unreadCommentsCount" class="unread-badge">
-          {{ game.unreadCommentsCount }}
-        </span>
-      </router-link>
-    </nav>
-
-    <div class="game-actions" v-if="canSubscribe">
-      <Button @click="handleSubscribe">
-        {{ isSubscribed ? "Отписаться" : "Подписаться" }}
-      </Button>
+      <page-title>{{ game.title }}</page-title>
     </div>
 
     <router-view />
@@ -165,100 +48,38 @@ onUnmounted(() => {
     <p>{{ gameError }}</p>
     <router-link to="/games">Вернуться к списку игр</router-link>
   </div>
+
+  <!-- Loading: twin of the loaded header (skeleton-parity). Reuses
+       .game-header so margins match; the bar height mirrors the h1 line box
+       (20px font x 1.3 line-height = 26px). -->
+  <div v-else class="game-header" aria-hidden="true">
+    <div class="skeleton-title" />
+  </div>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
+@import "src/assets/styles/Skeleton"
 
 .game-header
   margin-bottom: $medium
 
-.game-title-row
-  display: flex
-  align-items: baseline
-  gap: $medium
-  flex-wrap: wrap
-
-.game-status
-  font-size: $secondary-font-size
-  padding: 2px $small
-  border-radius: $border-radius
-  background-color: $bg-element
-  color: $text-muted
-
-  &.status-active
-    background-color: rgba($accent-green, 0.2)
-    color: $accent-green
-
-  &.status-recruiting
-    background-color: rgba($accent-green, 0.2)
-    color: $accent-green
-
-  &.status-finished
-    background-color: rgba($text-muted, 0.2)
-    color: $text-muted
-
-  &.status-frozen
-    background-color: rgba($text-muted, 0.2)
-    color: $text-muted
-
-.game-meta
-  display: flex
-  flex-wrap: wrap
-  gap: $small
-  margin-top: $tiny
-
-.game-master,
-.game-assistant
-  margin-left: $medium
-
-.game-tabs
-  margin-bottom: $medium
-
-  .tabs-link
-    display: inline-block
-    margin-right: $medium
-    text-transform: uppercase
-    font-weight: bold
-    color: $link-nav
-    text-decoration: none
-    position: relative
-
-    &:hover
-      color: $link-nav-hover
-      text-decoration: underline
-
-    &.router-link-exact-active
-      color: $text
-      text-decoration: none
-      cursor: default
-
-.unread-badge
-  display: inline-block
-  min-width: $grid-step * 4
-  padding: 0 $tiny
-  margin-left: $tiny
-  font-size: $tertiary-font-size
-  font-weight: bold
-  text-align: center
-  border-radius: $border-radius
-  background-color: $accent-red
-  color: white
-
-.game-actions
-  margin-bottom: $medium
-
-.game-loading,
 .game-error
   padding: $big
   text-align: center
-
-.game-error
   color: $accent-red
 
   a
     color: $link
     margin-top: $small
     display: inline-block
+
+// --- Loading skeleton (twin of the loaded header) ---
+
+// Twin of the PageTitle h1: same margins ($medium 0 $small), height equals
+// the h1 line box (20px font x 1.3 line-height = 26px).
+.skeleton-title
+  width: 260px
+  height: 26px
+  margin: $medium 0 $small
+  +skeleton-shimmer
 </style>

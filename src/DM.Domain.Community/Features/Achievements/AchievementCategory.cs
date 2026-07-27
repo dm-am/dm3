@@ -4,56 +4,56 @@ using DM.Domain.Core.Enums;
 namespace DM.Domain.Community.Features.Achievements;
 
 /// <summary>
-/// Категория достижений = цепочка тиров одной метрики. SSOT для иконки,
-/// описания и порядка. Одна метрика = одна категория (UNIQUE на уровне БД).
+/// Achievement category = a chain of tiers for a single metric. SSOT for the icon,
+/// description and ordering. One metric = one category (UNIQUE at the DB level).
 /// </summary>
 public class AchievementCategory
 {
-    /// <summary>Идентификатор.</summary>
+    /// <summary>Identifier.</summary>
     public Guid Id { get; set; }
 
-    /// <summary>Стабильный код («game_posts_authored»).</summary>
+    /// <summary>Stable code ("game_posts_authored").</summary>
     public string Code { get; set; } = string.Empty;
 
-    /// <summary>Отображаемое название цепочки («Игровые посты»).</summary>
+    /// <summary>Display name of the chain ("Игровые посты").</summary>
     public string Title { get; set; } = string.Empty;
 
     /// <summary>
-    /// Описание метрики — что именно считается, что включается, что нет.
-    /// Показывается в шапке popover-а на достижении.
+    /// Metric description — what exactly is counted, what is included and what is not.
+    /// Shown in the header of the achievement popover.
     /// </summary>
     public string Description { get; set; } = string.Empty;
 
-    /// <summary>Имя иконки из game-icons спрайта (одна на всю цепочку).</summary>
+    /// <summary>Icon name from the game-icons sprite (one per chain).</summary>
     public string IconName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Метрика. По ней evaluator считает прогресс. Маппится на поле
-    /// <c>GeneralUser</c> через <c>AchievementMetricResolver.GetValue</c>.
+    /// Metric. The evaluator computes progress from it. Maps to a field of
+    /// <c>GeneralUser</c> via <c>AchievementMetricResolver.GetValue</c>.
     /// </summary>
     public AchievementMetric Metric { get; set; }
 
-    /// <summary>Порядок цепочек в UI.</summary>
+    /// <summary>Ordering of chains in the UI.</summary>
     public int SortOrder { get; set; }
 
-    /// <summary>Активна = тиры доступны для начисления и видны в UI.</summary>
+    /// <summary>Active = tiers can be granted and are visible in the UI.</summary>
     public bool IsActive { get; set; }
 }
 
-/// <summary>Запрос на обновление категории. Создание из админ-UI не предполагается:
-/// каталог из 13 категорий статичен; правки — точечные (description, icon).</summary>
+/// <summary>Category update request. Creation from the admin UI is not expected:
+/// the catalog of 13 categories is static; edits are point fixes (description, icon).</summary>
 public class UpdateAchievementCategory
 {
-    /// <summary>Идентификатор обновляемой записи.</summary>
+    /// <summary>Identifier of the record being updated.</summary>
     public Guid Id { get; set; }
-    /// <summary>Новое название (null = не менять).</summary>
+    /// <summary>New title (null = leave unchanged).</summary>
     public string? Title { get; set; }
-    /// <summary>Новое описание (null = не менять).</summary>
+    /// <summary>New description (null = leave unchanged).</summary>
     public string? Description { get; set; }
-    /// <summary>Новая иконка (null = не менять).</summary>
+    /// <summary>New icon (null = leave unchanged).</summary>
     public string? IconName { get; set; }
-    /// <summary>Новый SortOrder (null = не менять).</summary>
+    /// <summary>New SortOrder (null = leave unchanged).</summary>
     public int? SortOrder { get; set; }
-    /// <summary>Новый IsActive (null = не менять).</summary>
+    /// <summary>New IsActive (null = leave unchanged).</summary>
     public bool? IsActive { get; set; }
 }

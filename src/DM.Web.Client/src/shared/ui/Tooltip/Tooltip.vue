@@ -9,6 +9,7 @@
     @touchstart="handleTouchStart"
     @keydown.esc="hide"
     :aria-describedby="isVisible ? tooltipId : undefined"
+    :tabindex="focusable ? 0 : undefined"
   >
     <slot />
   </span>
@@ -24,6 +25,7 @@
         :style="tooltipStyle"
         @mouseenter="handleTooltipMouseEnter"
         @mouseleave="handleTooltipMouseLeave"
+        @focusout="handleFocusOut"
       >
         <span ref="contentRef" class="tooltip-text">
           <slot name="content">{{ text }}</slot>
@@ -51,6 +53,11 @@ import type { TooltipPlacement } from "./types";
 const slots = useSlots();
 const hasContentSlot = computed(() => !!slots.content);
 
+// Shows text/content on hover, keyboard focus, or touch tap (WCAG 1.4.13).
+// Trigger is only reachable by Tab when `focusable` is set (the caller's
+// element already provides its own focus target otherwise, e.g. a <button>).
+// Tab can continue into interactive tooltip content (links, buttons) without
+// closing it — see handleFocusOut below.
 const props = withDefaults(
   defineProps<{
     /** Tooltip text. If undefined/empty, tooltip won't show */
@@ -59,12 +66,16 @@ const props = withDefaults(
     /** Delay in ms before showing/hiding */
     delay?: number;
     disabled?: boolean;
+    /** Make the trigger span keyboard-focusable (tabindex="0"). Use when the
+     * slotted content isn't itself a focusable element (e.g. plain text). */
+    focusable?: boolean;
   }>(),
   {
     text: undefined,
     placement: "top",
     delay: 150,
     disabled: false,
+    focusable: false,
   },
 );
 
@@ -82,7 +93,9 @@ const { isVisible, position, show, hide, updatePosition } = useTooltip(
   toRef(props, "placement"),
 );
 
-// Solve shrinkwrap problem using canvas text measurement
+// Solve shrinkwrap problem using canvas text measurement. Plain-text
+// tooltips only: rich `#content` popovers skip the shrink (see
+// measureAndShrink) and size themselves via CSS width/max-width.
 const MAX_TOOLTIP_WIDTH = 340;
 const measurePhase = ref<"measure" | "final">("measure");
 
@@ -144,6 +157,18 @@ function getWidestLineWidth(
 
 function measureAndShrink() {
   if (!tooltipRef.value || !contentRef.value) return;
+
+  // Rich slot content (block layout, nested elements, grids) cannot be
+  // simulated by the canvas TEXT measurement: textContent glues all nodes
+  // into one pseudo-line, under-measures the real block layout and the
+  // resulting width clips the popover (eaten right padding, cut columns).
+  // Skip the shrink entirely — CSS `width: max-content` + `max-width: 340px`
+  // already size slot popovers from their content.
+  if (hasContentSlot.value) {
+    measurePhase.value = "final";
+    updatePosition();
+    return;
+  }
 
   if (measurePhase.value === "measure") {
     const text = contentRef.value.textContent || "";
@@ -233,6 +258,10 @@ function handleFocusOut(e: FocusEvent) {
   // Ignore focus moves within the trigger (e.g. between its children)
   const next = e.relatedTarget as Node | null;
   if (next && triggerRef.value?.contains(next)) return;
+  // Keep tooltip open when focus moves into the tooltip itself, symmetric
+  // to handleTooltipMouseEnter — lets Tab reach links inside tooltip content
+  // (e.g. award popovers) instead of closing on the way there
+  if (next && tooltipRef.value?.contains(next)) return;
   clearAllTimers();
   hide();
 }
@@ -315,7 +344,6 @@ const arrowStyle = computed(() => {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/ZIndex"
 
 .tooltip-trigger

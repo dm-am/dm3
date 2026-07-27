@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { computed, watch, onMounted } from "vue";
+import { computed, ref, watch, onMounted } from "vue";
+import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { DataTable, type Column, type SortState } from "@/shared/ui/DataTable";
-import { Tooltip, RichText } from "@/shared/ui/Tooltip";
+import { Tooltip, TooltipContent } from "@/shared/ui/Tooltip";
+import { ErrorState } from "@/shared/ui/ErrorState";
+import { CounterPair } from "@/shared/ui/CounterPair";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import { UserLink } from "@/entities/user";
 import {
   useGamesStore,
   useGameDisplay,
   GameStatusBadge,
+  GameStatus,
+  type Game,
 } from "@/entities/game";
 import { GamesFilter, useGamesFilter } from "@/features/game-filter";
 import type { GamesSearchParams } from "@/features/game-filter";
@@ -16,11 +21,17 @@ import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { buildReadersTooltip } from "@/shared/lib/utils/tooltipBuilders";
 
 const gamesStore = useGamesStore();
-const { searchResult, searchLoading, searchError, tags } =
+const { searchResult, searchLoading, searchError, tags, tagsError } =
   storeToRefs(gamesStore);
+
+const route = useRoute();
 
 // filterState is computed from URL (single source of truth, no sync needed)
 const { filterState, searchParams, hasActiveFilters } = useGamesFilter();
+
+function retrySearch() {
+  gamesStore.searchGames(searchParams.value);
+}
 
 // Two-state empty text
 const emptyText = computed(() =>
@@ -43,53 +54,30 @@ function getTagInfo(tagId: number): { title: string; description?: string } {
   return tagMap.value.get(tagId) ?? { title: `#${tagId}` };
 }
 
-// Build slots tooltip with active characters
-function buildSlotsTooltip(row: {
-  recruitment?: { pcCount: number; pcLimit?: number | null };
-  activeCharacters?: { name: string; ownerUsername: string }[];
-}): string {
-  const chars = row.activeCharacters ?? [];
-  const pcCount = row.recruitment?.pcCount ?? 0;
-  const pcLimit = row.recruitment?.pcLimit;
-
-  const lines: string[] = [];
-
-  // Characters
-  if (chars.length > 0) {
-    lines.push("Персонажи:");
-    chars.forEach((c) => lines.push(`• ${c.name} (${c.ownerUsername})`));
-  } else {
-    lines.push("Нет персонажей");
-  }
-
-  // Free slots
-  if (pcLimit != null) {
-    const free = Math.max(0, pcLimit - pcCount);
-    if (free > 0) {
-      lines.push(`\nСвободных мест: ${free}`);
-    } else {
-      lines.push("\nМест нет");
-    }
-  } else {
-    lines.push("\nМест: без ограничений");
-  }
-
-  return lines.join("\n");
-}
-
 // Ensure tags are loaded (sidebar may have loaded them already)
 onMounted(() => {
   gamesStore.fetchTags();
 });
 const {
-  buildTooltip,
   buildStatusTooltip,
   getUnreadPosts,
   getUnreadComments,
   formatUnreadPostsTooltip,
   formatUnreadCommentsTooltip,
   isNew,
+  formatSlots,
+  buildSlotsTooltip,
+  buildAssistantTooltip,
 } = useGameDisplay();
+
+// Title-link colour convention (same as GameLink/BlogLink): closed games are
+// muted grey; the green "new" highlight excludes closed (muted takes priority).
+function isClosedGame(game: Game): boolean {
+  return game.status === GameStatus.Closed;
+}
+function isNewHighlight(game: Game): boolean {
+  return !isClosedGame(game) && isNew(game);
+}
 
 // Columns that have direct mapping to sort options
 const sortableColumnKeys = new Set(["title", "status"]);
@@ -101,7 +89,6 @@ const columns: Column[] = [
     label: "Название",
     width: "28%",
     align: "left",
-    sortable: true,
   },
   { key: "master", label: "Ведущие", width: "18%", align: "left" },
   {
@@ -116,7 +103,6 @@ const columns: Column[] = [
     label: "Статус игры",
     width: "18%",
     align: "left",
-    sortable: true,
   },
   {
     key: "reviews",
@@ -170,19 +156,19 @@ function createParamsKey(params: GamesSearchParams): string {
 
 const paramsKey = computed(() => createParamsKey(searchParams.value));
 
-// Build assistant tooltip
-function buildAssistantTooltip(assistants: { username: string }[]): string {
-  const names = assistants.map((a) => a.username).join(", ");
-  return `Ассистент${assistants.length > 1 ? "ы" : ""}: ${names}`;
-}
-
-// Format slots display for status column: "[N/M]" or "[N/∞]"
-function formatSlots(row: {
-  recruitment?: { pcCount: number; pcLimit?: number | null };
-}): string {
-  const pcCount = row.recruitment?.pcCount ?? 0;
-  const pcLimit = row.recruitment?.pcLimit;
-  return pcLimit != null ? `[${pcCount}/${pcLimit}]` : `[${pcCount}/∞]`;
+// Build a tag-click destination that PRESERVES the current query (adds the
+// clicked tag to requiredTags) instead of resetting all other filters.
+function tagFilterQuery(tagId: number): Record<string, string> {
+  const query: Record<string, string> = {};
+  for (const [key, value] of Object.entries(route.query)) {
+    if (key === "requiredTags" || key === "number") continue;
+    if (typeof value === "string") query[key] = value;
+  }
+  const existing = filterState.value.requiredTags;
+  const nextTags = new Set(existing);
+  nextTags.add(tagId);
+  query.requiredTags = [...nextTags].join(",");
+  return query;
 }
 
 // Fetch games when search params key changes (immediate for initial load)
@@ -198,6 +184,12 @@ watch(
 function handlePrefetch(page: number) {
   gamesStore.prefetchPage(page);
 }
+
+// Paging scrolls the table itself back into view (not the page top)
+const tableRef = ref<{ $el: HTMLElement } | null>(null);
+function pagingAnchor(): HTMLElement | null {
+  return tableRef.value?.$el ?? null;
+}
 </script>
 
 <template>
@@ -206,15 +198,19 @@ function handlePrefetch(page: number) {
     <GamesFilter class="filters" />
 
     <!-- Error state -->
-    <div v-if="searchError" class="error-message">
-      {{ searchError }}
-    </div>
+    <ErrorState
+      v-if="searchError"
+      :message="searchError"
+      :retry="retrySearch"
+      class="error-state-block"
+    />
 
     <!-- Table. Hidden when the request failed and there is nothing to
          show - an error must not be presented as an empty list. Stale
          rows (if any) stay visible under the error message. -->
     <DataTable
       v-if="!searchError || games.length > 0"
+      ref="tableRef"
       :columns="columns"
       :data="games"
       :loading="searchLoading"
@@ -229,42 +225,34 @@ function handlePrefetch(page: number) {
     >
       <!-- Title column: Title (unread/comments) with search highlighting -->
       <template #cell-title="{ row }">
-        <Tooltip :text="buildTooltip(row)">
-          <router-link
-            :to="{ name: 'game', params: { id: row.publicId || row.id } }"
-            :class="['game-link', { 'new-item': isNew(row) }]"
-          >
-            <span
-              v-if="filterState.search"
-              v-html="highlightMatch(row.title, filterState.search)"
-            ></span>
-            <template v-else>{{ row.title }}</template>
-          </router-link> </Tooltip
-        >{{ " "
-        }}<span class="counters"
-          ><span class="muted">(</span
-          ><Tooltip :text="formatUnreadPostsTooltip(getUnreadPosts(row))">
-            <!-- First-unread endpoints bind the id as a Guid - pass row.id -->
-            <router-link
-              :to="{
-                name: 'game-first-unread-post',
-                params: { id: row.id },
-              }"
-              :aria-label="formatUnreadPostsTooltip(getUnreadPosts(row))"
-              >{{ getUnreadPosts(row) }}</router-link
-            > </Tooltip
-          ><span class="muted">/</span
-          ><Tooltip :text="formatUnreadCommentsTooltip(getUnreadComments(row))">
-            <router-link
-              :to="{
-                name: 'game-first-unread-comment',
-                params: { id: row.id },
-              }"
-              :aria-label="formatUnreadCommentsTooltip(getUnreadComments(row))"
-              >{{ getUnreadComments(row) }}</router-link
-            > </Tooltip
-          ><span class="muted">)</span></span
+        <router-link
+          :to="{ name: 'game', params: { id: row.publicId || row.id } }"
+          :class="[
+            'game-link',
+            {
+              'new-item': isNewHighlight(row),
+              'closed-item': isClosedGame(row),
+            },
+          ]"
         >
+          <span
+            v-if="filterState.search"
+            v-html="highlightMatch(row.title, filterState.search)"
+          ></span>
+          <template v-else>{{ row.title }}</template> </router-link
+        >{{ " "
+        }}<!-- First-unread endpoints bind the id as a Guid - pass row.id -->
+        <CounterPair
+          :first-value="getUnreadPosts(row)"
+          :first-to="{ name: 'game-first-unread-post', params: { id: row.id } }"
+          :first-label="formatUnreadPostsTooltip(getUnreadPosts(row))"
+          :second-value="getUnreadComments(row)"
+          :second-to="{
+            name: 'game-first-unread-comment',
+            params: { id: row.id },
+          }"
+          :second-label="formatUnreadCommentsTooltip(getUnreadComments(row))"
+        />
       </template>
 
       <!-- Master column -->
@@ -274,17 +262,17 @@ function handlePrefetch(page: number) {
           :user="row.master"
           :search-query="filterState.search"
           hide-badge
-        /><Tooltip
-          v-if="row.assistants?.length"
-          :text="buildAssistantTooltip(row.assistants)"
+        /><template v-if="row.assistants?.length"
+          >{{ " "
+          }}<Tooltip :text="buildAssistantTooltip(row.assistants)" focusable>
+            <span class="assistant-count">[+{{ row.assistants.length }}]</span>
+          </Tooltip></template
         >
-          <span class="assistant-count">[+{{ row.assistants.length }}]</span>
-        </Tooltip>
       </template>
 
       <!-- Status column with date tooltip + slots -->
       <template #cell-status="{ row }">
-        <Tooltip :text="buildStatusTooltip(row)">
+        <Tooltip :text="buildStatusTooltip(row)" focusable>
           <span class="status-wrapper">
             <GameStatusBadge
               :status="row.status"
@@ -292,28 +280,45 @@ function handlePrefetch(page: number) {
               :is-subsequent="row.recruitment?.isSubsequent"
               :closed-reason="row.closedReason"
             />
-          </span>
-        </Tooltip>
-        <Tooltip :text="buildSlotsTooltip(row)">
+          </span> </Tooltip
+        >{{ " "
+        }}<Tooltip :text="buildSlotsTooltip(row)" focusable>
           <span class="slots-indicator">{{ formatSlots(row) }}</span>
         </Tooltip>
       </template>
 
       <!-- Tags column: use tagIds + cached store tags for descriptions -->
       <template #cell-tags="{ row }">
-        <div v-if="row.tagIds?.length" class="tags-list">
+        <!-- While the tag catalog hasn't loaded yet, render a shimmer
+             placeholder instead of a raw "#id" link target -->
+        <div v-if="row.tagIds?.length && !tags && !tagsError" class="tags-list">
+          <span
+            v-for="tagId in row.tagIds"
+            :key="tagId"
+            class="tag-shimmer"
+          ></span>
+        </div>
+        <!-- On tag catalog load failure, render plain text (no link,
+             no tooltip) rather than a dead "#id" link -->
+        <div v-else-if="row.tagIds?.length && tagsError" class="tags-list">
+          <template v-for="(tagId, idx) in row.tagIds" :key="tagId"
+            ><span class="tag-pending">{{ getTagInfo(tagId).title }}</span
+            ><template v-if="idx < row.tagIds.length - 1">, </template>
+          </template>
+        </div>
+        <div v-else-if="row.tagIds?.length" class="tags-list">
           <template v-for="(tagId, idx) in row.tagIds" :key="tagId">
             <!-- Tag with description tooltip from cached store -->
             <Tooltip>
               <template #content>
-                <RichText
+                <TooltipContent
                   :text="
                     getTagInfo(tagId).description || getTagInfo(tagId).title
                   "
                 />
               </template>
               <router-link
-                :to="{ name: 'games', query: { requiredTags: String(tagId) } }"
+                :to="{ name: 'games', query: tagFilterQuery(tagId) }"
                 class="tag-link"
                 >{{ getTagInfo(tagId).title }}</router-link
               > </Tooltip
@@ -325,33 +330,31 @@ function handlePrefetch(page: number) {
       <!-- Reviews column -->
       <template #cell-reviews="{ row }">
         <span class="reviews-cell">
-          <Tooltip :text="`Рецензий на игру: ${row.gameReviewsCount ?? 0}`">
-            <router-link
-              :to="{
-                name: 'game-reviews',
-                params: { id: row.publicId || row.id },
-              }"
-              class="review-link"
-              >{{ row.gameReviewsCount ?? 0 }}</router-link
-            >
-          </Tooltip>
-          <span class="muted">/</span>
-          <Tooltip :text="`Оценок постов: ${row.postReviewsCount ?? 0}`">
-            <router-link
-              :to="{
-                name: 'game-post-reviews',
-                params: { id: row.publicId || row.id },
-              }"
-              class="review-link"
-              >{{ row.postReviewsCount ?? 0 }}</router-link
-            >
-          </Tooltip>
+          <router-link
+            :to="{
+              name: 'game-reviews',
+              params: { id: row.publicId || row.id },
+            }"
+            class="review-link"
+            :aria-label="`Отзывы об игре: ${row.gameReviewsCount ?? 0}`"
+            >{{ row.gameReviewsCount ?? 0 }}</router-link
+          >
+          <span class="muted" aria-hidden="true">/</span>
+          <router-link
+            :to="{
+              name: 'game-post-reviews',
+              params: { id: row.publicId || row.id },
+            }"
+            class="review-link"
+            :aria-label="`Отзывы о постах: ${row.postReviewsCount ?? 0}`"
+            >{{ row.postReviewsCount ?? 0 }}</router-link
+          >
         </span>
       </template>
 
       <!-- Readers column -->
       <template #cell-readers="{ row }">
-        <Tooltip :text="buildReadersTooltip(row)">
+        <Tooltip :text="buildReadersTooltip(row)" focusable>
           <span class="readers-count">{{ row.subscribersCount ?? 0 }}</span>
         </Tooltip>
       </template>
@@ -366,6 +369,7 @@ function handlePrefetch(page: number) {
           :to="{ name: 'games' }"
           :use-query="true"
           :on-prefetch="handlePrefetch"
+          :scroll-anchor="pagingAnchor"
         />
       </template>
     </DataTable>
@@ -373,7 +377,7 @@ function handlePrefetch(page: number) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
+@import "src/assets/styles/Skeleton"
 
 .games-data-table
   width: 100%
@@ -381,11 +385,7 @@ function handlePrefetch(page: number) {
 .filters
   margin-bottom: $medium
 
-.error-message
-  padding: $medium
-  color: $text-on-red
-  background-color: $bg-highlight-red
-  border-radius: $border-radius
+.error-state-block
   margin-bottom: $medium
 
 .game-link
@@ -398,14 +398,11 @@ function handlePrefetch(page: number) {
     color: $accent-green
     &:hover
       color: $accent-green-hover
-  // .search-highlight styled globally in Reset.sass
-
-.counters
-  white-space: nowrap
-  a
-    color: $link
+  &.closed-item
+    color: $text-muted
     &:hover
       color: $link-hover
+  // .search-highlight styled globally in Reset.sass
 
 .muted
   color: $text-muted
@@ -420,17 +417,26 @@ function handlePrefetch(page: number) {
   &:hover
     color: $link-hover
 
+.tag-pending
+  color: $text-muted
+
+.tag-shimmer
+  display: inline-block
+  width: 3.5em
+  height: 1em
+  margin-right: $tiny
+  vertical-align: middle
+  +skeleton-shimmer
+
 .status-wrapper
   cursor: help
 
 .slots-indicator
   color: $text-muted
-  margin-left: 0.35em
   cursor: help
 
 .assistant-count
   color: $text-muted
-  margin-left: 0.25em
   cursor: help
 
 .reviews-cell

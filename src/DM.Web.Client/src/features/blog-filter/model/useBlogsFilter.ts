@@ -3,17 +3,10 @@ import { useRoute, useRouter } from "vue-router";
 import type { LocationQuery } from "vue-router";
 import { usePaging, createFilterDispatcher } from "@/shared/lib/composables";
 import {
-  parseStringFromUrl,
   parseDateFromUrl,
-  parseSetFromUrl,
-  parseSortDirection,
-  validateSortField,
-  parseNumberFromUrl,
-  formatSetForUrl,
   dateToApiStart,
   dateToApiEnd,
-  setToArray,
-  buildQuery,
+  toQueryValue,
 } from "@/shared/lib/filters";
 import type {
   BlogsFilterState,
@@ -48,7 +41,6 @@ export interface BlogsFilterComposable {
   setSort: (sortBy: string, sortOrder?: "asc" | "desc") => void;
   toggleSortOrder: () => void;
   clearFilters: () => void;
-  removeFilter: (key: string) => void;
 }
 
 // =============================================================================
@@ -70,7 +62,6 @@ type BlogsFilterAction =
   | { type: "SET_CLOSED_RANGE"; fromUtc: string | null; toUtc: string | null }
   | { type: "SET_SORT"; sortBy: string; sortOrder?: "asc" | "desc" }
   | { type: "TOGGLE_SORT_ORDER" }
-  | { type: "REMOVE_FILTER"; key: string }
   | { type: "CLEAR_FILTERS" };
 
 // =============================================================================
@@ -142,28 +133,6 @@ function reducer(
       newState.sortOrder = newState.sortOrder === "asc" ? "desc" : "asc";
       return newState;
 
-    case "REMOVE_FILTER": {
-      const key = action.key;
-      if (key === "status") {
-        newState.status = "any";
-      } else if (key === "hosts") {
-        newState.hostUsernames.clear();
-      } else if (key.startsWith("host-")) {
-        const username = key.replace("host-", "");
-        newState.hostUsernames.delete(username);
-      } else if (key === "createdRange") {
-        newState.createdFromUtc = null;
-        newState.createdToUtc = null;
-      } else if (key === "activatedRange") {
-        newState.activatedFromUtc = null;
-        newState.activatedToUtc = null;
-      } else if (key === "closedRange") {
-        newState.closedFromUtc = null;
-        newState.closedToUtc = null;
-      }
-      return newState;
-    }
-
     case "CLEAR_FILTERS":
       return createDefaultState();
 
@@ -210,13 +179,14 @@ function parseQueryToState(query: LocationQuery): BlogsFilterState {
     }
   }
 
-  if (query.createdFromUtc) state.createdFromUtc = String(query.createdFromUtc);
-  if (query.createdToUtc) state.createdToUtc = String(query.createdToUtc);
-  if (query.activatedFromUtc)
-    state.activatedFromUtc = String(query.activatedFromUtc);
-  if (query.activatedToUtc) state.activatedToUtc = String(query.activatedToUtc);
-  if (query.closedFromUtc) state.closedFromUtc = String(query.closedFromUtc);
-  if (query.closedToUtc) state.closedToUtc = String(query.closedToUtc);
+  state.createdFromUtc = parseDateFromUrl(toQueryValue(query.createdFromUtc));
+  state.createdToUtc = parseDateFromUrl(toQueryValue(query.createdToUtc));
+  state.activatedFromUtc = parseDateFromUrl(
+    toQueryValue(query.activatedFromUtc),
+  );
+  state.activatedToUtc = parseDateFromUrl(toQueryValue(query.activatedToUtc));
+  state.closedFromUtc = parseDateFromUrl(toQueryValue(query.closedFromUtc));
+  state.closedToUtc = parseDateFromUrl(toQueryValue(query.closedToUtc));
 
   const sortByRaw = query.sortBy as string;
   if (validSortByValues.has(sortByRaw)) state.sortBy = sortByRaw;
@@ -363,8 +333,6 @@ export function useBlogsFilter(): BlogsFilterComposable {
   const setSort = (sortBy: string, sortOrder?: "asc" | "desc") =>
     dispatch({ type: "SET_SORT", sortBy, sortOrder });
   const toggleSortOrder = () => dispatch({ type: "TOGGLE_SORT_ORDER" });
-  const removeFilter = (key: string) =>
-    dispatch({ type: "REMOVE_FILTER", key });
   const clearFilters = () => dispatch({ type: "CLEAR_FILTERS" });
 
   return {
@@ -383,6 +351,5 @@ export function useBlogsFilter(): BlogsFilterComposable {
     setSort,
     toggleSortOrder,
     clearFilters,
-    removeFilter,
   };
 }

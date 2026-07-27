@@ -52,6 +52,10 @@ internal class GameIntentionResolver :
 
             GameIntention.Edit when user.IsAuthenticated => userIsSeniorModerator ||
                                                             roles.HasEditAccess(),
+            // Settings / embedded schema editing is broader than lead-only Edit: mentors may edit too
+            GameIntention.EditSettings when user.IsAuthenticated => userIsSeniorModerator ||
+                                                                    roles.HasEditAccess() ||
+                                                                    roles.Contains(GameRole.Mentor),
             // only the master itself is allowed to remove the game
             GameIntention.Delete when user.IsAuthenticated => userIsSeniorModerator ||
                                                               user.UserId == target.Master.UserId,
@@ -72,8 +76,10 @@ internal class GameIntentionResolver :
             // Closed -> Active (reopen)
             GameIntention.SetStatusActive when target.Status == ModuleStatus.Closed =>
                 roles.HasEditAccess(),
-            // Active -> Closed (close/freeze/finish)
-            GameIntention.SetStatusClosed when target.Status == ModuleStatus.Active =>
+            // Active -> Closed (close/freeze/finish), or Closed -> Closed
+            // (change reason, e.g. unfreeze a Frozen game to a plain Close)
+            GameIntention.SetStatusClosed when target.Status == ModuleStatus.Active ||
+                                               target.Status == ModuleStatus.Closed =>
                 roles.HasEditAccess(),
 
             GameIntention.ReadComments =>

@@ -13,13 +13,26 @@
 
 =paging
   .paging
-    display: flex
-    flex-wrap: wrap
-    gap: $small
-    justify-content: center
+    // Inline flow, NOT flex: element flex items copy with newlines between
+    // them (Chrome selection serializer), so a flex strip copied as
+    // "1\n2\n3". Centered inline-blocks + side margins reproduce the old
+    // "gap: $small; justify-content: center" geometry, while zero-width
+    // .copy-space text nodes between items make the strip copy as "1 2 3"
+    // on a single line.
+    display: block
+    text-align: center
+    // Kill the parent-font line-box strut so the block line is exactly as
+    // tall as the inline-block links — same height the flex row had (the
+    // strip sits between optically 1.5px-tuned separators, see
+    // PagingWithSeparators.vue, so even ~1px of extra leading matters).
+    line-height: 0
     margin: $small 0
 
     a
+      display: inline-block
+      line-height: normal
+      // Half-gap per side = former flex gap $small between neighbors.
+      margin: 0 ($small * 0.5)
       padding: $tiny $small
       font-size: $secondary-font-size
       color: $link
@@ -28,6 +41,12 @@
       &:hover
         color: $link-hover
         text-decoration: underline
+
+    // Zero-width preserved space between page links: invisible in layout
+    // (font-size: 0), but Selection.toString() still emits a real " ".
+    .copy-space
+      white-space: pre
+      font-size: 0
 
     .page-number
       &.active

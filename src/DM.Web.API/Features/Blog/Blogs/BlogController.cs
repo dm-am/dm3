@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
@@ -151,6 +152,72 @@ public class BlogController : ControllerBase
     }
 
     /// <summary>
+    /// Change blog status
+    /// </summary>
+    /// <remarks>
+    /// Applies a single status transition on the blog state machine:
+    /// `Start` (Draft-&gt;Active), `Freeze` (Active-&gt;Closed/Frozen),
+    /// `Finish` (Active-&gt;Closed/Finished), `Close` (Active or Frozen-&gt;Closed),
+    /// `Reopen` (Closed-&gt;Active). Only the blog leads (owner and assistants)
+    /// may change the status. Illegal transitions are rejected with 400.
+    /// </remarks>
+    /// <param name="id">Blog public ID (5 letters) or GUID</param>
+    /// <param name="request">Requested status transition</param>
+    /// <response code="200">Returns the updated blog</response>
+    /// <response code="400">The requested transition is illegal for the current status</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User is not authorized to change the status of this blog</response>
+    /// <response code="404">Blog not found</response>
+    [HttpPost("{id}/status", Name = nameof(PostBlogStatus))]
+    [AuthenticationRequired]
+    [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> PostBlogStatus(string id, [FromBody] BlogStatusChangeRequest request)
+    {
+        // Pass the raw id through: the domain resolves the public id via the
+        // repository (ungated) after the authentication gate. Resolving here
+        // through the read-gated GetByPublicId would hide a premoderation-
+        // pending blog from its own leads on this lead-only endpoint.
+        return Ok(await _apiService.ChangeStatus(id, request));
+    }
+
+    /// <summary>
+    /// Change blog premoderation state
+    /// </summary>
+    /// <remarks>
+    /// Mentor action: `SendToPremoderation` (AwaitingEdits-&gt;AwaitingApproval)
+    /// puts the blog back in the review queue and assigns the acting mentor as
+    /// curator; `RemoveFromPremoderation` (AwaitingApproval-&gt;Approved) releases
+    /// the blog so it becomes publicly visible. Requires Mentor role or above.
+    /// Illegal transitions are rejected with 400.
+    /// </remarks>
+    /// <param name="id">Blog public ID (5 letters) or GUID</param>
+    /// <param name="request">Requested premoderation transition</param>
+    /// <response code="200">Returns the updated blog</response>
+    /// <response code="400">The requested transition is illegal for the current premoderation state</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User is not a mentor</response>
+    /// <response code="404">Blog not found</response>
+    [HttpPost("{id}/premoderation", Name = nameof(PostBlogPremoderation))]
+    [RequireRole(UserRole.Mentor)]
+    [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> PostBlogPremoderation(string id, [FromBody] BlogPremoderationChangeRequest request)
+    {
+        // Pass the raw id through: the domain resolves the public id via the
+        // repository (ungated) after the Mentor gate. Resolving here through the
+        // read-gated GetByPublicId would hide a premoderation-pending blog from
+        // the non-curator mentor this endpoint exists for.
+        return Ok(await _apiService.ChangePremoderation(id, request));
+    }
+
+    /// <summary>
     /// Create a new rubric in blog
     /// </summary>
     /// <param name="id">Blog public ID (5 letters) or GUID</param>
@@ -174,6 +241,61 @@ public class BlogController : ControllerBase
             : (await _apiService.GetByPublicId(id)).Resource.Id;
         var result = await _apiService.CreateRubric(blogId, request);
         return Created("", result);
+    }
+
+    /// <summary>
+    /// Rename a rubric
+    /// </summary>
+    /// <param name="id">Blog public ID (5 letters) or GUID</param>
+    /// <param name="rubricId">Rubric identifier</param>
+    /// <param name="request">Rubric rename request</param>
+    /// <response code="200">Rubric renamed successfully</response>
+    /// <response code="400">Invalid request</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User is not authorized</response>
+    /// <response code="404">Rubric not found</response>
+    [HttpPatch("{id}/rubrics/{rubricId:guid}", Name = nameof(PatchRubric))]
+    [AuthenticationRequired]
+    [ProducesResponseType(typeof(Envelope<Rubric>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> PatchRubric(string id, Guid rubricId, [FromBody] UpdateRubricRequest request)
+    {
+        // The rubric id alone identifies the rubric; the blog {id} is kept in
+        // the route for a consistent nested contract. The domain resolves and
+        // authorizes via the rubric's own blog.
+        return Ok(await _apiService.UpdateRubric(rubricId, request));
+    }
+
+    /// <summary>
+    /// Reorder a blog's rubrics
+    /// </summary>
+    /// <remarks>
+    /// Accepts the rubric identifiers in the desired order; each rubric's sort
+    /// order becomes its position in the list. Only the blog owner may reorder.
+    /// </remarks>
+    /// <param name="id">Blog public ID (5 letters) or GUID</param>
+    /// <param name="request">Ordered rubric identifiers</param>
+    /// <response code="200">Rubrics reordered; returns the rubrics in their new order</response>
+    /// <response code="400">Invalid request</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User is not authorized</response>
+    /// <response code="404">Blog not found</response>
+    [HttpPut("{id}/rubrics/order", Name = nameof(PutRubricsOrder))]
+    [AuthenticationRequired]
+    [ProducesResponseType(typeof(ListEnvelope<Rubric>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> PutRubricsOrder(string id, [FromBody] ReorderRubricsRequest request)
+    {
+        var blogId = Guid.TryParse(id, out var guid)
+            ? guid
+            : (await _apiService.GetByPublicId(id)).Resource.Id;
+        return Ok(await _apiService.ReorderRubrics(blogId, request));
     }
 
     /// <summary>

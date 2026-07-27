@@ -48,8 +48,6 @@ defineExpose({
 </script>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Variables"
-
 .password-input
   position: relative
   display: block

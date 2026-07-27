@@ -11,6 +11,7 @@ using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
+using DM.Domain.Core.Users;
 using DM.Domain.Forum.Authorization;
 using DM.Domain.Forum.Features.Boards;
 using DM.Domain.Forum.Features.Topics;
@@ -33,6 +34,7 @@ public class TopicServiceShould : UnitTestBase
     private readonly Mock<IAccessPolicyConverter> _accessPolicyConverter;
     private readonly Mock<ITopicRepository> _repository;
     private readonly Mock<IUnreadCountersRepository> _unreadCountersRepository;
+    private readonly Mock<IUserLookupService> _userLookupService;
     private readonly Mock<IEventProducer> _eventProducer;
     private readonly ISetup<ITopicRepository, Task<Topic>> _createTopicSetup;
     private readonly TopicService _service;
@@ -79,6 +81,8 @@ public class TopicServiceShould : UnitTestBase
             .ReturnsAsync((Guid userId, UnreadEntryType type, Guid[] ids) =>
                 ids.ToDictionary(id => id, _ => 0));
 
+        _userLookupService = Mock<IUserLookupService>();
+
         _eventProducer = Mock<IEventProducer>();
         _eventProducer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>()))
             .Returns(Task.CompletedTask);
@@ -104,6 +108,7 @@ public class TopicServiceShould : UnitTestBase
             _identityProvider.Object,
             _repository.Object,
             _unreadCountersRepository.Object,
+            _userLookupService.Object,
             _eventProducer.Object,
             cache.Object);
     }
@@ -158,17 +163,34 @@ public class TopicServiceShould : UnitTestBase
     }
 
     [Fact]
-    public async Task ThrowWhenTopicNotFound()
+    public async Task ThrowNotFoundWhenTopicNeverExisted()
     {
         var topicId = Guid.NewGuid();
         _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Topic)null!);
+        _repository.Setup(r => r.Exists(topicId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var act = async () => await _service.GetAsync(topicId);
+
+        var exception = await act.Should().ThrowAsync<HttpException>();
+        exception.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        exception.Which.Message.Should().Contain("Topic not found");
+    }
+
+    [Fact]
+    public async Task ThrowGoneWhenTopicWasRemoved()
+    {
+        var topicId = Guid.NewGuid();
+        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Topic)null!);
+        _repository.Setup(r => r.Exists(topicId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
 
         var act = async () => await _service.GetAsync(topicId);
 
         var exception = await act.Should().ThrowAsync<HttpException>();
         exception.Which.StatusCode.Should().Be(HttpStatusCode.Gone);
-        exception.Which.Message.Should().Contain("Topic not found");
     }
 
     [Fact]

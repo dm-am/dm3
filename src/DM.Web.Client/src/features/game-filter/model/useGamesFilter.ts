@@ -3,19 +3,10 @@ import { useRoute, useRouter } from "vue-router";
 import type { LocationQuery } from "vue-router";
 import { usePaging, createFilterDispatcher } from "@/shared/lib/composables";
 import {
-  parseStringFromUrl,
   parseDateFromUrl,
-  parseSetFromUrl,
-  parseNumberSetFromUrl,
-  parseSortDirection,
-  validateSortField,
-  parseNumberFromUrl,
-  formatSetForUrl,
-  formatNumberSetForUrl,
   dateToApiStart,
   dateToApiEnd,
-  setToArray,
-  buildQuery,
+  toQueryValue,
 } from "@/shared/lib/filters";
 import type {
   GamesFilterState,
@@ -69,7 +60,6 @@ export interface GamesFilterComposable {
   clearDateRanges: () => void;
   setSort: (sortBy: string, sortOrder?: "asc" | "desc") => void;
   toggleSortOrder: () => void;
-  removeFilter: (key: string) => void;
   clearFilters: () => void;
   validateTagFilters: (validTagIds: Set<number>) => void;
 }
@@ -104,7 +94,6 @@ type GamesFilterAction =
   | { type: "CLEAR_DATE_RANGES" }
   | { type: "SET_SORT"; sortBy: string; sortOrder?: "asc" | "desc" }
   | { type: "TOGGLE_SORT_ORDER" }
-  | { type: "REMOVE_FILTER"; key: string }
   | { type: "CLEAR_FILTERS" }
   | { type: "VALIDATE_TAGS"; validTagIds: Set<number> };
 
@@ -223,41 +212,6 @@ function reducer(
       newState.sortOrder = newState.sortOrder === "asc" ? "desc" : "asc";
       return newState;
 
-    case "REMOVE_FILTER": {
-      const key = action.key;
-      if (key.startsWith("status-")) {
-        newState.status = null;
-        newState.recruitmentFilter = "any";
-        newState.closedReasonFilter = "any";
-      } else if (key === "recruitment") {
-        newState.recruitmentFilter = "any";
-      } else if (key === "closedReason") {
-        newState.closedReasonFilter = "any";
-      } else if (key.startsWith("required-tag-")) {
-        const tagId = parseInt(key.replace("required-tag-", ""), 10);
-        newState.requiredTags.delete(tagId);
-      } else if (key.startsWith("excluded-tag-")) {
-        const tagId = parseInt(key.replace("excluded-tag-", ""), 10);
-        newState.excludedTags.delete(tagId);
-      } else if (key.startsWith("host-")) {
-        const username = key.replace("host-", "");
-        newState.hostUsernames.delete(username);
-      } else if (key === "createdRange") {
-        newState.createdFromUtc = null;
-        newState.createdToUtc = null;
-      } else if (key === "activatedRange") {
-        newState.activatedFromUtc = null;
-        newState.activatedToUtc = null;
-      } else if (key === "closedRange") {
-        newState.closedFromUtc = null;
-        newState.closedToUtc = null;
-      } else if (key === "recruitmentStartedRange") {
-        newState.recruitmentStartedFromUtc = null;
-        newState.recruitmentStartedToUtc = null;
-      }
-      return newState;
-    }
-
     case "CLEAR_FILTERS":
       return createDefaultState();
 
@@ -371,17 +325,20 @@ function parseQueryToState(query: LocationQuery): GamesFilterState {
     }
   }
 
-  if (query.createdFromUtc) state.createdFromUtc = String(query.createdFromUtc);
-  if (query.createdToUtc) state.createdToUtc = String(query.createdToUtc);
-  if (query.activatedFromUtc)
-    state.activatedFromUtc = String(query.activatedFromUtc);
-  if (query.activatedToUtc) state.activatedToUtc = String(query.activatedToUtc);
-  if (query.closedFromUtc) state.closedFromUtc = String(query.closedFromUtc);
-  if (query.closedToUtc) state.closedToUtc = String(query.closedToUtc);
-  if (query.recruitmentStartedFromUtc)
-    state.recruitmentStartedFromUtc = String(query.recruitmentStartedFromUtc);
-  if (query.recruitmentStartedToUtc)
-    state.recruitmentStartedToUtc = String(query.recruitmentStartedToUtc);
+  state.createdFromUtc = parseDateFromUrl(toQueryValue(query.createdFromUtc));
+  state.createdToUtc = parseDateFromUrl(toQueryValue(query.createdToUtc));
+  state.activatedFromUtc = parseDateFromUrl(
+    toQueryValue(query.activatedFromUtc),
+  );
+  state.activatedToUtc = parseDateFromUrl(toQueryValue(query.activatedToUtc));
+  state.closedFromUtc = parseDateFromUrl(toQueryValue(query.closedFromUtc));
+  state.closedToUtc = parseDateFromUrl(toQueryValue(query.closedToUtc));
+  state.recruitmentStartedFromUtc = parseDateFromUrl(
+    toQueryValue(query.recruitmentStartedFromUtc),
+  );
+  state.recruitmentStartedToUtc = parseDateFromUrl(
+    toQueryValue(query.recruitmentStartedToUtc),
+  );
 
   const sortByRaw = query.sortBy as string;
   if (validSortByValues.has(sortByRaw)) state.sortBy = sortByRaw;
@@ -652,8 +609,6 @@ export function useGamesFilter(): GamesFilterComposable {
   const setSort = (sortBy: string, sortOrder?: "asc" | "desc") =>
     dispatch({ type: "SET_SORT", sortBy, sortOrder });
   const toggleSortOrder = () => dispatch({ type: "TOGGLE_SORT_ORDER" });
-  const removeFilter = (key: string) =>
-    dispatch({ type: "REMOVE_FILTER", key });
   const clearFilters = () => dispatch({ type: "CLEAR_FILTERS" });
   const validateTagFilters = (validTagIds: Set<number>) =>
     dispatch({ type: "VALIDATE_TAGS", validTagIds });
@@ -681,7 +636,6 @@ export function useGamesFilter(): GamesFilterComposable {
     clearDateRanges,
     setSort,
     toggleSortOrder,
-    removeFilter,
     clearFilters,
     validateTagFilters,
   };

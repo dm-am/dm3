@@ -8,6 +8,8 @@ import {
   onBeforeUnmount,
   nextTick,
 } from "vue";
+import dayjs from "dayjs";
+import { storeToRefs } from "pinia";
 import type { Post, PostReview } from "@/entities/game";
 import { gameApi, GameLink, PostReviewItem, RoomLink } from "@/entities/game";
 import {
@@ -16,15 +18,23 @@ import {
   Tooltip,
   TruncatedContent,
 } from "@/shared/ui";
-import { UserLink, AvatarImg } from "@/entities/user";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import {
+  UserLink,
+  AvatarImg,
+  useUserStore,
+  userIsModerator,
+} from "@/entities/user";
 import { trimHtmlWhitespace } from "@/shared/lib/utils/bbcodeInteractive";
 import { useAuthStore } from "@/shared/stores/auth";
 import {
   registerExpandable,
   notifyExpandableChanged,
 } from "@/shared/lib/composables/useExpandableRegistry";
-import dayjs from "dayjs";
 import { symbols } from "@/shared/lib/utils/icons";
+import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { useToast } from "@/shared/lib/composables/useToast";
 
 const props = withDefaults(
   defineProps<{
@@ -38,15 +48,37 @@ const props = withDefaults(
     maxHeight?: number;
     /** Search query for highlighting matches in post text */
     searchQuery?: string;
+    /** Username to highlight among reviews (bold author + green left border) */
+    highlightUsername?: string;
+    /**
+     * Enable author/moderator lifecycle controls (edit + delete) on the post.
+     * Off by default so read-only surfaces (home "best post", pulse, rated
+     * lists) never expose them; the game room opts in.
+     */
+    editable?: boolean;
   }>(),
   {
     showNavigation: false,
     truncatable: false,
     maxHeight: 150,
+    editable: false,
   },
 );
 
+const emit = defineEmits<{
+  /** A successful edit landed (parent may refetch if it wants). */
+  edited: [id: string];
+  /** The post was soft-deleted (parent may refetch / drop it). */
+  deleted: [id: string];
+}>();
+
 const authStore = useAuthStore();
+const { user: currentUser } = storeToRefs(useUserStore());
+const toast = useToast();
+
+// 15-minute author edit window — a client-side affordance matching the
+// Comment block; moderators+ may edit/delete regardless (PostIntention).
+const EDIT_TIME_LIMIT_MINUTES = 15;
 
 // Reviews state
 const showReviews = ref(false);
@@ -73,26 +105,73 @@ const canLinkCharacter = computed(
 const hasDiceRolls = computed(
   () => props.post?.diceRolls && props.post.diceRolls.length > 0,
 );
-const hasMetagameText = computed(() => !!props.post?.metagameText);
-// Pre-trim leading/trailing empty lines so they never inflate scrollHeight
-// or eat the collapsed budget. Pure transforms, no DOM mutation.
-const postTextHtml = computed(() => trimHtmlWhitespace(props.post?.gameText));
-const postMetagameHtml = computed(() =>
-  trimHtmlWhitespace(props.post?.metagameText),
+// After a successful inline edit the server returns the freshly rendered
+// HTML; keep it as a local override so the post updates in place without the
+// parent having to refetch (mirrors the reviewCount/rating override idiom).
+const gameTextOverride = ref<string | null>(null);
+const metaTextOverride = ref<string | null>(null);
+const editedOverride = ref(false);
+
+const effectiveGameText = computed(
+  () => gameTextOverride.value ?? props.post?.gameText,
+);
+const effectiveMetaText = computed(() =>
+  metaTextOverride.value !== null
+    ? metaTextOverride.value
+    : props.post?.metagameText,
 );
 
-const formattedDate = computed(() => {
-  if (!props.post?.createdUtc) return "";
-  return dayjs(props.post.createdUtc).format("DD.MM.YYYY [в] HH:mm");
-});
+const hasMetagameText = computed(() => !!effectiveMetaText.value);
+// Pre-trim leading/trailing empty lines so they never inflate scrollHeight
+// or eat the collapsed budget. Pure transforms, no DOM mutation.
+const postTextHtml = computed(() =>
+  trimHtmlWhitespace(effectiveGameText.value),
+);
+const postMetagameHtml = computed(() =>
+  trimHtmlWhitespace(effectiveMetaText.value),
+);
 
-const reviewCount = computed(() => props.post?.reviewCount ?? 0);
+const formattedDate = computed(() => formatDateFull(props.post?.createdUtc));
+
+// Local overrides for reviewCount/rating — keep the visible values consistent
+// with a just-submitted review until the parent list is refetched, without
+// mutating the `post` prop (which is otherwise read-only data owned by the
+// store/API response).
+const reviewCountOverride = ref<number | null>(null);
+const ratingOverride = ref<number | null>(null);
+
+const reviewCount = computed(
+  () => reviewCountOverride.value ?? props.post?.reviewCount ?? 0,
+);
 
 const postId = computed(() => props.post?.id);
 const postAnchor = computed(() => `#post-${postId.value}`);
+const reviewsCollapseId = computed(() => `post-reviews-${postId.value}`);
+
+/**
+ * Splits a dice roll into the muted "dNN: R +B" prefix and the bold green
+ * "= T" total, built in script so the template never needs adjacent
+ * mustaches (whitespace-condense would otherwise glue "+2= 6" together).
+ */
+function diceLinePrefix(roll: {
+  dice: number;
+  result: number;
+  bonus?: number;
+}): string {
+  const bonusPart = roll.bonus
+    ? ` ${roll.bonus > 0 ? "+" : ""}${roll.bonus}`
+    : "";
+  return `d${roll.dice}: ${roll.result}${bonusPart}`;
+}
+
+function diceLineTotal(roll: { result: number; bonus?: number }): string {
+  return `= ${roll.result + (roll.bonus || 0)}`;
+}
 
 // Rating — "Рейтинг: +N" format, bold colored link
-const postRating = computed(() => props.post?.rating ?? null);
+const postRating = computed(
+  () => ratingOverride.value ?? props.post?.rating ?? null,
+);
 const ratingText = computed(() => {
   const r = postRating.value;
   if (r === null || r === undefined) return "+0";
@@ -108,6 +187,40 @@ const ratingColorClass = computed(() => {
 });
 
 const hasReviews = computed(() => reviewCount.value > 0);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Review-form gating (doc 4.2.2.14). The backend is authoritative
+// (PostReviewService): own post → forbidden, one review per post, newbies may
+// pick only "=" (need ≥100 posts for ±), one review per game every 3 days.
+// The client mirrors the deterministic gates and surfaces the server's reason
+// for the rest (cooldown) on submit.
+// ──────────────────────────────────────────────────────────────────────────────
+const alreadyVoted = computed(
+  () =>
+    !!currentUser.value &&
+    reviews.value.some(
+      (r) => r.author?.username === currentUser.value?.username,
+    ),
+);
+const isNewbieReviewer = computed(() => !!currentUser.value?.isNewbie);
+// Newbies are limited to the neutral "=" sign until they reach 100 posts.
+const canPickSignedReview = computed(() => !isNewbieReviewer.value);
+const showReviewForm = computed(
+  () =>
+    authStore.isAuthenticated &&
+    !isPostAuthor.value &&
+    !alreadyVoted.value &&
+    !isDeleted.value,
+);
+
+// Keep the selected sign valid for newbies (they may only pick "=").
+watch(
+  canPickSignedReview,
+  (canSign) => {
+    if (!canSign) newReviewSign.value = 0;
+  },
+  { immediate: true },
+);
 
 // Register reviews collapse with the expandable registry so
 // "Свернуть/Развернуть все" in ScrollNav controls post reviews.
@@ -185,8 +298,11 @@ function recalcMaxHeight() {
   const expandLinkH = 22;
   const available = metaH - expandLinkH;
 
-  // Snap to full lines (approximate line-height from font)
-  const lineH = 20; // 16px font * ~1.25 default line-height
+  // Rough BUDGET estimate only (approximate line step for card sizing).
+  // The authoritative whole-line snapping happens inside
+  // <TruncatedContent>, which measures the real content line-height at
+  // runtime — this estimate never has to match it to keep lines uncut.
+  const lineH = 20;
   const lines = Math.max(1, Math.floor(available / lineH));
   dynamicMaxHeight.value = lines * lineH;
 }
@@ -213,13 +329,110 @@ function copyAnchorLink() {
   );
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Author / moderator lifecycle: edit + soft-delete (doc 4.2.2.12)
+// ──────────────────────────────────────────────────────────────────────────────
+const isModerator = computed(() => userIsModerator(currentUser.value));
+const isPostAuthor = computed(
+  () =>
+    !!currentUser.value &&
+    currentUser.value.username === author.value?.username,
+);
+const withinEditWindow = computed(
+  () =>
+    dayjs().diff(dayjs(props.post?.createdUtc), "minute", true) <=
+    EDIT_TIME_LIMIT_MINUTES,
+);
+// Edit: author within 15 min, or moderator+ any time. Delete: author or
+// moderator+ (backend PostIntention.Delete has no author time window).
+const canEditPost = computed(
+  () =>
+    props.editable &&
+    !isDeleted.value &&
+    (isModerator.value || (isPostAuthor.value && withinEditWindow.value)),
+);
+const canDeletePost = computed(
+  () =>
+    props.editable &&
+    !isDeleted.value &&
+    (isModerator.value || isPostAuthor.value),
+);
+const isEdited = computed(
+  () => editedOverride.value || (props.post?.edits?.length ?? 0) > 0,
+);
+
+const isEditingPost = ref(false);
+const editGameText = ref("");
+const editMetaText = ref("");
+const savingPost = ref(false);
+
+function startEditPost() {
+  // Seed from the currently displayed text (mirrors the Comment edit block;
+  // the dual-mode BBCodeEditor round-trips the rendered HTML).
+  editGameText.value = effectiveGameText.value ?? "";
+  editMetaText.value = effectiveMetaText.value ?? "";
+  isEditingPost.value = true;
+}
+
+function cancelEditPost() {
+  isEditingPost.value = false;
+}
+
+async function saveEditPost() {
+  if (!postId.value || !editGameText.value.trim() || savingPost.value) return;
+  savingPost.value = true;
+  const { data, error } = await gameApi.updatePost(postId.value, {
+    gameText: editGameText.value.trim(),
+    metagameText: editMetaText.value.trim() || undefined,
+  });
+  savingPost.value = false;
+  if (error) {
+    toast.error("Не удалось сохранить пост");
+    return;
+  }
+  // Reflect the server-rendered result in place.
+  gameTextOverride.value = data?.resource?.gameText ?? editGameText.value;
+  metaTextOverride.value = data?.resource?.metagameText ?? "";
+  editedOverride.value = true;
+  isEditingPost.value = false;
+  emit("edited", postId.value);
+}
+
+const isDeleted = ref(false);
+const showDeleteConfirm = ref(false);
+const deletingPost = ref(false);
+
+function requestDeletePost() {
+  showDeleteConfirm.value = true;
+}
+
+async function confirmDeletePost() {
+  if (!postId.value || deletingPost.value) return;
+  deletingPost.value = true;
+  const { error } = await gameApi.deletePost(postId.value);
+  deletingPost.value = false;
+  showDeleteConfirm.value = false;
+  if (error) {
+    toast.error("Не удалось удалить пост");
+    return;
+  }
+  isDeleted.value = true;
+  emit("deleted", postId.value);
+}
+
 // Review functions
 async function loadReviews() {
   if (reviewsLoaded.value || reviewsLoading.value || !postId.value) return;
   reviewsLoading.value = true;
   reviewsError.value = null;
+  // Cap high enough to fetch every review in one request for the small
+  // counts seen in practice, instead of silently truncating at the
+  // default take=20.
+  const take = Math.max(20, reviewCount.value);
   // Api never throws — failures come back in the error field
-  const { data, error } = await gameApi.getPostReviews(postId.value);
+  const { data, error } = await gameApi.getPostReviews(postId.value, {
+    take,
+  });
   reviewsLoading.value = false;
   if (error) {
     reviewsError.value = "Не удалось загрузить отзывы";
@@ -242,15 +455,34 @@ async function submitReview() {
   if (!postId.value || !newReviewText.value.trim() || submittingReview.value)
     return;
   submittingReview.value = true;
+  // Newbies may only submit the neutral sign (backend enforces ≥100 posts
+  // for ±); clamp defensively even though the ± buttons are hidden for them.
+  const sign = canPickSignedReview.value ? newReviewSign.value : 0;
   try {
-    const { data } = await gameApi.createPostReview(postId.value, {
-      sign: newReviewSign.value,
+    const { data, error } = await gameApi.createPostReview(postId.value, {
+      sign,
       text: newReviewText.value.trim(),
     });
     if (data) {
       reviews.value.push(data);
       newReviewText.value = "";
-      newReviewSign.value = 1;
+      newReviewSign.value = canPickSignedReview.value ? 1 : 0;
+      // Keep the visible rating/reviewCount consistent with the new review
+      // until the parent list is refetched, via local overrides (post prop
+      // itself is read-only data owned by the store/API response).
+      reviewCountOverride.value = reviewCount.value + 1;
+      ratingOverride.value = (postRating.value ?? 0) + sign;
+    } else if (error) {
+      // The draft text is preserved (not cleared) so the user can retry.
+      // 403 (own post / newbie) and 429 (per-game cooldown) are already
+      // surfaced by the global response interceptor — only add a message
+      // for the cases it does not cover.
+      const status = (error as { status?: number }).status;
+      if (status === 409) {
+        toast.error("Вы уже оценили этот пост");
+      } else if (status !== 403 && status !== 429) {
+        toast.error("Не удалось отправить отзыв");
+      }
     }
   } finally {
     submittingReview.value = false;
@@ -266,153 +498,235 @@ async function submitReview() {
   >
     <!-- Navigation breadcrumb (featured post only). `post.room.game`
          is a full sidebar-tier GameRef so GameLink / RoomLink render
-         the same tooltip UX as the sidebar without a second fetch. -->
+         the same tooltip UX as the sidebar without a second fetch.
+         Plain link colors (no green/gray status tinting) — the sidebar
+         coloring is a sidebar affordance, not a post one. -->
     <div v-if="hasNavigation" class="post-nav">
       <GameLink :game="post.room!.game!" />
-      <span class="nav-separator"> > </span>
+      <span class="nav-separator" aria-hidden="true"> > </span>
       <RoomLink :room="post.room!" :game="post.room!.game!" />
     </div>
 
     <!-- Post card (bordered area) -->
     <div class="post-card">
-      <div class="post-columns">
-        <!-- Left column: metadata -->
-        <div ref="metaRef" class="post-meta">
-          <div class="meta-inner">
-            <!-- Character/Author info -->
-            <template v-if="hasCharacter">
-              <router-link
-                v-if="canLinkCharacter"
-                class="character-name"
-                :to="{
-                  name: 'game-characters',
-                  params: {
-                    id: post.room?.game?.publicId || post.room?.game?.id,
-                  },
-                }"
-                >{{ characterName }}</router-link
-              >
-              <span v-else class="character-name">{{ characterName }}</span>
-              <UserLink v-if="hasAuthor" :user="author!" hide-badge />
-            </template>
-            <template v-else-if="authorGameRole">
-              <span class="game-role">{{ authorGameRole }}</span>
-              <UserLink v-if="hasAuthor" :user="author!" hide-badge />
-            </template>
-            <template v-else-if="hasAuthor">
-              <UserLink :user="author!" />
-            </template>
-            <template v-else>
-              <span class="system-text">Системное</span>
-            </template>
+      <!-- Soft-deleted placeholder (after an author/moderator delete) -->
+      <div v-if="isDeleted" class="post-deleted">Пост удален</div>
 
-            <!-- Avatar: no-default for characters (нет аватара = нет картинки).
-                 size=150 — фактическая ширина рендера (колонка 160px минус
-                 margin), CSS растягивает на 100% ширины. С size=150 браузер
-                 берет medium (400px) на любом DPR — крупный четкий портрет. -->
-            <AvatarImg
-              v-if="hasCharacter"
-              :picture="character?.picture"
-              :alt="characterName || ''"
-              :size="150"
-              img-class="avatar"
-              no-default
-            />
+      <template v-else>
+        <div class="post-columns">
+          <!-- Left column: metadata -->
+          <div ref="metaRef" class="post-meta">
+            <div class="meta-inner">
+              <!-- Character/Author info -->
+              <template v-if="hasCharacter">
+                <router-link
+                  v-if="canLinkCharacter"
+                  class="character-name"
+                  :to="{
+                    name: 'game-characters',
+                    params: {
+                      id: post.room?.game?.publicId || post.room?.game?.id,
+                    },
+                  }"
+                  >{{ characterName }}</router-link
+                >
+                <span v-else class="character-name">{{ characterName }}</span>
+                <UserLink v-if="hasAuthor" :user="author!" hide-badge />
+              </template>
+              <template v-else-if="authorGameRole">
+                <span class="game-role">{{ authorGameRole }}</span>
+                <UserLink v-if="hasAuthor" :user="author!" hide-badge />
+              </template>
+              <template v-else-if="hasAuthor">
+                <UserLink :user="author!" />
+              </template>
+              <template v-else>
+                <span class="system-text">Системное</span>
+              </template>
 
-            <!-- Date -->
-            <span class="post-date">{{ formattedDate }}</span>
+              <!-- Avatar: no-default for characters (no avatar = no image).
+                 size=150 — the actual render width (the 160px column minus
+                 margin); CSS stretches it to 100% width. With size=150 the browser
+                 takes medium (400px) at any DPR — a large, sharp portrait. -->
+              <AvatarImg
+                v-if="hasCharacter"
+                :picture="character?.picture"
+                :alt="characterName || ''"
+                :size="150"
+                img-class="avatar"
+                no-default
+              />
 
-            <!-- Rating: "Рейтинг: <bold value>" -->
-            <span class="rating-line"
-              >Рейтинг:
-              <!--
+              <!-- Date -->
+              <span class="post-date">{{ formattedDate }}</span>
+
+              <!-- Rating: "Рейтинг: <bold value>" -->
+              <span class="rating-line"
+                >Рейтинг:
+                <!--
               --><button
-                v-if="hasReviews"
-                type="button"
-                class="rating-value"
-                :class="ratingColorClass"
-                :aria-expanded="showReviews"
-                :aria-label="`Рейтинг ${ratingText}, показать отзывы`"
-                @click="toggleReviews"
-              >
-                <b>{{ ratingText }}</b></button
-              ><span v-else class="rating-value" :class="ratingColorClass"
-                ><b>{{ ratingText }}</b></span
-              >
-            </span>
-          </div>
-        </div>
-
-        <!-- Right column: content -->
-        <div class="post-body">
-          <TruncatedContent
-            :truncatable="shouldTruncate"
-            :max-height="dynamicMaxHeight"
-            :watch-key="postTextHtml"
-          >
-            <div class="game-text">
-              <content-text :html="postTextHtml" :search-query="searchQuery" />
+                  v-if="hasReviews"
+                  type="button"
+                  class="rating-value"
+                  :class="ratingColorClass"
+                  :aria-expanded="showReviews"
+                  :aria-controls="reviewsCollapseId"
+                  :aria-label="`Рейтинг ${ratingText}, показать отзывы`"
+                  @click="toggleReviews"
+                >
+                  <b>{{ ratingText }}</b></button
+                ><span v-else class="rating-value" :class="ratingColorClass"
+                  ><b>{{ ratingText }}</b></span
+                >
+              </span>
             </div>
+          </div>
 
-            <div v-if="hasDiceRolls" class="dice-rolls">
-              <div
-                v-for="roll in post.diceRolls"
-                :key="roll.id"
-                class="dice-roll"
-              >
-                <span class="dice-result">
-                  d{{ roll.dice }}: {{ roll.result }}
-                  <span v-if="roll.bonus"
-                    >{{ roll.bonus > 0 ? "+" : "" }}{{ roll.bonus }}</span
-                  >
-                  <span class="dice-total"
-                    >= {{ roll.result + (roll.bonus || 0) }}</span
-                  >
-                </span>
-                <span v-if="roll.comment" class="dice-comment">{{
-                  roll.comment
-                }}</span>
+          <!-- Right column: content -->
+          <div class="post-body">
+            <!-- Inline edit mode (author ≤15min / moderator+) -->
+            <div v-if="isEditingPost" class="post-edit">
+              <label class="edit-label">Игровой текст</label>
+              <BBCodeEditor
+                v-model="editGameText"
+                context="post"
+                placeholder="Игровой текст поста..."
+                :min-height="120"
+                :is-moderator="isModerator"
+              />
+              <label class="edit-label">Метаигровой текст</label>
+              <BBCodeEditor
+                v-model="editMetaText"
+                context="post"
+                placeholder="Метаигровой комментарий (необязательно)..."
+                :min-height="60"
+                :max-height="200"
+                :is-moderator="isModerator"
+              />
+              <div class="edit-actions">
+                <button
+                  class="edit-btn save"
+                  :disabled="savingPost || !editGameText.trim()"
+                  @click="saveEditPost"
+                >
+                  Сохранить
+                </button>
+                <button class="edit-btn" @click="cancelEditPost">
+                  Отменить
+                </button>
               </div>
             </div>
 
-            <div v-if="hasMetagameText" class="metagame-text">
-              <content-text
-                :html="postMetagameHtml"
-                :search-query="searchQuery"
-              />
-            </div>
-          </TruncatedContent>
-        </div>
-      </div>
+            <TruncatedContent
+              v-else
+              :truncatable="shouldTruncate"
+              :max-height="dynamicMaxHeight"
+              :watch-key="postTextHtml"
+            >
+              <div class="game-text">
+                <content-text
+                  :html="postTextHtml"
+                  :search-query="searchQuery"
+                />
+              </div>
 
-      <!-- Post footer: number or anchor icon (inside card, like DM2 td[colspan=3]) -->
-      <div class="post-footer">
-        <Tooltip v-if="hasNavigation" text="Перейти к посту">
-          <router-link
-            class="post-link"
-            :to="{
-              name: 'game-room',
-              params: { id: gameId, num: roomNumber },
-              hash: postAnchor,
-            }"
-            >{{ symbols.returnArrow }}</router-link
+              <div v-if="hasDiceRolls" class="dice-rolls">
+                <div
+                  v-for="roll in post.diceRolls"
+                  :key="roll.id"
+                  class="dice-roll"
+                >
+                  <span class="dice-result"
+                    >{{ diceLinePrefix(roll) }}
+                    <span class="dice-total">{{
+                      diceLineTotal(roll)
+                    }}</span></span
+                  >
+                  <span v-if="roll.comment" class="dice-comment">{{
+                    roll.comment
+                  }}</span>
+                </div>
+              </div>
+
+              <div v-if="hasMetagameText" class="metagame-text">
+                <content-text
+                  :html="postMetagameHtml"
+                  :search-query="searchQuery"
+                />
+              </div>
+            </TruncatedContent>
+          </div>
+        </div>
+
+        <!-- Post footer: number or anchor icon (inside card, like DM2 td[colspan=3]) -->
+        <div class="post-footer">
+          <span
+            v-if="!isEditingPost && (canEditPost || canDeletePost || isEdited)"
+            class="post-controls"
           >
-        </Tooltip>
-        <a
-          v-else-if="number"
-          class="post-number"
-          :href="postAnchor"
-          @click.prevent="copyAnchorLink"
-          >{{ number }}</a
-        >
-      </div>
+            <button
+              v-if="canEditPost"
+              type="button"
+              class="post-action-btn"
+              @click="startEditPost"
+            >
+              Редактировать
+            </button>
+            <button
+              v-if="canDeletePost"
+              type="button"
+              class="post-action-btn delete"
+              @click="requestDeletePost"
+            >
+              Удалить
+            </button>
+            <span v-if="isEdited" class="post-edited">(отредактировано)</span>
+          </span>
+
+          <Tooltip v-if="hasNavigation" text="Перейти к посту">
+            <router-link
+              class="post-link"
+              :to="{
+                name: 'game-room',
+                params: { id: gameId, num: roomNumber },
+                hash: postAnchor,
+              }"
+              >{{ symbols.returnArrow }}</router-link
+            >
+          </Tooltip>
+          <a
+            v-else-if="number"
+            class="post-number"
+            :href="postAnchor"
+            @click.prevent="copyAnchorLink"
+            >{{ number }}</a
+          >
+        </div>
+      </template>
     </div>
 
+    <!-- Delete confirmation (soft delete) -->
+    <ConfirmDialog
+      :show="showDeleteConfirm"
+      title="Удалить пост?"
+      message="Пост будет удален. Это действие можно отменить только через модерацию."
+      confirm-label="Удалить"
+      danger
+      :loading="deletingPost"
+      @confirm="confirmDeletePost"
+      @update:show="showDeleteConfirm = $event"
+    />
+
     <!-- Reviews section (below card, grid-based collapse animation) -->
-    <div class="reviews-collapse" :class="{ expanded: showReviews }">
+    <div
+      :id="reviewsCollapseId"
+      class="reviews-collapse"
+      :class="{ expanded: showReviews }"
+      :inert="!showReviews"
+    >
       <div class="reviews-overflow">
         <SecondaryText v-if="reviewsLoading" class="reviews-status">
-          Загрузка...
+          Загрузка…
         </SecondaryText>
         <SecondaryText v-else-if="reviewsError" class="reviews-status">
           {{ reviewsError }}
@@ -422,17 +736,20 @@ async function submitReview() {
           class="reviews-section"
         >
           <PostReviewItem
-            v-for="review in reviews"
+            v-for="(review, i) in reviews"
             :key="review.id"
             :review="review"
+            :number="i + 1"
+            :highlight="
+              !!highlightUsername &&
+              review.author?.username === highlightUsername
+            "
           />
-          <!-- Review form (logged-in users) -->
-          <li
-            v-if="showReviews && authStore.isAuthenticated"
-            class="review-form"
-          >
+          <!-- Review form (eligible logged-in users) -->
+          <li v-if="showReviews && showReviewForm" class="review-form">
             <div class="sign-selector">
               <button
+                v-if="canPickSignedReview"
                 class="sign-btn"
                 :class="{
                   active: newReviewSign === 1,
@@ -453,6 +770,7 @@ async function submitReview() {
                 =
               </button>
               <button
+                v-if="canPickSignedReview"
                 class="sign-btn"
                 :class="{
                   active: newReviewSign === -1,
@@ -463,12 +781,18 @@ async function submitReview() {
                 −
               </button>
             </div>
-            <textarea
-              v-model="newReviewText"
-              class="review-input"
-              placeholder="Текст отзыва..."
-              rows="2"
-            ></textarea>
+            <div class="review-input-col">
+              <textarea
+                v-model="newReviewText"
+                class="review-input"
+                placeholder="Текст отзыва…"
+                rows="2"
+              ></textarea>
+              <SecondaryText v-if="!canPickSignedReview" class="review-hint">
+                Новичкам доступна только нейтральная оценка (нужно 100 постов
+                для "+" и "−")
+              </SecondaryText>
+            </div>
             <button
               class="submit-btn"
               :disabled="!newReviewText.trim() || submittingReview"
@@ -477,6 +801,20 @@ async function submitReview() {
               Отправить
             </button>
           </li>
+
+          <!-- Ineligible notice: own post or already voted -->
+          <li
+            v-else-if="showReviews && authStore.isAuthenticated"
+            class="review-notice"
+          >
+            <SecondaryText>
+              {{
+                isPostAuthor
+                  ? "Нельзя оценивать собственный пост"
+                  : "Вы уже оценили этот пост"
+              }}
+            </SecondaryText>
+          </li>
         </ul>
       </div>
     </div>
@@ -484,9 +822,8 @@ async function submitReview() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Inputs"
+@import "src/assets/styles/Animations"
 
 // ============================================================================
 // Game Post — layout dimensions matching DM2
@@ -692,9 +1029,9 @@ button.rating-value
 .reviews-collapse
   display: grid
   grid-template-rows: 0fr
-  transition: grid-template-rows 0.3s ease-out
-  @media (prefers-reduced-motion: reduce)
-    transition: none
+  // Unified reveal tokens — same tempo as TruncatedContent, ExpandableList
+  // and the BBCode spoiler/NSFW blocks. Reduced-motion: Reset.sass.
+  transition: grid-template-rows $expand-duration $expand-easing
   &.expanded
     grid-template-rows: 1fr
 
@@ -764,4 +1101,72 @@ button.rating-value
 .submit-btn
   margin-top: $small
   +button
+
+.review-input-col
+  flex: 1
+  display: flex
+  flex-direction: column
+  gap: $tiny
+
+.review-input-col .review-input
+  flex: none
+
+.review-hint
+  font-size: $tertiary-font-size
+
+.review-notice
+  list-style: none
+  margin-top: $small
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Author / moderator controls: edit, delete, edited indicator
+// ──────────────────────────────────────────────────────────────────────────────
+.post-deleted
+  padding: $small
+  color: $text-muted
+  font-style: italic
+
+.post-edit
+  display: flex
+  flex-direction: column
+  gap: $tiny
+  margin: 11px 15px 11px 5px
+
+.edit-label
+  color: $text-muted
+  font-size: $secondary-font-size
+
+.edit-actions
+  display: flex
+  gap: $small
+  margin-top: $small
+
+.edit-btn
+  +button
+  &.save
+    font-weight: bold
+
+// Controls sit at the left of the footer; the number/link stays pinned right.
+.post-controls
+  display: inline-flex
+  align-items: center
+  gap: $small
+  margin-right: auto
+
+.post-action-btn
+  padding: 0 $tiny
+  font-size: $secondary-font-size
+  border: none
+  background: transparent
+  cursor: pointer
+  color: $text-muted
+  &:hover
+    color: $link
+  &.delete:hover
+    color: $accent-red
+
+.post-edited
+  color: $text-muted
+  font-size: $tertiary-font-size
+  font-style: italic
 </style>

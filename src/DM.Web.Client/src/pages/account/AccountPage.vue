@@ -3,10 +3,10 @@
 
   <div v-if="user" class="account-page">
     <!--
-      /account = только account-level: безопасность, сессии, уведомления,
-      приватность, привязки ботов, смена логина.
-      Аватар, статус, имя, биография, контакты — profile-attrs, редактируются
-      на странице профиля (/profile/me → «Редактировать»).
+      /account = account-level only: security, sessions, notifications,
+      privacy, bot links, username change.
+      Avatar, status, name, bio, contacts are profile attrs, edited
+      on the profile page (/profile/me → "Редактировать").
     -->
     <p class="profile-link-hint">
       Аватар, статус, имя, биография и контакты редактируются на
@@ -48,9 +48,6 @@ const user = computed(() => userStore.user);
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .account-page
   max-width: 800px
   margin: 0 auto

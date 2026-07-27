@@ -50,11 +50,6 @@ public class User : IUser, IRemovable
     /// <inheritdoc />
     public UserRole Role { get; set; }
 
-    /// <summary>
-    /// Honorary goblin status (special title for active users)
-    /// </summary>
-    public bool IsHonorary { get; set; }
-
     /// <inheritdoc />
     public AccessPolicy AccessPolicy { get; set; }
 
@@ -138,13 +133,13 @@ public class User : IUser, IRemovable
     public Guid? AvatarUploadId { get; set; }
 
     /// <summary>
-    /// Discord ID для будущих уведомлений бота. Не используется для аутентификации.
+    /// Discord ID for future bot notifications. Not used for authentication.
     /// </summary>
     [MaxLength(50)]
     public string? DiscordId { get; set; }
 
     /// <summary>
-    /// Telegram ID для будущих уведомлений бота. Не используется для аутентификации.
+    /// Telegram ID for future bot notifications. Not used for authentication.
     /// </summary>
     [MaxLength(30)]
     public string? TelegramId { get; set; }

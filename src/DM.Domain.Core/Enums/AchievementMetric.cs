@@ -1,66 +1,66 @@
 namespace DM.Domain.Core.Enums;
 
 /// <summary>
-/// Метрика, по которой оценивается прогресс достижения.
-/// Каждое значение однозначно отображается на одно поле в профиле
-/// пользователя (см. <c>AchievementMetricResolver</c> в Domain.Community).
-/// Новая метрика = новое значение enum + новый case в резолвере + (при
-/// необходимости) новое денормализованное поле на <c>GeneralUser</c> +
-/// парный case в FE <c>getMetricValue</c>.
+/// Metric used to evaluate achievement progress.
+/// Each value maps unambiguously to a single field in the user
+/// profile (see <c>AchievementMetricResolver</c> in Domain.Community).
+/// A new metric = a new enum value + a new case in the resolver + (if
+/// needed) a new denormalized field on <c>GeneralUser</c> +
+/// a paired case in the FE <c>getMetricValue</c>.
 /// </summary>
 public enum AchievementMetric
 {
-    /// <summary>Кол-во игровых постов (<c>QuantityRating</c>).</summary>
+    /// <summary>Number of game posts (<c>QuantityRating</c>).</summary>
     GamePostsAuthored = 1,
 
-    /// <summary>Дней с регистрации (now − <c>RegisteredUtc</c>).</summary>
+    /// <summary>Days since registration (now − <c>RegisteredUtc</c>).</summary>
     DaysSinceRegistration = 2,
 
-    /// <summary>Сумма очков рейтинга от полученных PostReviews (<c>QualityRating</c>).</summary>
+    /// <summary>Sum of rating points from received PostReviews (<c>QualityRating</c>).</summary>
     PostReviewScoreSum = 3,
 
-    /// <summary>Игр, где пользователь — мастер или ассистент (<c>GamesHosting</c>).</summary>
+    /// <summary>Games where the user is a master or an assistant (<c>GamesHosting</c>).</summary>
     GamesHosted = 4,
 
-    /// <summary>Игр, где пользователь — игрок (<c>GamesPlaying</c>).</summary>
+    /// <summary>Games where the user is a player (<c>GamesPlaying</c>).</summary>
     GamesPlayed = 5,
 
-    /// <summary>Блогов, где пользователь — автор или ассистент (<c>BlogsHosting</c>).</summary>
+    /// <summary>Blogs where the user is an author or an assistant (<c>BlogsHosting</c>).</summary>
     BlogsHosted = 6,
 
-    /// <summary>Кол-во форумных топиков, созданных пользователем.</summary>
+    /// <summary>Number of forum topics created by the user.</summary>
     TopicsAuthored = 7,
 
-    /// <summary>Кол-во оставленных комментариев (любого типа).</summary>
+    /// <summary>Number of comments left (of any type).</summary>
     CommentsAuthored = 8,
 
-    /// <summary>Кол-во сообщений в глобальном чате.</summary>
+    /// <summary>Number of messages in the global chat.</summary>
     GlobalChatMessages = 9,
 
-    /// <summary>Кол-во полученных банов (count(Bans) where TargetUser=user).</summary>
+    /// <summary>Number of received bans (count(Bans) where TargetUser=user).</summary>
     BansReceived = 10,
 
     /// <summary>
-    /// Кол-во дропов — игр, которые пользователь покинул добровольно
+    /// Number of drops — games the user left voluntarily
     /// (count(Characters) where AuthorId=user AND Status=Retired AND IsPlayerLeft=true).
-    /// Exile и death — не дропы, это инициатива GM или ин-гейм событие.
+    /// Exile and death are not drops — those are GM-initiated or in-game events.
     /// </summary>
     GameDrops = 11,
 
     /// <summary>
-    /// Кол-во публикаций — статей в блогах, написанных пользователем
+    /// Number of publications — blog articles written by the user
     /// (count(Publications) where AuthorId=user AND !IsRemoved).
-    /// Драфты (IsPublished=false) тоже считаются — пользователь сделал
-    /// работу даже если не нажал «Опубликовать».
+    /// Drafts (IsPublished=false) also count — the user did the
+    /// work even without clicking "Опубликовать".
     /// </summary>
     PublicationsAuthored = 12,
 
     /// <summary>
-    /// Суммарное число «лайков», полученных пользователем на его
-    /// контент: топики, публикации, комментарии, чат-сообщения. Игровые
-    /// посты (с рейтингом через PostReviews) и сами PostReview-ы не
-    /// включены — для постов есть отдельная цепочка «Рейтинг».
-    /// Soft-deleted лайки и удаленный контент исключены.
+    /// Total number of "likes" the user received on their
+    /// content: topics, publications, comments, chat messages. Game
+    /// posts (rated via PostReviews) and PostReviews themselves are not
+    /// included — posts have their own "Рейтинг" chain.
+    /// Soft-deleted likes and deleted content are excluded.
     /// </summary>
     LikesReceived = 13,
 }

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using DM.Infrastructure.Persistence.Entities.Forum;
 using FluentAssertions;
 using Xunit;
 
@@ -145,16 +146,55 @@ public class TopicControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Get non-existent topic should return Gone
+    /// Get a topic id that never existed should return NotFound. Gone (410) is
+    /// reserved for a topic row that exists but is soft-deleted — a reader who
+    /// follows a stale link to a removed topic must be able to tell "this was
+    /// deleted" from "this address was never valid".
     /// </summary>
     [Fact]
-    public async Task GetTopic_WithNonExistentId_ReturnsGone()
+    public async Task GetTopic_WithNonExistentId_ReturnsNotFound()
     {
         // Arrange
         var nonExistentId = Guid.NewGuid();
 
         // Act
         var response = await Client.GetAsync($"/v1/topics/{nonExistentId}");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// Get a soft-deleted topic should return Gone — the counterpart of the
+    /// NotFound case above. Both directions are asserted because the service
+    /// distinguishes them with an extra existence probe: a regression that
+    /// drops the probe collapses one status into the other silently.
+    /// </summary>
+    [Fact]
+    public async Task GetTopic_WithRemovedTopic_ReturnsGone()
+    {
+        // Arrange
+        var removedTopicId = Guid.NewGuid();
+        await using (var db = DatabaseFixture.CreateDbContext())
+        {
+            db.Set<Topic>().Add(new Topic
+            {
+                TopicId = removedTopicId,
+                BoardId = TestConstants.TestBoardId,
+                AuthorId = TestConstants.TestUserId,
+                Title = "Removed Topic",
+                Text = "Removed topic content.",
+                TopicNumber = 9001,
+                CreatedUtc = DateTimeOffset.UtcNow.AddHours(-1),
+                IsRemoved = true,
+                IsAttached = false,
+                IsClosed = false
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Act
+        var response = await Client.GetAsync($"/v1/topics/{removedTopicId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Gone);

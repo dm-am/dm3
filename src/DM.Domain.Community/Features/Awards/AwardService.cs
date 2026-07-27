@@ -32,7 +32,7 @@ internal class AwardService : IAwardService
         _eventProducer = eventProducer;
     }
 
-    // ---- Типы наград ----
+    // ---- Award types ----
 
     public Task<IReadOnlyCollection<AwardType>> GetTypesAsync(bool includeInactive = false, CancellationToken ct = default) =>
         _repository.GetTypesAsync(includeInactive, ct);
@@ -59,7 +59,7 @@ internal class AwardService : IAwardService
     public Task DeactivateTypeAsync(Guid id, CancellationToken ct = default) =>
         _repository.UpdateTypeAsync(new UpdateAwardType { Id = id, IsActive = false }, ct);
 
-    // ---- Серии конкурсов ----
+    // ---- Contest series ----
 
     public Task<IReadOnlyCollection<ContestSeries>> GetSeriesAsync(bool includeInactive = false, CancellationToken ct = default) =>
         _repository.GetSeriesAsync(includeInactive, ct);
@@ -80,7 +80,7 @@ internal class AwardService : IAwardService
     public Task DeactivateSeriesAsync(Guid id, CancellationToken ct = default) =>
         _repository.UpdateSeriesAsync(new UpdateContestSeries { Id = id, IsActive = false }, ct);
 
-    // ---- Выдачи ----
+    // ---- Grants ----
 
     public async Task<IReadOnlyCollection<UserAward>> GetUserAwardsAsync(string username, CancellationToken ct = default)
     {
@@ -118,8 +118,8 @@ internal class AwardService : IAwardService
         };
         var granted = await _repository.CreateAsync(create, _identity.Current.User.UserId, ct);
 
-        // Publish notification event — worker generator превратит его в
-        // запись UserNotification у получателя.
+        // Publish notification event — the worker generator turns it into
+        // a UserNotification record for the recipient.
         await _eventProducer.SendAsync(EventType.AwardGranted, granted.Id);
 
         return granted;

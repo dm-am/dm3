@@ -1,28 +1,28 @@
 namespace DM.Domain.Core.Dto;
 
 /// <summary>
-/// Source-файл аватара (один на upload). SSOT для projection'ов сущностей,
-/// у которых есть аватар (User, Character).
+/// Avatar source file (one per upload). SSOT for projections of entities
+/// that have an avatar (User, Character).
 ///
-/// Domain-уровень хранит ТОЛЬКО source-URL и object-key. Thumbnail-варианты
-/// (small/medium) генерируются on-the-fly на API-слое через imgproxy при
-/// маппинге в DTO (см. AvatarPictureResolver).
+/// The domain level stores ONLY the source URL and object key. Thumbnail variants
+/// (small/medium) are generated on-the-fly at the API layer via imgproxy when
+/// mapping to DTOs (see AvatarPictureResolver).
 /// </summary>
 public sealed class AvatarPicture
 {
     /// <summary>
-    /// S3 object key исходного файла (например <c>avatars/{userId:N}_{8hex}.jpg</c>).
-    /// Используется imgproxy URL builder'ом на API-слое. Null если у сущности
-    /// нет аватара.
+    /// S3 object key of the source file (e.g. <c>avatars/{userId:N}_{8hex}.jpg</c>).
+    /// Used by the imgproxy URL builder at the API layer. Null if the entity
+    /// has no avatar.
     /// </summary>
     public string? SourceObjectKey { get; set; }
 
     /// <summary>
-    /// Прямой публичный URL к source-файлу. Aspect-preserving original
-    /// (≤1024 px). EXIF stripped. Null если нет аватара.
+    /// Direct public URL to the source file. Aspect-preserving original
+    /// (≤1024 px). EXIF stripped. Null if there is no avatar.
     /// </summary>
     public string? SourceUrl { get; set; }
 
-    /// <summary>True если есть source-файл.</summary>
+    /// <summary>True if a source file exists.</summary>
     public bool HasUrl => SourceUrl != null;
 }

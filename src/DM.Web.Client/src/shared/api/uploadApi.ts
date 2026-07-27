@@ -1,4 +1,5 @@
 import type { Upload } from "./models/common/upload";
+import type { ListEnvelope } from "./models/common";
 import Api from "./client";
 import type { AxiosProgressEvent } from "axios";
 
@@ -6,8 +7,8 @@ import type { AxiosProgressEvent } from "axios";
  * Upload API.
  *
  * Direct upload only: file → multipart/form-data → server side
- * processing → confirmed Upload. Применяется для аватаров, портретов,
- * вложений постов. Никаких presigned URLs.
+ * processing → confirmed Upload. Used for avatars, portraits,
+ * post attachments. No presigned URLs.
  */
 export default new (class UploadApi {
   public directUpload(
@@ -17,10 +18,10 @@ export default new (class UploadApi {
       targetId?: string;
       onProgress?: (e: AxiosProgressEvent) => void;
       /**
-       * Idempotency-Key для безопасного retry. Если не задан — генерируется
-       * crypto.randomUUID() автоматически. Сервер кеширует response для
-       * того же ключа в течение часа, поэтому дублирующие retry'и (mobile
-       * сеть, axios-retry interceptor) не создают дубли Upload-записей.
+       * Idempotency-Key for safe retries. If not provided, it is generated
+       * automatically via crypto.randomUUID(). The server caches the response for
+       * the same key for an hour, so duplicate retries (mobile
+       * network, axios-retry interceptor) do not create duplicate Upload records.
        */
       idempotencyKey?: string;
     },
@@ -44,11 +45,29 @@ export default new (class UploadApi {
     );
   }
 
-  public getUpload(uploadId: string) {
-    return Api.get<Upload>(`uploads/${uploadId}`);
+  /**
+   * List uploads, newest first (GET /v1/uploads).
+   * Without `username` returns the CURRENT user's own uploads (any
+   * authenticated user). Passing `username` narrows to that user's uploads
+   * and is Admin-gated server-side (UploadIntention.ListUser).
+   */
+  public getUploads(params?: {
+    username?: string;
+    number?: number;
+    size?: number;
+  }) {
+    return Api.get<ListEnvelope<Upload>>("uploads", {
+      username: params?.username,
+      number: params?.number,
+      size: params?.size,
+    });
   }
 
-  public deleteUpload(uploadId: string) {
-    return Api.delete(`uploads/${uploadId}`);
+  /**
+   * Delete an upload (DELETE /v1/uploads/{id}, soft-delete).
+   * Allowed to the upload owner and admins server-side.
+   */
+  public deleteUpload(id: string) {
+    return Api.delete(`uploads/${id}`);
   }
 })();

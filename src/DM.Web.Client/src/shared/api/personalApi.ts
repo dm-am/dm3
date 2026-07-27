@@ -50,8 +50,8 @@ export default new (class PersonalApi {
   }
 
   /**
-   * Сбросить мой аватар. Идемпотент: безопасно вызывать на пользователе
-   * без аватара.
+   * Reset my avatar. Idempotent: safe to call on a user
+   * without an avatar.
    */
   public removeMyAvatar() {
     return Api.delete("users/me/profile/avatar");

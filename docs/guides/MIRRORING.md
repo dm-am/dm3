@@ -57,8 +57,8 @@ Users ──────────────────>│  nginx → dm-a
 # 1. Клонировать репозиторий
 git clone https://github.com/dm-am/dm3.git && cd dm3/docker
 
-# 2. Запустить интерактивный мастер
-./scripts/setup-mirror.sh
+# 2. Создать .env.mirror из шаблона и заполнить (см. "Ручная настройка")
+cp .env.example .env.mirror
 
 # 3. Настроить nginx (SSL)
 certbot --nginx -d your-mirror-domain.ru
@@ -71,16 +71,24 @@ docker compose --env-file .env.mirror --profile mirror up -d
 
 ### 1. Создать `.env.mirror`
 
+Отдельного шаблона для зеркала нет — файл создается вручную из общего `.env.example`:
+
 ```bash
-cp .env.mirror.example .env.mirror
-# Заполнить:
-# - POSTGRES_PASSWORD (тот же что на main)
-# - RABBITMQ_DEFAULT_PASS (тот же)
-# - MINIO_ROOT_PASSWORD (тот же)
-# - DM_CryptoConfiguration__KeyBase64 (КРИТИЧНО: тот же!)
-# - MIRROR_ID (уникальный для этого зеркала)
-# - DB_HOST, MONGO_HOST, etc. (IP/домен основного сервера)
+cp .env.example .env.mirror
 ```
+
+Заполнить переменные (все они подставляются в `docker-compose.yml`, секция `x-workload-env`):
+
+| Категория | Переменные | Значение |
+|-----------|------------|----------|
+| Секреты | `POSTGRES_PASSWORD`, `RABBITMQ_DEFAULT_PASS`, `MINIO_ROOT_PASSWORD` | Те же, что на main |
+| imgproxy | `IMGPROXY_KEY`, `IMGPROXY_SALT` | Те же, что на main |
+| Криптография | `DM_CryptoConfiguration__KeyBase64` | **КРИТИЧНО: тот же, что на main!** |
+| Идентификатор | `MIRROR_ID` | Уникальный ID зеркала — ключ из `appsettings.json` → `MirrorConfiguration` → `Mirrors` |
+| Хосты main-сервера | `DB_HOST`, `MONGO_HOST`, `RABBITMQ_HOST`, `MINIO_HOST`, `SEARCH_HOST`, `SEARCH_GRPC_HOST`, `LOGS_HOST`, `TRACING_HOST` | IP/домен основного сервера |
+| SSL к БД | `DB_SSL_MODE`, `MONGO_TLS` | См. шаг 3 |
+| Публичные URL зеркала | `WEB_URL`, `API_URL`, `CDN_PUBLIC_URL`, `IMGPROXY_PUBLIC_URL`, `CORS_URL_0` | Домен этого зеркала |
+| Окружение | `ASPNETCORE_ENVIRONMENT` | `Production` |
 
 ### 2. Настроить firewall на основном сервере
 
@@ -128,7 +136,7 @@ Watchtower автоматически обновляет контейнеры к
 ### Добавление нового зеркала
 
 1. Настроить зеркало по инструкции выше
-2. Добавить URL зеркала в `appsettings.json` → `IntegrationSettings.MirrorUrls`
+2. Добавить URL зеркала в `appsettings.json` → `MirrorConfiguration` → `Mirrors`
 3. Push в main → CI/CD обновит образ → Watchtower обновит все сервера
 
 ## Мониторинг

@@ -200,25 +200,25 @@ public class PollsQuery : PagingQuery
     /// Filter by minimum start date (ISO 8601, inclusive)
     /// </summary>
     /// <example>2024-01-01T00:00:00Z</example>
-    public DateTimeOffset? StartsFrom { get; set; }
+    public DateTimeOffset? StartsFromUtc { get; set; }
 
     /// <summary>
     /// Filter by maximum start date (ISO 8601, inclusive)
     /// </summary>
     /// <example>2024-12-31T23:59:59Z</example>
-    public DateTimeOffset? StartsTo { get; set; }
+    public DateTimeOffset? StartsToUtc { get; set; }
 
     /// <summary>
     /// Filter by minimum end date (ISO 8601, inclusive)
     /// </summary>
     /// <example>2024-01-01T00:00:00Z</example>
-    public DateTimeOffset? EndsFrom { get; set; }
+    public DateTimeOffset? EndsFromUtc { get; set; }
 
     /// <summary>
     /// Filter by maximum end date (ISO 8601, inclusive)
     /// </summary>
     /// <example>2024-12-31T23:59:59Z</example>
-    public DateTimeOffset? EndsTo { get; set; }
+    public DateTimeOffset? EndsToUtc { get; set; }
 
     /// <summary>
     /// Sort field: "status" (default), "starts", "ends"

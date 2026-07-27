@@ -1,13 +1,31 @@
 /**
  * Shared Filter Utilities
  *
- * Унифицированные функции для работы с фильтрами:
- * - Парсинг и форматирование дат
- * - Работа с множествами (Set)
- * - Конвертация между URL, State и API форматами
+ * Unified helpers for working with filters:
+ * - Date parsing and formatting
+ * - Conversion between URL, State and API formats
  */
 
 import type { DateRange, SortDirection } from "./types";
+
+// =============================================================================
+// QUERY VALUE NORMALIZATION
+// =============================================================================
+
+/**
+ * Normalize a raw route query value (which may include `null` entries,
+ * e.g. from repeated query params like `?foo&foo=bar`) into the
+ * `string | string[] | undefined` shape expected by the parse* helpers below.
+ */
+export function toQueryValue(
+  value: string | null | (string | null)[] | undefined,
+): string | string[] | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (Array.isArray(value)) {
+    return value.filter((v): v is string => v !== null);
+  }
+  return value;
+}
 
 // =============================================================================
 // DATE UTILITIES
@@ -100,82 +118,6 @@ export function formatDateRangeForDisplay(range: DateRange): string {
   return "";
 }
 
-/**
- * Check if date range has any value
- */
-export function hasDateRange(range: DateRange): boolean {
-  return range.from !== null || range.to !== null;
-}
-
-/**
- * Create empty date range
- */
-export function emptyDateRange(): DateRange {
-  return { from: null, to: null };
-}
-
-// =============================================================================
-// SET UTILITIES
-// =============================================================================
-
-/**
- * Parse comma-separated string to Set<string>
- */
-export function parseSetFromUrl(
-  value: string | string[] | undefined,
-): Set<string> {
-  if (!value) return new Set();
-  const str = Array.isArray(value) ? value[0] : value;
-  if (!str) return new Set();
-
-  const items = str
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  return new Set(items);
-}
-
-/**
- * Parse comma-separated string to Set<number>
- */
-export function parseNumberSetFromUrl(
-  value: string | string[] | undefined,
-): Set<number> {
-  if (!value) return new Set();
-  const str = Array.isArray(value) ? value[0] : value;
-  if (!str) return new Set();
-
-  const items = str
-    .split(",")
-    .map((s) => parseInt(s.trim(), 10))
-    .filter((n) => !isNaN(n));
-  return new Set(items);
-}
-
-/**
- * Format Set<string> to comma-separated string for URL
- */
-export function formatSetForUrl(set: Set<string>): string | undefined {
-  if (set.size === 0) return undefined;
-  return Array.from(set).join(",");
-}
-
-/**
- * Format Set<number> to comma-separated string for URL
- */
-export function formatNumberSetForUrl(set: Set<number>): string | undefined {
-  if (set.size === 0) return undefined;
-  return Array.from(set).join(",");
-}
-
-/**
- * Convert Set to array for API
- */
-export function setToArray<T>(set: Set<T>): T[] | undefined {
-  if (set.size === 0) return undefined;
-  return Array.from(set);
-}
-
 // =============================================================================
 // STRING UTILITIES
 // =============================================================================
@@ -191,21 +133,6 @@ export function parseStringFromUrl(
   const str = Array.isArray(value) ? value[0] : value;
   if (!str) return "";
   return maxLength ? str.slice(0, maxLength) : str;
-}
-
-/**
- * Parse number from URL query parameter
- */
-export function parseNumberFromUrl(
-  value: string | string[] | undefined,
-  defaultValue?: number,
-): number | undefined {
-  if (!value) return defaultValue;
-  const str = Array.isArray(value) ? value[0] : value;
-  if (!str) return defaultValue;
-
-  const num = parseInt(str, 10);
-  return isNaN(num) ? defaultValue : num;
 }
 
 // =============================================================================

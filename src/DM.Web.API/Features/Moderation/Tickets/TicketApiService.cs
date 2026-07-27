@@ -22,9 +22,9 @@ internal class TicketApiService : ITicketApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Ticket>> GetTickets(TicketStatus? status = null)
+    public async Task<ListEnvelope<Ticket>> GetTickets(TicketStatus? status = null, TicketSubtype? subtype = null)
     {
-        var tickets = await _ticketService.GetTickets(status);
+        var tickets = await _ticketService.GetTickets(status, subtype);
         return new ListEnvelope<Ticket>(tickets.Select(_mapper.Map<Ticket>));
     }
 
@@ -36,17 +36,17 @@ internal class TicketApiService : ITicketApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Ticket>> GetMyFiledTickets()
+    public async Task<ListEnvelope<Ticket>> GetMyFiledTickets(TicketStatus? status = null, TicketSubtype? subtype = null)
     {
-        var tickets = await _ticketService.GetMyFiledTickets();
+        var tickets = await _ticketService.GetMyFiledTickets(status, subtype);
         return new ListEnvelope<Ticket>(tickets.Select(_mapper.Map<Ticket>));
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Ticket>?> GetTicket(Guid ticketId)
+    public async Task<Envelope<TicketDetails>?> GetTicket(Guid ticketId)
     {
         var ticket = await _ticketService.GetTicket(ticketId);
-        return ticket != null ? new Envelope<Ticket>(_mapper.Map<Ticket>(ticket)) : null;
+        return ticket != null ? new Envelope<TicketDetails>(_mapper.Map<TicketDetails>(ticket)) : null;
     }
 
     /// <inheritdoc />
@@ -78,10 +78,14 @@ internal class TicketApiService : ITicketApiService
         var stats = await _ticketService.GetTicketStats();
         return new TicketStats
         {
-            Open = stats.TryGetValue(TicketStatus.Open, out var open) ? open : 0,
-            InProgress = stats.TryGetValue(TicketStatus.InProgress, out var inProgress) ? inProgress : 0,
-            Resolved = stats.TryGetValue(TicketStatus.Resolved, out var resolved) ? resolved : 0,
-            Rejected = stats.TryGetValue(TicketStatus.Rejected, out var rejected) ? rejected : 0
+            WaitingForModeration = stats.TryGetValue(TicketStatus.WaitingForModeration, out var waitingForModeration)
+                ? waitingForModeration
+                : 0,
+            WaitingForUser = stats.TryGetValue(TicketStatus.WaitingForUser, out var waitingForUser)
+                ? waitingForUser
+                : 0,
+            Closed = stats.TryGetValue(TicketStatus.Closed, out var closed) ? closed : 0,
+            Spam = stats.TryGetValue(TicketStatus.Spam, out var spam) ? spam : 0
         };
     }
 }

@@ -1,0 +1,23 @@
+using System.ComponentModel;
+
+namespace DM.Domain.Core.Enums;
+
+/// <summary>
+/// Participation scope for the games list player filter
+/// (only applicable when PlayerUsername is set)
+/// </summary>
+public enum PlayerParticipation
+{
+    /// <summary>
+    /// Player currently has an active character in the game (default)
+    /// </summary>
+    [Description("Активный персонаж")]
+    Active = 0,
+
+    /// <summary>
+    /// Player has any non-NPC character except declined applications:
+    /// active, retired (dead / left / exiled) or an application under review
+    /// </summary>
+    [Description("Любое участие")]
+    Any = 1
+}

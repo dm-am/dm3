@@ -10,6 +10,7 @@ using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Posts;
 using DM.Infrastructure.Persistence.RelationalStorage;
+using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
 
@@ -116,7 +117,7 @@ internal class PostRepository : IPostRepository
             baseQuery = baseQuery.Where(p => EF.Functions.ILike(
                 DmDbContext.RegexpReplace(
                     p.GameText,
-                    @"\[private=[^\]]*\][\s\S]*?\[/private\]",
+                    @"\[private(=[^\]]*)?\][\s\S]*?\[/private\]",
                     "",
                     "gi"),
                 pattern));
@@ -132,7 +133,7 @@ internal class PostRepository : IPostRepository
 
         // Reviewer filter — keep only posts which have at least one active
         // review authored by the given username. Powers the profile page
-        // «Оценил чужих постов: {username}». Subquery against PostReviews
+        // The "Оценил чужих постов: {username}" page. Subquery against PostReviews
         // mirrors the LastReviewedAfter pattern below for plan stability.
         if (!string.IsNullOrWhiteSpace(query.ReviewerUsername))
         {
@@ -150,7 +151,7 @@ internal class PostRepository : IPostRepository
         }
         if (query.CreatedBefore.HasValue)
         {
-            baseQuery = baseQuery.Where(p => p.CreatedUtc <= query.CreatedBefore.Value);
+            baseQuery = baseQuery.WhereAtOrBefore(p => p.CreatedUtc, query.CreatedBefore.Value);
         }
 
         // LastReviewedAfter filter — only posts that have a review after this date
@@ -283,7 +284,7 @@ internal class PostRepository : IPostRepository
                 {
                     Id = x.CharId.Value,
                     Name = x.CharName ?? string.Empty,
-                    // Picture заполняется батчем в EnrichWithCharacterPictures.
+                    // Picture is filled in batch by EnrichWithCharacterPictures.
                     IsNpc = x.CharIsNpc ?? false,
                     Author = new GeneralUser
                     {
@@ -372,9 +373,9 @@ internal class PostRepository : IPostRepository
     }
 
     /// <summary>
-    /// Батчем поднимает аватары всех персонажей на странице из таблицы Uploads
-    /// и заполняет <see cref="CharacterShort.Picture"/> (3 URL: original / medium /
-    /// small). Один query вместо N correlated subqueries.
+    /// Batch-loads avatars of all characters on the page from the Uploads table
+    /// and fills <see cref="CharacterShort.Picture"/> (3 URLs: original / medium /
+    /// small). One query instead of N correlated subqueries.
     /// </summary>
     private async Task EnrichWithCharacterPictures(IEnumerable<Post> posts)
     {

@@ -33,7 +33,7 @@ internal class AttributeSchemaApiService : IAttributeSchemaApiService
     /// <inheritdoc />
     public async Task<Envelope<AttributeSchema>> Get(Guid schemaId)
     {
-        var schema = await _schemaService.GetAsync(schemaId);
+        var schema = await _schemaService.GetForUserAsync(schemaId);
         return new Envelope<AttributeSchema>(_mapper.Map<AttributeSchema>(schema));
     }
 

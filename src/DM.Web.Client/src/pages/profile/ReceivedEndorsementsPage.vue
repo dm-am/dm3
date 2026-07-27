@@ -1,34 +1,42 @@
 <script setup lang="ts">
 /**
- * ReceivedEndorsementsPage — «Полученные рекомендации» пользователя.
- * Тонкая обертка над `UserEndorsementsList` в режиме `received`:
- * рекомендации, которые другие участники написали об этом пользователе.
+ * ReceivedEndorsementsPage — a user's "Полученные рекомендации" page.
+ * A thin wrapper over `ProfileEndorsementsList` in `received` mode:
+ * endorsements other members wrote about this user.
  */
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
+import { ErrorPage } from "@/shared/ui/ErrorPage";
 import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
-import UserEndorsementsList from "./UserEndorsementsList.vue";
+import ProfileEndorsementsList from "./ProfileEndorsementsList.vue";
+import { useProfileSubpageUser } from "./useProfileSubpageUser";
 
 const route = useRoute();
 const username = computed(() => route.params.username as string);
+
+const { notFound, canonicalUsername } = useProfileSubpageUser(username);
 
 const profileLink = computed(() => ({
   name: "profile" as const,
   params: { username: username.value },
 }));
 
-useDocumentTitle(() => `Полученные рекомендации — ${username.value}`);
+useDocumentTitle(() => `Полученные рекомендации — ${canonicalUsername.value}`);
 </script>
 
 <template>
-  <div class="received-endorsements-page">
-    <ProfileSubpageHeader label="Полученные рекомендации" :username="username">
+  <ErrorPage v-if="notFound" :code="404" />
+  <div v-else class="received-endorsements-page">
+    <ProfileSubpageHeader
+      label="Полученные рекомендации"
+      :username="canonicalUsername"
+    >
       Что участники сообщества пишут об игроке
-      <router-link :to="profileLink">{{ username }}</router-link>
+      <router-link :to="profileLink">{{ canonicalUsername }}</router-link>
     </ProfileSubpageHeader>
 
-    <UserEndorsementsList
+    <ProfileEndorsementsList
       :username="username"
       mode="received"
       route-name="received-endorsements"

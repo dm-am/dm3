@@ -26,6 +26,13 @@ public interface ITopicApiService
     Task<ListEnvelope<Topic>> GetAcrossBoards(TopicsQuery query);
 
     /// <summary>
+    /// Get the user's most-liked topic across every board visible to the
+    /// viewer (profile widget). Returns null inside the envelope when the
+    /// user has no visible topics.
+    /// </summary>
+    Task<Envelope<Topic?>> GetUserBestTopic(string username);
+
+    /// <summary>
     /// Get topic
     /// </summary>
     /// <param name="topicId">Topic identifier</param>

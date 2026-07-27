@@ -3,13 +3,34 @@
 
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { Game, GameRef, Character, Room, Post, Tag } from "./types";
-import type { ListEnvelope, Paging, Comment } from "@/shared/api/models/common";
+import type {
+  Game,
+  GameRef,
+  Character,
+  Room,
+  Post,
+  Tag,
+  ChatRoom,
+  NotepadEntry,
+  GameUser,
+  CreateRoomInput,
+  GameStatusTransition,
+  GamePremoderationTransition,
+} from "./types";
+import type {
+  ListEnvelope,
+  Paging,
+  Comment,
+  User,
+} from "@/shared/api/models/common";
 import gameApi, { type GamesSearchParams } from "../api/gameApi";
 import {
   useApiList,
   useApiResource,
 } from "@/shared/lib/composables/useApiResource";
+import { unwrapResource } from "@/shared/api";
+import { useAuthStore } from "@/shared/stores";
+import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 
 /**
  * Store for game lists (menu/sidebar, pagination)
@@ -79,10 +100,19 @@ export const useGamesStore = defineStore("games", () => {
     return JSON.stringify(sorted);
   }
 
+  // Request guard to discard stale out-of-order responses
+  const requestGuard = createRequestGuard();
+
   /**
    * Search games with filters (with caching)
    */
   async function searchGames(params: GamesSearchParams): Promise<void> {
+    const requestId = requestGuard.next();
+
+    // Reset error before the cache lookup so a stale error never survives
+    // a cache-hit navigation.
+    searchError.value = null;
+
     const cacheKey = createCacheKey(params);
     const cached = searchCache.get(cacheKey);
     const now = Date.now();
@@ -91,6 +121,7 @@ export const useGamesStore = defineStore("games", () => {
     if (cached && now - cached.timestamp < CACHE_TTL) {
       searchResult.value = cached.data;
       lastSearchParams.value = params;
+      searchLoading.value = false;
       return;
     }
 
@@ -100,10 +131,14 @@ export const useGamesStore = defineStore("games", () => {
     }
 
     searchLoading.value = true;
-    searchError.value = null;
     lastSearchParams.value = params;
 
     const { data, error } = await gameApi.searchGames(params);
+
+    // Ignore stale responses
+    if (!requestGuard.isCurrent(requestId)) {
+      return;
+    }
 
     if (error) {
       searchError.value = "Не удалось загрузить игры";
@@ -207,6 +242,9 @@ export const useGamesStore = defineStore("games", () => {
     participatingGamesError: participating.error,
     moderationGamesError: moderation.error,
     activeGamesError: activePage.error,
+    popularGamesError: popular.error,
+    recruitingGamesError: recruitingPage.error,
+    finishedGamesError: finishedPage.error,
 
     // Loading states
     participatingGamesLoading: participating.loading,
@@ -286,6 +324,55 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   const commentsPaging = ref<Paging | null>(null);
   const commentsLoading = ref(false);
   const commentsError = ref<string | null>(null);
+
+  // Chat rooms (discussion) data
+  const chatRooms = ref<ChatRoom[]>([]);
+  const chatRoomsLoading = ref(false);
+  const chatRoomsError = ref<string | null>(null);
+
+  // Master notepad data
+  const notepad = ref<NotepadEntry[]>([]);
+  const notepadLoading = ref(false);
+  const notepadError = ref<string | null>(null);
+
+  // Blacklist data
+  const blacklist = ref<User[]>([]);
+  const blacklistLoading = ref(false);
+  const blacklistError = ref<string | null>(null);
+
+  // Game users data
+  const users = ref<GameUser[]>([]);
+  const usersLoading = ref(false);
+  const usersError = ref<string | null>(null);
+
+  // Active vs archived post rooms — a room is archived when isArchived is true.
+  const activeRooms = computed(() => rooms.value.filter((r) => !r.isArchived));
+  const archivedRooms = computed(() => rooms.value.filter((r) => r.isArchived));
+
+  // Current-user role flags — single source of truth for the panel and page
+  // (previously duplicated in GamePage.vue). Derived from game.participation,
+  // which serializes the API's GameParticipation flags (see DM.Web.API
+  // Game.cs), NOT GameRole names: Owner (master), Authority (master or
+  // assistant), PendingAssistant, Player, Reader, Moderator (game mentor).
+  const participation = computed<string[]>(
+    () => (game.value?.participation as unknown as string[]) ?? [],
+  );
+  const isMaster = computed(() => participation.value.includes("Owner"));
+  const isAssistant = computed(
+    () => participation.value.includes("Authority") && !isMaster.value,
+  );
+  const isMentor = computed(() => participation.value.includes("Moderator"));
+  const isSubscribed = computed(() => participation.value.includes("Reader"));
+  const isPlayer = computed(
+    () =>
+      participation.value.includes("Player") ||
+      isMentor.value ||
+      isMaster.value,
+  );
+  /** Master, assistant or mentor — may edit/manage the game. */
+  const canManage = computed(
+    () => isMaster.value || isAssistant.value || isMentor.value,
+  );
 
   // Computed
   const isLoading = computed(
@@ -429,6 +516,200 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     commentsLoading.value = false;
   }
 
+  // --- Single comment mutations (edit / delete / likes) ---
+  // Mirror the forum boardsStore idiom: optimistic in-place list patches
+  // from the server response, no full reload.
+
+  async function updateComment(id: string, text: string) {
+    const { data } = await gameApi.updateGameComment(id, { text });
+    const updated = unwrapResource<Comment>(data);
+    if (updated) {
+      const index = comments.value.findIndex((c) => c.id === id);
+      if (index !== -1) comments.value[index] = updated;
+    }
+  }
+
+  async function deleteComment(id: string) {
+    await gameApi.deleteGameComment(id);
+    const index = comments.value.findIndex((c) => c.id === id);
+    if (index !== -1) {
+      comments.value[index] = {
+        ...comments.value[index],
+        isRemoved: true as unknown as Comment["isRemoved"],
+      };
+    }
+  }
+
+  async function likeComment(id: string) {
+    const { data } = await gameApi.likeGameComment(id);
+    const liker = unwrapResource<User>(data);
+    if (liker) {
+      const index = comments.value.findIndex((c) => c.id === id);
+      if (index !== -1) {
+        const comment = comments.value[index];
+        comments.value[index] = {
+          ...comment,
+          likes: [...(comment.likes ?? []), liker] as Comment["likes"],
+        };
+      }
+    }
+  }
+
+  async function unlikeComment(id: string) {
+    await gameApi.unlikeGameComment(id);
+    const index = comments.value.findIndex((c) => c.id === id);
+    if (index === -1) return;
+    const comment = comments.value[index];
+    const username = useAuthStore().user?.username;
+    if (comment.likes && username) {
+      comments.value[index] = {
+        ...comment,
+        likes: comment.likes.filter(
+          (u) => u.username !== username,
+        ) as Comment["likes"],
+      };
+    }
+  }
+
+  // Load chat rooms (discussion)
+  async function loadChatRooms(gameId: string): Promise<void> {
+    chatRoomsLoading.value = true;
+    chatRoomsError.value = null;
+
+    const { data, error } = await gameApi.getChatRooms(gameId);
+
+    if (error) {
+      chatRoomsError.value = "Не удалось загрузить обсуждения";
+      chatRooms.value = [];
+    } else if (data) {
+      chatRooms.value = data.resources;
+    }
+
+    chatRoomsLoading.value = false;
+  }
+
+  // Load master notepad
+  async function loadNotepad(gameId: string): Promise<void> {
+    notepadLoading.value = true;
+    notepadError.value = null;
+
+    const { data, error } = await gameApi.getNotepad(gameId);
+
+    if (error) {
+      notepadError.value = "Не удалось загрузить блокнот";
+      notepad.value = [];
+    } else if (data) {
+      notepad.value = data.resources;
+    }
+
+    notepadLoading.value = false;
+  }
+
+  // Load blacklist
+  async function loadBlacklist(gameId: string): Promise<void> {
+    blacklistLoading.value = true;
+    blacklistError.value = null;
+
+    const { data, error } = await gameApi.getBlacklist(gameId);
+
+    if (error) {
+      blacklistError.value = "Не удалось загрузить черный список";
+      blacklist.value = [];
+    } else if (data) {
+      blacklist.value = data.resources;
+    }
+
+    blacklistLoading.value = false;
+  }
+
+  // Load game users
+  async function loadUsers(gameId: string): Promise<void> {
+    usersLoading.value = true;
+    usersError.value = null;
+
+    const { data, error } = await gameApi.getUsers(gameId);
+
+    if (error) {
+      usersError.value = "Не удалось загрузить участников";
+      users.value = [];
+    } else if (data) {
+      users.value = data.resources;
+    }
+
+    usersLoading.value = false;
+  }
+
+  // === Mutations ===
+  // Each mutation calls the API and then re-syncs the affected store slices
+  // (loadGame refreshes participation/status/recruitment; loadRooms refreshes
+  // the active/archived split). They return a boolean success flag so callers
+  // can surface errors without reaching into the API layer.
+
+  async function transitionStatus(
+    transition: GameStatusTransition,
+  ): Promise<boolean> {
+    if (!game.value) return false;
+    const id = game.value.id;
+    const { error } = await gameApi.transitionStatus(id, transition);
+    if (error) return false;
+    await loadGame(id);
+    return true;
+  }
+
+  async function changePremoderation(
+    transition: GamePremoderationTransition,
+  ): Promise<boolean> {
+    if (!game.value) return false;
+    const id = game.value.id;
+    const { error } = await gameApi.changePremoderation(id, transition);
+    if (error) return false;
+    await loadGame(id);
+    return true;
+  }
+
+  async function resetRecruitment(): Promise<boolean> {
+    if (!game.value) return false;
+    const id = game.value.id;
+    const { error } = await gameApi.resetRecruitment(id);
+    if (error) return false;
+    await loadGame(id);
+    return true;
+  }
+
+  async function deleteGame(): Promise<boolean> {
+    if (!game.value) return false;
+    const { error } = await gameApi.deleteGame(game.value.id);
+    return !error;
+  }
+
+  async function createRoom(room: CreateRoomInput): Promise<boolean> {
+    if (!game.value) return false;
+    const id = game.value.id;
+    const { error } = await gameApi.createRoom(id, room);
+    if (error) return false;
+    await loadRooms(id);
+    return true;
+  }
+
+  async function updateRoom(
+    roomId: string,
+    patch: Partial<Room>,
+  ): Promise<boolean> {
+    if (!game.value) return false;
+    const { error } = await gameApi.updateRoom(roomId, patch);
+    if (error) return false;
+    await loadRooms(game.value.id);
+    return true;
+  }
+
+  async function archiveRoom(roomId: string): Promise<boolean> {
+    if (!game.value) return false;
+    const { error } = await gameApi.archiveRoom(roomId);
+    if (error) return false;
+    await loadRooms(game.value.id);
+    return true;
+  }
+
   // Reset all data (when leaving game page)
   function reset(): void {
     game.value = null;
@@ -453,6 +734,22 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     commentsPaging.value = null;
     commentsLoading.value = false;
     commentsError.value = null;
+
+    chatRooms.value = [];
+    chatRoomsLoading.value = false;
+    chatRoomsError.value = null;
+
+    notepad.value = [];
+    notepadLoading.value = false;
+    notepadError.value = null;
+
+    blacklist.value = [];
+    blacklistLoading.value = false;
+    blacklistError.value = null;
+
+    users.value = [];
+    usersLoading.value = false;
+    usersError.value = null;
   }
 
   // Subscribe to game
@@ -501,10 +798,30 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     commentsPaging,
     commentsLoading,
     commentsError,
+    chatRooms,
+    chatRoomsLoading,
+    chatRoomsError,
+    notepad,
+    notepadLoading,
+    notepadError,
+    blacklist,
+    blacklistLoading,
+    blacklistError,
+    users,
+    usersLoading,
+    usersError,
 
     // Computed
     isLoading,
     hasError,
+    activeRooms,
+    archivedRooms,
+    isMaster,
+    isAssistant,
+    isMentor,
+    isSubscribed,
+    isPlayer,
+    canManage,
 
     // Actions
     loadGame,
@@ -513,6 +830,21 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     loadPostsByRoomNumber,
     loadCharacters,
     loadComments,
+    updateComment,
+    deleteComment,
+    likeComment,
+    unlikeComment,
+    loadChatRooms,
+    loadNotepad,
+    loadBlacklist,
+    loadUsers,
+    transitionStatus,
+    changePremoderation,
+    resetRecruitment,
+    deleteGame,
+    createRoom,
+    updateRoom,
+    archiveRoom,
     reset,
     subscribe,
     unsubscribe,

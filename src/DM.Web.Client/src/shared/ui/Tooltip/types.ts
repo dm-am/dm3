@@ -9,6 +9,9 @@ export interface TooltipProps {
   delay?: number;
   /** Disable tooltip */
   disabled?: boolean;
+  /** Make the trigger span keyboard-focusable (tabindex="0"). Use when the
+   * slotted content isn't itself a focusable element (e.g. plain text). */
+  focusable?: boolean;
 }
 
 export interface TooltipPosition {

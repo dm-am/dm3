@@ -14,7 +14,15 @@ using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
 using DbAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema;
 using DbAttributeSpecification = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSpecification;
+using DbConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeConstraints;
 using DbStringConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.StringAttributeConstraints;
+using DbNumberConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.NumberAttributeConstraints;
+using DbListConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeConstraints;
+using DbBbCodeConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.BbCodeAttributeConstraints;
+using DbListValueKind = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListValueKind;
+using DbListAttributeValue = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeValue;
+using DtoListValue = DM.Domain.Game.Features.Games.ListValue;
+using DtoSpecificationInput = DM.Domain.Game.Features.Games.IAttributeSpecificationInput;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
@@ -109,7 +117,10 @@ internal class AttributeSchemaRepository :
             {
                 Id = _guidFactory.Create(),
                 Title = s.Title.Trim(),
-                Constraints = new DbStringConstraints { Required = false, MaxLength = 0 }
+                Order = s.Order,
+                IsDescriptor = s.IsDescriptor,
+                IsHidden = s.IsHidden,
+                Constraints = BuildConstraints(s, s.Required)
             }).ToList()
         };
 
@@ -150,9 +161,12 @@ internal class AttributeSchemaRepository :
         {
             existingSchema.Specifications = updateSchema.Specifications.Select(s => new DbAttributeSpecification
             {
-                Id = s.Id ?? _guidFactory.Create(),
+                Id = s.Id.HasValue && s.Id.Value != Guid.Empty ? s.Id.Value : _guidFactory.Create(),
                 Title = s.Title.Trim(),
-                Constraints = new DbStringConstraints { Required = false, MaxLength = 0 }
+                Order = s.Order,
+                IsDescriptor = s.IsDescriptor,
+                IsHidden = s.IsHidden,
+                Constraints = BuildConstraints(s, s.Required)
             }).ToList();
         }
 
@@ -174,7 +188,38 @@ internal class AttributeSchemaRepository :
     public async Task Delete(Guid schemaId) =>
         await Collection.DeleteOneAsync(Filter.Eq(s => s.Id, schemaId));
 
+    public async Task<bool> IsUsedByUserGame(Guid schemaId, Guid userId) =>
+        await _dbContext.Games
+            .TagWith("DM.AttributeSchema.IsUsedByUserGame")
+            .AnyAsync(g => g.AttributeSchemaId == schemaId && !g.IsRemoved &&
+                           (g.MasterId == userId ||
+                            g.Assistants.Any(a => a.UserId == userId) ||
+                            g.Characters.Any(c => c.AuthorId == userId)));
+
     // --- HELPERS ---
+
+    /// <summary>
+    /// Build strongly-typed persistence constraints from a write-side specification
+    /// </summary>
+    private static DbConstraints BuildConstraints(DtoSpecificationInput spec, bool required) =>
+        spec.Type switch
+        {
+            AttributeSpecificationType.Number =>
+                new DbNumberConstraints { Required = required, MaxLength = spec.MaxLength },
+            AttributeSpecificationType.TextList =>
+                new DbListConstraints { Required = required, Kind = DbListValueKind.Text, Values = MapValues(spec.Values) },
+            AttributeSpecificationType.NumberList =>
+                new DbListConstraints { Required = required, Kind = DbListValueKind.Number, Values = MapValues(spec.Values) },
+            AttributeSpecificationType.TextNumberList =>
+                new DbListConstraints { Required = required, Kind = DbListValueKind.TextNumber, Values = MapValues(spec.Values) },
+            AttributeSpecificationType.BbCode =>
+                new DbBbCodeConstraints { Required = required, MaxLength = spec.MaxLength },
+            _ =>
+                new DbStringConstraints { Required = required, MaxLength = spec.MaxLength ?? 0 }
+        };
+
+    private static List<DbListAttributeValue> MapValues(IEnumerable<DtoListValue> values) =>
+        (values ?? []).Select(v => new DbListAttributeValue { Value = v.Value, Modifier = v.Modifier }).ToList();
 
     private async Task<IEnumerable<GeneralUser>> GetSchemataAuthors(ICollection<Guid> userIds)
     {

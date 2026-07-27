@@ -2,26 +2,26 @@ import { AchievementMetric } from "@/shared/api/models/achievements";
 import type { User } from "@/shared/api/models/community";
 
 /**
- * SSOT-маппинг метрики → значение из профиля пользователя.
+ * SSOT mapping of a metric → value from the user profile.
  *
- * Парный resolver на бэкенде — `AchievementMetricResolver.GetValue`.
- * При добавлении новой метрики обе функции меняются вместе.
+ * The paired backend resolver is `AchievementMetricResolver.GetValue`.
+ * When adding a new metric both functions change together.
  *
- * Все источники — денормализованные счетчики на профиле, кроме
- * `DaysSinceRegistration`, которая вычисляется из `registeredUtc` на
- * лету (одно вычитание, без сетевых запросов).
+ * All sources are denormalized profile counters, except
+ * `DaysSinceRegistration`, which is computed from `registeredUtc` on
+ * the fly (a single subtraction, no network requests).
  */
 export function getMetricValue(metric: AchievementMetric, user: User): number {
   switch (metric) {
     case AchievementMetric.GamePostsAuthored:
-      // Та же метрика, что правило «новичок до 100 постов» на backend
-      // (поле User.QuantityRating).
+      // The same metric as the "новичок до 100 постов" rule on the backend
+      // (the User.QuantityRating field).
       return user.rating?.totalPosts ?? 0;
     case AchievementMetric.DaysSinceRegistration:
       return daysSinceRegistration(user);
     case AchievementMetric.PostReviewScoreSum:
-      // Знаковый score; отрицательное обнуляем — пороги задаются
-      // положительными числами, отрицательный счет их не достигнет.
+      // Signed score; negatives are clamped to zero — thresholds are defined
+      // as positive numbers, a negative score will never reach them.
       return Math.max(0, user.rating?.postReviewScoreSum ?? 0);
     case AchievementMetric.GamesHosted:
       return user.gamesHosting ?? 0;
@@ -36,19 +36,19 @@ export function getMetricValue(metric: AchievementMetric, user: User): number {
     case AchievementMetric.GlobalChatMessages:
       return user.globalChatMessages ?? 0;
     case AchievementMetric.BansReceived:
-      // «Резиновая уточка» — пасхалка на мем про утят-террористов.
-      // Считаем количество выданных банов (исключая soft-deleted).
+      // "Резиновая уточка" — an easter egg for the duckling-terrorists meme.
+      // Count the bans issued (excluding soft-deleted).
       return user.bansReceived ?? 0;
     case AchievementMetric.GameDrops:
-      // «Дропы» — игры, которые пользователь покинул добровольно
-      // (Retired-character + IsPlayerLeft). Смерть и изгнание не считаются.
+      // "Дропы" — games the user left voluntarily
+      // (Retired character + IsPlayerLeft). Death and exile do not count.
       return user.gameDrops ?? 0;
     case AchievementMetric.PublicationsAuthored:
-      // «Публикации» — статьи в блогах. Драфты тоже считаются.
+      // "Публикации" — blog articles. Drafts count too.
       return user.publicationsAuthored ?? 0;
     case AchievementMetric.LikesReceived:
-      // «Лайки» — суммарные лайки на топиках, публикациях, комментариях
-      // и чат-сообщениях. Игровые посты идут через «Рейтинг».
+      // "Лайки" — total likes on topics, publications, comments
+      // and chat messages. Game posts go through "Рейтинг".
       return user.likesReceived ?? 0;
     default:
       return 0;

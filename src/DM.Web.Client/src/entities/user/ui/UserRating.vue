@@ -42,18 +42,16 @@ const target = computed(() => ({
         reviewSumDisplay
       }}</router-link></Tooltip
     ><span class="sep">/</span
-    ><Tooltip text="Количество постов"
+    ><Tooltip text="Количество постов" focusable
       ><span class="post-count">{{ rating.postCount }}</span></Tooltip
     >
   </span>
   <router-link v-else :to="target" class="user-rating user-rating-na"
-    >n/a</router-link
+    >—</router-link
   >
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 .user-rating
   white-space: nowrap
 

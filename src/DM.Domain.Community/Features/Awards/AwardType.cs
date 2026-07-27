@@ -3,74 +3,74 @@ using System;
 namespace DM.Domain.Community.Features.Awards;
 
 /// <summary>
-/// Каталог типов наград — timeless (6 строк). Конкретная серия конкурса
-/// хранится в <see cref="ContestSeries"/>, выдача — в <see cref="UserAward"/>
-/// с FK на оба. Иконка из game-icons спрайта (валидируется при создании).
+/// Award type catalog — timeless (6 rows). A specific contest series
+/// is stored in <see cref="ContestSeries"/>, a grant in <see cref="UserAward"/>
+/// with FKs to both. The icon comes from the game-icons sprite (validated on creation).
 /// </summary>
 public class AwardType
 {
-    /// <summary>Идентификатор записи каталога.</summary>
+    /// <summary>Catalog record identifier.</summary>
     public Guid Id { get; set; }
 
-    /// <summary>Стабильный код («contest_first», «popular_vote», «guesser»).</summary>
+    /// <summary>Stable code ("contest_first", "popular_vote", "guesser").</summary>
     public string Code { get; set; } = string.Empty;
 
-    /// <summary>Отображаемое название («Литконкурс», «Народное признание»).</summary>
+    /// <summary>Display name ("Литконкурс", "Народное признание").</summary>
     public string Title { get; set; } = string.Empty;
 
-    /// <summary>Описание (за что выдается).</summary>
+    /// <summary>Description (what it is granted for).</summary>
     public string Description { get; set; } = string.Empty;
 
-    /// <summary>Имя иконки из game-icons спрайта.</summary>
+    /// <summary>Icon name from the game-icons sprite.</summary>
     public string IconName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Тир для визуального стиля (1=gold, 2=silver, 3=bronze).
-    /// Для мест в литконкурсе: 1/2/3 = 1/2/3 место. Для спец-наград: 1.
+    /// Tier for the visual style (1=gold, 2=silver, 3=bronze).
+    /// For literary contest placements: 1/2/3 = 1st/2nd/3rd place. For special awards: 1.
     /// </summary>
     public int? Tier { get; set; }
 
-    /// <summary>Порядок отображения внутри серии конкурса.</summary>
+    /// <summary>Display order within a contest series.</summary>
     public int SortOrder { get; set; }
 
-    /// <summary>Активный = доступен для выдачи. Soft-delete через флаг.</summary>
+    /// <summary>Active = available for granting. Soft-delete via the flag.</summary>
     public bool IsActive { get; set; }
 }
 
-/// <summary>Запрос на создание новой записи в каталоге наград.</summary>
+/// <summary>Request to create a new record in the award catalog.</summary>
 public class CreateAwardType
 {
-    /// <summary>Стабильный код.</summary>
+    /// <summary>Stable code.</summary>
     public string Code { get; set; } = string.Empty;
-    /// <summary>Название.</summary>
+    /// <summary>Title.</summary>
     public string Title { get; set; } = string.Empty;
-    /// <summary>Описание.</summary>
+    /// <summary>Description.</summary>
     public string Description { get; set; } = string.Empty;
-    /// <summary>Имя иконки.</summary>
+    /// <summary>Icon name.</summary>
     public string IconName { get; set; } = string.Empty;
-    /// <summary>Тир (визуальный стиль).</summary>
+    /// <summary>Tier (visual style).</summary>
     public int? Tier { get; set; }
-    /// <summary>Порядок отображения внутри серии.</summary>
+    /// <summary>Display order within a series.</summary>
     public int SortOrder { get; set; }
 }
 
 /// <summary>
-/// Запрос на частичное обновление. Любое null-поле = не трогать.
+/// Partial update request. Any null field = leave untouched.
 /// </summary>
 public class UpdateAwardType
 {
-    /// <summary>Идентификатор обновляемой записи.</summary>
+    /// <summary>Identifier of the record being updated.</summary>
     public Guid Id { get; set; }
-    /// <summary>Новое название (null = не менять).</summary>
+    /// <summary>New title (null = leave unchanged).</summary>
     public string? Title { get; set; }
-    /// <summary>Новое описание (null = не менять).</summary>
+    /// <summary>New description (null = leave unchanged).</summary>
     public string? Description { get; set; }
-    /// <summary>Новая иконка (null = не менять).</summary>
+    /// <summary>New icon (null = leave unchanged).</summary>
     public string? IconName { get; set; }
-    /// <summary>Новый тир (null = не менять).</summary>
+    /// <summary>New tier (null = leave unchanged).</summary>
     public int? Tier { get; set; }
-    /// <summary>Новый SortOrder (null = не менять).</summary>
+    /// <summary>New SortOrder (null = leave unchanged).</summary>
     public int? SortOrder { get; set; }
-    /// <summary>Новый IsActive (null = не менять).</summary>
+    /// <summary>New IsActive (null = leave unchanged).</summary>
     public bool? IsActive { get; set; }
 }

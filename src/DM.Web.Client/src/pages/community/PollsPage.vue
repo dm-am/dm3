@@ -2,7 +2,9 @@
 import { watch } from "vue";
 import { useRoute } from "vue-router";
 import { usePollsStore } from "@/entities/poll";
-import { usePollsFilter } from "@/features/poll-filter";
+import { PollsFilter, usePollsFilter } from "@/features/poll-filter";
+import { CreatePollForm } from "@/features/create-poll";
+import LeadText from "@/shared/ui/Layout/LeadText.vue";
 import PollsList from "./PollsList.vue";
 
 const route = useRoute();
@@ -20,5 +22,15 @@ watch(
 </script>
 
 <template>
+  <page-title>Опросы</page-title>
+  <LeadText>Запланированные, текущие и завершенные опросы сообщества</LeadText>
+
+  <!-- Create poll form (moderators only) -->
+  <CreatePollForm />
+
+  <!-- Filter -->
+  <PollsFilter />
+
+  <!-- List + paging -->
   <PollsList />
 </template>

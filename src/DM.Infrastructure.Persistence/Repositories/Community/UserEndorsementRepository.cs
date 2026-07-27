@@ -36,6 +36,7 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
         await _dbContext.UserEndorsements
             .Where(e => e.TargetUserId == targetUserId && !e.IsRemoved)
             .OrderByDescending(e => e.CreatedUtc)
+            .ThenByDescending(e => e.UserEndorsementId)
             .Page(paging)
             .ProjectTo<UserEndorsement>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
@@ -73,10 +74,10 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
     }
 
     /// <summary>
-    /// Общий predicate-блок: фильтрация по автору / получателю и
-    /// подстрочный поиск. Search ILIKE'ит по тексту, имени автора и
-    /// имени получателя одновременно — три SQL-условия через OR. Это
-    /// эквивалент «найди где упоминается X» без отдельных бакетов поиска.
+    /// Shared predicate block: filtering by author / recipient plus
+    /// substring search. Search ILIKEs over the text, author name and
+    /// recipient name at once — three SQL conditions joined by OR. This is
+    /// the equivalent of "find where X is mentioned" without separate search buckets.
     /// </summary>
     private static IQueryable<DbUserEndorsement> ApplyFilter(
         IQueryable<DbUserEndorsement> query, UserEndorsementFilter? filter)
@@ -101,10 +102,14 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
     }
 
     /// <summary>
-    /// Сортировка списка. Поддерживаемые поля синхронизированы с FE
-    /// ReviewsFilter SORT_OPTIONS ("created", "author") — добавление
-    /// новой опции на FE без соответствующего case'а здесь молча
-    /// упадет в default-порядок, поэтому держим SSOT в этом switch.
+    /// List sorting. Supported fields are kept in sync with the FE
+    /// ReviewsFilter SORT_OPTIONS ("created", "author") — adding
+    /// a new option on the FE without a matching case here silently
+    /// falls into the default order, so the SSOT is kept in this switch.
+    /// For "given" endorsements (AuthorId is fixed by the filter)
+    /// "author" means the other side of the pair — we sort by the
+    /// recipient's name. Secondary keys (CreatedUtc, then Id) make
+    /// the order deterministic when primary values are equal.
     /// </summary>
     private static IOrderedQueryable<DbUserEndorsement> ApplySort(
         IQueryable<DbUserEndorsement> query, UserEndorsementFilter? filter)
@@ -113,13 +118,24 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
         var desc = string.IsNullOrEmpty(filter?.SortOrder) ||
                    filter.SortOrder.Equals("desc", StringComparison.OrdinalIgnoreCase);
 
-        return (sortBy, desc) switch
+        if (sortBy == "author")
         {
-            ("author", true) => query.OrderByDescending(e => e.Author.Username),
-            ("author", false) => query.OrderBy(e => e.Author.Username),
-            (_, true) => query.OrderByDescending(e => e.CreatedUtc),
-            (_, false) => query.OrderBy(e => e.CreatedUtc),
-        };
+            var byRecipient = filter?.AuthorId != null;
+            var ordered = (byRecipient, desc) switch
+            {
+                (true, true) => query.OrderByDescending(e => e.TargetUser.Username),
+                (true, false) => query.OrderBy(e => e.TargetUser.Username),
+                (false, true) => query.OrderByDescending(e => e.Author.Username),
+                (false, false) => query.OrderBy(e => e.Author.Username),
+            };
+            return desc
+                ? ordered.ThenByDescending(e => e.CreatedUtc).ThenByDescending(e => e.UserEndorsementId)
+                : ordered.ThenBy(e => e.CreatedUtc).ThenBy(e => e.UserEndorsementId);
+        }
+
+        return desc
+            ? query.OrderByDescending(e => e.CreatedUtc).ThenByDescending(e => e.UserEndorsementId)
+            : query.OrderBy(e => e.CreatedUtc).ThenBy(e => e.UserEndorsementId);
     }
 
     // ═══ WRITE ═══

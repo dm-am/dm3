@@ -7,7 +7,7 @@ using DM.Infrastructure.Persistence.Entities.Contracts;
 
 namespace DM.Infrastructure.Persistence.Entities.Community;
 
-/// <summary>DAL для факта получения достижения пользователем.</summary>
+/// <summary>DAL for the fact that a user earned an achievement.</summary>
 [Table("UserAchievements")]
 public class UserAchievement : IRemovable
 {

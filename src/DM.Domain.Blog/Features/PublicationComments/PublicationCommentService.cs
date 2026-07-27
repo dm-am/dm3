@@ -8,6 +8,7 @@ using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Comments;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
@@ -62,15 +63,19 @@ internal class PublicationCommentService : IPublicationCommentService
 
         // Check blacklist
         var blog = await _blogService.GetBlogAsync(publication.BlogId);
-        var currentUserId = _identityProvider.Current.User.UserId;
-        if (blog.BlacklistedUserIds.Contains(currentUserId))
+        var currentUser = _identityProvider.Current.User;
+        if (blog.BlacklistedUserIds.Contains(currentUser.UserId))
         {
             throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this blog");
         }
 
+        // Strip [mod] authored by a non-moderator (it renders as a green mod
+        // block on the Comment surface); Moderator+ may author it.
+        createComment.Text = ModBlockSanitizer.SanitizeForAuthor(createComment.Text, currentUser.Role);
+
         var (createdComment, commentId) = await _repository.Create(
             createComment,
-            currentUserId,
+            currentUser.UserId,
             publication.Id,
             publication.CommentCount + 1);
 
@@ -110,6 +115,11 @@ internal class PublicationCommentService : IPublicationCommentService
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
 
         var text = updateComment.Text?.Trim();
+        if (!string.IsNullOrEmpty(text))
+        {
+            // Strip [mod] authored by a non-moderator before comparing/saving.
+            text = ModBlockSanitizer.SanitizeForAuthor(text, _identityProvider.Current.User.Role);
+        }
         if (string.IsNullOrEmpty(text) || text == comment.Text)
         {
             // No actual changes

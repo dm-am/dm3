@@ -32,9 +32,11 @@ public class Room
     public Optional<Guid>? PreviousRoomId { get; set; }
 
     /// <summary>
-    /// Room title
+    /// Room title. Always set on read; nullable so an omitted value on a
+    /// partial PATCH leaves the stored title unchanged (UpdateRoom.Title is
+    /// nullable) instead of failing implicit-required model validation.
     /// </summary>
-    public string Title { get; set; } = null!;
+    public string? Title { get; set; }
 
     /// <summary>
     /// Room access type
@@ -42,9 +44,16 @@ public class Room
     public RoomAccessType? Access { get; set; }
 
     /// <summary>
-    /// Room content type
+    /// Room content type. Nullable so an omitted value on a partial PATCH
+    /// leaves the stored RoomType unchanged instead of resetting it to Default.
     /// </summary>
     public RoomType? Type { get; set; }
+
+    /// <summary>
+    /// Room is archived (hidden from the active rooms list, kept for history).
+    /// Nullable on input so an omitted value on a partial PATCH is unchanged.
+    /// </summary>
+    public bool? IsArchived { get; set; }
 
     /// <summary>
     /// Room accesses
@@ -62,9 +71,11 @@ public class Room
     public int UnreadPostsCount { get; set; }
 
     /// <summary>
-    /// Room settings
+    /// Room settings. Always set on read; nullable so an omitted block on a
+    /// partial PATCH leaves every setting unchanged (the mapping already
+    /// treats a null Settings as "no changes").
     /// </summary>
-    public RoomSettings Settings { get; set; } = null!;
+    public RoomSettings? Settings { get; set; }
 }
 
 /// <summary>

@@ -6,7 +6,8 @@ import { BlogsDataTable } from "@/widgets/blogs-table";
 <template>
   <page-title v-once>Блоги</page-title>
   <LeadText v-once>
-    Читайте блоги сообщества: авторские истории, заметки и мысли об играх
+    Читайте авторские блоги участников, от игровых заметок до личных историй,
+    или <router-link to="/blogs/create">заведите собственный блог</router-link>
   </LeadText>
   <BlogsDataTable />
 </template>

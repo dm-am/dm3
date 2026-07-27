@@ -11,11 +11,13 @@ export {
   type RenderAudience,
 } from "./audience";
 
+// Envelope unwrap helper (single-resource responses)
+export { unwrapResource } from "./envelope";
+
 // API Services (PascalCase)
 export { default as AccountApi } from "./accountApi";
 export { default as AchievementApi } from "./achievementApi";
 export { default as BlacklistApi } from "./blacklistApi";
-export { default as BotApi } from "./botApi";
 export { default as CommunityApi } from "./communityApi";
 export { default as ModerationApi } from "./moderationApi";
 export { default as NotepadApi } from "./notepadApi";
@@ -25,20 +27,24 @@ export {
   type UpdateProfilePayload,
 } from "./personalApi";
 export { default as SubscriptionApi } from "./subscriptionApi";
+export {
+  default as SupportApi,
+  type TicketSubtype,
+  type CreateTicketIntake,
+  type Ticket,
+  type TicketStatus,
+} from "./supportApi";
 export { default as UploadApi } from "./uploadApi";
 
 // API Services (camelCase aliases for backward compatibility)
 export { default as accountApi } from "./accountApi";
 export { default as achievementApi } from "./achievementApi";
 export { default as blacklistApi } from "./blacklistApi";
-export { default as botApi } from "./botApi";
 export { default as communityApi } from "./communityApi";
 export { default as moderationApi } from "./moderationApi";
 export { default as notepadApi } from "./notepadApi";
 export { default as notificationApi } from "./notificationApi";
 export { default as personalApi } from "./personalApi";
-export { default as subscriptionApi } from "./subscriptionApi";
-export { default as uploadApi } from "./uploadApi";
 
 // Re-export models
 export * from "./models";

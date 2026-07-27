@@ -62,8 +62,14 @@ internal class BbConverterFactory : JsonConverterFactory
             JsonSerializerOptions options)
         {
             var raw = bbText.Value ?? string.Empty;
-            var audience = ReadAudienceHeader();
+            var requestedAudience = ReadAudienceHeader();
             var viewer = ResolveViewerFromRequest();
+            // AuthorEdit emits unfiltered round-trip source (every [private] and
+            // [mod] block). The audience arrives as a client-controlled header
+            // applied to every response, so authorship is enforced here rather
+            // than trusted from the endpoint: AuthorEdit is honored only when the
+            // viewer is the content's author, otherwise it degrades to Display.
+            var audience = ResolveEffectiveAudience(requestedAudience, viewer, bbText.Context);
             var renderContext = BuildRenderContext(bbText, audience, viewer);
 
             // Fast path for a missing or empty input.
@@ -118,6 +124,30 @@ internal class BbConverterFactory : JsonConverterFactory
                 // render rather than leaking provider internals.
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Downgrades a client-requested AuthorEdit to Display unless the viewer
+        /// is the content's author. AuthorEdit reveals unfiltered round-trip
+        /// source (including [private]/[mod]); since the audience is a per-request
+        /// header that applies to any endpoint, authorship is verified at render
+        /// time. Author identity comes from the mapping-populated envelope; a
+        /// missing author id is treated as "not the author" and denied.
+        /// </summary>
+        private static RenderAudience ResolveEffectiveAudience(
+            RenderAudience requested,
+            IAuthorizationSubject? viewer,
+            RenderContextEnvelope? envelope)
+        {
+            if (requested != RenderAudience.AuthorEdit)
+                return requested;
+
+            if (viewer is not null
+                && envelope?.PostAuthorUserId is Guid author
+                && viewer.UserId == author)
+                return RenderAudience.AuthorEdit;
+
+            return RenderAudience.Display;
         }
 
         private RenderContext BuildRenderContext(

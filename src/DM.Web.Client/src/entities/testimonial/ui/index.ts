@@ -1,1 +1,2 @@
-export { default as Testimonial } from "./Testimonial.vue";
+export { default as TestimonialCard } from "./TestimonialCard.vue";
+export { default as TestimonialSkeleton } from "./TestimonialSkeleton.vue";

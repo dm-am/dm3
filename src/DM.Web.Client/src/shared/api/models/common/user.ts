@@ -135,12 +135,10 @@ export type UserRef = {
   username: Username;
   /** Last activity moment (UTC) - for online indicators */
   lastActivityUtc: string | null;
-  /** User role (for displaying role badges [А], [С], [М], [Н], [Р]) */
+  /** User role (for displaying role badges [А], [С], [М], [Н]) */
   role: UserRole;
   /** Whether user is a newbie (less than 100 posts) - affects name color */
   isNewbie: boolean;
-  /** Honorary status (visual badge [П] for former staff) */
-  isHonorary: boolean;
 };
 
 // ============================================================================
@@ -160,15 +158,13 @@ export type UserRef = {
  * - GET /v1/users/{username}
  */
 export interface User extends UserRef {
-  // Inherits: id, username, lastActivityUtc, role, isNewbie, isHonorary from UserRef
+  // Inherits: id, username, lastActivityUtc, role, isNewbie from UserRef
 
   /** History of username changes */
   usernameHistory: UsernameHistoryEntry[];
-  /** User roles array (for multiple roles check) */
-  roles?: UserRole[];
   /** User rating information (null if user has disabled rating display) */
   rating: Rating | null;
-  /** User profile picture (SSOT — все URLs только тут). */
+  /** User profile picture (SSOT — all URLs live only here). */
   picture: UserPicture;
   /** User status message */
   status?: string;
@@ -224,13 +220,13 @@ export interface User extends UserRef {
   commentsAuthored?: number;
   /** Messages this user has posted in the global chat. */
   globalChatMessages?: number;
-  /** Bans this user has received — drives the «резиновая уточка» achievement chain. */
+  /** Bans this user has received — drives the "резиновая уточка" achievement chain. */
   bansReceived?: number;
-  /** Games voluntarily dropped (retired characters with IsPlayerLeft=true) — drives the «дропы» chain. */
+  /** Games voluntarily dropped (retired characters with IsPlayerLeft=true) — drives the "дропы" chain. */
   gameDrops?: number;
-  /** Publications (blog articles) authored by this user — drives the «публикации» chain. */
+  /** Publications (blog articles) authored by this user — drives the "публикации" chain. */
   publicationsAuthored?: number;
-  /** Total likes received across topics+publications+comments+messages — drives the «лайки» chain. */
+  /** Total likes received across topics+publications+comments+messages — drives the "лайки" chain. */
   likesReceived?: number;
   /** Number of subscribers following this user */
   subscribersCount?: number;

@@ -6,22 +6,22 @@ namespace DM.Domain.Core.Authorization;
 public enum UploadIntention
 {
     /// <summary>
-    /// View upload (owner or admin)
+    /// View upload (owner or moderator+)
     /// </summary>
     View = 1,
 
     /// <summary>
-    /// Delete upload (owner or admin)
+    /// Delete upload (owner or moderator+)
     /// </summary>
     Delete = 2,
 
     /// <summary>
-    /// List all uploads (admin only)
+    /// List all uploads across users (moderator+, per doc 4.2.3.8.9)
     /// </summary>
     ListAll = 3,
 
     /// <summary>
-    /// List specific user's uploads (admin only)
+    /// List specific user's uploads (moderator+)
     /// </summary>
     ListUser = 4
 }

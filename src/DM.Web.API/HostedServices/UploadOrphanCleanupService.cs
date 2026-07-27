@@ -15,19 +15,19 @@ using Microsoft.Extensions.Options;
 namespace DM.Web.API.HostedServices;
 
 /// <summary>
-/// Background worker, физически удаляющий S3-объекты для soft-deleted uploads.
+/// Background worker that physically deletes S3 objects for soft-deleted uploads.
 ///
 /// Workflow:
-/// 1. Periodically (раз в N часов) выбирает Uploads.IsRemoved=true, у которых
-///    DeletedUtc старше grace-period (24ч по умолчанию).
-/// 2. Для каждой такой записи удаляет оригинал + thumbnails (_m.webp / _s.webp)
-///    в S3. Не падает на 404 (файла нет — норма) или transient errors.
-/// 3. Удаляет саму запись Upload из БД (hard-delete) только после успешного
-///    удаления всех S3-объектов. Если S3-delete упал — оставляем запись, ретрай
-///    на следующем тике.
+/// 1. Periodically (every N hours) selects Uploads.IsRemoved=true whose
+///    DeletedUtc is older than the grace period (24h by default).
+/// 2. For each such record deletes the original + thumbnails (_m.webp / _s.webp)
+///    in S3. Does not fail on 404 (a missing file is fine) or transient errors.
+/// 3. Deletes the Upload record itself from the DB (hard-delete) only after all
+///    S3 objects were deleted successfully. If the S3 delete failed, the record stays and
+///    is retried on the next tick.
 ///
-/// Grace period нужен на случай short-term восстановления: юзер ткнул «удалить
-/// аватар», передумал — restore работает в первые 24ч.
+/// The grace period allows short-term recovery: the user clicked "удалить
+/// аватар", changed their mind — restore works within the first 24h.
 /// </summary>
 internal class UploadOrphanCleanupService : BackgroundService
 {
@@ -117,7 +117,7 @@ internal class UploadOrphanCleanupService : BackgroundService
                     }
                     catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
                     {
-                        // Object уже удален — норма для idempotent retry.
+                        // The object is already deleted — normal for an idempotent retry.
                     }
                     catch (Exception ex)
                     {
@@ -155,8 +155,8 @@ internal class UploadOrphanCleanupService : BackgroundService
     }
 
     /// <summary>
-    /// Single source-file per upload (thumbnails живут только в imgproxy
-    /// cache, не в S3 хранилище).
+    /// Single source file per upload (thumbnails live only in the imgproxy
+    /// cache, not in S3 storage).
     /// </summary>
     private static System.Collections.Generic.IEnumerable<string> EnumerateKeys(string objectKey)
     {

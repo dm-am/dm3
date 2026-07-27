@@ -3,18 +3,19 @@ import { ref, computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
-import { useUserStore } from "@/entities/user";
+import { useUserStore, userIsModerator } from "@/entities/user";
 import { useUiStore } from "@/shared/stores/ui";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useScrollToElement } from "@/shared/lib/composables/useScrollToElement";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { Comment } from "@/features/comment";
+import { CommentItem, useCommentWarnDialog } from "@/features/comment";
+import { LoginPrompt } from "@/features/auth";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
-import { BBCodeEditor } from "@/features/editor";
+import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import Button from "@/shared/ui/Button/Button.vue";
 import { gameApi } from "@/entities/game";
-import { AccessPolicy, UserRole } from "@/shared/api/models/community";
+import { AccessPolicy } from "@/shared/api/models/community";
 import { CommentariesAccessMode, GameRole } from "@/entities/game";
 
 const route = useRoute();
@@ -25,8 +26,10 @@ const { game, comments, commentsPaging, commentsLoading, commentsError } =
   storeToRefs(gameStore);
 
 const gameId = computed(() => route.params.id as string);
+// The shared Paging widget writes the page as ?number= (codebase-wide
+// query-key convention) — read the same key back.
 function getPage(): number {
-  const page = route.query.page;
+  const page = route.query.number;
   return page ? parseInt(page as string) || 1 : 1;
 }
 
@@ -35,6 +38,37 @@ function getCommentNumber(index: number): number {
   if (!commentsPaging.value) return index + 1;
   const offset = (commentsPaging.value.current - 1) * commentsPaging.value.size;
   return offset + index + 1;
+}
+
+// --- Single-comment actions (edit / delete / likes / warn) ---
+async function handleEdit(id: string, text: string) {
+  await gameStore.updateComment(id, text);
+}
+
+async function handleDelete(id: string) {
+  await gameStore.deleteComment(id);
+}
+
+async function handleLike(id: string) {
+  await gameStore.likeComment(id);
+}
+
+async function handleUnlike(id: string) {
+  await gameStore.unlikeComment(id);
+}
+
+// Moderator warning (doc 4.2.4.1) — shared dialog wiring.
+const { warnComment: handleWarn } = useCommentWarnDialog((id) =>
+  comments.value.find((c) => c.id === id),
+);
+
+// Raw BBCode source fetch for the edit form (AuthorEdit audience).
+const fetchEditSource = (id: string) => gameApi.getGameCommentForEdit(id);
+
+// Paging scrolls the comments block back into view (not the page top)
+const commentsSectionRef = ref<HTMLElement | null>(null);
+function pagingAnchor(): HTMLElement | null {
+  return commentsSectionRef.value;
 }
 
 // Comment creation state
@@ -50,16 +84,7 @@ const isBanned = computed(() => {
   );
 });
 
-const isModerator = computed(() => {
-  if (!user.value) return false;
-  return (
-    user.value.roles?.some((r: UserRole) =>
-      [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(
-        r,
-      ),
-    ) ?? false
-  );
-});
+const isModerator = computed(() => userIsModerator(user.value));
 
 const isParticipant = computed(() => {
   if (!game.value?.participation) return false;
@@ -143,7 +168,7 @@ useFetchData(
   ],
   [
     {
-      query: (q) => q.page,
+      query: (q) => q.number,
       callback: () => gameStore.loadComments(gameId.value, getPage()),
     },
   ],
@@ -173,15 +198,21 @@ useFetchData(
         <secondary-text>Пока нет комментариев</secondary-text>
       </div>
 
-      <div v-else class="comments-section">
+      <div v-else ref="commentsSectionRef" class="comments-section">
         <div class="comments-list">
-          <Comment
+          <CommentItem
             v-for="(comment, index) in comments"
             :key="comment.id"
             :comment="comment"
             :compact="isCompactLayout"
             :number="getCommentNumber(index)"
             :data-id="comment.id"
+            :fetch-edit-source="fetchEditSource"
+            @edit="handleEdit"
+            @delete="handleDelete"
+            @like="handleLike"
+            @unlike="handleUnlike"
+            @warn="handleWarn"
           />
         </div>
       </div>
@@ -196,6 +227,7 @@ useFetchData(
         }"
         :use-query="true"
         query-key="number"
+        :scroll-anchor="pagingAnchor"
       />
 
       <!-- Comment input -->
@@ -223,7 +255,7 @@ useFetchData(
               Отправить
             </Button>
           </template>
-          <secondary-text v-else-if="isBanned" class="comment-hint">
+          <secondary-text v-else-if="isBanned" class="comment-banned-hint">
             Вы не можете отправлять комментарии из-за ограничений аккаунта
           </secondary-text>
           <secondary-text
@@ -232,10 +264,7 @@ useFetchData(
           >
             Комментарии в этой игре доступны только для чтения
           </secondary-text>
-          <secondary-text v-else-if="!user" class="comment-hint">
-            <router-link to="/?action=login">Войдите</router-link>, чтобы
-            оставить комментарий
-          </secondary-text>
+          <LoginPrompt v-else-if="!user" action="оставить комментарий" />
         </div>
       </div>
     </template>
@@ -243,9 +272,6 @@ useFetchData(
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .game-comments
   min-height: $grid-step * 50
 
@@ -278,12 +304,11 @@ useFetchData(
   :deep(.bbcode-editor-wrapper)
     width: 100%
 
-.comment-hint
+.comment-hint,
+.comment-banned-hint
   text-align: center
   padding: $small
 
-  a
-    color: $link
-    &:hover
-      text-decoration: underline
+.comment-banned-hint
+  color: $accent-red
 </style>

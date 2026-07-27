@@ -20,7 +20,10 @@ import {
   NSFW_HIDE_TEXT,
   NSFW_WARNING_TEXT,
 } from "./bbcodeConstants";
-import { registerExpandable } from "@/shared/lib/composables/useExpandableRegistry";
+import {
+  registerExpandable,
+  notifyExpandableChanged,
+} from "@/shared/lib/composables/useExpandableRegistry";
 
 // ============================================================================
 // CLEANUP TRACKING
@@ -295,14 +298,25 @@ function handleKeyboardToggle(
 // ============================================================================
 
 /**
- * Initialize spoiler toggle behavior for server-rendered spoilers
- * Structure: <a class="spoiler-head">...</a><div class="spoiler">...</div>
+ * Initialize spoiler toggle behavior for server-rendered spoilers.
+ * Server structure: <a class="spoiler-head">...</a><div class="spoiler">...</div>
+ *
+ * The .spoiler is wrapped into the shared collapse structure so expand and
+ * collapse animate smoothly (grid-template-rows 0fr/1fr, see the .bb-collapse
+ * rules in _BbcodeContent.sass):
+ *
+ *   <a class="spoiler-head">
+ *   <div class="bb-collapse [open]">
+ *     <div class="bb-collapse-clip">
+ *       <div class="spoiler">...</div>
  *
  * WCAG features:
  * - role="button" for screen readers
  * - tabindex="0" for keyboard focus
  * - aria-expanded to indicate state
  * - Enter/Space keyboard support
+ * - inert on the collapsed wrapper keeps hidden content out of the tab
+ *   order and the accessibility tree (parity with the old display: none)
  */
 export function initSpoilers(container: HTMLElement | null): void {
   if (!container) {
@@ -326,9 +340,29 @@ export function initSpoilers(container: HTMLElement | null): void {
   }
 
   spoilerHeads.forEach((head) => {
-    const spoiler = head.nextElementSibling as HTMLElement;
-    // Check BEFORE marking as initialized - if check fails, element can be retried later
-    if (!spoiler?.classList.contains("spoiler")) {
+    // Resolve the content element and the collapse wrapper. On first init
+    // the .spoiler directly follows the head and gets wrapped; on re-init
+    // after cleanup the wrapper already exists and is reused.
+    let spoiler = head.nextElementSibling as HTMLElement | null;
+    let collapse: HTMLElement;
+
+    if (spoiler?.classList.contains("bb-collapse")) {
+      collapse = spoiler;
+      spoiler = collapse.querySelector<HTMLElement>(
+        ":scope > .bb-collapse-clip > .spoiler",
+      );
+      if (!spoiler) return;
+    } else if (spoiler?.classList.contains("spoiler")) {
+      collapse = document.createElement("div");
+      collapse.className = "bb-collapse";
+      const clip = document.createElement("div");
+      clip.className = "bb-collapse-clip";
+      spoiler.parentNode?.insertBefore(collapse, spoiler);
+      clip.appendChild(spoiler);
+      collapse.appendChild(clip);
+    } else {
+      // Check BEFORE marking as initialized - if check fails, element can
+      // be retried later
       if (import.meta.env.DEV) {
         console.warn(
           "[bbcodeInteractive] spoiler-head has no adjacent .spoiler element:",
@@ -350,34 +384,37 @@ export function initSpoilers(container: HTMLElement | null): void {
     head.setAttribute("tabindex", "0");
     head.setAttribute("aria-expanded", "false");
 
-    // Initially hide spoilers with standard text
-    spoiler.classList.add("hidden");
+    // Initially collapsed with standard text
+    collapse.classList.remove("open");
+    collapse.inert = true;
     head.textContent = SPOILER_SHOW_TEXT;
 
-    // Toggle function
+    // Toggle function. Pure class flip — the CSS grid transition animates
+    // both directions and reverses cleanly mid-flight on rapid clicks.
     const toggleSpoiler = (): void => {
-      const isHidden = spoiler.classList.contains("hidden");
+      const expand = !collapse.classList.contains("open");
+      collapse.classList.toggle("open", expand);
+      collapse.inert = !expand;
+      head.textContent = expand ? SPOILER_HIDE_TEXT : SPOILER_SHOW_TEXT;
+      head.setAttribute("aria-expanded", String(expand));
+    };
 
-      if (isHidden) {
-        spoiler.classList.remove("hidden");
-        head.textContent = SPOILER_HIDE_TEXT;
-        head.setAttribute("aria-expanded", "true");
-      } else {
-        spoiler.classList.add("hidden");
-        head.textContent = SPOILER_SHOW_TEXT;
-        head.setAttribute("aria-expanded", "false");
-      }
+    // Manual user toggle (click/keyboard): clears the registry's pending
+    // bulk action; registry-driven calls use toggleSpoiler directly.
+    const manualToggle = (): void => {
+      notifyExpandableChanged();
+      toggleSpoiler();
     };
 
     // Click handler
     const clickHandler = (e: Event): void => {
       e.preventDefault();
-      toggleSpoiler();
+      manualToggle();
     };
 
     // Keyboard handler (WCAG)
     const keydownHandler = (e: Event): void => {
-      handleKeyboardToggle(e as KeyboardEvent, toggleSpoiler);
+      handleKeyboardToggle(e as KeyboardEvent, manualToggle);
     };
 
     head.addEventListener("click", clickHandler);
@@ -387,12 +424,12 @@ export function initSpoilers(container: HTMLElement | null): void {
     // ScrollNav toggle button can drive every spoiler on the page at once.
     const unregister = registerExpandable({
       id: Symbol("spoiler"),
-      isExpanded: () => !spoiler.classList.contains("hidden"),
+      isExpanded: () => collapse.classList.contains("open"),
       expand: () => {
-        if (spoiler.classList.contains("hidden")) toggleSpoiler();
+        if (!collapse.classList.contains("open")) toggleSpoiler();
       },
       collapse: () => {
-        if (!spoiler.classList.contains("hidden")) toggleSpoiler();
+        if (collapse.classList.contains("open")) toggleSpoiler();
       },
     });
 
@@ -422,12 +459,23 @@ export function initSpoilers(container: HTMLElement | null): void {
 // ============================================================================
 
 /**
- * Initialize NSFW toggle behavior with 18+ overlay for server-rendered NSFW blocks
- * Structure: <a class="nsfw-head">...</a><div class="nsfw-spoiler">...</div>
+ * Initialize NSFW toggle behavior with 18+ overlay for server-rendered NSFW blocks.
+ * Server structure: <a class="nsfw-head">...</a><div class="nsfw-spoiler">...</div>
+ *
+ * The content is wrapped into the shared collapse structure (same smooth
+ * grid-rows animation as spoilers) plus a positioning wrapper for the
+ * 18+ overlay:
+ *
+ *   <a class="nsfw-head">
+ *   <div class="bb-collapse [open]">
+ *     <div class="bb-collapse-clip">
+ *       <div class="nsfw-content-wrapper">   (position: relative)
+ *         <div class="nsfw-spoiler">...</div>
+ *         <div class="nsfw-overlay">18+</div>
  *
  * Features:
  * - 18+ overlay shown on first open only (confirmation persists)
- * - Clicking overlay removes it permanently for that block
+ * - Clicking overlay fades it out (opacity, unified reveal curve)
  * - WCAG keyboard navigation
  */
 export function initNsfw(container: HTMLElement | null): void {
@@ -439,9 +487,62 @@ export function initNsfw(container: HTMLElement | null): void {
   const cleanupFunctions: Array<() => void> = [];
 
   nsfwHeads.forEach((head) => {
-    const nsfwContent = head.nextElementSibling;
-    // Check BEFORE marking as initialized - if check fails, element can be retried later
-    if (!nsfwContent?.classList.contains("nsfw-spoiler")) return;
+    // Resolve content, overlay and wrappers. On first init the
+    // .nsfw-spoiler directly follows the head and gets wrapped; on re-init
+    // after cleanup the structure already exists and is reused.
+    let nsfwContent = head.nextElementSibling as HTMLElement | null;
+    let collapse: HTMLElement;
+    let overlay: HTMLElement;
+
+    if (nsfwContent?.classList.contains("bb-collapse")) {
+      collapse = nsfwContent;
+      const wrapper = collapse.querySelector<HTMLElement>(
+        ":scope > .bb-collapse-clip > .nsfw-content-wrapper",
+      );
+      const existingContent = wrapper?.querySelector<HTMLElement>(
+        ":scope > .nsfw-spoiler",
+      );
+      const existingOverlay = wrapper?.querySelector<HTMLElement>(
+        ":scope > .nsfw-overlay",
+      );
+      if (!existingContent || !existingOverlay) return;
+      nsfwContent = existingContent;
+      overlay = existingOverlay;
+    } else if (nsfwContent?.classList.contains("nsfw-spoiler")) {
+      // Wrapper for overlay positioning. No margin/border/padding here: the
+      // outer spacing (5px, DM2 parity) lives on .nsfw-spoiler in
+      // _BbcodeContent.sass and collapses through this borderless wrapper,
+      // so the overlay's inset: 6px stays aligned with the yellow box.
+      const wrapper = document.createElement("div");
+      wrapper.className = "nsfw-content-wrapper";
+      wrapper.style.position = "relative";
+
+      collapse = document.createElement("div");
+      collapse.className = "bb-collapse";
+      const clip = document.createElement("div");
+      clip.className = "bb-collapse-clip";
+
+      nsfwContent.parentNode?.insertBefore(collapse, nsfwContent);
+      collapse.appendChild(clip);
+      clip.appendChild(wrapper);
+      wrapper.appendChild(nsfwContent);
+
+      // Create 18+ overlay
+      overlay = document.createElement("div");
+      overlay.className = "nsfw-overlay";
+      overlay.innerHTML = `<span class="nsfw-warning">${NSFW_WARNING_TEXT}</span>`;
+      overlay.setAttribute("role", "button");
+      overlay.setAttribute("tabindex", "0");
+      overlay.setAttribute(
+        "aria-label",
+        "Click to confirm you are 18+ and view content",
+      );
+      wrapper.appendChild(overlay);
+    } else {
+      // Check BEFORE marking as initialized - if check fails, element can
+      // be retried later
+      return;
+    }
 
     // Mark as initialized AFTER successful check
     head.setAttribute("data-initialized", "true");
@@ -452,50 +553,35 @@ export function initNsfw(container: HTMLElement | null): void {
     head.setAttribute("aria-expanded", "false");
     head.textContent = NSFW_SHOW_TEXT;
 
-    // Create wrapper for overlay positioning
-    const wrapper = document.createElement("div");
-    wrapper.className = "nsfw-content-wrapper";
-    wrapper.style.cssText = "position: relative; margin: 4px 0; display: none;";
+    // Initially collapsed; inert keeps hidden content out of the tab order
+    // and the accessibility tree (parity with the old display: none).
+    collapse.classList.remove("open");
+    collapse.inert = true;
 
-    // Move content into wrapper
-    nsfwContent.parentNode?.insertBefore(wrapper, nsfwContent);
-    wrapper.appendChild(nsfwContent);
+    // Track if user has confirmed 18+ (persists for this block; recovered
+    // from the overlay class when the structure is reused on re-init).
+    let isConfirmed = overlay.classList.contains("confirmed");
 
-    // Create 18+ overlay
-    const overlay = document.createElement("div");
-    overlay.className = "nsfw-overlay";
-    overlay.innerHTML = `<span class="nsfw-warning">${NSFW_WARNING_TEXT}</span>`;
-    overlay.setAttribute("role", "button");
-    overlay.setAttribute("tabindex", "0");
-    overlay.setAttribute(
-      "aria-label",
-      "Click to confirm you are 18+ and view content",
-    );
-    wrapper.appendChild(overlay);
-
-    // Track if user has confirmed 18+ (persists for this block)
-    let isConfirmed = false;
-
-    // Toggle function
+    // Toggle function. Pure class flip — the CSS grid transition animates
+    // both directions and reverses cleanly mid-flight on rapid clicks.
     const toggleNsfw = (): void => {
-      const isHidden = wrapper.style.display === "none";
-
-      if (isHidden) {
-        wrapper.style.display = "block";
-        overlay.style.display = isConfirmed ? "none" : "flex";
-        head.textContent = NSFW_HIDE_TEXT;
-        head.setAttribute("aria-expanded", "true");
-      } else {
-        wrapper.style.display = "none";
-        head.textContent = NSFW_SHOW_TEXT;
-        head.setAttribute("aria-expanded", "false");
+      const expand = !collapse.classList.contains("open");
+      if (expand) {
+        // Sync the overlay with the confirmation state before revealing:
+        // unconfirmed blocks show the red zone again on every open.
+        overlay.classList.toggle("confirmed", isConfirmed);
       }
+      collapse.classList.toggle("open", expand);
+      collapse.inert = !expand;
+      head.textContent = expand ? NSFW_HIDE_TEXT : NSFW_SHOW_TEXT;
+      head.setAttribute("aria-expanded", String(expand));
     };
 
-    // Confirm overlay function
+    // Confirm overlay function. The overlay fades out via the CSS
+    // opacity/backdrop-filter transition (unified reveal curve).
     const confirmOverlay = (): void => {
       isConfirmed = true;
-      overlay.style.display = "none";
+      overlay.classList.add("confirmed");
     };
 
     // Event handlers
@@ -504,12 +590,19 @@ export function initNsfw(container: HTMLElement | null): void {
       handleKeyboardToggle(e as KeyboardEvent, confirmOverlay);
     };
 
-    const headClickHandler = (e: Event): void => {
-      e.preventDefault();
+    // Manual user toggle (click/keyboard): clears the registry's pending
+    // bulk action; registry-driven calls use toggleNsfw directly.
+    const manualToggleNsfw = (): void => {
+      notifyExpandableChanged();
       toggleNsfw();
     };
+
+    const headClickHandler = (e: Event): void => {
+      e.preventDefault();
+      manualToggleNsfw();
+    };
     const headKeydownHandler = (e: Event): void => {
-      handleKeyboardToggle(e as KeyboardEvent, toggleNsfw);
+      handleKeyboardToggle(e as KeyboardEvent, manualToggleNsfw);
     };
 
     overlay.addEventListener("click", overlayClickHandler);
@@ -523,15 +616,15 @@ export function initNsfw(container: HTMLElement | null): void {
     // behind a separate click would defeat the affordance.
     const unregister = registerExpandable({
       id: Symbol("nsfw"),
-      isExpanded: () => wrapper.style.display !== "none",
+      isExpanded: () => collapse.classList.contains("open"),
       expand: () => {
-        if (wrapper.style.display === "none") {
+        if (!collapse.classList.contains("open")) {
           isConfirmed = true;
           toggleNsfw();
         }
       },
       collapse: () => {
-        if (wrapper.style.display !== "none") toggleNsfw();
+        if (collapse.classList.contains("open")) toggleNsfw();
       },
     });
 

@@ -29,7 +29,7 @@ internal class AchievementRepository : IAchievementRepository
         _guidFactory = guidFactory;
     }
 
-    // ---- Категории ----
+    // ---- Categories ----
 
     public async Task<IReadOnlyCollection<AchievementCategory>> GetCategoriesAsync(bool includeInactive, CancellationToken ct = default)
     {
@@ -60,7 +60,7 @@ internal class AchievementRepository : IAchievementRepository
         return _mapper.Map<AchievementCategory>(entity);
     }
 
-    // ---- Тиры ----
+    // ---- Tiers ----
 
     public async Task<IReadOnlyCollection<AchievementType>> GetTypesAsync(bool includeInactive, CancellationToken ct = default)
     {
@@ -126,7 +126,7 @@ internal class AchievementRepository : IAchievementRepository
         await _db.SaveChangesAsync(ct);
     }
 
-    // ---- Получения ----
+    // ---- Earnings ----
 
     public async Task<IReadOnlyCollection<UserAchievement>> GetUserAchievementsAsync(Guid userId, CancellationToken ct = default) =>
         await _db.UserAchievements
@@ -155,9 +155,9 @@ internal class AchievementRepository : IAchievementRepository
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
         {
-            // UNIQUE(UserId, AchievementTypeId) — параллельный
-            // evaluator уже начислил. Откатываем tracker и сообщаем
-            // «уже было». Это нормальная ситуация, не ошибка.
+            // UNIQUE(UserId, AchievementTypeId) — a parallel
+            // evaluator has already granted it. Roll back the tracker and report
+            // "already there". This is a normal situation, not an error.
             _db.Entry(entity).State = EntityState.Detached;
             return false;
         }

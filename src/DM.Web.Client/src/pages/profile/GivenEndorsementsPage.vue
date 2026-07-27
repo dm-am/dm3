@@ -1,35 +1,43 @@
 <script setup lang="ts">
 /**
- * GivenEndorsementsPage — «Написанные рекомендации» пользователя.
- * Тонкая обертка над `UserEndorsementsList` в режиме `written`:
- * рекомендации, которые этот пользователь написал о других.
+ * GivenEndorsementsPage — a user's "Написанные рекомендации" page.
+ * A thin wrapper over `ProfileEndorsementsList` in `written` mode:
+ * endorsements this user wrote about others.
  */
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
+import { ErrorPage } from "@/shared/ui/ErrorPage";
 import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
-import UserEndorsementsList from "./UserEndorsementsList.vue";
+import ProfileEndorsementsList from "./ProfileEndorsementsList.vue";
+import { useProfileSubpageUser } from "./useProfileSubpageUser";
 
 const route = useRoute();
 const username = computed(() => route.params.username as string);
+
+const { notFound, canonicalUsername } = useProfileSubpageUser(username);
 
 const profileLink = computed(() => ({
   name: "profile" as const,
   params: { username: username.value },
 }));
 
-useDocumentTitle(() => `Написанные рекомендации — ${username.value}`);
+useDocumentTitle(() => `Написанные рекомендации — ${canonicalUsername.value}`);
 </script>
 
 <template>
-  <div class="given-endorsements-page">
-    <ProfileSubpageHeader label="Написанные рекомендации" :username="username">
+  <ErrorPage v-if="notFound" :code="404" />
+  <div v-else class="given-endorsements-page">
+    <ProfileSubpageHeader
+      label="Написанные рекомендации"
+      :username="canonicalUsername"
+    >
       Что игрок
-      <router-link :to="profileLink">{{ username }}</router-link>
+      <router-link :to="profileLink">{{ canonicalUsername }}</router-link>
       пишет о других участниках сообщества
     </ProfileSubpageHeader>
 
-    <UserEndorsementsList
+    <ProfileEndorsementsList
       :username="username"
       mode="written"
       route-name="given-endorsements"

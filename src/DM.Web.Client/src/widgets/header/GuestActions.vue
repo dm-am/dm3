@@ -146,22 +146,9 @@ function handleRecoveryClick() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 
-// Button reset that mimics the global anchor styles (Reset.sass)
 .action-link
-  background: none
-  border: none
-  padding: 0
-  font: inherit
   vertical-align: baseline
-  text-decoration: none
-  cursor: pointer
-  transition: color $animation-time ease
-  color: $link
-
-  &:hover
-    text-decoration: underline
-    color: $link-hover
+  +inline-link-button
 </style>

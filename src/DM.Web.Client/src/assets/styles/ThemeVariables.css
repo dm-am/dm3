@@ -10,7 +10,6 @@ html.theme_Light {
   --accent-yellow: #d4a000;
   --text-on-green: #363;
   --text-on-red: #633;
-  --text-on-yellow: #654;
   --heading: #630;
   --heading-alt: #666;
   --link: #304060;
@@ -19,6 +18,8 @@ html.theme_Light {
   --accent-red-hover: #d33;
   --accent-green-muted: #8a9a8a;
   --accent-red-muted: #c08080;
+  --link-muted: #7080a0;
+  --text-muted-muted: #bbb;
   --link-nav: #999;
   --link-nav-hover: #444;
   --bg-page: #fff;
@@ -33,40 +34,47 @@ html.theme_Light {
   --selection-bg: #3266d0;
   --selection-text: #fff;
   --button-bg: #eaeaea;
-  --button-bg-hover: #ddd;
-  --button-bg-disabled: #f5f5f5;
   --button-text: #333;
-  --button-text-hover: #000;
-  --button-text-disabled: #aaa;
   --button-border: #ccc;
-  --button-border-hover: #999;
-  --button-border-disabled: #ddd;
   --border: #ccc;
   --border-focus: #999;
   --border-accent-blue: #b0c4de;
   --border-accent-green: #696;
   --border-accent-red: #b33;
-  --progress-bg: #f9f9f9;
-  --progress-fill: #e9f0f9;
   --input-bg: #f9f9f9;
-  --input-bg-overlay: rgba(0, 0, 0, 0.024);
+  /* Relative input fill — same calibration rationale as --control-bg-overlay:
+     inputs sit on --bg-page (forms) AND on --bg-element (dropdown panels),
+     so the alpha must keep the fill distinguishable from BOTH surfaces.
+     Light: #fff + 0.04 = #f5f5f5 (delta ~10 vs page and vs element) */
+  --input-bg-overlay: rgba(0, 0, 0, 0.04);
   --input-bg-disabled: #ddd;
   --shade-bg: rgba(0, 0, 0, 0.6);
   --shade-text: #fff;
   --tooltip-bg: #333;
   --tooltip-text: #fff;
   --tooltip-border: transparent;
+  /* Links on the tooltip surface — the surface is dark in BOTH themes,
+     so regular --link (dark navy in light theme) is unreadable here */
+  --tooltip-link: #7cb0e0;
+  --tooltip-link-hover: #9cc8f0;
   --overlay-bg: rgba(0, 0, 0, 0.25);
   --overlay-subtle: rgba(0, 0, 0, 0.05);
-  --overlay-emphasis: rgba(0, 0, 0, 0.1);
   --selected-overlay: rgba(0, 0, 0, 0.02);
   --hover-overlay: rgba(0, 0, 0, 0.05);
   --active-overlay: rgba(0, 0, 0, 0.08);
-  /* Control overlays — calibrated so that composed over --bg-page they equal
-     the legacy solid --bg-element / --bg-element-accent exactly.
-     Light: #fff + rgba(0,0,0,0.024) = #f9f9f9 (= --bg-element)
-     Light: #fff + rgba(0,0,0,0.082) = #eaeaea (= --bg-element-accent) */
-  --control-bg-overlay: rgba(0, 0, 0, 0.024);
+  /* Control overlays — relative fills for buttons that must read on ANY
+     sanctioned surface: --bg-page (#fff), --bg-element cards/dropdown panels
+     (#f9f9f9), --bg-element-accent modal form footers (#eaeaea).
+     Calibrated for a minimum rest-vs-backdrop delta of ~9-10 RGB points on
+     every surface (the old page-only calibration of 0.024 composed to a
+     6-point delta on tinted surfaces — visually indistinguishable):
+     #fff    + rgba(0,0,0,0.04) = #f5f5f5 (delta 10.2)
+     #f9f9f9 + rgba(0,0,0,0.04) = #efefef (delta 10.0)
+     #eaeaea + rgba(0,0,0,0.04) = #e1e1e1 (delta 9.4)
+     Hover/active stack --hover-overlay on top: another ~11-12 points down. */
+  --control-bg-overlay: rgba(0, 0, 0, 0.04);
+  /* Composed over --bg-page equals the legacy solid --bg-element-accent:
+     #fff + rgba(0,0,0,0.082) = #eaeaea */
   --control-bg-hover-overlay: rgba(0, 0, 0, 0.082);
   --shadow-color: rgba(0, 0, 0, 0.12);
   --nsfw-overlay: rgba(230, 98, 126, 0.2);
@@ -77,7 +85,6 @@ html.theme_Light {
   --progress-fill-overlay: rgba(35, 105, 195, 0.1);
   --filter-invert: none;
   --hover-brightness: 0.7;
-  --active-brightness: 0.5;
   --partner-glow: transparent;
   --partner-brightness: 1.05;
 
@@ -97,6 +104,14 @@ html.theme_Light {
   --toast-info-bg: #1565c0;
   --toast-info-text: #fff;
   --toast-info-border: #0d47a1;
+
+  /* Tier badges (awards/achievements) - metals are not theme-dependent, same in both themes */
+  --award-gold: #d4af37;
+  --award-silver: #c0c0c0;
+  --award-bronze: #cd7f32;
+  --achievement-platinum: #7fcfd4;
+  --award-diamond: var(--achievement-platinum); /* diamond award tier = achievement platinum */
+  --tier-badge-text: #fff;
 }
 
 html.theme_Dark {
@@ -108,7 +123,6 @@ html.theme_Dark {
   --accent-yellow: #e0b040;
   --text-on-green: #8fbc8f;
   --text-on-red: #d49a9a;
-  --text-on-yellow: #e0c070;
   --heading: #d4956a;
   --heading-alt: #a0a0a0;
   --link: #7cb0e0;
@@ -117,6 +131,8 @@ html.theme_Dark {
   --accent-red-hover: #e07070;
   --accent-green-muted: #7a9a7a;
   --accent-red-muted: #b08080;
+  --link-muted: #6a90b0;
+  --text-muted-muted: #808080;
   --link-nav: #a0a0a0;
   --link-nav-hover: #ccc;
   --bg-page: #222222;
@@ -131,21 +147,13 @@ html.theme_Dark {
   --selection-bg: #3266d0;
   --selection-text: #fff;
   --button-bg: #333;
-  --button-bg-hover: #444;
-  --button-bg-disabled: #2a2a2a;
   --button-text: #e0e0e0;
-  --button-text-hover: #fff;
-  --button-text-disabled: #666;
   --button-border: #666;
-  --button-border-hover: #888;
-  --button-border-disabled: #444;
   --border: #555;
   --border-focus: #888;
   --border-accent-blue: #5a7a9a;
   --border-accent-green: #5a8a5a;
   --border-accent-red: #a44;
-  --progress-bg: #2a2a2a;
-  --progress-fill: #3a4550;
   --input-bg: #222;
   --input-bg-overlay: rgba(255, 255, 255, 0.035);
   --input-bg-disabled: #444;
@@ -154,16 +162,25 @@ html.theme_Dark {
   --tooltip-bg: #444;
   --tooltip-text: #e8e8e8;
   --tooltip-border: #555;
+  /* Links on the tooltip surface — the surface is dark in BOTH themes,
+     so regular --link (dark navy in light theme) is unreadable here */
+  --tooltip-link: #7cb0e0;
+  --tooltip-link-hover: #9cc8f0;
   --overlay-bg: rgba(0, 0, 0, 0.4);
   --overlay-subtle: rgba(255, 255, 255, 0.05);
-  --overlay-emphasis: rgba(255, 255, 255, 0.1);
   --selected-overlay: rgba(255, 255, 255, 0.03);
   --hover-overlay: rgba(255, 255, 255, 0.08);
   --active-overlay: rgba(255, 255, 255, 0.12);
-  /* Control overlays — calibrated so that composed over --bg-page they equal
-     the legacy solid --bg-element / --bg-element-accent exactly.
-     Dark: #222 + rgba(255,255,255,0.036) = #2a2a2a (= --bg-element)
-     Dark: #222 + rgba(255,255,255,0.077) = #333333 (= --bg-element-accent) */
+  /* Control overlays — relative fills for buttons that must read on ANY
+     sanctioned surface: --bg-page (#222), --bg-element (#2a2a2a),
+     --bg-element-accent (#333). Composed over --bg-page this equals the
+     legacy solid --bg-element exactly:
+     #222    + rgba(255,255,255,0.036) = #2a2a2a (delta 8.0)
+     #2a2a2a + rgba(255,255,255,0.036) = #323232 (delta 7.7)
+     #333    + rgba(255,255,255,0.036) = #3a3a3a (delta 7.3)
+     Unlike the light theme (see its 0.04 calibration note), 7-8 points at
+     this low luminance is a 1.15-1.24x relative step — clearly visible, so
+     the dark alpha keeps the original page-calibrated value. */
   --control-bg-overlay: rgba(255, 255, 255, 0.036);
   --control-bg-hover-overlay: rgba(255, 255, 255, 0.077);
   --shadow-color: rgba(0, 0, 0, 0.3);
@@ -175,7 +192,6 @@ html.theme_Dark {
   --progress-fill-overlay: rgba(106, 134, 161, 0.4);
   --filter-invert: invert(87%);
   --hover-brightness: 1.4;
-  --active-brightness: 1.6;
   --partner-glow: rgba(255, 255, 255, 0.25);
   --partner-brightness: 1;
 
@@ -195,6 +211,14 @@ html.theme_Dark {
   --toast-info-bg: #1976d2;
   --toast-info-text: #fff;
   --toast-info-border: #1565c0;
+
+  /* Tier badges (awards/achievements) - metals are not theme-dependent, same in both themes */
+  --award-gold: #d4af37;
+  --award-silver: #c0c0c0;
+  --award-bronze: #cd7f32;
+  --achievement-platinum: #7fcfd4;
+  --award-diamond: var(--achievement-platinum); /* diamond award tier = achievement platinum */
+  --tier-badge-text: #fff;
 }
 
 /* Suppress all transitions during theme switch — toggled synchronously in App.vue */
@@ -206,6 +230,6 @@ html.no-transitions *::after {
 }
 
 /* vue-final-modal overlay override - loaded after vfm styles */
-.vfm__overlay.lightbox-overlay {
+.vfm__overlay.dialog-overlay {
   background-color: var(--overlay-bg);
 }

@@ -74,7 +74,7 @@ internal class UserProfileNoteRepository : IUserProfileNoteRepository
         {
             entity.Text = note.Text;
         }
-        entity.UpdatedUtc = note.UpdatedUtc;
+        entity.ModifiedUtc = note.ModifiedUtc;
 
         await _dbContext.SaveChangesAsync(ct);
 

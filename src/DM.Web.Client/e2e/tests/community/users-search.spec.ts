@@ -153,11 +153,8 @@ test.describe("Users Search", () => {
       // Wait for results
       await page.waitForTimeout(500);
 
-      // Should show empty message or no results
-      const noResults = page.locator(
-        "text=Пользователи не найдены, .empty-message, .no-results",
-      );
-      // May or may not be visible depending on implementation
+      // Should show empty message or no results - may or may not be visible
+      // depending on implementation
     });
   });
 });

@@ -17,12 +17,12 @@ public class AwardMappingProfile : Profile
     {
         CreateMap<DomainAwardType, ApiAwardType>();
         CreateMap<DomainContestSeries, ApiContestSeries>();
-        // AwardedBy и Note удалены — в публичном API не светим (audit в БД).
+        // AwardedBy and Note are removed — not exposed in the public API (audit stays in the DB).
         CreateMap<DomainUserAward, ApiUserAward>();
 
         CreateMap<CreateAwardTypeRequest, CreateAwardType>();
         CreateMap<UpdateAwardTypeRequest, UpdateAwardType>()
-            .ForMember(d => d.Id, opt => opt.Ignore()); // Id берется из route, не из body
+            .ForMember(d => d.Id, opt => opt.Ignore()); // Id comes from the route, not the body
 
         CreateMap<CreateContestSeriesRequest, CreateContestSeries>();
         CreateMap<UpdateContestSeriesRequest, UpdateContestSeries>()

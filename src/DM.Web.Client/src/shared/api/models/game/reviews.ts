@@ -5,7 +5,7 @@ import type { User } from "../community";
  * Game review types
  * @module shared/api/models/game/reviews
  *
- * Game reviews (рецензия) are detailed reviews on entire games.
+ * Game reviews ("рецензия") are detailed reviews on entire games.
  * - BBCode supported
  * - NO likes support
  * - One review per game per user
@@ -54,7 +54,7 @@ export type UpdateGameReviewRequest = {
  * post review types
  * @module shared/api/models/game/reviews
  *
- * PostReviews (оценка поста) are ratings with required text for individual posts.
+ * PostReviews ("оценка поста") are ratings with required text for individual posts.
  * - BBCode supported
  * - Likes support (ONLY for PostReviews)
  * - One review per post per user

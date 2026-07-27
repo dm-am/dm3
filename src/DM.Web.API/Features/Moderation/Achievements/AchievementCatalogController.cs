@@ -15,14 +15,14 @@ using DomainUpdateAchievementType = DM.Domain.Community.Features.Achievements.Up
 namespace DM.Web.API.Features.Moderation.Achievements;
 
 /// <summary>
-/// Управление каталогом достижений (категории + тиры).
+/// Management of the achievement catalog (categories + tiers).
 /// </summary>
 /// <remarks>
-/// Категории — только PATCH, создания/удаления нет (каталог статичен и
-/// привязан к серверным метрикам через <c>AchievementCategory.Metric</c>).
-/// Тиры — POST/PATCH/DELETE: SeniorModerator может добавить/убрать тир
-/// или подкрутить порог; категория-родитель указывается через FK.
-/// Все ручки требуют SeniorModerator или выше.
+/// Categories — PATCH only, no creation/deletion (the catalog is static and
+/// tied to server metrics via <c>AchievementCategory.Metric</c>).
+/// Tiers — POST/PATCH/DELETE: a SeniorModerator can add/remove a tier
+/// or tune the threshold; the parent category is referenced via FK.
+/// All endpoints require SeniorModerator or higher.
 /// </remarks>
 [ApiController]
 [Route("v1/moderation")]
@@ -42,15 +42,15 @@ public class AchievementCatalogController : ControllerBase
     }
 
     /// <summary>
-    /// Частично обновить категорию достижений (Title/Description/IconName/SortOrder/IsActive).
+    /// Partially update an achievement category (Title/Description/IconName/SortOrder/IsActive).
     /// </summary>
-    /// <param name="id">Идентификатор категории.</param>
-    /// <param name="request">Поля для обновления (null = не трогать).</param>
-    /// <response code="200">Обновлено.</response>
-    /// <response code="400">Неизвестная иконка или невалидные данные.</response>
-    /// <response code="401">Не аутентифицирован.</response>
-    /// <response code="403">Недостаточно прав.</response>
-    /// <response code="404">Категория не найдена.</response>
+    /// <param name="id">Category identifier.</param>
+    /// <param name="request">Fields to update (null = leave untouched).</param>
+    /// <response code="200">Updated.</response>
+    /// <response code="400">Unknown icon or invalid data.</response>
+    /// <response code="401">Not authenticated.</response>
+    /// <response code="403">Insufficient permissions.</response>
+    /// <response code="404">Category not found.</response>
     [HttpPatch("achievement-categories/{id:guid}", Name = nameof(UpdateAchievementCategory))]
     [ProducesResponseType(typeof(Envelope<AchievementCategory>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
@@ -65,12 +65,12 @@ public class AchievementCatalogController : ControllerBase
         return Ok(new Envelope<AchievementCategory>(_mapper.Map<AchievementCategory>(updated)));
     }
 
-    /// <summary>Создать новый тир в существующей категории.</summary>
-    /// <response code="201">Создан.</response>
-    /// <response code="400">Неизвестная категория или невалидные данные.</response>
-    /// <response code="401">Не аутентифицирован.</response>
-    /// <response code="403">Недостаточно прав.</response>
-    /// <response code="409">Code уже занят.</response>
+    /// <summary>Create a new tier in an existing category.</summary>
+    /// <response code="201">Created.</response>
+    /// <response code="400">Unknown category or invalid data.</response>
+    /// <response code="401">Not authenticated.</response>
+    /// <response code="403">Insufficient permissions.</response>
+    /// <response code="409">Code is already taken.</response>
     [HttpPost("achievement-types", Name = nameof(CreateAchievementType))]
     [ProducesResponseType(typeof(Envelope<AchievementType>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
@@ -88,14 +88,14 @@ public class AchievementCatalogController : ControllerBase
             new Envelope<AchievementType>(api));
     }
 
-    /// <summary>Частично обновить тир (Title / Threshold / Tier).</summary>
-    /// <param name="id">Идентификатор тира.</param>
-    /// <param name="request">Поля для обновления.</param>
-    /// <response code="200">Обновлено.</response>
-    /// <response code="400">Невалидные данные.</response>
-    /// <response code="401">Не аутентифицирован.</response>
-    /// <response code="403">Недостаточно прав.</response>
-    /// <response code="404">Тир не найден.</response>
+    /// <summary>Partially update a tier (Title / Threshold / Tier).</summary>
+    /// <param name="id">Tier identifier.</param>
+    /// <param name="request">Fields to update.</param>
+    /// <response code="200">Updated.</response>
+    /// <response code="400">Invalid data.</response>
+    /// <response code="401">Not authenticated.</response>
+    /// <response code="403">Insufficient permissions.</response>
+    /// <response code="404">Tier not found.</response>
     [HttpPatch("achievement-types/{id:guid}", Name = nameof(UpdateAchievementType))]
     [ProducesResponseType(typeof(Envelope<AchievementType>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
@@ -110,11 +110,11 @@ public class AchievementCatalogController : ControllerBase
         return Ok(new Envelope<AchievementType>(_mapper.Map<AchievementType>(updated)));
     }
 
-    /// <summary>Удалить тир из каталога. Уже выданные UserAchievement остаются как историческая запись.</summary>
-    /// <response code="204">Удалено.</response>
-    /// <response code="401">Не аутентифицирован.</response>
-    /// <response code="403">Недостаточно прав.</response>
-    /// <response code="404">Тир не найден.</response>
+    /// <summary>Delete a tier from the catalog. Already earned UserAchievement records remain as history.</summary>
+    /// <response code="204">Deleted.</response>
+    /// <response code="401">Not authenticated.</response>
+    /// <response code="403">Insufficient permissions.</response>
+    /// <response code="404">Tier not found.</response>
     [HttpDelete("achievement-types/{id:guid}", Name = nameof(DeleteAchievementType))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useBlogDisplay, type Blog, type BlogRef } from "@/entities/blog";
 import { Tooltip } from "@/shared/ui/Tooltip";
+import { CounterPair } from "@/shared/ui/CounterPair";
 import { computed, ref } from "vue";
 
 const props = withDefaults(
@@ -27,15 +28,17 @@ const {
   isNew,
 } = useBlogDisplay();
 
-// Закрытый блог: приглушенный серый до hover. Muted приоритетнее "new".
+// Closed blog: muted grey until hover. Muted takes priority over "new".
 const isClosedBlog = computed(() => props.blog.status === "Closed");
 
 // Blog is "new" if activated < 7 days ago
 const isNewBlog = computed(() => !isClosedBlog.value && isNew(props.blog));
 
+// Prefer the short public id for the URL; fall back to the GUID (the blog
+// route is publicId-tolerant on the backend).
 const blogRoute = computed(() => ({
   name: "blog",
-  params: { id: props.blog.id },
+  params: { id: props.blog.publicId ?? props.blog.id },
 }));
 const hovered = ref(false);
 const showCounters = computed(
@@ -57,7 +60,7 @@ const blogTooltip = computed(() => buildTooltip(props.blog));
 </script>
 
 <template>
-  <div class="link" @mouseenter="hovered = true" @mouseleave="hovered = false">
+  <li class="link" @mouseenter="hovered = true" @mouseleave="hovered = false">
     <span class="muted" aria-hidden="true">{{ prefix }}</span>
     <Tooltip :text="blogTooltip">
       <router-link
@@ -66,22 +69,22 @@ const blogTooltip = computed(() => buildTooltip(props.blog));
         >{{ blog.title }}</router-link
       > </Tooltip
     >{{ " "
-    }}<span v-if="showCounters" class="counters"
-      ><span class="bracket">(</span
-      ><router-link :to="blogRoute" :aria-label="publicationsTooltip">{{
-        publicationsCount
-      }}</router-link
-      ><span class="counter-sep">/</span
-      ><router-link :to="blogRoute" :aria-label="commentsTooltip">{{
-        commentsCount
-      }}</router-link
-      ><span class="bracket">)</span></span
-    >
-  </div>
+    }}<CounterPair
+      v-if="showCounters"
+      class="counters"
+      :first-value="publicationsCount"
+      :first-to="blogRoute"
+      :first-label="publicationsTooltip"
+      :second-value="commentsCount"
+      :second-to="blogRoute"
+      :second-label="commentsTooltip"
+    />
+  </li>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
+.link
+  display: block
 
 .muted
   color: $text-muted
@@ -92,7 +95,7 @@ const blogTooltip = computed(() => buildTooltip(props.blog));
   &:hover
     color: $accent-green-hover
 
-// Закрытые блоги: приглушенный серый, при hover — обычное link-поведение.
+// Closed blogs: muted grey; on hover — the regular link behavior.
 .closed-item
   color: $text-muted
   &:hover
@@ -100,12 +103,4 @@ const blogTooltip = computed(() => buildTooltip(props.blog));
 
 .counters
   transition: opacity 0.15s ease
-  a
-    color: $link
-    &:hover
-      color: $link-hover
-
-.bracket,
-.counter-sep
-  color: $text-muted
 </style>

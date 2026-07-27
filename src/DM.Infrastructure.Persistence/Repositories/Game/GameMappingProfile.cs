@@ -121,7 +121,7 @@ internal class GameMappingProfile : Profile
             // post. ProjectTo carries it over as raw JSON; API-layer
             // mapping profile parses it into a Dictionary at render time.
             .ForMember(d => d.PrivateAddresseeSnapshotJson, s => s.MapFrom(p => p.PrivateAddresseeSnapshotJson))
-            .ForMember(d => d.Edits, s => s.MapFrom(p => p.Edits.OrderByDescending(e => e.EditedUtc)))
+            .ForMember(d => d.Edits, s => s.MapFrom(p => p.Edits.OrderByDescending(e => e.ModifiedUtc)))
             .ForMember(d => d.Rating, opt => opt.Ignore())
             .ForMember(d => d.ReviewCount, opt => opt.Ignore())
             .ForMember(d => d.AuthorGameRole, opt => opt.Ignore())
@@ -141,17 +141,26 @@ internal class GameMappingProfile : Profile
     {
         CreateMap<DbCharacter, Character>()
             .ForMember(d => d.Id, s => s.MapFrom(c => c.CharacterId))
-            // Picture поднимается отдельным batched-query (см. PostRepository
-            // / CharacterRepository); здесь оставляем дефолт пустой AvatarPicture().
+            // Picture is loaded by a separate batched query (see PostRepository
+            // / CharacterRepository); here we leave the default empty AvatarPicture().
             .ForMember(d => d.Picture, opt => opt.Ignore())
             .ForMember(d => d.ModifiedUtc, opt => opt.Ignore()) // Not stored on the DB entity yet
-            .ForMember(d => d.TotalPostsCount, s => s.MapFrom(c => c.Posts.Count()));
+            .ForMember(d => d.TotalPostsCount, s => s.MapFrom(c => c.Posts.Count()))
+            // Aggregate subquery (MAX), not a collection join - split-query safe.
+            .ForMember(d => d.LastPostUtc, s => s.MapFrom(c => c.Posts
+                .Max(p => (DateTimeOffset?)p.CreatedUtc)))
+            // Descriptor is derived from the schema by CharacterAttributeValueFiller
+            // in the domain layer, not projectable from the DB row.
+            .ForMember(d => d.Descriptor, opt => opt.Ignore());
 
         CreateMap<DbCharacterAttribute, CharacterAttribute>()
             .ForMember(d => d.Id, s => s.MapFrom(a => a.AttributeId))
             .ForMember(d => d.Title, opt => opt.Ignore())
             .ForMember(d => d.Description, opt => opt.Ignore())
             .ForMember(d => d.Modifier, opt => opt.Ignore())
+            // Type is populated by CharacterAttributeValueFiller from the schema,
+            // not stored on the attribute row.
+            .ForMember(d => d.Type, opt => opt.Ignore())
             .ForMember(d => d.Inconsistent, opt => opt.Ignore());
 
         CreateMap<DbCharacter, CharacterToUpdate>()
@@ -163,7 +172,7 @@ internal class GameMappingProfile : Profile
         CreateMap<DbCharacter, CharacterShort>()
             .Include<DbCharacter, CharacterShortInfo>()
             .ForMember(d => d.Id, s => s.MapFrom(c => c.CharacterId))
-            // Picture поднимается отдельным batched-query из Uploads
+            // Picture is loaded by a separate batched query from Uploads
             // (PostRepository.EnrichWithCharacterPictures).
             .ForMember(d => d.Picture, opt => opt.Ignore());
 
@@ -203,8 +212,7 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.JoinedUtc, s => s.MapFrom(a => a.JoinedUtc))
             .ForMember(d => d.LastActivityUtc, s => s.MapFrom(a => a.User.LastActivityUtc))
             .ForMember(d => d.Role, s => s.MapFrom(a => a.User.Role))
-            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.User.QuantityRating < 100))
-            .ForMember(d => d.IsHonorary, s => s.MapFrom(a => a.User.IsHonorary));
+            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.User.QuantityRating < 100));
 
         CreateMap<DbGame, GameDto>()
             .Include<DbGame, GameDetails>()
@@ -228,6 +236,7 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.PostReviewsCount, opt => opt.Ignore()) // Set in repository
             .ForMember(d => d.SubscriberUsernames, opt => opt.Ignore()) // Set in repository
             .ForMember(d => d.ActiveCharacters, opt => opt.Ignore()) // Set in repository
+            .ForMember(d => d.FilteredPlayerCharacters, opt => opt.Ignore()) // Set in repository (player filter only)
             .ForMember(d => d.Recruitment, s => s.MapFrom(g => new GameRecruitment
             {
                 IsOpen = g.IsRecruitmentOpen,
@@ -249,7 +258,12 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.AttributeSchema, opt => opt.Ignore())
             .ForMember(d => d.Pendencies, opt => opt.Ignore())
             .ForMember(d => d.UnreadPostsCount, opt => opt.Ignore())
-            .ForMember(d => d.UnreadCommentsCount, opt => opt.Ignore());
+            .ForMember(d => d.UnreadCommentsCount, opt => opt.Ignore())
+            // Aggregates computed by GameRepository after the projection
+            // (see FillGameDetailStatistics) — they have no entity counterpart.
+            .ForMember(d => d.TotalPostsCount, opt => opt.Ignore())
+            .ForMember(d => d.LastMasterPostUtc, opt => opt.Ignore())
+            .ForMember(d => d.DiceSupported, opt => opt.Ignore());
 
         CreateMap<DbGameTag, DtoGameTag>()
             .ForMember(d => d.Id, s => s.MapFrom(g => g.TagId))

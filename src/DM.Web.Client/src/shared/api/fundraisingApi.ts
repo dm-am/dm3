@@ -5,7 +5,7 @@ import Api from "./client";
 export interface Fundraising {
   goalAmount: number;
   collectedAmount: number;
-  updatedUtc: string;
+  modifiedUtc: string;
 }
 
 /** Update request for the fundraising goal */

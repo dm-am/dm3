@@ -1,0 +1,289 @@
+<script setup lang="ts">
+/**
+ * ConfirmDialog — a modal confirmation prompt (title + message + confirm/cancel).
+ *
+ * Reuses the InputDialog modal shell (backdrop / container / header / footer,
+ * Escape-to-cancel, backdrop-click-to-cancel) but carries a read-only message
+ * instead of input fields. Used for destructive/irreversible confirms
+ * (premoderation, delete game, reset recruitment, delete NPC, room delete).
+ *
+ * The `danger` flag paints the confirm button in the accent-red action color.
+ * A minimal focus trap keeps Tab within the dialog while it is open and
+ * restores focus to the previously-focused element on close.
+ */
+import { ref, watch, nextTick, onBeforeUnmount } from "vue";
+import { symbols } from "@/shared/lib/utils/icons";
+
+const props = withDefaults(
+  defineProps<{
+    show: boolean;
+    title: string;
+    message?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    /** Render the confirm action as destructive (accent-red). */
+    danger?: boolean;
+    /** Disable the confirm button and show a spinner-ish disabled state. */
+    loading?: boolean;
+  }>(),
+  {
+    message: "",
+    confirmLabel: "Подтвердить",
+    cancelLabel: "Отмена",
+    danger: false,
+    loading: false,
+  },
+);
+
+const emit = defineEmits<{
+  (e: "update:show", value: boolean): void;
+  (e: "confirm"): void;
+  (e: "cancel"): void;
+}>();
+
+const container = ref<HTMLElement | null>(null);
+const confirmBtn = ref<HTMLButtonElement | null>(null);
+let previouslyFocused: HTMLElement | null = null;
+
+watch(
+  () => props.show,
+  (show) => {
+    if (show) {
+      previouslyFocused = document.activeElement as HTMLElement | null;
+      nextTick(() => confirmBtn.value?.focus());
+    } else {
+      previouslyFocused?.focus?.();
+      previouslyFocused = null;
+    }
+  },
+);
+
+onBeforeUnmount(() => {
+  previouslyFocused?.focus?.();
+});
+
+function close() {
+  emit("update:show", false);
+}
+
+function handleConfirm() {
+  if (props.loading) return;
+  emit("confirm");
+}
+
+function handleCancel() {
+  emit("cancel");
+  close();
+}
+
+// Focusable elements inside the dialog, in DOM order.
+function focusables(): HTMLElement[] {
+  if (!container.value) return [];
+  return Array.from(
+    container.value.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((el) => !el.hasAttribute("disabled"));
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    handleCancel();
+    return;
+  }
+  if (e.key === "Enter") {
+    // Enter confirms only when focus is NOT on one of the dialog buttons —
+    // otherwise a focused "Отмена"/close button would trigger the (possibly
+    // destructive) confirm instead of its own native Enter activation.
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLButtonElement &&
+      container.value?.contains(active)
+    ) {
+      return;
+    }
+    e.preventDefault();
+    handleConfirm();
+    return;
+  }
+  if (e.key === "Tab") {
+    // Trap focus within the dialog.
+    const items = focusables();
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    if (e.shiftKey && active === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+}
+
+function handleBackdropClick(e: MouseEvent) {
+  if (e.target === e.currentTarget) {
+    handleCancel();
+  }
+}
+</script>
+
+<template>
+  <Teleport to="body">
+    <Transition name="dialog">
+      <div
+        v-if="show"
+        class="dialog-backdrop"
+        @click="handleBackdropClick"
+        @keydown="handleKeydown"
+      >
+        <div
+          ref="container"
+          class="dialog-container"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="title"
+        >
+          <div class="dialog-header">
+            <h3 class="dialog-title">{{ title }}</h3>
+            <button
+              type="button"
+              class="dialog-close"
+              aria-label="Закрыть"
+              @click="handleCancel"
+            >
+              {{ symbols.close }}
+            </button>
+          </div>
+
+          <div v-if="message" class="dialog-content">
+            <p class="dialog-message">{{ message }}</p>
+          </div>
+
+          <div class="dialog-footer">
+            <button
+              type="button"
+              class="dialog-btn dialog-btn-cancel"
+              @click="handleCancel"
+            >
+              {{ cancelLabel }}
+            </button>
+            <button
+              ref="confirmBtn"
+              type="button"
+              class="dialog-btn dialog-btn-submit"
+              :class="{ danger }"
+              :disabled="loading"
+              @click="handleConfirm"
+            >
+              {{ confirmLabel }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+</template>
+
+<style scoped lang="sass">
+@import "src/assets/styles/Inputs"
+@import "src/assets/styles/ZIndex"
+@import "src/assets/styles/Animations"
+
+.dialog-backdrop
+  position: fixed
+  inset: 0
+  z-index: $z-modal
+  display: flex
+  align-items: center
+  justify-content: center
+  background-color: $overlay-bg
+  backdrop-filter: blur(2px)
+
+.dialog-container
+  width: 100%
+  max-width: 420px
+  margin: $medium
+  border-radius: $border-radius
+  box-shadow: 0 8px 32px var(--shadow-color)
+  background-color: $bg-element
+  border: 1px solid $border
+
+.dialog-header
+  display: flex
+  justify-content: space-between
+  align-items: center
+  padding: $medium
+  border-bottom: 1px solid
+  border-color: $border
+
+.dialog-title
+  margin: 0
+  font-size: $font-size
+  font-weight: 600
+
+.dialog-close
+  padding: 4px 8px
+  border: none
+  background: none
+  font-size: 20px
+  cursor: pointer
+  color: $text-muted
+
+  &:hover
+    color: $text
+
+.dialog-content
+  padding: $medium
+
+.dialog-message
+  margin: 0
+  color: $text
+  line-height: 1.5
+
+.dialog-footer
+  display: flex
+  justify-content: flex-start
+  gap: $small
+  padding: $medium
+  border-top: 1px solid
+  border-color: $border
+
+.dialog-btn
+  font-size: $secondary-font-size
+  +button
+
+  &.danger
+    background-color: $accent-red
+    border-color: $accent-red
+
+    &:hover:not(:disabled)
+      background-color: $accent-red
+
+  &:disabled
+    opacity: 0.6
+    cursor: default
+
+// Transition animations
+.dialog-enter-active,
+.dialog-leave-active
+  transition: opacity 0.2s ease
+  @media (prefers-reduced-motion: reduce)
+    transition: none
+
+.dialog-enter-from,
+.dialog-leave-to
+  opacity: 0
+
+  .dialog-container
+    transform: scale(0.95)
+
+.dialog-enter-active .dialog-container,
+.dialog-leave-active .dialog-container
+  transition: transform 0.2s ease
+  @media (prefers-reduced-motion: reduce)
+    transition: none
+</style>

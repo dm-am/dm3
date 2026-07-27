@@ -7,13 +7,16 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Users;
+using FluentValidation;
 
 namespace DM.Domain.Moderation.Features.Warnings;
 
 /// <inheritdoc />
 internal class WarningService : IWarningService
 {
+    private readonly IValidator<CreateWarning> _createValidator;
     private readonly IWarningRepository _warningRepository;
+    private readonly IBanRepository _banRepository;
     private readonly IUserLookupService _userLookupService;
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
@@ -21,13 +24,17 @@ internal class WarningService : IWarningService
 
     /// <inheritdoc />
     public WarningService(
+        IValidator<CreateWarning> createValidator,
         IWarningRepository warningRepository,
+        IBanRepository banRepository,
         IUserLookupService userLookupService,
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider)
     {
+        _createValidator = createValidator;
         _warningRepository = warningRepository;
+        _banRepository = banRepository;
         _userLookupService = userLookupService;
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
@@ -69,6 +76,8 @@ internal class WarningService : IWarningService
     /// <inheritdoc />
     public async Task<Warning> CreateWarning(CreateWarning createWarning, CancellationToken ct = default)
     {
+        await _createValidator.ValidateAndThrowAsync(createWarning, ct);
+
         var currentUser = _identityProvider.Current.User;
         if (currentUser.Role < UserRole.Moderator)
         {
@@ -84,7 +93,8 @@ internal class WarningService : IWarningService
             AuthorId = currentUser.UserId,
             EntityId = createWarning.EntityId ?? Guid.Empty,
             EntityType = ParseEntityType(createWarning.EntityType),
-            Points = Math.Clamp(createWarning.Points, 1, 3),
+            // 0 points = verbal warning: recorded, but adds nothing to the sum
+            Points = Math.Clamp(createWarning.Points, 0, 6),
             Text = createWarning.Reason,
             CreatedUtc = _dateTimeProvider.Now
         };
@@ -116,6 +126,64 @@ internal class WarningService : IWarningService
         {
             return 0;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<Violator>> GetViolators(
+        ViolatorsFilter filter = ViolatorsFilter.All, CancellationToken ct = default)
+    {
+        var currentUser = _identityProvider.Current.User;
+        if (currentUser.Role < UserRole.Moderator)
+        {
+            throw new UnauthorizedAccessException("Only moderators can view violators");
+        }
+
+        var pointsSummaries = await _warningRepository.GetActiveWarningSummaries(ct);
+        var activeBans = await _banRepository.GetAllActiveBans(ct);
+
+        // A user can theoretically have several overlapping bans; show the longest one
+        var bansByUser = activeBans
+            .GroupBy(b => b.TargetUser.UserId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(b => b.EndedUtc).First());
+
+        var violators = new Dictionary<Guid, Violator>();
+        foreach (var summary in pointsSummaries)
+        {
+            violators[summary.User.UserId] = new Violator
+            {
+                User = summary.User,
+                Points = summary.Points,
+                LastWarningUtc = summary.LastWarningUtc,
+                ActiveBan = bansByUser.GetValueOrDefault(summary.User.UserId)
+            };
+        }
+
+        // Banned users without active points still count as violators
+        foreach (var (userId, ban) in bansByUser)
+        {
+            if (!violators.ContainsKey(userId))
+            {
+                violators[userId] = new Violator
+                {
+                    User = ban.TargetUser,
+                    Points = 0,
+                    LastWarningUtc = null,
+                    ActiveBan = ban
+                };
+            }
+        }
+
+        var filtered = filter switch
+        {
+            ViolatorsFilter.Banned => violators.Values.Where(v => v.ActiveBan != null),
+            ViolatorsFilter.PointsOnly => violators.Values.Where(v => v.ActiveBan == null && v.Points > 0),
+            _ => violators.Values.AsEnumerable()
+        };
+
+        return filtered
+            .OrderByDescending(v => v.Points)
+            .ThenByDescending(v => v.LastWarningUtc ?? DateTimeOffset.MinValue)
+            .ToList();
     }
 
     private static WarningEntityType ParseEntityType(string? entityType)

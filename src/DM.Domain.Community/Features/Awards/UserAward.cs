@@ -4,43 +4,43 @@ using DM.Domain.Core.Dto;
 namespace DM.Domain.Community.Features.Awards;
 
 /// <summary>
-/// Награда, выданная конкретному пользователю в рамках серии конкурса.
-/// Note и AwardedBy не светятся в публичном API — описание уже есть на типе,
-/// модератор-выдавший хранится для audit на уровне БД, но не выдается клиенту.
+/// An award granted to a specific user within a contest series.
+/// Note and AwardedBy are not exposed in the public API — the description already lives on the type,
+/// the granting moderator is stored for DB-level audit but is not returned to the client.
 /// </summary>
 public class UserAward
 {
-    /// <summary>Идентификатор записи о выдаче.</summary>
+    /// <summary>Grant record identifier.</summary>
     public Guid Id { get; set; }
 
-    /// <summary>Пользователь, которому выдана награда.</summary>
+    /// <summary>User the award was granted to.</summary>
     public GeneralUser User { get; set; } = null!;
 
-    /// <summary>Тип награды (запись из каталога).</summary>
+    /// <summary>Award type (a catalog record).</summary>
     public AwardType Type { get; set; } = null!;
 
-    /// <summary>Серия конкурса, в рамках которой выдана награда (опционально).</summary>
+    /// <summary>Contest series the award was granted within (optional).</summary>
     public ContestSeries? ContestSeries { get; set; }
 
     /// <summary>
-    /// Ссылка на форумный топик с работой, за которую получена награда.
-    /// Опциональна — best_critic / guesser не привязаны к конкретной работе.
+    /// Link to the forum topic with the work the award was granted for.
+    /// Optional — best_critic / guesser are not tied to a specific work.
     /// </summary>
     public string? WorkUrl { get; set; }
 
-    /// <summary>Момент выдачи (UTC).</summary>
+    /// <summary>Grant moment (UTC).</summary>
     public DateTimeOffset AwardedUtc { get; set; }
 }
 
-/// <summary>Запрос на выдачу награды пользователю.</summary>
+/// <summary>Request to grant an award to a user.</summary>
 public class CreateUserAward
 {
-    /// <summary>Кому выдаем.</summary>
+    /// <summary>Recipient.</summary>
     public Guid UserId { get; set; }
-    /// <summary>Тип награды из каталога.</summary>
+    /// <summary>Award type from the catalog.</summary>
     public Guid AwardTypeId { get; set; }
-    /// <summary>Серия конкурса (опционально для будущих внеконкурсных наград).</summary>
+    /// <summary>Contest series (optional, for future out-of-contest awards).</summary>
     public Guid? ContestSeriesId { get; set; }
-    /// <summary>Ссылка на топик с работой (опционально).</summary>
+    /// <summary>Link to the topic with the work (optional).</summary>
     public string? WorkUrl { get; set; }
 }

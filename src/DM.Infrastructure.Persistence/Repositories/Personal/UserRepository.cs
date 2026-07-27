@@ -14,6 +14,7 @@ using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Infrastructure.Persistence.Entities.Account.Settings;
 using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Infrastructure.Persistence.RelationalStorage;
+using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
 
@@ -48,7 +49,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         UserActivityFilter filter,
         string? search = null,
         UserRole? role = null,
-        bool? isHonorary = null,
         bool? isNewbie = null,
         bool? isOnline = null,
         int? minRating = null,
@@ -61,7 +61,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         int? maxBlogsHosting = null,
         DateTimeOffset? registeredFromUtc = null,
         DateTimeOffset? registeredToUtc = null) =>
-        GetQuery(filter, search, role, isHonorary, isNewbie, isOnline, minRating, maxRating,
+        GetQuery(filter, search, role, isNewbie, isOnline, minRating, maxRating,
             minGamesHosting, maxGamesHosting, minGamesPlaying, maxGamesPlaying, minBlogsHosting, maxBlogsHosting,
             registeredFromUtc, registeredToUtc).CountAsync();
 
@@ -73,7 +73,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         UserRole? role = null,
         UserSort sort = UserSort.Name,
         bool sortAscending = true,
-        bool? isHonorary = null,
         bool? isNewbie = null,
         bool? isOnline = null,
         int? minRating = null,
@@ -87,7 +86,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         DateTimeOffset? registeredFromUtc = null,
         DateTimeOffset? registeredToUtc = null)
     {
-        var baseQuery = GetQuery(filter, search, role, isHonorary, isNewbie, isOnline, minRating, maxRating,
+        var baseQuery = GetQuery(filter, search, role, isNewbie, isOnline, minRating, maxRating,
                 minGamesHosting, maxGamesHosting, minGamesPlaying, maxGamesPlaying, minBlogsHosting, maxBlogsHosting,
                 registeredFromUtc, registeredToUtc)
             .Include(u => u.AvatarUpload)
@@ -458,12 +457,12 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     {
         var user = await _dmDbContext.Users.FindAsync(userId);
         if (user == null) return;
-        if (user.AvatarUploadId == null) return; // Идемпотент: уже нет аватара
+        if (user.AvatarUploadId == null) return; // Idempotent: no avatar already
 
         user.AvatarUploadId = null;
 
-        // Soft-delete все Upload-записи UserAvatar-типа этого юзера.
-        // GC-worker (UploadOrphanCleanupService) подметет S3-объекты после grace.
+        // Soft-delete all UserAvatar-type Upload records of this user.
+        // The GC worker (UploadOrphanCleanupService) sweeps the S3 objects after the grace period.
         var avatarUploads = await _dmDbContext.Uploads
             .Where(u => u.UserId == userId
                 && u.Type == UploadType.UserAvatar
@@ -525,7 +524,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         UserActivityFilter filter,
         string? search = null,
         UserRole? role = null,
-        bool? isHonorary = null,
         bool? isNewbie = null,
         bool? isOnline = null,
         int? minRating = null,
@@ -585,12 +583,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             query = query.Where(u => u.Role == role.Value);
         }
 
-        // Honorary filter (only applicable for RegularUser)
-        if (isHonorary.HasValue)
-        {
-            query = query.Where(u => u.IsHonorary == isHonorary.Value);
-        }
-
         // Newbie filter (users with < 100 posts)
         if (isNewbie.HasValue)
         {
@@ -621,7 +613,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         }
         if (registeredToUtc.HasValue)
         {
-            query = query.Where(u => u.CreatedUtc <= registeredToUtc.Value);
+            query = query.WhereAtOrBefore(u => u.CreatedUtc, registeredToUtc.Value);
         }
 
         // Games hosting filter (master + assistant)
@@ -737,7 +729,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             .Select(g => new { UserId = g.Key, Count = g.Count() })
             .ToListAsync();
 
-        // Bans received — drives the «резиновая уточка» chain. Same
+        // Bans received — drives the "резиновая уточка" chain. Same
         // batched-GROUP-BY pattern. Soft-deleted bans excluded (IsRemoved):
         // tidying ban history shouldn't retroactively erase the achievement,
         // but if a ban gets revoked entirely we don't want to keep counting it.
@@ -747,9 +739,9 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             .Select(g => new { UserId = g.Key, Count = g.Count() })
             .ToListAsync();
 
-        // Game drops — drives the «дропы» chain. Игрок ушел сам
-        // (IsPlayerLeft=true), персонаж Retired, не NPC, удаленные
-        // персонажи и игры исключены. Смерть и изгнание GM-ом — не дропы.
+        // Game drops — drives the "дропы" chain. The player left voluntarily
+        // (IsPlayerLeft=true), the character is Retired, not an NPC; deleted
+        // characters and games are excluded. Death and GM exile are not drops.
         var gameDropsCounts = await _dmDbContext.Set<Entities.Game.Characters.Character>()
             .Where(c => c.AuthorId.HasValue
                 && userIds.Contains(c.AuthorId.Value)
@@ -762,22 +754,22 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             .Select(g => new { UserId = g.Key, Count = g.Count() })
             .ToListAsync();
 
-        // Publications authored — drives the «публикации» chain. Драфты
-        // тоже считаются (см. enum doc), потому что фильтрация только
-        // по IsRemoved.
+        // Publications authored — drives the "публикации" chain. Drafts
+        // also count (see the enum doc) because filtering is only
+        // by IsRemoved.
         var publicationsAuthoredCounts = await _dmDbContext.Set<Entities.Blog.Publication>()
             .Where(p => userIds.Contains(p.AuthorId) && !p.IsRemoved)
             .GroupBy(p => p.AuthorId)
             .Select(g => new { UserId = g.Key, Count = g.Count() })
             .ToListAsync();
 
-        // Likes received — drives the «лайки» chain. Likes полиморфные
-        // (Like.EntityType + Like.EntityId), поэтому делаем 4 отдельных
-        // JOIN'а с каждым типом контента (Topic / Publication / Comment /
-        // Message) и суммируем в .NET. Альтернатива (один SQL с UNION ALL)
-        // была бы сложнее и хуже читалась.
-        // Игровые посты и PostReview не учитываются — для них есть
-        // отдельный сигнал качества «Рейтинг» через PostReview.SignValue.
+        // Likes received — drives the "лайки" chain. Likes are polymorphic
+        // (Like.EntityType + Like.EntityId), so we do 4 separate
+        // JOINs with each content type (Topic / Publication / Comment /
+        // Message) and sum in .NET. The alternative (one SQL with UNION ALL)
+        // would be more complex and less readable.
+        // Game posts and PostReviews are not counted — they have their
+        // own quality signal "Рейтинг" via PostReview.SignValue.
         var likesOnTopicsCounts = await _dmDbContext.Set<Entities.Shared.Like>()
             .Where(l => !l.IsRemoved && l.EntityType == DM.Domain.Core.Enums.LikeEntityType.Topic)
             .Join(_dmDbContext.Topics.Where(t => !t.IsRemoved && userIds.Contains(t.AuthorId)),
@@ -919,7 +911,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         var gameDropsDict = gameDropsCounts.ToDictionary(x => x.UserId, x => x.Count);
         var publicationsAuthoredDict = publicationsAuthoredCounts.ToDictionary(x => x.UserId, x => x.Count);
 
-        // Сшиваем 4 источника лайков в один словарь (UserId → sum).
+        // Stitch the 4 like sources into one dictionary (UserId → sum).
         var likesReceivedDict = new Dictionary<Guid, int>();
         foreach (var x in likesOnTopicsCounts)
             likesReceivedDict[x.UserId] = (likesReceivedDict.TryGetValue(x.UserId, out var v) ? v : 0) + x.Count;

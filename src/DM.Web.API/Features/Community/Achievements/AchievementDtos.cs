@@ -3,92 +3,92 @@ using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Features.Community.Achievements;
 
-/// <summary>API DTO: категория достижений (цепочка тиров одной метрики).</summary>
+/// <summary>API DTO: achievement category (a chain of tiers for one metric).</summary>
 public class AchievementCategory
 {
-    /// <summary>Идентификатор.</summary>
+    /// <summary>Identifier.</summary>
     public Guid Id { get; set; }
-    /// <summary>Стабильный код ("game_posts_authored").</summary>
+    /// <summary>Stable code ("game_posts_authored").</summary>
     public string Code { get; set; } = string.Empty;
-    /// <summary>Название цепочки ("Игровые посты").</summary>
+    /// <summary>Chain title ("Игровые посты").</summary>
     public string Title { get; set; } = string.Empty;
-    /// <summary>Описание метрики (что именно считается).</summary>
+    /// <summary>Metric description (what exactly is counted).</summary>
     public string Description { get; set; } = string.Empty;
-    /// <summary>Имя иконки из game-icons спрайта.</summary>
+    /// <summary>Icon name from the game-icons sprite.</summary>
     public string IconName { get; set; } = string.Empty;
-    /// <summary>Метрика.</summary>
+    /// <summary>Metric.</summary>
     public AchievementMetric Metric { get; set; }
-    /// <summary>Порядок цепочек в UI.</summary>
+    /// <summary>Ordering of chains in the UI.</summary>
     public int SortOrder { get; set; }
-    /// <summary>Активна ли категория.</summary>
+    /// <summary>Whether the category is active.</summary>
     public bool IsActive { get; set; }
 }
 
-/// <summary>API DTO: тир достижения. Категория-родитель включена в ответ.</summary>
+/// <summary>API DTO: achievement tier. The parent category is included in the response.</summary>
 public class AchievementType
 {
-    /// <summary>Идентификатор тира.</summary>
+    /// <summary>Tier identifier.</summary>
     public Guid Id { get; set; }
-    /// <summary>Стабильный код ("POSTS_100").</summary>
+    /// <summary>Stable code ("POSTS_100").</summary>
     public string Code { get; set; } = string.Empty;
-    /// <summary>Название тира ("Автор").</summary>
+    /// <summary>Tier title ("Автор").</summary>
     public string Title { get; set; } = string.Empty;
-    /// <summary>Порог разблокировки.</summary>
+    /// <summary>Unlock threshold.</summary>
     public int Threshold { get; set; }
-    /// <summary>Визуальный тир (1-4).</summary>
+    /// <summary>Visual tier (1-4).</summary>
     public int? Tier { get; set; }
-    /// <summary>Категория-родитель (SSOT для иконки, метрики, описания цепочки).</summary>
+    /// <summary>Parent category (SSOT for the chain icon, metric, description).</summary>
     public AchievementCategory Category { get; set; } = null!;
 }
 
-/// <summary>API DTO: факт получения достижения пользователем.</summary>
+/// <summary>API DTO: the fact that a user earned an achievement.</summary>
 public class UserAchievement
 {
-    /// <summary>Идентификатор записи о получении.</summary>
+    /// <summary>Earned record identifier.</summary>
     public Guid Id { get; set; }
-    /// <summary>Тип достижения.</summary>
+    /// <summary>Achievement type.</summary>
     public AchievementType Type { get; set; } = null!;
-    /// <summary>Момент пересечения порога (UTC).</summary>
+    /// <summary>Moment the threshold was crossed (UTC).</summary>
     public DateTimeOffset EarnedUtc { get; set; }
 }
 
-/// <summary>Запрос на обновление категории. Создание не предусмотрено: каталог статичен.</summary>
+/// <summary>Category update request. Creation is not supported: the catalog is static.</summary>
 public class UpdateAchievementCategoryRequest
 {
-    /// <summary>Новое название.</summary>
+    /// <summary>New title.</summary>
     public string? Title { get; set; }
-    /// <summary>Новое описание.</summary>
+    /// <summary>New description.</summary>
     public string? Description { get; set; }
-    /// <summary>Новая иконка.</summary>
+    /// <summary>New icon.</summary>
     public string? IconName { get; set; }
-    /// <summary>Новый SortOrder.</summary>
+    /// <summary>New SortOrder.</summary>
     public int? SortOrder { get; set; }
-    /// <summary>Новый IsActive.</summary>
+    /// <summary>New IsActive.</summary>
     public bool? IsActive { get; set; }
 }
 
-/// <summary>Запрос на создание нового тира.</summary>
+/// <summary>Request to create a new tier.</summary>
 public class CreateAchievementTypeRequest
 {
-    /// <summary>Стабильный код (уникальный).</summary>
+    /// <summary>Stable code (unique).</summary>
     public string Code { get; set; } = string.Empty;
-    /// <summary>Название тира.</summary>
+    /// <summary>Tier title.</summary>
     public string Title { get; set; } = string.Empty;
-    /// <summary>Порог разблокировки.</summary>
+    /// <summary>Unlock threshold.</summary>
     public int Threshold { get; set; }
-    /// <summary>Визуальный тир (1-4).</summary>
+    /// <summary>Visual tier (1-4).</summary>
     public int? Tier { get; set; }
-    /// <summary>Идентификатор категории-родителя.</summary>
+    /// <summary>Parent category identifier.</summary>
     public Guid AchievementCategoryId { get; set; }
 }
 
-/// <summary>Запрос на частичное обновление тира.</summary>
+/// <summary>Request to partially update a tier.</summary>
 public class UpdateAchievementTypeRequest
 {
-    /// <summary>Новое название.</summary>
+    /// <summary>New title.</summary>
     public string? Title { get; set; }
-    /// <summary>Новый порог.</summary>
+    /// <summary>New threshold.</summary>
     public int? Threshold { get; set; }
-    /// <summary>Новый тир.</summary>
+    /// <summary>New tier.</summary>
     public int? Tier { get; set; }
 }

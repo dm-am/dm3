@@ -11,7 +11,7 @@ public class CreateTopicRequest
     /// Topic title
     /// </summary>
     [Required(ErrorMessage = "Заголовок обязателен")]
-    [StringLength(200, MinimumLength = 3, ErrorMessage = "Заголовок должен быть от 3 and 200 символов")]
+    [StringLength(200, MinimumLength = 3, ErrorMessage = "Заголовок должен быть от 3 до 200 символов")]
     public string Title { get; set; } = "";
 
     /// <summary>

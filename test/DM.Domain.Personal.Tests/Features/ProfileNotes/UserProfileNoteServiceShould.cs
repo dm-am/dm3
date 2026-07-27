@@ -188,7 +188,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
         capturedEntity.Should().NotBeNull();
         capturedEntity!.Id.Should().Be(_noteId);
         capturedEntity.Text.Should().Be("Updated text");
-        capturedEntity.UpdatedUtc.Should().Be(_now);
+        capturedEntity.ModifiedUtc.Should().Be(_now);
     }
 
     [Fact]

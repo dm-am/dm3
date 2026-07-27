@@ -27,8 +27,14 @@
               <span v-if="session.ipAddress" class="session-ip">{{
                 session.ipAddress
               }}</span>
+              <span
+                v-if="session.ipAddress"
+                class="meta-sep"
+                aria-hidden="true"
+                >{{ " | " }}</span
+              >
               <span class="session-date">{{
-                formatDate(session.createdUtc)
+                formatDateFull(session.createdUtc)
               }}</span>
             </div>
           </div>
@@ -62,8 +68,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import dayjs from "dayjs";
 import { AccountApi } from "@/shared/api";
+import { formatDateFull } from "@/shared/lib/utils/datetime";
 import Button from "@/shared/ui/Button/Button.vue";
 import { EmptyState } from "@/shared/ui";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
@@ -94,10 +100,6 @@ async function loadSessions() {
   }
 }
 
-function formatDate(dateStr: string): string {
-  return dayjs(dateStr).format("DD.MM.YYYY [в] HH:mm");
-}
-
 async function terminateSession(sessionId: string) {
   terminatingId.value = sessionId;
   const { error } = await AccountApi.terminateSession(sessionId);
@@ -126,8 +128,6 @@ const logoutFromAll = () => {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "../AccountPage.styles"
 
 .sessions-content
@@ -156,7 +156,7 @@ const logoutFromAll = () => {
 
   &--current
     border-color: $link
-    background-color: rgba($link, 0.05)
+    background-color: $link-muted
 
 .session-info
   display: flex
@@ -174,20 +174,17 @@ const logoutFromAll = () => {
   font-size: $secondary-font-size
   font-weight: normal
   color: $link
-  background-color: rgba($link, 0.1)
+  background-color: $link-muted
   padding: 2px $tiny
   border-radius: 3px
 
 .session-details
   display: flex
-  gap: $small
   font-size: $secondary-font-size
   color: $text-muted
 
-.session-ip
-  &::after
-    content: "•"
-    margin-left: $small
+.meta-sep
+  color: $text-muted
 
 .terminate-btn
   background: none
@@ -199,7 +196,7 @@ const logoutFromAll = () => {
   font-size: $secondary-font-size
 
   &:hover:not(:disabled)
-    background-color: rgba($accent-red, 0.1)
+    background-color: $accent-red-muted
 
   &:disabled
     opacity: 0.5

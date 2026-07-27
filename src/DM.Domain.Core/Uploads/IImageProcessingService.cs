@@ -6,27 +6,27 @@ using DM.Domain.Core.Enums;
 namespace DM.Domain.Core.Uploads;
 
 /// <summary>
-/// Pipeline для аватаров (UserAvatar, CharacterAvatar):
-///   1) magic-byte валидация формата (не доверяем client content-type),
-///   2) decompression-bomb защита (pre-decode pixel area check),
+/// Pipeline for avatars (UserAvatar, CharacterAvatar):
+///   1) magic-byte format validation (client content-type is not trusted),
+///   2) decompression-bomb protection (pre-decode pixel area check),
 ///   3) min/max dimension guards,
 ///   4) EXIF/IPTC/XMP strip (re-encode metadata-free),
-///   5) downscale до <see cref="ImageProcessingDefaults.OriginalMaxDimension"/>
-///      если изображение больше (Max-mode, aspect-preserving).
+///   5) downscale to <see cref="ImageProcessingDefaults.OriginalMaxDimension"/>
+///      if the image is larger (Max-mode, aspect-preserving).
 ///
-/// Возвращает один файл (source). Thumbnails генерируются on-the-fly
-/// через imgproxy при serving — не пре-генерируются.
+/// Returns a single file (source). Thumbnails are generated on-the-fly
+/// via imgproxy at serving time — not pre-generated.
 /// </summary>
 public interface IImageProcessingService
 {
-    /// <summary>True если тип upload'а требует image-pipeline (validation+EXIF strip).</summary>
+    /// <summary>True if the upload type requires the image pipeline (validation+EXIF strip).</summary>
     bool IsImageType(UploadType type);
 
     /// <summary>
-    /// Прочесть stream, провалидировать (magic-byte, размеры, decompression-
-    /// bomb), застрипать EXIF, downscale если &gt;1024 px. Кидает
-    /// <see cref="DM.Domain.Core.Exceptions.HttpBadRequestException"/> при любой
-    /// ошибке валидации.
+    /// Read the stream, validate (magic bytes, dimensions, decompression
+    /// bomb), strip EXIF, downscale if &gt;1024 px. Throws
+    /// <see cref="DM.Domain.Core.Exceptions.HttpBadRequestException"/> on any
+    /// validation error.
     /// </summary>
     Task<ProcessedImage> ProcessAsync(
         Stream input,
@@ -35,9 +35,9 @@ public interface IImageProcessingService
 }
 
 /// <summary>
-/// Результат обработки — единственный re-encoded source-файл,
-/// готовый к S3 PUT. Thumbnails не пре-генерируются — imgproxy
-/// делает on-the-fly transform по запросу.
+/// Processing result — a single re-encoded source file
+/// ready for S3 PUT. Thumbnails are not pre-generated — imgproxy
+/// does on-the-fly transforms on request.
 /// </summary>
 public sealed record ProcessedImage(
     byte[] Bytes,
@@ -45,11 +45,11 @@ public sealed record ProcessedImage(
     string Extension);
 
 /// <summary>
-/// Public-доступные константы pipeline'а — SSOT для документов, тестов,
+/// Publicly accessible pipeline constants — SSOT for docs, tests,
 /// imgproxy presets.
 /// </summary>
 public static class ImageProcessingDefaults
 {
-    /// <summary>Максимальная сторона source-файла после обработки.</summary>
+    /// <summary>Maximum dimension of the source file after processing.</summary>
     public const int OriginalMaxDimension = 1024;
 }

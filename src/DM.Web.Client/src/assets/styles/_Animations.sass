@@ -6,13 +6,24 @@
 // See UI_STANDARDS.md for documentation.
 // =============================================================================
 
+// $transition-fast / $transition-normal live in Variables.sass
+@import "Variables"
+
 // -----------------------------------------------------------------------------
 // Transition Durations
 // -----------------------------------------------------------------------------
 
-$transition-fast: 0.1s ease
-$transition-normal: 0.15s ease
 $transition-slow: 0.3s ease
+
+// -----------------------------------------------------------------------------
+// Expand/Collapse Reveal Idiom
+// -----------------------------------------------------------------------------
+// Single site-wide duration + easing for expanding/collapsing content:
+// TruncatedContent, Testimonial, ExpandableList, BBCode spoiler/NSFW blocks,
+// game post reviews, etc. ease-out-quart decelerates gently toward the end -
+// noticeably softer than Material's standard ease.
+$expand-duration: 0.55s
+$expand-easing: cubic-bezier(0.22, 1, 0.36, 1)
 
 // -----------------------------------------------------------------------------
 // Accessible Transition Mixin
@@ -24,41 +35,6 @@ $transition-slow: 0.3s ease
 //   .my-element
 //     +transition-safe(background-color)
 //     +transition-safe(opacity, $transition-slow)
-//
-// For multiple properties:
-//   .my-element
-//     +transition-safe-multi((background-color, color, transform))
 
 =transition-safe($property, $duration: $transition-normal)
   transition: $property $duration
-
-=transition-safe-multi($properties, $duration: $transition-normal)
-  $transitions: ()
-  @each $prop in $properties
-    $transitions: append($transitions, $prop $duration, comma)
-  transition: $transitions
-
-// -----------------------------------------------------------------------------
-// Animation Mixin (for keyframe animations)
-// -----------------------------------------------------------------------------
-
-=animation-safe($animation)
-  animation: $animation
-
-// -----------------------------------------------------------------------------
-// Common Transitions
-// -----------------------------------------------------------------------------
-// Pre-built mixins for common use cases.
-// NOTE: "transition: all" is banned (UI_STANDARDS.md) — always enumerate properties.
-
-=fade-transition
-  +transition-safe(opacity)
-
-=hover-transition
-  +transition-safe(background-color, $transition-fast)
-
-=scale-transition
-  +transition-safe(transform)
-
-=color-transition
-  +transition-safe(color)

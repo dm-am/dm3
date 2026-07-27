@@ -203,7 +203,6 @@ async function unsubscribe() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/_ZIndex"
 
 .user-subscribe
@@ -236,7 +235,6 @@ async function unsubscribe() {
   cursor: pointer
   font-size: $font-size
   color: $text
-  user-select: none
 
   input
     cursor: pointer

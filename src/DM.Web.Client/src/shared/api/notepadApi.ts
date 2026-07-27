@@ -49,52 +49,6 @@ export default new (class NotepadApi {
     return Api.delete(`${this.userPath}/${id}`);
   }
 
-  // ==================== Game Notepad ====================
-
-  private gamePath = (gameId: string) => `games/${gameId}/notepad`;
-
-  /**
-   * Get game notepad entries (master/assistant only)
-   */
-  public getGameEntries(gameId: string) {
-    return Api.get<ListEnvelope<NotepadEntry>>(this.gamePath(gameId));
-  }
-
-  /**
-   * Get game notepad entry by ID
-   */
-  public getGameEntry(gameId: string, entryId: string) {
-    return Api.get<NotepadEntry>(`${this.gamePath(gameId)}/${entryId}`);
-  }
-
-  /**
-   * Create game notepad entry
-   */
-  public createGameEntry(gameId: string, request: CreateNotepadEntryRequest) {
-    return Api.post<NotepadEntry>(this.gamePath(gameId), request);
-  }
-
-  /**
-   * Update game notepad entry
-   */
-  public updateGameEntry(
-    gameId: string,
-    entryId: string,
-    request: UpdateNotepadEntryRequest,
-  ) {
-    return Api.patch<NotepadEntry>(
-      `${this.gamePath(gameId)}/${entryId}`,
-      request,
-    );
-  }
-
-  /**
-   * Delete game notepad entry
-   */
-  public deleteGameEntry(gameId: string, entryId: string) {
-    return Api.delete(`${this.gamePath(gameId)}/${entryId}`);
-  }
-
   // ==================== Blog Notepad ====================
 
   private blogPath = (blogId: string) => `blogs/${blogId}/notepad`;

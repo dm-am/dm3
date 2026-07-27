@@ -121,7 +121,7 @@ public class CommunityProfileServiceShould : UnitTestBase
         var query = new PagingQuery();
         _userRepository.Setup(r => r.CountUsersAsync(
                 It.IsAny<UserActivityFilter>(), It.IsAny<string?>(), It.IsAny<UserRole?>(),
-                It.IsAny<bool?>(), It.IsAny<bool?>(), It.IsAny<bool?>(),
+                It.IsAny<bool?>(), It.IsAny<bool?>(),
                 It.IsAny<int?>(), It.IsAny<int?>(),
                 It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(),
                 It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>()))
@@ -129,7 +129,7 @@ public class CommunityProfileServiceShould : UnitTestBase
         _userRepository.Setup(r => r.GetUsersAsync(
                 It.IsAny<PagingData>(), It.IsAny<UserActivityFilter>(), It.IsAny<string?>(),
                 It.IsAny<UserRole?>(), It.IsAny<UserSort>(), It.IsAny<bool>(),
-                It.IsAny<bool?>(), It.IsAny<bool?>(), It.IsAny<bool?>(),
+                It.IsAny<bool?>(), It.IsAny<bool?>(),
                 It.IsAny<int?>(), It.IsAny<int?>(),
                 It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(),
                 It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>()))

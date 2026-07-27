@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -63,5 +64,37 @@ internal class MentorshipRepository : IMentorshipRepository
     {
         return await _dbContext.Blogs
             .AnyAsync(b => b.BlogId == blogId && !b.IsRemoved, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<MentorshipAssignment>> GetGameMentorships(
+        IReadOnlyCollection<Guid> mentorIds, CancellationToken ct = default)
+    {
+        return await _dbContext.Games
+            .Where(g => !g.IsRemoved && g.MentorId.HasValue && mentorIds.Contains(g.MentorId.Value))
+            .OrderBy(g => g.Title)
+            .Select(g => new MentorshipAssignment
+            {
+                MentorId = g.MentorId!.Value,
+                TargetId = g.GameId,
+                Title = g.Title
+            })
+            .ToArrayAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<MentorshipAssignment>> GetBlogMentorships(
+        IReadOnlyCollection<Guid> mentorIds, CancellationToken ct = default)
+    {
+        return await _dbContext.Blogs
+            .Where(b => !b.IsRemoved && b.MentorId.HasValue && mentorIds.Contains(b.MentorId.Value))
+            .OrderBy(b => b.Title)
+            .Select(b => new MentorshipAssignment
+            {
+                MentorId = b.MentorId!.Value,
+                TargetId = b.BlogId,
+                Title = b.Title
+            })
+            .ToArrayAsync(ct);
     }
 }

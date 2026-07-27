@@ -107,7 +107,11 @@ function handleClose() {
       <div class="modal-header">
         <h3>Порядок закрепленных топиков</h3>
         <Tooltip text="Закрыть">
-          <button class="close-button" @click="handleClose">
+          <button
+            class="close-button"
+            aria-label="Закрыть"
+            @click="handleClose"
+          >
             {{ symbols.close }}
           </button>
         </Tooltip>
@@ -142,6 +146,7 @@ function handleClose() {
               <Tooltip text="Переместить вверх">
                 <button
                   class="move-button"
+                  aria-label="Переместить вверх"
                   :disabled="index === 0"
                   @click="moveUp(index)"
                 >
@@ -151,6 +156,7 @@ function handleClose() {
               <Tooltip text="Переместить вниз">
                 <button
                   class="move-button"
+                  aria-label="Переместить вниз"
                   :disabled="index === localTopics.length - 1"
                   @click="moveDown(index)"
                 >
@@ -183,8 +189,6 @@ function handleClose() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Variables"
-@import "@/assets/styles/Themes"
 @import "@/assets/styles/Inputs"
 @import "@/assets/styles/ZIndex"
 
@@ -202,8 +206,8 @@ function handleClose() {
 
 .pinned-manager-modal
   background: $bg-page
-  border-radius: 8px
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3)
+  border-radius: $border-radius
+  box-shadow: 0 4px 20px $shadow-color
   width: 90%
   max-width: 500px
   max-height: 80vh
@@ -275,7 +279,6 @@ function handleClose() {
 .drag-handle
   color: $text-muted
   cursor: grab
-  user-select: none
   font-size: 12px
   letter-spacing: -2px
 

@@ -7,14 +7,14 @@ import { useAuthStore } from "@/shared/stores/auth";
 import type { GameReview } from "@/shared/api/models/game/reviews";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { ContentText } from "@/shared/ui";
-import { UserLink } from "@/entities/user";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { ExpandableListSkeleton } from "@/shared/ui/Skeleton";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import {
   ExpandableList,
   type ExpandableItem,
 } from "@/shared/ui/ExpandableList";
-import dayjs from "dayjs";
+import { formatDateFull } from "@/shared/lib/utils/datetime";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
@@ -38,10 +38,16 @@ const page = computed(() => {
 const reviewItems = computed<(ExpandableItem & { review: GameReview })[]>(() =>
   (reviews.value?.resources ?? []).map((r) => ({
     id: r.id,
-    title: `${r.author?.username ?? "Аноним"} — ${formatDate(r.createdUtc)}`,
+    title: `${r.author?.username ?? "Аноним"} — ${formatDateFull(r.createdUtc)}`,
     review: r,
   })),
 );
+
+// Paging scrolls the reviews list back into view (not the page top)
+const reviewsListRef = ref<{ $el: HTMLElement } | null>(null);
+function pagingAnchor(): HTMLElement | null {
+  return reviewsListRef.value?.$el ?? null;
+}
 
 async function fetchReviews() {
   if (!gameId.value) return;
@@ -76,17 +82,15 @@ async function submitReview() {
   }
 }
 
-function formatDate(dateStr: string) {
-  return dayjs(dateStr).format("DD.MM.YYYY [в] HH:mm");
-}
-
 onMounted(fetchReviews);
 watch(page, fetchReviews);
 </script>
 
 <template>
   <div class="game-reviews">
-    <SecondaryText v-if="loading">Загрузка...</SecondaryText>
+    <!-- Skeleton twin of the collapsed reviews ExpandableList; shown only
+         while there is no data yet (stale-while-revalidate on paging). -->
+    <ExpandableListSkeleton v-if="loading && !reviews" />
 
     <SecondaryText
       v-else-if="
@@ -99,6 +103,7 @@ watch(page, fetchReviews);
     <template v-else-if="reviews">
       <ExpandableList
         v-if="reviewItems.length"
+        ref="reviewsListRef"
         :items="reviewItems"
         :allow-multiple="true"
       >
@@ -118,6 +123,7 @@ watch(page, fetchReviews);
         :paging="reviews.paging"
         :to="{ name: 'game-reviews', params: { id: route.params.id } }"
         :use-query="true"
+        :scroll-anchor="pagingAnchor"
         class="pagination"
       />
     </template>
@@ -144,16 +150,14 @@ watch(page, fetchReviews);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Inputs"
 
 .game-reviews
   padding: $small 0
 
+// Line-height comes from the global .bbcode-content (SSOT) on ContentText.
 .review-text
   color: $text
-  line-height: 1.5
 
 .pagination
   margin-top: $medium

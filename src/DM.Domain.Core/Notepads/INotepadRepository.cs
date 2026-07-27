@@ -130,7 +130,7 @@ public class UpdateNotepadEntryInternal
     /// <summary>Sort order</summary>
     public int? SortOrder { get; set; }
     /// <summary>Update timestamp</summary>
-    public DateTimeOffset UpdatedUtc { get; set; }
+    public DateTimeOffset ModifiedUtc { get; set; }
 }
 
 /// <summary>

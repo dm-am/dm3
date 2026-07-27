@@ -26,13 +26,19 @@ internal class TicketRepository : ITicketRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Ticket>> GetTickets(TicketStatus? status = null, CancellationToken ct = default)
+    public async Task<IEnumerable<Ticket>> GetTickets(TicketStatus? status = null,
+        IReadOnlyCollection<TicketSubtype>? subtypes = null, CancellationToken ct = default)
     {
         var query = _dbContext.Tickets.AsQueryable();
 
         if (status.HasValue)
         {
             query = query.Where(t => t.Status == status.Value);
+        }
+
+        if (subtypes != null)
+        {
+            query = query.Where(t => subtypes.Contains(t.Subtype));
         }
 
         return await query
@@ -52,10 +58,22 @@ internal class TicketRepository : ITicketRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Ticket>> GetUserTickets(Guid userId, CancellationToken ct = default)
+    public async Task<IEnumerable<Ticket>> GetUserTickets(Guid userId,
+        TicketStatus? status = null, TicketSubtype? subtype = null, CancellationToken ct = default)
     {
-        return await _dbContext.Tickets
-            .Where(t => t.UserId == userId)
+        var query = _dbContext.Tickets.Where(t => t.UserId == userId);
+
+        if (status.HasValue)
+        {
+            query = query.Where(t => t.Status == status.Value);
+        }
+
+        if (subtype.HasValue)
+        {
+            query = query.Where(t => t.Subtype == subtype.Value);
+        }
+
+        return await query
             .OrderByDescending(t => t.CreatedUtc)
             .ProjectTo<Ticket>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
@@ -71,6 +89,31 @@ internal class TicketRepository : ITicketRepository
     }
 
     /// <inheritdoc />
+    public async Task<TicketDetails?> GetDetails(Guid ticketId, CancellationToken ct = default)
+    {
+        return await _dbContext.Tickets
+            .Where(t => t.TicketId == ticketId)
+            .ProjectTo<TicketDetails>(_mapper.ConfigurationProvider)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<TicketDetails?> GetByTrackingToken(string token, CancellationToken ct = default)
+    {
+        // The token is the credential; an empty token must never match a row
+        // (authenticated tickets store a null token).
+        if (string.IsNullOrEmpty(token))
+        {
+            return null;
+        }
+
+        return await _dbContext.Tickets
+            .Where(t => t.TrackingToken == token)
+            .ProjectTo<TicketDetails>(_mapper.ConfigurationProvider)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    /// <inheritdoc />
     public async Task<Ticket> Create(CreateTicketEntity entity, CancellationToken ct = default)
     {
         var ticket = new DbTicket
@@ -78,9 +121,12 @@ internal class TicketRepository : ITicketRepository
             TicketId = entity.TicketId,
             UserId = entity.ReporterUserId,
             TargetId = entity.TargetUserId,
+            GuestEmail = entity.GuestEmail,
+            TrackingToken = entity.TrackingToken,
             EntityId = entity.EntityId,
             EntityType = entity.EntityType ?? "",
             Status = entity.Status,
+            Subtype = entity.Subtype,
             CreatedUtc = entity.CreatedUtc,
             Description = entity.Description,
             Comment = entity.Comment
@@ -139,9 +185,17 @@ internal class TicketRepository : ITicketRepository
     }
 
     /// <inheritdoc />
-    public async Task<Dictionary<TicketStatus, int>> GetTicketCounts(CancellationToken ct = default)
+    public async Task<Dictionary<TicketStatus, int>> GetTicketCounts(
+        IReadOnlyCollection<TicketSubtype>? subtypes = null, CancellationToken ct = default)
     {
-        return await _dbContext.Tickets
+        var query = _dbContext.Tickets.AsQueryable();
+
+        if (subtypes != null)
+        {
+            query = query.Where(t => subtypes.Contains(t.Subtype));
+        }
+
+        return await query
             .GroupBy(t => t.Status)
             .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Status, x => x.Count, ct);

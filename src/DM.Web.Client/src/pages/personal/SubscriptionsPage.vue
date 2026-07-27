@@ -100,9 +100,7 @@ const handleUnsubscribe = async (subscription: Subscription) => {
       </button>
     </div>
 
-    <secondary-text v-if="store.subscriptionsLoading"
-      >Загрузка...</secondary-text
-    >
+    <secondary-text v-if="store.subscriptionsLoading">Загрузка…</secondary-text>
 
     <template v-else-if="filteredSubscriptions.length === 0">
       <secondary-text>Нет подписок</secondary-text>

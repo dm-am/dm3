@@ -42,14 +42,14 @@
 
 | Тип ответа | Формат |
 |------------|--------|
-| Одиночный ресурс | JSON напрямую |
+| Одиночный ресурс | `Envelope<T>` с полем `resource` |
 | Коллекция | `ListEnvelope<T>` с `paging` |
 | Курсорная пагинация | `CursorEnvelope<T>` с `cursor` |
 | Ошибка | `ErrorEnvelope` |
 
 ```json
-// Одиночный ресурс — напрямую
-{ "id": "...", "username": "john" }
+// Одиночный ресурс — Envelope
+{ "resource": { "id": "...", "username": "john" } }
 
 // Коллекция — ListEnvelope
 { "resources": [...], "paging": { "skip": 0, "take": 20, "total": 150 } }
@@ -57,6 +57,9 @@
 // Ошибка — ErrorEnvelope
 { "errors": [{ "code": "not_found", "message": "User not found" }] }
 ```
+
+> **Правило:** `Envelope<T>` — стандарт для всех одиночных ресурсов.
+> Endpoint'ы, возвращающие DTO без конверта, — legacy; при доработке приводить к `Envelope<T>`.
 
 ---
 
@@ -74,6 +77,10 @@
 | 409 | Конфликт состояния |
 | 410 | Токен/приглашение истекло |
 | 429 | Rate limit превышен |
+
+**DELETE** возвращает `204 No Content` без тела.
+Записанное исключение: `DELETE /v1/polls/{id}/vote` возвращает `200` с обновленным
+`Envelope<Poll>` — клиент сразу перерисовывает результаты опроса без повторного запроса.
 
 ---
 
@@ -140,6 +147,18 @@ GET /v1/posts?sort=rating:desc&take=1        # Best post
 1. **Actions** (изменяют состояние): `/games/{id}/join`, `/posts/{id}/like`
 2. **Агрегации** (сложные вычисления): `/statistics/overview`
 3. **Специфичные форматы**: `/export/csv`
+
+### Записанные исключения (семантические шорткаты)
+
+Специализированные GET, которые осознанно оставлены вместо параметров фильтрации:
+
+- `GET /v1/users/by-role/{role}`
+- `GET /v1/users/{username}/best-publication`
+- `GET /v1/users/{username}/best-topic`
+- `GET /v1/users/{username}/bans/active`
+
+Это устойчивые продуктовые понятия ("лучшая публикация", "активный бан"), а не комбинации
+фильтров; отдельный endpoint здесь читается лучше, чем набор query-параметров.
 
 ---
 

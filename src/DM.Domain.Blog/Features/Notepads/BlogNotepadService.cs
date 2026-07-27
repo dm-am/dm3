@@ -110,7 +110,7 @@ internal class BlogNotepadService : IBlogNotepadService
             Content = updateEntry.Content,
             CategoryId = updateEntry.CategoryId,
             SortOrder = updateEntry.SortOrder,
-            UpdatedUtc = _dateTimeProvider.Now
+            ModifiedUtc = _dateTimeProvider.Now
         };
 
         return await _repository.UpdateEntryAsync(internalDto, ct);
@@ -218,8 +218,10 @@ internal class BlogNotepadService : IBlogNotepadService
         var blog = await _blogService.GetBlogAsync(blogId, ct);
         var isOwner = blog.Author.UserId == UserId;
         var isAssistant = blog.Assistants.Any(a => a.UserId == UserId);
+        // Notepad access = owner + assistants + mentor (curator), per doc.
+        var isMentor = blog.Mentor?.UserId == UserId;
 
-        if (!isOwner && !isAssistant)
+        if (!isOwner && !isAssistant && !isMentor)
         {
             throw new HttpException(HttpStatusCode.Forbidden, "Access denied to blog notepad");
         }

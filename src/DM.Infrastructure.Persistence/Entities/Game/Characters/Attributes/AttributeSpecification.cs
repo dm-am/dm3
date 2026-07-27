@@ -23,6 +23,11 @@ public class AttributeSpecification
     public AttributeConstraints Constraints { get; set; } = null!;
 
     /// <summary>
+    /// Order index within the schema
+    /// </summary>
+    public int Order { get; set; }
+
+    /// <summary>
     /// Show on game main page as descriptor
     /// </summary>
     public bool IsDescriptor { get; set; }

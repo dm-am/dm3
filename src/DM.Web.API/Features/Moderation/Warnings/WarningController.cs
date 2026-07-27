@@ -16,7 +16,7 @@ namespace DM.Web.API.Features.Moderation.Warnings;
 /// Most operations require Moderator role or higher.
 ///
 /// ## Warning Points
-/// - Each warning carries 1-3 points
+/// - Each warning carries 0-6 points (0 = verbal warning, no points)
 /// - 6+ points in 30 days triggers an automatic ban
 /// - Points are recalculated when warnings are removed
 /// </remarks>
@@ -40,6 +40,8 @@ public class WarningController : ControllerBase
     /// <remarks>
     /// Returns all active warnings for the specified user,
     /// including total warning points.
+    /// Public view: points and dates only, without warning reason
+    /// and moderator identity.
     /// </remarks>
     /// <param name="username">Username</param>
     /// <response code="200">User warnings info</response>
@@ -76,9 +78,10 @@ public class WarningController : ControllerBase
     /// Issues a warning to a user. Requires Moderator role.
     ///
     /// **Warning points:**
+    /// - 0 points: Verbal warning (recorded, no points)
     /// - 1 point: Minor violation
     /// - 2 points: Moderate violation
-    /// - 3 points: Serious violation
+    /// - 3-6 points: Serious violation
     ///
     /// 6+ points within 30 days triggers automatic ban.
     /// </remarks>

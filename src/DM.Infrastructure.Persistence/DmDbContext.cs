@@ -17,6 +17,7 @@ using DM.Infrastructure.Persistence.Entities.Subscriptions;
 using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Infrastructure.Persistence.Entities.Community;
 using Microsoft.EntityFrameworkCore;
+using NpgsqlTypes;
 
 namespace DM.Infrastructure.Persistence;
 
@@ -99,7 +100,7 @@ public class DmDbContext : DbContext
                 FundraisingGoalId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 GoalAmount = 50000m,
                 CollectedAmount = 17000m,
-                UpdatedUtc = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero)
+                ModifiedUtc = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero)
             });
         });
 
@@ -163,12 +164,96 @@ public class DmDbContext : DbContext
 
         #endregion
 
+        #region Statistics period indexes
+
+        // Partial CreatedUtc indexes backing the statistics period aggregates
+        // (leaderboards group live rows by a [start, end) CreatedUtc window on
+        // Posts, PostReviews and Publications) — same live-rows-only partial
+        // index idiom as the review indexes above.
+        var postByCreatedIndexBuilder = modelBuilder.Entity<Post>()
+            .HasIndex(p => p.CreatedUtc);
+        if (isPostgres)
+        {
+            postByCreatedIndexBuilder.HasFilter("\"IsRemoved\" = false");
+        }
+
+        var postReviewByCreatedIndexBuilder = modelBuilder.Entity<PostReview>()
+            .HasIndex(r => r.CreatedUtc);
+        if (isPostgres)
+        {
+            postReviewByCreatedIndexBuilder.HasFilter("\"IsRemoved\" = false");
+        }
+
+        var publicationByCreatedIndexBuilder = modelBuilder.Entity<Publication>()
+            .HasIndex(p => p.CreatedUtc);
+        if (isPostgres)
+        {
+            publicationByCreatedIndexBuilder.HasFilter("\"IsRemoved\" = false");
+        }
+
+        // Period digest markers: one digest per calendar month and one per
+        // year. NULLs are distinct in unique indexes (PG and SQLite alike),
+        // so the two shapes need separate partial unique indexes: monthly
+        // digests unique on (Year, Month), the yearly digest unique on Year
+        // alone. The generator also checks before inserting; the indexes are
+        // the concurrency backstop.
+        modelBuilder.Entity<PeriodDigestTopic>(entity =>
+        {
+            entity.HasIndex(d => new { d.Year, d.Month })
+                .IsUnique()
+                .HasFilter(isPostgres ? "\"Month\" IS NOT NULL" : "Month IS NOT NULL")
+                .HasDatabaseName("IX_PeriodDigestTopics_Year_Month");
+
+            entity.HasIndex(d => d.Year)
+                .IsUnique()
+                .HasFilter(isPostgres ? "\"Month\" IS NULL" : "Month IS NULL")
+                .HasDatabaseName("IX_PeriodDigestTopics_Year");
+        });
+
+        #endregion
+
         // Configure DeletedBy relationships for soft-deletable entities (no inverse collections)
         ConfigureDeletedByRelationship<Comment>(modelBuilder);
         ConfigureDeletedByRelationship<Topic>(modelBuilder);
         ConfigureDeletedByRelationship<Message>(modelBuilder);
         ConfigureDeletedByRelationship<Post>(modelBuilder);
         ConfigureDeletedByRelationship<Character>(modelBuilder);
+
+        #region Full-text search (PostgreSQL tsvector)
+
+        // Generated STORED tsvector columns + GIN indexes power the unified
+        // message/post search (GET /v1/search/messages). The Post expression
+        // strips [private=…]…[/private] blocks BEFORE indexing, so private text
+        // is never tokenized and can never be matched or previewed by anyone.
+        // regexp_replace + explicit-config to_tsvector are IMMUTABLE, so both
+        // are valid inside a generated column. Shadow "SearchVector" properties
+        // keep the tsvector off the domain-facing entity surface.
+        if (isPostgres)
+        {
+            modelBuilder.Entity<Message>(b =>
+            {
+                b.Property<NpgsqlTsVector>("SearchVector")
+                    .HasComputedColumnSql("to_tsvector('russian', coalesce(\"Text\", ''))", stored: true);
+                b.HasIndex("SearchVector").HasMethod("gin");
+            });
+
+            modelBuilder.Entity<Post>(b =>
+            {
+                b.Property<NpgsqlTsVector>("SearchVector")
+                    .HasComputedColumnSql(
+                        "to_tsvector('russian', regexp_replace(coalesce(\"GameText\", ''), " +
+                        "'\\[private(=[^\\]]*)?\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))",
+                        stored: true);
+                b.HasIndex("SearchVector").HasMethod("gin").HasDatabaseName("IX_Posts_SearchVector");
+            });
+        }
+
+        // Composite index backing message cursor/keyset pagination and search
+        // (filter by ChatId, order by CreatedUtc, tie-break by MessageId).
+        modelBuilder.Entity<Message>()
+            .HasIndex(m => new { m.ChatId, m.CreatedUtc, m.MessageId });
+
+        #endregion
 
         // Configure both DeletedBy and ModifiedBy for editable entities (no inverse collections)
         ConfigureEditableRelationships<GameReview>(modelBuilder);
@@ -177,7 +262,7 @@ public class DmDbContext : DbContext
         ConfigureEditableRelationships<WebsiteTestimonial>(modelBuilder);
         ConfigureDeletedByRelationship<UserAward>(modelBuilder);
 
-        // ---- Awards / Achievements: схема + индексы + seed ----
+        // ---- Awards / Achievements: schema + indexes + seed ----
 
         modelBuilder.Entity<AwardType>()
             .HasIndex(t => t.Code)
@@ -185,17 +270,17 @@ public class DmDbContext : DbContext
 
         modelBuilder.Entity<ContestSeries>(entity =>
         {
-            // Каждый тип конкурса имеет свою сквозную нумерацию.
-            // Идентичность серии — пара (ContestType, Number). Год — чисто
-            // отображаемое поле, не участвует в UNIQUE.
+            // Each contest type has its own sequential numbering.
+            // Series identity is the (ContestType, Number) pair. Year is purely
+            // a display field and is not part of the UNIQUE.
             entity.HasIndex(s => new { s.ContestType, s.Number }).IsUnique();
         });
 
         modelBuilder.Entity<UserAward>(entity =>
         {
-            // Awarder-навигация настраивается отдельно, чтобы не словить
-            // multiple-cascade-paths: AwardedByUserId — это шаринг с User,
-            // у которого уже есть Subscribers/etc. Без коллекции на User.
+            // The awarder navigation is configured separately to avoid
+            // multiple cascade paths: AwardedByUserId points to User,
+            // which already has Subscribers/etc. No collection on User.
             entity.HasOne(a => a.AwardedBy)
                 .WithMany()
                 .HasForeignKey(a => a.AwardedByUserId)
@@ -211,17 +296,17 @@ public class DmDbContext : DbContext
                 .HasForeignKey(a => a.AwardTypeId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // ContestSeries опциональна — если серию удалят/деактивируют,
-            // награда остается orphan-историей без ссылки на контекст конкурса.
+            // ContestSeries is optional — if the series is deleted/deactivated,
+            // the award remains orphan history without a link to the contest context.
             entity.HasOne(a => a.ContestSeries)
                 .WithMany(s => s.Awards)
                 .HasForeignKey(a => a.ContestSeriesId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            // Индекс для эффективной выборки наград пользователя.
-            // Фильтр !IsRemoved обрабатывается глобальным soft-delete-фильтром,
-            // но в индексе ограничение все равно полезно — partial index
-            // экономит место и ускоряет диапазонный скан.
+            // Index for efficient retrieval of a user's awards.
+            // The !IsRemoved filter is handled by the global soft-delete filter,
+            // but the constraint is still useful in the index — a partial index
+            // saves space and speeds up range scans.
             var awardIdx = entity.HasIndex(a => new { a.UserId, a.AwardedUtc });
             if (isPostgres) awardIdx.HasFilter("\"IsRemoved\" = false");
         });
@@ -229,7 +314,7 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<AchievementCategory>(entity =>
         {
             entity.HasIndex(c => c.Code).IsUnique();
-            // Одна метрика — одна категория. Защита от случайного дубля цепочки.
+            // One metric — one category. Protects from an accidental duplicate chain.
             entity.HasIndex(c => c.Metric).IsUnique();
         });
 
@@ -255,22 +340,22 @@ public class DmDbContext : DbContext
                 .HasForeignKey(a => a.AchievementTypeId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // КЛЮЧЕВАЯ инвариантность: одно достижение пользователю
-            // выдается ровно один раз. UNIQUE-нарушение в TryGrantAsync
-            // молча трактуется как «уже было» — это и есть идемпотентность
-            // evaluator'а на гонках между lazy-eval и event-worker.
+            // KEY invariant: a given achievement is granted to a user
+            // exactly once. A UNIQUE violation in TryGrantAsync
+            // is silently treated as "already there" — which is exactly the evaluator's
+            // idempotency under races between lazy-eval and the event worker.
             var achievementUniqueIdx = entity.HasIndex(a => new { a.UserId, a.AchievementTypeId }).IsUnique();
             if (isPostgres) achievementUniqueIdx.HasFilter("\"IsRemoved\" = false");
 
             entity.HasIndex(a => new { a.UserId, a.EarnedUtc });
         });
 
-        // ---- Bootstrap seed: ровно по одной записи каждого каталога ----
-        // Фиксированные GUID'ы (ноль-семейство) — чтобы повторный seed не
-        // создавал дубли и чтобы код вне миграций мог ссылаться на эти
-        // записи по предсказуемому ID при необходимости.
-        // Полный seed (52 типа достижений, 13 категорий, 6 типов наград,
-        // 2 серии) живет в InitialCreate.cs через InsertData.
+        // ---- Bootstrap seed: exactly one record per catalog ----
+        // Fixed GUIDs (the zero family) — so a repeated seed does not
+        // create duplicates and code outside migrations can reference these
+        // records by a predictable ID when needed.
+        // The full seed (52 achievement types, 13 categories, 6 award types,
+        // 2 series) lives in InitialCreate.cs via InsertData.
 
         var seedAwardId = Guid.Parse("00000000-0000-0000-0001-000000000001");
         var seedCategoryId = Guid.Parse("00000000-0000-0000-0003-000000000002");
@@ -333,13 +418,13 @@ public class DmDbContext : DbContext
         // Blog.Comments, Game.Comments, Publication.Comments are [NotMapped] to prevent shadow FK creation.
         // Only Topic.Comments is a real EF relationship, configured here.
         //
-        // ── ВАЖНО для regenerate миграции ──
-        // EF из этой `HasMany().WithOne()` пары генерирует DB-уровень FK
-        // `FK_Comments_Topics_EntityId`. Эта constraint ЛОЖНА: comments к Game/Blog/
-        // Publication имеют EntityId не из Topics, и INSERT падает на ее проверке.
-        // В сгенерированном файле миграции этот `migrationBuilder.AddForeignKey`
-        // блок нужно удалять вручную (см. NOTE-комментарий в InitialCreate.cs).
-        // Ссылочную целостность поддерживает application-логика.
+        // ── IMPORTANT for migration regeneration ──
+        // From this `HasMany().WithOne()` pair EF generates a DB-level FK
+        // `FK_Comments_Topics_EntityId`. This constraint is FALSE: comments on Game/Blog/
+        // Publication have an EntityId not from Topics, and INSERT fails on its check.
+        // In the generated migration file this `migrationBuilder.AddForeignKey`
+        // block must be removed manually (see the NOTE comment in InitialCreate.cs).
+        // Referential integrity is maintained by application logic.
         modelBuilder.Entity<Topic>()
             .HasMany(t => t.Comments)
             .WithOne(c => c.Topic)
@@ -435,9 +520,9 @@ public class DmDbContext : DbContext
                 .HasDatabaseName("IX_PendingRegistrations_CreatedUtc");
         });
 
-        // Upload target FKs: типизированные nullable columns (TargetUserId,
-        // TargetCharacterId, TargetPostId), ровно один не-null. Каждый
-        // с FK constraint и индексом для batched-query lookup.
+        // Upload target FKs: typed nullable columns (TargetUserId,
+        // TargetCharacterId, TargetPostId), exactly one non-null. Each
+        // with an FK constraint and an index for batched-query lookups.
         modelBuilder.Entity<Upload>(entity =>
         {
             entity.HasOne<User>()
@@ -465,16 +550,48 @@ public class DmDbContext : DbContext
             entity.HasIndex(u => u.TargetPostId)
                 .HasFilter("\"TargetPostId\" IS NOT NULL");
 
-            // CHECK constraint: ровно одна типизированная target-колонка
-            // не-null И матчится с Type discriminator.
-            // CHECK: ровно одна типизированная target-колонка не-null И
-            // матчится с Type discriminator (UserAvatar=1, CharacterAvatar=2,
-            // PostAttachment=3 в UploadType enum).
+            // CHECK constraint: exactly one typed target column
+            // is non-null AND matches the Type discriminator.
+            // CHECK: exactly one typed target column is non-null AND
+            // matches the Type discriminator (UserAvatar=1, CharacterAvatar=2,
+            // PostAttachment=3 in the UploadType enum).
             entity.ToTable(t => t.HasCheckConstraint(
                 "CK_Uploads_TypedTarget",
                 "(\"Type\" = 1 AND \"TargetUserId\" IS NOT NULL AND \"TargetCharacterId\" IS NULL AND \"TargetPostId\" IS NULL) OR " +
                 "(\"Type\" = 2 AND \"TargetCharacterId\" IS NOT NULL AND \"TargetUserId\" IS NULL AND \"TargetPostId\" IS NULL) OR " +
                 "(\"Type\" = 3 AND \"TargetPostId\" IS NOT NULL AND \"TargetUserId\" IS NULL AND \"TargetCharacterId\" IS NULL)"));
+        });
+
+        // Notepad scope lookup: entries/categories are always fetched for a
+        // concrete notepad (container + type + owner for player notepads).
+        modelBuilder.Entity<NotepadEntry>()
+            .HasIndex(e => new { e.ContainerId, e.NotepadType, e.OwnerId });
+
+        modelBuilder.Entity<NotepadCategory>()
+            .HasIndex(c => new { c.ContainerId, c.NotepadType, c.OwnerId });
+
+        // RoomAccess integrity: a grant targets exactly one of Character /
+        // ReaderUser, and a room cannot hold duplicate grants for one target.
+        modelBuilder.Entity<RoomAccess>(entity =>
+        {
+            // Explicit plain RoomId index: the composite indexes below are
+            // partial, so the FK index is declared explicitly to keep it
+            // from being dropped by the redundant-FK-index convention.
+            entity.HasIndex(a => a.RoomId);
+
+            entity.HasIndex(a => new { a.RoomId, a.CharacterId })
+                .IsUnique()
+                .HasFilter("\"CharacterId\" IS NOT NULL");
+
+            entity.HasIndex(a => new { a.RoomId, a.ReaderUserId })
+                .IsUnique()
+                .HasFilter("\"ReaderUserId\" IS NOT NULL");
+
+            // CHECK constraint: exactly one typed target column is non-null.
+            entity.ToTable(t => t.HasCheckConstraint(
+                "CK_RoomAccesses_TypedTarget",
+                "(\"CharacterId\" IS NOT NULL AND \"ReaderUserId\" IS NULL) OR " +
+                "(\"CharacterId\" IS NULL AND \"ReaderUserId\" IS NOT NULL)"));
         });
 
         // Global Query Filter: automatically exclude soft-deleted entities
@@ -876,6 +993,12 @@ public class DmDbContext : DbContext
     /// Award grants per user.
     /// </summary>
     public DbSet<UserAward> UserAwards { get; set; }
+
+    /// <summary>
+    /// Markers linking closed statistics periods to their auto-created
+    /// "Итоги …" forum topics (one row per generated digest).
+    /// </summary>
+    public DbSet<PeriodDigestTopic> PeriodDigestTopics { get; set; }
 
     /// <summary>
     /// Achievement category catalog (13 rows in seed). SSOT for chain metadata

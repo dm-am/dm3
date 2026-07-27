@@ -67,41 +67,34 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
         // Get target user
         var user = await _moderatedProfileService.GetProfile(username);
 
-        // Parallel queries (some conditional on role)
-        var fetchLinkedProfiles = _loginRecordRepository.GetLinkedProfiles(user.UserId);
-        var fetchModeratorNotes = _moderatorNoteApiService.GetNotes(username);
-        var fetchPersonalNote = _personalNoteService.GetNote(username);
-        var fetchWarnings = _warningApiService.GetUserWarnings(username);
-        var fetchBanStatus = _banApiService.GetUserBanStatus(username);
-        var fetchIpAddresses = isAdmin
-            ? _loginRecordRepository.GetUserIps(user.UserId)
-            : Task.FromResult<IReadOnlyList<ServiceUserIpInfo>>(null!);
-        var fetchLoginHistory = isAdmin
-            ? _loginRecordRepository.GetLoginHistory(user.UserId)
-            : Task.FromResult<IReadOnlyList<ServiceUserLoginRecord>>(null!);
-
-        await Task.WhenAll(
-            fetchLinkedProfiles, fetchModeratorNotes, fetchPersonalNote, fetchWarnings,
-            fetchBanStatus, fetchIpAddresses, fetchLoginHistory);
-
-        var warnings = fetchWarnings.Result;
-        var banStatus = fetchBanStatus.Result;
-        var moderatorNotes = fetchModeratorNotes.Result;
+        // Sequential on purpose: every query below runs on this request's
+        // single DbContext, and EF forbids concurrent operations on one
+        // context. Admin-only queries are skipped for lower roles.
+        var linkedProfiles = await _loginRecordRepository.GetLinkedProfiles(user.UserId);
+        var moderatorNotes = await _moderatorNoteApiService.GetNotes(username);
+        var personalNote = await _personalNoteService.GetNote(username);
+        var warnings = await _warningApiService.GetUserWarnings(username);
+        var banStatus = await _banApiService.GetUserBanStatus(username);
+        var ipAddresses = isAdmin
+            ? MapIpAddresses(await _loginRecordRepository.GetUserIps(user.UserId))
+            : null;
+        var loginHistory = isAdmin
+            ? MapLoginHistory(await _loginRecordRepository.GetLoginHistory(user.UserId))
+            : null;
 
         // Map base UserProfile fields using AutoMapper, then add moderation-specific fields
         var profile = _mapper.Map<ModeratedProfile>(user);
 
         // Admin-only fields (null for non-admin callers)
         profile.Email = isAdmin ? user.Email : null;
-        profile.IpAddresses = isAdmin ? MapIpAddresses(fetchIpAddresses.Result) : null;
-        profile.LoginHistory = isAdmin ? MapLoginHistory(fetchLoginHistory.Result) : null;
+        profile.IpAddresses = ipAddresses;
+        profile.LoginHistory = loginHistory;
 
         // Moderator+ fields
-        profile.LinkedProfiles = MapLinkedProfiles(fetchLinkedProfiles.Result);
+        profile.LinkedProfiles = MapLinkedProfiles(linkedProfiles);
         profile.ModeratorNotes = MapModeratorNotes(moderatorNotes, caller.UserId, isSeniorMod);
 
         // Personal note (caller's own note about this user)
-        var personalNote = fetchPersonalNote.Result;
         if (personalNote != null)
         {
             profile.PersonalNote = new PersonalNote
@@ -109,7 +102,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
                 Id = personalNote.Id,
                 Text = personalNote.Text,
                 CreatedUtc = personalNote.CreatedUtc,
-                UpdatedUtc = personalNote.UpdatedUtc
+                ModifiedUtc = personalNote.ModifiedUtc
             };
         }
 
@@ -201,7 +194,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
             AuthorId = n.Author?.Id ?? Guid.Empty,
             Text = n.Text,
             CreatedUtc = n.CreatedUtc,
-            UpdatedUtc = n.UpdatedUtc,
+            ModifiedUtc = n.ModifiedUtc,
             CanEdit = isSeniorMod || (n.Author?.Id == callerId),
             CanDelete = isSeniorMod || (n.Author?.Id == callerId)
         }).ToList();

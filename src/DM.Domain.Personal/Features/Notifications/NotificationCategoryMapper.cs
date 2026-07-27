@@ -23,7 +23,9 @@ public static class NotificationCategoryMapper
         EventType.NewPublication or EventType.ChangedPublication or EventType.LikedPublication or
         EventType.NewBlogComment or EventType.ChangedBlogComment or EventType.LikedBlogComment or
         EventType.NewPublicationComment or EventType.ChangedPublicationComment or EventType.LikedPublicationComment or
-        EventType.BlogInvitationCreated or EventType.BlogInvitationAccepted or EventType.BlogInvitationRejected
+        EventType.BlogInvitationCreated or EventType.BlogInvitationAccepted or EventType.BlogInvitationRejected or
+        EventType.StatusBlogActive or EventType.StatusBlogClosed or
+        EventType.StatusBlogFrozen or EventType.StatusBlogFinished
             => NotificationCategory.Blog,
 
         EventType.StatusGameActive or EventType.StatusGameClosed or

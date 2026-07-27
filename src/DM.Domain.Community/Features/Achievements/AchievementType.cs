@@ -4,58 +4,58 @@ using DM.Domain.Core.Enums;
 namespace DM.Domain.Community.Features.Achievements;
 
 /// <summary>
-/// Тир достижения в цепочке. Хранит только то, что уникально для тира:
-/// порог, ранг, имя. Все, что одинаково для всей цепочки (иконка,
-/// описание, метрика, sort-order, активность), — на <see cref="AchievementCategory"/>.
+/// Achievement tier within a chain. Stores only what is unique to the tier:
+/// threshold, rank, name. Everything shared by the whole chain (icon,
+/// description, metric, sort order, active flag) lives on <see cref="AchievementCategory"/>.
 /// </summary>
 public class AchievementType
 {
-    /// <summary>Идентификатор.</summary>
+    /// <summary>Identifier.</summary>
     public Guid Id { get; set; }
 
-    /// <summary>Стабильный код тира («POSTS_100»).</summary>
+    /// <summary>Stable tier code ("POSTS_100").</summary>
     public string Code { get; set; } = string.Empty;
 
-    /// <summary>Отображаемое название тира («Автор»).</summary>
+    /// <summary>Display name of the tier ("Автор").</summary>
     public string Title { get; set; } = string.Empty;
 
-    /// <summary>Порог метрики для разблокировки.</summary>
+    /// <summary>Metric threshold to unlock.</summary>
     public int Threshold { get; set; }
 
     /// <summary>
-    /// Визуальный тир (1=bronze, 2=silver, 3=gold, 4=platinum).
-    /// Не влияет на логику, только на UI.
+    /// Visual tier (1=bronze, 2=silver, 3=gold, 4=platinum).
+    /// Does not affect logic, UI only.
     /// </summary>
     public int? Tier { get; set; }
 
-    /// <summary>Категория-родитель (хранит метрику, иконку, описание).</summary>
+    /// <summary>Parent category (stores the metric, icon, description).</summary>
     public AchievementCategory Category { get; set; } = null!;
 }
 
-/// <summary>Запрос на создание нового тира в каталоге достижений.</summary>
+/// <summary>Request to create a new tier in the achievement catalog.</summary>
 public class CreateAchievementType
 {
-    /// <summary>Стабильный код.</summary>
+    /// <summary>Stable code.</summary>
     public string Code { get; set; } = string.Empty;
-    /// <summary>Название тира.</summary>
+    /// <summary>Tier title.</summary>
     public string Title { get; set; } = string.Empty;
-    /// <summary>Порог разблокировки.</summary>
+    /// <summary>Unlock threshold.</summary>
     public int Threshold { get; set; }
-    /// <summary>Тир (визуальный стиль 1-4).</summary>
+    /// <summary>Tier (visual style 1-4).</summary>
     public int? Tier { get; set; }
-    /// <summary>Идентификатор категории-родителя.</summary>
+    /// <summary>Parent category identifier.</summary>
     public Guid AchievementCategoryId { get; set; }
 }
 
-/// <summary>Запрос на частичное обновление тира.</summary>
+/// <summary>Request to partially update a tier.</summary>
 public class UpdateAchievementType
 {
-    /// <summary>Идентификатор обновляемой записи.</summary>
+    /// <summary>Identifier of the record being updated.</summary>
     public Guid Id { get; set; }
-    /// <summary>Новое название (null = не менять).</summary>
+    /// <summary>New title (null = leave unchanged).</summary>
     public string? Title { get; set; }
-    /// <summary>Новый порог (null = не менять).</summary>
+    /// <summary>New threshold (null = leave unchanged).</summary>
     public int? Threshold { get; set; }
-    /// <summary>Новый тир (null = не менять).</summary>
+    /// <summary>New tier (null = leave unchanged).</summary>
     public int? Tier { get; set; }
 }

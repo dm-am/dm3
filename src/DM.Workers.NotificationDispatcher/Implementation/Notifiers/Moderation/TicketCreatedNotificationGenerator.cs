@@ -35,9 +35,9 @@ internal class TicketCreatedNotificationGenerator : BaseNotificationGenerator
                 t.TicketId,
                 t.Description,
                 t.TargetId,
-                TargetUsername = t.Target.Username,
+                TargetUsername = t.Target != null ? t.Target.Username : null,
                 t.UserId,
-                AuthorUsername = t.Author.Username,
+                AuthorUsername = t.Author != null ? t.Author.Username : null,
                 t.CreatedUtc
             })
             .FirstOrDefaultAsync();

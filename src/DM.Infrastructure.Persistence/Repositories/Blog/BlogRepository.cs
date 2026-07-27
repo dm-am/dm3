@@ -12,6 +12,7 @@ using DM.Domain.Core.Identity;
 using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
+using DM.Infrastructure.Persistence.Shared.Queries;
 using DM.Infrastructure.Persistence.Shared.Users;
 using Microsoft.EntityFrameworkCore;
 using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
@@ -58,10 +59,13 @@ internal class BlogRepository : IBlogRepository
         DateTimeOffset? closedFromUtc = null,
         DateTimeOffset? closedToUtc = null,
         IReadOnlyCollection<Guid>? excludeOwnerIds = null,
+        PremoderationStatus? premoderationStatus = null,
+        Guid currentUserId = default,
         CancellationToken ct = default)
     {
         var query = GetFilteredQuery(search, status, hostUserIds, createdFromUtc, createdToUtc,
-            activatedFromUtc, activatedToUtc, closedFromUtc, closedToUtc, excludeOwnerIds);
+            activatedFromUtc, activatedToUtc, closedFromUtc, closedToUtc, excludeOwnerIds,
+            premoderationStatus, currentUserId);
         return query.CountAsync(ct);
     }
 
@@ -80,17 +84,26 @@ internal class BlogRepository : IBlogRepository
         DateTimeOffset? closedFromUtc = null,
         DateTimeOffset? closedToUtc = null,
         IReadOnlyCollection<Guid>? excludeOwnerIds = null,
+        PremoderationStatus? premoderationStatus = null,
+        Guid currentUserId = default,
         CancellationToken ct = default)
     {
         var query = GetFilteredQuery(search, status, hostUserIds, createdFromUtc, createdToUtc,
-            activatedFromUtc, activatedToUtc, closedFromUtc, closedToUtc, excludeOwnerIds);
+            activatedFromUtc, activatedToUtc, closedFromUtc, closedToUtc, excludeOwnerIds,
+            premoderationStatus, currentUserId);
 
-        // Apply ordering
-        var orderedQuery = ApplySorting(query, search, sortBy, sortOrder);
+        // Apply ordering. The BlogId tiebreaker makes the order unique so
+        // split-query pagination stays deterministic (each collection subquery
+        // re-runs the same ORDER BY + OFFSET/FETCH and must hit the same page).
+        var orderedQuery = ApplySorting(query, search, sortBy, sortOrder).ThenBy(b => b.BlogId);
 
         var blogs = await orderedQuery
             .Page(paging)
+            // BlogDto projects three independent collections (Rubrics,
+            // Assistants, Tokens); a single query LEFT-JOINs them into a
+            // cartesian product that can OOM the reader. Split them.
             .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .AsSplitQuery()
             .ToListAsync(ct);
 
         await FillBlogSubscriberIds(blogs, ct);
@@ -107,7 +120,9 @@ internal class BlogRepository : IBlogRepository
         DateTimeOffset? activatedToUtc,
         DateTimeOffset? closedFromUtc,
         DateTimeOffset? closedToUtc,
-        IReadOnlyCollection<Guid>? excludeOwnerIds)
+        IReadOnlyCollection<Guid>? excludeOwnerIds,
+        PremoderationStatus? premoderationStatus,
+        Guid currentUserId)
     {
         // Show Active, Closed, and Draft blogs with public visibility (like games)
         var query = _dbContext.Blogs
@@ -115,6 +130,22 @@ internal class BlogRepository : IBlogRepository
             .Where(b => !b.IsRemoved &&
                 (b.Status != ModuleStatus.Draft || b.DraftVisibility == DraftVisibility.Public))
             .Where(b => excludeOwnerIds == null || !excludeOwnerIds.Contains(b.AuthorId));
+
+        // Premoderation visibility (mirrors games): pending blogs are hidden
+        // from the public list except for the author, assistants, the
+        // assigned curator, and invited users. An explicit filter (Mentor+
+        // only, gated by the service) replaces the restriction so reviewers
+        // can browse the premoderation queue.
+        query = premoderationStatus.HasValue
+            ? query.Where(b => b.PremoderationStatus == premoderationStatus.Value)
+            : query.Where(b =>
+                b.PremoderationStatus == PremoderationStatus.Approved ||
+                b.AuthorId == currentUserId ||
+                b.MentorId == currentUserId ||
+                b.Assistants.Any(a => a.UserId == currentUserId) ||
+                b.Tokens.Any(t => t.UserId == currentUserId && !t.IsRemoved &&
+                    (t.Type == TokenType.BlogAssistantInvitation ||
+                     t.Type == TokenType.BlogReaderInvitation)));
 
         // Status filter
         if (status.HasValue)
@@ -149,7 +180,7 @@ internal class BlogRepository : IBlogRepository
         }
         if (createdToUtc.HasValue)
         {
-            query = query.Where(b => b.CreatedUtc <= createdToUtc.Value);
+            query = query.WhereAtOrBefore(b => b.CreatedUtc, createdToUtc.Value);
         }
 
         // Activated date range (excludes blogs without ActivatedUtc)
@@ -162,7 +193,7 @@ internal class BlogRepository : IBlogRepository
             }
             if (activatedToUtc.HasValue)
             {
-                query = query.Where(b => b.ActivatedUtc <= activatedToUtc.Value);
+                query = query.WhereAtOrBefore(b => b.ActivatedUtc, activatedToUtc.Value);
             }
         }
 
@@ -176,7 +207,7 @@ internal class BlogRepository : IBlogRepository
             }
             if (closedToUtc.HasValue)
             {
-                query = query.Where(b => b.ClosedUtc <= closedToUtc.Value);
+                query = query.WhereAtOrBefore(b => b.ClosedUtc, closedToUtc.Value);
             }
         }
 
@@ -242,7 +273,11 @@ internal class BlogRepository : IBlogRepository
             .TagWith("DM.Blog.ListByUser")
             .Where(b => !b.IsRemoved && b.AuthorId == userId)
             .OrderByDescending(b => b.ActivatedUtc ?? b.CreatedUtc)
+            // BlogDto's Rubrics/Assistants/Tokens collections cartesian-explode
+            // on a single query; split them (no row limiting here, so EF orders
+            // each split by the parent key automatically).
             .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .AsSplitQuery()
             .ToListAsync(ct);
 
         await FillBlogSubscriberIds(blogs, ct);
@@ -256,7 +291,9 @@ internal class BlogRepository : IBlogRepository
         return await _dbContext.Blogs
             .TagWith("DM.Blog.Get")
             .Where(b => b.BlogId == blogId)
+            // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
             .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
     }
 
@@ -267,7 +304,9 @@ internal class BlogRepository : IBlogRepository
         return await _dbContext.Blogs
             .TagWith("DM.Blog.GetByPublicId")
             .Where(b => b.PublicId == publicId)
+            // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
             .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
     }
 
@@ -278,7 +317,9 @@ internal class BlogRepository : IBlogRepository
         return await _dbContext.Blogs
             .TagWith("DM.Blog.GetByUsername")
             .Where(b => b.Author.Username.ToLower() == username.ToLower())
+            // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
             .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
     }
 
@@ -409,14 +450,19 @@ internal class BlogRepository : IBlogRepository
             .TagWith("DM.Blog.Popular")
             .Where(b => !b.IsRemoved &&
                 (b.Status != ModuleStatus.Draft || b.DraftVisibility == DraftVisibility.Public))
+            // Premoderation-pending blogs never surface in the public widget
+            .Where(b => b.PremoderationStatus == PremoderationStatus.Approved)
             .Where(b => excludeOwnerIds == null || !excludeOwnerIds.Contains(b.AuthorId))
             .Where(b => b.PopularityScore > 0)
             .OrderByDescending(b => b.Status == ModuleStatus.Active)
             .ThenByDescending(b => b.Status == ModuleStatus.Closed)
             .ThenByDescending(b => b.PopularityScore)
             .ThenBy(b => b.Title)
+            .ThenBy(b => b.BlogId)
             .Take(count)
+            // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
             .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .AsSplitQuery()
             .ToListAsync(ct);
 
         await FillBlogSubscriberIds(blogs, ct);
@@ -502,7 +548,9 @@ internal class BlogRepository : IBlogRepository
             .TagWith("DM.Blog.GetByIds")
             .Where(b => !b.IsRemoved && blogIdList.Contains(b.BlogId))
             .OrderByDescending(b => b.ActivatedUtc ?? b.CreatedUtc)
+            // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
             .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .AsSplitQuery()
             .ToListAsync(ct);
 
         await FillBlogSubscriberIds(blogs, ct);
@@ -524,7 +572,9 @@ internal class BlogRepository : IBlogRepository
             .Where(b => !b.IsRemoved &&
                 (b.AuthorId == userId || b.MentorId == userId || assistantBlogIds.Contains(b.BlogId)))
             .OrderByDescending(b => b.ActivatedUtc ?? b.CreatedUtc)
+            // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
             .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .AsSplitQuery()
             .ToListAsync(ct);
 
         await FillBlogSubscriberIds(blogs, ct);
@@ -577,6 +627,20 @@ internal class BlogRepository : IBlogRepository
             blog.DraftVisibility = entity.DraftVisibility.Value;
         if (entity.CommentsEnabled.HasValue)
             blog.CommentsEnabled = entity.CommentsEnabled.Value;
+        if (entity.Status.HasValue)
+            blog.Status = entity.Status.Value;
+        if (entity.ClosedReason.HasValue)
+            blog.ClosedReason = entity.ClosedReason.Value;
+        if (entity.ActivatedUtc.HasValue)
+            blog.ActivatedUtc = entity.ActivatedUtc.Value;
+        if (entity.ClosedUtc.HasValue)
+            blog.ClosedUtc = entity.ClosedUtc.Value;
+        if (entity.ClearClosedUtc)
+            blog.ClosedUtc = null;
+        if (entity.PremoderationStatus.HasValue)
+            blog.PremoderationStatus = entity.PremoderationStatus.Value;
+        if (entity.SetMentorId)
+            blog.MentorId = entity.MentorId;
 
         blog.UpdatedUtc = entity.UpdatedUtc;
         await _dbContext.SaveChangesAsync(ct);
@@ -640,6 +704,41 @@ internal class BlogRepository : IBlogRepository
             .Where(r => r.RubricId == entity.RubricId)
             .ProjectTo<Rubric>(_mapper.ConfigurationProvider)
             .FirstAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public async Task ReorderRubrics(
+        Guid blogId, IReadOnlyList<Guid> orderedRubricIds, CancellationToken ct = default)
+    {
+        var rubrics = await _dbContext.Rubrics
+            .Where(r => r.BlogId == blogId && !r.IsRemoved)
+            .ToListAsync(ct);
+
+        for (var i = 0; i < orderedRubricIds.Count; i++)
+        {
+            var rubric = rubrics.FirstOrDefault(r => r.RubricId == orderedRubricIds[i]);
+            if (rubric != null)
+            {
+                rubric.SortOrder = i;
+            }
+        }
+
+        await _dbContext.SaveChangesAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<IDictionary<Guid, Guid[]>> GetRubricPublicationIds(
+        Guid blogId, CancellationToken ct = default)
+    {
+        var rows = await _dbContext.Publications
+            .TagWith("DM.Blog.RubricPublicationIds")
+            .Where(p => !p.IsRemoved && p.IsPublished && p.BlogId == blogId && p.RubricId != null)
+            .Select(p => new { RubricId = p.RubricId!.Value, p.PublicationId })
+            .ToListAsync(ct);
+
+        return rows
+            .GroupBy(x => x.RubricId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.PublicationId).ToArray());
     }
 
     /// <inheritdoc />

@@ -44,4 +44,9 @@ public interface IBanRepository
     /// Get all active bans
     /// </summary>
     Task<IEnumerable<Ban>> GetAllActiveBans(CancellationToken ct = default);
+
+    /// <summary>
+    /// Get full ban history - active, expired and lifted - newest first, paged
+    /// </summary>
+    Task<(IEnumerable<Ban> Bans, int TotalCount)> GetBanHistory(int skip, int take, CancellationToken ct = default);
 }

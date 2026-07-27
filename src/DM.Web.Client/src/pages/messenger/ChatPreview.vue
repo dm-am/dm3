@@ -69,9 +69,6 @@ const hasUnread = computed(() => (props.chat.unreadMessagesCount ?? 0) > 0);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .chat-preview
   display: flex
   align-items: center

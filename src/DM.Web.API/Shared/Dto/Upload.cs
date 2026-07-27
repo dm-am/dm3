@@ -16,6 +16,14 @@ public class Upload
     /// <summary>Owner user identifier.</summary>
     public Guid UserId { get; set; }
 
+    /// <summary>
+    /// Owner username (profile ref). Populated on the moderation list views
+    /// (all-uploads / by-user) so the "Загрузил" column can link to the
+    /// uploader's profile without a separate lookup. Null when the owner
+    /// navigation was not loaded (e.g. the DirectUpload response).
+    /// </summary>
+    public string? UploaderUsername { get; set; }
+
     /// <summary>Upload type / purpose.</summary>
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public UploadType Type { get; set; }
@@ -37,10 +45,10 @@ public class Upload
     public UploadStatus Status { get; set; }
 
     /// <summary>
-    /// Source file URL (≤1024 px, EXIF stripped). Thumbnail-варианты
-    /// генерируются on-the-fly через imgproxy при serving — клиент берет
-    /// этот URL для original-варианта и собирает imgproxy URL'ы для
-    /// thumbnails через picture-объект в User/UserProfile/Character DTO.
+    /// Source file URL (≤1024 px, EXIF stripped). Thumbnail variants
+    /// are generated on-the-fly via imgproxy at serving time — the client uses
+    /// this URL for the original variant and builds imgproxy URLs for
+    /// thumbnails via the picture object in the User/UserProfile/Character DTOs.
     /// </summary>
     public string? Url { get; set; }
 

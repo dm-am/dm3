@@ -90,6 +90,16 @@ internal class RoomAccessRepository : IRoomAccessRepository
         return gameWrapper?.GameId;
     }
 
+    /// <inheritdoc />
+    public Task<bool> AccessExists(Guid roomId, Guid? characterId, Guid? readerUserId)
+    {
+        return _dbContext.RoomAccesses
+            .TagWith("DM.RoomAccess.AccessExists")
+            .AnyAsync(a => a.RoomId == roomId &&
+                ((characterId != null && a.CharacterId == characterId) ||
+                 (readerUserId != null && a.ReaderUserId == readerUserId)));
+    }
+
     #endregion
 
     #region Write

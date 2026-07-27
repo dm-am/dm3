@@ -1,31 +1,28 @@
 <script setup lang="ts">
 /**
- * ProfileSubpageHeader — заголовок профильной подстраницы (полученные
- * оценки / поставленные оценки / полученные рекомендации / написанные
- * рекомендации).
+ * ProfileSubpageHeader — the heading of a profile subpage (received
+ * reviews / given reviews / received endorsements / given
+ * endorsements).
  *
- * Унифицирует визуальную единицу: PageTitle с форматом «{label}: {username}»
- * (как H1 профиля «Личный кабинет: {username}») + краткое описание со
- * ссылкой обратно на профиль. Описание задается слотом и рендерится через
- * LeadText, чтобы вписать router-link на профиль внутрь самой фразы
- * жирной ссылкой (единый look с games/blogs и прочими интро).
+ * Unifies the visual unit: a PageTitle with the "{label}: {username}" format
+ * (like the profile H1 "Личный кабинет: {username}") + a short description with
+ * a link back to the profile. The description is provided via a slot and rendered through
+ * LeadText so the profile router-link can be embedded inside the phrase itself
+ * as a bold link (a unified look with games/blogs and other intros).
  */
 import { PageTitle, LeadText } from "@/shared/ui/Layout";
 
 defineProps<{
-  /** Часть заголовка до двоеточия, напр. «Полученные оценки». */
+  /** The heading part before the colon, e.g. "Полученные оценки". */
   label: string;
-  /** Имя пользователя — рендерится после двоеточия, регистр сохраняется. */
+  /** Username — rendered after the colon. */
   username: string;
 }>();
 </script>
 
 <template>
   <div>
-    <PageTitle>
-      {{ label }}:
-      <span class="username-preserve-case">{{ username }}</span>
-    </PageTitle>
+    <PageTitle> {{ label }}: {{ username }} </PageTitle>
     <LeadText v-if="$slots.default">
       <slot />
     </LeadText>

@@ -12,6 +12,9 @@ import { EditableField } from "@/shared/ui/EditableField";
 import { StatLine } from "@/shared/ui/StatLine";
 import Button from "@/shared/ui/Button/Button.vue";
 import { SvgIcon } from "@/shared/ui/Icon";
+import FormField from "@/shared/ui/Form/FormField.vue";
+import { Select, type SelectOption } from "@/shared/ui/Select";
+import { DateInput } from "@/shared/ui/DatePicker";
 import dayjs from "dayjs";
 
 const props = defineProps<{
@@ -33,6 +36,11 @@ const genderValue = computed(() =>
   props.user.gender ? genderLabels[props.user.gender as Gender] : "",
 );
 
+const genderOptions: SelectOption[] = [
+  { value: Gender.Male, label: "мужской" },
+  { value: Gender.Female, label: "женский" },
+];
+
 // Visibility settings live on the top-level PersonalProfile DTO
 // (only present for the account owner), not under user.settings.
 const showYear = computed(
@@ -49,7 +57,7 @@ const birthday = computed<Birthday | undefined>(
   () => (props.user as Partial<PersonalProfile>).birthday,
 );
 
-// Format with «D MMMM» (no year) per CODE_STYLE and append the year only
+// Format with "D MMMM" (no year) per CODE_STYLE and append the year only
 // when the backend actually sent one.
 const birthdayValue = computed(() => {
   const b = birthday.value;
@@ -75,12 +83,12 @@ const birthdayInputValue = computed(() => {
   return `${y}-${mm}-${dd}`;
 });
 
-function onGenderChange(event: Event) {
-  emit("updateField", "gender", (event.target as HTMLSelectElement).value);
+function onGenderChange(value: string) {
+  emit("updateField", "gender", value);
 }
 
-function onBirthdayChange(event: Event) {
-  emit("updateField", "birthday", (event.target as HTMLInputElement).value);
+function onBirthdayChange(value: string | null) {
+  emit("updateField", "birthday", value ?? "");
 }
 
 function onShowYearToggle(event: Event) {
@@ -146,11 +154,11 @@ function onContactChange(
     <BlockTitle>Контакты</BlockTitle>
 
     <!--
-      Поле-порядок: имя → пол → местоположение → день рождения. Имя и
-      пол — стабильная личностная пара (кто это). Местоположение —
-      контекстный факт «где живет». День рождения — наименее «жесткий»
-      пункт (часто `не указан` или скрыт визибилити-настройкой), поэтому
-      идет последним: пустая плашка в конце меньше ломает ритм блока.
+      Field order: name → gender → location → birthday. Name and
+      gender are the stable identity pair (who this is). Location is
+      the contextual "where they live" fact. Birthday is the least "solid"
+      item (often `не указан` or hidden by a visibility setting), so it
+      goes last: an empty plaque at the end breaks the block rhythm less.
     -->
     <div class="info-grid">
       <EditableField
@@ -163,18 +171,14 @@ function onContactChange(
       />
 
       <template v-if="isEditMode">
-        <div class="form-row">
-          <span class="label">Пол:</span>
-          <select
-            :value="user.gender ?? ''"
-            class="select"
-            @change="onGenderChange"
-          >
-            <option value="">не указан</option>
-            <option :value="Gender.Male">мужской</option>
-            <option :value="Gender.Female">женский</option>
-          </select>
-        </div>
+        <FormField label="Пол" name="gender">
+          <Select
+            :model-value="user.gender ?? ''"
+            :options="genderOptions"
+            placeholder="не указан"
+            @update:model-value="onGenderChange"
+          />
+        </FormField>
       </template>
       <StatLine
         v-else
@@ -193,15 +197,13 @@ function onContactChange(
       />
 
       <template v-if="isEditMode">
-        <div class="form-row">
-          <span class="label">День рождения:</span>
-          <input
-            type="date"
-            :value="birthdayInputValue"
-            class="input"
-            @change="onBirthdayChange"
+        <FormField label="День рождения" name="birthday">
+          <DateInput
+            :model-value="birthdayInputValue || null"
+            aria-label="День рождения"
+            @update:model-value="onBirthdayChange"
           />
-        </div>
+        </FormField>
         <label class="checkbox-row">
           <input
             type="checkbox"
@@ -293,19 +295,19 @@ function onContactChange(
 <style scoped lang="sass">
 @import "src/assets/styles/Inputs"
 
-// Within-group row-gap = $minor (4px), синхронизирован с .stats-group /
-// .endorsement-stats / .contacts-subgroup в профиле. Поверх line-height
-// 1.25 дает 7-8px воздуха между «label: value» строками.
+// Within-group row-gap = $minor (4px), synchronized with .stats-group /
+// .endorsement-stats / .contacts-subgroup in the profile. On top of line-height
+// 1.25 it gives 7-8px of air between "label: value" lines.
 .info-grid
   display: flex
   flex-direction: column
   gap: $minor
 
-// Visible separator between personal fields и contacts-subgroup.
-// `white-space: pre` сохраняет `\n` text-node для Selection API
-// (копи-паст получает реальную пустую строку). Высота $small +
-// два $minor gap'а от parent .info-grid дают итоговый $medium-зазор —
-// тот же, что между .endorsement-stats и .violations-inline в ProfilePage.
+// Visible separator between personal fields and the contacts subgroup.
+// `white-space: pre` keeps the `\n` text node for the Selection API
+// (copy-paste gets a real empty line). The $small height +
+// two $minor gaps from the parent .info-grid give a total $medium gap —
+// the same as between .endorsement-stats and .violations-inline in ProfilePage.
 .info-grid-break
   display: block
   height: $small
@@ -316,14 +318,8 @@ function onContactChange(
 .contacts-subgroup
   display: flex
   flex-direction: column
-  // Внутри-группового row-gap = $minor, как в .stats-group / .info-grid.
+  // Within-group row-gap = $minor, as in .stats-group / .info-grid.
   gap: $minor
-
-.form-row
-  display: flex
-  gap: $small
-  align-items: center
-  font-size: $font-size
 
 .checkbox-row
   display: inline-flex
@@ -332,16 +328,10 @@ function onContactChange(
   font-size: $font-size
   color: $text
   cursor: pointer
-  user-select: none
 
   input
     cursor: pointer
 
-.label
-  color: $text
-  flex-shrink: 0
-
-.select,
 .input
   font-family: inherit
   font-size: $font-size

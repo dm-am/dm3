@@ -4,7 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { AccountApi } from "@/shared/api";
 import Button from "@/shared/ui/Button/Button.vue";
-import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
+import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import StatusIcon from "@/shared/ui/Icon/StatusIcon.vue";
 import { parseApiErrors } from "@/shared/lib/utils/apiErrors";
 
@@ -55,7 +55,7 @@ function goHome() {
       <!-- Success state -->
       <template v-else-if="confirmed">
         <status-icon type="success" />
-        <lightbox-title>Почта изменена</lightbox-title>
+        <dialog-title>Почта изменена</dialog-title>
         <p class="status-description">Ваша почта успешно обновлена.</p>
         <div class="status-actions">
           <Button @click="goHome">На главную</Button>
@@ -65,7 +65,7 @@ function goHome() {
       <!-- Error state -->
       <template v-else>
         <status-icon type="error" />
-        <lightbox-title>Ошибка подтверждения</lightbox-title>
+        <dialog-title>Ошибка подтверждения</dialog-title>
         <p class="status-description error-text">
           {{ error || "Ссылка недействительна или устарела." }}
         </p>
@@ -76,16 +76,13 @@ function goHome() {
 
       <div class="help-section">
         Нужна помощь? Обратитесь в
-        <a href="/support?reason=access">поддержку</a>
+        <router-link to="/support?reason=access">поддержку</router-link>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .confirm-page
   max-width: 380px
   margin: $major auto

@@ -121,12 +121,12 @@ public class PublicationCommentController : ControllerBase
     /// - Like count
     ///
     /// Example request:
-    ///     GET /v1/blogs/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6
+    ///     GET /v1/publications/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <response code="200">Comment details</response>
     /// <response code="404">Comment not found</response>
-    [HttpGet("~/v1/blogs/comments/{id}", Name = nameof(GetPublicationComment))]
+    [HttpGet("comments/{id}", Name = nameof(GetPublicationComment))]
     [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublicationComment(Guid id) => Ok(await _commentApiService.Get(id));
@@ -140,7 +140,7 @@ public class PublicationCommentController : ControllerBase
     /// Edit history is preserved.
     ///
     /// Example request:
-    ///     PATCH /v1/blogs/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6
+    ///     PATCH /v1/publications/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6
     ///     {
     ///       "text": "Updated comment text"
     ///     }
@@ -152,7 +152,7 @@ public class PublicationCommentController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User cannot edit this comment</response>
     /// <response code="404">Comment not found</response>
-    [HttpPatch("~/v1/blogs/comments/{id}", Name = nameof(PatchPublicationComment))]
+    [HttpPatch("comments/{id}", Name = nameof(PatchPublicationComment))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
@@ -171,14 +171,14 @@ public class PublicationCommentController : ControllerBase
     /// This action cannot be undone.
     ///
     /// Example request:
-    ///     DELETE /v1/blogs/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6
+    ///     DELETE /v1/publications/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <response code="204">Comment deleted successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User cannot delete this comment</response>
     /// <response code="404">Comment not found</response>
-    [HttpDelete("~/v1/blogs/comments/{id}", Name = nameof(DeletePublicationComment))]
+    [HttpDelete("comments/{id}", Name = nameof(DeletePublicationComment))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
@@ -199,7 +199,7 @@ public class PublicationCommentController : ControllerBase
     /// Each user can only like a comment once.
     ///
     /// Example request:
-    ///     POST /v1/blogs/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6/likes
+    ///     POST /v1/publications/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6/likes
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <response code="201">Like added, returns user who liked</response>
@@ -207,7 +207,7 @@ public class PublicationCommentController : ControllerBase
     /// <response code="403">User cannot like this comment (e.g., own comment)</response>
     /// <response code="404">Comment not found</response>
     /// <response code="409">User already liked this comment</response>
-    [HttpPost("~/v1/blogs/comments/{id}/likes", Name = nameof(PostPublicationCommentLike))]
+    [HttpPost("comments/{id}/likes", Name = nameof(PostPublicationCommentLike))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
@@ -228,7 +228,7 @@ public class PublicationCommentController : ControllerBase
     /// Can only remove your own likes.
     ///
     /// Example request:
-    ///     DELETE /v1/blogs/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6/likes
+    ///     DELETE /v1/publications/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6/likes
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <response code="204">Like removed successfully</response>
@@ -236,7 +236,7 @@ public class PublicationCommentController : ControllerBase
     /// <response code="403">User cannot remove like (not their like)</response>
     /// <response code="404">Comment not found</response>
     /// <response code="409">User has not liked this comment</response>
-    [HttpDelete("~/v1/blogs/comments/{id}/likes", Name = nameof(DeletePublicationCommentLike))]
+    [HttpDelete("comments/{id}/likes", Name = nameof(DeletePublicationCommentLike))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]

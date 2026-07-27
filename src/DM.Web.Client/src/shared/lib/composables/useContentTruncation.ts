@@ -28,7 +28,10 @@ import {
 } from "vue";
 
 export interface ContentTruncationOptions {
-  /** Maximum height in px before truncation (default: 150) */
+  /** Overflow threshold in px — content counts as truncatable when its
+   * scrollHeight exceeds this value (default: 150). Callers that snap
+   * their visual clamp to whole lines (TruncatedContent) pass a derived
+   * threshold here, not the raw budget. */
   maxHeight?: number | Ref<number>;
   /** Enable truncation (default: true) */
   enabled?: boolean | Ref<boolean> | ComputedRef<boolean>;

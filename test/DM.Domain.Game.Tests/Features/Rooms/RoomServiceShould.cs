@@ -207,6 +207,50 @@ public class RoomServiceShould : UnitTestBase
     }
 
     [Fact]
+    public async Task PassIsArchivedThroughToRepositoryOnUpdate()
+    {
+        var roomId = Guid.NewGuid();
+        var updateRoom = new UpdateRoom { RoomId = roomId, IsArchived = true };
+        var room = new RoomToUpdate
+        {
+            Id = roomId,
+            Game = new GameDto
+            {
+                Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
+            }
+        };
+
+        _repository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateRoomEntity>())).ReturnsAsync(room);
+
+        await _service.UpdateAsync(updateRoom);
+
+        _repository.Verify(r => r.Update(It.Is<UpdateRoomEntity>(e => e.IsArchived == true)), Times.Once);
+    }
+
+    [Fact]
+    public async Task LeaveIsArchivedUnsetWhenUpdateOmitsIt()
+    {
+        var roomId = Guid.NewGuid();
+        var updateRoom = new UpdateRoom { RoomId = roomId, Title = "Updated Room" };
+        var room = new RoomToUpdate
+        {
+            Id = roomId,
+            Game = new GameDto
+            {
+                Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
+            }
+        };
+
+        _repository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateRoomEntity>())).ReturnsAsync(room);
+
+        await _service.UpdateAsync(updateRoom);
+
+        _repository.Verify(r => r.Update(It.Is<UpdateRoomEntity>(e => e.IsArchived == null)), Times.Once);
+    }
+
+    [Fact]
     public async Task AuthorizeDeleteRoomAction()
     {
         var roomId = Guid.NewGuid();

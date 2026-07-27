@@ -137,7 +137,7 @@ var games = await context.Games
 Endpoint, который читается на каждой загрузке home page (news, tags, site statistics, popular lists) — кандидат на сервисный кэш в `ICache` с коротким TTL. Правила:
 
 1. **Кэшировать только cache-friendly shape запроса**. Если клиент передал search, фильтры по дате или автора — обойти кэш, не плодить ключи. Ключ шаблон: `{entity}:list:{scope}:{шаблон-параметров}:{accessPolicy}`.
-2. **Не кэшировать user-specific поля**. Кэш хранит «общедоступный» слепок; per-user данные (unread counts, own flags) заполняются поверх кэша в каждом запросе.
+2. **Не кэшировать user-specific поля**. Кэш хранит "общедоступный" слепок; per-user данные (unread counts, own flags) заполняются поверх кэша в каждом запросе.
 3. **Полагаться на TTL, не на явную инвалидацию**, когда данные меняются редко и допустима задержка в минуту-две. Phone-book-scale enumeration инвалидации (все take × все accessPolicy) — обычно ошибка; короткий TTL проще и предсказуемее.
 4. **accessPolicy — часть ключа**: гости и привилегированные пользователи никогда не разделяют одну запись кэша (правильность).
 5. **Fast path должен пропускать дорогие шаги**, которые не нужны для compact read (например, отдельный `SELECT COUNT(*)` для paging metadata, когда клиент рендерит единственный список без номеров страниц).
@@ -147,7 +147,7 @@ Endpoint, который читается на каждой загрузке hom
 Polling-эндпойнты (SiteStatistics, unread counters) — **средство, а не цель**. Правила:
 
 - **Серверный TTL кэша должен превышать интервал polling клиента** — иначе половина запросов идет в БД впустую. Если клиент опрашивает раз в 60 секунд, кэшируй хотя бы на 90 секунд.
-- **Интервал polling выводится из UX-требования**, а не удобства. «Статистика сайта» — приблизительные числа, 60s достаточно; unread counter в чате — другое дело.
+- **Интервал polling выводится из UX-требования**, а не удобства. "Статистика сайта" — приблизительные числа, 60s достаточно; unread counter в чате — другое дело.
 - **Polling прерывается когда вкладка скрыта** (`document.visibilitychange` → `stopPolling`). Обязательная энергосберегающая практика.
 
 ### Decoupling enrichment from critical path
@@ -579,7 +579,7 @@ export const i18n = createI18n({
 
 ## CSS Transitions и тема
 
-Переключение темы анимируется через **View Transition API** (`document.startViewTransition()` в `App.vue`), а не через CSS transitions. Подробности — в [UI_STANDARDS.md](./UI_STANDARDS.md) → «Переключение темы». `transition: all` запрещен (performance overhead и непредсказуемость).
+Переключение темы — **мгновенное**: временный класс `.no-transitions` подавляет все CSS transitions на время смены темы, а forced reflow (`offsetHeight`) гарантирует снап значений за один кадр. Подробности — в [UI_STANDARDS.md](./UI_STANDARDS.md) → "Переключение темы". `transition: all` запрещен (performance overhead и непредсказуемость).
 
 ---
 

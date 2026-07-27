@@ -10,7 +10,8 @@ import type {
   TopicsQuery,
   CommentsQuery,
 } from "./types";
-import type { ListEnvelope } from "@/shared/api/models/common";
+import type { ListEnvelope, User } from "@/shared/api/models/common";
+import { unwrapResource } from "@/shared/api";
 import forumApi from "../api/forumApi";
 import { useAuthStore } from "@/shared/stores";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
@@ -36,26 +37,65 @@ export const useBoardsStore = defineStore("boards", () => {
   const fetchNews = newsResource.fetch;
 
   const selectedBoard = ref<Board | null>(null);
+
+  // Monotonic token shared by every "select board/topic" flow. Each new
+  // selection bumps it; continuations resumed after `await` compare their
+  // captured token and bail if another selection started meanwhile. Without
+  // this, a slow getBoard/getTopic response from board A lands AFTER the
+  // user already navigated to board B and silently overwrites selectedBoard
+  // (the classic "clicked Для новичков, still see Общий" bug).
+  //
+  // Board and topic selection use SEPARATE tokens: on a direct navigation to
+  // a topic URL, the persistent ForumPage shell selects the board while the
+  // TopicPage leaf selects the topic — concurrently. A shared token made
+  // whichever finished second invalidate the other, so the topic silently
+  // failed to load until the user re-entered from the board (the bug where
+  // /forum/alias/num opened blank). Independent tokens let both complete.
+  let boardSelectVersion = 0;
+  let topicSelectVersion = 0;
+
   async function trySelectBoard(id: BoardId) {
+    const version = ++boardSelectVersion;
     const localBoard = boards.value?.find((f) => f.id === id);
     if (localBoard) selectedBoard.value = localBoard;
 
     const { error, data } = await forumApi.getBoard(id);
+    // Stale continuation: commit nothing, report success as a no-op (same
+    // contract as trySelectBoardByAlias / trySelectTopicByNumber below).
+    if (version !== boardSelectVersion) return true;
     if (error) return false;
 
     selectedBoard.value = data?.resource ?? null;
     return true;
   }
 
-  async function trySelectBoardByAlias(alias: string) {
+  /**
+   * Resolve a board by its URL alias.
+   *
+   * Returns `{ ok, status }` instead of a bare boolean so callers can tell a
+   * missing board (404) apart from a transient failure (network/500) and map
+   * each to the right error page instead of flattening everything to 404.
+   * The returned object is still truthy, so old call sites doing
+   * `if (await trySelectBoardByAlias(...))` keep compiling (though they lose
+   * the extra status info) — new call sites should destructure `{ ok }`.
+   */
+  async function trySelectBoardByAlias(
+    alias: string,
+  ): Promise<{ ok: boolean; status?: number }> {
+    const version = ++boardSelectVersion;
     const localBoard = boards.value?.find((f) => f.alias === alias);
     if (localBoard) selectedBoard.value = localBoard;
 
     const { error, data } = await forumApi.getBoard(alias as BoardId);
-    if (error) return false;
+    // Stale continuation: a newer selection started while this response was
+    // in flight. Commit nothing and report ok so the (equally stale) caller
+    // treats it as a no-op instead of raising an error page over the newer
+    // navigation's state.
+    if (version !== boardSelectVersion) return { ok: true };
+    if (error) return { ok: false, status: error.status };
 
     selectedBoard.value = data?.resource ?? null;
-    return true;
+    return { ok: true };
   }
 
   const attachedTopics = ref<Topic[] | null>(null);
@@ -77,12 +117,18 @@ export const useBoardsStore = defineStore("boards", () => {
     return JSON.stringify({ board: boardAlias, ...query });
   }
 
+  // Monotonic token for topics requests: only the latest searchTopics call
+  // may commit results/error/loading state. A slower response for a board
+  // the user already left must never overwrite the newer board's rows.
+  let topicsVersion = 0;
+
   /**
    * Search topics with filters. Single source of truth for loading topics.
    * Called by TopicsList via paramsKey watcher.
    */
   async function searchTopics(query: TopicsQuery) {
     if (!selectedBoard.value) return;
+    const version = ++topicsVersion;
 
     // Apply user's page size preference
     const size =
@@ -140,19 +186,9 @@ export const useBoardsStore = defineStore("boards", () => {
         fetchedTopics = regularResult.data ?? null;
       }
 
-      // On failure surface the error and keep any already-shown rows
-      // (stale-while-revalidate) instead of blanking the list — never
-      // present a failed load as fake-empty.
-      if (failed) {
-        topicsError.value = true;
-        return;
-      }
-
-      attachedTopics.value = fetchedAttached;
-      topics.value = fetchedTopics;
-
-      // Update cache
-      if (fetchedTopics) {
+      // Fresh data is still valid for ITS cache key, so cache it even when
+      // the visible commit below is skipped as stale.
+      if (!failed && fetchedTopics) {
         topicsCache.set(cacheKey, {
           data: fetchedTopics,
           attached: fetchedAttached,
@@ -163,8 +199,25 @@ export const useBoardsStore = defineStore("boards", () => {
           if (firstKey) topicsCache.delete(firstKey);
         }
       }
+
+      // Stale continuation: a newer searchTopics started while this one was
+      // in flight — the newer call owns the visible state.
+      if (version !== topicsVersion) return;
+
+      // On failure surface the error and keep any already-shown rows
+      // (stale-while-revalidate) instead of blanking the list — never
+      // present a failed load as fake-empty.
+      if (failed) {
+        topicsError.value = true;
+        return;
+      }
+
+      attachedTopics.value = fetchedAttached;
+      topics.value = fetchedTopics;
     } finally {
-      topicsLoading.value = false;
+      // Only the latest request may clear the flag: a stale finally must
+      // not hide the spinner while the newer request is still loading.
+      if (version === topicsVersion) topicsLoading.value = false;
     }
   }
 
@@ -229,8 +282,10 @@ export const useBoardsStore = defineStore("boards", () => {
 
   const selectedTopic = ref<Topic | null>(null);
   async function trySelectTopic(id: TopicId) {
+    const version = ++topicSelectVersion;
     if (selectedTopic.value?.id !== id) selectedTopic.value = null;
     const { data } = await forumApi.getTopic(id);
+    if (version !== topicSelectVersion) return; // stale: newer selection won
     const topic = data?.resource;
     if (!topic) return;
 
@@ -238,18 +293,35 @@ export const useBoardsStore = defineStore("boards", () => {
     await trySelectBoard(topic.board.id);
   }
 
+  /**
+   * Resolve a topic by its board alias + per-board topic number.
+   *
+   * Returns `{ ok, status }` (same contract as trySelectBoardByAlias) so the
+   * caller can map 403/404/410/500 to the right ErrorPage without firing a
+   * second request just to read the status code. The returned object is
+   * still truthy under `if (...)`, so existing boolean-truthiness call sites
+   * keep working unchanged.
+   */
   async function trySelectTopicByNumber(
     boardAlias: string,
     topicNumber: number,
-  ) {
+  ): Promise<{ ok: boolean; status?: number }> {
+    const version = ++topicSelectVersion;
     selectedTopic.value = null;
-    const { data } = await forumApi.getTopicByNumber(boardAlias, topicNumber);
+    const { data, error } = await forumApi.getTopicByNumber(
+      boardAlias,
+      topicNumber,
+    );
+    // Stale continuation (user already navigated elsewhere): keep hands off
+    // selectedTopic/selectedBoard and report ok so the (equally stale)
+    // caller treats it as a no-op instead of raising an error page.
+    if (version !== topicSelectVersion) return { ok: true };
     const topic = data?.resource;
-    if (!topic) return false;
+    if (!topic) return { ok: false, status: error?.status };
 
     selectedTopic.value = topic;
     selectedBoard.value = topic.board;
-    return true;
+    return { ok: true };
   }
 
   const comments = ref<ListEnvelope<Comment> | null>(null);
@@ -358,10 +430,11 @@ export const useBoardsStore = defineStore("boards", () => {
 
   async function updateComment(id: string, text: string) {
     const { data } = await forumApi.updateComment(id as CommentId, { text });
-    if (data && comments.value) {
+    const updated = unwrapResource<Comment>(data);
+    if (updated && comments.value) {
       const index = comments.value.resources.findIndex((c) => c.id === id);
       if (index !== -1) {
-        comments.value.resources[index] = data;
+        comments.value.resources[index] = updated;
       }
     }
   }
@@ -381,7 +454,8 @@ export const useBoardsStore = defineStore("boards", () => {
 
   async function likeComment(id: string) {
     const { data } = await forumApi.postCommentLike(id as CommentId);
-    if (data && comments.value && currentUser.value) {
+    const liker = unwrapResource<User>(data);
+    if (liker && comments.value && currentUser.value) {
       const index = comments.value.resources.findIndex((c) => c.id === id);
       if (index !== -1) {
         const comment = comments.value.resources[index];
@@ -389,7 +463,7 @@ export const useBoardsStore = defineStore("boards", () => {
           comment.likes || ([] as unknown as Comment["likes"]);
         comments.value.resources[index] = {
           ...comment,
-          likes: [...existingLikes, data] as Comment["likes"],
+          likes: [...existingLikes, liker] as Comment["likes"],
         };
       }
     }
@@ -443,6 +517,50 @@ export const useBoardsStore = defineStore("boards", () => {
     }
   }
 
+  /**
+   * Edit a topic's title and/or first-post text (author while open, or
+   * moderator). Commits the server-rendered result to selectedTopic.
+   */
+  async function updateTopicContent(
+    id: string,
+    patch: { title?: string; description?: string },
+  ) {
+    const { data, error } = await forumApi.updateTopic(
+      id as TopicId,
+      patch as any,
+    );
+    if (error) return { error };
+    if (data?.resource && selectedTopic.value?.id === id) {
+      selectedTopic.value = data.resource;
+    }
+    return { data: data?.resource };
+  }
+
+  /** Lock/unlock a topic (moderator action). */
+  async function setTopicClosed(id: string, closed: boolean) {
+    const { data, error } = await forumApi.updateTopic(
+      id as TopicId,
+      {
+        isClosed: closed,
+      } as any,
+    );
+    if (error) return { error };
+    if (selectedTopic.value?.id === id) {
+      selectedTopic.value =
+        data?.resource ??
+        ({ ...selectedTopic.value, isClosed: closed } as Topic);
+    }
+    return { data: closed };
+  }
+
+  /** Delete a topic (author or moderator); clears it from selection. */
+  async function deleteTopic(id: string) {
+    const { error } = await forumApi.deleteTopic(id as TopicId);
+    if (error) return { error };
+    if (selectedTopic.value?.id === id) selectedTopic.value = null;
+    return { data: true };
+  }
+
   return {
     boards,
     boardsLoading,
@@ -476,5 +594,8 @@ export const useBoardsStore = defineStore("boards", () => {
     unlikeComment,
     likeTopic,
     unlikeTopic,
+    updateTopicContent,
+    setTopicClosed,
+    deleteTopic,
   };
 });

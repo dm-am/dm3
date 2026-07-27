@@ -57,7 +57,7 @@ public class CharacterServiceShould : UnitTestBase
         _repository = Mock<ICharacterRepository>();
 
         var attributeValueFiller = Mock<ICharacterAttributeValueFiller>();
-        attributeValueFiller.Setup(f => f.Fill(It.IsAny<IEnumerable<Character>>(), It.IsAny<Guid?>()))
+        attributeValueFiller.Setup(f => f.Fill(It.IsAny<IEnumerable<Character>>(), It.IsAny<GameDto>(), It.IsAny<Guid>()))
             .Returns(Task.CompletedTask);
 
         var intentionConverter = Mock<ICharacterIntentionConverter>();
@@ -185,6 +185,137 @@ public class CharacterServiceShould : UnitTestBase
         await _service.UpdateAsync(updateCharacter);
 
         _intentionManager.Verify(m => m.ThrowIfForbidden(CharacterIntention.Edit, characterForUpdate), Times.Once);
+    }
+
+    [Fact]
+    public async Task PreserveHiddenAttributeWhenMasterOmitsItOnUpdate()
+    {
+        // A game lead can see hidden values, so the submission passes through
+        // unchanged. Omitting the hidden attribute must not blank it: the entity
+        // sent to the repository carries only the submitted (visible) values,
+        // leaving the stored hidden value untouched.
+        var gameId = Guid.NewGuid();
+        var characterId = Guid.NewGuid();
+        var visibleSpecId = Guid.NewGuid();
+        var hiddenSpecId = Guid.NewGuid();
+
+        var game = new GameDto
+        {
+            Id = gameId,
+            Master = new GeneralUser { UserId = _currentUserId, Username = "Master" },
+            Assistants = [],
+            Players = [],
+            SubscriberIds = [],
+            AttributeSchemaId = Guid.NewGuid()
+        };
+        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+
+        var characterForUpdate = new CharacterToUpdate
+        {
+            Id = characterId,
+            GameId = gameId,
+            GameMasterId = _currentUserId
+        };
+        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync(characterForUpdate);
+
+        UpdateCharacterEntity? captured = null;
+        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
+            .Callback<UpdateCharacterEntity>(e => captured = e)
+            .ReturnsAsync(new Character { Id = characterId });
+
+        var updateCharacter = new UpdateCharacter
+        {
+            CharacterId = characterId,
+            Name = "Updated",
+            Attributes = new[]
+            {
+                new Domain.Game.Features.Games.CharacterAttribute { Id = visibleSpecId, Value = "visible" }
+            }
+        };
+
+        await _service.UpdateAsync(updateCharacter);
+
+        captured.Should().NotBeNull();
+        captured!.Attributes.Should().ContainSingle(a => a.Id == visibleSpecId && a.Value == "visible");
+        captured.Attributes.Should().NotContain(a => a.Id == hiddenSpecId);
+        // Lead can see hidden values -> no schema/stored lookup needed.
+        _repository.Verify(r => r.GetGameSchema(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RestoreHiddenAttributeWhenSubmitterCannotSeeItOnUpdate()
+    {
+        // A submitter whose read was redacted (neither owner nor lead) must not
+        // be able to blank or overwrite a hidden value. Their hidden input is
+        // dropped and the stored value is restored so it survives the round-trip.
+        var gameId = Guid.NewGuid();
+        var characterId = Guid.NewGuid();
+        var authorId = Guid.NewGuid();
+        var visibleSpecId = Guid.NewGuid();
+        var hiddenSpecId = Guid.NewGuid();
+
+        var game = new GameDto
+        {
+            Id = gameId,
+            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Master" },
+            Assistants = [],
+            Players = [],
+            SubscriberIds = [],
+            AttributeSchemaId = Guid.NewGuid()
+        };
+        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+
+        var characterForUpdate = new CharacterToUpdate
+        {
+            Id = characterId,
+            GameId = gameId,
+            AuthorId = authorId,
+            GameMasterId = game.Master.UserId
+        };
+        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync(characterForUpdate);
+
+        var schema = new AttributeSchema
+        {
+            Specifications = new[]
+            {
+                new AttributeSpecification { Id = visibleSpecId, Title = "V", IsHidden = false },
+                new AttributeSpecification { Id = hiddenSpecId, Title = "H", IsHidden = true }
+            }
+        };
+        _repository.Setup(r => r.GetGameSchema(gameId)).ReturnsAsync(schema);
+
+        _repository.Setup(r => r.FindCharacter(characterId)).ReturnsAsync(new Character
+        {
+            Id = characterId,
+            GameId = gameId,
+            Attributes = new[]
+            {
+                new Domain.Game.Features.Games.CharacterAttribute { Id = hiddenSpecId, Value = "secret" }
+            }
+        });
+
+        UpdateCharacterEntity? captured = null;
+        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
+            .Callback<UpdateCharacterEntity>(e => captured = e)
+            .ReturnsAsync(new Character { Id = characterId });
+
+        var updateCharacter = new UpdateCharacter
+        {
+            CharacterId = characterId,
+            Name = "Updated",
+            Attributes = new[]
+            {
+                new Domain.Game.Features.Games.CharacterAttribute { Id = visibleSpecId, Value = "visible" },
+                // Submitter tries to blank the hidden value they could not see.
+                new Domain.Game.Features.Games.CharacterAttribute { Id = hiddenSpecId, Value = string.Empty }
+            }
+        };
+
+        await _service.UpdateAsync(updateCharacter);
+
+        captured.Should().NotBeNull();
+        captured!.Attributes.Should().Contain(a => a.Id == visibleSpecId && a.Value == "visible");
+        captured.Attributes.Should().Contain(a => a.Id == hiddenSpecId && a.Value == "secret");
     }
 
     [Fact]

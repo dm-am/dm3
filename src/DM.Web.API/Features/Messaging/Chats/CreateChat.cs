@@ -13,7 +13,7 @@ public class CreateChat
     /// Chat title
     /// </summary>
     [Required(ErrorMessage = "Заголовок обязателен")]
-    [StringLength(100, MinimumLength = 1, ErrorMessage = "Заголовок должен быть от 1 and 100 символов")]
+    [StringLength(100, MinimumLength = 1, ErrorMessage = "Заголовок должен быть от 1 до 100 символов")]
     public string Title { get; set; } = "";
 
     /// <summary>

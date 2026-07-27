@@ -75,6 +75,7 @@ export const useTestimonialStore = defineStore("testimonials", () => {
         (r) => r.id !== id,
       );
     }
+    return { error };
   }
 
   async function createTestimonial(text: string) {

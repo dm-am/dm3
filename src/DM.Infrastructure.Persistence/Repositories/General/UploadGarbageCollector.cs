@@ -36,10 +36,10 @@ internal class UploadGarbageCollector : IUploadGarbageCollector
     /// <inheritdoc />
     public async Task CollectObsoleteAsync(Guid entityId)
     {
-        // Берем все активные uploads сущности, отсортированные по дате;
-        // самый свежий (HEAD) — текущий аватар, остальные obsolete.
-        // Filter охватывает все типизированные target-колонки: если
-        // entityId — user, найдем UserAvatar; если character — CharacterAvatar.
+        // Take all active uploads of the entity, sorted by date;
+        // the most recent (HEAD) is the current avatar, the rest are obsolete.
+        // The filter covers all typed target columns: if
+        // entityId is a user, we find UserAvatar; if a character — CharacterAvatar.
         var uploads = await _db.Uploads
             .Where(u => !u.IsRemoved &&
                 (u.TargetUserId == entityId
@@ -57,8 +57,8 @@ internal class UploadGarbageCollector : IUploadGarbageCollector
         var s3Keys = new List<string>();
         foreach (var up in obsolete)
         {
-            // Один файл per upload (imgproxy делает thumbnails on-the-fly,
-            // никаких пре-сгенерированных _m/_s файлов).
+            // One file per upload (imgproxy makes thumbnails on-the-fly,
+            // no pre-generated _m/_s files).
             if (!string.IsNullOrEmpty(up.ObjectKey))
             {
                 s3Keys.Add(up.ObjectKey);
@@ -68,9 +68,9 @@ internal class UploadGarbageCollector : IUploadGarbageCollector
             up.DeletedUtc = DateTimeOffset.UtcNow;
         }
 
-        // Сохраняем soft-delete в БД до того, как трогаем S3 — если S3
-        // delete упадет, DB все равно консистентна (orphan-файл подметет
-        // фоновый worker позже).
+        // Persist the soft-delete in the DB before touching S3 — if the S3
+        // delete fails, the DB is still consistent (the orphan file is swept
+        // by the background worker later).
         await _db.SaveChangesAsync();
 
         foreach (var key in s3Keys)
@@ -85,12 +85,12 @@ internal class UploadGarbageCollector : IUploadGarbageCollector
             }
             catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                // Файл уже удален или не существует — норма.
+                // The file is already deleted or does not exist — that is fine.
             }
             catch (Exception ex)
             {
-                // Логируем, но не падаем — соответствующий Upload помечен
-                // IsRemoved, GC-worker заберет файл при следующем проходе.
+                // Log but do not fail — the corresponding Upload is marked
+                // IsRemoved, the GC worker picks the file up on the next pass.
                 _logger.LogWarning(ex, "Failed to delete obsolete S3 object {Key}", key);
             }
         }

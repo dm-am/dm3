@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
@@ -13,12 +14,13 @@ namespace DM.Web.API.Features.Moderation.Bans;
 /// </summary>
 /// <remarks>
 /// Provides endpoints for managing user bans.
-/// Most operations require Moderator role or higher.
+/// Viewing ban lists requires Moderator role or higher;
+/// creating and lifting bans requires SeniorModerator role or higher.
 ///
 /// ## Ban Types
 /// - **Auto**: Triggered by warning points (6+ in 30 days)
 /// - **Temporary**: Set by moderator with expiration
-/// - **Permanent**: Indefinite ban (Admin can lift)
+/// - **Permanent**: Indefinite ban (only Admin can lift)
 /// - **Voluntary**: Self-requested by user
 /// </remarks>
 [ApiController]
@@ -40,27 +42,31 @@ public class BanController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Returns current ban status and ban history for the user.
+    /// Public view: ban type and period only, without ban reason
+    /// and moderator identity.
     /// </remarks>
     /// <param name="username">Username</param>
     /// <response code="200">User ban status and history</response>
     /// <response code="404">User not found</response>
     [HttpGet("~/v1/users/{username}/bans", Name = nameof(GetUserBans))]
-    [ProducesResponseType(typeof(UserBanStatus), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PublicUserBanStatus), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserBans(string username) =>
-        Ok(await _banApiService.GetUserBanStatus(username));
+        Ok(await _banApiService.GetPublicUserBanStatus(username));
 
     /// <summary>
     /// Get active ban for a user
     /// </summary>
     /// <remarks>
     /// Returns the currently active ban for the user, or 404 if not banned.
+    /// Public view: ban type and period only, without ban reason
+    /// and moderator identity.
     /// </remarks>
     /// <param name="username">Username</param>
     /// <response code="200">Active ban details</response>
     /// <response code="404">User not found or not banned</response>
     [HttpGet("~/v1/users/{username}/bans/active", Name = nameof(GetActiveBan))]
-    [ProducesResponseType(typeof(Envelope<Ban>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Envelope<PublicBan>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetActiveBan(string username)
     {
@@ -91,10 +97,31 @@ public class BanController : ControllerBase
         Ok(await _banApiService.GetAllActiveBans(type));
 
     /// <summary>
+    /// Get ban history (moderators only)
+    /// </summary>
+    /// <remarks>
+    /// Returns all bans ever issued - active, expired and lifted - newest first, paged.
+    /// The unpaged GET /v1/bans endpoint keeps returning only currently active bans.
+    /// </remarks>
+    /// <param name="q">Pagination parameters</param>
+    /// <response code="200">Paged list of all bans</response>
+    /// <response code="400">Invalid pagination parameters</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">Moderator role required</response>
+    [HttpGet("history", Name = nameof(GetBanHistory))]
+    [RequireRole(UserRole.Moderator)]
+    [ProducesResponseType(typeof(ListEnvelope<Ban>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetBanHistory([FromQuery] PagingQuery q) =>
+        Ok(await _banApiService.GetBanHistory(q));
+
+    /// <summary>
     /// Create a ban
     /// </summary>
     /// <remarks>
-    /// Bans a user. Requires Moderator role.
+    /// Bans a user. Requires SeniorModerator role.
     ///
     /// **Duration options:**
     /// - Set `expiresUtc` for specific end time
@@ -107,11 +134,11 @@ public class BanController : ControllerBase
     /// <response code="201">Ban created</response>
     /// <response code="400">Invalid ban data</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">Moderator role required</response>
+    /// <response code="403">SeniorModerator role required</response>
     /// <response code="404">Target user not found</response>
     /// <response code="409">User is already banned</response>
     [HttpPost(Name = nameof(CreateBan))]
-    [RequireRole(UserRole.Moderator)]
+    [RequireRole(UserRole.SeniorModerator)]
     [ProducesResponseType(typeof(Envelope<Ban>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
@@ -129,16 +156,16 @@ public class BanController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Cancels an active ban before its expiration.
-    /// Requires Moderator role for temporary bans, Admin for permanent bans.
+    /// Requires SeniorModerator role; permanent bans can only be lifted by Admin.
     /// </remarks>
     /// <param name="id">Ban identifier</param>
     /// <param name="request">Optional lift reason</param>
     /// <response code="204">Ban lifted</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">Moderator/Admin role required</response>
+    /// <response code="403">SeniorModerator role required (Admin for permanent bans)</response>
     /// <response code="404">Ban not found</response>
     [HttpDelete("{id}", Name = nameof(LiftBan))]
-    [RequireRole(UserRole.Moderator)]
+    [RequireRole(UserRole.SeniorModerator)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]

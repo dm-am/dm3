@@ -34,7 +34,7 @@ public class FundraisingGoal
     /// <summary>
     /// Last update moment (UTC)
     /// </summary>
-    public DateTimeOffset UpdatedUtc { get; set; }
+    public DateTimeOffset ModifiedUtc { get; set; }
 
     /// <summary>
     /// Last editor user identifier

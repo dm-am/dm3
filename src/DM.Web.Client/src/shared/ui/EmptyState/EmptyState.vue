@@ -21,8 +21,6 @@ defineProps<{
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 .empty-state
   display: flex
   flex-direction: column

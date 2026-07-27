@@ -99,7 +99,13 @@ public static class ModuleRegistrationExtensions
             .Where(t => !t.IsAssignableTo(typeof(IHostedService)))
             .AsSelf()
             .AsImplementedInterfaces()
-            .InstancePerDependency();
+            .InstancePerDependency()
+            // Autofac modules are applied AFTER builder.Populate(services), so
+            // without this the blanket scan silently overrides MS.DI
+            // registrations with per-dependency construction — DbContext
+            // pooling and typed-HttpClient factories were bypassed entirely.
+            // The scan must only fill gaps, never replace explicit wiring.
+            .PreserveExistingDefaults();
 
         return builder;
     }

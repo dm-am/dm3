@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * ModerationAwardsSeries — детали серии: edit-form (topic URL / IsActive),
- * grant-form (выдать награду пользователю в этой серии) и список ранее
- * выданных наград с возможностью отзыва.
+ * ModerationAwardsSeries — contest series details: an edit form (topic
+ * URL / IsActive), a grant form (award a user within this series) and the
+ * list of previously granted awards with a revoke action.
  *
- * Series identity — id (uuid), берем из route param `id`.
+ * Series identity — id (uuid), taken from the `id` route param.
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -16,7 +16,7 @@ import { achievementApi } from "@/shared/api";
 import { useContestSeries } from "@/shared/lib/achievements/useContestSeries";
 import { formatContestSeriesTitle } from "@/shared/lib/achievements/formatThreshold";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
-import UserAutocomplete from "@/shared/ui/UserAutocomplete/UserAutocomplete.vue";
+import { UserAutocomplete } from "@/entities/user";
 import { GameIcon } from "@/shared/ui/Icon";
 import dayjs from "dayjs";
 
@@ -89,47 +89,43 @@ async function grant() {
   }
 }
 
-// --- Grants list (загружается отдельно через per-user awards) ---
-// FE для admin-вьюхи: проще получить список «у кого есть награды в этой серии»
-// собирая в одном запросе все user-awards с фильтром по series — но такого
-// эндпоинта нет (вижуально admin-сценарий: выдал → видит выданное).
-// Использую следующий подход: храним локальный список выданных в этой
-// сессии (после grant), плюс при загрузке тянем «известных получателей» —
-// у нас seed-знание о SolohinLex/TestUser_1 и т.п., но fully general
-// решение — отдельный admin-endpoint. Открыт для дополнения.
+// --- Grants list (loaded separately through per-user awards) ---
+// For this admin view the natural query would be "who holds awards in
+// this series" — a single request over all user awards filtered by
+// series — but no such endpoint exists (the admin scenario is visual:
+// grant, then see what was granted).
 //
-// Реальная стратегия: показываем список наград, выданных за текущую
-// сессию + позволяем revoke любую по id. Полный список — задача
-// отдельного admin-endpoint `/v1/moderation/contest-series/{id}/awards`.
+// Actual strategy: show the awards granted during the current session
+// and allow revoking any of them by id. A complete list is the job of a
+// dedicated admin endpoint `/v1/moderation/contest-series/{id}/awards`.
 
 const grants = ref<UserAward[]>([]);
 const grantsLoaded = ref(false);
 
 async function loadGrants() {
-  // Простейший вариант: пройтись по всем пользователям с наградами было бы
-  // дорого. Пока используем in-memory accumulator: после успешного grant
-  // добавляем UserAward в список. Список «накапливается» в течение сессии.
-  // Долгосрочно нужен server-side endpoint, но scope-фикс — добавляем
-  // последний grant из api response, если он там есть.
+  // Walking every user with awards would be too expensive. For now an
+  // in-memory accumulator is used: after a successful grant the UserAward
+  // is appended to the list, which "accumulates" over the session. Long
+  // term this needs a server-side endpoint; as a scoped fix we append the
+  // last grant from the api response when it is present.
   grantsLoaded.value = true;
 }
 
 async function revoke(award: UserAward) {
   if (
-    !confirm(
-      `Отозвать награду «${award.type.title}» у ${grantUsernameOf(award)}?`,
-    )
+    !confirm(`Отозвать награду "${award.type.title}" у ${grantUsernameOf()}?`)
   ) {
     return;
   }
-  const username = grantUsernameOf(award);
+  const username = grantUsernameOf();
   await achievementApi.revokeUserAward(username, award.id);
   grants.value = grants.value.filter((a) => a.id !== award.id);
 }
 
-function grantUsernameOf(_a: UserAward): string {
-  // UserAward в публичной модели не несет username (только type+series+date).
-  // Для отзыва берем username из формы или из истории grant — храним рядом.
+function grantUsernameOf(): string {
+  // The public UserAward model carries no username (only type+series+
+  // date). For revocation the username comes from the form or the grant
+  // history — stored alongside.
   return "";
 }
 
@@ -152,8 +148,8 @@ onMounted(async () => {
     </header>
 
     <BlockTitle v-if="current">
-      {{ formatContestSeriesTitle(current.contestType, current.number) }}
-      · {{ current.year }}
+      {{ formatContestSeriesTitle(current.contestType, current.number) }},
+      {{ current.year }}
     </BlockTitle>
     <SecondaryText v-else>Серия не найдена</SecondaryText>
 
@@ -244,7 +240,6 @@ onMounted(async () => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Inputs"
 
 .series-detail

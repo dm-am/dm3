@@ -9,14 +9,14 @@ using Microsoft.AspNetCore.Mvc;
 namespace DM.Web.API.Features.Community.Achievements;
 
 /// <summary>
-/// Публичное чтение каталога достижений и пользовательских записей о
-/// получении. Lazy-eval engine стартует на каждый GET по пользователю:
-/// типы, пересекшие порог с момента предыдущего вызова, INSERT'ятся
-/// и сразу попадают в ответ.
+/// Public read of the achievement catalog and users' earned
+/// records. The lazy-eval engine runs on every per-user GET:
+/// types whose threshold was crossed since the previous call are INSERTed
+/// and immediately included in the response.
 /// </summary>
 /// <remarks>
-/// Редактирование каталога — в <c>v1/moderation/achievement-categories</c>
-/// и <c>v1/moderation/achievement-types</c> (admin only).
+/// Catalog editing lives in <c>v1/moderation/achievement-categories</c>
+/// and <c>v1/moderation/achievement-types</c> (admin only).
 /// </remarks>
 [ApiController]
 [Route("v1")]
@@ -34,9 +34,9 @@ public class AchievementController : ControllerBase
         _mapper = mapper;
     }
 
-    /// <summary>Список категорий достижений (цепочки одной метрики).</summary>
-    /// <remarks>Inactive скрыты. SortOrder и описание — SSOT для FE.</remarks>
-    /// <response code="200">Список категорий.</response>
+    /// <summary>List of achievement categories (single-metric chains).</summary>
+    /// <remarks>Inactive ones are hidden. SortOrder and description are the SSOT for the FE.</remarks>
+    /// <response code="200">List of categories.</response>
     [HttpGet("achievement-categories", Name = nameof(GetAchievementCategories))]
     [ProducesResponseType(typeof(ListEnvelope<AchievementCategory>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAchievementCategories()
@@ -46,8 +46,8 @@ public class AchievementController : ControllerBase
         return Ok(new ListEnvelope<AchievementCategory>(items, null));
     }
 
-    /// <summary>Список тиров достижений (только активные, с категорией-родителем).</summary>
-    /// <response code="200">Список тиров.</response>
+    /// <summary>List of achievement tiers (active only, with the parent category).</summary>
+    /// <response code="200">List of tiers.</response>
     [HttpGet("achievement-types", Name = nameof(GetAchievementTypes))]
     [ProducesResponseType(typeof(ListEnvelope<AchievementType>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAchievementTypes()
@@ -58,12 +58,12 @@ public class AchievementController : ControllerBase
     }
 
     /// <summary>
-    /// Достижения пользователя. Lazy-eval: за каждый запрос еще-не-полученные
-    /// типы проверяются на пересечение порога и автоматически выдаются.
+    /// A user's achievements. Lazy-eval: on every request, not-yet-earned
+    /// types are checked against their thresholds and granted automatically.
     /// </summary>
-    /// <param name="username">Имя пользователя.</param>
-    /// <response code="200">Список достижений (новые сверху).</response>
-    /// <response code="404">Пользователь не найден.</response>
+    /// <param name="username">Username.</param>
+    /// <response code="200">List of achievements (newest first).</response>
+    /// <response code="404">User not found.</response>
     [HttpGet("users/{username}/achievements", Name = nameof(GetUserAchievements))]
     [ProducesResponseType(typeof(ListEnvelope<UserAchievement>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]

@@ -1,35 +1,35 @@
 namespace DM.Domain.Core.Configuration;
 
 /// <summary>
-/// Конфигурация imgproxy — on-the-fly image transforms (resize + format
+/// imgproxy configuration — on-the-fly image transforms (resize + format
 /// negotiation AVIF/WebP/JPEG).
 ///
-/// Бэк хранит один source-файл в S3, генерирует подписанные imgproxy-URL'ы
-/// для thumbnail-вариантов при проекции в DTO. Никаких pre-generated
-/// thumbnails в storage.
+/// The backend stores a single source file in S3 and generates signed imgproxy URLs
+/// for thumbnail variants when projecting to DTOs. No pre-generated
+/// thumbnails in storage.
 /// </summary>
 public class ImageProxyConfiguration
 {
     /// <summary>
-    /// Публичный URL imgproxy (откуда фронт грузит трансформированные images).
-    /// В dev: http://localhost:8080. В prod: https://img.dm.com или подобное.
+    /// Public imgproxy URL (where the frontend loads transformed images from).
+    /// Dev: http://localhost:8080. Prod: https://img.dm.com or similar.
     /// </summary>
     public string Endpoint { get; set; } = string.Empty;
 
     /// <summary>
-    /// HMAC-SHA256 key (hex). Используется для подписи URL'ов чтобы
-    /// anyone не мог потребовать произвольный transform.
+    /// HMAC-SHA256 key (hex). Used to sign URLs so that
+    /// nobody can request an arbitrary transform.
     /// </summary>
     public string Key { get; set; } = string.Empty;
 
     /// <summary>
-    /// HMAC-SHA256 salt (hex). Конкатенируется с path перед HMAC.
+    /// HMAC-SHA256 salt (hex). Concatenated with the path before HMAC.
     /// </summary>
     public string Salt { get; set; } = string.Empty;
 
     /// <summary>
-    /// Префикс source-URL для imgproxy (где он берет исходник).
-    /// Для MinIO S3: <c>s3://dm-uploads/</c>. Для HTTPS-CDN: <c>https://cdn.example.com/</c>.
+    /// Source URL prefix for imgproxy (where it fetches the original).
+    /// For MinIO S3: <c>s3://dm-uploads/</c>. For an HTTPS CDN: <c>https://cdn.example.com/</c>.
     /// </summary>
     public string SourceUrlPrefix { get; set; } = string.Empty;
 }

@@ -36,7 +36,7 @@ public class ModeratedProfileNote
     /// <summary>
     /// Last modification date (UTC)
     /// </summary>
-    public DateTimeOffset? UpdatedUtc { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 }
 
 /// <summary>
@@ -88,5 +88,5 @@ public class UpdateModeratedProfileNoteEntity
     /// <summary>
     /// Update timestamp
     /// </summary>
-    public DateTimeOffset UpdatedUtc { get; set; }
+    public DateTimeOffset ModifiedUtc { get; set; }
 }

@@ -6,9 +6,9 @@ import type {
 } from "@/shared/api/models/achievements";
 
 /**
- * Singleton-кеш каталога наград + серий конкурсов: load() ленивая,
- * reload() для админских правок (после create/edit/deactivate).
- * Шарится между профильной секцией наград и админ-страницами.
+ * Singleton cache of the award catalog + contest series: load() is lazy,
+ * reload() is for admin edits (after create/edit/deactivate).
+ * Shared between the profile awards section and the admin pages.
  */
 const awardTypes: Ref<AwardType[] | null> = ref(null);
 const series: Ref<ContestSeries[] | null> = ref(null);

@@ -2,7 +2,12 @@ import { computed, type ComputedRef } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { LocationQuery } from "vue-router";
 import { usePaging, createFilterDispatcher } from "@/shared/lib/composables";
-import { dateToApiStart, dateToApiEnd } from "@/shared/lib/filters";
+import {
+  parseDateFromUrl,
+  dateToApiStart,
+  dateToApiEnd,
+  toQueryValue,
+} from "@/shared/lib/filters";
 import { UserRole } from "@/entities/user";
 import type {
   UsersFilterState,
@@ -10,14 +15,11 @@ import type {
   ActivityFilter,
   OnlineFilter,
   RoleFilter,
-  HonoraryFilter,
   ExperienceFilter,
 } from "./types";
 import {
   DEFAULT_FILTER_STATE,
   SORT_OPTIONS,
-  ACTIVITY_OPTIONS,
-  HONORARY_OPTIONS,
   EXPERIENCE_OPTIONS,
 } from "./types";
 
@@ -38,7 +40,6 @@ export interface UsersFilterComposable {
   setActivity: (activity: ActivityFilter) => void;
   setOnlineFilter: (onlineFilter: OnlineFilter) => void;
   setRole: (role: RoleFilter) => void;
-  setHonorary: (honorary: HonoraryFilter) => void;
   setExperience: (experience: ExperienceFilter) => void;
   setRatingRange: (min: number | null, max: number | null) => void;
   setGamesHostingRange: (min: number | null, max: number | null) => void;
@@ -59,7 +60,6 @@ type UsersFilterAction =
   | { type: "SET_ACTIVITY"; activity: ActivityFilter }
   | { type: "SET_ONLINE_FILTER"; onlineFilter: OnlineFilter }
   | { type: "SET_ROLE"; role: RoleFilter }
-  | { type: "SET_HONORARY"; honorary: HonoraryFilter }
   | { type: "SET_EXPERIENCE"; experience: ExperienceFilter }
   | { type: "SET_RATING_RANGE"; min: number | null; max: number | null }
   | { type: "SET_GAMES_HOSTING_RANGE"; min: number | null; max: number | null }
@@ -108,14 +108,6 @@ function reducer(
 
     case "SET_ROLE":
       newState.role = action.role;
-      // Reset honorary when changing role (only relevant for RegularUser)
-      if (action.role !== UserRole.RegularUser) {
-        newState.honorary = "all";
-      }
-      return newState;
-
-    case "SET_HONORARY":
-      newState.honorary = action.honorary;
       return newState;
 
     case "SET_EXPERIENCE":
@@ -181,9 +173,6 @@ const validSortByValues = new Set<string>(SORT_OPTIONS.map((o) => o.value));
 const validActivityValues = new Set<string>(["active", "inactive", "all"]);
 const validOnlineValues = new Set<string>(["all", "online"]);
 const validRoleValues = new Set<string>(["all", ...Object.values(UserRole)]);
-const validHonoraryValues = new Set<string>(
-  HONORARY_OPTIONS.map((o) => o.value),
-);
 const validExperienceValues = new Set<string>(
   EXPERIENCE_OPTIONS.map((o) => o.value),
 );
@@ -217,13 +206,6 @@ function parseQueryToState(query: LocationQuery): UsersFilterState {
     const role = String(query.role);
     if (validRoleValues.has(role)) {
       state.role = role as RoleFilter;
-    }
-  }
-
-  if (query.honorary) {
-    const honorary = String(query.honorary);
-    if (validHonoraryValues.has(honorary)) {
-      state.honorary = honorary as HonoraryFilter;
     }
   }
 
@@ -270,10 +252,10 @@ function parseQueryToState(query: LocationQuery): UsersFilterState {
     if (!isNaN(val)) state.blogsHostingMax = val;
   }
 
-  if (query.registeredFromUtc)
-    state.registeredFromUtc = String(query.registeredFromUtc);
-  if (query.registeredToUtc)
-    state.registeredToUtc = String(query.registeredToUtc);
+  state.registeredFromUtc = parseDateFromUrl(
+    toQueryValue(query.registeredFromUtc),
+  );
+  state.registeredToUtc = parseDateFromUrl(toQueryValue(query.registeredToUtc));
 
   const sortByRaw = query.sortBy as string;
   if (validSortByValues.has(sortByRaw)) state.sortBy = sortByRaw;
@@ -304,11 +286,6 @@ function buildQueryFromState(state: UsersFilterState): Record<string, string> {
   // Role
   if (state.role !== def.role) {
     query.role = state.role;
-  }
-
-  // Honorary (only if role is RegularUser and honorary is non-default)
-  if (state.role === UserRole.RegularUser && state.honorary !== def.honorary) {
-    query.honorary = state.honorary;
   }
 
   // Experience (if non-default)
@@ -410,14 +387,6 @@ export function useUsersFilter(): UsersFilterComposable {
     // Role
     if (state.role !== "all") {
       params.role = state.role as UserRole;
-
-      // Honorary sub-filter (only for RegularUser)
-      if (
-        state.role === UserRole.RegularUser &&
-        state.honorary === "honorary"
-      ) {
-        params.isHonorary = true;
-      }
     }
 
     // Experience filter (applies to all roles)
@@ -479,7 +448,6 @@ export function useUsersFilter(): UsersFilterComposable {
       state.activity !== def.activity ||
       state.onlineFilter !== def.onlineFilter ||
       state.role !== def.role ||
-      state.honorary !== def.honorary ||
       state.experience !== def.experience ||
       state.ratingMin !== def.ratingMin ||
       state.ratingMax !== def.ratingMax ||
@@ -505,8 +473,6 @@ export function useUsersFilter(): UsersFilterComposable {
   const setOnlineFilter = (onlineFilter: OnlineFilter) =>
     dispatch({ type: "SET_ONLINE_FILTER", onlineFilter });
   const setRole = (role: RoleFilter) => dispatch({ type: "SET_ROLE", role });
-  const setHonorary = (honorary: HonoraryFilter) =>
-    dispatch({ type: "SET_HONORARY", honorary });
   const setExperience = (experience: ExperienceFilter) =>
     dispatch({ type: "SET_EXPERIENCE", experience });
   const setRatingRange = (min: number | null, max: number | null) =>
@@ -532,7 +498,6 @@ export function useUsersFilter(): UsersFilterComposable {
     setActivity,
     setOnlineFilter,
     setRole,
-    setHonorary,
     setExperience,
     setRatingRange,
     setGamesHostingRange,

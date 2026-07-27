@@ -1,1 +1,1 @@
-export { default as CreateBlogPage } from "./CreateBlogPage.vue";
+export { default as CreateBlogForm } from "./CreateBlogForm.vue";

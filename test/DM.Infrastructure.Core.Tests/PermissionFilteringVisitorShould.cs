@@ -27,21 +27,23 @@ public class PermissionFilteringVisitorShould
     private static readonly Guid PostId = Guid.Parse("77777777-7777-7777-7777-777777777777");
 
     // ════════════════════════════════════════════════════════════════
-    // [mod] visibility — forum/comment/global chat surfaces only.
+    // [mod] visibility — public on read: renders for EVERYONE on the
+    // comment / global chat surfaces (write access is gated elsewhere,
+    // at save time by ModBlockSanitizer).
     // ════════════════════════════════════════════════════════════════
 
     [Theory]
-    [InlineData(BbSurface.ForumTopic)]
-    [InlineData(BbSurface.Comment)]
-    [InlineData(BbSurface.GlobalChatMessage)]
-    public void StripMod_ForRegularUser_InAllowedSurfaces(BbSurface surface)
+    [InlineData(BbSurface.Comment, UserRole.Guest)]
+    [InlineData(BbSurface.Comment, UserRole.RegularUser)]
+    [InlineData(BbSurface.GlobalChatMessage, UserRole.Guest)]
+    [InlineData(BbSurface.GlobalChatMessage, UserRole.RegularUser)]
+    public void RenderMod_ForEveryone_InAllowedSurfaces(BbSurface surface, UserRole role)
     {
-        var html = Render("[mod]secret[/mod]",
-            surface,
-            Viewer(UserRole.RegularUser));
+        // [mod] is public on read: even a guest sees the authored mod block.
+        var html = Render("[mod]secret[/mod]", surface, Viewer(role));
 
-        html.Should().NotContain("secret");
-        html.Should().NotContain("mod-block");
+        html.Should().Contain("mod-block");
+        html.Should().Contain("secret");
     }
 
     [Theory]
@@ -50,20 +52,22 @@ public class PermissionFilteringVisitorShould
     [InlineData(UserRole.Admin)]
     public void RenderMod_ForModeratorPlus_InForum(UserRole role)
     {
-        var html = Render("[mod]secret[/mod]", BbSurface.ForumTopic, Viewer(role));
+        var html = Render("[mod]secret[/mod]", BbSurface.Comment, Viewer(role));
 
         html.Should().Contain("mod-block");
         html.Should().Contain("secret");
     }
 
     [Fact]
-    public void StripMod_InPlainTextAudience()
+    public void RenderMod_InPlainTextAudience_KeepsInnerText()
     {
+        // [mod] is no longer privacy-sensitive: its inner text renders in
+        // plain text like any normal formatting tag (not stripped).
         var text = RenderText("before [mod]secret[/mod] after",
-            BbSurface.ForumTopic,
+            BbSurface.Comment,
             audience: RenderAudience.PlainText);
 
-        text.Should().NotContain("secret");
+        text.Should().Contain("secret");
         text.Should().Contain("before");
         text.Should().Contain("after");
     }
@@ -72,8 +76,8 @@ public class PermissionFilteringVisitorShould
     public void RenderMod_WithRoundTripAttributes_InAuthorEdit()
     {
         var author = Viewer(UserRole.Moderator, AuthorId);
-        var ctx = RenderContext.ForAuthorEdit(author, BbSurface.ForumTopic);
-        var html = RenderWithContext("[mod]secret[/mod]", BbSurface.ForumTopic, ctx);
+        var ctx = RenderContext.ForAuthorEdit(author, BbSurface.Comment);
+        var html = RenderWithContext("[mod]secret[/mod]", BbSurface.Comment, ctx);
 
         html.Should().Contain("data-bb-tag=\"mod\"");
         html.Should().Contain("secret");
@@ -204,7 +208,7 @@ public class PermissionFilteringVisitorShould
     [Fact]
     public void NonPrivacyContent_PassesThroughUnchanged_ForAnyViewer()
     {
-        var html = Render("[b]bold[/b] plain text", BbSurface.ForumTopic, Viewer(UserRole.Guest));
+        var html = Render("[b]bold[/b] plain text", BbSurface.Comment, Viewer(UserRole.Guest));
 
         html.Should().Contain("<strong>bold</strong>");
         html.Should().Contain("plain text");
@@ -216,7 +220,7 @@ public class PermissionFilteringVisitorShould
         var ctx = new RenderContext
         {
             Audience = RenderAudience.Display,
-            Surface = BbSurface.ForumTopic,
+            Surface = BbSurface.Comment,
             Viewer = Viewer(UserRole.RegularUser)
         };
         var plan = PermissionFilteringVisitor.Prepare("[b]bold[/b]", ctx);
@@ -224,20 +228,36 @@ public class PermissionFilteringVisitorShould
     }
 
     [Theory]
-    [InlineData("[mod]x[/mod]")]
     [InlineData("[private=\"A\"]x[/private]")]
     [InlineData("[private]x[/private]")]
-    [InlineData("before [mod]x[/mod] after")]
+    [InlineData("before [private]x[/private] after")]
     public void ContentWithPrivacyTags_IsDetected(string input)
     {
         var ctx = new RenderContext
         {
             Audience = RenderAudience.Display,
-            Surface = BbSurface.ForumTopic,
+            Surface = BbSurface.Comment,
             Viewer = Viewer(UserRole.RegularUser)
         };
         var plan = PermissionFilteringVisitor.Prepare(input, ctx);
         plan.HasPrivacyTags.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("[mod]x[/mod]")]
+    [InlineData("before [mod=foo]x[/mod] after")]
+    public void ContentWithOnlyModTag_IsNotPrivacySensitive(string input)
+    {
+        // [mod] renders identically for every viewer now, so it must NOT force
+        // a per-user cache bucket.
+        var ctx = new RenderContext
+        {
+            Audience = RenderAudience.Display,
+            Surface = BbSurface.Comment,
+            Viewer = Viewer(UserRole.RegularUser)
+        };
+        var plan = PermissionFilteringVisitor.Prepare(input, ctx);
+        plan.HasPrivacyTags.Should().BeFalse();
     }
 
     // ════════════════════════════════════════════════════════════════

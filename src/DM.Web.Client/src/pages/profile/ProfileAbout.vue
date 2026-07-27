@@ -3,6 +3,7 @@ import { ref, watch, nextTick, onMounted, computed } from "vue";
 import type { User } from "@/shared/api/models/community";
 import { SecondaryText } from "@/shared/ui/Layout";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
+import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 
 const props = defineProps<{
   user: User;
@@ -15,9 +16,8 @@ const emit = defineEmits<{
 
 // API contract: `user.info` is a string serialised by the server's BbConverter.
 // In Display audience (default) it's pre-rendered HTML; in AuthorEdit audience
-// (used by `getUserForUpdate`) it's the raw BBCode source. The frontend never
-// renders BBCode itself — it just hands display HTML to v-html and edit source
-// to the textarea.
+// it's the raw BBCode source. The frontend never renders BBCode itself — it
+// just hands display HTML to v-html and edit source to the textarea.
 const infoText = computed<string>(() => {
   const raw = props.user.info as unknown;
   if (typeof raw === "string") return raw;
@@ -42,18 +42,12 @@ watch(
 <template>
   <section class="profile-about">
     <template v-if="isEditMode">
-      <textarea
-        :value="infoText"
-        class="about-textarea"
+      <BBCodeEditor
+        :model-value="infoText"
+        context="info"
         placeholder="Расскажите о себе (поддерживается BBCode)…"
-        rows="8"
-        @input="
-          emit(
-            'updateField',
-            'info',
-            ($event.target as HTMLTextAreaElement).value,
-          )
-        "
+        :min-height="160"
+        @update:model-value="emit('updateField', 'info', $event)"
       />
     </template>
 
@@ -72,15 +66,15 @@ watch(
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
 @import "src/assets/styles/BbcodeContent"
 
 .profile-about
   // Flat — no boxes, no rounded corners. Spacing comes from BlockTitle margins.
 
+// Line-height and BBCode typography come from the global .bbcode-content
+// (SSOT in _BbcodeContent.sass) — no local overrides.
 .about-content
   color: $text
-  line-height: 1.6
 
 // Empty-section placeholder: muted gray, distinct from the user's actual
 // content. (Stat values like "не указан" stay in default $text color
@@ -88,12 +82,4 @@ watch(
 // the de-emphasized exception.)
 .about-empty
   color: $text-muted
-
-.about-textarea
-  width: 100%
-  padding: $small
-  font-family: inherit
-  font-size: inherit
-  resize: vertical
-  min-height: 200px
 </style>

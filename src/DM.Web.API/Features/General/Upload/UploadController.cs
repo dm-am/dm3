@@ -13,8 +13,8 @@ namespace DM.Web.API.Features.General.Upload;
 /// File upload management.
 /// </summary>
 /// <remarks>
-/// Direct upload flow only. Клиент шлет multipart/form-data на POST /v1/uploads,
-/// сервер валидирует, процессит и атомарно кладет в S3.
+/// Direct upload flow only. The client sends multipart/form-data to POST /v1/uploads,
+/// the server validates, processes and atomically puts to S3.
 /// </remarks>
 [ApiController]
 [Route("v1/uploads")]
@@ -36,16 +36,16 @@ public class UploadController : ControllerBase
     /// <remarks>
     /// By default returns current user's uploads.
     ///
-    /// Admin options:
+    /// Privileged options (moderator and above):
     /// - **scope=all**: Get all uploads across all users
     /// - **username={username}**: Get uploads by specific user
     /// </remarks>
     /// <param name="query">Query parameters for filtering and pagination</param>
-    /// <param name="scope">Scope filter (use "all" for admin to see all uploads)</param>
-    /// <param name="username">Filter by username (admin only)</param>
+    /// <param name="scope">Scope filter (use "all" for moderator+ to see all uploads)</param>
+    /// <param name="username">Filter by username (moderator and above)</param>
     /// <response code="200">List of uploads</response>
     /// <response code="401">User not authenticated</response>
-    /// <response code="403">Admin access required for scope=all or username filter</response>
+    /// <response code="403">Moderator+ required for scope=all and the username filter</response>
     [HttpGet(Name = nameof(GetUploads))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(ListEnvelope<Shared.Dto.Upload>), StatusCodes.Status200OK)]
@@ -64,10 +64,15 @@ public class UploadController : ControllerBase
     /// <summary>
     /// Get upload by ID
     /// </summary>
+    /// <remarks>
+    /// The owner can view their own upload; viewing another user's upload
+    /// requires the Moderator role or higher (aligned with the list and
+    /// delete endpoints).
+    /// </remarks>
     /// <param name="id">Upload identifier</param>
     /// <response code="200">Upload details</response>
     /// <response code="401">User not authenticated</response>
-    /// <response code="403">Not allowed to view this upload</response>
+    /// <response code="403">Not the owner and not a moderator+</response>
     /// <response code="404">Upload not found</response>
     [HttpGet("{id:guid}", Name = nameof(GetUpload))]
     [AuthenticationRequired]
@@ -82,7 +87,7 @@ public class UploadController : ControllerBase
     }
 
     /// <summary>
-    /// Delete upload (soft-delete; S3 cleanup сделает фоновый GC)
+    /// Delete upload (soft-delete; S3 cleanup is done by the background GC)
     /// </summary>
     /// <param name="id">Upload identifier</param>
     /// <response code="204">Upload deleted</response>
@@ -105,11 +110,11 @@ public class UploadController : ControllerBase
     /// Upload file with server-side processing
     /// </summary>
     /// <remarks>
-    /// Multipart/form-data upload. Для изображений (UserAvatar, CharacterAvatar):
-    /// magic-byte валидация, EXIF/IPTC/XMP strip, генерация WebP thumbnails
-    /// (medium 400×400, small 100×100), атомарный batch S3 PUT.
+    /// Multipart/form-data upload. For images (UserAvatar, CharacterAvatar):
+    /// magic-byte validation, EXIF/IPTC/XMP strip, WebP thumbnail generation
+    /// (medium 400×400, small 100×100), atomic batch S3 PUT.
     ///
-    /// Допустимые форматы: JPEG, PNG, WebP. Максимум 10 МБ.
+    /// Allowed formats: JPEG, PNG, WebP. Maximum 10 MB.
     /// </remarks>
     /// <param name="file">File (multipart/form-data)</param>
     /// <param name="type">Upload type/purpose</param>

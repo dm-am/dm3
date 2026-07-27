@@ -29,14 +29,14 @@ internal class PersonalMappingProfile : Profile
             .ForMember(d => d.SubjectUserId, o => o.MapFrom(s => s.SubjectUserId))
             .ForMember(d => d.Text, o => o.MapFrom(s => s.Text))
             .ForMember(d => d.CreatedUtc, o => o.MapFrom(s => s.CreatedUtc))
-            .ForMember(d => d.UpdatedUtc, o => o.MapFrom(s => s.UpdatedUtc));
+            .ForMember(d => d.ModifiedUtc, o => o.MapFrom(s => s.ModifiedUtc));
 
         // Notification -> RealtimeNotification
         CreateMap<Notification, RealtimeNotification>()
             .ForMember(d => d.RecipientIds, s => s.MapFrom(n => n.UsersInterested));
 
-        // CreateNotificationEntity -> RealtimeNotification — путь для SignalR
-        // push'а сразу после CreateAsync, минуя повторный DB-fetch.
+        // CreateNotificationEntity -> RealtimeNotification — the path for a SignalR
+        // push right after CreateAsync, bypassing a second DB fetch.
         CreateMap<CreateNotificationEntity, RealtimeNotification>()
             .ForMember(d => d.RecipientIds, s => s.MapFrom(n => n.UsersInterested));
     }

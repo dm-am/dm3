@@ -5,9 +5,6 @@ import LeadText from "@/shared/ui/Layout/LeadText.vue";
 
 <template>
   <page-title v-once>Сообщество</page-title>
-  <LeadText v-once
-    >Знакомьтесь с игроками и мастерами DM.AM: ищите по имени, рейтингу или
-    активности</LeadText
-  >
+  <LeadText v-once>Найдите старых знакомых или новых соигроков</LeadText>
   <UsersDataTable />
 </template>

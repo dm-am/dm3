@@ -356,7 +356,6 @@ test.describe("Games List Page", () => {
       // Select first tag in group
       await page.waitForSelector(".dropdown-item");
       const firstTag = page.locator(".dropdown-item").first();
-      const tagText = await firstTag.textContent();
       await firstTag.click();
 
       // URL should have requiredTags
@@ -450,7 +449,6 @@ test.describe("Games List Page", () => {
       // Select first owner suggestion
       const firstOwner = page.locator(".dropdown-item").first();
       if (await firstOwner.isVisible()) {
-        const ownerName = await firstOwner.locator(".item-label").textContent();
         await firstOwner.click();
 
         // URL should have ownerUsernames
@@ -656,9 +654,8 @@ test.describe("Games List Page", () => {
       // Wait for tags to load
       await page.waitForTimeout(500);
 
-      // If tag exists, bubble should appear
-      const tagBubble = page.locator(".bubble").filter({ hasText: "Тег:" });
-      // May or may not be visible depending on whether tag ID 1 exists
+      // If tag exists, a "Тег:" bubble should appear - may or may not be
+      // visible depending on whether tag ID 1 exists
     });
   });
 

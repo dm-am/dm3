@@ -24,7 +24,8 @@ export function useScrollToElement(itemsLoaded: Ref<boolean>) {
       setTimeout(() => element.classList.remove("highlight-unread"), 2000);
 
       // Remove scrollTo from URL to prevent re-scrolling on navigation
-      const { scrollTo, ...restQuery } = route.query;
+      const restQuery = { ...route.query };
+      delete restQuery.scrollTo;
       router.replace({ ...route, query: restQuery });
     }
   }

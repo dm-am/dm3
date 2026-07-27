@@ -5,6 +5,11 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes;
 /// </summary>
 public class BbCodeAttributeConstraints : AttributeConstraints
 {
+    /// <summary>
+    /// Maximum text length (no cap if null)
+    /// </summary>
+    public int? MaxLength { get; set; }
+
     /// <inheritdoc />
     public override string GetDefaultValue() => string.Empty;
 }

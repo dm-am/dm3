@@ -11,16 +11,16 @@ export interface PollsFilterState {
   search: string;
 
   /** Filter by minimum start date (ISO string, date only) */
-  startsFrom: string;
+  startsFromUtc: string;
 
   /** Filter by maximum start date (ISO string, date only) */
-  startsTo: string;
+  startsToUtc: string;
 
   /** Filter by minimum end date (ISO string, date only) */
-  endsFrom: string;
+  endsFromUtc: string;
 
   /** Filter by maximum end date (ISO string, date only) */
-  endsTo: string;
+  endsToUtc: string;
 
   /** Poll type filter: true = anonymous, false = public, "" = all */
   pollType: "anonymous" | "public" | "";
@@ -38,10 +38,10 @@ export interface PollsFilterState {
 export const DEFAULT_FILTER_STATE: PollsFilterState = {
   status: "",
   search: "",
-  startsFrom: "",
-  startsTo: "",
-  endsFrom: "",
-  endsTo: "",
+  startsFromUtc: "",
+  startsToUtc: "",
+  endsFromUtc: "",
+  endsToUtc: "",
   pollType: "",
   sortBy: "status",
   sortOrder: "asc",
@@ -73,7 +73,7 @@ export const SORT_OPTIONS = [
   {
     value: "status" as const,
     label: "Статус",
-    hint: "Сначала активные, потом остальные",
+    hint: "Сначала запланированные, затем активные и завершенные",
     defaultDirection: "asc" as const,
   },
   {

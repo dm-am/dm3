@@ -10,6 +10,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Comments;
 using DM.Domain.Game.Features.Games;
+using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using CommentDal = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
@@ -84,7 +85,7 @@ internal class GameCommentRepository : IGameCommentRepository
 
         if (commentsQuery.CreatedToUtc.HasValue)
         {
-            query = query.Where(c => c.CreatedUtc <= commentsQuery.CreatedToUtc.Value);
+            query = query.WhereAtOrBefore(c => c.CreatedUtc, commentsQuery.CreatedToUtc.Value);
         }
 
         // Search by text content

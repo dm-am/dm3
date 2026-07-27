@@ -1,14 +1,12 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { storeToRefs } from "pinia";
 import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
-import Poll from "@/widgets/sidebar/Poll.vue";
-import { EmptyState } from "@/shared/ui/EmptyState";
+import { PollCard } from "@/widgets/sidebar";
+import { ErrorState } from "@/shared/ui/ErrorState";
 import { usePollsStore } from "@/entities/poll";
-import { PollsFilter, usePollsFilter } from "@/features/poll-filter";
-import { CreatePollForm } from "@/features/create-poll";
+import { usePollsFilter } from "@/features/poll-filter";
 import { usePaging } from "@/shared/lib/composables";
-import LeadText from "@/shared/ui/Layout/LeadText.vue";
 
 const pollsStore = usePollsStore();
 const { polls, pollsLoading, pollsError } = storeToRefs(pollsStore);
@@ -20,34 +18,44 @@ const skeletonCount = computed(
 );
 
 // Two-state empty text
-const { filterState, hasActiveFilters } = usePollsFilter();
+const { filterState, searchParams, hasActiveFilters } = usePollsFilter();
 const emptyTitle = computed(() =>
   hasActiveFilters.value
     ? "Опросов по заданным фильтрам не найдено"
     : "Опросов пока нет",
 );
-const emptyHint = computed(() =>
-  hasActiveFilters.value ? "Попробуйте изменить параметры поиска" : undefined,
-);
+
+// Out-of-range page: paging exists, current page has no resources, but
+// earlier pages do (i.e. this isn't just an empty result set).
+const currentPageOutOfRange = computed(() => {
+  const list = polls.value;
+  if (!list || !list.paging) return false;
+  return list.resources.length === 0 && list.paging.number > 1;
+});
+
+function retry() {
+  pollsStore.fetchPolls(searchParams.value);
+}
+
+// Paging scrolls the polls block (top separator + grid) back into view
+// instead of the page top. The loading and loaded branches render
+// different `.polls-list` wrappers — mutually exclusive, so one ref
+// always points at the rendered one.
+const listRef = ref<HTMLElement | null>(null);
+function pagingAnchor(): HTMLElement | null {
+  return listRef.value;
+}
 </script>
 
 <template>
-  <page-title>Опросы</page-title>
-  <LeadText>Запланированные, текущие и завершенные опросы сообщества</LeadText>
-
-  <!-- Create poll form (moderators only) -->
-  <CreatePollForm />
-
-  <!-- Filter -->
-  <PollsFilter />
-
   <!-- Loading state: skeleton grid; paging stays visible when stale data is present -->
-  <div v-if="pollsLoading" class="polls-list" aria-busy="true">
+  <div v-if="pollsLoading" ref="listRef" class="polls-list" aria-busy="true">
     <PagingWithSeparators
       v-if="polls?.paging"
       :paging="polls.paging"
       :to="{ name: 'polls' }"
       :use-query="true"
+      :scroll-anchor="pagingAnchor"
     />
 
     <div class="polls-grid" aria-hidden="true">
@@ -68,34 +76,42 @@ const emptyHint = computed(() =>
       :paging="polls.paging"
       :to="{ name: 'polls' }"
       :use-query="true"
+      :scroll-anchor="pagingAnchor"
     />
   </div>
 
   <!-- Error state -->
-  <div v-else-if="pollsError" class="error-message">
-    {{ pollsError }}
+  <ErrorState v-else-if="pollsError" :message="pollsError" :retry="retry" />
+
+  <!-- Out-of-range page: paging exists but this page has no resources -->
+  <div v-else-if="currentPageOutOfRange" class="empty-state">
+    <secondary-text>
+      На этой странице опросов нет —
+      <router-link :to="{ name: 'polls' }"
+        >вернуться на первую страницу</router-link
+      >
+    </secondary-text>
   </div>
 
   <!-- Empty state -->
-  <EmptyState
-    v-else-if="polls && polls.resources.length === 0"
-    :title="emptyTitle"
-    :hint="emptyHint"
-  />
+  <div v-else-if="polls && polls.resources.length === 0" class="empty-state">
+    <secondary-text>{{ emptyTitle }}</secondary-text>
+  </div>
 
   <!-- Polls list -->
-  <div v-else-if="polls" class="polls-list">
+  <div v-else-if="polls" ref="listRef" class="polls-list">
     <!-- Top paging -->
     <PagingWithSeparators
       v-if="polls.paging"
       :paging="polls.paging"
       :to="{ name: 'polls' }"
       :use-query="true"
+      :scroll-anchor="pagingAnchor"
     />
 
     <div class="polls-grid">
       <div v-for="poll in polls.resources" :key="poll.id" class="poll-card">
-        <Poll
+        <PollCard
           :poll="poll"
           :controls="true"
           :search-query="filterState.search"
@@ -109,19 +125,20 @@ const emptyHint = computed(() =>
       :paging="polls.paging"
       :to="{ name: 'polls' }"
       :use-query="true"
+      :scroll-anchor="pagingAnchor"
     />
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Skeleton"
 
 .polls-list
   display: flex
   flex-direction: column
-  gap: $tiny
+  // Paging blocks sit $medium from the poll grid — same rhythm as between
+  // the poll cards themselves (.polls-grid gap)
+  gap: $medium
   margin-top: $medium
 
 .polls-grid
@@ -129,20 +146,25 @@ const emptyHint = computed(() =>
   grid-template-columns: repeat(3, 1fr)
   gap: $medium
 
-  @media (max-width: 1000px)
+  @media (max-width: $bp-shell)
     grid-template-columns: repeat(2, 1fr)
 
+  // Not migrated to $bp-mobile — out of scope for this pass (see
+  // UI_STANDARDS.md "Брейкпоинты": only the shell + drawer use the token
+  // scale so far, the rest is a future consolidation)
   @media (max-width: 600px)
     grid-template-columns: 1fr
 
 .poll-card
   padding: $medium
-  border: 1px solid $border
-  border-radius: $border-radius
+  border: 1px dashed $border
   background-color: $bg-element
 
   :deep(.poll)
     margin: 0
+
+.empty-state
+  margin-top: $medium
 
 // Skeleton card mirrors the poll card content: title, status line,
 // then options (label + progress bar). Uses the shared shimmer mixin.
@@ -173,11 +195,4 @@ const emptyHint = computed(() =>
 .skeleton-option-bar
   width: 100%
   height: 16px
-
-.error-message
-  padding: $medium
-  color: $text-on-red
-  background-color: $bg-highlight-red
-  border-radius: $border-radius
-  margin-bottom: $medium
 </style>

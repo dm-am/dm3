@@ -73,6 +73,32 @@ public interface IGameService
     /// <param name="updateGame">Update game model</param>
     Task<GameDetails> UpdateAsync(UpdateGame updateGame);
 
+    /// <summary>
+    /// Apply a game status transition (start / freeze / finish / close / reopen).
+    /// Validates the transition against the current status and authorizes on the
+    /// game lead bucket (master + assistant). Kept separate from the generic
+    /// settings update so ClosedReason and status timestamps are only ever
+    /// changed through the state machine.
+    /// </summary>
+    /// <param name="gameId">Game identifier</param>
+    /// <param name="transition">Requested transition</param>
+    Task<GameDetails> ChangeStatusAsync(Guid gameId, GameStatusTransition transition);
+
+    /// <summary>
+    /// Apply a premoderation transition (send to / remove from premoderation).
+    /// Gated Mentor+. The public id is resolved via the repository (ungated) so
+    /// a premoderation-pending game stays reachable for the non-curator mentor.
+    /// </summary>
+    /// <param name="id">Game public id (5 letters) or GUID</param>
+    /// <param name="transition">Requested transition</param>
+    Task<GameDetails> ChangePremoderationAsync(string id, GamePremoderationTransition transition);
+
+    /// <summary>
+    /// Reset the recruitment start date (nulls RecruitmentStartedUtc). Admin only.
+    /// </summary>
+    /// <param name="gameId">Game identifier</param>
+    Task<GameDetails> ResetRecruitmentDateAsync(Guid gameId);
+
     #endregion
 
     #region Delete

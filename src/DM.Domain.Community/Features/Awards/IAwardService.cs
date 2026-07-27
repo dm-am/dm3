@@ -6,41 +6,41 @@ using System.Threading.Tasks;
 namespace DM.Domain.Community.Features.Awards;
 
 /// <summary>
-/// Сервис каталога наград и выдач. RBAC проверяется на уровне
-/// контроллеров (RequireRole атрибут) — сервис трастит вызывающий код.
+/// Service for the award catalog and grants. RBAC is checked at the
+/// controller level (RequireRole attribute) — the service trusts the caller.
 /// </summary>
 public interface IAwardService
 {
-    // ---- Каталог типов наград (timeless) ----
+    // ---- Award type catalog (timeless) ----
 
-    /// <summary>Все типы наград. Inactive по умолчанию скрыты.</summary>
+    /// <summary>All award types. Inactive ones are hidden by default.</summary>
     Task<IReadOnlyCollection<AwardType>> GetTypesAsync(bool includeInactive = false, CancellationToken ct = default);
-    /// <summary>Создать новый тип награды. Валидирует уникальность Code и валидность IconName.</summary>
+    /// <summary>Create a new award type. Validates Code uniqueness and IconName validity.</summary>
     Task<AwardType> CreateTypeAsync(CreateAwardType create, CancellationToken ct = default);
-    /// <summary>Частично обновить тип награды.</summary>
+    /// <summary>Partially update an award type.</summary>
     Task<AwardType> UpdateTypeAsync(UpdateAwardType update, CancellationToken ct = default);
-    /// <summary>Деактивировать тип (IsActive=false). Не удаляет уже выданные награды.</summary>
+    /// <summary>Deactivate a type (IsActive=false). Does not delete already granted awards.</summary>
     Task DeactivateTypeAsync(Guid id, CancellationToken ct = default);
 
-    // ---- Серии конкурсов (ContestSeries) ----
+    // ---- Contest series (ContestSeries) ----
 
-    /// <summary>Все серии конкурсов. Inactive по умолчанию скрыты.</summary>
+    /// <summary>All contest series. Inactive ones are hidden by default.</summary>
     Task<IReadOnlyCollection<ContestSeries>> GetSeriesAsync(bool includeInactive = false, CancellationToken ct = default);
-    /// <summary>Серия по ID, либо null.</summary>
+    /// <summary>Series by ID, or null.</summary>
     Task<ContestSeries?> GetSeriesAsync(Guid id, CancellationToken ct = default);
-    /// <summary>Создать новую серию.</summary>
+    /// <summary>Create a new series.</summary>
     Task<ContestSeries> CreateSeriesAsync(CreateContestSeries create, CancellationToken ct = default);
-    /// <summary>Частично обновить серию.</summary>
+    /// <summary>Partially update a series.</summary>
     Task<ContestSeries> UpdateSeriesAsync(UpdateContestSeries update, CancellationToken ct = default);
-    /// <summary>Деактивировать серию — скрывает ее из dropdown при выдаче.</summary>
+    /// <summary>Deactivate a series — hides it from the grant dropdown.</summary>
     Task DeactivateSeriesAsync(Guid id, CancellationToken ct = default);
 
-    // ---- Выдачи ----
+    // ---- Grants ----
 
-    /// <summary>Список наград пользователя.</summary>
+    /// <summary>List of a user's awards.</summary>
     Task<IReadOnlyCollection<UserAward>> GetUserAwardsAsync(string username, CancellationToken ct = default);
-    /// <summary>Выдать награду пользователю. ContestSeriesId опционален (null = внеконкурсная). WorkUrl — ссылка на топик с работой (опц).</summary>
+    /// <summary>Grant an award to a user. ContestSeriesId is optional (null = outside a contest). WorkUrl is a link to the topic with the work (optional).</summary>
     Task<UserAward> GrantAsync(string username, Guid awardTypeId, Guid? contestSeriesId, string? workUrl, CancellationToken ct = default);
-    /// <summary>Отозвать ранее выданную награду (soft-delete).</summary>
+    /// <summary>Revoke a previously granted award (soft-delete).</summary>
     Task RevokeAsync(Guid awardId, CancellationToken ct = default);
 }

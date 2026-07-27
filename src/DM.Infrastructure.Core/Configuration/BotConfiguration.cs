@@ -37,13 +37,6 @@ public class BotConfiguration
     public long? ModerationTelegramChatId { get; set; }
 
     /// <summary>
-    /// API key for bot endpoints (optional).
-    /// If set, bot endpoints will require X-Bot-Api-Key header with this value.
-    /// If not set, bot endpoints are unprotected (dev mode).
-    /// </summary>
-    public string? BotApiKey { get; set; }
-
-    /// <summary>
     /// Secret for Telegram webhook URL validation.
     /// The webhook URL will be /v1/webhooks/telegram/{secret}.
     /// If not set, any secret is accepted (dev mode).

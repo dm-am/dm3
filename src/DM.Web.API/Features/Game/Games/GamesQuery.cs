@@ -51,49 +51,59 @@ public class GamesQuery : PagingQuery
     public IReadOnlyCollection<string>? AuthorUsernames { get; set; }
 
     /// <summary>
-    /// Filter by player username - user has active character (case-insensitive)
+    /// Filter by player username (case-insensitive); the matched participation
+    /// kind is controlled by PlayerParticipation (active characters by default)
     /// </summary>
     public string? PlayerUsername { get; set; }
 
     /// <summary>
+    /// Participation scope for the PlayerUsername filter. Active (default) -
+    /// only games where the user has an active character. Any - games where
+    /// the user has any non-NPC character except declined applications
+    /// (including retired ones and applications under review).
+    /// Ignored if PlayerUsername is not set.
+    /// </summary>
+    public PlayerParticipation? PlayerParticipation { get; set; }
+
+    /// <summary>
     /// Created date range start (inclusive)
     /// </summary>
-    public DateTimeOffset? CreatedFrom { get; set; }
+    public DateTimeOffset? CreatedFromUtc { get; set; }
 
     /// <summary>
     /// Created date range end (inclusive)
     /// </summary>
-    public DateTimeOffset? CreatedTo { get; set; }
+    public DateTimeOffset? CreatedToUtc { get; set; }
 
     /// <summary>
     /// Activated date range start (inclusive). Games without ActivatedUtc are excluded.
     /// </summary>
-    public DateTimeOffset? ActivatedFrom { get; set; }
+    public DateTimeOffset? ActivatedFromUtc { get; set; }
 
     /// <summary>
     /// Activated date range end (inclusive). Games without ActivatedUtc are excluded.
     /// </summary>
-    public DateTimeOffset? ActivatedTo { get; set; }
+    public DateTimeOffset? ActivatedToUtc { get; set; }
 
     /// <summary>
     /// Closed date range start (inclusive). Games without ClosedUtc are excluded.
     /// </summary>
-    public DateTimeOffset? ClosedFrom { get; set; }
+    public DateTimeOffset? ClosedFromUtc { get; set; }
 
     /// <summary>
     /// Closed date range end (inclusive). Games without ClosedUtc are excluded.
     /// </summary>
-    public DateTimeOffset? ClosedTo { get; set; }
+    public DateTimeOffset? ClosedToUtc { get; set; }
 
     /// <summary>
     /// Recruitment started date range start (inclusive). Games without RecruitmentStartedUtc are excluded.
     /// </summary>
-    public DateTimeOffset? RecruitmentStartedFrom { get; set; }
+    public DateTimeOffset? RecruitmentStartedFromUtc { get; set; }
 
     /// <summary>
     /// Recruitment started date range end (inclusive). Games without RecruitmentStartedUtc are excluded.
     /// </summary>
-    public DateTimeOffset? RecruitmentStartedTo { get; set; }
+    public DateTimeOffset? RecruitmentStartedToUtc { get; set; }
 
     /// <summary>
     /// Sort field: created, activated, recruitmentstarted, title, popularity, status, availableslots, closed
@@ -116,4 +126,10 @@ public class GamesQuery : PagingQuery
     /// "ref" returns lightweight GameRef with counts only (for sidebars/menus).
     /// </summary>
     public string? Projection { get; set; }
+
+    /// <summary>
+    /// Premoderation statuses to show (OR between selected). Moderation page
+    /// filter, requires Mentor role or higher - other callers get 403.
+    /// </summary>
+    public IReadOnlyCollection<PremoderationStatus>? PremoderationStatuses { get; set; }
 }

@@ -167,7 +167,7 @@ public class ModNote
     /// <summary>
     /// Last modification timestamp (UTC)
     /// </summary>
-    public DateTimeOffset? UpdatedUtc { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
     /// Whether the current caller can edit this note
@@ -312,7 +312,7 @@ public class ModeratedProfileNote
     /// <summary>
     /// Last modification timestamp (UTC)
     /// </summary>
-    public DateTimeOffset? UpdatedUtc { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 }
 
 /// <summary>
@@ -511,7 +511,7 @@ public class ModNoteDto
     /// <summary>
     /// Last modification timestamp (UTC)
     /// </summary>
-    public DateTimeOffset? UpdatedUtc { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
     /// Whether the current caller can edit this note

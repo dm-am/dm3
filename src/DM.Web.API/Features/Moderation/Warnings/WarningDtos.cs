@@ -35,7 +35,7 @@ public class Warning
     public string? EntityType { get; set; }
 
     /// <summary>
-    /// Warning points (1-3)
+    /// Warning points (0-6, 0 = verbal warning without points)
     /// </summary>
     public int Points { get; set; }
 
@@ -78,7 +78,7 @@ public class CreateWarningRequest
     public string? EntityType { get; set; }
 
     /// <summary>
-    /// Warning points (1-3)
+    /// Warning points (0-6, 0 = verbal warning without points)
     /// </summary>
     /// <example>1</example>
     public int Points { get; set; } = 1;
@@ -91,7 +91,32 @@ public class CreateWarningRequest
 }
 
 /// <summary>
-/// User warnings summary
+/// Warning as visible to everyone on the public profile
+/// </summary>
+/// <remarks>
+/// Aggregate facts only — reason, causation entity and moderator identity
+/// stay in the moderation area (GET /v1/moderation/warnings).
+/// </remarks>
+public class PublicWarning
+{
+    /// <summary>
+    /// Warning points (0-6, 0 = verbal warning without points)
+    /// </summary>
+    public int Points { get; set; }
+
+    /// <summary>
+    /// Creation timestamp (UTC)
+    /// </summary>
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    /// <summary>
+    /// Whether the warning is still active
+    /// </summary>
+    public bool IsActive { get; set; }
+}
+
+/// <summary>
+/// User warnings summary (public view)
 /// </summary>
 public class UserWarningsInfo
 {
@@ -111,7 +136,7 @@ public class UserWarningsInfo
     public int ActiveCount { get; set; }
 
     /// <summary>
-    /// List of warnings
+    /// List of warnings (trimmed public view)
     /// </summary>
-    public IEnumerable<Warning> Warnings { get; set; } = Array.Empty<Warning>();
+    public IEnumerable<PublicWarning> Warnings { get; set; } = Array.Empty<PublicWarning>();
 }

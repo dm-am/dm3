@@ -26,13 +26,6 @@ export type OnlineFilter = "all" | "online";
 export type RoleFilter = "all" | UserRole;
 
 /**
- * Honorary sub-filter for RegularUser only
- * - all: all regular users
- * - honorary: only honorary users (former staff)
- */
-export type HonoraryFilter = "all" | "honorary";
-
-/**
  * Experience filter (applies to all roles)
  * - all: all users
  * - newbie: only newbies (< 100 posts)
@@ -55,9 +48,6 @@ export interface UsersFilterState {
 
   /** Role filter (single selection) */
   role: RoleFilter;
-
-  /** Honorary sub-filter (only for RegularUser role) */
-  honorary: HonoraryFilter;
 
   /** Experience filter (applies to all roles) */
   experience: ExperienceFilter;
@@ -107,7 +97,6 @@ export const DEFAULT_FILTER_STATE: UsersFilterState = {
   activity: "all",
   onlineFilter: "all",
   role: "all",
-  honorary: "all",
   experience: "all",
   ratingMin: null,
   ratingMax: null,
@@ -155,7 +144,6 @@ export const ROLE_OPTIONS = [
     value: UserRole.RegularUser,
     label: "Пользователь",
     hint: "Обычные пользователи",
-    hasSubOptions: true,
   },
   {
     value: UserRole.Mentor,
@@ -172,18 +160,6 @@ export const ROLE_OPTIONS = [
     value: UserRole.Admin,
     label: "Администратор",
     hint: "Администраторы сайта",
-  },
-] as const;
-
-/**
- * Honorary sub-options for RegularUser
- */
-export const HONORARY_OPTIONS = [
-  { value: "all" as const, label: "Все", hint: "Все обычные пользователи" },
-  {
-    value: "honorary" as const,
-    label: "Почетные",
-    hint: "Бывшие члены команды сайта",
   },
 ] as const;
 

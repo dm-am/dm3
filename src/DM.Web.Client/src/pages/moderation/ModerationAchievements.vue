@@ -1,11 +1,12 @@
 <script setup lang="ts">
 /**
- * ModerationAchievements — каталог достижений: 13 категорий + 52 тира.
- * Категории — PATCH (Title/Description/IconName/SortOrder/IsActive),
- * тиры — POST/PATCH/DELETE. Metric у категории immutable (привязка
- * к серверному AchievementMetricResolver).
+ * ModerationAchievements — the achievement catalog: 13 categories + 52
+ * tiers. Categories support PATCH (Title/Description/IconName/SortOrder/
+ * IsActive), tiers support POST/PATCH/DELETE. A category's Metric is
+ * immutable (bound to the server-side AchievementMetricResolver).
  */
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref, type Ref } from "vue";
+import { useModal } from "vue-final-modal";
 import { achievementApi } from "@/shared/api";
 import type {
   AchievementCategory,
@@ -15,6 +16,9 @@ import { useAchievementCatalog } from "@/shared/lib/achievements/useAchievementC
 import { formatThreshold } from "@/shared/lib/achievements/formatThreshold";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { GameIcon } from "@/shared/ui/Icon";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import AchievementCategoryDialog from "./dialogs/AchievementCategoryDialog.vue";
+import AchievementTierDialog from "./dialogs/AchievementTierDialog.vue";
 
 const { categories, types, load, reload } = useAchievementCatalog();
 
@@ -30,107 +34,76 @@ function tiersOf(c: AchievementCategory): AchievementType[] {
     .sort((a, b) => a.threshold - b.threshold);
 }
 
-// --- Category edit ---
+// --- Category edit dialog (shared Dialog idiom) ---
+// Null until the first openEditCategory sets it; the dialog only mounts
+// after that, so the non-null cast below is safe.
 const editingCategory = ref<AchievementCategory | null>(null);
-const catForm = ref({
-  title: "",
-  description: "",
-  iconName: "",
-  sortOrder: 0,
-  isActive: true,
+
+const { open: openCategoryDialog, close: closeCategoryDialog } = useModal({
+  component: AchievementCategoryDialog,
+  attrs: reactive({
+    category: editingCategory as Ref<AchievementCategory>,
+    onSuccess: async () => {
+      closeCategoryDialog();
+      await reload();
+    },
+    onCancel: () => closeCategoryDialog(),
+  }),
 });
-const catSaving = ref(false);
 
 function openEditCategory(c: AchievementCategory) {
   editingCategory.value = c;
-  catForm.value = {
-    title: c.title,
-    description: c.description,
-    iconName: c.iconName,
-    sortOrder: c.sortOrder,
-    isActive: c.isActive,
-  };
+  openCategoryDialog();
 }
 
-async function saveCategory() {
-  if (!editingCategory.value || catSaving.value) return;
-  catSaving.value = true;
-  try {
-    await achievementApi.updateAchievementCategory(editingCategory.value.id, {
-      title: catForm.value.title,
-      description: catForm.value.description,
-      iconName: catForm.value.iconName,
-      sortOrder: catForm.value.sortOrder,
-      isActive: catForm.value.isActive,
-    });
-    editingCategory.value = null;
-    await reload();
-  } finally {
-    catSaving.value = false;
-  }
-}
-
-// --- Tier edit / create / delete ---
+// --- Tier create/edit dialog (shared Dialog idiom) ---
 const editingTier = ref<AchievementType | null>(null);
-const tierFormCategoryId = ref<string | null>(null);
-const tierForm = ref({ code: "", title: "", threshold: 0, tier: 1 });
-const tierSaving = ref(false);
+const tierCategoryId = ref("");
+const tierDefault = ref(1);
+
+const { open: openTierDialog, close: closeTierDialog } = useModal({
+  component: AchievementTierDialog,
+  attrs: reactive({
+    tier: editingTier,
+    categoryId: tierCategoryId,
+    defaultTier: tierDefault,
+    onSuccess: async () => {
+      closeTierDialog();
+      await reload();
+    },
+    onCancel: () => closeTierDialog(),
+  }),
+});
 
 function openCreateTier(c: AchievementCategory) {
   editingTier.value = null;
-  tierFormCategoryId.value = c.id;
+  tierCategoryId.value = c.id;
   const maxTier = tiersOf(c).reduce((m, t) => Math.max(m, t.tier ?? 0), 0);
-  tierForm.value = { code: "", title: "", threshold: 0, tier: maxTier + 1 };
+  tierDefault.value = maxTier + 1;
+  openTierDialog();
 }
 
 function openEditTier(t: AchievementType) {
   editingTier.value = t;
-  tierFormCategoryId.value = t.category.id;
-  tierForm.value = {
-    code: t.code,
-    title: t.title,
-    threshold: t.threshold,
-    tier: t.tier ?? 1,
-  };
+  tierCategoryId.value = t.category.id;
+  tierDefault.value = t.tier ?? 1;
+  openTierDialog();
 }
 
-async function saveTier() {
-  if (tierSaving.value || tierFormCategoryId.value === null) return;
-  tierSaving.value = true;
+// --- Tier delete (ConfirmDialog) ---
+const deleteTierTarget = ref<AchievementType | null>(null);
+const deletingTier = ref(false);
+
+async function confirmDeleteTier() {
+  if (!deleteTierTarget.value || deletingTier.value) return;
+  deletingTier.value = true;
   try {
-    if (editingTier.value) {
-      await achievementApi.updateAchievementType(editingTier.value.id, {
-        title: tierForm.value.title,
-        threshold: tierForm.value.threshold,
-        tier: tierForm.value.tier,
-      });
-    } else {
-      await achievementApi.createAchievementType({
-        code: tierForm.value.code,
-        title: tierForm.value.title,
-        threshold: tierForm.value.threshold,
-        tier: tierForm.value.tier,
-        achievementCategoryId: tierFormCategoryId.value,
-      });
-    }
-    editingTier.value = null;
-    tierFormCategoryId.value = null;
+    await achievementApi.deleteAchievementType(deleteTierTarget.value.id);
+    deleteTierTarget.value = null;
     await reload();
   } finally {
-    tierSaving.value = false;
+    deletingTier.value = false;
   }
-}
-
-async function deleteTier(t: AchievementType) {
-  if (
-    !confirm(
-      `Удалить тир «${t.title}»? Уже выданные UserAchievement останутся.`,
-    )
-  ) {
-    return;
-  }
-  await achievementApi.deleteAchievementType(t.id);
-  await reload();
 }
 </script>
 
@@ -155,8 +128,9 @@ async function deleteTier(t: AchievementType) {
           <div class="cat-info">
             <div class="cat-title">{{ c.title }}</div>
             <div class="cat-meta">
-              <code>{{ c.code }}</code> · <code>{{ c.metric }}</code> · sort
-              {{ c.sortOrder }}
+              <code>{{ c.code }}</code
+              >, <code>{{ c.metric }}</code
+              >, sort {{ c.sortOrder }}
             </div>
             <p class="cat-desc">{{ c.description }}</p>
           </div>
@@ -207,7 +181,7 @@ async function deleteTier(t: AchievementType) {
                 <button
                   type="button"
                   class="text-button danger"
-                  @click="deleteTier(t)"
+                  @click="deleteTierTarget = t"
                 >
                   Del
                 </button>
@@ -218,116 +192,23 @@ async function deleteTier(t: AchievementType) {
       </li>
     </ul>
 
-    <!-- Category modal -->
-    <div
-      v-if="editingCategory"
-      class="modal-overlay"
-      @click.self="editingCategory = null"
-    >
-      <form class="modal" @submit.prevent="saveCategory">
-        <h3>Категория: {{ editingCategory.code }}</h3>
-        <div class="form-row">
-          <label>Название</label>
-          <input v-model="catForm.title" type="text" required maxlength="200" />
-        </div>
-        <div class="form-row">
-          <label>Описание (показывается в popover)</label>
-          <textarea
-            v-model="catForm.description"
-            rows="3"
-            maxlength="1000"
-            required
-          />
-        </div>
-        <div class="form-row">
-          <label>Имя иконки</label>
-          <input
-            v-model="catForm.iconName"
-            type="text"
-            required
-            maxlength="80"
-          />
-        </div>
-        <div class="form-row">
-          <label>Порядок</label>
-          <input v-model.number="catForm.sortOrder" type="number" min="0" />
-        </div>
-        <div class="form-row inline">
-          <label>
-            <input v-model="catForm.isActive" type="checkbox" />
-            Активна
-          </label>
-        </div>
-        <div class="modal-actions">
-          <button
-            type="button"
-            class="text-button"
-            @click="editingCategory = null"
-          >
-            Отмена
-          </button>
-          <button type="submit" class="primary-button" :disabled="catSaving">
-            {{ catSaving ? "Сохраняем…" : "Сохранить" }}
-          </button>
-        </div>
-      </form>
-    </div>
-
-    <!-- Tier modal (create or edit) -->
-    <div
-      v-if="tierFormCategoryId"
-      class="modal-overlay"
-      @click.self="tierFormCategoryId = null"
-    >
-      <form class="modal" @submit.prevent="saveTier">
-        <h3>{{ editingTier ? `Тир: ${editingTier.code}` : "Новый тир" }}</h3>
-        <div v-if="!editingTier" class="form-row">
-          <label>Code (стабильный, например POSTS_100)</label>
-          <input v-model="tierForm.code" type="text" required maxlength="80" />
-        </div>
-        <div class="form-row">
-          <label>Название</label>
-          <input
-            v-model="tierForm.title"
-            type="text"
-            required
-            maxlength="200"
-          />
-        </div>
-        <div class="form-row">
-          <label>Порог</label>
-          <input
-            v-model.number="tierForm.threshold"
-            type="number"
-            min="1"
-            required
-          />
-        </div>
-        <div class="form-row">
-          <label>Tier (1-4)</label>
-          <input v-model.number="tierForm.tier" type="number" min="1" max="9" />
-        </div>
-        <div class="modal-actions">
-          <button
-            type="button"
-            class="text-button"
-            @click="tierFormCategoryId = null"
-          >
-            Отмена
-          </button>
-          <button type="submit" class="primary-button" :disabled="tierSaving">
-            {{ tierSaving ? "Сохраняем…" : "Сохранить" }}
-          </button>
-        </div>
-      </form>
-    </div>
+    <!-- Tier delete confirmation -->
+    <ConfirmDialog
+      :show="deleteTierTarget !== null"
+      title="Удаление тира"
+      :message="`Удалить тир &quot;${deleteTierTarget?.title ?? ''}&quot;? Уже выданные UserAchievement останутся.`"
+      confirm-label="Удалить"
+      danger
+      :loading="deletingTier"
+      @update:show="(v) => !v && (deleteTierTarget = null)"
+      @confirm="confirmDeleteTier"
+    />
   </section>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Inputs"
-@import "src/assets/styles/ZIndex"
+@import "src/assets/styles/Tables"
 
 .achievements-admin
   display: flex
@@ -385,19 +266,26 @@ async function deleteTier(t: AchievementType) {
   flex-direction: column
   gap: $tiny
 
+// Site table idiom: 1px gaps painted by the $border background
+// (same visual language as DataTable / +table)
 .tier-table
   width: 100%
-  border-collapse: collapse
+  border-collapse: separate
+  border-spacing: 1px
+  background-color: $border
   font-size: $secondary-font-size
 
-  th, td
-    padding: $tiny $small
-    text-align: left
-    border-bottom: 1px solid $border
-
   th
-    color: $text-meta
-    font-weight: 500
+    text-align: left
+    +table-header
+
+  td
+    text-align: left
+    vertical-align: middle
+    +table-row
+
+  tbody tr
+    +table-row-hover
 
   code
     background: $bg-element-accent
@@ -405,76 +293,11 @@ async function deleteTier(t: AchievementType) {
     border-radius: 3px
 
 .text-button
-  background: none
-  border: none
-  color: $link
-  cursor: pointer
-  font: inherit
-  padding: 0
   margin-right: $small
-
-  &:hover
-    text-decoration: underline
+  +inline-link-button
 
   &.danger
-    color: $accent-red
-
-.primary-button
-  +button
-
-.modal-overlay
-  position: fixed
-  inset: 0
-  background: rgba(0, 0, 0, 0.5)
-  display: flex
-  align-items: center
-  justify-content: center
-  z-index: $z-modal
-
-.modal
-  background: $bg-element
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $large
-  width: 100%
-  max-width: 480px
-
-  h3
-    margin: 0 0 $medium
-
-.form-row
-  display: flex
-  flex-direction: column
-  gap: $tiny
-  margin-bottom: $small
-
-  &.inline
-    flex-direction: row
-    align-items: center
-    gap: $small
-
-  label
-    font-size: $secondary-font-size
-    color: $text-muted
-
-  input, textarea
-    padding: $small
-    border: 1px solid $border
-    border-radius: $border-radius
-    background: $bg-element
-    color: $text
-    font: inherit
-
-    &:focus
-      outline: none
-      border-color: $link
-
-  textarea
-    resize: vertical
-
-.modal-actions
-  display: flex
-  justify-content: flex-end
-  gap: $small
-  margin-top: $medium
+    &,
+    &:hover:not(:disabled)
+      color: $accent-red
 </style>

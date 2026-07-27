@@ -24,7 +24,7 @@ public class Fundraising
     /// <summary>
     /// Last update timestamp (UTC)
     /// </summary>
-    public DateTimeOffset UpdatedUtc { get; set; }
+    public DateTimeOffset ModifiedUtc { get; set; }
 }
 
 /// <summary>

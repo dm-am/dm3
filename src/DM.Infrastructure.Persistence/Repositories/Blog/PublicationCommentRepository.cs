@@ -10,6 +10,7 @@ using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
+using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
@@ -82,7 +83,7 @@ internal class PublicationCommentRepository : IPublicationCommentRepository
 
         if (commentsQuery.CreatedToUtc.HasValue)
         {
-            query = query.Where(c => c.CreatedUtc <= commentsQuery.CreatedToUtc.Value);
+            query = query.WhereAtOrBefore(c => c.CreatedUtc, commentsQuery.CreatedToUtc.Value);
         }
 
         // Search by text content

@@ -192,8 +192,6 @@ test.describe("Tooltip Accessibility", () => {
       // Touch/tap to show tooltip
       await scrollNavBtn.tap();
 
-      // May show tooltip on touch (behavior depends on implementation)
-      const tooltip = page.locator('[role="tooltip"]');
       // Touch behavior may vary - this documents expected behavior
 
       await context.close();
@@ -234,9 +232,7 @@ test.describe("Tooltip Accessibility", () => {
         await sidebarHeader.hover();
         await page.waitForTimeout(300);
 
-        // Check if tooltip appears (not all headers have tooltips)
-        const tooltip = page.locator('[role="tooltip"]');
-        // May or may not have tooltip
+        // Tooltip may or may not appear - not all headers have tooltips
       }
     });
   });
@@ -258,9 +254,7 @@ test.describe("Tooltip Accessibility", () => {
         await statusCell.hover();
         await page.waitForTimeout(300);
 
-        // Check for tooltip
-        const tooltip = page.locator('[role="tooltip"]');
-        // May or may not have tooltip depending on content
+        // Tooltip may or may not appear depending on content
       }
     });
   });

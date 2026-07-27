@@ -21,8 +21,8 @@ internal class GeneralUserMappingProfile : Profile
     public GeneralUserMappingProfile()
     {
         CreateMap<User, GeneralUser>()
-            // Avatar projection — SSOT через AvatarProjections.From; никаких
-            // больше тернарных дубликатов в каждом репозитории.
+            // Avatar projection — SSOT via AvatarProjections.From; no more
+            // ternary duplicates in every repository.
             .ForMember(d => d.Picture, s => s.MapFrom(u => AvatarProjections.From(u.AvatarUpload)))
             .ForMember(d => d.LastActivityUtc, s => s.MapFrom(u => u.LastActivityUtc))
             .ForMember(d => d.RegisteredUtc, s => s.MapFrom(u => u.CreatedUtc))

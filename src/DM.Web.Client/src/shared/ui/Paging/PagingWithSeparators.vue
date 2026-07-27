@@ -13,6 +13,8 @@ defineProps<{
   useQuery?: boolean;
   queryKey?: string;
   onPrefetch?: (page: number) => void;
+  /** Forwarded to Paging: getter for the paginated block to scroll to. */
+  scrollAnchor?: () => HTMLElement | null;
 }>();
 </script>
 
@@ -31,6 +33,7 @@ defineProps<{
       :use-query="useQuery"
       :query-key="queryKey"
       :on-prefetch="onPrefetch"
+      :scroll-anchor="scrollAnchor"
     />
     <div class="separator" aria-hidden="true">
       - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -43,12 +46,16 @@ defineProps<{
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
+// Digits have no descenders, so their ink sits ~1.5px above the geometric
+// center of the line box — the gap to the dash line below reads larger than
+// the one above. Nudge the row down by that amount so the ink-to-dash gaps
+// match (measured at the 14px paging font).
+$optical-shift: 1.5px
 
 .paging-block
-  // Collapse Paging's default $medium top/bottom margin — compact look with separators
+  // Collapse Paging's default margin — compact look with separators
   :deep(.paging)
-    margin: $tiny 0
+    margin: ($tiny + $optical-shift) 0 ($tiny - $optical-shift)
 
 .separator
   color: $text-muted
@@ -57,5 +64,4 @@ defineProps<{
   max-width: 100%
   width: 0
   min-width: 100%
-  user-select: none
 </style>

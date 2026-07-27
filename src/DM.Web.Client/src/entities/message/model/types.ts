@@ -1,4 +1,4 @@
-import type { Id, Served } from "@/shared/api/models";
+import type { Served } from "@/shared/api/models";
 import type {
   User,
   ChatId as BaseChatId,

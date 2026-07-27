@@ -1,14 +1,78 @@
 /**
- * SSOT for role information across the site.
- * Used in: AdminList.vue, ProfilePage.vue
+ * SSOT for role information across the site: section titles/nicknames
+ * (ROLE_INFO), staff role lists, and the role badge map (ROLE_BADGES) that
+ * every badge-rendering component uses.
  */
 
 import { UserRole } from "@/shared/api/models/community";
 
+/**
+ * Staff/system role badge: [A] or [M] (Latin) — gray brackets, green bold
+ * letter. Only two letters exist: A for the admin tier, M for the moderator
+ * tier; the exact role lives in the tooltip.
+ */
+export interface RoleBadge {
+  /** Short badge letter shown between the brackets */
+  letter: string;
+  /** Full role name for tooltips */
+  label: string;
+  /** CSS class hook for per-role styling */
+  cssClass: string;
+}
+
+export const ROLE_BADGES: Partial<Record<UserRole, RoleBadge>> = {
+  [UserRole.Admin]: {
+    letter: "A",
+    label: "Администратор",
+    cssClass: "role-admin",
+  },
+  [UserRole.SeniorModerator]: {
+    letter: "M",
+    label: "Старший модератор",
+    cssClass: "role-senior-moderator",
+  },
+  [UserRole.Moderator]: {
+    letter: "M",
+    label: "Модератор",
+    cssClass: "role-moderator",
+  },
+  [UserRole.Mentor]: {
+    letter: "M",
+    label: "Наставник",
+    cssClass: "role-mentor",
+  },
+  // Same letter as Admin — the bot IS an administrator; the tooltip
+  // carries the robot specifics.
+  [UserRole.System]: {
+    letter: "A",
+    label: "Робот-администратор",
+    cssClass: "role-system",
+  },
+};
+
+/** Badge for a role, or null when the role has none (regular users, guests). */
+export function getRoleBadge(
+  role: UserRole | null | undefined,
+): RoleBadge | null {
+  return (role && ROLE_BADGES[role]) || null;
+}
+
+/**
+ * Singular full name for every role — badge labels for the badge-carrying
+ * roles plus the badge-less ones, so the two never drift apart.
+ */
+export const ROLE_FULL_NAMES: Partial<Record<UserRole, string>> = {
+  ...(Object.fromEntries(
+    Object.entries(ROLE_BADGES).map(([role, badge]) => [role, badge.label]),
+  ) as Partial<Record<UserRole, string>>),
+  [UserRole.RegularUser]: "Пользователь",
+  [UserRole.Guest]: "Гость",
+};
+
 export interface RoleInfo {
-  /** Plural section title (AdminList: "Администраторы", "Модераторы") */
+  /** Plural section title (RulesStaffTable: "Администраторы", "Модераторы") */
   title: string;
-  /** Plural community nickname (AdminList groups) */
+  /** Plural community nickname (RulesStaffTable groups) */
   nickname: string;
   /** Singular community nickname (profile pages, "Тролль" for one admin) */
   nicknameSingular: string;
@@ -64,7 +128,7 @@ export const ROLE_INFO: Record<UserRole, RoleInfo> = {
   },
 };
 
-/** Roles displayed in AdminList (moderators/admins) */
+/** Roles displayed in RulesStaffTable (moderators/admins) */
 export const STAFF_ROLES: UserRole[] = [
   UserRole.Admin,
   UserRole.SeniorModerator,

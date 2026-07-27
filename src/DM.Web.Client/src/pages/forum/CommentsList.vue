@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, watch, nextTick } from "vue";
-import { useBoardsStore } from "@/entities/forum";
+import { computed, ref, watch, nextTick } from "vue";
+import { useBoardsStore, forumApi } from "@/entities/forum";
+import type { CommentId } from "@/entities/forum";
 import { useUiStore } from "@/shared/stores/ui";
 import { storeToRefs } from "pinia";
 import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
 import { useRoute } from "vue-router";
-import { Comment } from "@/features/comment";
+import { CommentItem, useCommentWarnDialog } from "@/features/comment";
 import { useCommentsFilter } from "@/features/comment-filter";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
+import { ErrorState } from "@/shared/ui/ErrorState";
 
 const route = useRoute();
 const boardsStore = useBoardsStore();
@@ -80,13 +82,29 @@ async function handleUnlike(id: string) {
   await boardsStore.unlikeComment(id);
 }
 
-function handleWarn(_id: string) {
-  // TODO: Open warning modal (P5.5 - console.log removed)
+// Moderator warning (doc 4.2.4.1) — shared dialog wiring.
+const { warnComment: handleWarn } = useCommentWarnDialog((id) =>
+  comments.value?.resources.find((c) => c.id === id),
+);
+
+// Raw BBCode source fetch for the edit form (AuthorEdit audience).
+const fetchEditSource = (id: string) =>
+  forumApi.getCommentForUpdate(id as CommentId);
+
+function retryLoad() {
+  boardsStore.searchComments(searchParams.value);
+}
+
+// Paging scrolls the comments block (top paging + list) back into view
+// instead of the page top — the topic header above is not re-shown.
+const sectionRef = ref<HTMLElement | null>(null);
+function pagingAnchor(): HTMLElement | null {
+  return sectionRef.value;
 }
 </script>
 
 <template>
-  <div class="comments-section">
+  <div ref="sectionRef" class="comments-section">
     <!-- Paging at top -->
     <PagingWithSeparators
       v-if="comments && comments.paging"
@@ -97,6 +115,7 @@ function handleWarn(_id: string) {
       }"
       :use-query="true"
       query-key="number"
+      :scroll-anchor="pagingAnchor"
     />
 
     <!-- Loading state -->
@@ -104,12 +123,11 @@ function handleWarn(_id: string) {
 
     <!-- Error state: a failed load must not be presented as fake-empty.
          Shown only when there are no stale comments to keep on screen. -->
-    <secondary-text
+    <ErrorState
       v-else-if="commentsError && !comments?.resources.length"
-      class="comments-error"
-    >
-      Не удалось загрузить комментарии. Попробуйте обновить страницу.
-    </secondary-text>
+      message="Не удалось загрузить комментарии"
+      :retry="retryLoad"
+    />
 
     <!-- Empty state -->
     <secondary-text
@@ -124,14 +142,16 @@ function handleWarn(_id: string) {
     </secondary-text>
 
     <!-- Comments list -->
-    <template v-else-if="comments">
-      <Comment
+    <div v-else-if="comments" class="comments-list">
+      <CommentItem
         v-for="(comment, index) in comments.resources"
         :key="comment.id"
         v-memo="[
           comment.id,
           comment.text,
           comment.likes.length,
+          comment.isRemoved,
+          comment.modifiedUtc,
           isCompactLayout,
           filterState.search,
         ]"
@@ -139,13 +159,14 @@ function handleWarn(_id: string) {
         :compact="isCompactLayout"
         :number="getCommentNumber(index)"
         :search-query="filterState.search"
+        :fetch-edit-source="fetchEditSource"
         @edit="handleEdit"
         @delete="handleDelete"
         @like="handleLike"
         @unlike="handleUnlike"
         @warn="handleWarn"
       />
-    </template>
+    </div>
 
     <!-- Paging at bottom -->
     <PagingWithSeparators
@@ -157,28 +178,25 @@ function handleWarn(_id: string) {
       }"
       :use-query="true"
       query-key="number"
+      :scroll-anchor="pagingAnchor"
     />
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-
+// Paging blocks sit $medium from the comment list; the tighter $small
+// rhythm between the comments themselves lives on the inner wrapper.
 .comments-section
+  display: flex
+  flex-direction: column
+  gap: $medium
+
+.comments-list
   display: flex
   flex-direction: column
   gap: $small
 
-.comments-loading
-  text-align: center
-  padding: $medium 0
-
 .comments-none
   text-align: center
   padding: $medium 0
-
-.comments-error
-  text-align: center
-  padding: $medium 0
-  color: $accent-red
 </style>

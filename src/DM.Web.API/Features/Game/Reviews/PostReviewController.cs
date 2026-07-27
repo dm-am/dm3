@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Users;
 using DM.Domain.Game.Features.PostReviews;
@@ -39,10 +40,13 @@ public class PostReviewController : ControllerBase
     }
 
     /// <summary>
-    /// Get all post reviews with optional filters
+    /// Get all post reviews with optional filters (moderators only)
     /// </summary>
     /// <remarks>
     /// Returns post reviews across all games with optional filtering.
+    /// Cross-game review listing is a moderation worklist ("Последние
+    /// оцененные посты"); public pages consume per-post reviews
+    /// (GET v1/posts/{postId}/reviews) or the rated posts list (GET v1/posts).
     ///
     /// Filter options:
     /// - **authorUsername**: Reviews written BY this user
@@ -54,8 +58,13 @@ public class PostReviewController : ControllerBase
     /// <param name="recipientUsername">Filter by post author (recipient)</param>
     /// <param name="gameId">Filter by game</param>
     /// <response code="200">List of post reviews</response>
+    /// <response code="401">User not authenticated</response>
+    /// <response code="403">Moderator or higher role required</response>
     [HttpGet("posts", Name = nameof(GetAllPostReviews))]
+    [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(typeof(ListEnvelope<PostReviewDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetAllPostReviews(
         [FromQuery] PagingQuery q,
         [FromQuery] string? authorUsername = null,

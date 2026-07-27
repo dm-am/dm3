@@ -130,14 +130,6 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
             Status = createCharacter.InitialStatus,
             CreatedUtc = createCharacter.CreatedUtc,
             Name = createCharacter.Name,
-            Race = createCharacter.Race,
-            Class = createCharacter.Class,
-            Alignment = createCharacter.Alignment,
-            Appearance = createCharacter.Appearance,
-            Temper = createCharacter.Temper,
-            Story = createCharacter.Story,
-            Skills = createCharacter.Skills,
-            Inventory = createCharacter.Inventory,
             IsNpc = createCharacter.IsNpc,
             AccessPolicy = createCharacter.AccessPolicy,
             IsRemoved = false
@@ -217,30 +209,6 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
 
         if (!string.IsNullOrEmpty(updateCharacter.Name))
             character.Name = updateCharacter.Name;
-
-        if (!string.IsNullOrEmpty(updateCharacter.Race))
-            character.Race = updateCharacter.Race;
-
-        if (!string.IsNullOrEmpty(updateCharacter.Class))
-            character.Class = updateCharacter.Class;
-
-        if (updateCharacter.Alignment.HasValue)
-            character.Alignment = updateCharacter.Alignment;
-
-        if (!string.IsNullOrEmpty(updateCharacter.Appearance))
-            character.Appearance = updateCharacter.Appearance;
-
-        if (!string.IsNullOrEmpty(updateCharacter.Temper))
-            character.Temper = updateCharacter.Temper;
-
-        if (!string.IsNullOrEmpty(updateCharacter.Story))
-            character.Story = updateCharacter.Story;
-
-        if (!string.IsNullOrEmpty(updateCharacter.Skills))
-            character.Skills = updateCharacter.Skills;
-
-        if (!string.IsNullOrEmpty(updateCharacter.Inventory))
-            character.Inventory = updateCharacter.Inventory;
 
         if (updateCharacter.IsNpc.HasValue)
             character.IsNpc = updateCharacter.IsNpc.Value;

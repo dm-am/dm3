@@ -52,7 +52,7 @@ public class CreateWarningValidatorShould : UnitTestBase
         var input = new CreateWarning
         {
             Username = "testuser",
-            Points = 0,
+            Points = -1,
             Reason = "Valid reason"
         };
 
@@ -67,7 +67,7 @@ public class CreateWarningValidatorShould : UnitTestBase
         var input = new CreateWarning
         {
             Username = "testuser",
-            Points = 4,
+            Points = 7,
             Reason = "Valid reason"
         };
 
@@ -79,7 +79,8 @@ public class CreateWarningValidatorShould : UnitTestBase
     [Fact]
     public void PassForAllValidPointValues()
     {
-        for (int points = 1; points <= 3; points++)
+        // 0 = verbal warning without points, 6 = maximum single-warning severity
+        for (int points = 0; points <= 6; points++)
         {
             var input = new CreateWarning
             {

@@ -16,8 +16,10 @@ internal class TagMappingProfile : Profile
         CreateMap<DtoTag, Tag>();
 
         CreateMap<CreateTagGroupRequest, DtoCreateTagGroup>();
-        CreateMap<UpdateTagGroupRequest, DtoUpdateTagGroup>();
+        CreateMap<UpdateTagGroupRequest, DtoUpdateTagGroup>()
+            .ForMember(d => d.Id, opt => opt.Ignore());
         CreateMap<CreateTagRequest, DtoCreateTag>();
-        CreateMap<UpdateTagRequest, DtoUpdateTag>();
+        CreateMap<UpdateTagRequest, DtoUpdateTag>()
+            .ForMember(d => d.Id, opt => opt.Ignore());
     }
 }

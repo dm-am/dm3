@@ -29,6 +29,9 @@
 //   .bb-tab                       - tab/indent
 // ============================================================================
 
+// $expand-duration / $expand-easing for the spoiler/NSFW reveal animation
+@import "Animations"
+
 // ──────────────────────────────────────────────────────────────────────────
 // Overlay Background Mixin
 // ──────────────────────────────────────────────────────────────────────────
@@ -56,11 +59,15 @@
   // ──────────────────────────────────────────────────────────────────────────
   // Typography
   // ──────────────────────────────────────────────────────────────────────────
+  // No line-height here: each surface owns its own rhythm (comments 1.6,
+  // chat messages 1.5, topic descriptions 1.6, ...) — an owner-rejected
+  // "unification" once squeezed every post to 1.25 (2026-07-22).
 
+  // No inter-paragraph margin: the display path renders newlines as <br/>
+  // (no <p> elements), so a p-margin would show ONLY inside the Tiptap
+  // editor and desync it from the rendered post.
   p
     margin: 0
-    &:not(:last-child)
-      margin-bottom: $tiny
 
   strong, b
     font-weight: 600
@@ -169,6 +176,30 @@
     color: $text
 
   // ──────────────────────────────────────────────────────────────────────────
+  // Collapse wrapper (shared by spoiler and NSFW)
+  // ──────────────────────────────────────────────────────────────────────────
+  // Unified smooth expand/collapse idiom: grid-template-rows 0fr -> 1fr
+  // animates content of unknown height in both directions (same pattern as
+  // ExpandableList). Structure, built by bbcodeInteractive.ts in the display
+  // path and by SpoilerView/NsfwView in the editor path:
+  //
+  //   .bb-collapse       - grid container, animates grid-template-rows
+  //   .bb-collapse-clip  - overflow clip, min-height: 0
+  //   .spoiler / .nsfw-content-wrapper - the actual content
+  //
+  // prefers-reduced-motion is handled globally in Reset.sass.
+  .bb-collapse
+    display: grid
+    grid-template-rows: 0fr
+    transition: grid-template-rows $expand-duration $expand-easing
+    &.open
+      grid-template-rows: 1fr
+
+  .bb-collapse-clip
+    overflow: hidden
+    min-height: 0
+
+  // ──────────────────────────────────────────────────────────────────────────
   // Spoiler
   // Backend: a.spoiler-head (toggle) + div.spoiler (content)
   // Frontend: NodeView with same structure
@@ -185,13 +216,16 @@
       text-decoration: underline
 
   // Spoiler content - yellow background, dashed border, no rounded corners
-  // No margin - block elements handle spacing, padding for inner spacing only
+  // DM2 parity: .lightbg { margin: 5px 0; padding: 5px; border: 1px dashed }
+  // The 5px top margin is also the gap between the spoiler head and content.
+  // (5px is DM2's literal value — deliberately off the 4px grid.)
+  // Show/hide is driven by the .bb-collapse wrapper above (grid animation),
+  // so the box itself carries no hidden state.
   .spoiler, .bb-spoiler
-    padding: $tiny $small
+    margin: 5px 0
+    padding: 5px
     background-color: $bg-highlight-yellow
     border: 1px dashed $border
-    &.hidden
-      display: none
 
   // ──────────────────────────────────────────────────────────────────────────
   // NSFW
@@ -213,37 +247,58 @@
       text-decoration: underline
 
   // NSFW content - same as spoiler (yellow, dashed border)
-  // No margin - block elements handle spacing, padding for inner spacing only
+  // DM2 parity: same box as the spoiler — margin: 5px 0; padding: 5px.
+  // In the display path the block sits inside .nsfw-content-wrapper (see
+  // bbcodeInteractive.ts); the wrapper has no border/padding, so these
+  // margins collapse through it and are contained by the .bb-collapse-clip
+  // BFC — visually the same 5px gap as before the collapse wrapper existed.
   .nsfw-spoiler, .bb-nsfw
     position: relative
-    padding: $tiny $small
+    margin: 5px 0
+    padding: 5px
     background-color: $bg-highlight-yellow
     border: 1px dashed $border
-    &.hidden
-      display: none
 
-  // 18+ overlay — закрывает ВЕСЬ блок NSFW-контента, а не только
-  // горизонтальную полоску по центру. inset:0 = top/right/bottom/left:0
-  // относительно .nsfw-content-wrapper (position: relative). Plus
-  // backdrop-blur размывает контент под ним.
+  // 18+ overlay — the red zone over NSFW content. DM2 parity: on the old
+  // site .nsfw-alert covers only the CONTENT area of the yellow box — the
+  // 1px dashed border and the 5px yellow padding stay visible. Hence
+  // inset: 6px (1px border + 5px padding). Positioned relative to
+  // .nsfw-content-wrapper (display path) or .nsfw-spoiler (editor path).
+  // Backdrop-blur blurs the content underneath the zone.
   .nsfw-overlay
     position: absolute
-    inset: 0
+    inset: 6px
     z-index: 1
     background-color: $nsfw-overlay
     backdrop-filter: blur(8px)
     cursor: pointer
     display: flex
-    align-items: center
+    // DM2 parity: warning text sits at the top of the red zone, centered
+    // horizontally (old .nsfw-alert is a plain block with centered text).
+    align-items: flex-start
     justify-content: center
+    // 18+ confirmation fades the red zone away in sync with the unified
+    // reveal curve. backdrop-filter is transitioned explicitly because
+    // element opacity does not reliably fade the backdrop blur in all
+    // engines.
+    transition: opacity $expand-duration $expand-easing, backdrop-filter $expand-duration $expand-easing
+
+    &.confirmed
+      opacity: 0
+      backdrop-filter: blur(0px)
+      pointer-events: none
+      visibility: hidden
+      // Same fade + visibility flip deferred to the end of the transition,
+      // so the overlay disappears from the accessibility tree only after
+      // it has visually faded out. The delayed visibility lives ONLY in
+      // this state: un-confirming (fresh overlay) must show instantly.
+      transition: opacity $expand-duration $expand-easing, backdrop-filter $expand-duration $expand-easing, visibility 0s linear $expand-duration
 
   .nsfw-warning
     color: $accent-red
     text-align: center
     font-size: $font-size
-    line-height: 1.2
     font-weight: bold
-    padding: 0 $small
 
   // ──────────────────────────────────────────────────────────────────────────
   // Private

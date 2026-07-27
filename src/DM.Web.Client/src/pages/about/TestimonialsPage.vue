@@ -1,35 +1,28 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useRoute } from "vue-router";
 import { useTestimonialStore } from "@/shared/stores/testimonials";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { storeToRefs } from "pinia";
 import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
 import LeadText from "@/shared/ui/Layout/LeadText.vue";
-import { Testimonial } from "@/entities/testimonial";
-import { ReviewsFilter, useReviewsFilter } from "@/features/review-filter";
-import { CreateReviewForm } from "@/features/create-review";
-import { useUserStore, UserRole } from "@/entities/user";
+import { DashSeparator } from "@/shared/ui/DashSeparator";
+import { ErrorState } from "@/shared/ui/ErrorState";
+import { TestimonialCard, TestimonialSkeleton } from "@/entities/testimonial";
+import { TestimonialDeleteButton } from "@/features/testimonial-delete";
+import {
+  TestimonialsFilter,
+  useTestimonialsFilter,
+} from "@/features/testimonial-filter";
+import { CreateTestimonialForm } from "@/features/create-testimonial";
+import { TESTIMONIALS_FORUM_TOPIC } from "@/shared/config/wellKnownRoutes";
 
 const route = useRoute();
 const testimonialStore = useTestimonialStore();
-const { testimonials, error } = storeToRefs(testimonialStore);
+const { testimonials, error, loading } = storeToRefs(testimonialStore);
 
-const userStore = useUserStore();
-const { user } = storeToRefs(userStore);
-
-// Testimonials are a moderator-only review barrier — regular users post in the
-// forum topic, only moderators add entries here.
-const isModerator = computed(
-  () =>
-    user.value?.roles?.some((r) =>
-      [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(
-        r,
-      ),
-    ) ?? false,
-);
-
-const { filterState, searchParams, hasActiveFilters } = useReviewsFilter();
+const { filterState, searchParams, hasActiveFilters, clearFilters } =
+  useTestimonialsFilter();
 
 useFetchData(
   () => testimonialStore.fetchTestimonials(searchParams.value),
@@ -40,181 +33,190 @@ useFetchData(
     },
   ],
 );
+
+function retryFetch() {
+  return testimonialStore.fetchTestimonials(searchParams.value, true);
+}
+
+// Out-of-range page: paging exists, current page has no resources, but
+// earlier pages do (i.e. this isn't just an empty result set).
+const currentPageOutOfRange = computed(() => {
+  const list = testimonials.value;
+  if (!list || !list.paging) return false;
+  return list.resources.length === 0 && list.paging.number > 1;
+});
+
+// Paging scrolls the testimonials block (top separator + rows) back into
+// view instead of the page top.
+const listRef = ref<HTMLElement | null>(null);
+function pagingAnchor(): HTMLElement | null {
+  return listRef.value;
+}
 </script>
 
 <template>
   <page-title v-once>Отзывы о сайте</page-title>
 
   <LeadText>
-    Здесь собраны отзывы игроков о DM.AM. Будем рады, если поделитесь и своим —
-    <router-link to="/forum/general/1">в топике на форуме</router-link>
+    Узнайте мнение игроков о Dungeon Master, а при желании поделитесь и
+    собственным —
+    <router-link :to="TESTIMONIALS_FORUM_TOPIC"
+      >в топике с отзывами</router-link
+    >
   </LeadText>
 
-  <!-- Create Form (moderators only — testimonials are a moderator-curated review barrier) -->
-  <CreateReviewForm v-if="isModerator" />
+  <!-- Create Form owns its own moderator gate; render unconditionally -->
+  <CreateTestimonialForm />
 
   <!-- Filter controls -->
-  <ReviewsFilter />
+  <TestimonialsFilter />
 
-  <!-- Loading state (first load): skeleton bubbles -->
-  <div
-    v-if="!testimonials && !error"
-    class="testimonials-skeleton"
-    aria-hidden="true"
-  >
-    <div v-for="n in 3" :key="n" class="skeleton-item">
-      <div class="skeleton-bubble">
-        <div class="skeleton-text-line wide" />
-        <div class="skeleton-text-line" />
-        <div class="skeleton-text-line short" />
-      </div>
-      <div class="skeleton-footer">
-        <div class="skeleton-author" />
-        <div class="skeleton-date" />
-      </div>
-    </div>
-  </div>
+  <!-- Loading state (first load, no stale data yet): skeleton bubbles.
+       Top-paging space is reserved so content doesn't jump when the
+       real paging block appears above the list. -->
+  <template v-if="!testimonials && !error">
+    <div class="paging-space-reserve" aria-hidden="true" />
+    <TestimonialSkeleton :count="3" />
+  </template>
 
-  <!-- Error state -->
-  <div v-else-if="error" class="error-message">
-    {{ error }}
-  </div>
-
-  <!-- Content -->
-  <div
-    v-else-if="testimonials && testimonials.resources.length > 0"
-    class="testimonials-list"
-  >
-    <!-- Top paging -->
-    <PagingWithSeparators
-      v-if="testimonials.paging"
-      :paging="testimonials.paging"
-      :to="{ name: 'testimonials' }"
-      :use-query="true"
+  <template v-else>
+    <!-- Error banner: rendered above stale content when there is
+         something to show, otherwise it is the only thing on screen. -->
+    <ErrorState
+      v-if="error"
+      class="error-banner"
+      :message="error"
+      :retry="retryFetch"
     />
 
-    <template
-      v-for="(testimonial, index) in testimonials.resources"
-      :key="testimonial.id"
+    <!-- Content (kept visible under the error banner during refetch) -->
+    <div
+      v-if="testimonials && testimonials.resources.length > 0"
+      ref="listRef"
+      class="testimonials-list"
+      :class="{ 'is-refetching': loading }"
+      :aria-busy="loading ? 'true' : undefined"
     >
-      <Testimonial
-        :controls="true"
-        :testimonial="testimonial"
-        :search-query="filterState.search"
+      <!-- Top paging -->
+      <PagingWithSeparators
+        v-if="testimonials.paging"
+        :paging="testimonials.paging"
+        :to="{ name: 'testimonials' }"
+        :use-query="true"
+        :scroll-anchor="pagingAnchor"
       />
-      <div
-        v-if="index < testimonials.resources.length - 1"
-        class="separator"
-        aria-hidden="true"
-      >
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        - - - - - - - - - - - - - -
+
+      <div class="testimonials-rows">
+        <template
+          v-for="(testimonial, index) in testimonials.resources"
+          :key="testimonial.id"
+        >
+          <TestimonialCard
+            :testimonial="testimonial"
+            :search-query="filterState.search"
+          >
+            <template #controls>
+              <TestimonialDeleteButton :testimonial="testimonial" />
+            </template>
+          </TestimonialCard>
+          <DashSeparator
+            v-if="index < testimonials.resources.length - 1"
+            spacing="tiny"
+          />
+        </template>
       </div>
-    </template>
 
-    <!-- Bottom paging -->
-    <PagingWithSeparators
-      v-if="testimonials.paging"
-      :paging="testimonials.paging"
-      :to="{ name: 'testimonials' }"
-      :use-query="true"
-    />
-  </div>
+      <!-- Bottom paging -->
+      <PagingWithSeparators
+        v-if="testimonials.paging"
+        :paging="testimonials.paging"
+        :to="{ name: 'testimonials' }"
+        :use-query="true"
+        :scroll-anchor="pagingAnchor"
+      />
+    </div>
 
-  <!-- Empty state -->
-  <secondary-text v-else-if="testimonials">
-    {{
-      hasActiveFilters
-        ? "Отзывов по заданным фильтрам не найдено"
-        : "Отзывов пока нет"
-    }}
-  </secondary-text>
+    <!-- Out-of-range page: paging exists but this page has no resources -->
+    <div v-else-if="currentPageOutOfRange" class="empty-state">
+      <secondary-text>
+        На этой странице отзывов нет —
+        <router-link :to="{ name: 'testimonials' }"
+          >вернуться на первую страницу</router-link
+        >
+      </secondary-text>
+    </div>
+
+    <!-- Empty state -->
+    <div v-else-if="testimonials" class="empty-state">
+      <secondary-text>
+        {{
+          hasActiveFilters
+            ? "Отзывов по заданным фильтрам не найдено"
+            : "Отзывов пока нет"
+        }}
+      </secondary-text>
+      <button
+        v-if="hasActiveFilters"
+        type="button"
+        class="clear-filters-btn"
+        @click="clearFilters"
+      >
+        Сбросить фильтры
+      </button>
+    </div>
+  </template>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-@import "src/assets/styles/Skeleton"
+@import "src/assets/styles/Inputs"
 
+// Paging blocks sit at the same tight $tiny rhythm the rows keep between
+// themselves and their dash separators (COMM-1: пагинация→строки =
+// межстрочному, matching the polls page where both distances are equal).
 .testimonials-list
   display: flex
   flex-direction: column
   gap: $tiny
   margin-top: $medium
+  transition: opacity 0.15s ease
 
-.separator
-  margin: $tiny 0
-  color: $text-muted
-  white-space: nowrap
-  overflow: hidden
-  max-width: 100%
-  width: 0
-  min-width: 100%
-  user-select: none
+  // Dim feedback during a refetch (paging/sort/search) while stale
+  // testimonials stay on screen.
+  &.is-refetching
+    opacity: 0.6
+    pointer-events: none
 
-.error-message
-  margin-top: $medium
-  padding: $medium
-  color: $text-on-red
-  background-color: $bg-highlight-red
-  border-radius: $border-radius
-
-// Skeleton bubbles mirror the collapsed testimonial bubble shape
-// (same padding/radius/min-height as the real .testimonial-text,
-// see entities/testimonial Testimonial.vue and RandomTestimonials).
-.testimonials-skeleton
+.testimonials-rows
   display: flex
   flex-direction: column
+  gap: $tiny
+
+.error-banner
+  margin-top: $medium
+
+// Reserves the top PagingWithSeparators block's height during the
+// skeleton state so paged results don't shift the list down once the
+// real paging controls mount above it. Budget: two dash-separator
+// lines (~21px each, no margins) + one .paging row (~22px links +
+// 4px total vertical margin from the compact override) ~= 68px.
+.paging-space-reserve
+  height: 68px
+  margin-top: $medium
+
+// TestimonialSkeleton itself doesn't carry the page's top margin.
+// No :deep() — the component's root element inherits this page's scope
+// attribute, so the plain scoped selector matches it directly (a :deep
+// descendant selector would not: the page is a root-level fragment).
+// $tiny mirrors the loaded state's paging-to-rows gap so nothing shifts.
+.testimonial-skeleton-list
+  margin-top: $tiny
+
+.empty-state
+  display: flex
+  align-items: center
   gap: $medium
   margin-top: $medium
 
-.skeleton-bubble
-  display: flex
-  flex-direction: column
-  justify-content: center
-  gap: 8px
-  padding: $medium + $tiny $medium + $small
-  margin-bottom: $small
-  border-radius: 20px
-  background-color: $bg-highlight-green
-  min-height: calc(1.5 * 3 * 1em + ($medium + $tiny) + 26px)
-
-// Uses +skeleton-shimmer for animation/border-radius, then overrides
-// the gradient for the green bubble context: lines are derived from
-// $text-on-green (the bubble's own text color) instead of hardcoded
-// white, so they stay visible in both light and dark themes
-// (same approach as RandomTestimonials on the home page).
-.skeleton-text-line
-  height: 14px
-  width: 100%
-  +skeleton-shimmer
-  border-radius: 3px
-  background: linear-gradient(90deg, color-mix(in srgb, $text-on-green 25%, transparent) 25%, color-mix(in srgb, $text-on-green 50%, transparent) 50%, color-mix(in srgb, $text-on-green 25%, transparent) 75%)
-  background-size: 200% 100%
-
-  &.wide
-    width: 95%
-
-  &.short
-    width: 60%
-
-.skeleton-footer
-  display: flex
-  align-items: center
-  justify-content: space-between
-  gap: $small
-  margin-top: 18px // Clear the real bubble's tail position
-
-.skeleton-author
-  width: 120px
-  height: 14px
-  +skeleton-shimmer
-
-.skeleton-date
-  width: 70px
-  height: 12px
-  +skeleton-shimmer
+.clear-filters-btn
+  +inline-link-button
 </style>

@@ -34,7 +34,7 @@ Internet → Nginx → Frontend (Vue.js)
 
 **Файлы:**
 - Backend: [`docker/app.Dockerfile`](../../docker/app.Dockerfile)
-- Frontend: [`frontend/DM.Web.Modern/Dockerfile`](../../frontend/DM.Web.Modern/Dockerfile)
+- Frontend: [`src/DM.Web.Client/Dockerfile`](../../src/DM.Web.Client/Dockerfile)
 
 **Принцип:** Multi-stage build (SDK → Runtime), non-root user `dmuser`
 
@@ -94,7 +94,9 @@ Main сервер                    Mirror сервер
 **Первоначальная настройка зеркала (один раз):**
 ```bash
 cd docker
-./scripts/setup-mirror.sh  # интерактивный мастер
+cp .env.example .env.mirror
+# Заполнить: секреты и крипто-ключ с main, MIRROR_ID, хосты main-сервера,
+# публичные URL зеркала — полный список переменных в MIRRORING.md
 docker compose --env-file .env.mirror --profile mirror up -d
 ```
 

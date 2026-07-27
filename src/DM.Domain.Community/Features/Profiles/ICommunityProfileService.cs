@@ -33,7 +33,6 @@ public interface ICommunityProfileService
         UserRole? role = null,
         UserSort sort = UserSort.Name,
         bool sortAscending = true,
-        bool? isHonorary = null,
         bool? isNewbie = null,
         bool? isOnline = null,
         int? minRating = null,

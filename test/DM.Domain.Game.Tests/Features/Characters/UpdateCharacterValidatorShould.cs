@@ -63,34 +63,6 @@ public class UpdateCharacterValidatorShould : UnitTestBase
     }
 
     [Fact]
-    public async Task FailWhenRaceExceedsMaxLength()
-    {
-        var input = new UpdateCharacter
-        {
-            CharacterId = Guid.NewGuid(),
-            Race = new string('a', 31)
-        };
-
-        var result = await validator.TestValidateAsync(input);
-        result.ShouldHaveValidationErrorFor(x => x.Race)
-            .WithErrorMessage(ValidationError.Long);
-    }
-
-    [Fact]
-    public async Task FailWhenClassExceedsMaxLength()
-    {
-        var input = new UpdateCharacter
-        {
-            CharacterId = Guid.NewGuid(),
-            Class = new string('a', 31)
-        };
-
-        var result = await validator.TestValidateAsync(input);
-        result.ShouldHaveValidationErrorFor(x => x.Class)
-            .WithErrorMessage(ValidationError.Long);
-    }
-
-    [Fact]
     public async Task PassWhenOptionalFieldsAreNull()
     {
         var input = new UpdateCharacter

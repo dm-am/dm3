@@ -24,11 +24,11 @@
         :always-show-counters="true"
       />
     </template>
-    <div class="separator">
+    <div class="separator" aria-hidden="true">
       - - - - - - - - - - - - - - - - - - - - - - - - - -
     </div>
     <div>
-      <span class="muted">- </span>
+      <span class="muted" aria-hidden="true">- </span>
       <router-link class="forward" :to="{ name: 'blogs' }"
         >Все блоги</router-link
       >
@@ -71,8 +71,6 @@ watch(
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 .separator
   color: $text-muted
 

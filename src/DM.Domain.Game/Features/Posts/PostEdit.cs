@@ -16,7 +16,7 @@ public class PostEdit
     /// <summary>
     /// Edit timestamp (UTC)
     /// </summary>
-    public DateTimeOffset EditedUtc { get; set; }
+    public DateTimeOffset ModifiedUtc { get; set; }
 
     /// <summary>
     /// Editor user

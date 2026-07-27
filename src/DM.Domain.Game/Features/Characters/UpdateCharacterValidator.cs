@@ -24,14 +24,6 @@ internal class UpdateCharacterValidator : AbstractValidator<UpdateCharacter>
                 .NotEmpty().WithMessage(ValidationError.Empty)
                 .MaximumLength(50).WithMessage(ValidationError.Long));
 
-        When(c => c.Race != default, () =>
-            RuleFor(c => c.Race)
-                .MaximumLength(30).WithMessage(ValidationError.Long));
-
-        When(c => c.Class != default, () =>
-            RuleFor(c => c.Class)
-                .MaximumLength(30).WithMessage(ValidationError.Long));
-
         When(c => c.Attributes != null && c.Attributes.Any(), () =>
             RuleForEach(c => c.Attributes)
                 .MustAsync(async (c, attribute, context, _) =>

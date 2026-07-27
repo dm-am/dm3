@@ -41,7 +41,7 @@ public class ModeratedProfileNote : IRemovable
     /// <summary>
     /// Last modification date (UTC)
     /// </summary>
-    public DateTimeOffset? UpdatedUtc { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
     /// Whether the note is soft-deleted

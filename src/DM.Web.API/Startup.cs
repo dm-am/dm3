@@ -157,15 +157,16 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             services.AddHostedService<HostedServices.TokenCleanupService>();
             services.AddHostedService<HostedServices.SessionCleanupService>();
             services.AddHostedService<HostedServices.PendingRegistrationCleanupService>();
+            services.AddHostedService<HostedServices.PeriodDigestService>();
             services.AddHostedService<HostedServices.UsernameChangeCleanupService>();
             services.AddHostedService<HostedServices.PendencyReminderService>();
             services.AddHostedService<HostedServices.GameInactivityService>();
             services.AddHostedService<HostedServices.PopularityScoreService>();
             services.AddHostedService<HostedServices.UploadOrphanCleanupService>();
 
-            // Bucket initializer бежит и в migration mode тоже — но регистрируем
-            // только в обычном mode, потому что migration-контейнер не имеет
-            // S3-доступа (зависит только от postgres).
+            // The bucket initializer would run in migration mode too — so we register it
+            // only in normal mode, because the migration container has no
+            // S3 access (it depends only on postgres).
             services.AddHostedService<DM.Infrastructure.Core.Storage.StorageBucketInitializer>();
         }
 
@@ -250,9 +251,9 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                         }));
 
                 // Upload endpoint: 10 uploads per minute per authenticated user
-                // (fallback на IP для guests; в норме upload requires auth).
-                // Анти-флуд защита поверх 10 MB лимита размера: даже если
-                // атакующий шлет валидные мелкие файлы — не более 10/мин.
+                // (fallback to IP for guests; normally upload requires auth).
+                // Anti-flood protection on top of the 10 MB size limit: even if
+                // an attacker sends valid small files — no more than 10/min.
                 options.AddPolicy("uploads", context =>
                     RateLimitPartition.GetFixedWindowLimiter(
                         partitionKey: context.User.Identity?.Name
@@ -262,6 +263,23 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                         {
                             PermitLimit = 10,
                             Window = TimeSpan.FromMinutes(1),
+                            QueueLimit = 0,
+                        }));
+
+                // Sliding window for expensive read endpoints (chat availability,
+                // full-text search): 30 requests per minute per user/IP. Search
+                // runs heavy tsvector scans against the primary OLTP database, so
+                // it is a more realistic cost vector than the other read paths.
+                options.AddPolicy("sliding", context =>
+                    RateLimitPartition.GetSlidingWindowLimiter(
+                        partitionKey: context.User.Identity?.Name
+                            ?? context.Connection.RemoteIpAddress?.ToString()
+                            ?? "anon",
+                        factory: _ => new SlidingWindowRateLimiterOptions
+                        {
+                            PermitLimit = 30,
+                            Window = TimeSpan.FromMinutes(1),
+                            SegmentsPerWindow = 6,
                             QueueLimit = 0,
                         }));
             }
@@ -277,6 +295,8 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                 options.AddPolicy("email-check", _ =>
                     RateLimitPartition.GetNoLimiter<string>("unlimited"));
                 options.AddPolicy("uploads", _ =>
+                    RateLimitPartition.GetNoLimiter<string>("unlimited"));
+                options.AddPolicy("sliding", _ =>
                     RateLimitPartition.GetNoLimiter<string>("unlimited"));
             }
 
@@ -403,7 +423,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .UseMiddleware<ErrorHandlingMiddleware>()
             .UseCors(b => b
                 .WithOrigins(integrationOptions.Value.CorsUrls)
-                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-Dm-Correlation-Token", "X-Bot-Api-Key", "Cache-Control", "X-Dm-Audience", "x-signalr-user-agent")
+                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-Dm-Correlation-Token", "Cache-Control", "X-Dm-Audience", "x-signalr-user-agent")
                 .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .AllowCredentials()
                 .SetPreflightMaxAge(TimeSpan.FromHours(1)))

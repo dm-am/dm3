@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { DashSeparator } from "@/shared/ui/DashSeparator";
+
 interface FaqItem {
   question: string;
   answer: string;
@@ -59,15 +61,15 @@ const faqItems: FaqItem[] = [
   <!-- MAIN CONTENT (static - faqItems is const) -->
   <div class="about-content" v-once>
     <p>
-      DM.AM — одна из крупнейших русскоязычных площадок для текстовых ролевых
-      игр. С 2007 года тысячи игроков создают здесь свои истории: фэнтези,
-      sci-fi, horror, исторические драмы и многое другое.
+      Dungeon Master — одна из крупнейших русскоязычных площадок для текстовых
+      ролевых игр. С 2007 года тысячи игроков создают здесь свои истории:
+      фэнтези, фантастика, хоррор, исторические драмы и многое другое.
     </p>
 
     <block-title>Почему форумные игры?</block-title>
     <p>
       В отличие от настольных сессий, здесь не нужно собираться в одно время и в
-      одном месте. Пишите когда удобно — утром за кофе, в обеденный перерыв или
+      одном месте. Пишите, когда удобно — утром за кофе, в обеденный перерыв или
       поздно ночью. Игра идет непрерывно, а продуманные посты делают историю
       глубже и интереснее.
     </p>
@@ -77,7 +79,14 @@ const faqItems: FaqItem[] = [
       <li>
         Игры с открытым набором ждут игроков —
         <router-link
-          to="/games?status=Active&recruitmentFilter=open&sortBy=activated"
+          :to="{
+            name: 'games',
+            query: {
+              status: 'Active',
+              recruitmentFilter: 'open',
+              sortBy: 'activated',
+            },
+          }"
           ><strong>найдите игру для себя</strong></router-link
         >
       </li>
@@ -90,39 +99,33 @@ const faqItems: FaqItem[] = [
     </ul>
 
     <block-title>Частые вопросы</block-title>
-    <div class="separator">
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - -
-    </div>
+    <DashSeparator spacing="tiny" />
     <div class="faq-list">
-      <template v-for="(item, index) in faqItems" :key="item.question">
+      <template v-for="item in faqItems" :key="item.question">
         <div class="faq-item">
-          <div class="faq-question">{{ item.question }}</div>
+          <h3 class="faq-question">{{ item.question }}</h3>
           <div class="faq-answer">{{ item.answer }}</div>
         </div>
-        <div v-if="index < faqItems.length - 1" class="separator">
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          - - - - - - - - - - - - - - - - - -
-        </div>
+        <DashSeparator spacing="tiny" />
       </template>
+
+      <!-- Testimonials link: natural home for #26, kept out of faqItems
+           since it needs a router-link (plain data array only holds text) -->
+      <div class="faq-item">
+        <h3 class="faq-question">Что говорят о Dungeon Master игроки?</h3>
+        <div class="faq-answer">
+          Мы собираем отзывы участников на отдельной странице —
+          <router-link to="/testimonials"
+            ><strong>почитайте, что пишут игроки</strong></router-link
+          >.
+        </div>
+      </div>
     </div>
-    <div class="separator">
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - -
-    </div>
+    <DashSeparator spacing="tiny" />
 
     <p>
       Остались вопросы? Загляните в
-      <router-link to="/forum/newbies"
+      <router-link :to="{ name: 'forum', params: { alias: 'newbies' } }"
         ><strong>раздел для новичков на форуме</strong></router-link
       >
       — там точно помогут разобраться.
@@ -131,9 +134,6 @@ const faqItems: FaqItem[] = [
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .motto
   display: flex
   flex-direction: column
@@ -185,12 +185,6 @@ const faqItems: FaqItem[] = [
 
   li
     margin: $tiny 0
-    color: $text
-
-  a
-    color: $link
-    &:hover
-      color: $link-hover
 
 // ============================================
 // FAQ LIST
@@ -202,20 +196,12 @@ const faqItems: FaqItem[] = [
   margin: 0 0 $small
 
 .faq-question
+  margin: 0
+  font-size: inherit
   font-weight: bold
   color: $text
 
 .faq-answer
   margin: $tiny 0 0 0
   color: $text
-
-.separator
-  margin: $tiny 0
-  color: $text-muted
-  white-space: nowrap
-  overflow: hidden
-  max-width: 100%
-  width: 0
-  min-width: 100%
-  user-select: none
 </style>

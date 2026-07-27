@@ -8,7 +8,7 @@ using DM.Domain.Core.Enums;
 namespace DM.Infrastructure.Persistence.Entities.Moderation;
 
 /// <summary>
-/// DAL model of user complaint ticket
+/// DAL model of a ticket ("обращение"): user complaint, suggestion or support request
 /// </summary>
 [Table("Tickets")]
 public class Ticket
@@ -20,14 +20,26 @@ public class Ticket
     public Guid TicketId { get; set; }
 
     /// <summary>
-    /// Complaint author identifier
+    /// Ticket author identifier (null for guest submissions)
     /// </summary>
-    public Guid UserId { get; set; }
+    public Guid? UserId { get; set; }
 
     /// <summary>
-    /// Complaint target user identifier
+    /// Complaint target user identifier (null for tickets without a target)
     /// </summary>
-    public Guid TargetId { get; set; }
+    public Guid? TargetId { get; set; }
+
+    /// <summary>
+    /// Contact email left by a guest author (null for authenticated submissions)
+    /// </summary>
+    public string? GuestEmail { get; set; }
+
+    /// <summary>
+    /// Public tracking token for guest submissions (null for authenticated
+    /// authors). Lets a guest check their ticket status without an account —
+    /// the token is the only credential required, so it must be unguessable.
+    /// </summary>
+    public string? TrackingToken { get; set; }
 
     /// <summary>
     /// Entity that caused the complaint (comment, message, post, etc.)
@@ -43,6 +55,11 @@ public class Ticket
     /// Ticket status
     /// </summary>
     public TicketStatus Status { get; set; }
+
+    /// <summary>
+    /// Ticket category
+    /// </summary>
+    public TicketSubtype Subtype { get; set; }
 
     /// <summary>
     /// Creation moment
@@ -97,16 +114,16 @@ public class Ticket
     #region Navigation Properties
 
     /// <summary>
-    /// Complaint author
+    /// Ticket author (null for guest submissions)
     /// </summary>
     [ForeignKey(nameof(UserId))]
-    public virtual User Author { get; set; } = null!;
+    public virtual User? Author { get; set; }
 
     /// <summary>
-    /// Complaint target user
+    /// Complaint target user (null for tickets without a target)
     /// </summary>
     [ForeignKey(nameof(TargetId))]
-    public virtual User Target { get; set; } = null!;
+    public virtual User? Target { get; set; }
 
     /// <summary>
     /// Moderator assigned to handle this ticket

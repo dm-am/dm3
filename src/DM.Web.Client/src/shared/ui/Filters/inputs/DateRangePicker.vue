@@ -3,8 +3,11 @@
  * DateRangePicker - Date range input with From/To fields and Apply button.
  *
  * Used for filtering by date ranges (created, activated, closed, etc.)
+ * Each field is a DateInput: manual typing plus the shared site calendar
+ * (no native <input type="date">).
  */
 import { ref, watch, computed } from "vue";
+import { DateInput } from "@/shared/ui/DatePicker";
 import { FilterApplyButton } from "../primitives";
 
 defineOptions({ name: "DateRangePicker" });
@@ -90,11 +93,23 @@ function handleClear() {
   <div class="dropdown-date-range">
     <div class="date-range-row">
       <label class="date-label">{{ fromLabel }}</label>
-      <input v-model="fromInput" type="date" class="date-input" />
+      <DateInput
+        class="date-input"
+        :model-value="fromInput || null"
+        :max="toInput || undefined"
+        :aria-label="`Дата: ${fromLabel}`"
+        @update:model-value="fromInput = $event || ''"
+      />
     </div>
     <div class="date-range-row">
       <label class="date-label">{{ toLabel }}</label>
-      <input v-model="toInput" type="date" class="date-input" />
+      <DateInput
+        class="date-input"
+        :model-value="toInput || null"
+        :min="fromInput || undefined"
+        :aria-label="`Дата: ${toLabel}`"
+        @update:model-value="toInput = $event || ''"
+      />
     </div>
     <div class="date-actions">
       <FilterApplyButton

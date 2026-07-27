@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Game.Comments;
 
@@ -14,7 +15,7 @@ public interface IGameCommentLikeApiService
     /// </summary>
     /// <param name="commentId">Comment identifier</param>
     /// <returns>Envelope for user who just liked the comment</returns>
-    Task<User> LikeComment(Guid commentId);
+    Task<Envelope<User>> LikeComment(Guid commentId);
 
     /// <summary>
     /// Remove user's like from comment

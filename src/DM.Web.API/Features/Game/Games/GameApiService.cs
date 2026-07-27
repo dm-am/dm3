@@ -94,6 +94,27 @@ internal class GameApiService : IGameApiService
     }
 
     /// <inheritdoc />
+    public async Task<Envelope<GameDetails>> ChangeStatus(Guid gameId, GameStatusChangeRequest request)
+    {
+        var updatedGame = await _gameService.ChangeStatusAsync(gameId, request.Transition);
+        return new Envelope<GameDetails>(_mapper.Map<GameDetails>(updatedGame));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<GameDetails>> ChangePremoderation(string id, GamePremoderationChangeRequest request)
+    {
+        var updatedGame = await _gameService.ChangePremoderationAsync(id, request.Transition);
+        return new Envelope<GameDetails>(_mapper.Map<GameDetails>(updatedGame));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<GameDetails>> ResetRecruitmentDate(Guid gameId)
+    {
+        var updatedGame = await _gameService.ResetRecruitmentDateAsync(gameId);
+        return new Envelope<GameDetails>(_mapper.Map<GameDetails>(updatedGame));
+    }
+
+    /// <inheritdoc />
     public Task Delete(Guid gameId) => _gameService.DeleteAsync(gameId);
 
     /// <inheritdoc />

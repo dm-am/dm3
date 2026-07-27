@@ -6,32 +6,37 @@
     aria-label="Статистика сайта"
   >
     <div class="stat-row">
-      Пользователей: {{ statValue(users.value) }} <span class="bracket">[</span
+      Пользователей: {{ statValue(users.value) }}
+      <span class="bracket" aria-hidden="true">[</span
       ><span class="delta">{{ deltaValue(users.todayDelta) }}</span
-      ><span class="bracket">]</span>, онлайн:
+      ><span class="bracket" aria-hidden="true">]</span>, online:
       <span class="online">{{ statsUnavailable ? "n/a" : online }}</span>
     </div>
     <div class="stat-row">
       Персонажей: {{ statValue(characters.value) }}
-      <span class="bracket">[</span
+      <span class="bracket" aria-hidden="true">[</span
       ><span class="delta">{{ deltaValue(characters.todayDelta) }}</span
-      ><span class="bracket">]</span>
+      ><span class="bracket" aria-hidden="true">]</span>
     </div>
     <div class="stat-row">
-      Игр: {{ statValue(games.value) }} <span class="bracket">[</span
+      Игр: {{ statValue(games.value) }}
+      <span class="bracket" aria-hidden="true">[</span
       ><span class="delta">{{ deltaValue(games.todayDelta) }}</span
-      ><span class="bracket">]</span>, постов: {{ statValue(posts.value) }}
-      <span class="bracket">[</span
+      ><span class="bracket" aria-hidden="true">]</span>, постов:
+      {{ statValue(posts.value) }}
+      <span class="bracket" aria-hidden="true">[</span
       ><span class="delta">{{ deltaValue(posts.todayDelta) }}</span
-      ><span class="bracket">]</span>
+      ><span class="bracket" aria-hidden="true">]</span>
     </div>
     <div class="stat-row">
-      Блогов: {{ statValue(blogs.value) }} <span class="bracket">[</span
+      Блогов: {{ statValue(blogs.value) }}
+      <span class="bracket" aria-hidden="true">[</span
       ><span class="delta">{{ deltaValue(blogs.todayDelta) }}</span
-      ><span class="bracket">]</span>, публикаций:
-      {{ statValue(publications.value) }} <span class="bracket">[</span
+      ><span class="bracket" aria-hidden="true">]</span>, публикаций:
+      {{ statValue(publications.value) }}
+      <span class="bracket" aria-hidden="true">[</span
       ><span class="delta">{{ deltaValue(publications.todayDelta) }}</span
-      ><span class="bracket">]</span>
+      ><span class="bracket" aria-hidden="true">]</span>
     </div>
   </div>
   <!-- Skeleton placeholder while loading. Matches .site-stats
@@ -106,8 +111,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Skeleton"
 
 .site-stats

@@ -20,8 +20,8 @@
 /about           ← о проекте
 /support         ← поддержка
 /complaint       ← жалоба
-/donate          ← донат
-/chat            ← глобальный чат
+/donate          ← донат (планируется)
+/global-chat     ← глобальный чат
 /community       ← список пользователей
 ```
 
@@ -87,7 +87,7 @@
 
 ```
 /game/{publicId}
-/blog/{publicId}
+/blogs/{publicId}
 /messenger/c/{publicId}
 ```
 
@@ -116,7 +116,7 @@
 ```
 /forum/{alias}/{num}           ← топик #42 в разделе
 /game/{publicId}/rooms/{num}   ← комната #3 в игре
-/blog/{publicId}/feed/{num}    ← публикация #5 в блоге
+/blogs/{publicId}/feed/{num}   ← публикация #5 в блоге
 ```
 
 **Когда использовать:**
@@ -174,8 +174,8 @@
 /game/kxmnt/rooms           ← список комнат
 /game/kxmnt/rooms/3         ← комната #3
 /forum/general/42           ← топик #42 в разделе
-/blog/prnvw/feed            ← лента публикаций
-/blog/prnvw/feed/5          ← публикация #5
+/blogs/prnvw/feed           ← лента публикаций
+/blogs/prnvw/feed/5         ← публикация #5
 ```
 
 ### Пагинация
@@ -198,7 +198,7 @@ Query parameters для фильтров:
 ```
 /games?status=Active&sort=created
 /community?role=Mentor&activity=online
-/blog/kxmnt/feed?rubric=humor
+/blogs/kxmnt/feed?rubric=humor
 ```
 
 ---
@@ -211,8 +211,11 @@ Query parameters для фильтров:
 |---------|--------|
 | Lowercase | `/games`, не `/Games` |
 | Множественное число для списков | `/games`, `/users`, `/polls` |
-| Единственное число для элемента | `/game/{id}`, `/user/{username}` |
+| Единственное число для элемента | `/game/{id}` |
 | Дефис для составных слов | `/create-game`, `/post-reviews` |
+
+**Записанные исключения:** `/users/{username}` и `/blogs/{publicId}` используют
+множественное число и для элемента — путь элемента продолжает путь списка.
 
 ### Query parameters
 

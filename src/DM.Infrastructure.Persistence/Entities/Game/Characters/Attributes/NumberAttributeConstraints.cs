@@ -6,14 +6,10 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes;
 public class NumberAttributeConstraints : AttributeConstraints
 {
     /// <summary>
-    /// Minimum possible value (no minimal value if null)
+    /// Maximum number of digits (no cap if null)
     /// </summary>
-    public int? MinValue { get; set; }
-    /// <summary>
-    /// Maximum possible value (no maximal value if null)
-    /// </summary>
-    public int? MaxValue { get; set; }
+    public int? MaxLength { get; set; }
 
     /// <inheritdoc />
-    public override string GetDefaultValue() => (MinValue ?? MaxValue ?? 0).ToString();
+    public override string GetDefaultValue() => "0";
 }

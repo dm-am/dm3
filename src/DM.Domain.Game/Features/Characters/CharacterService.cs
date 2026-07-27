@@ -98,14 +98,6 @@ internal class CharacterService : ICharacterService
             GameId = createCharacter.GameId,
             AuthorId = isNpc ? null : currentUserId,
             Name = createCharacter.Name.Trim(),
-            Race = createCharacter.Race?.Trim(),
-            Class = createCharacter.Class?.Trim(),
-            Alignment = createCharacter.Alignment,
-            Appearance = createCharacter.Appearance?.Trim(),
-            Temper = createCharacter.Temper?.Trim(),
-            Story = createCharacter.Story?.Trim(),
-            Skills = createCharacter.Skills?.Trim(),
-            Inventory = createCharacter.Inventory?.Trim(),
             IsNpc = isNpc,
             AccessPolicy = createCharacter.AccessPolicy,
             InitialStatus = initialStatus,
@@ -132,7 +124,7 @@ internal class CharacterService : ICharacterService
     {
         var game = await _gameService.GetAsync(gameId);
         var characters = (await _repository.GetCharacters(gameId)).ToArray();
-        await _attributeValueFiller.Fill(characters, game.AttributeSchemaId);
+        await _attributeValueFiller.Fill(characters, game, _identityProvider.Current.User.UserId);
         return characters;
     }
 
@@ -145,7 +137,7 @@ internal class CharacterService : ICharacterService
         }
 
         var game = await _gameService.GetAsync(character.GameId);
-        await _attributeValueFiller.Fill(new[] { character }, game.AttributeSchemaId);
+        await _attributeValueFiller.Fill(new[] { character }, game, _identityProvider.Current.User.UserId);
         return character;
     }
 
@@ -212,6 +204,8 @@ internal class CharacterService : ICharacterService
             }
         }
 
+        var attributeInputs = await BuildAttributeInputs(characterToUpdate, updateCharacter.Attributes);
+
         var entity = new UpdateCharacterEntity
         {
             CharacterId = updateCharacter.CharacterId,
@@ -220,21 +214,9 @@ internal class CharacterService : ICharacterService
             IsPlayerLeft = isPlayerLeft,
             IsPlayerExiled = isPlayerExiled,
             Name = updateCharacter.Name?.Trim(),
-            Race = updateCharacter.Race?.Trim(),
-            Class = updateCharacter.Class?.Trim(),
-            Alignment = updateCharacter.Alignment,
-            Appearance = updateCharacter.Appearance?.Trim(),
-            Temper = updateCharacter.Temper?.Trim(),
-            Story = updateCharacter.Story?.Trim(),
-            Skills = updateCharacter.Skills?.Trim(),
-            Inventory = updateCharacter.Inventory?.Trim(),
             IsNpc = isNpc,
             AccessPolicy = accessPolicy,
-            Attributes = updateCharacter.Attributes?.Select(a => new CharacterAttributeInput
-            {
-                Id = a.Id,
-                Value = a.Value
-            })
+            Attributes = attributeInputs
             // Modification tracking is handled via Edit history, not inline ModifiedUtc
         };
 
@@ -259,6 +241,69 @@ internal class CharacterService : ICharacterService
         }
 
         return character;
+    }
+
+    /// <summary>
+    /// Builds the attribute inputs for an update, protecting hidden attribute
+    /// values against a redacted round-trip. A submitter whose read redacted the
+    /// hidden values (anyone who is neither owner nor game lead) must never
+    /// create, overwrite, or blank them: their hidden inputs are dropped and the
+    /// stored values are restored so they survive the save.
+    /// </summary>
+    private async Task<IEnumerable<CharacterAttributeInput>?> BuildAttributeInputs(
+        CharacterToUpdate character,
+        IEnumerable<Games.CharacterAttribute>? submitted)
+    {
+        if (submitted == null)
+        {
+            return null;
+        }
+
+        var inputs = submitted
+            .Select(a => new CharacterAttributeInput { Id = a.Id, Value = a.Value })
+            .ToList();
+
+        if (inputs.Count == 0)
+        {
+            return inputs;
+        }
+
+        var game = await _gameService.GetAsync(character.GameId);
+        if (!game.AttributeSchemaId.HasValue)
+        {
+            return inputs;
+        }
+
+        var currentUserId = _identityProvider.Current.User.UserId;
+        var canSeeHidden = game.GetRoles(currentUserId).HasEditAccess() ||
+                           character.UserId == currentUserId;
+        if (canSeeHidden)
+        {
+            return inputs;
+        }
+
+        var schema = await _repository.GetGameSchema(game.Id);
+        var hiddenSpecIds = schema.Specifications
+            .Where(s => s.IsHidden)
+            .Select(s => s.Id)
+            .ToHashSet();
+        if (hiddenSpecIds.Count == 0)
+        {
+            return inputs;
+        }
+
+        inputs.RemoveAll(a => hiddenSpecIds.Contains(a.Id));
+
+        var stored = await _repository.FindCharacter(character.Id);
+        if (stored != null)
+        {
+            foreach (var attribute in stored.Attributes.Where(a => hiddenSpecIds.Contains(a.Id)))
+            {
+                inputs.Add(new CharacterAttributeInput { Id = attribute.Id, Value = attribute.Value });
+            }
+        }
+
+        return inputs;
     }
 
     #endregion

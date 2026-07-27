@@ -3,7 +3,7 @@
  * - any: show all games regardless of recruitment
  * - open: show games with open recruitment (any type)
  * - initial: show games with first-time recruitment
- * - subsequent: show games with subsequent recruitment (донабор)
+ * - subsequent: show games with subsequent recruitment ("донабор")
  * - closed: show games with closed recruitment
  */
 export type RecruitmentFilter =

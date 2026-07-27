@@ -1,0 +1,24 @@
+// =============================================================================
+// BREAKPOINT SCALE
+// =============================================================================
+// Centralized breakpoint tokens for responsive layout. New media queries
+// should use these instead of ad-hoc pixel values. See UI_STANDARDS.md for
+// documentation ("Брейкпоинты" section).
+//
+// NOTE: many existing components still hardcode 768/640/600 etc. — those are
+// intentionally left as-is (future consolidation), this scale is authoritative
+// only where it is actually used (the page shell + off-canvas drawer for now).
+// =============================================================================
+
+// Shell breakpoint — below this both page sidebars leave the 3-column flow;
+// the burger + off-canvas drawer becomes the navigation entry point.
+$bp-shell: 1000px
+
+// Tablet-ish content reflow (grids dropping a column, etc.)
+$bp-tablet: 768px
+
+// Phone-width layout (single-column content, compact controls)
+$bp-mobile: 600px
+
+// Narrowest supported width (small phones)
+$bp-narrow: 480px

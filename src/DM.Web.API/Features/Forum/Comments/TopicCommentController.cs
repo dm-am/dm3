@@ -98,7 +98,7 @@ public class TopicCommentController : ControllerBase
     /// <response code="404">Topic not found</response>
     [HttpPost("~/v1/topics/{id}/comments", Name = nameof(PostTopicComment))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Comment), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
@@ -123,7 +123,7 @@ public class TopicCommentController : ControllerBase
     /// <response code="200">Comment details</response>
     /// <response code="404">Comment not found</response>
     [HttpGet("{id}", Name = nameof(GetTopicComment))]
-    [ProducesResponseType(typeof(Comment), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTopicComment(Guid id) => Ok(await _commentApiService.Get(id));
 
@@ -144,7 +144,7 @@ public class TopicCommentController : ControllerBase
     /// <response code="404">Comment not found</response>
     [HttpPatch("{id}", Name = nameof(PatchTopicComment))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Comment), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
@@ -193,7 +193,7 @@ public class TopicCommentController : ControllerBase
     /// <response code="404">Comment not found</response>
     [HttpPost("{id}/likes", Name = nameof(PostTopicCommentLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(User), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]

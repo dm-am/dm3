@@ -8,7 +8,8 @@ $input-padding: ($minor + 1px) $small
   padding: $input-padding
   color: $text
   background-color: $input-bg-overlay
-  border: 1px dashed $border
+  border: 1px solid $border
+  border-radius: $border-radius
 
 @mixin input()
   margin: 0
@@ -54,14 +55,17 @@ $input-padding: ($minor + 1px) $small
   border-radius: $button-border-radius
 
 /// Solid button — default variant.
-/// Grayscale: $bg-element bg, $border, $text color.
+/// Every state is a translucent overlay, never an absolute color, so the
+/// button reads correctly on ANY background (page, cards, modal footers):
+/// rest = $control-bg-overlay over the parent (calibrated to render exactly
+/// like the old solid $bg-element when sitting on $bg-page), hover/active
+/// stack $hover-overlay on top of that.
 /// Hover and active (e.g. dropdown open) share the SAME visual emphasis —
 /// $hover-overlay — so an open-menu button doesn't gain a stronger third
 /// shade that would compete with selection indicators elsewhere on the page.
-/// The overlay is translucent (rgba) so darkening is relative to the base.
 @mixin button()
   +_button-layout
-  background-color: $bg-element
+  background-color: $control-bg-overlay
   background-image: linear-gradient(transparent, transparent)
   color: $text
   border: 1px solid $border
@@ -109,6 +113,68 @@ $input-padding: ($minor + 1px) $small
     opacity: $disabled-opacity
     cursor: default
 
+/// Inline link-styled button — full reset to look like a plain inline <a> tag.
+/// Unlike +button-link, has no layout/sizing (no height, no padding box) so it
+/// can sit inline inside a paragraph or sentence. Several files hand-roll this
+/// reset (background: none, border: none, padding: 0, font: inherit) — use
+/// this mixin instead.
+@mixin inline-link-button()
+  background: none
+  border: none
+  padding: 0
+  font: inherit
+  color: $link
+  cursor: pointer
+
+  &:hover:not(:disabled)
+    color: $link-hover
+    text-decoration: underline
+
+/// "... показать полностью" reveal control — the site-wide idiom shared by
+/// TruncatedContent (text truncation) and the period-digest boards teaser.
+/// Real <button> semantics stay with the caller; this covers the visual
+/// contract: inline link look, enlarged tap target (padding overrides the
+/// inline-link-button reset via the bare & block, keeping the cascade order
+/// explicit under the new Sass mixed-decls semantics), keyboard focus ring.
+@mixin expand-toggle-button()
+  align-self: flex-start
+  display: inline-block
+  margin-top: $tiny
+  text-align: left
+  +inline-link-button
+  &
+    padding: $tiny 0
+
+  &:focus-visible
+    outline: 2px solid $link
+    outline-offset: 2px
+    border-radius: 2px
+
+/// "Label + inline muted links" line — the site-wide idiom for secondary
+/// link rows ("Полезные ссылки" in rules, "Модераторы раздела" on boards,
+/// subscribers lines on profiles): muted secondary-size text with links
+/// that recede to the muted color and light up on hover. Apply to the
+/// line container; give a bold-ish label locally (font-weight: 500) and
+/// apply +muted-link to the links themselves (directly for own <a> tags,
+/// via :deep(a) when the links come from a child component like UserLink).
+@mixin muted-links-line()
+  font-size: $secondary-font-size
+  color: $text-muted
+
+/// Link treatment for +muted-links-line rows: muted at rest, $link +
+/// underline on hover, visible keyboard focus.
+@mixin muted-link()
+  color: $text-muted
+  text-decoration: none
+
+  &:hover
+    color: $link
+    text-decoration: underline
+
+  &:focus-visible
+    outline: 2px solid $link
+    outline-offset: 2px
+
 /// Custom checkbox styling
 @mixin checkbox()
   appearance: none
@@ -140,7 +206,8 @@ $input-padding: ($minor + 1px) $small
     opacity: $disabled-opacity
 
 input,
-textarea
+textarea,
+select
   +input()
 
 input[type="checkbox"]

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -104,12 +105,51 @@ internal class MentorshipService : IMentorshipService
         await _repository.SetBlogMentor(blogId, null, ct);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<MentorshipAssignment>> GetGameMentorships(
+        IReadOnlyCollection<Guid> mentorIds, CancellationToken ct = default)
+    {
+        EnsureModeratorRole();
+        if (mentorIds.Count == 0)
+        {
+            return Array.Empty<MentorshipAssignment>();
+        }
+
+        return await _repository.GetGameMentorships(mentorIds, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<MentorshipAssignment>> GetBlogMentorships(
+        IReadOnlyCollection<Guid> mentorIds, CancellationToken ct = default)
+    {
+        EnsureModeratorRole();
+        if (mentorIds.Count == 0)
+        {
+            return Array.Empty<MentorshipAssignment>();
+        }
+
+        return await _repository.GetBlogMentorships(mentorIds, ct);
+    }
+
     private void EnsureMentorRole()
     {
         var userRole = _identityProvider.Current.User.Role;
         if (userRole < UserRole.Mentor)
         {
             throw new HttpException(HttpStatusCode.Forbidden, "Mentor role or higher is required");
+        }
+    }
+
+    /// <summary>
+    /// Cross-mentor listings expose curation zones of OTHER users, so they
+    /// require the moderation overview role, not just Mentor.
+    /// </summary>
+    private void EnsureModeratorRole()
+    {
+        var userRole = _identityProvider.Current.User.Role;
+        if (userRole < UserRole.Moderator)
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, "Moderator role or higher is required");
         }
     }
 }

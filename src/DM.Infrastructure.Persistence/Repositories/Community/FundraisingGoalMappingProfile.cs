@@ -10,7 +10,7 @@ internal class FundraisingGoalMappingProfile : Profile
     /// <inheritdoc />
     public FundraisingGoalMappingProfile()
     {
-        // GoalAmount, CollectedAmount and UpdatedUtc are mapped by convention
+        // GoalAmount, CollectedAmount and ModifiedUtc are mapped by convention
         CreateMap<DbFundraisingGoal, FundraisingGoal>();
     }
 }

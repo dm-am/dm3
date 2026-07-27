@@ -39,9 +39,6 @@ export { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
 /** Time limit for editing own messages (minutes) */
 export const EDIT_TIME_LIMIT_MINUTES = 15;
 
-/** Default page size for message loading */
-export const DEFAULT_PAGE_SIZE = 50;
-
 /** Max messages in memory to prevent unbounded growth */
 export const MAX_MESSAGES = 500;
 

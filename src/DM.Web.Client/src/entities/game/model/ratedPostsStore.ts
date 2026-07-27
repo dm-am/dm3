@@ -28,6 +28,8 @@ interface UserBestPostEntry {
   fetchedAt: number;
   loading: boolean;
   loaded: boolean;
+  /** Russian error message, or null when the last fetch succeeded. */
+  error: string | null;
 }
 
 export const useRatedPostsStore = defineStore("ratedPosts", () => {
@@ -87,7 +89,18 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
     }
   }
 
-  async function fetchLatestRated(force = false) {
+  /**
+   * Fetch the latest rated post.
+   *
+   * @param excludeId - When set, fetches the top 2 results (instead of 1)
+   *   and picks the first one whose id differs from `excludeId`. Used by
+   *   the homepage to avoid showing the same post as BestWeeklyPost twice
+   *   when they'd otherwise coincide. Backward compatible: omitting the
+   *   param keeps the original take:1 behavior.
+   * @param force - Bypass the cache TTL and refetch. Kept as a trailing
+   *   param (rather than dropped) so no existing call site breaks.
+   */
+  async function fetchLatestRated(excludeId?: string, force = false) {
     const now = Date.now();
     if (
       !force &&
@@ -103,14 +116,17 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
       const response = await gameApi.getRatedPosts({
         sortBy: "lastreview",
         hasReviews: true,
-        take: 1,
+        take: excludeId ? 2 : 1,
       });
       if (response.error) {
         // Keep any stale post visible; the widget shows the error
         // text only when it has no post to render.
         latestError.value = "Не удалось загрузить последний оцененный пост";
       } else {
-        latestRated.value = response.data?.resources?.[0] ?? null;
+        const resources = response.data?.resources ?? [];
+        latestRated.value = excludeId
+          ? (resources.find((p) => p.id !== excludeId) ?? resources[0] ?? null)
+          : (resources[0] ?? null);
         lastFetchLatest = now;
       }
     } finally {
@@ -142,6 +158,7 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
       fetchedAt: existing?.fetchedAt ?? 0,
       loading: true,
       loaded: existing?.loaded ?? false,
+      error: null,
     });
 
     try {
@@ -151,22 +168,34 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
         authorUsernames: username,
         take: 1,
       });
+      if (response.error) {
+        // Keep the entry loaded-but-null so consumers can distinguish
+        // "failed" (error set) from "empty" (error null, post null).
+        userBestPosts.value.set(username, {
+          post: existing?.post ?? null,
+          fetchedAt: Date.now(),
+          loading: false,
+          loaded: true,
+          error: "Не удалось загрузить лучший пост пользователя",
+        });
+        return;
+      }
       userBestPosts.value.set(username, {
         post: response.data?.resources?.[0] ?? null,
         fetchedAt: Date.now(),
         loading: false,
         loaded: true,
+        error: null,
       });
     } catch {
-      // Leave the entry marked as loaded-but-null so the empty state shows
-      // rather than an infinite skeleton. Swallow the error for parity
-      // with the fetchBestOfWeek / fetchLatestRated paths (they don't
-      // rethrow either — the UI simply shows the fallback empty state).
+      // Leave the entry marked as loaded-but-null with an error so callers
+      // can distinguish failure from a genuinely empty result.
       userBestPosts.value.set(username, {
         post: null,
         fetchedAt: Date.now(),
         loading: false,
         loaded: true,
+        error: "Не удалось загрузить лучший пост пользователя",
       });
     }
   }
@@ -181,6 +210,11 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
 
   function isLoadedBestPostOf(username: string): boolean {
     return userBestPosts.value.get(username)?.loaded ?? false;
+  }
+
+  /** Error message for the last fetchBestPostOfUser call, or null. */
+  function bestPostErrorOf(username: string): string | null {
+    return userBestPosts.value.get(username)?.error ?? null;
   }
 
   return {
@@ -198,5 +232,6 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
     bestPostOfUser,
     isLoadingBestPostOf,
     isLoadedBestPostOf,
+    bestPostErrorOf,
   };
 });

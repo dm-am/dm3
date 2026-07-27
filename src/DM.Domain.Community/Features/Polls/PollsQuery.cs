@@ -21,22 +21,22 @@ public class PollsQuery : PagingQuery
     /// <summary>
     /// Filter by minimum start date (inclusive)
     /// </summary>
-    public DateTimeOffset? StartsFrom { get; set; }
+    public DateTimeOffset? StartsFromUtc { get; set; }
 
     /// <summary>
     /// Filter by maximum start date (inclusive)
     /// </summary>
-    public DateTimeOffset? StartsTo { get; set; }
+    public DateTimeOffset? StartsToUtc { get; set; }
 
     /// <summary>
     /// Filter by minimum end date (inclusive)
     /// </summary>
-    public DateTimeOffset? EndsFrom { get; set; }
+    public DateTimeOffset? EndsFromUtc { get; set; }
 
     /// <summary>
     /// Filter by maximum end date (inclusive)
     /// </summary>
-    public DateTimeOffset? EndsTo { get; set; }
+    public DateTimeOffset? EndsToUtc { get; set; }
 
     /// <summary>
     /// Sort field: "status" (default), "starts", "ends"

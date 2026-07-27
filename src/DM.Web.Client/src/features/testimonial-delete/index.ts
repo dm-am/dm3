@@ -1,0 +1,1 @@
+export { TestimonialDeleteButton } from "./ui";

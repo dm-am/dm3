@@ -70,7 +70,10 @@ public class GlobalChatController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> PostGlobalChatMessage([FromBody] CreateMessageInput input)
     {
-        var message = new Message { Text = new CommonBbText { Value = input.Text } };
+        // Surface is GlobalChatMessage so the safe-image parser applies; the
+        // response is re-projected from the domain (see MessageTextResolver),
+        // this carrier only ferries the raw text into the create pipeline.
+        var message = new Message { Text = new GlobalChatBbText { Value = input.Text } };
         var result = await _apiService.CreateGlobalChatMessageAsync(message);
         return CreatedAtRoute("GetMessage", new { id = result.Resource.Id }, result);
     }

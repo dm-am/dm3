@@ -198,7 +198,7 @@ const dispatcher = createFilterDispatcher<
 export function useTopicsFilter(): TopicsFilterComposable {
   const route = useRoute();
   const router = useRouter();
-  const { entitiesPerPage } = usePaging();
+  const { topicsPerPage } = usePaging();
 
   dispatcher.setRouter(router);
 
@@ -233,7 +233,7 @@ export function useTopicsFilter(): TopicsFilterComposable {
       if (!isNaN(num) && num > 0) params.number = num;
     }
 
-    params.size = entitiesPerPage.value;
+    params.size = topicsPerPage.value;
     return params;
   });
 

@@ -56,8 +56,10 @@ npm run test:unit -- --coverage   # С покрытием
 | `DM.Domain.Moderation.Tests` | Модерация, баны |
 | `DM.Domain.Personal.Tests` | Профили, уведомления |
 | `DM.Infrastructure.Core.Tests` | Ядро (parsing, utilities) |
+| `DM.Infrastructure.Mail.Tests` | Рендеринг email-шаблонов |
 | `DM.Infrastructure.Messaging.Tests` | Очередь сообщений |
 | `DM.Infrastructure.Persistence.Tests` | Репозитории |
+| `DM.Web.API.Tests` | Unit-тесты слоя Web API |
 | `DM.Web.API.IntegrationTests` | API интеграционные тесты |
 
 ### Паттерн именования
@@ -79,7 +81,7 @@ public class TopicCreatingServiceShould : UnitTestBase
         // Arrange
         var createTopic = new CreateTopic { Title = "Test" };
         _repository
-            .Setup(r => r.Create(It.IsAny<ForumTopic>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.Create(It.IsAny<Topic>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Topic { Id = Guid.NewGuid() });
 
         // Act
@@ -109,17 +111,21 @@ repository.Setup(r => r.Get(It.IsAny<Guid>()))
 
 ### Структура
 
+Тесты колокейтятся рядом с исходником по слоям FSD:
+
 ```
 src/
-├── components/**/*.spec.ts   # Тесты компонентов
-└── utils/**/*.spec.ts        # Тесты утилит (BBCode и др.)
+├── entities/{entity}/model/*.spec.ts   # Сторы и модели сущностей
+├── features/{feature}/model/*.spec.ts  # Логика фич
+├── shared/lib/utils/*.spec.ts          # Утилиты (BBCode и др.)
+└── shared/ui/{Component}/*.spec.ts     # UI-компоненты
 ```
 
 ### Пример теста
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { bbcodeToHtml } from '@/utils/bbcode';
+import { bbcodeToHtml } from '@/shared/lib/utils/bbcode';
 
 describe('bbcodeToHtml', () => {
   it('converts bold text', () => {

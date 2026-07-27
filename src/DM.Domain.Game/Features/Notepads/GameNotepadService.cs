@@ -156,7 +156,7 @@ internal class GameNotepadService : IGameNotepadService
             Content = updateEntry.Content,
             CategoryId = updateEntry.CategoryId,
             SortOrder = updateEntry.SortOrder,
-            UpdatedUtc = _dateTimeProvider.Now
+            ModifiedUtc = _dateTimeProvider.Now
         };
 
         return await _repository.UpdateEntryAsync(internalDto, ct);

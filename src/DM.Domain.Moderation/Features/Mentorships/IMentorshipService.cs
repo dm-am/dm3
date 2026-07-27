@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -36,4 +37,22 @@ public interface IMentorshipService
     /// <param name="blogId">Blog identifier</param>
     /// <param name="ct">Cancellation token</param>
     Task RemoveBlogMentor(Guid blogId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get games curated by the given mentors (moderation overview, Moderator+)
+    /// </summary>
+    /// <param name="mentorIds">Mentor user ids</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Game mentorship assignments</returns>
+    Task<IReadOnlyCollection<MentorshipAssignment>> GetGameMentorships(
+        IReadOnlyCollection<Guid> mentorIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get blogs curated by the given mentors (moderation overview, Moderator+)
+    /// </summary>
+    /// <param name="mentorIds">Mentor user ids</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Blog mentorship assignments</returns>
+    Task<IReadOnlyCollection<MentorshipAssignment>> GetBlogMentorships(
+        IReadOnlyCollection<Guid> mentorIds, CancellationToken ct = default);
 }

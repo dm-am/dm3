@@ -1,19 +1,25 @@
 <template>
   <div id="app">
+    <!-- Skip-link: accessibility helper for keyboard/screen-reader users.
+         Visually hidden until it receives keyboard focus (first Tab on any
+         page); Enter moves focus straight to <main id="main">, skipping the
+         header (logo, menu, statistics). Mouse users never see it.
+         Styles live in Reset.sass (.skip-link). -->
+    <a class="skip-link" href="#main">К основному содержимому</a>
     <div class="main" ref="scroll">
       <div class="content-container">
         <div class="content-wrapper">
           <Header />
           <div class="content-body">
-            <div class="sidebar-left">
+            <aside class="sidebar-left">
               <router-view name="left" />
-            </div>
-            <div class="content">
+            </aside>
+            <main id="main" class="content" tabindex="-1">
               <router-view name="page" />
-            </div>
-            <div class="sidebar-right">
+            </main>
+            <aside class="sidebar-right">
               <router-view name="right" />
-            </div>
+            </aside>
           </div>
         </div>
         <Footer />
@@ -22,20 +28,121 @@
     <modals-container />
     <ToastContainer />
     <ScrollNav />
+
+    <!-- Mobile off-canvas navigation drawer (<= $bp-shell, burger in Header).
+         Content mirrors the desktop header + left sidebar: auth block, main
+         site nav, then the same contextual left-sidebar panels (GamePanel /
+         BlogPanel / ModerationPanel + boards) so nothing is unreachable on
+         mobile. Mounted only while open. -->
+    <MobileDrawer v-model="uiStore.isMobileDrawerOpen">
+      <div class="drawer-auth">
+        <template v-if="userStore.user && userStore.user.username">
+          <div class="drawer-greeting">
+            Здравствуй,
+            <router-link
+              :to="{
+                name: 'profile',
+                params: { username: userStore.user.username },
+              }"
+              class="username"
+              >{{ userStore.user.username }}</router-link
+            >
+            <span class="separator"> | </span>
+            <router-link class="drawer-settings-link" :to="{ name: 'account' }"
+              >Настройки</router-link
+            >
+          </div>
+          <div class="drawer-logout">
+            <button
+              type="button"
+              class="action-link"
+              data-testid="drawer-logout-button"
+              @click="userStore.signOut"
+            >
+              Выйти
+            </button>
+            <button
+              type="button"
+              class="action-link"
+              data-testid="drawer-logout-all-button"
+              @click="userStore.signOutAll"
+            >
+              Выйти со всех устройств
+            </button>
+          </div>
+        </template>
+        <template v-else>
+          <GuestActions />
+        </template>
+      </div>
+
+      <nav class="drawer-nav" aria-label="Основные разделы">
+        <ul class="drawer-nav-list">
+          <li>
+            <span class="muted" aria-hidden="true">- </span
+            ><router-link :to="{ name: 'about' }">О проекте</router-link>
+          </li>
+          <li>
+            <span class="muted" aria-hidden="true">- </span
+            ><router-link :to="{ name: 'rules' }">Правила</router-link>
+          </li>
+          <li>
+            <span class="muted" aria-hidden="true">- </span
+            ><router-link :to="{ name: 'games' }">Игры</router-link>
+          </li>
+          <li>
+            <span class="muted" aria-hidden="true">- </span
+            ><router-link :to="{ name: 'blogs' }">Блоги</router-link>
+          </li>
+          <li>
+            <span class="muted" aria-hidden="true">- </span
+            ><router-link :to="{ name: 'community' }">Сообщество</router-link>
+          </li>
+          <li>
+            <span class="muted" aria-hidden="true">- </span
+            ><router-link :to="{ name: 'forum-index' }">Форум</router-link>
+          </li>
+          <li>
+            <span class="muted" aria-hidden="true">- </span
+            ><router-link :to="{ name: 'global-chat' }">Чат</router-link>
+          </li>
+          <!-- Always visible to everyone (owner rule) — mirrors the desktop
+               top menu. -->
+          <li>
+            <span class="muted" aria-hidden="true">- </span
+            ><router-link :to="{ name: 'forum', params: { alias: 'newbies' } }"
+              >Для новичков</router-link
+            >
+          </li>
+          <li v-if="isModerator">
+            <span class="muted" aria-hidden="true">- </span
+            ><router-link :to="{ name: 'moderation' }">Модерация</router-link>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="drawer-context">
+        <LeftSidebar />
+      </div>
+    </MobileDrawer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { useUiStore } from "@/shared/stores/ui";
-import { useUserStore } from "@/entities/user";
+import { useUserStore, userIsModerator } from "@/entities/user";
 import { useMessagingStore } from "@/entities/message";
+import { useNotificationStore } from "@/entities/notification";
 import { setScrollContainer } from "@/shared/lib/scroll";
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { ModalsContainer } from "vue-final-modal";
-import { Header } from "@/widgets/header";
+import { Header, GuestActions } from "@/widgets/header";
 import { Footer } from "@/widgets/footer";
+import { LeftSidebar } from "@/widgets/sidebar";
 import { ToastContainer } from "@/shared/ui/Toast";
 import { ScrollNav } from "@/shared/ui/ScrollNav";
+import { MobileDrawer } from "@/shared/ui/Drawer";
 import { useGlobalSignalR } from "@/shared/lib/composables/useSignalR";
 import { EventType } from "@/shared/api/models/notifications/signalr";
 import type { SignalRNotification } from "@/shared/api/models/notifications/signalr";
@@ -43,6 +150,18 @@ import type { SignalRNotification } from "@/shared/api/models/notifications/sign
 const uiStore = useUiStore();
 const userStore = useUserStore();
 const messagingStore = useMessagingStore();
+const notificationStore = useNotificationStore();
+const route = useRoute();
+
+const isModerator = computed(() => userIsModerator(userStore.user));
+
+// Close the drawer on every navigation (path change) — reopening it after
+// following a link would be surprising, and a stale-open drawer would keep
+// `.main` scroll locked underneath the newly navigated page.
+watch(
+  () => route.path,
+  () => uiStore.closeDrawer(),
+);
 
 // Template ref for the scrollable content container (".main")
 const scroll = ref<HTMLElement | null>(null);
@@ -54,6 +173,15 @@ const {
 
 // Map Theme to CSS theme class (now 1:1 mapping)
 const themeToClass = (theme: string) => theme;
+
+// theme-color meta content per theme — mirrors --bg-page in
+// assets/styles/ThemeVariables.css (Light: #fff, Dark: #222222). Kept as a
+// hardcoded map (not read from CSS) since the meta must update synchronously
+// with the class swap below, before any style recalculation.
+const THEME_COLORS: Record<string, string> = {
+  Light: "#ffffff",
+  Dark: "#222222",
+};
 
 watch(
   () => uiStore.theme,
@@ -68,6 +196,9 @@ watch(
     // Force reflow — browser computes styles with transitions disabled
     void html.offsetHeight;
     html.classList.remove("no-transitions");
+
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", THEME_COLORS[value]);
   },
   { immediate: true },
 );
@@ -76,16 +207,25 @@ watch(
 function handleNotification(notification: SignalRNotification) {
   switch (notification.eventType) {
     case EventType.NewMessage:
-    case EventType.NewGlobalChatMessage:
-      // Refresh unread count when new message arrives
+      // Refresh unread count when new message arrives. Note: the backend
+      // does not emit NewMessage for global chat sends (no notification
+      // generator wires it to recipients) — this only fires for direct
+      // messages that do reach the notification pipeline.
       messagingStore.fetchUnreadCount();
       break;
     case EventType.UserAvatarChanged:
-      // Live-обновление аватара в open tabs. Если изменился текущий
-      // пользователь — освежаем user store. Чужие аватары в чате/
-      // комментариях обновятся через next render когда DOM перерисуется
-      // (urls в payload immutable, browser cache safe).
+      // Live avatar update in open tabs. If the current user changed,
+      // refresh the user store. Other users' avatars in chat/
+      // comments update on the next render when the DOM repaints
+      // (URLs in the payload are immutable, browser cache safe).
       handleAvatarChanged(notification.payload);
+      break;
+    default:
+      // Every other event type is a candidate for a persisted user
+      // notification (likes, comments, invitations, subscriptions, etc.) —
+      // refresh the header badge. Debounced inside the store so bursts of
+      // events collapse into a single request.
+      notificationStore.fetchUnreadCount();
       break;
     // Add more event handlers as needed
   }
@@ -96,8 +236,8 @@ function handleAvatarChanged(payload: Record<string, unknown>) {
   if (!userId) return;
   const currentUserId = userStore.user?.id;
   if (currentUserId === userId) {
-    // Re-fetch current user — гарантирует, что settings/visibility
-    // тоже подхвачены, не только picture.
+    // Re-fetch current user — guarantees settings/visibility
+    // are picked up too, not only the picture.
     userStore.fetchUser();
   }
 }
@@ -121,10 +261,11 @@ onMounted(async () => {
   // Register the scrollable container so paging/router can scroll to top
   setScrollContainer(scroll.value);
 
-  // User уже инициализирован из localStorage в store
-  // Параллельно обновляем данные с сервера
+  // The user is already initialized from localStorage in the store
+  // Refresh data from the server in parallel
   userStore.fetchUser();
   messagingStore.fetchUnreadCount(true); // immediate on app start
+  notificationStore.fetchUnreadCount(true); // immediate on app start
 
   // Connect to SignalR if already authenticated
   if (userStore.isAuthenticated) {
@@ -138,6 +279,7 @@ onMounted(async () => {
 
 <style scoped lang="sass">
 // Variables from Layout and Themes are injected globally via vite.config.ts additionalData
+@import "src/assets/styles/Inputs"
 
 .main
   height: 100%
@@ -150,10 +292,11 @@ onMounted(async () => {
   display: flex
   flex-direction: column
   min-height: 100vh
-  min-width: $min-width
-  // Below the sidebar breakpoint both sidebars are hidden, so the rigid
-  // min-width would only force a horizontal scrollbar — relax it
-  @media (max-width: $min-width)
+  min-width: $bp-shell
+  // Below the sidebar breakpoint the left sidebar is hidden and the right
+  // one reflows into the normal document flow, so the rigid min-width
+  // would only force a horizontal scrollbar — relax it
+  @media (max-width: $bp-shell)
     min-width: 0
   &:before
     content: ''
@@ -165,26 +308,38 @@ onMounted(async () => {
     background: url('@/assets/images/decorations/header-decoration.png') left top repeat-x
     background-size: auto $header-height
     filter: $filter-invert
+    // The header collapses to a single compact row on mobile (Header.vue) —
+    // shrink the decorative strip to match, so it doesn't bleed into the
+    // page content below a much shorter header
+    @media (max-width: $bp-shell)
+      height: $header-row-height
+      background-size: auto $header-row-height
 
 .content-wrapper
   position: relative
   flex: 1 0 auto
-  min-width: $min-width
-  @media (max-width: $min-width)
+  min-width: $bp-shell
+  @media (max-width: $bp-shell)
     min-width: 0
 
 .content-body
   display: flex
   padding-bottom: $big
+  @media (max-width: $bp-shell)
+    // Left sidebar is hidden (reachable via the burger drawer instead); the
+    // right sidebar reflows below <main> in normal document order (it is
+    // already the last DOM sibling of the three columns)
+    flex-direction: column
 
 .sidebar-left
   width: $sidebar-width
   flex-shrink: 0
   padding-left: $big
   box-sizing: border-box
-  // Hide together with the right sidebar so narrow viewports get the
-  // full width for content instead of an asymmetric layout
-  @media (max-width: $min-width)
+  // Unreachable as a fixed column below the shell breakpoint — its content
+  // (GamePanel/BlogPanel/ModerationPanel + boards) is reachable instead via
+  // the mobile burger drawer (LeftSidebar rendered a second time there)
+  @media (max-width: $bp-shell)
     display: none
 
 .content
@@ -197,6 +352,66 @@ onMounted(async () => {
   flex-shrink: 0
   padding-right: $big
   box-sizing: border-box
-  @media (max-width: $min-width)
-    display: none
+  @media (max-width: $bp-shell)
+    width: auto
+    padding: 0 $big
+
+// Mobile drawer content (auth block / main nav / contextual left panel) —
+// mirrors Header.vue's greeting idiom and the sidebar "- " link idiom.
+.drawer-auth
+  padding-bottom: $medium
+  margin-bottom: $medium
+  border-bottom: 1px solid $border
+  font-size: $secondary-font-size
+  color: $text
+
+.username
+  font-weight: bold
+
+.separator
+  color: $text-muted
+
+.action-link
+  vertical-align: baseline
+  +inline-link-button
+
+.drawer-settings-link
+  color: $link
+  &:hover
+    color: $link-hover
+
+// Both sign-out options stacked as full-width tap targets under the greeting
+// (still inside the bordered .drawer-auth section).
+.drawer-logout
+  display: flex
+  flex-direction: column
+  align-items: flex-start
+  gap: $tiny
+  margin-top: $small
+
+  .action-link
+    min-height: 44px
+
+.drawer-nav
+  margin-bottom: $medium
+  padding-bottom: $medium
+  border-bottom: 1px solid $border
+
+.drawer-nav-list
+  list-style: none
+
+  li
+    // >= 44px tap target via padding (not font-size bloat)
+    display: flex
+    align-items: center
+    min-height: 44px
+
+.muted
+  color: $text-muted
+  user-select: none
+
+// LeftSidebar's own scoped styles handle .blocks/list-item presentation —
+// this wrapper is just a grouping hook for the drawer layout.
+.drawer-context
+  min-height: 0
 </style>

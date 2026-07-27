@@ -77,7 +77,8 @@ internal class BlogApiService : IBlogApiService
             query.ActivatedFromUtc,
             query.ActivatedToUtc,
             query.ClosedFromUtc,
-            query.ClosedToUtc);
+            query.ClosedToUtc,
+            premoderationStatus: query.PremoderationStatus);
 
         return new ListEnvelope<Blog>(publicBlogs.Select(_mapper.Map<Blog>), new PagingInfo(paging));
     }
@@ -123,7 +124,8 @@ internal class BlogApiService : IBlogApiService
             query.ActivatedFromUtc,
             query.ActivatedToUtc,
             query.ClosedFromUtc,
-            query.ClosedToUtc);
+            query.ClosedToUtc,
+            premoderationStatus: query.PremoderationStatus);
 
         return new ListEnvelope<BlogRef>(publicBlogs.Select(_mapper.Map<BlogRef>), new PagingInfo(paging));
     }
@@ -197,12 +199,41 @@ internal class BlogApiService : IBlogApiService
     public Task Delete(Guid id) => _blogService.Delete(id);
 
     /// <inheritdoc />
+    public async Task<Envelope<Blog>> ChangePremoderation(string id, BlogPremoderationChangeRequest request)
+    {
+        var updatedBlog = await _blogService.ChangePremoderationAsync(id, request.Transition);
+        return new Envelope<Blog>(_mapper.Map<Blog>(updatedBlog));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<Blog>> ChangeStatus(string id, BlogStatusChangeRequest request)
+    {
+        var updatedBlog = await _blogService.ChangeStatusAsync(id, request.Transition);
+        return new Envelope<Blog>(_mapper.Map<Blog>(updatedBlog));
+    }
+
+    /// <inheritdoc />
     public async Task<Envelope<Rubric>> CreateRubric(Guid blogId, CreateRubricRequest request)
     {
         var createRubric = _mapper.Map<CreateRubric>(request);
         createRubric.BlogId = blogId;
         var rubric = await _blogService.CreateRubric(createRubric);
         return new Envelope<Rubric>(_mapper.Map<Rubric>(rubric));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<Rubric>> UpdateRubric(Guid rubricId, UpdateRubricRequest request)
+    {
+        var rubric = await _blogService.UpdateRubric(
+            new UpdateRubric { RubricId = rubricId, Title = request.Title });
+        return new Envelope<Rubric>(_mapper.Map<Rubric>(rubric));
+    }
+
+    /// <inheritdoc />
+    public async Task<ListEnvelope<Rubric>> ReorderRubrics(Guid blogId, ReorderRubricsRequest request)
+    {
+        var rubrics = await _blogService.ReorderRubrics(blogId, request.RubricIds);
+        return new ListEnvelope<Rubric>(rubrics.Select(_mapper.Map<Rubric>));
     }
 
     /// <inheritdoc />

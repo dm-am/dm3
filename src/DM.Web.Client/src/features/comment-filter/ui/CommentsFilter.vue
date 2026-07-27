@@ -10,13 +10,13 @@ import {
   FilterDropdown,
   FilterDropdownHeader,
   FilterDropdownItem,
-  UserMultiSelect,
   DateRangePicker,
   SortButton,
   ExpandableBubble,
   FilterBubble,
   BubblesRow,
 } from "@/shared/ui/Filters";
+import { UserMultiSelect } from "@/entities/user";
 
 const {
   filterState,
@@ -33,7 +33,7 @@ const {
 // SEARCH INPUT (with debounce)
 // =============================================================================
 
-const { localInput, handleInput, applySearch, clearSearch } = useFilterSearch(
+const { localInput, handleInput, applySearch } = useFilterSearch(
   computed(() => filterState.value.search),
   setSearch,
 );
@@ -193,9 +193,13 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
       <!-- Filter button -->
       <div v-click-outside="closeDropdown" class="filter-section">
-        <FilterButton :active="showDropdown" @click="toggleDropdown" />
+        <FilterButton
+          :active="showDropdown"
+          @click="toggleDropdown"
+          @close="closeDropdown"
+        />
 
-        <FilterDropdown v-if="showDropdown">
+        <FilterDropdown v-if="showDropdown" @close="closeDropdown">
           <!-- Navigation header when inside a sub-level -->
           <FilterDropdownHeader
             v-if="navPath"

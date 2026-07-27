@@ -1,20 +1,20 @@
 <script setup lang="ts">
 /**
- * GameIcon — рендерит иконку из game-icons.net спрайта.
+ * GameIcon — renders an icon from the game-icons.net sprite.
  *
- * Используется в наградах и достижениях. Имя валидируется в рантайме
- * (отсутствует → пустой `<svg>`, без падения) и на сервере при
- * сохранении AwardType/AchievementType (FluentValidation → 400).
+ * Used in awards and achievements. The name is validated at runtime
+ * (missing → an empty `<svg>`, no crash) and on the server when
+ * saving an AwardType/AchievementType (FluentValidation → 400).
  *
- * Цвет управляется через CSS-переменную `color` родителя
- * (через `fill="currentColor"`), размер — через `font-size` или
- * прямой width/height на корневом svg.
+ * Color is driven by the parent's `color` CSS variable
+ * (via `fill="currentColor"`), size — via `font-size` or
+ * direct width/height on the root svg.
  */
 import { computed } from "vue";
 import { GAME_ICONS, isGameIcon, type GameIconName } from "./gameIcons";
 
 const props = defineProps<{
-  /** Имя иконки (kebab-case как на game-icons.net). */
+  /** Icon name (kebab-case as on game-icons.net). */
   name: string;
 }>();
 

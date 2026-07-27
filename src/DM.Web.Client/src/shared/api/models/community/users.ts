@@ -103,7 +103,7 @@ export type UserProfileNote = {
   username: string;
   text: string;
   createdUtc: string;
-  updatedUtc?: string | null;
+  modifiedUtc?: string | null;
 };
 
 /**
@@ -113,27 +113,9 @@ export type UserProfileNoteRequest = {
   text: string;
 };
 
-/**
- * Public warning (shown on user profile)
- */
-export type PublicWarning = {
-  id: string;
-  moderatorUsername: string;
-  text: string;
-  points: number;
-  createdUtc: string;
-  expiresUtc?: string;
-};
-
-/**
- * Public ban (shown on user profile)
- */
-export type PublicBan = {
-  id: string;
-  moderatorUsername: string;
-  reason: string;
-  startUtc: string;
-  endUtc?: string;
-  isPermanent: boolean;
-  isActive: boolean;
-};
+// Public warning/ban aggregate types used to live here, but never matched
+// the actual wire contract (wrong field names, wrong envelope) and were
+// never consumed for rendering — see shared/api/moderationApi.ts for the
+// real trimmed public shapes (PublicWarning / PublicBan), which back
+// GET users/{username}/warnings|bans and are consumed by
+// pages/profile/ProfileViolations.vue.

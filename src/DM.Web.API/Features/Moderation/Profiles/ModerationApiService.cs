@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Community.Features.Polls;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.Profiles;
 using DM.Domain.Personal.Authorization;
@@ -24,6 +25,7 @@ using DM.Infrastructure.Persistence.Entities.Game.Links;
 using DM.Infrastructure.Persistence.Entities.Game.Posts;
 using DM.Infrastructure.Persistence.Entities.Messaging;
 using DM.Infrastructure.Persistence.Entities.Moderation;
+using DM.Infrastructure.Persistence.Entities.Personal.Notepads;
 using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Entities.Community;
 using DM.Infrastructure.Persistence.Entities.Subscriptions;
@@ -32,6 +34,14 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.Extensions.Options;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
+using DbAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema;
+using DbAttributeSpecification = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSpecification;
+using DbStringConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.StringAttributeConstraints;
+using DbBbCodeConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.BbCodeAttributeConstraints;
+using DbListConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeConstraints;
+using DbListValueKind = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListValueKind;
+using DbListAttributeValue = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeValue;
+using DbCharacterAttribute = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.CharacterAttribute;
 using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 using DbUsernameHistory = DM.Infrastructure.Persistence.Entities.Account.UsernameHistory;
@@ -93,11 +103,141 @@ internal class ModerationApiService : IModerationApiService
         _cdnConfig = cdnOptions.Value;
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // System attribute schema ("Классическая схема")
+    //
+    // A single well-known Public schema (Author=null) that mirrors the eight
+    // legacy character fields. Its Id and every specification Id are PINNED so
+    // that seeded games (Game.AttributeSchemaId) and character attribute rows
+    // (CharacterAttribute.AttributeId) keep referencing the same document even
+    // though Mongo survives a Postgres reseed. The upsert below is idempotent —
+    // a regenerated Id would orphan those references.
+    // ─────────────────────────────────────────────────────────────────────
+    private static readonly Guid SystemSchemaId = new("b1a5c0de-0000-4000-8000-000000000001");
+    private static readonly Guid SpecRaceId = new("b1a5c0de-0000-4000-8000-000000000101");
+    private static readonly Guid SpecClassId = new("b1a5c0de-0000-4000-8000-000000000102");
+    private static readonly Guid SpecAlignmentId = new("b1a5c0de-0000-4000-8000-000000000103");
+    private static readonly Guid SpecAppearanceId = new("b1a5c0de-0000-4000-8000-000000000104");
+    private static readonly Guid SpecTemperId = new("b1a5c0de-0000-4000-8000-000000000105");
+    private static readonly Guid SpecStoryId = new("b1a5c0de-0000-4000-8000-000000000106");
+    private static readonly Guid SpecSkillsId = new("b1a5c0de-0000-4000-8000-000000000107");
+    private static readonly Guid SpecInventoryId = new("b1a5c0de-0000-4000-8000-000000000108");
+
     /// <summary>
-    /// Прогон seed-картинки через реальный image-pipeline:
-    /// magic-byte → EXIF-strip → resize → WebP thumbnails → S3 PUT всех 3
-    /// объектов с Cache-Control: immutable. Возвращает Upload entity, готовую
-    /// к Add() в DbContext.
+    /// The nine D&amp;D alignments, indexed by <see cref="Alignment"/> value,
+    /// used both as the Мировоззрение list options and as the stored value of a
+    /// character's alignment attribute.
+    /// </summary>
+    private static readonly string[] AlignmentNames =
+    {
+        "Законопослушный добрый",
+        "Нейтральный добрый",
+        "Хаотичный добрый",
+        "Законопослушный нейтральный",
+        "Нейтральный",
+        "Хаотичный нейтральный",
+        "Законопослушный злой",
+        "Нейтральный злой",
+        "Хаотичный злой"
+    };
+
+    /// <summary>
+    /// Idempotently upserts the pinned system attribute schema into Mongo. Uses
+    /// ReplaceOneAsync with IsUpsert so a reseed keeps the same Id (games would
+    /// otherwise orphan). Every seeded game is attached to <see cref="SystemSchemaId"/>.
+    /// </summary>
+    private async Task SeedSystemAttributeSchemaAsync(ComprehensiveSeedResult result)
+    {
+        var schema = new DbAttributeSchema
+        {
+            Id = SystemSchemaId,
+            UserId = null,
+            Type = SchemaType.Public,
+            Title = "Классическая схема",
+            IsRemoved = false,
+            Specifications = new List<DbAttributeSpecification>
+            {
+                new() { Id = SpecRaceId, Title = "Раса", Order = 0, IsDescriptor = false, IsHidden = false,
+                    Constraints = new DbStringConstraints { Required = false, MaxLength = 30 } },
+                new() { Id = SpecClassId, Title = "Класс", Order = 1, IsDescriptor = true, IsHidden = false,
+                    Constraints = new DbStringConstraints { Required = false, MaxLength = 30 } },
+                new() { Id = SpecAlignmentId, Title = "Мировоззрение", Order = 2, IsDescriptor = false, IsHidden = false,
+                    Constraints = new DbListConstraints
+                    {
+                        Required = false,
+                        Kind = DbListValueKind.Text,
+                        Values = AlignmentNames.Select(a => new DbListAttributeValue { Value = a, Modifier = null }).ToList()
+                    } },
+                new() { Id = SpecAppearanceId, Title = "Внешность", Order = 3, IsDescriptor = false, IsHidden = false,
+                    Constraints = new DbBbCodeConstraints { Required = false, MaxLength = 20000 } },
+                new() { Id = SpecTemperId, Title = "Характер", Order = 4, IsDescriptor = false, IsHidden = false,
+                    Constraints = new DbBbCodeConstraints { Required = false, MaxLength = 20000 } },
+                new() { Id = SpecStoryId, Title = "История", Order = 5, IsDescriptor = false, IsHidden = false,
+                    Constraints = new DbBbCodeConstraints { Required = false, MaxLength = 20000 } },
+                new() { Id = SpecSkillsId, Title = "Навыки", Order = 6, IsDescriptor = false, IsHidden = false,
+                    Constraints = new DbBbCodeConstraints { Required = false, MaxLength = 20000 } },
+                new() { Id = SpecInventoryId, Title = "Инвентарь", Order = 7, IsDescriptor = false, IsHidden = false,
+                    Constraints = new DbBbCodeConstraints { Required = false, MaxLength = 20000 } }
+            }
+        };
+
+        var collection = _mongoClient.GetCollection<DbAttributeSchema>();
+        await collection.ReplaceOneAsync(
+            MongoDB.Driver.Builders<DbAttributeSchema>.Filter.Eq(s => s.Id, SystemSchemaId),
+            schema,
+            new MongoDB.Driver.ReplaceOptions { IsUpsert = true });
+
+        result.Details.Add("System attribute schema 'Классическая схема' upserted");
+    }
+
+    /// <summary>
+    /// Writes <see cref="DbCharacterAttribute"/> rows for the legacy per-field
+    /// character values against the pinned system schema. Empty/null values are
+    /// skipped (e.g. a Cyberpunk character with no alignment gets no Мировоззрение
+    /// row, mirroring the legacy games that had no alignment at all).
+    /// </summary>
+    private void AddLegacyCharacterAttributes(
+        Guid characterId,
+        string? race = null,
+        string? @class = null,
+        Alignment? alignment = null,
+        string? appearance = null,
+        string? temper = null,
+        string? story = null,
+        string? skills = null,
+        string? inventory = null)
+    {
+        void Add(Guid attributeId, string? value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return;
+            }
+
+            _dbContext.Set<DbCharacterAttribute>().Add(new DbCharacterAttribute
+            {
+                CharacterAttributeId = _guidFactory.Create(),
+                AttributeId = attributeId,
+                CharacterId = characterId,
+                Value = value
+            });
+        }
+
+        Add(SpecRaceId, race);
+        Add(SpecClassId, @class);
+        Add(SpecAlignmentId, alignment.HasValue ? AlignmentNames[(int)alignment.Value] : null);
+        Add(SpecAppearanceId, appearance);
+        Add(SpecTemperId, temper);
+        Add(SpecStoryId, story);
+        Add(SpecSkillsId, skills);
+        Add(SpecInventoryId, inventory);
+    }
+
+    /// <summary>
+    /// Runs a seed image through the real image pipeline:
+    /// magic-byte → EXIF strip → resize → WebP thumbnails → S3 PUT of all 3
+    /// objects with Cache-Control: immutable. Returns an Upload entity ready
+    /// for Add() into the DbContext.
     /// </summary>
     private async Task<DM.Infrastructure.Persistence.Entities.Shared.Upload> SeedAvatarFromBytesAsync(
         byte[] imageBytes,
@@ -109,9 +249,9 @@ internal class ModerationApiService : IModerationApiService
         Guid? entityId,
         DateTimeOffset now)
     {
-        // Тот же pipeline, что у пользовательских upload'ов: magic-byte
-        // валидация, EXIF strip, downscale до 1024 px. Один source-файл —
-        // imgproxy сделает thumbnails на лету при serving.
+        // The same pipeline as user uploads: magic-byte
+        // validation, EXIF strip, downscale to 1024 px. A single source file —
+        // imgproxy makes thumbnails on the fly at serving time.
         ProcessedImage processed;
         await using (var input = new MemoryStream(imageBytes, writable: false))
         {
@@ -181,28 +321,15 @@ internal class ModerationApiService : IModerationApiService
         if (user != null)
         {
             user.Role = role;
-            // Invariant: honorary is mutually exclusive with active staff
-            // roles. Moving INTO staff clears the title; moving OUT of staff
-            // doesn't auto-grant honorary (that requires an explicit action).
-            if (IsStaffRole(role))
-            {
-                user.IsHonorary = false;
-            }
             await _dbContext.SaveChangesAsync();
         }
     }
 
-    private static bool IsStaffRole(UserRole role) =>
-        role is UserRole.Admin
-            or UserRole.SeniorModerator
-            or UserRole.Moderator
-            or UserRole.Mentor;
-
     /// <summary>
-    /// Прочитать UTF-8-текст из embedded-ресурса сборки. Бросает, если
-    /// ресурс с таким именем не зарегистрирован — это setup-баг (забыли
-    /// <c>&lt;EmbeddedResource&gt;</c> в csproj), он должен ронять seed
-    /// громко, а не тихо записывать пустую строку в Info.
+    /// Read UTF-8 text from an embedded assembly resource. Throws if
+    /// no resource with that name is registered — that is a setup bug (a missing
+    /// <c>&lt;EmbeddedResource&gt;</c> in the csproj); it must fail the seed
+    /// loudly rather than silently writing an empty string into Info.
     /// </summary>
     private static async Task<string> LoadEmbeddedTextAsync(string resourceName)
     {
@@ -264,39 +391,39 @@ internal class ModerationApiService : IModerationApiService
         var testAccounts = new[]
         {
             // === All roles (one per role) ===
-            new { Login = "SolohinLex", Email = "admin@test.local", Role = UserRole.Admin, IsHonorary = false },
-            new { Login = "TestSeniorMod", Email = "seniormod@test.local", Role = UserRole.SeniorModerator, IsHonorary = false },
-            new { Login = "TestModerator", Email = "mod@test.local", Role = UserRole.Moderator, IsHonorary = false },
-            new { Login = "TestMentor", Email = "mentor@test.local", Role = UserRole.Mentor, IsHonorary = false },
-            new { Login = "TestUser", Email = "user@test.local", Role = UserRole.RegularUser, IsHonorary = false },
+            new { Login = "SolohinLex", Email = "admin@test.local", Role = UserRole.Admin },
+            new { Login = "TestSeniorMod", Email = "seniormod@test.local", Role = UserRole.SeniorModerator },
+            new { Login = "TestModerator", Email = "mod@test.local", Role = UserRole.Moderator },
+            new { Login = "TestMentor", Email = "mentor@test.local", Role = UserRole.Mentor },
+            new { Login = "TestUser", Email = "user@test.local", Role = UserRole.RegularUser },
 
             // === Edge cases: length ===
-            new { Login = "Ян", Email = "yan@test.local", Role = UserRole.RegularUser, IsHonorary = false }, // min length (2), cyrillic
-            new { Login = "LongestLoginPossible", Email = "longest@test.local", Role = UserRole.RegularUser, IsHonorary = false }, // max length (20)
+            new { Login = "Ян", Email = "yan@test.local", Role = UserRole.RegularUser }, // min length (2), cyrillic
+            new { Login = "LongestLoginPossible", Email = "longest@test.local", Role = UserRole.RegularUser }, // max length (20)
 
             // === Edge cases: special characters ===
-            new { Login = "Player_One", Email = "player1@test.local", Role = UserRole.RegularUser, IsHonorary = false }, // underscore
-            new { Login = "Player-Two", Email = "player2@test.local", Role = UserRole.RegularUser, IsHonorary = false }, // hyphen
-            new { Login = "Player.Three", Email = "player3@test.local", Role = UserRole.RegularUser, IsHonorary = false }, // dot
-            new { Login = "Player Four", Email = "player4@test.local", Role = UserRole.RegularUser, IsHonorary = false }, // space
+            new { Login = "Player_One", Email = "player1@test.local", Role = UserRole.RegularUser }, // underscore
+            new { Login = "Player-Two", Email = "player2@test.local", Role = UserRole.RegularUser }, // hyphen
+            new { Login = "Player.Three", Email = "player3@test.local", Role = UserRole.RegularUser }, // dot
+            new { Login = "Player Four", Email = "player4@test.local", Role = UserRole.RegularUser }, // space
 
             // === Edge cases: cyrillic ===
-            new { Login = "Игрок", Email = "igrok@test.local", Role = UserRole.RegularUser, IsHonorary = false }, // cyrillic only
-            new { Login = "Игрок_Один", Email = "igrok1@test.local", Role = UserRole.RegularUser, IsHonorary = false }, // cyrillic + underscore
-            new { Login = "Тест Елки", Email = "yolka@test.local", Role = UserRole.RegularUser, IsHonorary = false }, // cyrillic + space + Е
+            new { Login = "Игрок", Email = "igrok@test.local", Role = UserRole.RegularUser }, // cyrillic only
+            new { Login = "Игрок_Один", Email = "igrok1@test.local", Role = UserRole.RegularUser }, // cyrillic + underscore
+            new { Login = "Тест Елки", Email = "yolka@test.local", Role = UserRole.RegularUser }, // cyrillic + space + Е
 
             // === Special states ===
-            new { Login = "TestHonorary", Email = "honorary@test.local", Role = UserRole.RegularUser, IsHonorary = true }, // honorary goblin
+            new { Login = "TestHonorary", Email = "honorary@test.local", Role = UserRole.RegularUser }, // holds the "Почетный гоблин" award
 
             // === Rating test cases ===
-            new { Login = "RatingDisabled", Email = "rating-off@test.local", Role = UserRole.RegularUser, IsHonorary = false }, // rating disabled (n/a)
-            new { Login = "RatingPositive", Email = "rating-pos@test.local", Role = UserRole.RegularUser, IsHonorary = false }, // positive rating
-            new { Login = "RatingNegative", Email = "rating-neg@test.local", Role = UserRole.RegularUser, IsHonorary = false }, // negative rating
-            new { Login = "RatingZero", Email = "rating-zero@test.local", Role = UserRole.RegularUser, IsHonorary = false }, // zero rating
-            new { Login = "Experienced", Email = "experienced@test.local", Role = UserRole.RegularUser, IsHonorary = false }, // 150 posts, not newbie
+            new { Login = "RatingDisabled", Email = "rating-off@test.local", Role = UserRole.RegularUser }, // rating disabled (n/a)
+            new { Login = "RatingPositive", Email = "rating-pos@test.local", Role = UserRole.RegularUser }, // positive rating
+            new { Login = "RatingNegative", Email = "rating-neg@test.local", Role = UserRole.RegularUser }, // negative rating
+            new { Login = "RatingZero", Email = "rating-zero@test.local", Role = UserRole.RegularUser }, // zero rating
+            new { Login = "Experienced", Email = "experienced@test.local", Role = UserRole.RegularUser }, // 150 posts, not newbie
 
             // === Activity test cases ===
-            new { Login = "OnlyReader", Email = "reader@test.local", Role = UserRole.RegularUser, IsHonorary = false }, // reads games but never plays (0 gamesPlaying)
+            new { Login = "OnlyReader", Email = "reader@test.local", Role = UserRole.RegularUser }, // reads games but never plays (0 gamesPlaying)
         };
 
         var result = new SeedResult();
@@ -343,7 +470,7 @@ internal class ModerationApiService : IModerationApiService
             // Vary registration dates for realistic testing (staff registered earlier, newbies later)
             var registeredUtc = account.Login switch
             {
-                "SolohinLex" => now.AddYears(-11).AddDays(-Random.Shared.Next(0, 180)), // 11+ years (хватает на платину «Выслуга лет», T4 = 3650 дней)
+                "SolohinLex" => now.AddYears(-11).AddDays(-Random.Shared.Next(0, 180)), // 11+ years (enough for platinum of "Выслуга лет", T4 = 3650 days)
                 "TestSeniorMod" => now.AddYears(-4).AddDays(-Random.Shared.Next(0, 180)), // 4+ years ago
                 "TestModerator" => now.AddYears(-3).AddDays(-Random.Shared.Next(0, 180)), // 3+ years ago
                 "TestMentor" => now.AddYears(-2).AddDays(-Random.Shared.Next(0, 180)), // 2+ years ago
@@ -366,7 +493,6 @@ internal class ModerationApiService : IModerationApiService
                 PasswordHash = hash,
                 PasswordHashVersion = 4, // Argon2id
                 IsRemoved = false,
-                IsHonorary = account.IsHonorary,
                 RatingDisabled = ratingDisabled,
                 QualityRating = qualityRating,
                 QuantityRating = quantityRating,
@@ -465,8 +591,11 @@ internal class ModerationApiService : IModerationApiService
         await AssignBoardModerators(users, result);
 
         // ═══════════════════════════════════════════════════════════════════
-        // 3. CREATE GAMES WITH ALL VARIATIONS
+        // 3. SEED SYSTEM ATTRIBUTE SCHEMA (MongoDB) + CREATE GAMES
+        // The system "Классическая схема" must exist before games reference it
+        // via AttributeSchemaId. Idempotent upsert — survives PG reseed.
         // ═══════════════════════════════════════════════════════════════════
+        await SeedSystemAttributeSchemaAsync(result);
         var gameIds = await CreateGames(users, now, result);
 
         // ═══════════════════════════════════════════════════════════════════
@@ -478,7 +607,7 @@ internal class ModerationApiService : IModerationApiService
         // 5. CREATE GLOBAL CHAT AND MESSAGES
         // ═══════════════════════════════════════════════════════════════════
         await CreateGlobalChatMessages(users, now, result);
-        await CreateGlobalChatEvent(users, now, result);
+        await CreateGlobalChatEvents(users, now, result);
 
         // ═══════════════════════════════════════════════════════════════════
         // 6. CREATE REVIEWS
@@ -501,6 +630,16 @@ internal class ModerationApiService : IModerationApiService
         // 9. CREATE LIKES FOR ALL CONTENT
         // ═══════════════════════════════════════════════════════════════════
         await CreateLikes(users, result);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // 9b. ENSURE A FULL LEADERBOARD TOP-10 FOR THE CURRENT MONTH
+        // The statistics page defaults to the current-month period; the organic
+        // seed leaves the by-rating boards (reviews cluster in one finished
+        // game) and the blog boards (publications spread across ~1.5 years)
+        // short there. Top the current month up to a full top-10 on every
+        // board. Idempotent — a re-seed within the same month is a no-op.
+        // ═══════════════════════════════════════════════════════════════════
+        await EnsureLeaderboardCoverage(users, now, result);
 
         // ═══════════════════════════════════════════════════════════════════
         // 10. UPDATE LastCommentId REFERENCES
@@ -527,43 +666,171 @@ internal class ModerationApiService : IModerationApiService
 
         // ═══════════════════════════════════════════════════════════════════
         // 14. BOOST SOLOHIN-LEX METRICS FOR FULL ACHIEVEMENT TIER COVERAGE
-        // Поднимаем счетчики, чтобы на профиле SolohinLex были все 5 видов
-        // плашек: locked / bronze / silver / gold / platinum. Платина уже
-        // есть от 11-летней регистрации; gold/silver требуют поднять
-        // QuantityRating и QualityRating (все остальное уже на bronze /
-        // locked из реальных данных).
+        // Full tier palette on the achievements page: platinum (T4) comes
+        // from the 11-year registration AND from 5000+ real game posts
+        // (bulk archive insert inside the method — the tier IV showcase for
+        // the "Игровые посты" chain), gold stays on bans/drops (10 each),
+        // silver needs a QualityRating boost, bronze/locked come from
+        // organic data.
         // ═══════════════════════════════════════════════════════════════════
-        await BoostSolohinLexMetrics(result);
+        await BoostSolohinLexMetrics(now, result);
 
         // ═══════════════════════════════════════════════════════════════════
-        // 15. SEED SOLOHIN-LEX BANS FOR «РЕЗИНОВАЯ УТОЧКА» DEMO
-        // Цепочка BansReceived требует фактических Ban-записей в БД (а не
-        // денормализованного счетчика), поэтому инсертим 10 штук — gold tier,
-        // gold/silver/bronze тиры заработаны, platinum (T4=30) остается
-        // locked. Параллельно с гейм-постами/рейтингом дает полную палитру
-        // tier-плашек на странице достижений.
+        // 15. SEED SOLOHIN-LEX BANS FOR "РЕЗИНОВАЯ УТОЧКА" DEMO
+        // The BansReceived chain requires actual Ban records in the DB (not
+        // a denormalized counter), so we insert 10 of them — gold tier,
+        // gold/silver/bronze tiers are earned, platinum (T4=30) stays
+        // locked. Together with game posts/rating this gives the full palette
+        // of tier plaques on the achievements page.
         // ═══════════════════════════════════════════════════════════════════
         await SeedSolohinLexBans(users, now, result);
 
         // ═══════════════════════════════════════════════════════════════════
-        // 16. SEED SOLOHIN-LEX DROPS FOR «ДРОПЫ» DEMO
-        // Цепочка GameDrops читает Characters.Status=Retired+IsPlayerLeft,
-        // поэтому надо инсертить именно персонажей. 10 штук → gold tier,
+        // 16. SEED SOLOHIN-LEX DROPS FOR "ДРОПЫ" DEMO
+        // The GameDrops chain reads Characters.Status=Retired+IsPlayerLeft,
+        // so actual characters must be inserted. 10 of them → gold tier,
         // platinum (T4=30) locked.
         // ═══════════════════════════════════════════════════════════════════
         await SeedSolohinLexDrops(users, now, result);
 
-        result.Details.Add($"Comprehensive seed completed at {now:yyyy-MM-dd HH:mm:ss}");
+        // ═══════════════════════════════════════════════════════════════════
+        // 17. SEED SOLOHIN-LEX PLAYER CHARACTERS FOR PROFILE GAMES TABLE
+        // The "Игрок" mode of the profile games table shows the character
+        // status column, so SolohinLex needs deterministic characters with
+        // different statuses: active / dead / left alongside actives, plus
+        // a game with only former characters and a game with only an
+        // application under review — the latter two are visible only via
+        // the playerParticipation=Any scope of the games player filter.
+        // ═══════════════════════════════════════════════════════════════════
+        await SeedSolohinLexPlayerCharacters(users, now, result);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // 18. SEED TICKETS ("обращения") FOR THE MODERATION PAGES
+        // A mix of subtypes/statuses/author kinds (authenticated complaint
+        // with a target, guest support request with GuestEmail, spam) so the
+        // moderation ticket pages have data for every role scope.
+        // ═══════════════════════════════════════════════════════════════════
+        await SeedTickets(users, now, result);
+
+        result.Details.Add($"Comprehensive seed completed at {now:dd.MM.yyyy в HH:mm}");
         return result;
     }
 
     /// <summary>
-    /// Создает 10 персонажей-«дропов» для SolohinLex — Retired со
+    /// Seeds a handful of tickets ("обращения") covering the role visibility
+    /// matrix: user complaint and suggestion (Moderator scope), complaint
+    /// about a junior moderator decision (SeniorModerator scope), guest
+    /// support requests with GuestEmail and a Spam-status one (Admin scope).
+    /// Idempotent: skips when any tickets already exist.
+    /// </summary>
+    private async Task SeedTickets(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    {
+        var existing = await _dbContext.Tickets.CountAsync();
+        if (existing > 0)
+        {
+            result.Details.Add($"Tickets already seeded ({existing}), skipping");
+            return;
+        }
+
+        var regularUsers = users.Where(u => u.Role == UserRole.RegularUser).ToList();
+        var moderator = users.FirstOrDefault(u => u.Role == UserRole.Moderator)
+                        ?? users.FirstOrDefault(u => u.Role == UserRole.SeniorModerator);
+        if (regularUsers.Count < 2 || moderator == null)
+        {
+            result.Details.Add("Tickets skipped: not enough users for reporter/target/moderator roles");
+            return;
+        }
+
+        var reporter = regularUsers[0];
+        var target = regularUsers[1];
+
+        var tickets = new[]
+        {
+            // Authenticated complaint about a user (Moderator scope)
+            new Ticket
+            {
+                TicketId = Guid.NewGuid(),
+                UserId = reporter.UserId,
+                TargetId = target.UserId,
+                EntityType = "",
+                Status = TicketStatus.WaitingForModeration,
+                Subtype = TicketSubtype.UserComplaint,
+                CreatedUtc = now.AddDays(-2),
+                Description = $"Пользователь {target.Username} оскорбляет участников в комментариях к игре. " +
+                              "Прошу принять меры.\n\nСсылка на нарушение: https://dm.am/games/example",
+                Comment = "Жалоба на поведение в комментариях"
+            },
+            // Authenticated suggestion, answered by a moderator (Moderator scope)
+            new Ticket
+            {
+                TicketId = Guid.NewGuid(),
+                UserId = target.UserId,
+                EntityType = "",
+                Status = TicketStatus.WaitingForUser,
+                Subtype = TicketSubtype.SiteImprovementSuggestion,
+                CreatedUtc = now.AddDays(-5),
+                Description = "Предлагаю добавить сортировку списка игр по дате последнего поста — " +
+                              "так проще находить живые игры.",
+                Comment = "Предложение по списку игр",
+                AssignedModeratorId = moderator.UserId,
+                AnswerAuthorId = moderator.UserId,
+                Answer = "Спасибо за предложение! Передали разработчикам, уточните, пожалуйста, " +
+                         "какой порядок сортировки вы ожидаете по умолчанию."
+            },
+            // Authenticated complaint about a junior moderator decision (SeniorModerator scope)
+            new Ticket
+            {
+                TicketId = Guid.NewGuid(),
+                UserId = reporter.UserId,
+                EntityType = "",
+                Status = TicketStatus.WaitingForModeration,
+                Subtype = TicketSubtype.ModeratorDecisionComplaint,
+                CreatedUtc = now.AddDays(-1),
+                Description = "Считаю, что предупреждение за флуд выдано несправедливо: сообщение " +
+                              "было по теме обсуждения. Прошу пересмотреть решение.",
+                Comment = "Несогласие с предупреждением"
+            },
+            // Guest support request with a contact email (Admin scope)
+            new Ticket
+            {
+                TicketId = Guid.NewGuid(),
+                GuestEmail = "guest@example.com",
+                EntityType = "",
+                Status = TicketStatus.WaitingForModeration,
+                Subtype = TicketSubtype.AccessRecovery,
+                CreatedUtc = now.AddHours(-8),
+                Description = "Не могу войти в аккаунт: письмо для восстановления пароля не приходит " +
+                              "на почту. Аккаунт зарегистрирован давно, логин помню.",
+                Comment = "Не приходит письмо восстановления"
+            },
+            // Guest submission marked as spam (Admin scope, Spam status demo)
+            new Ticket
+            {
+                TicketId = Guid.NewGuid(),
+                GuestEmail = "promo@spam.example.com",
+                EntityType = "",
+                Status = TicketStatus.Spam,
+                Subtype = TicketSubtype.Bug,
+                CreatedUtc = now.AddDays(-3),
+                Description = "Лучшие цены на продвижение вашего сайта! Пишите нам прямо сейчас.",
+                Comment = "Реклама",
+                AssignedModeratorId = moderator.UserId,
+                ResolvedUtc = now.AddDays(-3).AddHours(2)
+            }
+        };
+
+        _dbContext.Tickets.AddRange(tickets);
+        await _dbContext.SaveChangesAsync();
+        result.Details.Add($"Tickets seeded: {tickets.Length} (complaint, suggestion, moderator complaint, guest recovery, spam)");
+    }
+
+    /// <summary>
+    /// Creates 10 "drop" characters for SolohinLex — Retired with
     /// <see cref="DM.Infrastructure.Persistence.Entities.Game.Characters.Character.IsPlayerLeft"/>=true
-    /// в существующих играх. Идемпотентно: если уже 10+ дропов, ничего не делает.
-    /// Берем произвольные игры (не созданные SolohinLex-ом как мастер, чтобы
-    /// не нарушать логику), без проверки уникальности «один игрок — одна
-    /// активная роль в игре»: статус Retired исключает конкуренцию с Active.
+    /// in existing games. Idempotent: if there are already 10+ drops, does nothing.
+    /// We pick arbitrary games (not ones created by SolohinLex as a master, to
+    /// avoid breaking the logic), without the "one player — one active role
+    /// per game" uniqueness check: the Retired status rules out competing with Active.
     /// </summary>
     private async Task SeedSolohinLexDrops(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
     {
@@ -589,8 +856,8 @@ internal class ModerationApiService : IModerationApiService
         const int targetCount = 10;
         var toCreate = targetCount - existing;
 
-        // Берем существующие игры из ChangeTracker (созданные в шаге 6) —
-        // удобнее, чем повторный SELECT; и эти игры точно валидны.
+        // Take existing games from the ChangeTracker (created in step 6) —
+        // more convenient than a repeated SELECT; and these games are definitely valid.
         var availableGames = _dbContext.ChangeTracker.Entries<DbGame>()
             .Select(e => e.Entity)
             .Where(g => !g.IsRemoved && g.MasterId != solohin.UserId)
@@ -599,8 +866,8 @@ internal class ModerationApiService : IModerationApiService
 
         if (availableGames.Count < toCreate)
         {
-            // Fallback: подбираем из БД (на случай если ChangeTracker пуст,
-            // например после рестарта между seed-шагами).
+            // Fallback: pick from the DB (in case the ChangeTracker is empty,
+            // e.g. after a restart between seed steps).
             availableGames = await _dbContext.Set<DbGame>()
                 .Where(g => !g.IsRemoved && g.MasterId != solohin.UserId)
                 .Take(toCreate * 2)
@@ -626,7 +893,7 @@ internal class ModerationApiService : IModerationApiService
         {
             var game = availableGames[i % availableGames.Count];
             var createdAgo = (existing + i + 1) * 45;
-            _dbContext.Set<Character>().Add(new Character
+            var dropCharacter = new Character
             {
                 CharacterId = _guidFactory.Create(),
                 GameId = game.GameId,
@@ -637,25 +904,174 @@ internal class ModerationApiService : IModerationApiService
                 IsPlayerExiled = false,
                 CreatedUtc = now.AddDays(-createdAgo),
                 Name = characterNames[(existing + i) % characterNames.Length],
-                Race = races[(existing + i) % races.Length],
-                Class = classes[(existing + i) % classes.Length],
-                Story = "Покинул игру по личным обстоятельствам.",
                 IsNpc = false,
                 AccessPolicy = CharacterAccessPolicy.NoAccess,
                 IsRemoved = false,
-            });
+            };
+            _dbContext.Set<Character>().Add(dropCharacter);
+            AddLegacyCharacterAttributes(dropCharacter.CharacterId,
+                race: races[(existing + i) % races.Length],
+                @class: classes[(existing + i) % classes.Length],
+                story: "Покинул игру по личным обстоятельствам.");
         }
         await _dbContext.SaveChangesAsync();
-        result.Details.Add($"SolohinLex drops seeded: {toCreate} created (total {targetCount}) for «дропы» demo");
+        result.Details.Add($"SolohinLex drops seeded: {toCreate} created (total {targetCount}) for \"дропы\" demo");
     }
 
     /// <summary>
-    /// Сидим 10 банов для SolohinLex (target=SolohinLex, author=TestModerator)
-    /// — три тира цепочки «резиновая уточка» зарабатываются (BANS_1, BANS_3,
-    /// BANS_10), четвертый (BANS_30) остается locked. Баны прошедшие (Ended
-    /// в прошлом), <c>IsVoluntary=true</c>, AccessRestrictionPolicy не задается —
-    /// исторические записи, не активные ограничения. Идемпотентно: при
-    /// повторном seed не создает дубли.
+    /// Seeds deterministic player characters for SolohinLex so the profile
+    /// games table ("Игрок" mode) can demonstrate the character status
+    /// column: two games where he has an active character (one alongside a
+    /// dead character, the other alongside one that left), one game where he
+    /// has ONLY former characters (dead + left, no active one) and one game
+    /// where he has ONLY an application under review. The profile table
+    /// queries the games player filter with PlayerParticipation.Any, so the
+    /// two active-less games stay visible there while the public /games
+    /// player filter (active-only scope) keeps excluding them. Games are
+    /// picked among non-draft games not mastered by SolohinLex where he has
+    /// no characters yet, keeping the "one active character per player per
+    /// game" rule intact. Idempotent per marker name: re-running skips the
+    /// characters that already exist, so extending the plan list back-fills
+    /// only the new ones.
+    /// </summary>
+    private async Task SeedSolohinLexPlayerCharacters(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    {
+        var solohin = users.FirstOrDefault(u => u.Username == "SolohinLex");
+        if (solohin == null)
+        {
+            result.Details.Add("SolohinLex player characters skipped: target user not found");
+            return;
+        }
+
+        var plans = new (int GameIndex, string Name, CharacterStatus Status, bool IsDead, bool IsPlayerLeft, int DaysAgo, string Race, string Class, string Story)[]
+        {
+            // Game 0: active character + a dead one.
+            (0, "Ролан Странник", CharacterStatus.Active, false, false, 30, "Человек", "Следопыт", "Вышел на тракт за новыми историями."),
+            (0, "Торвальд Смелый", CharacterStatus.Retired, true, false, 120, "Дварф", "Воин", "Пал в бою, прикрывая отход отряда."),
+            // Game 1: active character + one that left the game.
+            (1, "Мираэль Тихая", CharacterStatus.Active, false, false, 20, "Эльф", "Плут", "Держится в тени и слушает больше, чем говорит."),
+            (1, "Каспар Непоседа", CharacterStatus.Retired, false, true, 90, "Полуэльф", "Бард", "Покинул игру: дорога позвала дальше."),
+            // Game 2: former participation only (dead + left, no active
+            // character) - visible only via PlayerParticipation.Any.
+            (2, "Эйнар Хмурый", CharacterStatus.Retired, true, false, 200, "Человек", "Варвар", "Погиб, не отступив ни на шаг."),
+            (2, "Лира Певунья", CharacterStatus.Retired, false, true, 150, "Полуэльф", "Бард", "Покинула игру ради новой баллады."),
+            // Game 3: application under review only - visible only via
+            // PlayerParticipation.Any.
+            (3, "Дориан Пытливый", CharacterStatus.UnderReview, false, false, 3, "Человек", "Маг", "Заявка ожидает решения мастера."),
+        };
+
+        // Per-name idempotency: every plan name is a marker. A database
+        // seeded by an older version of this step gets only the missing
+        // characters back-filled; a fully seeded one is skipped entirely.
+        var planNames = plans.Select(p => p.Name).ToList();
+        var existingNames = await _dbContext.Set<Character>()
+            .Where(c => c.AuthorId == solohin.UserId && !c.IsRemoved && planNames.Contains(c.Name))
+            .Select(c => c.Name)
+            .ToListAsync();
+        var pending = plans.Where(p => !existingNames.Contains(p.Name)).ToList();
+        if (pending.Count == 0)
+        {
+            result.Details.Add("SolohinLex player characters already seeded, skipping");
+            return;
+        }
+
+        // Games where SolohinLex already has any character (random seed picks
+        // or the drop characters from the previous step) are excluded so we
+        // never create a second active character in the same game.
+        var occupiedGameIds = await _dbContext.Set<Character>()
+            .Where(c => c.AuthorId == solohin.UserId && !c.IsRemoved)
+            .Select(c => c.GameId)
+            .Distinct()
+            .ToListAsync();
+
+        var pendingGameIndexes = pending.Select(p => p.GameIndex).Distinct().OrderBy(i => i).ToList();
+        var gamesNeeded = pendingGameIndexes.Count;
+
+        var eligibleGames = _dbContext.ChangeTracker.Entries<DbGame>()
+            .Select(e => e.Entity)
+            .Where(g => !g.IsRemoved &&
+                        g.Status != ModuleStatus.Draft &&
+                        g.MasterId != solohin.UserId &&
+                        !occupiedGameIds.Contains(g.GameId))
+            .Take(gamesNeeded)
+            .ToList();
+
+        if (eligibleGames.Count < gamesNeeded)
+        {
+            // Fallback to the database (e.g. when seed steps run against an
+            // already-populated database and the ChangeTracker is empty).
+            eligibleGames = await _dbContext.Set<DbGame>()
+                .Where(g => !g.IsRemoved &&
+                            g.Status != ModuleStatus.Draft &&
+                            g.MasterId != solohin.UserId &&
+                            !occupiedGameIds.Contains(g.GameId))
+                .Take(gamesNeeded)
+                .ToListAsync();
+        }
+
+        if (eligibleGames.Count == 0)
+        {
+            result.Details.Add("SolohinLex player characters skipped: no eligible games");
+            return;
+        }
+
+        // Each distinct plan game index gets its own eligible game. Folding
+        // several plan indexes into one game is NOT allowed: it could create
+        // a second active character of the same player in one game (invariant
+        // violation) and would blur the Any-vs-Active scope demo (a
+        // former-players-only game would gain an active character). With
+        // fewer eligible games than needed the unlucky plan indexes are
+        // skipped and reported instead.
+        var gameByPlanIndex = pendingGameIndexes
+            .Take(eligibleGames.Count)
+            .Select((planIndex, i) => (PlanIndex: planIndex, Game: eligibleGames[i]))
+            .ToDictionary(x => x.PlanIndex, x => x.Game);
+
+        var skippedCount = pending.Count(p => !gameByPlanIndex.ContainsKey(p.GameIndex));
+        if (skippedCount > 0)
+        {
+            pending = pending.Where(p => gameByPlanIndex.ContainsKey(p.GameIndex)).ToList();
+            result.Details.Add(
+                $"SolohinLex player characters partially skipped ({skippedCount}): not enough eligible games");
+        }
+
+        foreach (var plan in pending)
+        {
+            var planCharacter = new Character
+            {
+                CharacterId = _guidFactory.Create(),
+                GameId = gameByPlanIndex[plan.GameIndex].GameId,
+                AuthorId = solohin.UserId,
+                Status = plan.Status,
+                IsDead = plan.IsDead,
+                IsPlayerLeft = plan.IsPlayerLeft,
+                IsPlayerExiled = false,
+                CreatedUtc = now.AddDays(-plan.DaysAgo),
+                Name = plan.Name,
+                IsNpc = false,
+                AccessPolicy = CharacterAccessPolicy.NoAccess,
+                IsRemoved = false,
+            };
+            _dbContext.Set<Character>().Add(planCharacter);
+            AddLegacyCharacterAttributes(planCharacter.CharacterId,
+                race: plan.Race, @class: plan.Class, story: plan.Story);
+            result.CharactersCreated++;
+        }
+
+        await _dbContext.SaveChangesAsync();
+        result.Details.Add(
+            $"SolohinLex player characters seeded: {pending.Count} across {gameByPlanIndex.Count} game(s) for profile games table status column");
+    }
+
+    /// <summary>
+    /// Seed 10 bans for SolohinLex (target=SolohinLex, author=TestModerator)
+    /// — three tiers of the "резиновая уточка" chain are earned (BANS_1, BANS_3,
+    /// BANS_10), the fourth (BANS_30) stays locked. The bans are past (Ended
+    /// in the past), AccessRestrictionPolicy is not set — historical records,
+    /// not active restrictions. Regular moderator bans: voluntary bans
+    /// do not exist as a concept (owner decision), so
+    /// <c>IsVoluntary</c> is always false in the seed. Idempotent: a repeated
+    /// seed does not create duplicates.
     /// </summary>
     private async Task SeedSolohinLexBans(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
     {
@@ -694,7 +1110,7 @@ internal class ModerationApiService : IModerationApiService
         };
         for (var i = 0; i < toCreate; i++)
         {
-            var ago = (existing + i + 1) * 30; // равномерно по последним месяцам
+            var ago = (existing + i + 1) * 30; // spread evenly over recent months
             _dbContext.Set<Ban>().Add(new Ban
             {
                 BanId = Guid.NewGuid(),
@@ -704,30 +1120,113 @@ internal class ModerationApiService : IModerationApiService
                 EndedUtc = now.AddDays(-ago + 7),
                 Comment = reasons[(existing + i) % reasons.Length],
                 AccessRestrictionPolicy = AccessPolicy.NotSpecified,
-                IsVoluntary = true,
+                IsVoluntary = false,
                 IsRemoved = false,
             });
         }
         await _dbContext.SaveChangesAsync();
-        result.Details.Add($"SolohinLex bans seeded: {toCreate} created (total {targetCount}) for «резиновая уточка» demo");
+        result.Details.Add($"SolohinLex bans seeded: {toCreate} created (total {targetCount}) for \"резиновая уточка\" demo");
     }
 
     /// <summary>
-    /// Поднимаем QuantityRating и QualityRating SolohinLex'а так, чтобы он
-    /// демонстрировал все 5 состояний tier-плашек на странице достижений.
-    /// Запускается ПОСЛЕ <see cref="RecomputeUserRatings"/>, иначе пересчет
-    /// затрет наши значения.
+    /// Boosts SolohinLex metrics so his achievements page shows all 5 tier
+    /// plaque states, including platinum (T4) of the "Игровые посты" chain:
+    /// bulk-inserts lightweight archive posts up to the T4 threshold (5000)
+    /// into a room of a finished game he masters. The GamePostsAuthored
+    /// metric reads the denormalized QuantityRating, which is then recounted
+    /// from the real COUNT(Posts) — data and counter stay consistent.
+    /// Idempotent: marker is the GameText prefix, only the missing amount is
+    /// topped up. Must run AFTER <see cref="RecomputeUserRatings"/>, which
+    /// would otherwise overwrite the QualityRating boost.
     /// </summary>
-    private async Task BoostSolohinLexMetrics(ComprehensiveSeedResult result)
+    private async Task BoostSolohinLexMetrics(DateTimeOffset now, ComprehensiveSeedResult result)
     {
-        // Game posts: 2200 → gold (T1=100, T2=500, T3=2000 взяты; T4=5000 — нет).
-        // Rating:      350  → silver (T1=100, T2=250 взяты; T3=500, T4=1000 — нет).
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        // Game posts tier ladder: T1=100, T2=500, T3=2000, T4=5000.
+        const int targetArchivePosts = 5000;
+        const string archiveMarker = "Архивная запись №";
+
+        var solohin = await _dbContext.Users.FirstOrDefaultAsync(u => u.Username == "SolohinLex");
+        if (solohin == null)
+        {
+            result.Details.Add("SolohinLex metrics boost skipped: user not found");
+            return;
+        }
+
+        var existing = await _dbContext.Posts
+            .CountAsync(p => p.AuthorId == solohin.UserId
+                && !p.IsRemoved
+                && p.GameText.StartsWith(archiveMarker));
+        var toCreate = targetArchivePosts - existing;
+        if (toCreate > 0)
+        {
+            // A finished game mastered by SolohinLex is a plausible home for
+            // thousands of archive posts (a long completed campaign).
+            var game = await _dbContext.Set<DbGame>()
+                .Where(g => g.MasterId == solohin.UserId
+                    && !g.IsRemoved
+                    && g.Status == ModuleStatus.Closed
+                    && g.ClosedReason == ClosedReason.Finished)
+                .OrderBy(g => g.CreatedUtc)
+                .FirstOrDefaultAsync();
+            var room = game == null
+                ? null
+                : await _dbContext.Rooms
+                    .Where(r => r.GameId == game.GameId && !r.IsRemoved && r.Type == RoomType.Default)
+                    .OrderBy(r => r.RoomNumber)
+                    .FirstOrDefaultAsync();
+
+            if (room == null)
+            {
+                result.Details.Add("SolohinLex archive posts skipped: no finished mastered game with a room");
+            }
+            else
+            {
+                // Master posts (no character), short text, spread evenly
+                // between game activation and closing — always in the past,
+                // so they never surface in "recent activity" widgets.
+                var windowStart = game!.ActivatedUtc ?? game.CreatedUtc;
+                var windowEnd = game.ClosedUtc ?? now.AddDays(-1);
+                if (windowEnd <= windowStart) windowEnd = windowStart.AddDays(30);
+                var stepTicks = (windowEnd - windowStart).Ticks / targetArchivePosts;
+
+                var posts = new List<Post>(toCreate);
+                for (var i = 0; i < toCreate; i++)
+                {
+                    var ordinal = existing + i + 1;
+                    posts.Add(new Post
+                    {
+                        PostId = _guidFactory.Create(),
+                        RoomId = room.RoomId,
+                        CharacterId = null,
+                        AuthorId = solohin.UserId,
+                        CreatedUtc = windowStart.AddTicks(stepTicks * ordinal),
+                        GameText = $"{archiveMarker}{ordinal}. Летопись кампании, сохранена для истории.",
+                        IsRemoved = false,
+                    });
+                }
+                _dbContext.Posts.AddRange(posts);
+                await _dbContext.SaveChangesAsync();
+                result.PostsCreated += toCreate;
+            }
+        }
+
+        // QuantityRating = real post count (archive + organic game posts) →
+        // T4 "Приключение в жизнь" (5000). QualityRating: 350 → silver
+        // (T1=100, T2=250 earned; T3=500, T4=1000 — not).
         await _dbContext.Database.ExecuteSqlRawAsync("""
-            UPDATE "Users"
-            SET "QuantityRating" = 2200, "QualityRating" = 350
-            WHERE "Username" = 'SolohinLex';
+            UPDATE "Users" u
+            SET "QuantityRating" = (SELECT COUNT(*) FROM "Posts" p
+                                    WHERE p."AuthorId" = u."UserId" AND p."IsRemoved" = false),
+                "QualityRating" = 350
+            WHERE u."Username" = 'SolohinLex';
         """);
-        result.Details.Add("SolohinLex metrics boosted for full tier coverage (posts=2200, rating=350)");
+
+        sw.Stop();
+        result.Details.Add(
+            $"SolohinLex metrics boosted: +{Math.Max(toCreate, 0)} archive game posts " +
+            $"(target {targetArchivePosts} → posts T4 platinum), rating=350 (silver), took {sw.ElapsedMilliseconds} ms");
     }
 
     private async Task RecomputeUserRatings(ComprehensiveSeedResult result)
@@ -810,11 +1309,11 @@ internal class ModerationApiService : IModerationApiService
 
         // --- "О себе" (Info, BBCode) ---
         // Idempotent: always assign so re-seeds produce a known text.
-        // BBCode источник лежит в Assets/Seed/SolohinLex.bbcode и
-        // встроен в сборку как EmbeddedResource — единственная копия
-        // на весь проект (SSOT). Раньше дублировался в raw string
-        // здесь + scripts/solohin-info.bbcode + scripts/update-solohin-info.sql;
-        // оба внешних места убраны, ручной psql-апдейт больше не нужен.
+        // The BBCode source lives in Assets/Seed/SolohinLex.bbcode and
+        // is embedded into the assembly as an EmbeddedResource — the single copy
+        // for the whole project (SSOT). It used to be duplicated as a raw string
+        // here + in scripts/solohin-info.bbcode + scripts/update-solohin-info.sql;
+        // both external copies are gone, the manual psql update is no longer needed.
         solohin.Info = await LoadEmbeddedTextAsync("DM.Web.API.Assets.Seed.SolohinLex.bbcode");
 
         // --- Contacts ---
@@ -845,7 +1344,7 @@ internal class ModerationApiService : IModerationApiService
             });
         }
 
-        // --- Endorsements (Рекомендации) ---
+        // --- Endorsements ("Рекомендации") ---
         // Wipe-and-rebuild so re-seeds are deterministic. Endorsers are
         // looked up by username — if a username doesn't exist in this seed
         // run, that one entry is silently skipped.
@@ -856,13 +1355,15 @@ internal class ModerationApiService : IModerationApiService
         {
             _dbContext.UserEndorsements.RemoveRange(existingEndorsements);
         }
+        // Plain text only (endorsements are not BBCode-rendered), about the
+        // person as player / master / human — not about site administration.
         var endorsementEntries = new (string Username, int DaysAgo, string Text)[]
         {
-            ("TestSeniorMod", 180, "Веду игры с Лексом уже несколько лет. Адекватный мастер, посты пишет регулярно, конфликты разруливает спокойно. Рекомендую как мастера и как игрока."),
-            ("TestModerator", 90,  "Один из тех, кто реально читает правила перед тем как жаловаться. Помогает с модерацией постов и тегов, не флудит в чате."),
-            ("TestMentor",    60,  "Играл у него в Звездном Крейсере. Мастер с богатым внутренним миром — описания читаются как роман, NPC живые. Если попадетесь на его игру — соглашайтесь."),
-            ("Experienced",   30,  "Лекс из тех редких людей, которые админят сайт и [b]не зазнаются[/b]. Доступен в Discord, отвечает быстро."),
-            ("TestHonorary",  14,  "Знаком с ним еще с DM2. Принципиально не банит за политику, разбирается с каждым случаем индивидуально. Уважаю."),
+            ("TestSeniorMod", 180, "Играем с Лексом уже несколько лет. Надежный согрок: пишет регулярно, не пропадает посреди сцены, спорные моменты за столом обсуждает спокойно. Рекомендую и как мастера, и как игрока."),
+            ("TestModerator", 90,  "Отыгрывал у меня в двух кампаниях. Персонажей прописывает глубоко, в чужой отыгрыш не лезет, а его посты задают планку всей игре."),
+            ("TestMentor",    60,  "Играл у него в Звездном Крейсере. Описания читаются как роман, NPC живые, сюжет не провисает. Если попадете на его набор — соглашайтесь не раздумывая."),
+            ("Experienced",   30,  "Терпеливый к новичкам мастер: объяснит правила, поможет докрутить анкету и не бросит игру на середине. Таких поискать."),
+            ("TestHonorary",  14,  "Знаком с ним еще со старой версии сайта. Как человек — открытый и отзывчивый, всегда готов подсказать по механике или помочь с идеей для персонажа."),
         };
         foreach (var (authorUsername, daysAgo, text) in endorsementEntries)
         {
@@ -880,14 +1381,14 @@ internal class ModerationApiService : IModerationApiService
         }
 
         // --- Awards ---
-        // Демо-история SolohinLex'а в конкурсах: рассказывает прогрессию
-        // 2022 → 2024 (от середины турнирной таблицы до Гран-При). Правила:
-        //   - В одной серии — максимум одно место (1/2/3 взаимоисключающие).
-        //   - Спец-награды (Народное / Критик / Угадайка) выдаются отдельно
-        //     по решению жюри/мини-игры и могут сочетаться с местом.
-        //   - Дата выдачи привязана к (сезон, год) серии, а не к now,
-        //     чтобы порядок сортировки был естественным.
-        // Wipe-and-rebuild, как остальные демо-блоки.
+        // SolohinLex's demo contest history: tells a progression
+        // 2022 → 2024 (from mid-table to the Grand Prix). Rules:
+        //   - At most one placement per series (1/2/3 are mutually exclusive).
+        //   - Special awards (Народное / Критик / Угадайка) are granted separately
+        //     by jury/minigame decision and can be combined with a placement.
+        //   - The grant date is tied to the series (season, year), not to now,
+        //     so the sort order is natural.
+        // Wipe-and-rebuild, like the other demo blocks.
         var existingAwards = await _dbContext.UserAwards
             .Where(a => a.UserId == solohin.UserId)
             .ToListAsync();
@@ -895,27 +1396,33 @@ internal class ModerationApiService : IModerationApiService
         {
             _dbContext.UserAwards.RemoveRange(existingAwards);
         }
-        var lit23 = new Guid("00000000-0000-0000-0004-000000000001"); // 23-й литературный конкурс 2024
-        var lit22 = new Guid("00000000-0000-0000-0004-000000000002"); // 22-й литературный конкурс 2023
-        var lit20 = new Guid("00000000-0000-0000-0004-000000000004"); // 20-й литературный конкурс 2022
-        var art2  = new Guid("00000000-0000-0000-0004-000000000005"); // 2-й арт конкурс 2024
-        var art1  = new Guid("00000000-0000-0000-0004-000000000006"); // 1-й арт конкурс 2023
+        var lit23 = new Guid("00000000-0000-0000-0004-000000000001"); // 23rd literary contest, 2024
+        var lit22 = new Guid("00000000-0000-0000-0004-000000000002"); // 22nd literary contest, 2023
+        var lit20 = new Guid("00000000-0000-0000-0004-000000000004"); // 20th literary contest, 2022
+        var art2  = new Guid("00000000-0000-0000-0004-000000000005"); // 2nd art contest, 2024
+        // "1-й арт конкурс 2023" (0004-...-06) intentionally holds no
+        // SolohinLex award: his ONLY art award is the art2 place below.
         var contestFirst   = new Guid("00000000-0000-0000-0001-000000000001");
         var contestSecond  = new Guid("00000000-0000-0000-0001-000000000002");
         var contestThird   = new Guid("00000000-0000-0000-0001-000000000003");
         var popularVote    = new Guid("00000000-0000-0000-0001-000000000004");
         var bestCritic     = new Guid("00000000-0000-0000-0001-000000000005");
         var guesser        = new Guid("00000000-0000-0000-0001-000000000006");
-        // Хронология SolohinLex'а — лит-карьера 2022-2024 + участие в арт-конкурсах.
-        // WorkUrl — placeholder-топик с самой работой (для мест + народного
-        // признания). best_critic / guesser не привязаны к конкретной работе.
+        // SolohinLex chronology: lit career 2022-2024 + a single art award
+        // (silver at art contest #2, 2024).
+        // WorkUrl — a placeholder topic with the work itself (for placements + popular
+        // vote). best_critic / guesser are not tied to a specific work.
+        // Special-award bindings must make sense per contest type: best_critic
+        // rewards REVIEWS (texts), so it only ever attaches to a literary
+        // series; guesser (author guessing) and popular_vote (vote for a work)
+        // fit any contest type.
         const string sampleWork = "https://dm.am/forum/topic/sample-work-";
         var demoAwards = new (Guid SeriesId, Guid AwardTypeId, DateTimeOffset At, string? WorkUrl)[]
         {
             (lit20, contestThird,  new DateTimeOffset(2022, 9,  1, 12, 0, 0, TimeSpan.Zero), sampleWork + "lit20-3"),
             (lit20, guesser,       new DateTimeOffset(2022, 9,  1, 12, 0, 0, TimeSpan.Zero), null),
             (lit22, contestSecond, new DateTimeOffset(2023, 3,  1, 12, 0, 0, TimeSpan.Zero), sampleWork + "lit22-2"),
-            (art1,  bestCritic,    new DateTimeOffset(2023, 9,  1, 12, 0, 0, TimeSpan.Zero), null),
+            (lit22, bestCritic,    new DateTimeOffset(2023, 3,  1, 12, 0, 0, TimeSpan.Zero), null),
             (lit23, contestFirst,  new DateTimeOffset(2024, 3,  1, 12, 0, 0, TimeSpan.Zero), sampleWork + "lit23-1"),
             (lit23, popularVote,   new DateTimeOffset(2024, 3,  1, 12, 0, 0, TimeSpan.Zero), sampleWork + "lit23-1"),
             (art2,  contestSecond, new DateTimeOffset(2024, 9,  1, 12, 0, 0, TimeSpan.Zero), sampleWork + "art2-2"),
@@ -930,11 +1437,56 @@ internal class ModerationApiService : IModerationApiService
                 ContestSeriesId = seriesId,
                 WorkUrl = workUrl,
                 AwardedUtc = at,
-                AwardedByUserId = solohin.UserId, // self-grant в сидере; в проде — admin/seniormod
+                AwardedByUserId = solohin.UserId, // self-grant in the seeder; in prod — admin/seniormod
                 IsRemoved = false,
             });
         }
-        result.Details.Add($"SolohinLex awards: rebuilt {demoAwards.Length} across 5 contest series (2022-2024)");
+
+        // Honorary goblin — a non-contest veteran honour dated to the user's
+        // early years, so it is the OLDEST award and (awards sort oldest-first)
+        // leads the list. SolohinLex is the site's "главный гоблин" (admin), so
+        // he carries it too; the honour is not exclusive (TestHonorary keeps his
+        // own copy). No ContestSeriesId → the tile shows the plain type.title/icon.
+        var honoraryGoblinSince = new DateTimeOffset(2015, 6, 1, 12, 0, 0, TimeSpan.Zero);
+        _dbContext.UserAwards.Add(new DM.Infrastructure.Persistence.Entities.Community.UserAward
+        {
+            UserAwardId = _guidFactory.Create(),
+            UserId = solohin.UserId,
+            AwardTypeId = new Guid("00000000-0000-0000-0001-000000000007"), // honorary_goblin
+            ContestSeriesId = null,
+            WorkUrl = null,
+            AwardedUtc = honoraryGoblinSince,
+            AwardedByUserId = solohin.UserId, // self-grant in the seeder; in prod — admin/seniormod
+            IsRemoved = false,
+        });
+        result.Details.Add($"SolohinLex awards: rebuilt {demoAwards.Length} contest awards + honorary goblin across {demoAwards.Select(d => d.SeriesId).Distinct().Count()} contest series (2022-2024)");
+
+        // --- TestHonorary award ---
+        // Ex-honorary user: no longer a flag on the user entity, just holds
+        // the "Почетный гоблин" award like anyone else can.
+        var testHonorary = users.FirstOrDefault(u => u.Username == "TestHonorary");
+        if (testHonorary != null)
+        {
+            var existingHonoraryAwards = await _dbContext.UserAwards
+                .Where(a => a.UserId == testHonorary.UserId)
+                .ToListAsync();
+            if (existingHonoraryAwards.Count > 0)
+            {
+                _dbContext.UserAwards.RemoveRange(existingHonoraryAwards);
+            }
+            _dbContext.UserAwards.Add(new DM.Infrastructure.Persistence.Entities.Community.UserAward
+            {
+                UserAwardId = _guidFactory.Create(),
+                UserId = testHonorary.UserId,
+                AwardTypeId = new Guid("00000000-0000-0000-0001-000000000007"), // honorary_goblin
+                ContestSeriesId = null, // non-contest award
+                WorkUrl = null,
+                AwardedUtc = honoraryGoblinSince, // "почетный гоблин с 2015 года" — matches the profile bio
+                AwardedByUserId = solohin.UserId,
+                IsRemoved = false,
+            });
+            result.Details.Add("TestHonorary awarded: Почетный гоблин");
+        }
 
         // --- Avatar upload ---
         // Idempotent: skip if SolohinLex already has an avatar wired up.
@@ -1078,10 +1630,9 @@ internal class ModerationApiService : IModerationApiService
             AddLikesForEntity(publication.PublicationId, LikeEntityType.Publication, publication.AuthorId);
         }
 
-        // 4. Likes for global chat messages
-        var globalChatId = Chat.GlobalChatId;
+        // 4. Likes for chat messages — both the global chat and personal/group DMs
         var messages = await _dbContext.Set<Message>()
-            .Where(m => !m.IsRemoved && m.ChatId == globalChatId)
+            .Where(m => !m.IsRemoved)
             .Select(m => new { m.MessageId, m.UserId })
             .ToListAsync();
         foreach (var message in messages)
@@ -1103,6 +1654,252 @@ internal class ModerationApiService : IModerationApiService
 
         result.LikesCreated = likesCreated;
         result.Details.Add($"Created {likesCreated} likes");
+    }
+
+    /// <summary>
+    /// Ensures every statistics leaderboard has a full top-10 for the periods
+    /// the site shows by default: the current month (/statistics landing) and
+    /// the CLOSED periods the auto-created digest topics summarize — the last
+    /// closed month and the previous year (December window). The organic seed
+    /// leaves the rating boards short there: post reviews cluster in a single
+    /// finished game and blog publications spread across ~1.5 years. The
+    /// post/volume boards fill from organic data and are left untouched.
+    ///
+    /// Self-correcting and idempotent per window: coverage is measured the
+    /// same way the boards measure it (a positive score inside the window)
+    /// and only what is missing is added; reviewers who already reviewed a
+    /// post are never reused for it, and each covered post is used by one
+    /// window only.
+    /// </summary>
+    private async Task EnsureLeaderboardCoverage(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    {
+        // A little over the board's top-10 so each board is unambiguously full.
+        const int target = 12;
+
+        var monthStart = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
+        var prevMonthStart = monthStart.AddMonths(-1);
+        var prevYearDecStart = new DateTimeOffset(now.Year - 1, 12, 1, 0, 0, 0, TimeSpan.Zero);
+
+        // The homepage widgets must stay on the organic showcase posts (Chuck's
+        // grapefruit post for "лучший пост недели", the fireplace post for
+        // "последний оцененный"). Only the CURRENT-month window can collide
+        // with them, so only it takes the week-start constraints:
+        //  - coverage reviews go only on posts CREATED BEFORE the current week;
+        //  - coverage review DATES stay before the week start and >=6h before
+        //    `now`, so the freshest review remains the organic one.
+        var daysSinceMonday = ((int)now.DayOfWeek + 6) % 7; // Monday=0 … Sunday=6
+        var weekStart = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero)
+            .AddDays(-daysSinceMonday);
+
+        var nonDraftGameIds = await _dbContext.Set<DbGame>()
+            .Where(g => !g.IsRemoved && g.Status != ModuleStatus.Draft)
+            .Select(g => g.GameId)
+            .ToListAsync();
+
+        var blogs = await _dbContext.Set<DbBlog>()
+            .Where(b => !b.IsRemoved && b.Status != ModuleStatus.Draft)
+            .ToListAsync();
+
+        // Publication numbers are assigned across windows before a single
+        // SaveChanges, so the DB max must be bumped in memory per blog.
+        var nextPublicationNumber = new Dictionary<Guid, int>();
+
+        // Each covered post belongs to exactly one window — review dates must
+        // stay inside their window and a (post, reviewer) pair is unique.
+        var usedPostIds = new HashSet<Guid>();
+
+        async Task CoverWindow(DateTimeOffset winStart, DateTimeOffset winEnd, bool isCurrentMonth)
+        {
+            DateTimeOffset RandomReviewDate()
+            {
+                var cap = winEnd;
+                if (isCurrentMonth)
+                {
+                    var reviewWindowEnd = weekStart < now.AddHours(-6) ? weekStart : now.AddHours(-6);
+                    cap = reviewWindowEnd;
+                }
+                var minutes = (int)Math.Max(0, (cap - winStart).TotalMinutes);
+                return winStart.AddMinutes(minutes == 0 ? 0 : Random.Shared.Next(0, minutes));
+            }
+
+            // ── Rating boards: TopPlayersByRating + TopGamesByRating ────────
+            // Both sum PostReview.SignValue; measure the window exactly as the
+            // boards do before topping up.
+            var windowReviews = await _dbContext.PostReviews
+                .Where(r => !r.IsRemoved && r.CreatedUtc >= winStart && r.CreatedUtc < winEnd)
+                .Select(r => new { r.GameId, r.PostAuthorId, Sign = (int)r.SignValue })
+                .ToListAsync();
+            var positiveGames = windowReviews.GroupBy(r => r.GameId).Count(g => g.Sum(x => x.Sign) > 0);
+            var positiveAuthors = windowReviews.GroupBy(r => r.PostAuthorId).Count(g => g.Sum(x => x.Sign) > 0);
+
+            if (positiveGames < 10 || positiveAuthors < 10)
+            {
+                // Current month: any pre-week post (keeps topped-up posts out of
+                // the weekly-best widget). Closed windows: the window's own
+                // posts, so the reviews sit next to the activity they praise.
+                var candidatesQuery = _dbContext.Posts
+                    .Where(po => !po.IsRemoved
+                        && po.Room.AccessType == RoomAccessType.Open
+                        && nonDraftGameIds.Contains(po.Room.GameId));
+                candidatesQuery = isCurrentMonth
+                    ? candidatesQuery.Where(po => po.CreatedUtc < weekStart)
+                    : candidatesQuery.Where(po => po.CreatedUtc >= winStart && po.CreatedUtc < winEnd);
+                var candidates = (await candidatesQuery
+                        .Select(po => new { po.PostId, po.AuthorId, GameId = po.Room.GameId })
+                        .ToListAsync())
+                    .Where(c => !usedPostIds.Contains(c.PostId))
+                    .ToList();
+
+                // One post per distinct (game, author) so one batch lights up
+                // `target` distinct games AND `target` distinct authors.
+                var seenGames = new HashSet<Guid>();
+                var seenAuthors = new HashSet<Guid>();
+                var picked = new List<(Guid PostId, Guid AuthorId, Guid GameId)>();
+                foreach (var c in candidates)
+                {
+                    if (picked.Count >= target) break;
+                    if (!seenGames.Add(c.GameId)) continue;
+                    if (!seenAuthors.Add(c.AuthorId)) { seenGames.Remove(c.GameId); continue; }
+                    picked.Add((c.PostId, c.AuthorId, c.GameId));
+                }
+                if (picked.Count < target)
+                {
+                    foreach (var c in candidates)
+                    {
+                        if (picked.Count >= target) break;
+                        if (!seenGames.Add(c.GameId)) continue;
+                        picked.Add((c.PostId, c.AuthorId, c.GameId));
+                    }
+                }
+
+                // Reviewers who already reviewed a candidate post must not be
+                // reused for it — (post, reviewer) stays unique.
+                var pickedIds = picked.Select(x => x.PostId).ToList();
+                var existingPairs = (await _dbContext.PostReviews
+                        .Where(r => pickedIds.Contains(r.PostId))
+                        .Select(r => new { r.PostId, r.AuthorId })
+                        .ToListAsync())
+                    .Select(x => (x.PostId, x.AuthorId))
+                    .ToHashSet();
+
+                // Descending positive scores (target, target-1, …, 1) so the
+                // boards read as a real ranking, not a wall of ties.
+                for (var i = 0; i < picked.Count; i++)
+                {
+                    var post = picked[i];
+                    usedPostIds.Add(post.PostId);
+                    var score = Math.Max(1, target - i);
+                    var reviewers = users
+                        .Where(u => u.UserId != post.AuthorId
+                            && !existingPairs.Contains((post.PostId, u.UserId)))
+                        .OrderBy(_ => Random.Shared.Next())
+                        .Take(score)
+                        .ToList();
+                    foreach (var reviewer in reviewers)
+                    {
+                        _dbContext.PostReviews.Add(new DM.Infrastructure.Persistence.Entities.Game.PostReview
+                        {
+                            PostReviewId = _guidFactory.Create(),
+                            AuthorId = reviewer.UserId,
+                            PostId = post.PostId,
+                            PostAuthorId = post.AuthorId,
+                            GameId = post.GameId,
+                            CreatedUtc = RandomReviewDate(),
+                            Text = "Отличный отыгрыш!",
+                            SignValue = (short)ReviewSign.Positive,
+                            IsRemoved = false
+                        });
+                        result.ReviewsCreated++;
+                    }
+                }
+            }
+
+            // ── Blog boards: TopBlogsByRating (publication likes) +
+            //    TopBlogsByPosts + TopBlogAuthorsByVolume. All three read
+            //    publications dated in the window; give every blog without one
+            //    a publication (with a few likes). ─────────────────────────
+            var blogsWithWindowPub = (await _dbContext.Set<Publication>()
+                .Where(pu => !pu.IsRemoved && pu.IsPublished
+                    && pu.CreatedUtc >= winStart && pu.CreatedUtc < winEnd)
+                .Select(pu => pu.BlogId)
+                .Distinct()
+                .ToListAsync()).ToHashSet();
+
+            foreach (var blog in blogs)
+            {
+                if (blogsWithWindowPub.Contains(blog.BlogId)) continue;
+
+                var rubricId = await _dbContext.Set<Rubric>()
+                    .Where(r => r.BlogId == blog.BlogId && !r.IsRemoved)
+                    .OrderBy(r => r.SortOrder)
+                    .Select(r => (Guid?)r.RubricId)
+                    .FirstOrDefaultAsync();
+                if (rubricId == null) continue;
+
+                if (!nextPublicationNumber.TryGetValue(blog.BlogId, out var nextNumber))
+                {
+                    nextNumber = (await _dbContext.Set<Publication>()
+                        .Where(pu => pu.BlogId == blog.BlogId)
+                        .MaxAsync(pu => (int?)pu.PublicationNumber) ?? 0) + 1;
+                }
+                nextPublicationNumber[blog.BlogId] = nextNumber + 1;
+
+                const string content = "Свежая заметка этого месяца: делюсь наблюдениями, "
+                    + "планами и парой историй с недавних игр. Впереди много интересного!";
+                var windowCap = winEnd < now ? winEnd : now;
+                var windowMinutes = (int)Math.Max(1, (windowCap - winStart).TotalMinutes);
+                var createdUtc = winStart.AddMinutes(Random.Shared.Next(0, windowMinutes));
+                var publication = new Publication
+                {
+                    PublicationId = _guidFactory.Create(),
+                    BlogId = blog.BlogId,
+                    AuthorId = blog.AuthorId,
+                    RubricId = rubricId.Value,
+                    PublicationNumber = nextNumber,
+                    Title = "Заметки месяца",
+                    Content = content,
+                    Preview = content[..Math.Min(100, content.Length)] + "...",
+                    CreatedUtc = createdUtc,
+                    IsPublished = true,
+                    PublishedUtc = createdUtc,
+                    CommentsEnabled = true,
+                    ViewCount = Random.Shared.Next(10, 500),
+                    CommentCount = 0,
+                    IsRemoved = false
+                };
+                _dbContext.Set<Publication>().Add(publication);
+                blog.PublicationCount++;
+                result.PublicationsCreated++;
+
+                // At least one like so TopBlogsByRating counts this blog too.
+                var likers = users
+                    .Where(u => u.UserId != blog.AuthorId)
+                    .OrderBy(_ => Random.Shared.Next())
+                    .Take(Random.Shared.Next(1, 6))
+                    .ToList();
+                foreach (var liker in likers)
+                {
+                    _dbContext.Set<Like>().Add(new Like
+                    {
+                        LikeId = _guidFactory.Create(),
+                        EntityId = publication.PublicationId,
+                        EntityType = LikeEntityType.Publication,
+                        UserId = liker.UserId,
+                        IsRemoved = false
+                    });
+                    result.LikesCreated++;
+                }
+            }
+        }
+
+        // Closed windows first so they claim their own posts; the current
+        // month then covers itself with any remaining pre-week posts.
+        await CoverWindow(prevMonthStart, monthStart, isCurrentMonth: false);
+        await CoverWindow(prevYearDecStart, prevYearDecStart.AddMonths(1), isCurrentMonth: false);
+        await CoverWindow(monthStart, monthStart.AddMonths(1), isCurrentMonth: true);
+
+        await _dbContext.SaveChangesAsync();
+        result.Details.Add("Ensured full top-10 rating coverage for the current month, the last closed month and the previous year");
     }
 
     private async Task UpdatePopularityScores(DateTimeOffset now, ComprehensiveSeedResult result)
@@ -1181,24 +1978,24 @@ internal class ModerationApiService : IModerationApiService
 
     private Task UpdateUserProfiles(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
     {
-        var profiles = new (string Username, string Name, string Status, string Location, string Info, Gender Gender, bool IsHonorary, int QualityRating, int QuantityRating)[]
+        var profiles = new (string Username, string Name, string Status, string Location, string Info, Gender Gender, int QualityRating, int QuantityRating)[]
         {
-            ("SolohinLex", "Алексей Солохин", "Слежу за порядком", "Москва", "Администратор сайта с многолетним опытом. Отвечаю за техническую часть и модерацию.", Gender.Male, false, 500, 1500),
-            ("TestSeniorMod", "Старший Модератор", "На страже правил", "Санкт-Петербург", "Помогаю поддерживать дружелюбную атмосферу на сайте. Обращайтесь с вопросами!", Gender.Female, false, 350, 800),
-            ("TestModerator", "Модератор Форума", "Читаю все", "Новосибирск", "Модерирую форум и помогаю новичкам освоиться.", Gender.Male, false, 200, 400),
-            ("TestMentor", "Опытный Наставник", "Учу мастерству", "Екатеринбург", "Ментор для начинающих мастеров. Провожу игры уже 10 лет.", Gender.Male, false, 450, 1200),
-            ("TestUser", "Активный Игрок", "Ищу новые приключения", "Казань", "Люблю фэнтези и sci-fi. Играю за воинов и магов.", Gender.Male, false, 150, 300),
-            ("TestHonorary", "Почетный Гоблин", "Ветеран сообщества", "Нижний Новгород", "Один из первых участников сайта. Почетный гоблин с 2015 года.", Gender.Male, true, 600, 2000),
-            ("Ян", "Ян", "Минималист", "Владивосток", "Краткость — сестра таланта.", Gender.Male, false, 50, 80),
-            ("Player_One", "Игрок Первый", "Ready Player One", "Краснодар", "Геймер и ролевик. Люблю D&D 5e и Pathfinder.", Gender.Male, false, 120, 250),
-            ("Player-Two", "Игрок Второй", "Второй не значит худший", "Самара", "Мастер интриг и политических игр.", Gender.Female, false, 180, 350),
-            ("Player.Three", "Игрок Третий", "Точка — это стиль", "Ростов-на-Дону", "Специализируюсь на horror-играх и мистике.", Gender.Unknown, false, 90, 150),
-            ("Player Four", "Игрок Четвертый", "Пробелы разрешены", "Воронеж", "Новичок, но учусь быстро!", Gender.Male, false, 30, 45),
-            ("Игрок", "Русский Игрок", "Только кириллица", "Омск", "Предпочитаю русскоязычные игры.", Gender.Male, false, 100, 200),
-            ("Игрок_Один", "Первый Русский", "Кириллица и символы", "Челябинск", "Люблю славянское фэнтези.", Gender.Female, false, 75, 120),
-            ("Тест Елки", "Тестовая Елка", "С буквой Е", "Уфа", "Проверяю поддержку буквы Е в системе.", Gender.Unknown, false, 25, 40),
-            ("LongestLoginPossible", "Длинное Имя", "Максимальная длина", "Пермь", "У меня самый длинный логин на сайте!", Gender.Male, false, 60, 100),
-            ("OnlyReader", "Только Читатель", "Читаю, не играю", "Тула", "Люблю читать игры, но сам не участвую.", Gender.Male, false, 15, 50),
+            ("SolohinLex", "Алексей Солохин", "Слежу за порядком", "Москва", "Администратор сайта с многолетним опытом. Отвечаю за техническую часть и модерацию.", Gender.Male, 500, 1500),
+            ("TestSeniorMod", "Старший Модератор", "На страже правил", "Санкт-Петербург", "Помогаю поддерживать дружелюбную атмосферу на сайте. Обращайтесь с вопросами!", Gender.Female, 350, 800),
+            ("TestModerator", "Модератор Форума", "Читаю все", "Новосибирск", "Модерирую форум и помогаю новичкам освоиться.", Gender.Male, 200, 400),
+            ("TestMentor", "Опытный Наставник", "Учу мастерству", "Екатеринбург", "Ментор для начинающих мастеров. Провожу игры уже 10 лет.", Gender.Male, 450, 1200),
+            ("TestUser", "Активный Игрок", "Ищу новые приключения", "Казань", "Люблю фэнтези и sci-fi. Играю за воинов и магов.", Gender.Male, 150, 300),
+            ("TestHonorary", "Почетный Гоблин", "Ветеран сообщества", "Нижний Новгород", "Один из первых участников сайта. Почетный гоблин с 2015 года.", Gender.Male, 600, 2000),
+            ("Ян", "Ян", "Минималист", "Владивосток", "Краткость — сестра таланта.", Gender.Male, 50, 80),
+            ("Player_One", "Игрок Первый", "Ready Player One", "Краснодар", "Геймер и ролевик. Люблю D&D 5e и Pathfinder.", Gender.Male, 120, 250),
+            ("Player-Two", "Игрок Второй", "Второй не значит худший", "Самара", "Мастер интриг и политических игр.", Gender.Female, 180, 350),
+            ("Player.Three", "Игрок Третий", "Точка — это стиль", "Ростов-на-Дону", "Специализируюсь на horror-играх и мистике.", Gender.Unknown, 90, 150),
+            ("Player Four", "Игрок Четвертый", "Пробелы разрешены", "Воронеж", "Новичок, но учусь быстро!", Gender.Male, 30, 45),
+            ("Игрок", "Русский Игрок", "Только кириллица", "Омск", "Предпочитаю русскоязычные игры.", Gender.Male, 100, 200),
+            ("Игрок_Один", "Первый Русский", "Кириллица и символы", "Челябинск", "Люблю славянское фэнтези.", Gender.Female, 75, 120),
+            ("Тест Елки", "Тестовая Елка", "С буквой Е", "Уфа", "Проверяю поддержку буквы Е в системе.", Gender.Unknown, 25, 40),
+            ("LongestLoginPossible", "Длинное Имя", "Максимальная длина", "Пермь", "У меня самый длинный логин на сайте!", Gender.Male, 60, 100),
+            ("OnlyReader", "Только Читатель", "Читаю, не играю", "Тула", "Люблю читать игры, но сам не участвую.", Gender.Male, 15, 50),
         };
 
         foreach (var profile in profiles)
@@ -1211,10 +2008,6 @@ internal class ModerationApiService : IModerationApiService
                 user.Location = profile.Location;
                 user.Info = profile.Info;
                 user.Gender = profile.Gender;
-                // Invariant: honorary is mutually exclusive with active
-                // staff roles. Force false for current staff regardless of
-                // what the profile literal said (see IsStaffRole above).
-                user.IsHonorary = profile.IsHonorary && !IsStaffRole(user.Role);
                 user.QualityRating = profile.QualityRating;
                 user.QuantityRating = profile.QuantityRating;
                 user.LastActivityUtc = now.AddMinutes(-Random.Shared.Next(1, 1440));
@@ -1234,9 +2027,13 @@ internal class ModerationApiService : IModerationApiService
             Guid.Parse("00000000-0000-0000-0000-000000000100"), // "Обсуждение действий администрации"
         };
 
-        // Check if user-created topics already exist (exclude system topics)
+        // Check if user-created topics already exist. System topics don't
+        // count: the fixed migration-seeded ones and the auto-created period
+        // digests (PeriodDigestService starts creating those right at app
+        // start, before this seed can run).
         var existingTopicsCount = await _dbContext.Set<Topic>()
-            .CountAsync(t => !systemTopicIds.Contains(t.TopicId));
+            .CountAsync(t => !systemTopicIds.Contains(t.TopicId)
+                && !_dbContext.PeriodDigestTopics.Any(p => p.TopicId == t.TopicId));
         if (existingTopicsCount > 0)
         {
             result.Skipped++;
@@ -1286,7 +2083,7 @@ internal class ModerationApiService : IModerationApiService
             ["Под столом"] = new[]
             {
                 ("Музыка для атмосферы игр", "Делитесь плейлистами! Для фэнтези использую саундтреки из Ведьмака и Скайрима."),
-                ("Мемы DM — подборка за месяц", "Собрал лучшие мемы из наших игр. Осторожно, много смешного!"),
+                ("Мемы Dungeon Master — подборка за месяц", "Собрал лучшие мемы из наших игр. Осторожно, много смешного!"),
                 ("Интервью после полуночи #42", "Новый выпуск! На этот раз гость — TestMentor, ветеран с 10-летним стажем."),
             },
             ["Неролевые игры"] = new[]
@@ -1312,21 +2109,13 @@ internal class ModerationApiService : IModerationApiService
             },
             ["Новости проекта"] = new[]
             {
-                ("Запуск DM3 — новая версия сайта!", """
-Рады представить полностью переписанную версию сайта DM3!
+                ("Запуск новой версии Dungeon Master!", """
+Рады представить полностью переписанную версию сайта Dungeon Master!
 
 [b]Что нового:[/b]
-• Полностью новый дизайн — современный, чистый, адаптивный
-• Улучшенный редактор постов с поддержкой BBCode и предпросмотром
-• Система фильтров игр — ищите по жанрам, тегам, статусу набора
-• Оптимизированная производительность — страницы загружаются в 3 раза быстрее
-• Темная тема для ночных сов
-
+[ul][li]Полностью новый дизайн — современный, чистый, адаптивный[/li][li]Улучшенный редактор постов с поддержкой BBCode и предпросмотром[/li][li]Система фильтров игр — ищите по жанрам, тегам, статусу набора[/li][li]Оптимизированная производительность — страницы загружаются в 3 раза быстрее[/li][li]Темная тема для ночных сов[/li][/ul]
 [b]Для мастеров:[/b]
-• Новая панель управления игрой
-• Улучшенное управление персонажами и комнатами
-• Система приглашений игроков
-
+[ul][li]Новая панель управления игрой[/li][li]Улучшенное управление персонажами и комнатами[/li][li]Система приглашений игроков[/li][/ul]
 Мы работали над этим обновлением больше года и надеемся, что вам понравится! Если найдете баги — пишите в раздел "Ошибки".
 """),
                 ("Обновление март 2026: фильтры и теги", """
@@ -1336,11 +2125,7 @@ internal class ModerationApiService : IModerationApiService
 Теперь каждая игра может иметь теги — жанры, сеттинги, особенности. Мастера могут добавлять до 10 тегов к своей игре. Облако тегов в сайдбаре показывает популярные теги.
 
 [b]Расширенные фильтры[/b]
-• Фильтр по статусу: активные, на наборе, завершенные
-• Фильтр по тегам: включить или исключить
-• Сортировка: по активности, популярности, дате создания
-• Поиск по названию и описанию
-
+[ul][li]Фильтр по статусу: активные, на наборе, завершенные[/li][li]Фильтр по тегам: включить или исключить[/li][li]Сортировка: по активности, популярности, дате создания[/li][li]Поиск по названию и описанию[/li][/ul]
 [b]Как пользоваться:[/b]
 1. Зайдите на страницу "Игры"
 2. Используйте панель фильтров слева
@@ -1353,22 +2138,13 @@ internal class ModerationApiService : IModerationApiService
 Делимся планами на ближайшие месяцы!
 
 [b]Апрель 2026[/b]
-• Мобильная версия сайта — полностью адаптивный дизайн для телефонов
-• Push-уведомления в браузере о новых постах
-
+[ul][li]Мобильная версия сайта — полностью адаптивный дизайн для телефонов[/li][li]Push-уведомления в браузере о новых постах[/li][/ul]
 [b]Май 2026[/b]
-• Интеграция с Discord — бот для уведомлений о событиях в играх
-• Система достижений для игроков и мастеров
-
+[ul][li]Интеграция с Discord — бот для уведомлений о событиях в играх[/li][li]Система достижений для игроков и мастеров[/li][/ul]
 [b]Июнь 2026[/b]
-• Улучшенный блок — расширенные возможности форматирования
-• Галерея изображений для игр
-
+[ul][li]Улучшенный блог — расширенные возможности форматирования[/li][li]Галерея изображений для игр[/li][/ul]
 [b]В разработке:[/b]
-• Система рекомендаций игр на основе ваших предпочтений
-• Календарь событий для игр
-• Экспорт истории игры в PDF
-
+[ul][li]Система рекомендаций игр на основе ваших предпочтений[/li][li]Календарь событий для игр[/li][li]Экспорт истории игры в PDF[/li][/ul]
 Следите за новостями! Если у вас есть предложения — пишите в раздел "Улучшение сайта".
 """),
             },
@@ -1667,24 +2443,24 @@ internal class ModerationApiService : IModerationApiService
         // Helper for compact tag ID generation
         static Guid T(int id) => Guid.Parse($"00000000-0000-0000-0000-{id:x12}");
 
-        // Система (01-19)
+        // System (01-19)
         var (tagBlackBirdPie, tagDnD, tagDnD5e, tagD100, tagDawnOfWorlds) = (T(0x01), T(0x02), T(0x03), T(0x04), T(0x05));
         var (tagFallout, tagFate, tagFudge, tagGURPS, tagInterlock) = (T(0x06), T(0x08), T(0x09), T(0x0a), T(0x0b));
         var (tagPathfinder1e, tagPathfinder2e, tagPbtA, tagRisus, tagSavageWorlds) = (T(0x0d), T(0x0e), T(0x0f), T(0x10), T(0x11));
         var (tagStarfinder1e, tagStarfinder2e, tagWarhammer, tagWoD, tagAuthor) = (T(0x12), T(0x13), T(0x14), T(0x15), T(0x16));
         var (tagMafia, tagSloveski, tagEraVodolea) = (T(0x17), T(0x18), T(0x19));
 
-        // Жанр (1a-2b)
+        // Genre (1a-2b)
         var (tagAltHistory, tagAction, tagDetective, tagZombie, tagHistorical) = (T(0x1a), T(0x1b), T(0x1c), T(0x1d), T(0x1e));
         var (tagCyberpunk, tagComedy, tagKosmoopera, tagMystic, tagModern) = (T(0x1f), T(0x20), T(0x21), T(0x22), T(0x23));
         var (tagPostApoc, tagPsychedelic, tagSteampunk, tagThriller, tagTrash) = (T(0x24), T(0x25), T(0x26), T(0x27), T(0x28));
         var (tagHorror, tagSciFi, tagFantasy) = (T(0x29), T(0x2a), T(0x2b));
 
-        // Формат игры (2c-32)
+        // Game format (2c-32)
         var (tagDungeonCrawl, tagPvP, tagSurvival, tagSandbox, tagStrategy) = (T(0x2c), T(0x2d), T(0x2e), T(0x2f), T(0x30));
         var (tagPlotDriven, tagTactics) = (T(0x31), T(0x32));
 
-        // Формат постов (33-34), Темп (35-36, 3e), Ограничения (37-3b), Новички (3c-3d), Деликатный (3f-41)
+        // Post format (33-34), Pace (35-36, 3e), Restrictions (37-3b), Newcomers (3c-3d), Sensitive (3f-41)
         var (tagShortPost, tagLiterary, tagSlowPace, tagFastPace, tagDrySeasons) = (T(0x33), T(0x34), T(0x35), T(0x36), T(0x3e));
         var (tagNoSwearing, tagNoViolence, tagGrammarNazi, tagPrivateGroup, tagMessengerRequired) = (T(0x37), T(0x38), T(0x39), T(0x3a), T(0x3b));
         var (tagForNewbies, tagNewbieMaster, tagErotica, tagShockContent, tagSensitiveTopics) = (T(0x3c), T(0x3d), T(0x3f), T(0x40), T(0x41));
@@ -1881,6 +2657,14 @@ internal class ModerationApiService : IModerationApiService
                 ? newbieUsers[Random.Shared.Next(newbieUsers.Count)]
                 : experiencedUsers[gi % experiencedUsers.Count];
 
+            // First game carries the game-zone UI test fixtures (archived room,
+            // private-room access split, post pendency, unread counter, chat
+            // messages, master notepad) so a reseed always has one deterministic
+            // game to verify those UI states against. Gated on the template
+            // title (not just gi==0) so the fixtures stay attached to the same
+            // game if templates are reordered.
+            var isUiTestDataGame = template.Title == "Хроники Забытых Королевств";
+
             // Generate realistic dates based on game status
             // Draft: recent (1-30 days ago)
             // Active recruiting: medium age (30-90 days), activated recently
@@ -1981,15 +2765,11 @@ internal class ModerationApiService : IModerationApiService
                 ClosedUtc = gameClosedUtc,
                 MasterId = master.UserId,
                 MentorId = isNewbieMaster ? mentor.UserId : null,
+                AttributeSchemaId = SystemSchemaId,
                 Title = template.Title,
                 SystemName = template.System,
                 NarrativeSetting = template.Setting,
                 Info = $"Добро пожаловать в игру '{template.Title}'! Система: {template.System}, сеттинг: {template.Setting}. Здесь вас ждут захватывающие приключения и интересные персонажи.",
-                HideTemper = false,
-                HideSkills = false,
-                HideInventory = false,
-                HideStory = false,
-                DisableAlignment = template.System == "Cyberpunk RED",
                 HideDiceResult = false,
                 ShowPrivateMessages = false,
                 HidePostStats = false,
@@ -2125,6 +2905,29 @@ internal class ModerationApiService : IModerationApiService
             };
             _dbContext.Set<Room>().Add(privateRoom);
 
+            // UI test fixture: an archived room alongside the still-active ones,
+            // so the "archived rooms" spoiler has something to hide/reveal here
+            // while every other seeded game keeps zero archived rooms.
+            if (isUiTestDataGame)
+            {
+                var archivedRoom = new Room
+                {
+                    RoomId = _guidFactory.Create(),
+                    GameId = game.GameId,
+                    Title = "Пролог",
+                    AccessType = RoomAccessType.Open,
+                    Type = RoomType.Default,
+                    RoomNumber = 4,
+                    OrderNumber = 4,
+                    ViewPrivateText = false,
+                    ViewDiceResults = true,
+                    DiceEnabled = true,
+                    IsArchived = true,
+                    IsRemoved = false
+                };
+                _dbContext.Set<Room>().Add(archivedRoom);
+            }
+
             // Create characters - use variation.activeChars for active character count
             var characterNames = new[] { "Арагорн Следопыт", "Эльвира Чародейка", "Горим Железный Кулак", "Лиара Тенебраум", "Кассандра Видящая", "Торин Дубощит", "Леголас Зеленый Лист", "Гимли сын Глоина" };
             var races = new[] { "Человек", "Эльф", "Дварф", "Полуэльф", "Тифлинг", "Гном", "Полуорк", "Драконорожденный" };
@@ -2154,35 +2957,36 @@ internal class ModerationApiService : IModerationApiService
                     IsPlayerExiled = false,
                     CreatedUtc = game.CreatedUtc.AddDays(Random.Shared.Next(1, 7)),
                     Name = isDiopsideChar ? "Диопсид" : characterNames[ci % characterNames.Length],
-                    Race = isDiopsideChar ? "Кристаллическая сущность" : races[ci % races.Length],
-                    Class = isDiopsideChar ? "Аберрация" : classes[ci % classes.Length],
-                    Alignment = template.System != "Cyberpunk RED" ? (Alignment?)(ci % 9) : null,
-                    Appearance = isDiopsideChar
-                        ? "Полупрозрачное существо из живого кристалла. Отростки вдоль позвоночника мерцают приглушенным светом. Тело переливается оттенками зеленого и голубого."
-                        : "Высокий, крепкого телосложения, с проницательным взглядом.",
-                    Temper = isDiopsideChar
-                        ? "Древний и терпеливый. Мыслит категориями эпох, но способен к неожиданному любопытству."
-                        : "Решительный и отважный, но иногда слишком упрямый.",
-                    Story = isDiopsideChar
-                        ? "Осколок кристаллического мира, упавший через разрыв между измерениями. Столетия одиночества обострили восприятие, но оставили тоску по утраченной гармонии."
-                        : "Родился в маленькой деревне, с детства мечтал о приключениях...",
-                    Skills = isDiopsideChar
-                        ? "Телепатия, резонанс с магией, поглощение эссенции, кристаллическая регенерация."
-                        : "Владение мечом, выживание в дикой местности, следопытство.",
-                    Inventory = isDiopsideChar
-                        ? "Нет материальных вещей — только воспоминания о родном мире."
-                        : "Меч, лук, 20 стрел, рюкзак с припасами.",
                     IsNpc = false,
                     AccessPolicy = CharacterAccessPolicy.NoAccess,
                     IsRemoved = false
                 };
 
                 _dbContext.Set<Character>().Add(character);
+                AddLegacyCharacterAttributes(character.CharacterId,
+                    race: isDiopsideChar ? "Кристаллическая сущность" : races[ci % races.Length],
+                    @class: isDiopsideChar ? "Аберрация" : classes[ci % classes.Length],
+                    alignment: template.System != "Cyberpunk RED" ? (Alignment?)(ci % 9) : null,
+                    appearance: isDiopsideChar
+                        ? "Полупрозрачное существо из живого кристалла. Отростки вдоль позвоночника мерцают приглушенным светом. Тело переливается оттенками зеленого и голубого."
+                        : "Высокий, крепкого телосложения, с проницательным взглядом.",
+                    temper: isDiopsideChar
+                        ? "Древний и терпеливый. Мыслит категориями эпох, но способен к неожиданному любопытству."
+                        : "Решительный и отважный, но иногда слишком упрямый.",
+                    story: isDiopsideChar
+                        ? "Осколок кристаллического мира, упавший через разрыв между измерениями. Столетия одиночества обострили восприятие, но оставили тоску по утраченной гармонии."
+                        : "Родился в маленькой деревне, с детства мечтал о приключениях...",
+                    skills: isDiopsideChar
+                        ? "Телепатия, резонанс с магией, поглощение эссенции, кристаллическая регенерация."
+                        : "Владение мечом, выживание в дикой местности, следопытство.",
+                    inventory: isDiopsideChar
+                        ? "Нет материальных вещей — только воспоминания о родном мире."
+                        : "Меч, лук, 20 стрел, рюкзак с припасами.");
                 createdCharacters.Add(character);
                 result.CharactersCreated++;
 
-                // Add avatar for Diopside character — реальный pipeline:
-                // EXIF-strip + WebP _m/_s thumbnails, все лежит в MinIO.
+                // Add avatar for the Diopside character — the real pipeline:
+                // EXIF strip + WebP _m/_s thumbnails, everything lands in MinIO.
                 if (isDiopsideChar)
                 {
                     var bytes = ReadEmbeddedSeedBytes("DM.Web.API.Assets.Seed.diopside.jpg");
@@ -2198,14 +3002,22 @@ internal class ModerationApiService : IModerationApiService
                     _dbContext.Set<DM.Infrastructure.Persistence.Entities.Shared.Upload>().Add(upload);
                 }
 
-                // Add room access for active characters
-                _dbContext.Set<RoomAccess>().Add(new RoomAccess
+                // Add room access for active characters — except the last active
+                // character of the UI test data game, so that game's private
+                // room shows both a granted player (green lock) and a denied
+                // one (grey lock) instead of everyone having access.
+                var denyPrivateAccessForUiTest = isUiTestDataGame &&
+                    ci == Math.Min(variation.activeChars, playersForGame.Count) - 1;
+                if (!denyPrivateAccessForUiTest)
                 {
-                    AccessId = _guidFactory.Create(),
-                    RoomId = privateRoom.RoomId,
-                    CharacterId = character.CharacterId,
-                    ReaderUserId = null
-                });
+                    _dbContext.Set<RoomAccess>().Add(new RoomAccess
+                    {
+                        AccessId = _guidFactory.Create(),
+                        RoomId = privateRoom.RoomId,
+                        CharacterId = character.CharacterId,
+                        ReaderUserId = null
+                    });
+                }
             }
 
             // Add a few non-active characters for variety (if we have more players)
@@ -2225,20 +3037,21 @@ internal class ModerationApiService : IModerationApiService
                     IsPlayerExiled = false,
                     CreatedUtc = game.CreatedUtc.AddDays(Random.Shared.Next(1, 7)),
                     Name = characterNames[ci % characterNames.Length],
-                    Race = races[ci % races.Length],
-                    Class = classes[ci % classes.Length],
-                    Alignment = template.System != "Cyberpunk RED" ? (Alignment?)(ci % 9) : null,
-                    Appearance = "Среднего роста, ничем не примечательный.",
-                    Temper = "Спокойный и рассудительный.",
-                    Story = "История еще пишется...",
-                    Skills = "Базовые навыки выживания.",
-                    Inventory = "Простая одежда, кошелек с монетами.",
                     IsNpc = false,
                     AccessPolicy = CharacterAccessPolicy.NoAccess,
                     IsRemoved = false
                 };
 
                 _dbContext.Set<Character>().Add(character);
+                AddLegacyCharacterAttributes(character.CharacterId,
+                    race: races[ci % races.Length],
+                    @class: classes[ci % classes.Length],
+                    alignment: template.System != "Cyberpunk RED" ? (Alignment?)(ci % 9) : null,
+                    appearance: "Среднего роста, ничем не примечательный.",
+                    temper: "Спокойный и рассудительный.",
+                    story: "История еще пишется...",
+                    skills: "Базовые навыки выживания.",
+                    inventory: "Простая одежда, кошелек с монетами.");
                 createdCharacters.Add(character);
                 result.CharactersCreated++;
             }
@@ -2252,14 +3065,13 @@ internal class ModerationApiService : IModerationApiService
                 Status = CharacterStatus.Active,
                 CreatedUtc = game.CreatedUtc,
                 Name = "Таинственный Незнакомец",
-                Race = "Неизвестно",
-                Class = "Неизвестно",
-                Appearance = "Фигура, скрытая тенью.",
                 IsNpc = true,
                 AccessPolicy = CharacterAccessPolicy.NoAccess,
                 IsRemoved = false
             };
             _dbContext.Set<Character>().Add(npc);
+            AddLegacyCharacterAttributes(npc.CharacterId,
+                race: "Неизвестно", @class: "Неизвестно", appearance: "Фигура, скрытая тенью.");
             createdCharacters.Add(npc);
             result.CharactersCreated++;
 
@@ -2271,7 +3083,7 @@ internal class ModerationApiService : IModerationApiService
             const string largePostText = """
                 Кристаллы вдоль позвоночника резонировали с магией этого места. Диопсид замер, позволяя своим многочисленным отросткам ощутить потоки силы, пронизывающие древние стены. Столетия ожидания в темных глубинах не прошли даром — его восприятие обострилось до предела.
 
-                «Они близко», — мысль эхом прокатилась по кристаллической структуре его сознания.
+                "Они близко", — мысль эхом прокатилась по кристаллической структуре его сознания.
 
                 Существо бесшумно переместилось в тень ниши, позволяя полупрозрачному телу слиться с темнотой. Только тусклое мерцание выдавало его присутствие — да и то лишь тем, кто знал, куда смотреть.
 
@@ -2287,7 +3099,7 @@ internal class ModerationApiService : IModerationApiService
 
                 Первой поняла волшебница. Ее глаза расширились — не от страха, а от удивления.
 
-                «Ты... ты разумен?» — ее голос дрожал.
+                "Ты... ты разумен?" — ее голос дрожал.
 
                 Диопсид позволил своим кристаллам зазвучать в подобии смеха. Разумен? Он помнил эпохи, когда предки этих существ еще не спустились с деревьев. Но объяснять все это было бы слишком долго.
 
@@ -2398,7 +3210,7 @@ internal class ModerationApiService : IModerationApiService
                             PostEditId = _guidFactory.Create(),
                             PostId = post.PostId,
                             EditorUserId = post.AuthorId,
-                            EditedUtc = post.CreatedUtc.AddMinutes(Random.Shared.Next(5, 60))
+                            ModifiedUtc = post.CreatedUtc.AddMinutes(Random.Shared.Next(5, 60))
                         });
                     }
 
@@ -2406,6 +3218,153 @@ internal class ModerationApiService : IModerationApiService
                     var authorId = character.AuthorId ?? master.UserId;
                     var author = users.First(u => u.UserId == authorId);
                     author.QuantityRating++;
+                }
+            }
+
+            // UI test fixtures for the designated game: post pendency, unread
+            // counter, chat room messages and master notepad entries. Kept in
+            // one place so a reseed always gives QA the same deterministic
+            // game to check these UI states against.
+            // The chat's LastMessageId is applied only after the batch save:
+            // setting it while both Chat and Message are still Added would make
+            // EF detect a circular FK dependency (Chat.LastMessageId <->
+            // Message.ChatId) and fail the whole seed.
+            Chat? gameChatToLink = null;
+            Guid? gameChatLastMessageId = null;
+            if (isUiTestDataGame)
+            {
+                var waitingPlayer = playersForGame[0];
+                var waitingCharacter = createdCharacters[0];
+
+                // Open post pendency awaiting a seeded player - shows the red
+                // waiting-star with tooltip until they post or it's fulfilled.
+                _dbContext.Set<PostPendency>().Add(new PostPendency
+                {
+                    PendencyId = _guidFactory.Create(),
+                    RoomId = mainRoom.RoomId,
+                    CharacterId = waitingCharacter.CharacterId,
+                    WaitingForUserId = waitingPlayer.UserId,
+                    CreatedById = master.UserId,
+                    CreatedUtc = now.AddDays(-2),
+                    FulfilledUtc = null,
+                    LastReminderUtc = null,
+                    IsRemoved = false
+                });
+
+                // Baseline unread counter for the main room so any user who
+                // never visited it (i.e. everyone but its own post authors)
+                // sees the (N) unread badge instead of a silent zero.
+                if (postsToCreate > 0)
+                {
+                    var unreadCounters = _mongoClient.GetCollection<UnreadCounter>();
+                    await unreadCounters.InsertOneAsync(new UnreadCounter
+                    {
+                        UserId = Guid.Empty,
+                        EntityId = mainRoom.RoomId,
+                        ParentId = game.GameId,
+                        EntryType = UnreadEntryType.Message,
+                        LastReadUtc = game.ActivatedUtc!.Value.UtcDateTime,
+                        Counter = Math.Min(postsToCreate, 5),
+                        IsRemoved = false
+                    });
+                }
+
+                // Link the Chat room to a real Chat with a short OOC exchange
+                // between the master and a couple of players, so the chat page
+                // and its cursor pagination have something to render.
+                var chatParticipants = new[] { master }
+                    .Concat(playersForGame.Take(2))
+                    .ToList();
+                var gameChat = new Chat
+                {
+                    ChatId = _guidFactory.Create(),
+                    Type = ChatType.GameRoom,
+                    Title = chatRoomTitle,
+                    RoomId = chatRoom.RoomId
+                };
+                _dbContext.Set<Chat>().Add(gameChat);
+                chatRoom.ChatId = gameChat.ChatId;
+
+                var chatTexts = new[]
+                {
+                    "Народ, всем удобно новое время постинга?",
+                    "Да, вроде норм, буду успевать чаще писать.",
+                    "Класс! Тогда продолжаем в том же духе.",
+                    "Кстати, кто-нибудь помнит, где мы в прошлый раз остановились?",
+                    "Я вроде помню - у ворот перед встречей с торговцем.",
+                    "Точно, спасибо! Сейчас напишу пост.",
+                };
+                Message? lastGameChatMessage = null;
+                for (var mi = 0; mi < chatTexts.Length; mi++)
+                {
+                    var chatAuthor = chatParticipants[mi % chatParticipants.Count];
+                    var chatMessage = new Message
+                    {
+                        MessageId = _guidFactory.Create(),
+                        UserId = chatAuthor.UserId,
+                        ChatId = gameChat.ChatId,
+                        CreatedUtc = now.AddHours(-(chatTexts.Length - mi) * 3),
+                        Text = chatTexts[mi],
+                        IsRemoved = false
+                    };
+                    _dbContext.Set<Message>().Add(chatMessage);
+                    lastGameChatMessage = chatMessage;
+                    result.MessagesCreated++;
+                }
+                if (lastGameChatMessage != null)
+                {
+                    gameChatToLink = gameChat;
+                    gameChatLastMessageId = lastGameChatMessage.MessageId;
+                }
+
+                // Master notepad entries (game "Заметки")
+                var masterNotepadEntries = new[]
+                {
+                    ("Зацепки сюжета", "Торговец на въезде в город знает больше, чем говорит - потянуть за эту нить через пару постов."),
+                    ("NPC на подхвате", "Таинственный Незнакомец - держать интригу, не раскрывать личность раньше времени."),
+                    ("Заметка для себя", "Не забыть напомнить группе про открытую заявку на персонажа - висит уже несколько дней."),
+                };
+                for (var ni = 0; ni < masterNotepadEntries.Length; ni++)
+                {
+                    var (noteTitle, noteContent) = masterNotepadEntries[ni];
+                    _dbContext.Set<NotepadEntry>().Add(new NotepadEntry
+                    {
+                        EntryId = _guidFactory.Create(),
+                        NotepadType = NotepadType.Master,
+                        ContainerId = game.GameId,
+                        OwnerId = null,
+                        AuthorId = master.UserId,
+                        Title = noteTitle,
+                        Content = noteContent,
+                        SortOrder = ni,
+                        CreatedUtc = now.AddDays(-(masterNotepadEntries.Length - ni)),
+                        IsRemoved = false
+                    });
+                }
+
+                // Player notepad entries owned by the first active character,
+                // so the player scope of the game "Заметки" page has data too.
+                var playerNotepadEntries = new[]
+                {
+                    ("План на арку", "Разговорить торговца у ворот и выяснить, что он скрывает - мой персонаж ему не доверяет."),
+                    ("Список долгов", "Должен трактирщику 12 золотых. Вернуть после следующей вылазки, пока он сам не вспомнил."),
+                };
+                for (var ni = 0; ni < playerNotepadEntries.Length; ni++)
+                {
+                    var (noteTitle, noteContent) = playerNotepadEntries[ni];
+                    _dbContext.Set<NotepadEntry>().Add(new NotepadEntry
+                    {
+                        EntryId = _guidFactory.Create(),
+                        NotepadType = NotepadType.Player,
+                        ContainerId = game.GameId,
+                        OwnerId = waitingCharacter.CharacterId,
+                        AuthorId = waitingCharacter.AuthorId ?? waitingPlayer.UserId,
+                        Title = noteTitle,
+                        Content = noteContent,
+                        SortOrder = ni,
+                        CreatedUtc = now.AddDays(-(playerNotepadEntries.Length - ni)).AddHours(2),
+                        IsRemoved = false
+                    });
                 }
             }
 
@@ -2464,6 +3423,14 @@ internal class ModerationApiService : IModerationApiService
 
             // Batch save after each game to avoid memory pressure from thousands of tracked entities
             await _dbContext.SaveChangesAsync();
+
+            // Now that both the chat and its messages exist, link the last
+            // message (deferred to break the Chat <-> Message FK cycle). The
+            // PublicId save below persists it.
+            if (gameChatToLink != null && gameChatLastMessageId != null)
+            {
+                gameChatToLink.LastMessageId = gameChatLastMessageId;
+            }
 
             // Reload the game to get the auto-generated SerialNumber
             await _dbContext.Entry(game).ReloadAsync();
@@ -2562,20 +3529,21 @@ internal class ModerationApiService : IModerationApiService
                     IsPlayerExiled = false,
                     CreatedUtc = game.CreatedUtc.AddDays(Random.Shared.Next(1, 7)),
                     Name = characterNames[ci % characterNames.Length],
-                    Race = races[ci % races.Length],
-                    Class = classes[ci % classes.Length],
-                    Alignment = (Alignment?)(ci % 9),
-                    Appearance = "Высокий, крепкого телосложения.",
-                    Temper = "Решительный и отважный.",
-                    Story = "Родился в маленькой деревне...",
-                    Skills = "Владение мечом, выживание.",
-                    Inventory = "Меч, лук, рюкзак.",
                     IsNpc = false,
                     AccessPolicy = CharacterAccessPolicy.NoAccess,
                     IsRemoved = false
                 };
 
                 _dbContext.Set<Character>().Add(character);
+                AddLegacyCharacterAttributes(character.CharacterId,
+                    race: races[ci % races.Length],
+                    @class: classes[ci % classes.Length],
+                    alignment: (Alignment?)(ci % 9),
+                    appearance: "Высокий, крепкого телосложения.",
+                    temper: "Решительный и отважный.",
+                    story: "Родился в маленькой деревне...",
+                    skills: "Владение мечом, выживание.",
+                    inventory: "Меч, лук, рюкзак.");
                 createdCharacters.Add(character);
                 result.CharactersCreated++;
             }
@@ -2589,14 +3557,13 @@ internal class ModerationApiService : IModerationApiService
                 Status = CharacterStatus.Active,
                 CreatedUtc = game.CreatedUtc,
                 Name = "Таинственный Незнакомец",
-                Race = "Неизвестно",
-                Class = "Неизвестно",
-                Appearance = "Фигура, скрытая тенью.",
                 IsNpc = true,
                 AccessPolicy = CharacterAccessPolicy.NoAccess,
                 IsRemoved = false
             };
             _dbContext.Set<Character>().Add(npc);
+            AddLegacyCharacterAttributes(npc.CharacterId,
+                race: "Неизвестно", @class: "Неизвестно", appearance: "Фигура, скрытая тенью.");
             createdCharacters.Add(npc);
             result.CharactersCreated++;
 
@@ -3016,35 +3983,172 @@ internal class ModerationApiService : IModerationApiService
         result.Details.Add($"Created {result.MessagesCreated} global chat messages");
     }
 
-    private async Task CreateGlobalChatEvent(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    private async Task CreateGlobalChatEvents(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
     {
         if (users.Count == 0)
         {
             return;
         }
 
-        var alreadyExists = await _dbContext.Set<GlobalChatEvent>().AnyAsync();
-        if (alreadyExists)
+        // Events are created by a SeniorModerator (matches the Create intention)
+        var organizer = users.FirstOrDefault(u => u.Role == UserRole.SeniorModerator) ?? users[0];
+        // Invited participants for closed events (regular test accounts)
+        var invitees = users.Where(u => u.Role == UserRole.RegularUser).Take(2).ToList();
+
+        // Desired state after every reseed: ONE OPEN Live event running right
+        // now (exercises the in-frame live banner without locking the chat
+        // for non-participants) and TWO Scheduled events — one open, one
+        // closed with invited participants (exercises the participants-only
+        // message restriction and the "закрытый" mark in the upcoming list).
+        // Descriptions are BBCode — rendered to HTML server-side on display.
+        var eventTemplates = new (string Title, string Description, DateTimeOffset StartsUtc, TimeSpan? Duration, bool IsOpen, GlobalChatEventStatus Status)[]
+        {
+            (
+                "Вечер быстрых зарисовок",
+                "[b]Свободная импровизация — прямо сейчас в чате.[/b]\n" +
+                "Как это устроено:\n" +
+                "[ul][li]ведущий задает сцену одним сообщением[/li]" +
+                "[li]каждый желающий добавляет реплику или действие своего персонажа[/li]" +
+                "[li]каждые полчаса сцена меняется — успевайте вписаться[/li][/ul]\n" +
+                "Присоединяйтесь в любой момент — вечер открыт для всех.",
+                now.AddHours(-1), TimeSpan.FromHours(3), true, GlobalChatEventStatus.Live
+            ),
+            (
+                "Турнир коротких историй",
+                "[b]Соревнование рассказчиков: одна история — сто слов.[/b]\n" +
+                "Правила турнира:\n" +
+                "[ul][li]тема объявляется в момент старта[/li]" +
+                "[li]на написание дается 30 минут[/li]" +
+                "[li]победителя выбирают сами участники открытым голосованием[/li][/ul]\n" +
+                "Победитель получает почетное упоминание в блоге модераторов.",
+                now.AddDays(2), TimeSpan.FromHours(3), true, GlobalChatEventStatus.Scheduled
+            ),
+            (
+                "Закрытый совет мастеров",
+                "[b]Закрытая встреча ведущих игр.[/b]\n" +
+                "Повестка:\n" +
+                "[ul][li]обмен опытом по ведению долгих кампаний[/li]" +
+                "[li]разбор сложных ситуаций с игроками[/li]" +
+                "[li]планирование совместных межигровых событий[/li][/ul]\n" +
+                "Писать в чате во время встречи могут только приглашенные участники.",
+                now.AddDays(5), TimeSpan.FromMinutes(90), false, GlobalChatEventStatus.Scheduled
+            ),
+        };
+
+        // Previous revisions of this step seeded a different event set —
+        // remove those leftovers so a reseed converges on the state above
+        // instead of piling up stale Scheduled rows (they were never Live,
+        // so no messages reference them).
+        var legacyTitles = new[] { "Литературный вечер", "Вечер вопросов и ответов" };
+        var legacyEvents = await _dbContext.Set<GlobalChatEvent>()
+            .Where(e => legacyTitles.Contains(e.Title))
+            .ToListAsync();
+        if (legacyEvents.Count > 0)
+        {
+            var legacyIds = legacyEvents.Select(e => e.GlobalChatEventId).ToList();
+            var legacyParticipants = await _dbContext.Set<GlobalChatEventParticipant>()
+                .Where(p => legacyIds.Contains(p.GlobalChatEventId))
+                .ToListAsync();
+            _dbContext.Set<GlobalChatEventParticipant>().RemoveRange(legacyParticipants);
+            _dbContext.Set<GlobalChatEvent>().RemoveRange(legacyEvents);
+            result.Details.Add($"Removed {legacyEvents.Count} legacy global chat events");
+        }
+
+        var templateTitles = eventTemplates.Select(t => t.Title).ToList();
+        var existingEvents = await _dbContext.Set<GlobalChatEvent>()
+            .Where(e => templateTitles.Contains(e.Title))
+            .ToListAsync();
+
+        // Only one event may be Live at a time (domain invariant, mirrored
+        // from GlobalChatEventService.StartAsync) — if an unrelated event is
+        // already running, do not seed a second Live one.
+        var hasForeignLiveEvent = await _dbContext.Set<GlobalChatEvent>()
+            .AnyAsync(e => e.Status == GlobalChatEventStatus.Live && !templateTitles.Contains(e.Title));
+
+        var created = 0;
+        var refreshed = 0;
+        foreach (var template in eventTemplates)
+        {
+            if (template.Status == GlobalChatEventStatus.Live && hasForeignLiveEvent)
+            {
+                result.Details.Add($"Skipped live event '{template.Title}': another event is already live");
+                continue;
+            }
+
+            // Idempotency by title, like the neighboring seed steps — but the
+            // schedule fields are refreshed so a reseed always yields
+            // "running now" / "upcoming" instead of dates frozen at the
+            // previous run (participants are kept as-is).
+            var existing = existingEvents.FirstOrDefault(e => e.Title == template.Title);
+            if (existing != null)
+            {
+                existing.StartsUtc = template.StartsUtc;
+                existing.Duration = template.Duration;
+                existing.IsOpen = template.IsOpen;
+                existing.Status = template.Status;
+                existing.StartedUtc = template.Status == GlobalChatEventStatus.Live ? template.StartsUtc : null;
+                existing.EndedUtc = null;
+                refreshed++;
+                continue;
+            }
+
+            var chatEvent = new GlobalChatEvent
+            {
+                GlobalChatEventId = _guidFactory.Create(),
+                Title = template.Title,
+                Description = template.Description,
+                StartsUtc = template.StartsUtc,
+                Duration = template.Duration,
+                IsOpen = template.IsOpen,
+                Status = template.Status,
+                // The Live event is seeded directly in the started state
+                // (mirrors StartAsync: Status=Live + StartedUtc set) — it
+                // "started" right at its scheduled time an hour ago.
+                StartedUtc = template.Status == GlobalChatEventStatus.Live ? template.StartsUtc : null,
+                CreatedByUserId = organizer.UserId,
+                CreatedUtc = now,
+            };
+            _dbContext.Set<GlobalChatEvent>().Add(chatEvent);
+
+            // Mirror the domain CreateAsync behavior: the creator becomes an
+            // organizer participant
+            _dbContext.Set<GlobalChatEventParticipant>().Add(new GlobalChatEventParticipant
+            {
+                GlobalChatEventParticipantId = _guidFactory.Create(),
+                GlobalChatEventId = chatEvent.GlobalChatEventId,
+                UserId = organizer.UserId,
+                IsOrganizer = true,
+                JoinedUtc = now,
+            });
+
+            // Closed events get invited participants so the participants-only
+            // restriction can be exercised from test accounts
+            if (!template.IsOpen)
+            {
+                foreach (var invitee in invitees)
+                {
+                    _dbContext.Set<GlobalChatEventParticipant>().Add(new GlobalChatEventParticipant
+                    {
+                        GlobalChatEventParticipantId = _guidFactory.Create(),
+                        GlobalChatEventId = chatEvent.GlobalChatEventId,
+                        UserId = invitee.UserId,
+                        IsOrganizer = false,
+                        JoinedUtc = now,
+                    });
+                }
+            }
+
+            created++;
+        }
+
+        if (created == 0 && refreshed == 0)
         {
             result.Skipped++;
-            result.Details.Add("Global chat event already exists, skipping");
+            result.Details.Add("Global chat events already in the desired state, skipping");
             return;
         }
 
-        _dbContext.Set<GlobalChatEvent>().Add(new GlobalChatEvent
-        {
-            GlobalChatEventId = _guidFactory.Create(),
-            Title = "Литературный вечер",
-            Description = "Совместное написание историй в прямом эфире — присоединяйтесь!",
-            StartsUtc = now.AddDays(2),
-            Duration = null,
-            IsOpen = true,
-            Status = GlobalChatEventStatus.Scheduled,
-            CreatedByUserId = users[0].UserId,
-            CreatedUtc = now,
-        });
-
-        result.Details.Add("Created global chat event");
+        result.Details.Add($"Created {created} and refreshed {refreshed} global chat events");
     }
 
     private async Task CreateReviews(List<DbUser> users, List<Guid> gameIds, DateTimeOffset now, ComprehensiveSeedResult result)
@@ -3415,14 +4519,14 @@ internal class ModerationApiService : IModerationApiService
                     Status = CharacterStatus.Active,
                     CreatedUtc = now.AddDays(-20),
                     Name = "Сэр Максимилиан фон Штернберг",
-                    Race = "Человек",
-                    Class = "Паладин",
-                    Appearance = "Высокий светловолосый мужчина в сияющих доспехах.",
                     IsNpc = false,
                     AccessPolicy = CharacterAccessPolicy.NoAccess,
                     IsRemoved = false
                 };
                 _dbContext.Set<Character>().Add(longestChar);
+                AddLegacyCharacterAttributes(longestChar.CharacterId,
+                    race: "Человек", @class: "Паладин",
+                    appearance: "Высокий светловолосый мужчина в сияющих доспехах.");
                 result.CharactersCreated++;
 
                 longestUserPost = new Post
@@ -3620,18 +4724,18 @@ internal class ModerationApiService : IModerationApiService
                         Status = CharacterStatus.Active,
                         CreatedUtc = now.AddDays(-10),
                         Name = "Чак",
-                        Race = "Человек",
-                        Class = "Варвар",
-                        Appearance = "Коренастый мужчина с обветренным лицом и мощными руками. На поясе всегда висит мешочек с грейпфрутами.",
-                        Temper = "Буйный, но добродушный. Впадает в ярость при виде несправедливости. И при виде апельсинов.",
-                        Story = "Бывший фермер из долины Золотых Рощ, где выращивают лучшие грейпфруты континента. Ушел в приключенцы после того, как орки сожгли его плантацию.",
-                        Skills = "Двуручное оружие, выживание, кулинария (грейпфрутовые блюда), запугивание.",
-                        Inventory = "Двуручный топор, 3 грейпфрута, фляга с грейпфрутовым соком, потрепанная кулинарная книга.",
                         IsNpc = false,
                         AccessPolicy = CharacterAccessPolicy.NoAccess,
                         IsRemoved = false
                     };
                     _dbContext.Set<Character>().Add(chuckChar);
+                    AddLegacyCharacterAttributes(chuckChar.CharacterId,
+                        race: "Человек", @class: "Варвар",
+                        appearance: "Коренастый мужчина с обветренным лицом и мощными руками. На поясе всегда висит мешочек с грейпфрутами.",
+                        temper: "Буйный, но добродушный. Впадает в ярость при виде несправедливости. И при виде апельсинов.",
+                        story: "Бывший фермер из долины Золотых Рощ, где выращивают лучшие грейпфруты континента. Ушел в приключенцы после того, как орки сожгли его плантацию.",
+                        skills: "Двуручное оружие, выживание, кулинария (грейпфрутовые блюда), запугивание.",
+                        inventory: "Двуручный топор, 3 грейпфрута, фляга с грейпфрутовым соком, потрепанная кулинарная книга.");
                     result.CharactersCreated++;
 
                     // Upload Chuck avatar through the real pipeline
@@ -3661,23 +4765,23 @@ internal class ModerationApiService : IModerationApiService
 
                             Он провел большим пальцем по шершавой кожуре и закрыл глаза. Запах — горьковато-сладкий, с нотками утреннего тумана над рощей — ударил в нос, и на мгновение Чак оказался дома. Золотые Рощи. Ряды деревьев до горизонта. Мать на веранде, отец в саду. Корзины, полные розовато-желтых плодов.
 
-                            «Знаете, в чем проблема этого мира?» — произнес он, ни к кому конкретно не обращаясь. Спутники уже привыкли к его монологам. — «Все едят яблоки. Яблоки! Пресные, скучные, предсказуемые яблоки. Ни горечи, ни вызова. Откусил — и забыл. А грейпфрут? Грейпфрут — это диалог. Он не сразу раскрывается. Сначала горчит, потом кислит, потом — вот оно — сладость. Настоящая, заслуженная сладость. Как жизнь, понимаете?»
+                            "Знаете, в чем проблема этого мира?" — произнес он, ни к кому конкретно не обращаясь. Спутники уже привыкли к его монологам. — "Все едят яблоки. Яблоки! Пресные, скучные, предсказуемые яблоки. Ни горечи, ни вызова. Откусил — и забыл. А грейпфрут? Грейпфрут — это диалог. Он не сразу раскрывается. Сначала горчит, потом кислит, потом — вот оно — сладость. Настоящая, заслуженная сладость. Как жизнь, понимаете?"
 
                             Он аккуратно надрезал кожуру ножом — не топором, хотя мог бы — и начал чистить. Каждую дольку он отделял с почтением хирурга.
 
-                            «Мой дед говорил: покажи мне, как человек ест грейпфрут, и я скажу тебе, кто он. Если морщится и бросает — трус. Если заливает сахаром — слабак. А если ест как есть, с горечью, с кислинкой, с мякотью между зубами — вот это воин.»
+                            "Мой дед говорил: покажи мне, как человек ест грейпфрут, и я скажу тебе, кто он. Если морщится и бросает — трус. Если заливает сахаром — слабак. А если ест как есть, с горечью, с кислинкой, с мякотью между зубами — вот это воин."
 
                             Чак откусил дольку и жевал медленно, с выражением абсолютного блаженства на лице. Сок потек по бороде. Ему было все равно.
 
-                            «В таверне в Ривенделле однажды попросил грейпфрутовый сок. Трактирщик посмотрел на меня как на сумасшедшего. "У нас есть яблочный", говорит. Яблочный! Я чуть стол не перевернул. Нет, я перевернул. Но потом извинился и заплатил за ремонт. Я же не дикарь. Я варвар, но не дикарь. Есть разница.»
+                            "В таверне в Ривенделле однажды попросил грейпфрутовый сок. Трактирщик посмотрел на меня как на сумасшедшего. 'У нас есть яблочный', говорит. Яблочный! Я чуть стол не перевернул. Нет, я перевернул. Но потом извинился и заплатил за ремонт. Я же не дикарь. Я варвар, но не дикарь. Есть разница."
 
-                            Он доел грейпфрут, аккуратно сложил кожуру в мешок — «на сушку, для чая» — и вытер руки о штаны.
+                            Он доел грейпфрут, аккуратно сложил кожуру в мешок — "на сушку, для чая" — и вытер руки о штаны.
 
-                            «Вот когда мы закончим это приключение и я получу свою долю золота — знаете, что я сделаю? Куплю участок земли. Посажу грейпфрутовые деревья. И буду жить. Просто жить. Каждое утро — свежий грейпфрут с дерева. Каждый вечер — грейпфрутовый пирог. По праздникам — грейпфрутовое вино. Рай.»
+                            "Вот когда мы закончим это приключение и я получу свою долю золота — знаете, что я сделаю? Куплю участок земли. Посажу грейпфрутовые деревья. И буду жить. Просто жить. Каждое утро — свежий грейпфрут с дерева. Каждый вечер — грейпфрутовый пирог. По праздникам — грейпфрутовое вино. Рай."
 
                             Он помолчал, глядя на закат.
 
-                            «Но сначала надо убить этого дракона. Потому что, по слухам, он сжег три грейпфрутовые рощи к югу отсюда. И за это он ответит.»
+                            "Но сначала надо убить этого дракона. Потому что, по слухам, он сжег три грейпфрутовые рощи к югу отсюда. И за это он ответит."
                             """,
                         MetagameText = "Это было прекрасно. У меня слезы на глазах.",
                         IsRemoved = false
@@ -3822,13 +4926,40 @@ internal class ModerationApiService : IModerationApiService
 
     private async Task CreatePolls(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
     {
-        // Check if polls already exist
+        // Polls live in MongoDB and survive a relational re-seed, while their
+        // votes reference Postgres user ids. After the relational database is
+        // recreated the surviving votes point at users that no longer exist
+        // ("ghost votes"): counts stay inflated and public-poll voter lists
+        // resolve to nobody, so the voters tooltip silently disappears.
+        // Detect that staleness and recreate the polls instead of skipping.
         var existingPollsCount = await _pollRepository.Count(new PollsQuery());
         if (existingPollsCount > 0)
         {
-            result.Skipped++;
-            result.Details.Add($"Polls already exist ({existingPollsCount}), skipping");
-            return;
+            var pollsQuery = new PollsQuery { Take = (int)existingPollsCount };
+            var existingPolls = (await _pollRepository.Get(
+                pollsQuery,
+                new PagingData(pollsQuery, (int)existingPollsCount, (int)existingPollsCount))).ToList();
+            var voterIds = existingPolls
+                .SelectMany(p => p.Options.SelectMany(o => o.UserIds))
+                .Distinct()
+                .ToList();
+            var knownVoterCount = await _dbContext.Set<DbUser>()
+                .Where(u => voterIds.Contains(u.UserId))
+                .CountAsync();
+
+            if (knownVoterCount == voterIds.Count)
+            {
+                result.Skipped++;
+                result.Details.Add($"Polls already exist ({existingPollsCount}), skipping");
+                return;
+            }
+
+            foreach (var stalePoll in existingPolls)
+            {
+                await _pollRepository.Delete(stalePoll.Id);
+            }
+            result.Details.Add(
+                $"Stale polls recreated: {voterIds.Count - knownVoterCount} ghost voter(s) from a dropped relational database");
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -3927,7 +5058,10 @@ internal class ModerationApiService : IModerationApiService
             await _pollRepository.Vote(activePoll2.Id, optionIds2[i % optionIds2.Count], votersForActive2[i].UserId);
         }
 
-        // Active poll 3 - Weekly one-shot time
+        // Active poll 3 - Weekly one-shot time. PUBLIC (not anonymous):
+        // scheduling polls naturally show who votes for which slot, and the
+        // right sidebar needs one public active poll so the per-option
+        // voters tooltip is demonstrable.
         var activePoll3 = new CreatePollEntity
         {
             Id = _guidFactory.Create(),
@@ -3935,6 +5069,7 @@ internal class ModerationApiService : IModerationApiService
             EndsUtc = now.AddDays(9).UtcDateTime,
             Title = "Время для еженедельных ваншотов",
             Details = "По субботам, время по МСК",
+            IsAnonymous = false,
             Options = new[]
             {
                 new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "14:00" },
@@ -4220,8 +5355,8 @@ internal class ModerationApiService : IModerationApiService
             Title = "Формат постов в играх",
             Details = "Мы хотим понять, какой формат постов предпочитает наше сообщество. " +
                       "Это поможет нам лучше настроить редактор и подсказки для новых игроков. " +
-                      "Под «коротким постом» мы понимаем 2-5 предложений, под «средним» — 1-3 абзаца, " +
-                      "под «длинным» — развернутые описания на несколько экранов. " +
+                      "Под \"коротким постом\" мы понимаем 2-5 предложений, под \"средним\" — 1-3 абзаца, " +
+                      "под \"длинным\" — развернутые описания на несколько экранов. " +
                       "Учитывайте свой обычный стиль игры, а не идеальные пожелания.",
             Options = new[]
             {
@@ -4270,8 +5405,8 @@ internal class ModerationApiService : IModerationApiService
     }
 
     /// <summary>
-    /// Прочитать байты embedded-resource картинки seed-аватара. Кидает
-    /// <see cref="InvalidOperationException"/> если ресурс не embedded'ed
+    /// Read the bytes of an embedded seed avatar image resource. Throws
+    /// <see cref="InvalidOperationException"/> if the resource is not embedded
     /// (deployment misconfig).
     /// </summary>
     private static byte[] ReadEmbeddedSeedBytes(string resourceName)

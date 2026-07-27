@@ -18,7 +18,10 @@ internal class TopicMappingProfile : Profile
     {
         CreateMap<DomainTopic, Topic>()
             .ForMember(d => d.CommentsCount, s => s.MapFrom(t => t.TotalCommentsCount))
-            .ForMember(d => d.Description, s => s.MapFrom(t => t.Text));
+            .ForMember(d => d.Description, s => s.MapFrom(t => t.Text))
+            // Filled by TopicApiService.EnrichPeriodDigests (one batch marker
+            // lookup per response), not by the per-entity mapping.
+            .ForMember(d => d.PeriodDigest, s => s.Ignore());
 
         CreateMap<DomainLastComment, LastTopicComment>()
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(c => c.CreatedUtc));

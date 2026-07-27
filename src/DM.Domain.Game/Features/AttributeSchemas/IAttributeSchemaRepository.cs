@@ -22,6 +22,11 @@ public interface IAttributeSchemaRepository
     /// </summary>
     Task<AttributeSchema?> GetSchema(Guid schemaId);
 
+    /// <summary>
+    /// Whether the user leads or participates in a game that references this schema
+    /// </summary>
+    Task<bool> IsUsedByUserGame(Guid schemaId, Guid userId);
+
     #endregion
 
     #region Write

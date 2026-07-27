@@ -20,6 +20,10 @@
         <ProjectReference Include="..\..\src\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
         <ProjectReference Include="..\DM.Testing\DM.Testing.csproj" />
       <ProjectReference Include="..\..\src\DM.Infrastructure.Messaging\DM.Infrastructure.Messaging.csproj" />
+      <!-- SearchIndexer worker has no dedicated test project; its single
+           AutoMapper profile is covered from here (closest worker-side
+           infrastructure test project) via assembly scanning. -->
+      <ProjectReference Include="..\..\src\DM.Workers.SearchIndexer\DM.Workers.SearchIndexer.csproj" />
     </ItemGroup>
 
 </Project>

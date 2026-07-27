@@ -57,6 +57,16 @@ public interface ITopicService
         TopicsQuery query, CancellationToken ct = default);
 
     /// <summary>
+    /// Get a user's best (most-liked) topic across every board visible to
+    /// the current viewer. Used by the profile "Topics" widget. Access
+    /// policy is enforced in the repository. Returns null when the user has
+    /// no visible topics.
+    /// </summary>
+    /// <param name="username">Author username</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<Topic?> GetBestUserTopicAsync(string username, CancellationToken ct = default);
+
+    /// <summary>
     /// Update existing topic
     /// </summary>
     /// <param name="updateTopic">Update topic model</param>

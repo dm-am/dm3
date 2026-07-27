@@ -65,6 +65,10 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
         [EventType.LikedBlogComment] = "???? ?? ??????????? ? ?????",
         [EventType.NewPublicationComment] = "????? ??????????? ? ??????????",
         [EventType.LikedPublicationComment] = "???? ?? ??????????? ? ??????????",
+        [EventType.StatusBlogActive] = "Блог открыт",
+        [EventType.StatusBlogClosed] = "Блог закрыт",
+        [EventType.StatusBlogFrozen] = "Блог заморожен",
+        [EventType.StatusBlogFinished] = "Блог завершен",
 
         // Messages
         [EventType.NewMessage] = "????? ?????????",
@@ -248,9 +252,9 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
 
     private static string BuildMessage(EventType eventType, object metadata)
     {
-        var title = EventTypeMessages.TryGetValue(eventType, out var msg) ? msg : "???????????";
+        var title = EventTypeMessages.TryGetValue(eventType, out var msg) ? msg : "Уведомление";
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"<b>DM.AM: {title}</b>");
+        sb.AppendLine($"<b>Dungeon Master: {title}</b>");
         sb.AppendLine();
 
         if (metadata != null)

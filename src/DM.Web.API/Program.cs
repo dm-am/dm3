@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Serilog;
 
 [assembly: InternalsVisibleTo("DM.Web.API.IntegrationTests")]
+[assembly: InternalsVisibleTo("DM.Web.API.Tests")]
 
 namespace DM.Web.API;
 

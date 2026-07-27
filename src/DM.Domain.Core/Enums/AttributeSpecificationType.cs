@@ -6,22 +6,32 @@ namespace DM.Domain.Core.Enums;
 public enum AttributeSpecificationType
 {
     /// <summary>
+    /// Text
+    /// </summary>
+    Text = 0,
+
+    /// <summary>
     /// Number
     /// </summary>
-    Number = 0,
+    Number = 1,
 
     /// <summary>
-    /// String
+    /// List of text values
     /// </summary>
-    String = 1,
+    TextList = 2,
 
     /// <summary>
-    /// List
+    /// List of number values
     /// </summary>
-    List = 2,
+    NumberList = 3,
+
+    /// <summary>
+    /// List of text and number values
+    /// </summary>
+    TextNumberList = 4,
 
     /// <summary>
     /// BBCode formatted text (for appearance, personality, history, etc.)
     /// </summary>
-    BbCode = 3
+    BbCode = 5
 }

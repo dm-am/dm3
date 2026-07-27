@@ -1,4 +1,4 @@
-import { ref, computed, onMounted, onUnmounted, type Ref } from "vue";
+import { ref, onMounted, onUnmounted, type Ref } from "vue";
 import type { TooltipPlacement, TooltipPosition } from "./types";
 
 const TOOLTIP_OFFSET = 12;
@@ -30,14 +30,12 @@ export function useTooltip(
     let finalPlacement = placement.value;
     let top = 0;
     let left = 0;
-    let idealLeft = 0; // Store ideal position before clamping
 
     // Calculate initial position based on placement
     switch (placement.value) {
       case "top":
         top = triggerRect.top - tooltipRect.height - TOOLTIP_OFFSET;
         left = triggerRect.left + (triggerRect.width - tooltipRect.width) / 2;
-        idealLeft = left;
         // Flip to bottom if not enough space
         if (top < VIEWPORT_PADDING) {
           top = triggerRect.bottom + TOOLTIP_OFFSET;
@@ -48,7 +46,6 @@ export function useTooltip(
       case "bottom":
         top = triggerRect.bottom + TOOLTIP_OFFSET;
         left = triggerRect.left + (triggerRect.width - tooltipRect.width) / 2;
-        idealLeft = left;
         // Flip to top if not enough space
         if (top + tooltipRect.height > viewportHeight - VIEWPORT_PADDING) {
           top = triggerRect.top - tooltipRect.height - TOOLTIP_OFFSET;
@@ -59,7 +56,6 @@ export function useTooltip(
       case "left":
         top = triggerRect.top + (triggerRect.height - tooltipRect.height) / 2;
         left = triggerRect.left - tooltipRect.width - TOOLTIP_OFFSET;
-        idealLeft = left;
         // Flip to right if not enough space
         if (left < VIEWPORT_PADDING) {
           left = triggerRect.right + TOOLTIP_OFFSET;
@@ -70,7 +66,6 @@ export function useTooltip(
       case "right":
         top = triggerRect.top + (triggerRect.height - tooltipRect.height) / 2;
         left = triggerRect.right + TOOLTIP_OFFSET;
-        idealLeft = left;
         // Flip to left if not enough space
         if (left + tooltipRect.width > viewportWidth - VIEWPORT_PADDING) {
           left = triggerRect.left - tooltipRect.width - TOOLTIP_OFFSET;

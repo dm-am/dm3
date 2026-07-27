@@ -8,6 +8,7 @@ using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Comments;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
@@ -65,8 +66,8 @@ internal class GameCommentService : IGameCommentService
         _intentionManager.ThrowIfForbidden(GameIntention.CreateComment, game);
 
         // Check blacklist
-        var currentUserId = _identityProvider.Current.User.UserId;
-        if (game.BlacklistedUsers.Any(b => b.UserId == currentUserId))
+        var currentUser = _identityProvider.Current.User;
+        if (game.BlacklistedUsers.Any(b => b.UserId == currentUser.UserId))
         {
             throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this game");
         }
@@ -75,8 +76,10 @@ internal class GameCommentService : IGameCommentService
         {
             CommentId = _guidFactory.Create(),
             GameId = game.Id,
-            AuthorId = currentUserId,
-            Text = createComment.Text.Trim(),
+            AuthorId = currentUser.UserId,
+            // Strip [mod] authored by a non-moderator (it renders as a green
+            // mod block on the Comment surface); Moderator+ may author it.
+            Text = ModBlockSanitizer.SanitizeForAuthor(createComment.Text.Trim(), currentUser.Role),
             NewCommentCount = game.CommentCount + 1,
             CreatedUtc = _dateTimeProvider.Now
         };
@@ -120,6 +123,11 @@ internal class GameCommentService : IGameCommentService
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
 
         var text = updateComment.Text?.Trim();
+        if (!string.IsNullOrEmpty(text))
+        {
+            // Strip [mod] authored by a non-moderator before comparing/saving.
+            text = ModBlockSanitizer.SanitizeForAuthor(text, _identityProvider.Current.User.Role);
+        }
         if (string.IsNullOrWhiteSpace(text) || text == comment.Text)
         {
             return comment;

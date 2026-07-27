@@ -31,6 +31,7 @@ const emit = defineEmits<{
 
 // Dropdown state
 const showDropdown = ref(false);
+const expandBtnRef = ref<HTMLButtonElement | null>(null);
 
 // Computed values
 const sortedValues = computed(() =>
@@ -60,6 +61,11 @@ function toggleDropdown() {
 
 function closeDropdown() {
   showDropdown.value = false;
+}
+
+function closeDropdownAndReturnFocus() {
+  closeDropdown();
+  expandBtnRef.value?.focus();
 }
 
 function removeValue(id: string) {
@@ -95,14 +101,18 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- Single value - simple bubble -->
+  <!-- Single value - simple bubble. Explicit {{ " " }} space nodes: Vue's
+       whitespace condense eats literal spaces, and the copy must read
+       "Ведущий: Имя ×" on one line. -->
   <div v-if="isSingleValue" class="bubble bubble-single-owner">
-    <span class="bubble-prefix">{{ prefix }} </span>
-    <span class="bubble-owner-item">
-      <span class="bubble-value-text">{{ values[0].label }}</span>
-      <button
+    <span class="bubble-prefix">{{ prefix }}{{ " " }}</span
+    ><span class="bubble-owner-item">
+      <span class="bubble-value-text">{{ values[0].label }}</span
+      ><span class="copy-space">{{ " " }}</span
+      ><button
         type="button"
         class="bubble-owner-remove"
+        :aria-label="`Убрать фильтр: ${values[0].label}`"
         @click.stop="removeValue(values[0].id)"
       >
         {{ symbols.close }}
@@ -116,16 +126,17 @@ onUnmounted(() => {
     class="bubble bubble-expandable"
     :class="{ 'bubble-owners': isExpandable }"
   >
-    <span class="bubble-prefix">{{ prefix }} </span>
-
+    <span class="bubble-prefix">{{ prefix }}{{ " " }}</span>
     <!-- Visible values -->
     <template v-for="(item, idx) in visibleValues" :key="item.id">
-      <span v-if="idx > 0" class="bubble-separator">,</span>
+      <span v-if="idx > 0" class="bubble-separator">,{{ " " }}</span>
       <span class="bubble-owner-item">
-        <span class="bubble-value-text">{{ item.label }}</span>
-        <button
+        <span class="bubble-value-text">{{ item.label }}</span
+        ><span class="copy-space">{{ " " }}</span
+        ><button
           type="button"
           class="bubble-owner-remove"
+          :aria-label="`Убрать фильтр: ${item.label}`"
           @click.stop="removeValue(item.id)"
         >
           {{ symbols.close }}
@@ -141,21 +152,27 @@ onUnmounted(() => {
     <!-- Expand button -->
     <button
       v-if="isExpandable"
+      ref="expandBtnRef"
       type="button"
       class="bubble-expand-btn"
       :class="{ active: showDropdown }"
+      aria-haspopup="menu"
+      :aria-expanded="showDropdown"
       @click.stop="toggleDropdown"
+      @keydown.esc="closeDropdownAndReturnFocus"
     >
       <SvgIcon name="chevronDown" />
     </button>
 
     <!-- Dropdown for hidden values -->
-    <div v-if="showDropdown" class="owners-dropdown">
+    <div v-if="showDropdown" class="owners-dropdown" role="menu">
       <button
         v-for="item in hiddenValues"
         :key="item.id"
         type="button"
         class="owners-dropdown-item"
+        role="menuitem"
+        :aria-label="`Убрать фильтр: ${item.label}`"
         @click.stop="removeFromDropdown(item.id)"
       >
         <span class="owner-name">{{ item.label }}</span>

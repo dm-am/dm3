@@ -162,7 +162,7 @@ public class GameCommentController : ControllerBase
     /// <response code="404">Comment not found</response>
     [HttpPost("comments/{id}/likes", Name = nameof(PostGameCommentLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(User), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]

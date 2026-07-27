@@ -25,14 +25,13 @@ import type { PollStatus } from "@/entities/poll";
 
 const {
   filterState,
-  hasActiveFilters,
   setStatus,
   setPollType,
   setSearch,
-  setStartsFrom,
-  setStartsTo,
-  setEndsFrom,
-  setEndsTo,
+  setStartsFromUtc,
+  setStartsToUtc,
+  setEndsFromUtc,
+  setEndsToUtc,
   setSort,
   toggleSortOrder,
   clearFilters,
@@ -167,49 +166,49 @@ const pollTypeLabel = computed(() => {
 
 // Date range handlers
 function handleStartsApply(from: string | null, to: string | null) {
-  setStartsFrom(from || "");
-  setStartsTo(to || "");
+  setStartsFromUtc(from || "");
+  setStartsToUtc(to || "");
   closeDropdown();
 }
 
 function handleStartsClear() {
-  setStartsFrom("");
-  setStartsTo("");
+  setStartsFromUtc("");
+  setStartsToUtc("");
   closeDropdown();
 }
 
 function handleEndsApply(from: string | null, to: string | null) {
-  setEndsFrom(from || "");
-  setEndsTo(to || "");
+  setEndsFromUtc(from || "");
+  setEndsToUtc(to || "");
   closeDropdown();
 }
 
 function handleEndsClear() {
-  setEndsFrom("");
-  setEndsTo("");
+  setEndsFromUtc("");
+  setEndsToUtc("");
   closeDropdown();
 }
 
 // Date range display
 const hasStartsFilter = computed(() => {
-  return !!filterState.value.startsFrom || !!filterState.value.startsTo;
+  return !!filterState.value.startsFromUtc || !!filterState.value.startsToUtc;
 });
 
 const startsFilterLabel = computed(() => {
   return formatDateRangeForDisplay({
-    from: filterState.value.startsFrom || null,
-    to: filterState.value.startsTo || null,
+    from: filterState.value.startsFromUtc || null,
+    to: filterState.value.startsToUtc || null,
   });
 });
 
 const hasEndsFilter = computed(() => {
-  return !!filterState.value.endsFrom || !!filterState.value.endsTo;
+  return !!filterState.value.endsFromUtc || !!filterState.value.endsToUtc;
 });
 
 const endsFilterLabel = computed(() => {
   return formatDateRangeForDisplay({
-    from: filterState.value.endsFrom || null,
-    to: filterState.value.endsTo || null,
+    from: filterState.value.endsFromUtc || null,
+    to: filterState.value.endsToUtc || null,
   });
 });
 
@@ -235,14 +234,14 @@ function handleSearchKeydown(event: KeyboardEvent) {
     const state = filterState.value;
     if (hasEndsFilter.value) {
       event.preventDefault();
-      setEndsFrom("");
-      setEndsTo("");
+      setEndsFromUtc("");
+      setEndsToUtc("");
       return;
     }
     if (hasStartsFilter.value) {
       event.preventDefault();
-      setStartsFrom("");
-      setStartsTo("");
+      setStartsFromUtc("");
+      setStartsToUtc("");
       return;
     }
     if (state.pollType !== "") {
@@ -272,9 +271,13 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
       <!-- Filter button -->
       <div v-click-outside="closeDropdown" class="filter-section">
-        <FilterButton :active="showDropdown" @click="toggleDropdown" />
+        <FilterButton
+          :active="showDropdown"
+          @click="toggleDropdown"
+          @close="closeDropdown"
+        />
 
-        <FilterDropdown v-if="showDropdown">
+        <FilterDropdown v-if="showDropdown" @close="closeDropdown">
           <!-- Navigation header when inside a sub-level -->
           <FilterDropdownHeader
             v-if="navPath"
@@ -311,8 +314,8 @@ function handleSearchKeydown(event: KeyboardEvent) {
           <!-- Starts date range picker -->
           <DateRangePicker
             v-if="navPath?.filter === 'startsRange'"
-            :from-value="filterState.startsFrom || null"
-            :to-value="filterState.startsTo || null"
+            :from-value="filterState.startsFromUtc || null"
+            :to-value="filterState.startsToUtc || null"
             :show-clear-button="hasStartsFilter"
             @apply="handleStartsApply"
             @clear="handleStartsClear"
@@ -321,8 +324,8 @@ function handleSearchKeydown(event: KeyboardEvent) {
           <!-- Ends date range picker -->
           <DateRangePicker
             v-if="navPath?.filter === 'endsRange'"
-            :from-value="filterState.endsFrom || null"
-            :to-value="filterState.endsTo || null"
+            :from-value="filterState.endsFromUtc || null"
+            :to-value="filterState.endsToUtc || null"
             :show-clear-button="hasEndsFilter"
             @apply="handleEndsApply"
             @clear="handleEndsClear"
@@ -371,8 +374,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-@import "src/assets/styles/Variables"
 @import "src/assets/styles/Filters"
 
 .polls-filter

@@ -50,6 +50,7 @@ export default defineConfig({
       sass: {
         additionalData: `
           @import "@/assets/styles/Variables"
+          @import "@/assets/styles/Breakpoints"
           @import "@/assets/styles/Layout"
           @import "@/assets/styles/Themes"
         `,

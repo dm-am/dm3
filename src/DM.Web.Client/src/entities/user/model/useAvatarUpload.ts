@@ -7,28 +7,28 @@ import { compressImage } from "@/shared/lib/utils/imageCompression";
 import type { User } from "@/shared/api/models/community/users";
 
 /**
- * Поддерживаемые форматы: должны матчиться с whitelist'ом сервера
- * (ImageProcessingService.ExtensionByContentType). FE и BE — один контракт.
+ * Supported formats: must match the server whitelist
+ * (ImageProcessingService.ExtensionByContentType). FE and BE share one contract.
  */
 export const AVATAR_ACCEPT = "image/jpeg,image/png,image/webp";
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 /**
- * SSOT для загрузки/сброса аватара. Используется ProfilePicture overlay
- * на странице профиля — единственная точка UX (раньше дублировалось в
- * AccountProfileSection, что было IA-антипаттерном: avatar — profile attr,
- * не account setting).
+ * SSOT for avatar upload/reset. Used by the ProfilePictureUpload overlay
+ * on the profile page — the single UX entry point (previously duplicated in
+ * AccountProfileSection, which was an IA anti-pattern: the avatar is a profile attr,
+ * not an account setting).
  *
- * Поведение:
- * - Client-side resize до 1024×1024 (Canvas, без deps) — экономит трафик.
- * - Drag-drop через handleDrop / clipboard paste через document-level listener.
- * - Прогресс через axios onUploadProgress.
- * - Идемпотентность через `crypto.randomUUID()` в UploadApi (под капотом).
- * - После успешного upload/reset — userStore.fetchUser(), плюс SignalR
- *   `UserAvatarChanged` broadcast в открытые вкладки.
+ * Behavior:
+ * - Client-side resize to 1024×1024 (Canvas, no deps) — saves bandwidth.
+ * - Drag-drop via handleDrop / clipboard paste via a document-level listener.
+ * - Progress via axios onUploadProgress.
+ * - Idempotency via `crypto.randomUUID()` in UploadApi (under the hood).
+ * - After a successful upload/reset — userStore.fetchUser(), plus a SignalR
+ *   `UserAvatarChanged` broadcast to open tabs.
  *
- * @param user — реактивный ref на User (нужен .id для targetId и для
- *   определения «есть ли что сбрасывать»).
+ * @param user — a reactive ref to the User (.id is needed for targetId and to
+ *   determine "is there anything to reset").
  */
 export function useAvatarUpload(user: Ref<User | null | undefined>) {
   const userStore = useUserStore();
@@ -58,8 +58,8 @@ export function useAvatarUpload(user: Ref<User | null | undefined>) {
     uploading.value = true;
     progress.value = 0;
     try {
-      // Client-side compression: режем до 1024×1024 через Canvas API.
-      // Server все равно ресайзит, но это экономит upload-трафик на mobile.
+      // Client-side compression: cut down to 1024×1024 via the Canvas API.
+      // The server resizes anyway, but this saves upload bandwidth on mobile.
       const file = await compressImage(rawFile);
 
       const onProgress = (e: AxiosProgressEvent) => {
@@ -117,7 +117,7 @@ export function useAvatarUpload(user: Ref<User | null | undefined>) {
     }
   }
 
-  // Native event handlers — call sites bind через template @drop / @dragover.
+  // Native event handlers — call sites bind via template @drop / @dragover.
 
   function onDragEnter(e: DragEvent) {
     e.preventDefault();
@@ -140,8 +140,8 @@ export function useAvatarUpload(user: Ref<User | null | undefined>) {
     if (file) await uploadFile(file);
   }
 
-  // Clipboard paste: глобальный listener на document. Срабатывает на любом
-  // Ctrl+V когда страница в фокусе. Если в clipboard есть image — загружаем.
+  // Clipboard paste: a global listener on document. Fires on any
+  // Ctrl+V while the page is focused. If the clipboard holds an image — upload it.
   async function handlePaste(e: ClipboardEvent) {
     if (busy.value) return;
     const items = e.clipboardData?.items;
@@ -175,7 +175,7 @@ export function useAvatarUpload(user: Ref<User | null | undefined>) {
     // Actions
     uploadFile,
     resetAvatar,
-    // Event handlers (для template @-bindings)
+    // Event handlers (for template @-bindings)
     onDragEnter,
     onDragOver,
     onDragLeave,

@@ -145,7 +145,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from "vue";
+import { ref, reactive, onMounted } from "vue";
 import { AccountApi } from "@/shared/api";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type {
@@ -153,7 +153,7 @@ import type {
   NotificationCategory,
 } from "@/shared/api/models/account";
 
-const emit = defineEmits<{
+defineEmits<{
   (e: "connectTelegram"): void;
   (e: "connectDiscord"): void;
   (e: "refreshPreferences"): void;
@@ -319,8 +319,7 @@ defineExpose({ loadPreferences });
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 @import "../AccountPage.styles"
 
 .notifications-content
@@ -365,11 +364,11 @@ defineExpose({ loadPreferences });
 
   &--connected
     color: $accent-green
-    background-color: rgba($accent-green, 0.1)
+    background-color: $accent-green-muted
 
   &--disconnected
     color: $text-muted
-    background-color: rgba($text-muted, 0.1)
+    background-color: $text-muted-muted
 
 .channel-settings
   display: flex
@@ -383,11 +382,6 @@ defineExpose({ loadPreferences });
   gap: $small
   cursor: pointer
   color: $text
-
-  input[type="checkbox"]
-    width: 16px
-    height: 16px
-    accent-color: $link
 
   &:has(input:disabled)
     opacity: 0.6
@@ -415,11 +409,6 @@ defineExpose({ loadPreferences });
   font-size: $secondary-font-size
   color: $text
 
-  input[type="checkbox"]
-    width: 14px
-    height: 14px
-    accent-color: $link
-
   &:has(input:disabled)
     opacity: 0.6
     cursor: default
@@ -444,12 +433,12 @@ defineExpose({ loadPreferences });
     color: $link
 
     &:hover:not(:disabled)
-      background-color: rgba($link, 0.1)
+      background-color: $link-muted
 
   &--disconnect
     border: 1px solid $border
     color: $text-muted
 
     &:hover:not(:disabled)
-      background-color: rgba($text-muted, 0.1)
+      background-color: $text-muted-muted
 </style>

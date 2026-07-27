@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.BbRendering;
 
 namespace DM.Web.API.Features.Game.Reviews;
 
@@ -25,9 +26,9 @@ public class GameReviewDto
     public User? Author { get; set; }
 
     /// <summary>
-    /// Review text (BBCode supported)
+    /// Review text (BBCode supported, rendered as HTML)
     /// </summary>
-    public string Text { get; set; } = string.Empty;
+    public CommonBbText? Text { get; set; }
 
     /// <summary>
     /// Creation timestamp (UTC)

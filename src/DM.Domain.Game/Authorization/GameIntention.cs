@@ -93,5 +93,10 @@ public enum GameIntention
     /// <summary>
     /// Remove assistant from the game (master only)
     /// </summary>
-    RemoveUser = 20
+    RemoveUser = 20,
+
+    /// <summary>
+    /// Edit game settings / embedded attribute schema (master, assistant or mentor)
+    /// </summary>
+    EditSettings = 21
 }

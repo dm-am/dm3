@@ -8,10 +8,10 @@ using DM.Domain.Core.Enums;
 namespace DM.Infrastructure.Persistence.Entities.Community;
 
 /// <summary>
-/// DAL для серии конкурса. Каждый конкурс — отдельная запись
-/// с глобальным сквозным номером в рамках типа (Literary 1..N, Art 1..M).
-/// Награды (UserAward) ссылаются на серию, а не на per-year AwardType,
-/// что позволяет каталог типов держать timeless (6 строк).
+/// DAL for a contest series. Each contest is a separate record
+/// with a global sequential number within its type (Literary 1..N, Art 1..M).
+/// Awards (UserAward) reference the series rather than a per-year AwardType,
+/// which keeps the type catalog timeless (6 rows).
 /// </summary>
 [Table("ContestSeries")]
 public class ContestSeries
@@ -20,25 +20,25 @@ public class ContestSeries
     public Guid ContestSeriesId { get; set; }
 
     /// <summary>
-    /// Тип конкурса. У каждого типа своя сквозная нумерация
+    /// Contest type. Each type has its own sequential numbering
     /// (Literary 1..N, Art 1..M, …). UNIQUE(ContestType, Number).
     /// </summary>
     public ContestType ContestType { get; set; }
 
     /// <summary>
-    /// Сквозной номер конкурса в рамках типа (23-й литературный, 1-й арт).
+    /// Sequential contest number within the type (23rd literary, 1st art).
     /// </summary>
     public int Number { get; set; }
 
     /// <summary>
-    /// Год проведения конкурса. Чисто отображаемое поле — на тайле награды
-    /// показывается в year-бейдже. Уникальности по году не требуется.
+    /// Contest year. Purely a display field — shown in the year badge
+    /// on the award tile. No uniqueness by year is required.
     /// </summary>
     public int Year { get; set; }
 
     /// <summary>
-    /// Ссылка на форумный топик с итогами конкурса. Опциональна — серия
-    /// может существовать до публикации итогов или вообще без публичного топика.
+    /// Link to the forum topic with contest results. Optional — a series
+    /// may exist before the results are published or without a public topic at all.
     /// </summary>
     [MaxLength(500)]
     public string? TopicUrl { get; set; }

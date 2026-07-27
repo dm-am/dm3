@@ -48,14 +48,6 @@ export function highlightMatch(text: string, query: string): string {
 }
 
 /**
- * Check if text contains the search query (case-insensitive)
- */
-export function containsMatch(text: string, query: string): boolean {
-  if (!query || !text) return false;
-  return text.toLowerCase().includes(query.toLowerCase());
-}
-
-/**
  * Highlight search matches in already-rendered DOM content.
  * Walks text nodes and wraps matches in <mark class="search-highlight">.
  * Safe for BBCode/HTML content — operates on text nodes only.

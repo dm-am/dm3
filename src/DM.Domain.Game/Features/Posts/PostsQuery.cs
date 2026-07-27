@@ -55,9 +55,9 @@ public class PostsQuery : PagingQuery
 
     /// <summary>
     /// Filter to posts that have at least one review by this username.
-    /// Зеркало <see cref="AuthorUsernames"/>, но смотрит «кто рецензировал»,
-    /// а не «кто написал». Используется страницей профиля «Оценил чужих
-    /// постов: {username}» (route given-reviews).
+    /// Mirror of <see cref="AuthorUsernames"/>, but looks at "who reviewed"
+    /// rather than "who wrote". Used by the profile page "Оценил чужих
+    /// постов: {username}" (route given-reviews).
     /// </summary>
     public string? ReviewerUsername { get; set; }
 

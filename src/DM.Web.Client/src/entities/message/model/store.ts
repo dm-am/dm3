@@ -159,6 +159,29 @@ export const useMessagingStore = defineStore("messaging", () => {
     highlightedMessageId.value = null;
   }
 
+  // Load the window around a specific message (jump-to-context from search).
+  // Mirrors the global-chat store's navigateToMessage: fetches with
+  // aroundMessageId, replaces the list, and flags the message for the view to
+  // scroll/highlight.
+  async function navigateToMessage(chatId: ChatId, messageId: MessageId) {
+    loadingMessages.value = true;
+    try {
+      const { data } = await messagingApi.getMessages(chatId, {
+        aroundMessageId: messageId,
+        limit: PAGE_SIZE,
+      });
+      if (data && data.resources.length > 0) {
+        messagesList.value = data.resources;
+        currentCursor.value = data.paging ?? null;
+        hasMoreBefore.value = data.paging?.hasPrev ?? false;
+        hasMoreAfter.value = data.paging?.hasNext ?? false;
+        highlightedMessageId.value = messageId as unknown as string;
+      }
+    } finally {
+      loadingMessages.value = false;
+    }
+  }
+
   function clearHighlight() {
     highlightedMessageId.value = null;
   }
@@ -383,6 +406,7 @@ export const useMessagingStore = defineStore("messaging", () => {
     fetchMessages,
     fetchMoreBefore,
     jumpToLatest,
+    navigateToMessage,
     clearHighlight,
     sending,
     sendMessage,

@@ -26,12 +26,17 @@ const emit = defineEmits<{
 </script>
 
 <template>
+  <!-- Inline flow with explicit space text nodes ({{ " " }} — Vue's
+       whitespace condense would eat a literal trailing space), so the
+       bubble copies as "Статус: Активные ×" on one line. -->
   <div class="bubble">
-    <span v-if="prefix" class="bubble-prefix">{{ prefix }} </span>
-    <span class="bubble-value-text">{{ value }}</span>
-    <button
+    <span v-if="prefix" class="bubble-prefix">{{ prefix }}{{ " " }}</span
+    ><span class="bubble-value-text">{{ value }}</span
+    ><span class="copy-space">{{ " " }}</span
+    ><button
       type="button"
       class="bubble-remove-btn"
+      :aria-label="`Убрать фильтр: ${value}`"
       @click.stop="emit('remove')"
     >
       {{ symbols.close }}

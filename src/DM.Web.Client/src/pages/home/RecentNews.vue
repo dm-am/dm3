@@ -2,8 +2,9 @@
 import { computed, onMounted } from "vue";
 import { storeToRefs } from "pinia";
 import { useBoardsStore } from "@/entities/forum";
-import { Topic } from "@/features/topic";
+import { TopicView } from "@/features/topic";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { ErrorState } from "@/shared/ui/ErrorState";
 import dayjs from "dayjs";
 
 const NEWS_AGE_DAYS = 7;
@@ -37,21 +38,24 @@ onMounted(() => {
   <block-title>Последние новости</block-title>
 
   <div v-if="news?.length" class="news-list">
-    <Topic
+    <TopicView
       v-for="article in news"
       :key="article.id"
       :topic="article"
       :truncatable="true"
       :max-height="150"
+      :preview-only="true"
     />
   </div>
-  <secondary-text v-else-if="newsError">
-    Не удалось загрузить новости
-  </secondary-text>
-  <!-- Loading placeholder. Mirrors the real <Topic> shape pixel-for-pixel
+  <ErrorState
+    v-else-if="newsError"
+    message="Не удалось загрузить новости"
+    :retry="() => store.fetchNews(true)"
+  />
+  <!-- Loading placeholder. Mirrors the real <TopicView> shape pixel-for-pixel
        so the home page below (Best post, Featured post, discovery link)
        does not jump when the news array arrives. Structure matches
-       Topic.vue: dashed card, title with underline, description
+       TopicView.vue: dashed card, title with underline, description
        (TruncatedContent) + footer. `news === null` means "not loaded
        yet" (fetch errors land in the branch above); empty array is the
        genuine "no news". -->
@@ -77,13 +81,14 @@ onMounted(() => {
     С остальными новостями можно ознакомиться
     <router-link to="/forum/news"
       ><strong>в новостном разделе форума</strong></router-link
+    >. А с полной статистикой сайта —
+    <router-link :to="{ name: 'site-statistics' }"
+      ><strong>на отдельной странице</strong></router-link
     >.
   </p>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Skeleton"
 
 .news-list
@@ -100,11 +105,11 @@ onMounted(() => {
       color: $link-hover
 
 // Skeleton for one collapsed news Topic card. Pixel-matches the real
-// <Topic> card in Topic.vue:
-//   • outer dashed-bordered box with $medium padding
-//   • h3 title with $small padding-bottom + 1px dashed underline +
+// <TopicView> card in TopicView.vue:
+//   - outer dashed-bordered box with $medium padding
+//   - h3 title with $small padding-bottom + 1px dashed underline +
 //     $small bottom margin
-//   • description (clamped to the 150px `:max-height` prop passed by
+//   - description (clamped to the 150px `:max-height` prop passed by
 //     RecentNews) + footer margin-top $small
 // Total budgeted height: 16 padding + (~20 title + 8 + 1 + 8) + 175
 // description+footer + 16 padding ≈ 244px, matching the real card so

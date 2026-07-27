@@ -1,14 +1,18 @@
 <template>
   <Teleport to="body">
-    <div class="toast-container" v-if="toasts.length" aria-live="polite">
+    <!-- No aria-live on the container: it mounts together with the first
+         toast (v-if), so a container live region would not pre-exist in the
+         DOM and the first announcement would be lost. Per-toast role="alert"
+         / role="status" announces on insertion instead — exactly one live
+         region per toast, no double announcements. -->
+    <div class="toast-container" v-if="toasts.length">
       <TransitionGroup name="toast">
         <div
           v-for="toast in toasts"
           :key="toast.id"
           class="toast-item"
           :class="`toast-${toast.type}`"
-          role="alert"
-          :aria-live="toast.type === 'error' ? 'assertive' : 'polite'"
+          :role="toast.type === 'error' ? 'alert' : 'status'"
           @mouseenter="pause(toast.id)"
           @mouseleave="resume(toast.id)"
         >
@@ -39,8 +43,6 @@ const { toasts, dismiss, pause, resume } = useToast();
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/ZIndex"
 
 .toast-container

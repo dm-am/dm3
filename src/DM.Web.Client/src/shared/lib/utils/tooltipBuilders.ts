@@ -3,6 +3,8 @@
  * Shared functions to build consistent tooltip text.
  */
 
+import { pluralize } from "./pluralize";
+
 interface SubscriberData {
   subscribersCount?: number;
   subscriberUsernames?: string[];
@@ -41,40 +43,42 @@ export function buildReadersTooltip(data: SubscriberData): string {
   return buildSubscribersTooltip(data, "Нет читателей", "Читатели");
 }
 
-/**
- * Build tooltip for likes list.
- * Shows "Оценили: user1, user2, user3" format.
- */
-export function buildLikesTooltip(usernames: string[]): string {
-  if (usernames.length === 0) return "";
-  return `Оценили: ${usernames.join(", ")}`;
-}
-
 interface StatusByType {
   draft?: number;
   active?: number;
   closed?: number;
 }
 
+/** Russian plural forms tuple: [one, few, many] (e.g. ["игра", "игры", "игр"]). */
+export type PluralForms = [one: string, few: string, many: string];
+
 /**
  * Build status lines for tooltip (draft/active/closed counts).
+ *
  * @param byStatus - Object with draft, active, closed counts
- * @param suffix - Suffix for each line (e.g., "игры", "блоги")
+ * @param wordOrForms - Either a `PluralForms` tuple (correct Russian
+ *   pluralization per count, e.g. `["игра", "игры", "игр"]`) or a plain
+ *   suffix string kept for backward compatibility with existing callers
+ *   (fixed suffix, no pluralization — e.g. the historical `"игры"`).
  */
 export function buildStatusLines(
   byStatus: StatusByType | undefined,
-  suffix: string,
+  wordOrForms: PluralForms | string,
 ): string[] {
   if (!byStatus) return [];
+
+  const wordFor = (count: number): string =>
+    Array.isArray(wordOrForms) ? pluralize(count, ...wordOrForms) : wordOrForms;
+
   const lines: string[] = [];
   if (byStatus.draft && byStatus.draft > 0) {
-    lines.push(`  Черновики: ${byStatus.draft} ${suffix}`);
+    lines.push(`  Черновики: ${byStatus.draft} ${wordFor(byStatus.draft)}`);
   }
   if (byStatus.active && byStatus.active > 0) {
-    lines.push(`  Активные: ${byStatus.active} ${suffix}`);
+    lines.push(`  Активные: ${byStatus.active} ${wordFor(byStatus.active)}`);
   }
   if (byStatus.closed && byStatus.closed > 0) {
-    lines.push(`  Завершенные: ${byStatus.closed} ${suffix}`);
+    lines.push(`  Завершенные: ${byStatus.closed} ${wordFor(byStatus.closed)}`);
   }
   return lines;
 }

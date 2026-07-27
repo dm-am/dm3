@@ -30,7 +30,7 @@ internal class PasswordChangeMailSender : IPasswordChangeMailSender
         await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
-            Subject = "Ваш пароль на DM.AM был изменен",
+            Subject = "Ваш пароль на Dungeon Master был изменен",
             Body = emailBody,
             LinkedResources = [_emailAssetsProvider.GetLogo()]
         });

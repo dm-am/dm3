@@ -72,8 +72,7 @@ internal class BlogMappingProfile : Profile
             .ForMember(d => d.JoinedUtc, s => s.MapFrom(a => a.JoinedUtc))
             .ForMember(d => d.LastActivityUtc, s => s.MapFrom(a => a.User.LastActivityUtc))
             .ForMember(d => d.Role, s => s.MapFrom(a => a.User.Role))
-            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.User.QuantityRating < 100))
-            .ForMember(d => d.IsHonorary, s => s.MapFrom(a => a.User.IsHonorary));
+            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.User.QuantityRating < 100));
 
         CreateMap<DbBlog, BlogDto>()
             .ForMember(d => d.Id, s => s.MapFrom(b => b.BlogId))
@@ -97,7 +96,14 @@ internal class BlogMappingProfile : Profile
                 .Select(t => t.UserId)));
 
         CreateMap<DbRubric, Rubric>()
-            .ForMember(d => d.Id, s => s.MapFrom(r => r.RubricId));
+            .ForMember(d => d.Id, s => s.MapFrom(r => r.RubricId))
+            // Published-only publication count, mirroring how a game room's
+            // TotalPostsCount is a projection subquery over its posts.
+            .ForMember(d => d.PublicationCount, s => s.MapFrom(r => r.Publications
+                .Count(p => !p.IsRemoved && p.IsPublished)))
+            // Unread counts need the current viewer; filled in the service.
+            .ForMember(d => d.UnreadPublicationsCount, s => s.Ignore())
+            .ForMember(d => d.UnreadCommentsCount, s => s.Ignore());
 
         CreateMap<DbPublication, Publication>()
             .ForMember(d => d.Id, s => s.MapFrom(p => p.PublicationId))

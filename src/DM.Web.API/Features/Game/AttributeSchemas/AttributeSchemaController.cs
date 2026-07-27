@@ -64,9 +64,11 @@ public class AttributeSchemaController : ControllerBase
     /// </summary>
     /// <param name="id">Schema identifier</param>
     /// <response code="200">Returns the attribute schema details</response>
+    /// <response code="403">User is not allowed to read this private schema</response>
     /// <response code="404">Schema not found</response>
     [HttpGet("{id}", Name = nameof(GetSchema))]
     [ProducesResponseType(typeof(Envelope<AttributeSchema>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetSchema(Guid id) => Ok(await _schemaApiService.Get(id));
 

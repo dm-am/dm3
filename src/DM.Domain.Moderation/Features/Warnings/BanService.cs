@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
@@ -74,14 +76,27 @@ internal class BanService : IBanService
     }
 
     /// <inheritdoc />
+    public async Task<(IEnumerable<Ban> Bans, int TotalCount)> GetBanHistory(
+        int skip, int take, CancellationToken ct = default)
+    {
+        var currentUser = _identityProvider.Current.User;
+        if (currentUser.Role < UserRole.Moderator)
+        {
+            throw new UnauthorizedAccessException("Only moderators can view ban history");
+        }
+
+        return await _banRepository.GetBanHistory(skip, take, ct);
+    }
+
+    /// <inheritdoc />
     public async Task<Ban> CreateBan(CreateBan createBan, CancellationToken ct = default)
     {
         var currentUser = _identityProvider.Current.User;
 
         // Voluntary bans can be created by the user themselves
-        if (!createBan.IsVoluntary && currentUser.Role < UserRole.Moderator)
+        if (!createBan.IsVoluntary && currentUser.Role < UserRole.SeniorModerator)
         {
-            throw new UnauthorizedAccessException("Only moderators can create bans");
+            throw new UnauthorizedAccessException("Only senior moderators can create bans");
         }
 
         var targetUser = await _userLookupService.GetAsync(createBan.Username);
@@ -110,6 +125,14 @@ internal class BanService : IBanService
             endedUtc = now.AddYears(100);
         }
 
+        // Only the two ban scopes from the doc (4.2.4.2) are honored; any other
+        // value (NotSpecified, GlobalChatBan, RestrictContentEditing) falls back
+        // to FullBan so a malformed request never produces a weaker ban than the
+        // safe default.
+        var accessPolicy = createBan.AccessRestrictionPolicy == AccessPolicy.DemocraticBan
+            ? AccessPolicy.DemocraticBan
+            : AccessPolicy.FullBan;
+
         var entity = new CreateBanEntity
         {
             BanId = _guidFactory.Create(),
@@ -119,7 +142,7 @@ internal class BanService : IBanService
             EndedUtc = endedUtc,
             Comment = createBan.Comment,
             IsVoluntary = createBan.IsVoluntary,
-            AccessRestrictionPolicy = AccessPolicy.FullBan
+            AccessRestrictionPolicy = accessPolicy
         };
 
         return await _banRepository.Create(entity, ct);
@@ -129,9 +152,23 @@ internal class BanService : IBanService
     public async Task LiftBan(Guid banId, string? reason = null, CancellationToken ct = default)
     {
         var currentUser = _identityProvider.Current.User;
-        if (currentUser.Role < UserRole.Moderator)
+        if (currentUser.Role < UserRole.SeniorModerator)
         {
-            throw new UnauthorizedAccessException("Only moderators can lift bans");
+            throw new UnauthorizedAccessException("Only senior moderators can lift bans");
+        }
+
+        var ban = await _banRepository.Get(banId, ct);
+        if (ban == null || ban.IsRemoved)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, "Ban not found");
+        }
+
+        // Permanent bans are stored with a far-future end date (see CreateBan);
+        // lifting them is reserved for administrators. Voluntary self-bans are exempt.
+        var isPermanent = !ban.IsVoluntary && ban.EndedUtc > _dateTimeProvider.Now.AddYears(50);
+        if (isPermanent && currentUser.Role < UserRole.Admin)
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, "Only administrators can lift permanent bans");
         }
 
         await _banRepository.Remove(banId, ct);

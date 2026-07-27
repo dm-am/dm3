@@ -88,7 +88,7 @@ public class RejectUsernameChange
     /// Reason for rejection (shown to user)
     /// </summary>
     [Required(ErrorMessage = "Причина обязательна")]
-    [StringLength(500, MinimumLength = 5, ErrorMessage = "Причина должна быть от 5 and 500 символов")]
+    [StringLength(500, MinimumLength = 5, ErrorMessage = "Причина должна быть от 5 до 500 символов")]
     public string Reason { get; set; } = "";
 }
 

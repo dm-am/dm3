@@ -6,7 +6,10 @@
  * template + style for every caller (Topic, GamePost, Comment, ChatMessage,
  * ProfileBestPost). Handles:
  *
- *   - overflow detection against a (reactive) max-height
+ *   - overflow detection against a (reactive) max-height budget
+ *   - LINE-SNAPPED clamp: the applied collapsed max-height is derived from
+ *     the MEASURED line-height of the slotted content, never the raw px
+ *     budget (see "Line-snapped clamp" below)
  *   - symmetric whitespace trimming (leading AND trailing) via the composable
  *     so author-inserted blank lines never eat into the truncation budget
  *   - collapsed-state media shrinkage (img/video/iframe capped to a fraction
@@ -15,11 +18,13 @@
  *   - "показать полностью" button rendered only when truncated & collapsed
  *   - SMOOTH max-height transition on expand/collapse (see below)
  *
- * Visual contract: the collapsed view is a clean hard cut at maxHeight.
- * No gradient/mask fade — it would degrade the last visible line and
- * duplicate the explicit "показать полностью" affordance below. This
- * matches the modern hard-cut convention used by Twitter, Reddit, Facebook,
- * GitHub, LinkedIn, etc.
+ * Visual contract: the collapsed view is a clean hard cut BETWEEN text
+ * lines. `maxHeight` is a BUDGET, not the literal clamp — the applied
+ * collapsed height is snapped down to a whole number of content lines so
+ * the cut never slices a line in half. No gradient/mask fade — it would
+ * degrade the last visible line and duplicate the explicit "показать
+ * полностью" affordance below. This matches the modern hard-cut convention
+ * used by Twitter, Reddit, Facebook, GitHub, LinkedIn, etc.
  *
  * Smooth expansion (pattern):
  *   CSS cannot transition from a fixed px value to `none`, so the classic
@@ -48,11 +53,14 @@ import { useContentTruncation } from "@/shared/lib/composables/useContentTruncat
 import {
   registerExpandable,
   notifyExpandableChanged,
+  refreshExpandableStates,
 } from "@/shared/lib/composables";
 
 const props = withDefaults(
   defineProps<{
-    /** Max collapsed height in px. Reactive through the parent render cycle. */
+    /** Max collapsed height BUDGET in px. The applied clamp is snapped
+     * down to a whole number of measured content lines (never applied
+     * raw). Reactive through the parent render cycle. */
     maxHeight?: number;
     /** Enable truncation. When false, content always renders fully. */
     truncatable?: boolean;
@@ -86,17 +94,145 @@ const maxHeightRef = computed(() => props.maxHeight);
 const enabledRef = computed(() => props.truncatable);
 const watchContentRef = computed(() => props.watchKey);
 
+// ───────────────────────────────────────────────────────────────────
+// Line-box snapped clamp
+// ───────────────────────────────────────────────────────────────────
+// INVARIANT (do not regress): the collapsed hard cut must NEVER slice a
+// text line in half. `maxHeight` is only a budget; the applied clamp is
+// snapped DOWN to the bottom of the last text line that fits ENTIRELY
+// within the budget, taken from the REAL rendered line boxes of the
+// slotted content — never assumed from a uniform grid.
+//
+// History: earlier versions modelled the content as one uniform line grid
+// (offsetTop + n * lineHeight). That silently failed for multi-block bbcode:
+// inter-paragraph margins and mixed line-heights shift the real line
+// positions off the assumed grid, so the cut landed mid-line and a sliver of
+// the next line peeked (e.g. a 150px budget snapped to 140 while the real
+// line ran 130-150 -> 10px peek). Measuring the actual line-box bottoms is
+// content-agnostic: margins, lists, mixed line-heights all just work. Never
+// reintroduce a uniform-grid / hard-coded line-height assumption here.
+
+interface LineSnap {
+  /** Bottom of the last text line fully within the budget, px from the
+   * content-box top — the exact clamp height (a real line boundary). */
+  clamp: number;
+  /** Bottom of the first text line that overflows the budget, or Infinity
+   * when the whole content fits — drives the "needs truncation" decision. */
+  firstOverflowBottom: number;
+}
+
+// Measured line grid of the slotted content. null until measured, or when
+// there is no measurable text (media-only content, or a layout-less test
+// environment) — the raw budget is used as-is in that case.
+const lineSnap = ref<LineSnap | null>(null);
+
+// Applied collapsed clamp: the last real line boundary within the budget.
+const snappedMaxHeight = computed(() => {
+  const snap = lineSnap.value;
+  return snap ? snap.clamp : maxHeightRef.value;
+});
+
+// Overflow threshold for "needs truncation". Truncate only when a real text
+// line lies beyond the clamp: a sub-line remainder (trailing margin/padding,
+// rounding) renders fully rather than hiding half a line behind the button.
+// The threshold sits halfway between the clamp and the first overflowing
+// line's bottom, so the composable's `scrollHeight > threshold` check fires
+// for a genuine next line but not for trailing whitespace; MAX_SAFE_INTEGER
+// disables truncation when nothing overflows.
+const truncationThreshold = computed(() => {
+  const snap = lineSnap.value;
+  if (!snap) return maxHeightRef.value;
+  if (!Number.isFinite(snap.firstOverflowBottom))
+    return Number.MAX_SAFE_INTEGER;
+  return (snap.clamp + snap.firstOverflowBottom) / 2;
+});
+
 const {
   setContentRef,
   contentRef,
   needsTruncation,
   isExpanded,
   toggleExpand: toggleExpandRaw,
+  checkOverflow,
 } = useContentTruncation({
-  maxHeight: maxHeightRef,
+  maxHeight: truncationThreshold,
   enabled: enabledRef,
   watchContent: watchContentRef,
-  onContentMounted: props.onContentMounted,
+  onContentMounted: handleContentMounted,
+});
+
+/** Measure the line grid from the REAL rendered line boxes: walk every
+ * non-empty text node, take each line box's bottom relative to the content
+ * box, and record (a) the lowest bottom still within the budget — the clamp,
+ * and (b) the first bottom beyond the budget — the overflow mark. Content-
+ * agnostic: inter-block margins, lists and mixed line-heights all follow
+ * their real geometry, so the cut always lands on a real line boundary.
+ * Sets lineSnap to null when there is no measurable text (media-only content,
+ * or a layout-less environment like jsdom). */
+function measureLineSnap(): void {
+  const el = contentRef.value;
+  if (!el) {
+    lineSnap.value = null;
+    return;
+  }
+  const budget = maxHeightRef.value;
+  const elTop = el.getBoundingClientRect().top;
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let clamp = 0;
+  let firstOverflowBottom = Infinity;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!node.textContent?.trim()) continue;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    let rects: DOMRectList;
+    try {
+      rects = range.getClientRects();
+    } catch {
+      // Range measurement unavailable (jsdom) — no snap, raw budget applies.
+      lineSnap.value = null;
+      return;
+    }
+    for (const rect of rects) {
+      if (rect.height <= 0) continue; // display:none spoiler content etc.
+      const bottom = rect.bottom - elTop;
+      if (bottom <= budget + 0.5) {
+        if (bottom > clamp) clamp = bottom;
+      } else if (bottom < firstOverflowBottom) {
+        firstOverflowBottom = bottom;
+      }
+    }
+  }
+  // No line fit within the budget (or no measurable text): fall back to the
+  // raw budget rather than clamping to zero.
+  lineSnap.value = clamp > 0 ? { clamp, firstOverflowBottom } : null;
+}
+
+/** Content-mounted hook: measure the line grid FIRST, then re-run the
+ * overflow check — the composable's own initial check fires before this
+ * callback, i.e. against the pre-measurement threshold. */
+function handleContentMounted(el: HTMLElement): void {
+  measureLineSnap();
+  checkOverflow();
+  props.onContentMounted?.(el);
+  // Web fonts can swap in after mount and reflow the line grid; re-measure
+  // once they settle so the clamp is never left on the fallback font's
+  // metrics. measureLineSnap re-guards contentRef, so a post-unmount
+  // resolution is a no-op.
+  document.fonts?.ready.then(() => {
+    measureLineSnap();
+    checkOverflow();
+  });
+}
+
+// Re-measure when the content or the budget changes (e.g. GamePost resizes
+// its dynamic budget via a ResizeObserver on the meta column). Runs after
+// the composable's own watchContent re-check, refreshing the grid and
+// re-validating overflow against the up-to-date threshold.
+watch([watchContentRef, maxHeightRef], () => {
+  nextTick(() => {
+    measureLineSnap();
+    checkOverflow();
+  });
 });
 
 // True while the user sees the truncated (collapsed) version.
@@ -116,11 +252,13 @@ const isCollapsed = computed(() => needsTruncation.value && !isExpanded.value);
 // override write order strictly linear.
 const overrideMaxHeight = ref<string | null>(null);
 
-// Content style: collapsed gets the max-height + CSS variables that drive
-// media shrinkage; expanded releases the constraint entirely so images
-// return to their natural size. Pure function of state — no DOM reads.
+// Content style: collapsed gets the LINE-SNAPPED max-height + CSS
+// variables that drive media shrinkage; expanded releases the constraint
+// entirely so images return to their natural size. Pure function of state
+// — DOM measurements enter only via the lineSnap ref, which is written
+// exclusively in lifecycle/watch handlers.
 const contentStyle = computed(() => {
-  const max = maxHeightRef.value;
+  const max = snappedMaxHeight.value;
   const mediaMax = Math.floor(max * props.mediaBudget);
 
   if (overrideMaxHeight.value !== null) {
@@ -164,7 +302,10 @@ async function toggleExpand() {
     return;
   }
 
-  const collapsedPx = maxHeightRef.value;
+  // The animation endpoints use the SNAPPED clamp — the same value the
+  // collapsed declarative style applies — so expand starts from (and
+  // collapse returns to) a whole-line cut, never the raw budget.
+  const collapsedPx = snappedMaxHeight.value;
 
   if (!isExpanded.value) {
     // ─── Collapsed → expanded ─────────────────────────────────────
@@ -200,6 +341,15 @@ async function toggleExpand() {
   }
 }
 
+/** Manual user toggle (the "показать полностью" button): clears the
+ * registry's pending bulk action. Registry-driven bulk expands/collapses
+ * call toggleExpand directly and must NOT clear it — late-registering
+ * blocks still need to sync with the bulk action. */
+function manualToggle() {
+  notifyExpandableChanged();
+  toggleExpand();
+}
+
 function onTransitionEnd(e: TransitionEvent) {
   if (e.propertyName !== "max-height") return;
   if (!contentRef.value) return;
@@ -212,7 +362,9 @@ function onTransitionEnd(e: TransitionEvent) {
     // (maxHeight: <px>) take over.
     overrideMaxHeight.value = null;
   }
-  notifyExpandableChanged();
+  // Settle event: fires for bulk-driven animations too, so only refresh the
+  // aggregate state — never clear the pending bulk action here.
+  refreshExpandableStates();
 }
 
 // ───────────────────────────────────────────────────────────────────
@@ -268,7 +420,7 @@ onBeforeUnmount(() => unregisterExpand?.());
       type="button"
       class="truncated-expand-button"
       :aria-expanded="isExpanded"
-      @click="toggleExpand"
+      @click="manualToggle"
     >
       ... <strong>показать полностью</strong>
     </button>
@@ -276,8 +428,8 @@ onBeforeUnmount(() => unregisterExpand?.());
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
+@import "src/assets/styles/Animations"
 
 .truncated-content-wrapper
   display: flex
@@ -286,12 +438,12 @@ onBeforeUnmount(() => unregisterExpand?.());
 
 .truncated-content
   min-width: 0
-  // Smooth max-height transition used by expand/collapse. ease-out-quart
-  // (cubic-bezier(0.22, 1, 0.36, 1)) decelerates gently toward the end —
-  // noticeably softer than Material's standard ease. Duration tuned so
-  // the movement reads as deliberate, not jumpy, and matches the
-  // testimonial bubble animation one-for-one.
-  transition: max-height 0.55s cubic-bezier(0.22, 1, 0.36, 1)
+  // Smooth max-height transition used by expand/collapse. The unified
+  // $expand-duration/$expand-easing tokens (ease-out-quart) decelerate
+  // gently toward the end — noticeably softer than Material's standard
+  // ease. Shared with Testimonial, ExpandableList and the BBCode
+  // spoiler/NSFW blocks so every reveal on the site moves in one tempo.
+  transition: max-height $expand-duration $expand-easing
 
   &.truncatable
     overflow: hidden
@@ -334,34 +486,9 @@ onBeforeUnmount(() => unregisterExpand?.());
     height: auto
     object-fit: contain
 
-// Expand control:
-//   - Real <button> for native focus/keyboard/AT semantics.
-//   - Reset default button chrome so it visually reads as a link.
-//   - Padding gives a 24px+ tap target (WCAG 2.5.5 Target Size).
-//   - :focus-visible draws a clear keyboard outline; :hover handles mouse.
-//   - align-self prevents stretching to the full wrapper width.
+// Expand control: the shared "... показать полностью" idiom (SSOT mixin in
+// Inputs.sass — link look, 24px+ tap target per WCAG 2.5.5, keyboard focus
+// ring). Real <button> semantics live in the template above.
 .truncated-expand-button
-  align-self: flex-start
-  display: inline-block
-  margin-top: $tiny
-  padding: $tiny 0
-  border: none
-  background: none
-  font: inherit
-  text-align: left
-  color: $link
-  // Matches link behaviour from Reset.sass: no underline in the resting
-  // state, underline only on hover.
-  text-decoration: none
-  cursor: pointer
-  user-select: none
-
-  &:hover
-    color: $link-hover
-    text-decoration: underline
-
-  &:focus-visible
-    outline: 2px solid $link
-    outline-offset: 2px
-    border-radius: 2px
+  +expand-toggle-button
 </style>

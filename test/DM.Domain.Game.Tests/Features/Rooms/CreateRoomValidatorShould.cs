@@ -1,0 +1,68 @@
+using System;
+using DM.Domain.Core.Exceptions;
+using DM.Domain.Game.Features.Rooms;
+using DM.Testing;
+using FluentValidation.TestHelper;
+using Xunit;
+
+namespace DM.Domain.Game.Tests.Features.Rooms;
+
+public class CreateRoomValidatorShould : UnitTestBase
+{
+    private readonly CreateRoomValidator validator = new();
+
+    [Fact]
+    public void PassForValidInput()
+    {
+        var input = new CreateRoom
+        {
+            GameId = Guid.NewGuid(),
+            Title = "Tavern"
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public void FailWhenGameIdIsEmpty()
+    {
+        var input = new CreateRoom
+        {
+            GameId = Guid.Empty,
+            Title = "Tavern"
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(c => c.GameId)
+            .WithErrorMessage(ValidationError.Empty);
+    }
+
+    [Fact]
+    public void FailWhenTitleIsEmpty()
+    {
+        var input = new CreateRoom
+        {
+            GameId = Guid.NewGuid(),
+            Title = ""
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(c => c.Title)
+            .WithErrorMessage(ValidationError.Empty);
+    }
+
+    [Fact]
+    public void FailWhenTitleExceedsMaxLength()
+    {
+        var input = new CreateRoom
+        {
+            GameId = Guid.NewGuid(),
+            Title = new string('a', 101)
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(c => c.Title)
+            .WithErrorMessage(ValidationError.Long);
+    }
+}

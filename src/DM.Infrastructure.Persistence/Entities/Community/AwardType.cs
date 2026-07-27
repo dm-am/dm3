@@ -6,8 +6,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace DM.Infrastructure.Persistence.Entities.Community;
 
 /// <summary>
-/// DAL для типа награды (timeless каталог). Конкретная серия конкурса
-/// хранится в ContestSeries, выдача — в UserAward с FK на оба.
+/// DAL for an award type (timeless catalog). A specific contest series
+/// is stored in ContestSeries, a grant in UserAward with FKs to both.
 /// </summary>
 [Table("AwardTypes")]
 public class AwardType

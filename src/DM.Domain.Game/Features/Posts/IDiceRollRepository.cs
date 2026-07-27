@@ -18,4 +18,9 @@ public interface IDiceRollRepository
     /// Get dice rolls for multiple posts (batch fetch)
     /// </summary>
     Task<IDictionary<Guid, IEnumerable<DiceRoll>>> GetByPostIdsAsync(IEnumerable<Guid> postIds);
+
+    /// <summary>
+    /// Persist the given rolls (rolled server-side at post creation)
+    /// </summary>
+    Task CreateAsync(IEnumerable<DiceRoll> rolls);
 }

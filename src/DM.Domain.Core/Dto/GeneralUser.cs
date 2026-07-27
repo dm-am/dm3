@@ -29,11 +29,6 @@ public class GeneralUser : IUser
     /// <inheritdoc />
     public UserRole Role { get; set; }
 
-    /// <summary>
-    /// Honorary goblin status (special title for active users)
-    /// </summary>
-    public bool IsHonorary { get; set; }
-
     /// <inheritdoc />
     public AccessPolicy AccessPolicy { get; set; }
 
@@ -41,9 +36,9 @@ public class GeneralUser : IUser
     public DateTimeOffset? LastActivityUtc { get; set; }
 
     /// <summary>
-    /// Avatar variants (original/medium/small). SSOT — nested object вместо
-    /// трех плоских свойств. Заполняется через
-    /// <c>AvatarProjections.From(u.AvatarUpload)</c> в EF Select'ах.
+    /// Avatar variants (original/medium/small). SSOT — a nested object instead of
+    /// three flat properties. Populated via
+    /// <c>AvatarProjections.From(u.AvatarUpload)</c> in EF Selects.
     /// </summary>
     public AvatarPicture Picture { get; set; } = new();
 
@@ -130,7 +125,7 @@ public class GeneralUser : IUser
     /// <summary>
     /// Bans received by this user (count of <c>Bans</c> rows where this user
     /// is the target). Drives the <c>BansReceived</c> achievement metric —
-    /// the "резиновая уточка" chain (пасхалка на мем про утят-террористов).
+    /// the "резиновая уточка" chain (an easter egg for the duckling-terrorists meme).
     /// </summary>
     public int BansReceivedCount { get; set; }
 
@@ -153,7 +148,7 @@ public class GeneralUser : IUser
     /// Total likes received on user's authored content (topics +
     /// publications + comments + chat messages). Drives the
     /// <c>LikesReceived</c> achievement metric. Game posts have their
-    /// own quality signal (PostReview score sum → Рейтинг), so they
+    /// own quality signal (PostReview score sum → "Рейтинг"), so they
     /// are NOT counted here to avoid double-counting recognition.
     /// </summary>
     public int LikesReceivedCount { get; set; }

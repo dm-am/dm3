@@ -83,9 +83,6 @@ const barClass = computed(() => {
 </script>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Variables"
-@import "@/assets/styles/Themes"
-
 .password-strength
   margin-top: $minor
 

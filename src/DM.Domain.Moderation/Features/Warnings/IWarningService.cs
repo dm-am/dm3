@@ -34,6 +34,11 @@ public interface IWarningService
     /// Get total warning points for a user
     /// </summary>
     Task<int> GetUserWarningPoints(string username, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get violators: users with active warning points or an active ban (for moderators)
+    /// </summary>
+    Task<IEnumerable<Violator>> GetViolators(ViolatorsFilter filter = ViolatorsFilter.All, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -57,7 +62,7 @@ public class CreateWarning
     public string? EntityType { get; set; }
 
     /// <summary>
-    /// Warning points (1-3)
+    /// Warning points (0-6, 0 = verbal warning without points)
     /// </summary>
     public int Points { get; set; } = 1;
 

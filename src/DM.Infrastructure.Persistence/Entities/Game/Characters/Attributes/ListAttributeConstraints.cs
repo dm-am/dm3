@@ -9,6 +9,11 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes;
 public class ListAttributeConstraints : AttributeConstraints
 {
     /// <summary>
+    /// Kind of values held by the list
+    /// </summary>
+    public ListValueKind Kind { get; set; }
+
+    /// <summary>
     /// Possible values
     /// </summary>
     public IEnumerable<ListAttributeValue> Values { get; set; } = [];

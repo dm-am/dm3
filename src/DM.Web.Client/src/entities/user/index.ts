@@ -11,7 +11,13 @@ export * from "./model";
 export { useCommunityStore } from "./model/communityStore";
 
 // UI Components
-export { UserLink, UserOnline, UserRating, AvatarImg } from "./ui";
+export {
+  UserLink,
+  UserRating,
+  AvatarImg,
+  UserAutocomplete,
+  UserMultiSelect,
+} from "./ui";
 
 // Helpers
 export * from "./lib";

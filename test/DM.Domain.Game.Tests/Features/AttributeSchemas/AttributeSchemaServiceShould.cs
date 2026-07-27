@@ -38,7 +38,9 @@ public class AttributeSchemaServiceShould : UnitTestBase
         _service = new AttributeSchemaService(
             _intentionManager.Object,
             _repository.Object,
-            _identityProvider.Object);
+            _identityProvider.Object,
+            new CreateAttributeSchemaValidator(),
+            new UpdateAttributeSchemaValidator());
     }
 
     [Fact]

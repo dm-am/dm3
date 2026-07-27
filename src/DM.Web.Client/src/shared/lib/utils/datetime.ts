@@ -3,6 +3,15 @@
 import dayjs from "dayjs";
 
 /**
+ * Format a date string as "DD.MM.YYYY" (local time) — date only, no time.
+ * Returns "—" for null/undefined/empty input.
+ */
+export function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—";
+  return dayjs(dateStr).format("DD.MM.YYYY");
+}
+
+/**
  * Format a date string as "DD.MM.YYYY в HH:mm" (local time).
  * Returns "—" for null/undefined/empty input.
  */

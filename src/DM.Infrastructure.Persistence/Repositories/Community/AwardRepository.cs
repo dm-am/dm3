@@ -140,17 +140,16 @@ internal class AwardRepository : IAwardRepository
     // ---- UserAward ----
 
     public async Task<IReadOnlyCollection<UserAward>> GetUserAwardsAsync(Guid userId, CancellationToken ct = default) =>
-        // Сортировка по серии (Year DESC → Number DESC внутри года) затем по
-        // типу награды внутри серии (SortOrder ASC) — 1 место → 2 → 3 →
-        // Народное → Критик → Угадайка. Для наград без серии
-        // (ContestSeriesId=null) сортируем в конец по AwardedUtc DESC.
+        // Sort oldest first — the older the award, the earlier it appears. Ties
+        // on the same date (a placement + a special award from the same contest)
+        // break by award type (SortOrder ASC: 1st → 2nd → 3rd → Народное →
+        // Критик → Угадайка). Non-contest honours dated to the user's early
+        // years (the honorary goblin) therefore lead the list.
         await _db.UserAwards
             .AsNoTracking()
             .Where(a => a.UserId == userId && !a.IsRemoved)
-            .OrderByDescending(a => a.ContestSeries == null ? 0 : a.ContestSeries.Year)
-            .ThenByDescending(a => a.ContestSeries == null ? 0 : a.ContestSeries.Number)
+            .OrderBy(a => a.AwardedUtc)
             .ThenBy(a => a.AwardType.SortOrder)
-            .ThenByDescending(a => a.AwardedUtc)
             .ProjectTo<UserAward>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
 
@@ -177,7 +176,7 @@ internal class AwardRepository : IAwardRepository
         _db.UserAwards.Add(entity);
         await _db.SaveChangesAsync(ct);
 
-        // Перечитываем через проекцию чтобы подтянуть навигации (Type, Series, User).
+        // Re-read via the projection to pull in the navigations (Type, Series, User).
         return (await GetAsync(entity.UserAwardId, ct))!;
     }
 

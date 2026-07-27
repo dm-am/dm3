@@ -32,9 +32,6 @@ function goHome() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .auth-callback
   display: flex
   justify-content: center

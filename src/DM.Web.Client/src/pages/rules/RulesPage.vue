@@ -9,6 +9,8 @@
  * Editing — through code.
  */
 
+import { onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import {
   ExpandableList,
@@ -16,11 +18,15 @@ import {
 } from "@/shared/ui/ExpandableList";
 import { DISCORD_INVITE_URL } from "@/shared/config/contacts";
 import RulesIntro from "./RulesIntro.vue";
-import HelpLinksSection from "./HelpLinksSection.vue";
+import RulesHelpLinks from "./RulesHelpLinks.vue";
 import RulesExternalLinks from "./RulesExternalLinks.vue";
 import RulesBans from "./RulesBans.vue";
 import RulesAuthors from "./RulesAuthors.vue";
-import AdminList from "./AdminList.vue";
+import RulesStaffTable from "./RulesStaffTable.vue";
+import type { ExpandableListExpose } from "./expandableListRef";
+
+const route = useRoute();
+const penaltiesListRef = ref<ExpandableListExpose | null>(null);
 
 // Type alias (not interface) so the implicit index signature satisfies
 // the ExpandableItem constraint of ExpandableList.
@@ -79,6 +85,17 @@ const penaltyColumns: ExpandableListColumn<Penalty>[] = [
   { key: "violation", label: "Нарушение" },
   { key: "points", label: "Баллы", width: "80px", align: "center", bold: true },
 ];
+
+// Deep-link support: #<item-id> (e.g. "#hacking") auto-expands the matching
+// penalty row on mount. Scrolling itself is handled globally by the router
+// (router.ts already does document.getElementById(hash) on every
+// navigation) — this only adds the expand-on-arrival behavior.
+onMounted(() => {
+  const id = route.hash.slice(1);
+  if (id && penalties.some((penalty) => penalty.id === id)) {
+    penaltiesListRef.value?.expandItem(id);
+  }
+});
 </script>
 
 <template>
@@ -86,12 +103,13 @@ const penaltyColumns: ExpandableListColumn<Penalty>[] = [
 
   <RulesIntro />
 
-  <HelpLinksSection />
+  <RulesHelpLinks />
 
-  <!-- Таблица штрафов -->
-  <section class="rules-section">
+  <!-- Penalties table -->
+  <section id="penalties" class="rules-section">
     <BlockTitle>Нарушения и баллы</BlockTitle>
     <ExpandableList
+      ref="penaltiesListRef"
       :items="penalties"
       :columns="penaltyColumns"
       :allow-multiple="true"
@@ -171,16 +189,13 @@ const penaltyColumns: ExpandableListColumn<Penalty>[] = [
 
   <RulesBans />
 
-  <!-- Авторам и мастерам -->
+  <!-- For authors and masters -->
   <RulesAuthors />
 
-  <AdminList />
+  <RulesStaffTable />
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .rules-section
   margin: $big 0
 

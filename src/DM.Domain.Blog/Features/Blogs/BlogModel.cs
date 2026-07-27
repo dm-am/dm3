@@ -16,6 +16,11 @@ public class Blog
     public Guid Id { get; set; }
 
     /// <summary>
+    /// Short public identifier for URLs (5 lowercase letters), like games
+    /// </summary>
+    public string PublicId { get; set; } = string.Empty;
+
+    /// <summary>
     /// Blog author
     /// </summary>
     public GeneralUser Author { get; set; } = null!;
@@ -46,6 +51,11 @@ public class Blog
     public ModuleStatus Status { get; set; }
 
     /// <summary>
+    /// Premoderation status for newbie bloggers
+    /// </summary>
+    public PremoderationStatus PremoderationStatus { get; set; }
+
+    /// <summary>
     /// When the blog was first activated (changed from Draft to Active)
     /// </summary>
     public DateTimeOffset? ActivatedUtc { get; set; }
@@ -54,6 +64,11 @@ public class Blog
     /// When the blog was closed
     /// </summary>
     public DateTimeOffset? ClosedUtc { get; set; }
+
+    /// <summary>
+    /// Reason why the blog was closed (only applicable when Status = Closed)
+    /// </summary>
+    public ClosedReason ClosedReason { get; set; }
 
     /// <summary>
     /// Draft visibility (Private = only roles, Public = preview visible to all)
@@ -165,11 +180,6 @@ public class BlogAssistantInfo
     /// Whether user is a newbie (less than 100 posts) - affects name color
     /// </summary>
     public bool IsNewbie { get; set; }
-
-    /// <summary>
-    /// Honorary status (visual badge [П] for former staff)
-    /// </summary>
-    public bool IsHonorary { get; set; }
 }
 
 /// <summary>
@@ -207,4 +217,27 @@ public class Rubric
     /// Sort order
     /// </summary>
     public int SortOrder { get; set; }
+
+    /// <summary>
+    /// Total published publication count in this rubric. A supplementary
+    /// total (not part of the "(N/A)" counter). Computed via a repository
+    /// projection subquery.
+    /// </summary>
+    public int PublicationCount { get; set; }
+
+    /// <summary>
+    /// Count of publications in this rubric with unread content for the
+    /// current viewer — the "N" in the "(N/A)" counter (doc 4.2.1.4).
+    /// Filled in the service layer, mirroring how game rooms fill their
+    /// unread counters.
+    /// </summary>
+    public int UnreadPublicationsCount { get; set; }
+
+    /// <summary>
+    /// Total unread comments across this rubric's publications for the
+    /// current viewer — the "A" in the "(N/A)" counter (doc 4.2.1.4).
+    /// Filled in the service layer (sum of the per-publication unread
+    /// counters), mirroring the blog-level UnreadCommentsCount.
+    /// </summary>
+    public int UnreadCommentsCount { get; set; }
 }

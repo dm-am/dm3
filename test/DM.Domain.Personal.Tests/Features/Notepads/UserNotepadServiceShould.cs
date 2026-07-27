@@ -146,7 +146,7 @@ public class UserNotepadServiceShould : UnitTestBase
         capturedEntity!.EntryId.Should().Be(_entryId);
         capturedEntity.Title.Should().Be("Updated Title");
         capturedEntity.Content.Should().Be("Updated Content");
-        capturedEntity.UpdatedUtc.Should().Be(_now);
+        capturedEntity.ModifiedUtc.Should().Be(_now);
     }
 
     [Fact]

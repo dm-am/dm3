@@ -35,7 +35,7 @@ public class UserProfileNote
     /// <summary>
     /// Last update date
     /// </summary>
-    public DateTimeOffset? UpdatedUtc { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 }
 
 /// <summary>
@@ -87,5 +87,5 @@ public class UpdateUserProfileNoteEntity
     /// <summary>
     /// Update timestamp
     /// </summary>
-    public DateTimeOffset UpdatedUtc { get; set; }
+    public DateTimeOffset ModifiedUtc { get; set; }
 }

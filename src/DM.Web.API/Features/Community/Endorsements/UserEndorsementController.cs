@@ -40,15 +40,15 @@ public class UserEndorsementController : ControllerBase
     /// Get endorsements received by a user
     /// </summary>
     /// <remarks>
-    /// Возвращает рекомендации, написанные ПРО этого пользователя
-    /// (рекомендации, в которых он — recipient). Поддерживает
-    /// подстрочный поиск по тексту/имени автора, сортировку по дате
-    /// или имени автора, и пагинацию через PagingQuery.
+    /// Returns endorsements written ABOUT this user
+    /// (endorsements where they are the recipient). Supports
+    /// substring search over text/author name, sorting by date
+    /// or author name, and paging via PagingQuery.
     /// </remarks>
-    /// <param name="username">Имя получателя рекомендаций.</param>
+    /// <param name="username">Endorsement recipient's username.</param>
     /// <param name="q">Search / sort / paging.</param>
-    /// <response code="200">Список рекомендаций.</response>
-    /// <response code="404">Пользователь не найден.</response>
+    /// <response code="200">List of endorsements.</response>
+    /// <response code="404">User not found.</response>
     [HttpGet(Name = nameof(GetUserEndorsements))]
     [ProducesResponseType(typeof(ListEnvelope<UserEndorsement>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -71,15 +71,15 @@ public class UserEndorsementController : ControllerBase
     /// Get endorsements written by a user
     /// </summary>
     /// <remarks>
-    /// Возвращает рекомендации, написанные ЭТИМ пользователем (он —
-    /// author). Симметрично GET endorsements; те же search/sort/paging
-    /// параметры. Используется на странице «Написанные рекомендации»
-    /// в профиле.
+    /// Returns endorsements written BY this user (they are the
+    /// author). Symmetric with GET endorsements; the same search/sort/paging
+    /// parameters. Used on the "Написанные рекомендации" page
+    /// in the profile.
     /// </remarks>
-    /// <param name="username">Имя автора рекомендаций.</param>
+    /// <param name="username">Endorsement author's username.</param>
     /// <param name="q">Search / sort / paging.</param>
-    /// <response code="200">Список рекомендаций, написанных пользователем.</response>
-    /// <response code="404">Пользователь не найден.</response>
+    /// <response code="200">List of endorsements written by the user.</response>
+    /// <response code="404">User not found.</response>
     [HttpGet("/v1/users/{username}/written-endorsements", Name = nameof(GetWrittenUserEndorsements))]
     [ProducesResponseType(typeof(ListEnvelope<UserEndorsement>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]

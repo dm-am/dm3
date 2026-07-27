@@ -29,7 +29,7 @@ internal class EmailChangeWarningMailSender : IEmailChangeWarningMailSender
 <body style='font-family: Arial, sans-serif; color: #333;'>
     <h2 style='color: #d9534f;'>⚠️ Запрос на смену email</h2>
     <p>Здравствуйте, {username}!</p>
-    <p>Мы получили запрос на смену email-адреса для вашего аккаунта на DM.AM.</p>
+    <p>Мы получили запрос на смену email-адреса для вашего аккаунта на Dungeon Master.</p>
     <table style='margin: 20px 0; border-collapse: collapse;'>
         <tr>
             <td style='padding: 8px; border: 1px solid #ddd;'><strong>Текущий email:</strong></td>
@@ -52,7 +52,7 @@ internal class EmailChangeWarningMailSender : IEmailChangeWarningMailSender
         await _mailSender.SendAsync(new EmailLetter
         {
             Address = oldEmail,
-            Subject = "⚠️ Запрос на смену email — DM.AM",
+            Subject = "⚠️ Запрос на смену email — Dungeon Master",
             Body = body,
             LinkedResources = [_emailAssetsProvider.GetLogo()]
         });

@@ -11,9 +11,9 @@ namespace DM.Web.API.Features.Moderation.Tickets;
 public interface ITicketApiService
 {
     /// <summary>
-    /// Get all tickets
+    /// Get all tickets visible to the caller role
     /// </summary>
-    Task<ListEnvelope<Ticket>> GetTickets(TicketStatus? status = null);
+    Task<ListEnvelope<Ticket>> GetTickets(TicketStatus? status = null, TicketSubtype? subtype = null);
 
     /// <summary>
     /// Get tickets assigned to current moderator
@@ -21,14 +21,14 @@ public interface ITicketApiService
     Task<ListEnvelope<Ticket>> GetMyAssignedTickets();
 
     /// <summary>
-    /// Get tickets filed by current user
+    /// Get tickets filed by current user, optionally filtered by status and subtype
     /// </summary>
-    Task<ListEnvelope<Ticket>> GetMyFiledTickets();
+    Task<ListEnvelope<Ticket>> GetMyFiledTickets(TicketStatus? status = null, TicketSubtype? subtype = null);
 
     /// <summary>
-    /// Get ticket by ID
+    /// Get ticket by ID with the conversation thread
     /// </summary>
-    Task<Envelope<Ticket>?> GetTicket(Guid ticketId);
+    Task<Envelope<TicketDetails>?> GetTicket(Guid ticketId);
 
     /// <summary>
     /// Create a new ticket

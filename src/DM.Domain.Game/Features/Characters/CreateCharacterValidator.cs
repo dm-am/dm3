@@ -25,12 +25,6 @@ internal class CreateCharacterValidator : AbstractValidator<CreateCharacter>
             .NotEmpty().WithMessage(ValidationError.Empty)
             .MaximumLength(50).WithMessage(ValidationError.Long);
 
-        RuleFor(c => c.Race)
-            .MaximumLength(30).WithMessage(ValidationError.Long);
-
-        RuleFor(c => c.Class)
-            .MaximumLength(30).WithMessage(ValidationError.Long);
-
         WhenAsync(async (c, ct) => await characterRepository.GameRequiresAttributes(c.GameId, ct), () =>
         {
             RuleFor(c => c.Attributes)

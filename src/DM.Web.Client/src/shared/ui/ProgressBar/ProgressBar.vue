@@ -13,8 +13,6 @@ const progress = computed(() => (props.current / props.goal) * 100);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 .progress
   position: relative
   overflow: hidden
@@ -29,9 +27,8 @@ const progress = computed(() => (props.current / props.goal) * 100);
   left: 0
   bottom: 0
   background-color: $progress-fill-overlay
+  // prefers-reduced-motion is handled globally in Reset.sass.
   transition: width 0.4s ease
-  @media (prefers-reduced-motion: reduce)
-    transition: none
 
 .progress-text
   position: relative

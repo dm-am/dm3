@@ -17,7 +17,7 @@ import { EmptyState } from "@/shared/ui";
 const route = useRoute();
 const router = useRouter();
 const messagingStore = useMessagingStore();
-const { chats, loadingChats } = storeToRefs(messagingStore);
+const { chats } = storeToRefs(messagingStore);
 const { user: currentUser } = storeToRefs(useUserStore());
 
 const searchQuery = ref("");
@@ -31,15 +31,17 @@ function extractPage(value: string | null | undefined): number {
   return isNaN(num) || num < 1 ? 1 : num;
 }
 
+// The shared Paging widget writes the page as ?number= (codebase-wide
+// query-key convention) — read the same key back.
 useFetchData(
   () =>
     messagingStore.fetchChats(
-      extractPage(route.query.page as string | undefined),
+      extractPage(route.query.number as string | undefined),
     ),
   [],
   [
     {
-      query: (q) => q.page,
+      query: (q) => q.number,
       callback: (page) =>
         messagingStore.fetchChats(extractPage(page as string | undefined)),
     },
@@ -50,6 +52,12 @@ function getInterlocutor(chat: { participants: User[] }) {
   return chat.participants.find(
     (p) => p.username !== currentUser.value?.username,
   );
+}
+
+// Paging scrolls the chats list back into view (not the page top)
+const chatsListRef = ref<HTMLElement | null>(null);
+function pagingAnchor(): HTMLElement | null {
+  return chatsListRef.value;
 }
 
 async function searchUsers(query: string) {
@@ -160,7 +168,7 @@ function clearSearch() {
       </div>
     </div>
 
-    <div v-if="chats?.resources.length" class="chats-list">
+    <div v-if="chats?.resources.length" ref="chatsListRef" class="chats-list">
       <chat-preview
         v-for="chat in chats.resources"
         :key="chat.id"
@@ -175,6 +183,7 @@ function clearSearch() {
         :to="{ name: 'messenger' }"
         use-query
         query-key="number"
+        :scroll-anchor="pagingAnchor"
       />
     </div>
 
@@ -188,8 +197,6 @@ function clearSearch() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Filters"
 @import "src/assets/styles/ZIndex"
 

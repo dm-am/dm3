@@ -7,6 +7,8 @@ using DM.Domain.Community.Features.Profiles;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Users;
 using DM.Domain.Personal.Features.ProfileNotes;
+using DM.Infrastructure.Core.Parsing;
+using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Community.Users;
@@ -57,7 +59,6 @@ internal class CommunityUserApiService : ICommunityUserApiService
             query.Role,
             query.Sort,
             sortAscending,
-            query.IsHonorary,
             query.IsNewbie,
             query.IsOnline,
             query.MinRating,
@@ -124,9 +125,23 @@ internal class CommunityUserApiService : ICommunityUserApiService
             .OrderBy(c => c.SortOrder)
             .Select(_mapper.Map<Contact>)
             .ToList();
+        // Owner of the profile bio is the profile subject. Populate the
+        // render-context envelope so the JSON converter honors the owner's
+        // AuthorEdit round-trip and downgrades any other viewer's author_edit
+        // request to permission-filtered Display. Profile surface allows
+        // neither [mod] nor [private], so this is round-trip integrity rather
+        // than a leak vector, but the owner id is set for correctness.
         profile.Info = string.IsNullOrEmpty(user.Info)
             ? null
-            : new DM.Web.API.Shared.BbRendering.InfoBbText { Value = user.Info };
+            : new InfoBbText
+            {
+                Value = user.Info,
+                Context = new RenderContextEnvelope
+                {
+                    Surface = BbSurface.Profile,
+                    PostAuthorUserId = user.UserId
+                }
+            };
 
         if (personalNote != null)
         {
@@ -135,7 +150,7 @@ internal class CommunityUserApiService : ICommunityUserApiService
                 Id = personalNote.Id,
                 Text = personalNote.Text,
                 CreatedUtc = personalNote.CreatedUtc,
-                UpdatedUtc = personalNote.UpdatedUtc
+                ModifiedUtc = personalNote.ModifiedUtc
             };
         }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -38,4 +39,16 @@ public interface IMentorshipRepository
     /// Check if blog exists
     /// </summary>
     Task<bool> BlogExists(Guid blogId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get non-removed games curated by the given mentors
+    /// </summary>
+    Task<IReadOnlyCollection<MentorshipAssignment>> GetGameMentorships(
+        IReadOnlyCollection<Guid> mentorIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get non-removed blogs curated by the given mentors
+    /// </summary>
+    Task<IReadOnlyCollection<MentorshipAssignment>> GetBlogMentorships(
+        IReadOnlyCollection<Guid> mentorIds, CancellationToken ct = default);
 }

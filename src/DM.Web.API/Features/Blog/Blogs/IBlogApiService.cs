@@ -67,9 +67,35 @@ public interface IBlogApiService
     Task Delete(Guid id);
 
     /// <summary>
+    /// Apply a premoderation transition (send to / remove from premoderation)
+    /// </summary>
+    /// <param name="id">Blog public id (5 letters) or GUID</param>
+    /// <param name="request">Requested transition</param>
+    /// <returns>Envelope for updated blog</returns>
+    Task<Envelope<Blog>> ChangePremoderation(string id, BlogPremoderationChangeRequest request);
+
+    /// <summary>
+    /// Apply a blog status transition (start / freeze / finish / close / reopen)
+    /// </summary>
+    /// <param name="id">Blog public id (5 letters) or GUID</param>
+    /// <param name="request">Requested transition</param>
+    /// <returns>Envelope for updated blog</returns>
+    Task<Envelope<Blog>> ChangeStatus(string id, BlogStatusChangeRequest request);
+
+    /// <summary>
     /// Create a new rubric
     /// </summary>
     Task<Envelope<Rubric>> CreateRubric(Guid blogId, CreateRubricRequest request);
+
+    /// <summary>
+    /// Rename a rubric
+    /// </summary>
+    Task<Envelope<Rubric>> UpdateRubric(Guid rubricId, UpdateRubricRequest request);
+
+    /// <summary>
+    /// Reorder a blog's rubrics (ordered rubric ids)
+    /// </summary>
+    Task<ListEnvelope<Rubric>> ReorderRubrics(Guid blogId, ReorderRubricsRequest request);
 
     /// <summary>
     /// Delete rubric

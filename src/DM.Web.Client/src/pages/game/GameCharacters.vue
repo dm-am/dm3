@@ -2,33 +2,54 @@
 import { computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
-import { useGameDetailsStore } from "@/entities/game";
+import { useGameDetailsStore, CharacterCard } from "@/entities/game";
+import type { Character } from "@/entities/game";
+import { useUserStore } from "@/entities/user";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import GameCharacter from "./GameCharacter.vue";
-import { CharacterStatus } from "@/entities/game";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
-const { game, characters, charactersLoading, charactersError } =
-  storeToRefs(gameStore);
+const { characters, charactersError, canManage } = storeToRefs(gameStore);
+const { user } = storeToRefs(useUserStore());
 
 const gameId = computed(() => route.params.id as string);
 
-// Group characters by status
-const activeCharacters = computed(() =>
-  characters.value.filter((c) => c.status === CharacterStatus.Active),
+// A character belongs to the current viewer (its owner may see their own
+// application even before it is approved).
+function isOwn(c: Character): boolean {
+  return !!user.value && !!c.author && c.author.id === user.value.id;
+}
+
+// Declined applications are not game characters — the endpoint returns them
+// but they are never rendered. Under-review applications are split off into a
+// dedicated sub-block (leads see all, an owner sees their own). The roster
+// proper shows Active + Retired characters, split PC vs NPC.
+const rosterCharacters = computed(() =>
+  characters.value.filter(
+    (c) => c.status === "Active" || c.status === "Retired",
+  ),
 );
-const registrationCharacters = computed(() =>
-  characters.value.filter((c) => c.status === CharacterStatus.Registration),
+
+const playerCharacters = computed(() =>
+  rosterCharacters.value.filter((c) => !c.isNpc),
 );
-const deadCharacters = computed(() =>
-  characters.value.filter((c) => c.status === CharacterStatus.Dead),
+const npcCharacters = computed(() =>
+  rosterCharacters.value.filter((c) => c.isNpc),
 );
-const leftCharacters = computed(() =>
-  characters.value.filter((c) => c.status === CharacterStatus.Left),
+
+// Applications awaiting master review. Visible to leads (master / assistant /
+// mentor) and to the applying owner for their own submission.
+const underReviewCharacters = computed(() =>
+  characters.value.filter(
+    (c) => c.status === "UnderReview" && (canManage.value || isOwn(c)),
+  ),
 );
-const declinedCharacters = computed(() =>
-  characters.value.filter((c) => c.status === CharacterStatus.Declined),
+
+const hasAnything = computed(
+  () =>
+    playerCharacters.value.length > 0 ||
+    npcCharacters.value.length > 0 ||
+    underReviewCharacters.value.length > 0,
 );
 
 onMounted(() => {
@@ -44,65 +65,41 @@ onMounted(() => {
       {{ charactersError }}
     </div>
 
-    <div v-else-if="characters.length === 0" class="characters-empty">
+    <div v-else-if="!hasAnything" class="characters-empty">
       <secondary-text>В этой игре пока нет персонажей</secondary-text>
     </div>
 
     <div v-else class="characters-groups">
-      <!-- Active characters -->
-      <section v-if="activeCharacters.length" class="characters-section">
-        <h3 class="section-title">Активные персонажи</h3>
+      <!-- Player characters (PC) -->
+      <section v-if="playerCharacters.length" class="characters-section">
+        <h3 class="section-title">Игровые персонажи</h3>
         <div class="characters-grid">
-          <game-character
-            v-for="character in activeCharacters"
+          <character-card
+            v-for="character in playerCharacters"
             :key="character.id"
             :character="character"
           />
         </div>
       </section>
 
-      <!-- Registration (pending approval) -->
-      <section v-if="registrationCharacters.length" class="characters-section">
+      <!-- Non-player characters (NPC) -->
+      <section v-if="npcCharacters.length" class="characters-section">
+        <h3 class="section-title">Неигровые персонажи</h3>
+        <div class="characters-grid">
+          <character-card
+            v-for="character in npcCharacters"
+            :key="character.id"
+            :character="character"
+          />
+        </div>
+      </section>
+
+      <!-- Pending applications — leads see all, owner sees own -->
+      <section v-if="underReviewCharacters.length" class="characters-section">
         <h3 class="section-title">На рассмотрении</h3>
         <div class="characters-grid">
-          <game-character
-            v-for="character in registrationCharacters"
-            :key="character.id"
-            :character="character"
-          />
-        </div>
-      </section>
-
-      <!-- Dead characters -->
-      <section v-if="deadCharacters.length" class="characters-section">
-        <h3 class="section-title">Погибшие</h3>
-        <div class="characters-grid">
-          <game-character
-            v-for="character in deadCharacters"
-            :key="character.id"
-            :character="character"
-          />
-        </div>
-      </section>
-
-      <!-- Left characters -->
-      <section v-if="leftCharacters.length" class="characters-section">
-        <h3 class="section-title">Покинувшие игру</h3>
-        <div class="characters-grid">
-          <game-character
-            v-for="character in leftCharacters"
-            :key="character.id"
-            :character="character"
-          />
-        </div>
-      </section>
-
-      <!-- Declined characters -->
-      <section v-if="declinedCharacters.length" class="characters-section">
-        <h3 class="section-title">Отклоненные</h3>
-        <div class="characters-grid">
-          <game-character
-            v-for="character in declinedCharacters"
+          <character-card
+            v-for="character in underReviewCharacters"
             :key="character.id"
             :character="character"
           />
@@ -113,9 +110,6 @@ onMounted(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .game-characters
   min-height: $grid-step * 50
 

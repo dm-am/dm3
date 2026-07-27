@@ -23,9 +23,9 @@ const props = withDefaults(
     to?: RouteLocationRaw;
     placeholder?: string;
     /**
-     * Жирное начертание у цветных variants. Default true — для числовых
-     * значений (рейтинг, рекомендации) bold подчеркивает важность.
-     * false — для коротких статус-слов («онлайн»), где цвет уже все говорит.
+     * Bold weight for colored variants. Default true — for numeric
+     * values (rating, endorsements) bold underlines importance.
+     * false — for short status words ("онлайн") where the color already says it all.
      */
     emphasized?: boolean;
   }>(),
@@ -78,17 +78,15 @@ const effectiveVariant = computed(() => props.variant);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 // Block-level container with inline children — label and value flow as a
 // single text line. They wrap together if the line overflows, never apart.
-// line-height 1.25 — намеренно компактнее обычного body-текста: stat-блоки
-// читаются как таблица, лишний воздух между строками только разъединяет
-// связанные «label: value» пары. 1.25 еще оставляет достаточно места
-// для подчеркивания у as-link варианта.
-// ВАЖНО: EditableField синхронизирован на ту же высоту строки — иначе
-// в `.info-grid`, где они стэкаются вперемешку (Имя/Местоположение =
-// EditableField, Пол/День рождения = StatLine), ритм скачет.
+// line-height 1.25 — intentionally tighter than regular body text: stat blocks
+// read like a table, extra air between lines only pulls apart
+// related "label: value" pairs. 1.25 still leaves enough room
+// for the underline of the as-link variant.
+// IMPORTANT: EditableField is synchronized to the same line height — otherwise
+// in `.info-grid`, where they stack interleaved ("Имя"/"Местоположение" =
+// EditableField, "Пол"/"День рождения" = StatLine), the rhythm jumps.
 .stat-line
   display: block
   font-size: $font-size
@@ -146,9 +144,9 @@ const effectiveVariant = computed(() => props.variant);
         color: $link-hover
         text-decoration: underline
 
-// emphasized=false на usage-site — оставляет цвет variant'а, но снимает
-// bold. Для коротких статусов («онлайн»), где жирный визуально шумит.
-// Помещено в конец каскада, чтобы перекрывать font-weight: bold у
+// emphasized=false at the usage site — keeps the variant color but removes
+// bold. For short statuses ("онлайн") where bold is visually noisy.
+// Placed at the end of the cascade to override font-weight: bold of
 // positive/negative/muted variants.
 .value.value--plain
   font-weight: normal

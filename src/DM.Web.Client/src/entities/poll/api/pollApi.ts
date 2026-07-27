@@ -17,10 +17,10 @@ export default new (class PollApi {
     if (params.isAnonymous !== undefined)
       queryParams.isAnonymous = params.isAnonymous;
     if (params.search) queryParams.search = params.search;
-    if (params.startsFrom) queryParams.startsFrom = params.startsFrom;
-    if (params.startsTo) queryParams.startsTo = params.startsTo;
-    if (params.endsFrom) queryParams.endsFrom = params.endsFrom;
-    if (params.endsTo) queryParams.endsTo = params.endsTo;
+    if (params.startsFromUtc) queryParams.startsFromUtc = params.startsFromUtc;
+    if (params.startsToUtc) queryParams.startsToUtc = params.startsToUtc;
+    if (params.endsFromUtc) queryParams.endsFromUtc = params.endsFromUtc;
+    if (params.endsToUtc) queryParams.endsToUtc = params.endsToUtc;
     if (params.sortBy) queryParams.sortBy = params.sortBy;
     if (params.sortOrder) queryParams.sortOrder = params.sortOrder;
 

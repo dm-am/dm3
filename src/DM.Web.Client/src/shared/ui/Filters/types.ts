@@ -25,30 +25,6 @@ export interface DropdownItemProps {
 }
 
 // =============================================================================
-// USER SELECT TYPES
-// =============================================================================
-
-/**
- * User suggestion from API.
- */
-export interface UserSuggestion {
-  username: string;
-  picture?: string;
-}
-
-/**
- * Props for UserMultiSelect component.
- */
-export interface UserMultiSelectProps {
-  /** Currently selected usernames */
-  selectedUsers: Set<string>;
-  /** Placeholder text for search input */
-  placeholder?: string;
-  /** Maximum suggestions to show */
-  maxSuggestions?: number;
-}
-
-// =============================================================================
 // DATE RANGE TYPES
 // =============================================================================
 

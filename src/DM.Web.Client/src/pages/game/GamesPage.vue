@@ -7,8 +7,8 @@ import { GamesDataTable } from "@/widgets/games-table";
 <template>
   <page-title v-once>Игры</page-title>
   <LeadText v-once>
-    Подберите игру по жанру, системе или статусу набора, а если хотите водить
-    сами — <router-link to="/games/create">создайте собственную</router-link>
+    Найдите партию с открытым набором или
+    <router-link to="/games/create">создайте собственную игру</router-link>
   </LeadText>
   <GamesDataTable />
 </template>

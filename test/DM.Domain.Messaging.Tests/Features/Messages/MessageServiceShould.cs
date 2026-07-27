@@ -162,6 +162,43 @@ public class MessageServiceShould : UnitTestBase
     }
 
     [Fact]
+    public async Task PublishNewGlobalChatMessageEventForGlobalChat()
+    {
+        var chatId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var createMessage = new CreateMessage { ChatId = chatId, Text = "Hello" };
+        var chat = new Chat { Id = chatId, Type = ChatType.Global, Participants = Array.Empty<GeneralUser>() };
+        var messageEntity = new CreateMessageEntity { MessageId = messageId };
+        _chatService.Setup(s => s.GetAsync(chatId)).ReturnsAsync(chat);
+        _createMessageSetup.Returns(messageEntity);
+        _repository.Setup(r => r.Create(It.IsAny<CreateMessageEntity>(), It.IsAny<UpdateChatLastMessageEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Message { Id = messageId });
+
+        await _service.CreateAsync(createMessage);
+
+        _eventProducer.Verify(p => p.SendAsync(EventType.NewMessage, messageId), Times.Once);
+        _eventProducer.Verify(p => p.SendAsync(EventType.NewGlobalChatMessage, messageId), Times.Once);
+    }
+
+    [Fact]
+    public async Task NotPublishGlobalChatMessageEventForDirectChat()
+    {
+        var chatId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var createMessage = new CreateMessage { ChatId = chatId, Text = "Hello" };
+        var chat = new Chat { Id = chatId, Type = ChatType.Direct, Participants = Array.Empty<GeneralUser>() };
+        var messageEntity = new CreateMessageEntity { MessageId = messageId };
+        _chatService.Setup(s => s.GetAsync(chatId)).ReturnsAsync(chat);
+        _createMessageSetup.Returns(messageEntity);
+        _repository.Setup(r => r.Create(It.IsAny<CreateMessageEntity>(), It.IsAny<UpdateChatLastMessageEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Message { Id = messageId });
+
+        await _service.CreateAsync(createMessage);
+
+        _eventProducer.Verify(p => p.SendAsync(EventType.NewGlobalChatMessage, It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
     public async Task AuthorizeDeleteAction()
     {
         var messageId = Guid.NewGuid();

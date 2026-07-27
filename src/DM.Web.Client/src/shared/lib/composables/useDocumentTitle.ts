@@ -12,9 +12,9 @@
  */
 import { toValue, watchEffect, type MaybeRefOrGetter } from "vue";
 
-const BRAND = "DM.AM";
+const BRAND = "Dungeon Master";
 
-/** Formats a page title as `"{title} — DM.AM"`, or just the brand when empty. */
+/** Formats a page title as `"{title} — Dungeon Master"`, or just the brand when empty. */
 export function formatDocumentTitle(title: string | null | undefined): string {
   const trimmed = title?.trim();
   return trimmed ? `${trimmed} — ${BRAND}` : BRAND;

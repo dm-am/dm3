@@ -1,6 +1,1 @@
-export {
-  CreateGamePage,
-  SchemaSelector,
-  TagSelector,
-  AssistantSelector,
-} from "./ui";
+export { CreateGameForm, TagSelector, AssistantSelector } from "./ui";

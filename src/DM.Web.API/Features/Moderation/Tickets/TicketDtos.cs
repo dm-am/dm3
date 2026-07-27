@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using DM.Domain.Core.Enums;
+using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Moderation.Tickets;
 
@@ -14,14 +16,19 @@ public class Ticket
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Reporter username
+    /// Reporter username (null for guest submissions)
     /// </summary>
-    public string ReporterUsername { get; set; } = "";
+    public string? ReporterUsername { get; set; }
 
     /// <summary>
-    /// Target user username
+    /// Target user username (null for tickets without a target)
     /// </summary>
-    public string TargetUsername { get; set; } = "";
+    public string? TargetUsername { get; set; }
+
+    /// <summary>
+    /// Contact email left by a guest author (null for authenticated submissions)
+    /// </summary>
+    public string? GuestEmail { get; set; }
 
     /// <summary>
     /// Entity ID that was reported
@@ -37,6 +44,11 @@ public class Ticket
     /// Ticket status
     /// </summary>
     public TicketStatus Status { get; set; }
+
+    /// <summary>
+    /// Ticket category
+    /// </summary>
+    public TicketSubtype Subtype { get; set; }
 
     /// <summary>
     /// Creation time
@@ -77,6 +89,46 @@ public class Ticket
     /// Ban was issued
     /// </summary>
     public bool HasBan { get; set; }
+}
+
+/// <summary>
+/// Moderation ticket detail DTO: the base ticket plus the conversation
+/// thread. Returned by the detail endpoint only — list endpoints keep the
+/// lighter Ticket payload. Answer stays for backward compatibility as the
+/// single resolution response
+/// </summary>
+public class TicketDetails : Ticket
+{
+    /// <summary>
+    /// Responses in the ticket conversation, oldest first
+    /// </summary>
+    public IEnumerable<TicketResponse> Responses { get; set; } = [];
+}
+
+/// <summary>
+/// A single response in a ticket conversation
+/// </summary>
+public class TicketResponse
+{
+    /// <summary>
+    /// Response author (lightweight reference)
+    /// </summary>
+    public UserRef Author { get; set; } = null!;
+
+    /// <summary>
+    /// Response text
+    /// </summary>
+    public string Text { get; set; } = "";
+
+    /// <summary>
+    /// When the response was created
+    /// </summary>
+    public DateTimeOffset CreatedUtc { get; set; }
+
+    /// <summary>
+    /// Whether this response is from a moderator (vs the user)
+    /// </summary>
+    public bool IsFromModerator { get; set; }
 }
 
 /// <summary>
@@ -167,22 +219,22 @@ public class ResolveTicketRequest
 public class TicketStats
 {
     /// <summary>
-    /// Open tickets count
+    /// Tickets waiting for a moderation response
     /// </summary>
-    public int Open { get; set; }
+    public int WaitingForModeration { get; set; }
 
     /// <summary>
-    /// In-progress tickets count
+    /// Tickets waiting for the user
     /// </summary>
-    public int InProgress { get; set; }
+    public int WaitingForUser { get; set; }
 
     /// <summary>
-    /// Resolved tickets count
+    /// Closed tickets count
     /// </summary>
-    public int Resolved { get; set; }
+    public int Closed { get; set; }
 
     /// <summary>
-    /// Rejected tickets count
+    /// Spam tickets count
     /// </summary>
-    public int Rejected { get; set; }
+    public int Spam { get; set; }
 }

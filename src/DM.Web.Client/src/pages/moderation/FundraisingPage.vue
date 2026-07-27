@@ -50,7 +50,7 @@ onMounted(load);
     <div v-else-if="loadError" class="error">{{ loadError }}</div>
     <form v-else class="fundraising-form" @submit.prevent="save">
       <SecondaryText>
-        Значения отображаются в блоке «Поддержка проекта» в правом сайдбаре.
+        Значения отображаются в блоке "Поддержка проекта" в правом сайдбаре.
       </SecondaryText>
       <div class="form-field">
         <label for="fundraising-goal">Цель (р.)</label>
@@ -84,8 +84,6 @@ onMounted(load);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Inputs"
 
 .loading,

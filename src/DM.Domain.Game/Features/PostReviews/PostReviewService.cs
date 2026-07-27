@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
@@ -57,7 +58,8 @@ internal class PostReviewService : IPostReviewService
         await _createValidator.ValidateAndThrowAsync(createReview);
         _intentionManager.ThrowIfForbidden(PostReviewIntention.Create);
 
-        var authorId = _identityProvider.Current.User.UserId;
+        var author = _identityProvider.Current.User;
+        var authorId = author.UserId;
         var postId = createReview.PostId;
 
         // Get post information for authorization and denormalization
@@ -102,7 +104,9 @@ internal class PostReviewService : IPostReviewService
             GameId = postInfo.GameId,
             CreatedUtc = _dateTimeProvider.Now,
             Sign = createReview.Sign,
-            Text = createReview.Text
+            // Review bodies render on the Comment surface where [mod] is a green
+            // mod block; strip it when authored by a non-moderator.
+            Text = ModBlockSanitizer.SanitizeForAuthor(createReview.Text, author.Role)
         };
 
         try

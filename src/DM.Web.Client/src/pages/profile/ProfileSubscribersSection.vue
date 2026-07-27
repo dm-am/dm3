@@ -1,16 +1,17 @@
 <script setup lang="ts">
 /**
- * ProfileSubscribersSection — inline subscribers list inside a content
- * tab (Games / Blogs / Topics). Shows ONLY subscribers whose subscription
+ * ProfileSubscribersSection — subscribers list below a content tab's table
+ * (Games / Blogs / Topics). Shows ONLY subscribers whose subscription
  * settings have the tab's category flag set ("subscribed to games", etc.),
  * so each tab tells the viewer who cares about that specific category.
  *
- * Ordering and inactive styling match the rules established by the
- * profile-wide subscribers feed:
+ * Styled like the rules page "Полезные ссылки" line (muted label + inline
+ * muted links that light up on hover, secondary font-size) — see
+ * RulesStaffTable.vue .useful-links.
+ *
+ * Ordering matches the profile-wide subscribers feed:
  *   - Active subscribers first, inactive (no activity in 30+ days) last
  *   - Inside each bucket, most-recently-active first
- *   - Inactive subscribers render in muted gray; hover restores the link
- *     color so the affordance is consistent with the site-wide a:hover
  *
  * If no subscribers carry the requested flag, the section renders
  * nothing — the host page composes content + best-of + subscribers, and
@@ -18,7 +19,6 @@
  */
 import { computed } from "vue";
 import type { SubscriberRef } from "@/shared/api/models/common";
-import LeadText from "@/shared/ui/Layout/LeadText.vue";
 
 const props = defineProps<{
   subscribers: readonly SubscriberRef[];
@@ -55,23 +55,32 @@ const matching = computed(() => {
 
 <template>
   <!-- One-line list of the people subscribed to this user's games / blogs /
-       topics, with links to their profiles (LeadText style). Rendered at the
-       top of the content tab; nothing shows when there are none. -->
-  <LeadText v-if="matching.length" class="subscribers-line">
-    {{ label }}:
-    <template v-for="(sub, idx) in matching" :key="sub.username"
+       topics, with links to their profiles. Rendered below the tab's table;
+       nothing shows when there are none. Style matches the rules page
+       "Полезные ссылки" line — muted label + inline links, secondary size. -->
+  <p v-if="matching.length" class="subscribers-line">
+    <span class="subscribers-label">{{ label }}:</span>{{ " "
+    }}<template v-for="(sub, idx) in matching" :key="sub.username"
       ><router-link
         :to="{ name: 'profile', params: { username: sub.username } }"
         >{{ sub.username }}</router-link
-      ><span v-if="idx < matching.length - 1">, </span></template
+      ><template v-if="idx < matching.length - 1">, </template></template
     >
-  </LeadText>
+  </p>
 </template>
 
 <style scoped lang="sass">
-// The tab-content's flex `gap` already spaces this line from the table below;
-// drop LeadText's own bottom margin so the gap isn't doubled. Two classes beat
-// LeadText's single-class rule, so this reliably wins.
-.lead-text.subscribers-line
-  margin-bottom: 0
+@import "src/assets/styles/Inputs"
+
+// The active/inactive subscriber distinction stays in the ordering
+// (active first), not in the color — one uniform muted-links look.
+.subscribers-line
+  margin: 0
+  +muted-links-line
+
+  .subscribers-label
+    font-weight: 500
+
+  :deep(a)
+    +muted-link
 </style>

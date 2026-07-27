@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, nextTick } from "vue";
 import { useRouter } from "vue-router";
-import Lightbox from "@/shared/ui/Layout/Lightbox.vue";
-import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
+import Dialog from "@/shared/ui/Layout/Dialog.vue";
+import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
+import Button from "@/shared/ui/Button/Button.vue";
 import { AccountApi } from "@/shared/api";
 import {
   useValidatedField,
@@ -78,57 +79,80 @@ const onEmailInput = () => {
   emailField.onInput();
   serverError.value = "";
 };
+
+const clearForm = () => {
+  result.value = null;
+  serverError.value = "";
+  loading.value = false;
+  emailField.reset();
+};
+
+const cancel = () => {
+  clearForm();
+  emit("cancel");
+};
 </script>
 
 <template>
-  <Lightbox :narrow="!result">
+  <Dialog :narrow="!result" :auto="!!result" @before-close="clearForm">
     <!-- Result: Password reset sent -->
     <template v-if="result === 'password'">
       <div class="success-content">
-        <lightbox-title>Проверьте почту</lightbox-title>
+        <dialog-title>Проверьте почту</dialog-title>
         <p class="main-text">
           Мы отправили письмо на
           <strong>{{ emailField.value.value }}</strong> со ссылкой для сброса
           пароля.
         </p>
         <p class="expiry-note">Ссылка действительна 48 часов</p>
+        <Button type="button" class="confirm-btn" @click="cancel">
+          Закрыть
+        </Button>
       </div>
     </template>
 
     <!-- Result: Activation resent -->
     <template v-else-if="result === 'activation'">
       <div class="success-content">
-        <lightbox-title>Проверьте почту</lightbox-title>
+        <dialog-title>Проверьте почту</dialog-title>
         <p class="main-text">
           Мы отправили повторное письмо на
           <strong>{{ emailField.value.value }}</strong> со ссылкой для
           активации.
         </p>
         <p class="expiry-note">Ссылка действительна 48 часов</p>
+        <Button type="button" class="confirm-btn" @click="cancel">
+          Закрыть
+        </Button>
       </div>
     </template>
 
     <!-- Result: Not found -->
     <template v-else-if="result === 'notfound'">
       <div class="success-content">
-        <lightbox-title>Аккаунт не найден</lightbox-title>
+        <dialog-title>Аккаунт не найден</dialog-title>
         <p class="main-text">
           Аккаунта с почтой <strong>{{ emailField.value.value }}</strong> не
           существует.
         </p>
         <p class="expiry-note">
-          <a href="#" @click.prevent="tryAgain">Попробовать другую почту?</a>
+          <button type="button" class="field-action" @click="tryAgain">
+            Попробовать другую почту?
+          </button>
         </p>
+        <Button type="button" class="confirm-btn" @click="cancel">
+          Закрыть
+        </Button>
       </div>
     </template>
 
     <!-- Email form -->
     <template v-else>
-      <lightbox-title>Восстановление доступа</lightbox-title>
+      <dialog-title>Восстановление доступа</dialog-title>
 
       <Form
         @submit="submit"
-        @cancel="emit('cancel')"
+        @cancel="cancel"
         :valid="emailField.isReady.value"
         :loading="loading"
         action="Отправить"
@@ -161,27 +185,14 @@ const onEmailInput = () => {
         </form-field>
       </Form>
     </template>
-  </Lightbox>
+  </Dialog>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 
-// Button reset that mimics the global anchor styles (Reset.sass)
 .field-action
-  background: none
-  border: none
-  padding: 0
-  font: inherit
-  text-decoration: none
-  cursor: pointer
-  transition: color $animation-time ease
-  color: $link
-
-  &:hover
-    text-decoration: underline
-    color: $link-hover
+  +inline-link-button
 
 .success-content
   text-align: center
@@ -191,16 +202,10 @@ const onEmailInput = () => {
   line-height: 1.5
 
 .expiry-note
-  margin: 0
+  margin: 0 0 $medium
   color: $text-muted
   font-size: $secondary-font-size
 
-  a
-    color: $link
-</style>
-
-<style lang="sass">
-.lightbox:has(.success-content)
-  width: auto !important
-  max-width: 320px !important
+.confirm-btn
+  width: 100%
 </style>

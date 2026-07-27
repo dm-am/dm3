@@ -12,6 +12,7 @@ using DomainPost = DM.Domain.Game.Features.Games.Post;
 using DomainPostEdit = DM.Domain.Game.Features.Posts.PostEdit;
 using DomainDiceRoll = DM.Domain.Game.Features.Posts.DiceRoll;
 using DomainDiceRollResult = DM.Domain.Game.Features.Posts.DiceRollResult;
+using DomainCreatePostDiceRoll = DM.Domain.Game.Features.Posts.CreatePostDiceRoll;
 
 namespace DM.Web.API.Features.Game.Posts;
 
@@ -100,12 +101,22 @@ internal class PostMappingProfile : Profile
             .ForMember(d => d.Access, opt => opt.Ignore())
             .ForMember(d => d.Type, opt => opt.Ignore())
             .ForMember(d => d.Accesses, opt => opt.Ignore())
+            .ForMember(d => d.IsArchived, opt => opt.Ignore())
             .ForMember(d => d.Pendencies, opt => opt.Ignore())
             .ForMember(d => d.UnreadPostsCount, opt => opt.Ignore())
             .ForMember(d => d.Settings, opt => opt.Ignore());
 
         CreateMap<CreatePostRequest, CreatePost>()
             .ForMember(d => d.RoomId, opt => opt.Ignore());
+
+        // Create-post dice spec (API → domain). Bonus and Comment auto-map by
+        // name; the rest are renamed to the domain's XdY vocabulary and the
+        // "public" flag is inverted into "hidden".
+        CreateMap<CreatePostDiceRoll, DomainCreatePostDiceRoll>()
+            .ForMember(d => d.EdgesCount, opt => opt.MapFrom(s => s.Dice))
+            .ForMember(d => d.DiceCount, opt => opt.MapFrom(s => s.Count))
+            .ForMember(d => d.ExplosionCount, opt => opt.MapFrom(s => s.Explosion))
+            .ForMember(d => d.IsHidden, opt => opt.MapFrom(s => !s.Public));
 
         CreateMap<Post, UpdatePost>()
             .ForMember(d => d.PostId, opt => opt.Ignore())

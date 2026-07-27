@@ -74,6 +74,13 @@ internal class RoomAccessService : IRoomAccessService
             : _factory.CreateForReader(createRoomAccess,
                 await _readerClaimApprove.GetReaderUserId(createRoomAccess.ReaderUsername.Trim(), room));
 
+        if (await _repository.AccessExists(link.RoomId, link.CharacterId, link.ReaderUserId))
+        {
+            throw new HttpException(HttpStatusCode.Conflict, link.CharacterId.HasValue
+                ? "Room access for this character already exists"
+                : "Room access for this reader already exists");
+        }
+
         var result = await _repository.Create(link);
         await _producer.SendAsync(EventType.ChangedRoom, link.RoomId);
 

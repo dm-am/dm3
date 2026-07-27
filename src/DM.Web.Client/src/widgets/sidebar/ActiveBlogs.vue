@@ -1,60 +1,54 @@
 <template>
-  <SidebarBlock token="ActiveBlogs">
-    <template #title>Активные блоги</template>
-    <SidebarSkeleton
-      v-if="store.activeBlogs === null && !store.activeBlogsError"
-      :lines="5"
-    />
-    <SecondaryText v-else-if="store.activeBlogs === null">
-      Не удалось загрузить
-    </SecondaryText>
-    <SecondaryText v-else-if="store.activeBlogs.length === 0">
-      Активных блогов пока нет
-    </SecondaryText>
-    <BlogLink
-      v-else
-      v-for="blog in store.activeBlogs"
-      :key="blog.id"
-      :blog="blog"
-      :counters="true"
-      :always-show-counters="!userStore.user"
-    />
-    <div class="separator">
-      - - - - - - - - - - - - - - - - - - - - - - - - - -
-    </div>
-    <div>
-      <span class="muted">- </span>
-      <router-link class="forward" :to="{ name: 'blogs' }"
-        >Все блоги</router-link
-      >
-    </div>
-  </SidebarBlock>
+  <SidebarEntityList
+    token="ActiveBlogs"
+    title="Активные блоги"
+    :lines="5"
+    :items="store.activeBlogs"
+    :errored="!!store.activeBlogsError"
+    empty="Активных блогов пока нет"
+    :retry="() => store.fetchActiveBlogs(true)"
+    :forward-to="{ name: 'blogs' }"
+    forward-label="Все блоги"
+  >
+    <template #item="{ item }">
+      <BlogLink
+        :blog="item"
+        :counters="true"
+        :always-show-counters="!userStore.user"
+      />
+    </template>
+  </SidebarEntityList>
 </template>
 
 <script setup lang="ts">
-import SidebarBlock from "./SidebarBlock.vue";
-import SidebarSkeleton from "./SidebarSkeleton.vue";
-import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import SidebarEntityList from "./SidebarEntityList.vue";
 import BlogLink from "./BlogLink.vue";
 import { useBlogsStore } from "@/entities/blog";
 import { useUserStore } from "@/entities/user";
-import { onMounted } from "vue";
+import { onMounted, watch } from "vue";
+import { useRoute } from "vue-router";
 
 const store = useBlogsStore();
 const userStore = useUserStore();
+const route = useRoute();
 
 onMounted(() => store.fetchActiveBlogs());
+
+// Refetch only on actual login/logout to keep unread counters accurate
+// (force=true because a plain fetch() no-ops inside the cache TTL).
+watch(
+  () => userStore.user?.username,
+  (newUsername, oldUsername) => {
+    if ((newUsername && !oldUsername) || (!newUsername && oldUsername)) {
+      store.fetchActiveBlogs(true);
+    }
+  },
+);
+
+// Re-trigger on navigation so a failed fetch gets another chance once the
+// TTL cache considers it stale.
+watch(
+  () => route.fullPath,
+  () => store.fetchActiveBlogs(),
+);
 </script>
-
-<style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
-.muted
-  color: $text-muted
-
-.forward
-  font-weight: bold
-
-.separator
-  color: $text-muted
-</style>

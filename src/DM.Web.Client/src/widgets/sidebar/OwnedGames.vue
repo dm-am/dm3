@@ -18,7 +18,7 @@
     <template v-else>
       <!-- Mentored games (mentor role) -->
       <template v-if="mentorGames.length > 0">
-        <GameLink
+        <SidebarGameLink
           v-for="game in mentorGames"
           :key="game.id"
           :game="game"
@@ -36,12 +36,13 @@
             readingGames.length > 0)
         "
         class="separator"
+        aria-hidden="true"
       >
         - - - - - - - - - - - - - - - - - - - - - - - - - -
       </div>
       <!-- Owned games (Master, Assistant) -->
       <template v-if="ownedGames.length > 0">
-        <GameLink
+        <SidebarGameLink
           v-for="game in ownedGames"
           :key="game.id"
           :game="game"
@@ -53,12 +54,13 @@
       <div
         v-if="ownedGames.length > 0 && playingGames.length > 0"
         class="separator"
+        aria-hidden="true"
       >
         - - - - - - - - - - - - - - - - - - - - - - - - - -
       </div>
       <!-- Playing games (Player role) -->
       <template v-if="playingGames.length > 0">
-        <GameLink
+        <SidebarGameLink
           v-for="game in playingGames"
           :key="game.id"
           :game="game"
@@ -73,12 +75,13 @@
           readingGames.length > 0
         "
         class="separator"
+        aria-hidden="true"
       >
         - - - - - - - - - - - - - - - - - - - - - - - - - -
       </div>
       <!-- Reading games (Reader role) -->
       <template v-if="readingGames.length > 0">
-        <GameLink
+        <SidebarGameLink
           v-for="game in readingGames"
           :key="game.id"
           :game="game"
@@ -87,11 +90,11 @@
         />
       </template>
     </template>
-    <div class="separator">
+    <div class="separator" aria-hidden="true">
       - - - - - - - - - - - - - - - - - - - - - - - - - -
     </div>
     <div>
-      <span class="muted">- </span>
+      <span class="muted" aria-hidden="true">- </span>
       <router-link
         class="forward"
         :to="{ name: 'games', query: { status: 'Active' } }"
@@ -99,7 +102,7 @@
       >
     </div>
     <div>
-      <span class="muted">- </span>
+      <span class="muted" aria-hidden="true">- </span>
       <router-link class="forward" :to="{ name: 'create-game' }"
         >Создать игру</router-link
       >
@@ -111,7 +114,7 @@
 import SidebarBlock from "./SidebarBlock.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import GameLink from "./GameLink.vue";
+import SidebarGameLink from "./SidebarGameLink.vue";
 import { useUserStore } from "@/entities/user";
 import { useGamesStore, GameRole, type GameRef } from "@/entities/game";
 import { computed, watch } from "vue";
@@ -189,8 +192,6 @@ watch(
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 .muted
   color: $text-muted
 

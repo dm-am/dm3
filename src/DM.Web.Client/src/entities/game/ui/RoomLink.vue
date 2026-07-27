@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Shared primitive for linking to a game room, wrapped in a rich tooltip.
 // Mirrors GameLink.vue. The tooltip lists characters with access to the
-// room in the same "• Name (owner)" format used by the game characters
+// room in the same "- Name (owner)" format used by the game characters
 // tooltip on the games page (see useGameDisplay.buildRoomTooltip).
 //
 // Tooltip visibility follows room access rules:
@@ -21,7 +21,7 @@ import { storeToRefs } from "pinia";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import type { Game, GameRef, Room } from "../model/types";
 import { useGameDisplay } from "../model/useGameDisplay";
-import { useUserStore } from "@/entities/user";
+import { useUserStore } from "@/entities/user/@x/game";
 
 const props = defineProps<{
   room: Room;

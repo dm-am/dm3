@@ -11,7 +11,7 @@
  *
  * When count > 1 (pulse mode), renders multiple cards with $medium gap.
  * Single-post usage (count=1): BestWeeklyPost, LatestRatedPost, ProfileBestPost.
- * Multi-post usage (count=5): PulseDataTable.
+ * Multi-post usage (count=5): PulseFeed.
  */
 withDefaults(
   defineProps<{
@@ -56,14 +56,16 @@ withDefaults(
             <div class="skeleton-line short" />
           </div>
         </div>
+
+        <!-- Footer meta (post number / anchor) — right-aligned, matching
+             .post-footer, which is always present in the real card. -->
+        <div class="skeleton-footer" />
       </div>
     </div>
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Skeleton"
 
 .game-post-skeleton
@@ -161,4 +163,12 @@ withDefaults(
 
   &.long
     width: 90%
+
+// Footer meta placeholder — right-aligned post number/anchor.
+.skeleton-footer
+  +skeleton-shimmer
+  width: 48px
+  height: 13px
+  margin-top: $small
+  margin-left: auto
 </style>

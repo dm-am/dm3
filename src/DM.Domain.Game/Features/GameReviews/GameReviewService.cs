@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
@@ -56,7 +57,8 @@ internal class GameReviewService : IGameReviewService
         await _createValidator.ValidateAndThrowAsync(createReview);
         _intentionManager.ThrowIfForbidden(GameReviewIntention.Create);
 
-        var authorId = _identityProvider.Current.User.UserId;
+        var author = _identityProvider.Current.User;
+        var authorId = author.UserId;
         var gameId = createReview.GameId;
 
         // Newbies cannot create game reviews
@@ -86,7 +88,9 @@ internal class GameReviewService : IGameReviewService
             UserId = authorId,
             GameId = gameId,
             CreatedUtc = _dateTimeProvider.Now,
-            Text = createReview.Text.Trim()
+            // Review bodies render on the Comment surface where [mod] is a green
+            // mod block; strip it when authored by a non-moderator.
+            Text = ModBlockSanitizer.SanitizeForAuthor(createReview.Text.Trim(), author.Role)
         };
 
         try
@@ -166,7 +170,9 @@ internal class GameReviewService : IGameReviewService
 
         var entity = new UpdateGameReviewEntity(
             review.Id,
-            Text: updateReview.Text.Trim(),
+            // Review bodies render on the Comment surface where [mod] is a green
+            // mod block; strip it when the editor is a non-moderator.
+            Text: ModBlockSanitizer.SanitizeForAuthor(updateReview.Text.Trim(), currentUser.Role),
             ModifiedUtc: _dateTimeProvider.Now,
             ModifiedByUserId: currentUser.UserId);
 

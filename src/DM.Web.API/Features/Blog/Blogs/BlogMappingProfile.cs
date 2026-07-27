@@ -2,6 +2,7 @@ using System.Linq;
 using AutoMapper;
 using DM.Web.API.Features.Blog.Publications;
 using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.BbRendering;
 using SvcBlog = DM.Domain.Blog.Features.Blogs.Blog;
 using SvcBlogDetails = DM.Domain.Blog.Features.Blogs.BlogDetails;
 using SvcRubric = DM.Domain.Blog.Features.Blogs.Rubric;
@@ -34,8 +35,25 @@ internal class BlogMappingProfile : Profile
 
         // Blog mapping (extends BlogRef with rubrics and additional fields)
         CreateMap<SvcBlog, Blog>()
-            .IncludeBase<SvcBlog, BlogRef>();
-            // Rubrics, Description, etc. map by convention
+            .IncludeBase<SvcBlog, BlogRef>()
+            // Rubrics, Description, Mentor, etc. map by convention.
+            // Populate the render-context envelope on the description so the
+            // JSON converter honors the owner's AuthorEdit round-trip (the
+            // settings editor sends X-Dm-Audience: author_edit to load the raw
+            // BBCode source) and downgrades any other viewer's author_edit
+            // request to permission-filtered Display. Inherited by BlogDetails
+            // via IncludeBase.
+            .AfterMap((src, dest) =>
+            {
+                if (dest.Description is not null && src.Author is not null)
+                {
+                    dest.Description.Context = new RenderContextEnvelope
+                    {
+                        Surface = dest.Description.Surface,
+                        PostAuthorUserId = src.Author.UserId
+                    };
+                }
+            });
 
         // BlogDetails mapping (extends Blog with subscribers and full assistants)
         CreateMap<SvcBlogDetails, BlogDetails>()

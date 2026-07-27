@@ -33,10 +33,13 @@ public class TicketController : ControllerBase
     /// Get all tickets
     /// </summary>
     /// <remarks>
-    /// Returns all moderation tickets. Requires Moderator role or higher.
-    /// Can be filtered by status.
+    /// Returns moderation tickets visible to the caller role. Requires Moderator
+    /// role or higher. Moderator sees user complaints and suggestions,
+    /// SeniorModerator additionally sees complaints about junior moderator
+    /// decisions, Admin sees all categories. Can be filtered by status and subtype.
     /// </remarks>
     /// <param name="status">Optional status filter</param>
+    /// <param name="subtype">Optional subtype filter (within the caller visibility scope)</param>
     /// <response code="200">List of tickets</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">Moderator role required</response>
@@ -45,8 +48,9 @@ public class TicketController : ControllerBase
     [ProducesResponseType(typeof(ListEnvelope<Ticket>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetTickets([FromQuery] TicketStatus? status = null) =>
-        Ok(await _ticketApiService.GetTickets(status));
+    public async Task<IActionResult> GetTickets(
+        [FromQuery] TicketStatus? status = null, [FromQuery] TicketSubtype? subtype = null) =>
+        Ok(await _ticketApiService.GetTickets(status, subtype));
 
     /// <summary>
     /// Get ticket statistics
@@ -86,22 +90,27 @@ public class TicketController : ControllerBase
     /// Get my filed tickets
     /// </summary>
     /// <remarks>
-    /// Returns tickets filed by the current user.
+    /// Returns tickets filed by the current user. Can be filtered by status and
+    /// subtype server-side.
     /// </remarks>
+    /// <param name="status">Optional status filter</param>
+    /// <param name="subtype">Optional subtype filter</param>
     /// <response code="200">List of filed tickets</response>
     /// <response code="401">User must be authenticated</response>
     [HttpGet("mine", Name = nameof(GetMyFiledTickets))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(ListEnvelope<Ticket>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetMyFiledTickets() =>
-        Ok(await _ticketApiService.GetMyFiledTickets());
+    public async Task<IActionResult> GetMyFiledTickets(
+        [FromQuery] TicketStatus? status = null, [FromQuery] TicketSubtype? subtype = null) =>
+        Ok(await _ticketApiService.GetMyFiledTickets(status, subtype));
 
     /// <summary>
     /// Get ticket by ID
     /// </summary>
     /// <remarks>
-    /// Returns a specific ticket. Moderators see full details, reporters see their own tickets.
+    /// Returns a specific ticket with the conversation thread (responses).
+    /// Moderators see full details, reporters see their own tickets.
     /// </remarks>
     /// <param name="ticketId">Ticket ID</param>
     /// <response code="200">Ticket details</response>
@@ -109,7 +118,7 @@ public class TicketController : ControllerBase
     /// <response code="404">Ticket not found</response>
     [HttpGet("{ticketId:guid}", Name = nameof(GetTicket))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Ticket>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Envelope<TicketDetails>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTicket(Guid ticketId)

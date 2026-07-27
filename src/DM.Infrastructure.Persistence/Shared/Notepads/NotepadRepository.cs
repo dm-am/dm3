@@ -117,7 +117,7 @@ internal class NotepadRepository : INotepadRepository
         if (update.SortOrder.HasValue)
             entry.SortOrder = update.SortOrder.Value;
 
-        entry.UpdatedUtc = update.UpdatedUtc;
+        entry.ModifiedUtc = update.ModifiedUtc;
 
         await _dbContext.SaveChangesAsync(ct);
         return MapToDto(entry);
@@ -240,7 +240,7 @@ internal class NotepadRepository : INotepadRepository
         Content = entry.Content,
         SortOrder = entry.SortOrder,
         CreatedUtc = entry.CreatedUtc,
-        UpdatedUtc = entry.UpdatedUtc
+        ModifiedUtc = entry.ModifiedUtc
     };
 
     private static NotepadCategory MapCategoryToDto(NotepadCategoryEntity category) => new()

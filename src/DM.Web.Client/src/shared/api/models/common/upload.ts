@@ -1,14 +1,19 @@
 /**
  * File upload (server response).
  *
- * Direct upload flow only — серверный pipeline валидирует и процессит файл,
- * клиент получает готовый Upload с URL source-файла. Thumbnail-варианты
- * генерируются on-the-fly через imgproxy при serving — они доступны
- * через picture-объект в User/UserProfile/Character DTO (small/medium URLs).
+ * Direct upload flow only — the server pipeline validates and processes the file,
+ * the client receives a ready Upload with the source file URL. Thumbnail variants
+ * are generated on-the-fly via imgproxy at serving time — they are available
+ * via the picture object in the User/UserProfile/Character DTOs (small/medium URLs).
  */
 export interface Upload {
   id: string;
   userId: string;
+  /**
+   * Owner username (profile ref). Present on the moderation list views so the
+   * "Загрузил" column can link to the uploader profile; absent on self paths.
+   */
+  uploaderUsername?: string;
   type: string;
   targetId?: string;
   originalFileName: string;

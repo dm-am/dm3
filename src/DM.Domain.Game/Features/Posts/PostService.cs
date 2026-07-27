@@ -6,6 +6,7 @@ using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -33,6 +34,7 @@ internal class PostService : IPostService
     private readonly IGuidFactory _guidFactory;
     private readonly IPostRepository _repository;
     private readonly IDiceRollRepository _diceRollRepository;
+    private readonly IDiceRoller _diceRoller;
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly IEventProducer _producer;
     private readonly IIdentityProvider _identityProvider;
@@ -47,6 +49,7 @@ internal class PostService : IPostService
         IGuidFactory guidFactory,
         IPostRepository repository,
         IDiceRollRepository diceRollRepository,
+        IDiceRoller diceRoller,
         IUnreadCountersRepository unreadCountersRepository,
         IEventProducer producer,
         IIdentityProvider identityProvider)
@@ -60,6 +63,7 @@ internal class PostService : IPostService
         _guidFactory = guidFactory;
         _repository = repository;
         _diceRollRepository = diceRollRepository;
+        _diceRoller = diceRoller;
         _unreadCountersRepository = unreadCountersRepository;
         _producer = producer;
         _identityProvider = identityProvider;
@@ -86,6 +90,15 @@ internal class PostService : IPostService
         if (hasPendencies)
             events.Add(EventType.RoomPendencyFulfilled);
 
+        var metaText = createPost.MetagameText?.Trim();
+        // MetagameText (OOC) renders on the Comment surface where [mod] is a
+        // green mod block; strip it when authored by a non-moderator. GameText
+        // renders on the GamePost surface (no [mod]) and is left as-is.
+        if (!string.IsNullOrEmpty(metaText))
+            metaText = ModBlockSanitizer.SanitizeForAuthor(metaText, identity.User.Role);
+
+        var now = _dateTimeProvider.Now;
+
         var entity = new CreatePostEntity
         {
             PostId = _guidFactory.Create(),
@@ -93,11 +106,27 @@ internal class PostService : IPostService
             AuthorId = identity.User.UserId,
             CharacterId = createPost.CharacterId,
             GameText = createPost.GameText.Trim(),
-            MetagameText = createPost.MetagameText?.Trim(),
-            CreatedUtc = _dateTimeProvider.Now
+            MetagameText = metaText,
+            CreatedUtc = now
         };
 
         var createdPost = await _repository.Create(entity);
+
+        // Roll and persist any requested dice server-side (doc 4.2.2.13).
+        // The client already gates the composer on the room setting, but the
+        // server must not trust the payload — dice are dropped when the room
+        // has rolling disabled.
+        var diceSpecs = createPost.DiceRolls?.ToList() ?? new List<CreatePostDiceRoll>();
+        if (diceSpecs.Count > 0 && room.Settings?.DiceEnabled == true)
+        {
+            var rolls = _diceRoller.Roll(createdPost.Id, now, diceSpecs);
+            if (rolls.Count > 0)
+            {
+                await _diceRollRepository.CreateAsync(rolls);
+                createdPost.DiceRolls = rolls;
+            }
+        }
+
         await _unreadCountersRepository.IncrementAsync(createdPost.RoomId, UnreadEntryType.Message);
         await _producer.SendAsync(events, createdPost.Id);
 
@@ -172,7 +201,13 @@ internal class PostService : IPostService
         if (_intentionManager.IsAllowed(PostIntention.EditText, (post, room)))
         {
             entity.GameText = updatePost.GameText.Trim();
-            entity.MetagameText = updatePost.MetagameText?.Trim();
+            var metaText = updatePost.MetagameText?.Trim();
+            // MetagameText (OOC) renders on the Comment surface where [mod] is
+            // a green mod block; strip it when the editor is a non-moderator.
+            if (!string.IsNullOrEmpty(metaText))
+                metaText = ModBlockSanitizer.SanitizeForAuthor(
+                    metaText, _identityProvider.Current.User.Role);
+            entity.MetagameText = metaText;
         }
         else
         {

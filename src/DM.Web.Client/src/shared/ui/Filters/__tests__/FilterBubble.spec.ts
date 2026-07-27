@@ -80,7 +80,6 @@ describe("FilterBubble", () => {
 
     it("stops propagation on remove click", async () => {
       const wrapper = mountComponent();
-      const event = { stopPropagation: () => {} };
 
       // Click with stop modifier should prevent bubbling
       await wrapper.find(".bubble-remove-btn").trigger("click.stop");

@@ -6,13 +6,13 @@ import type {
 } from "@/shared/api/models/achievements";
 
 /**
- * Singleton catalog cache: загружается один раз и переиспользуется
- * между профилем и admin-страницами. Это admin-каталог из 13 категорий
- * + 52 тиров — данные стабильные, кешируем module-scope.
+ * Singleton catalog cache: loaded once and reused
+ * between the profile and admin pages. This is the admin catalog of 13 categories
+ * + 52 tiers — the data is stable, cached at module scope.
  *
- * Возвращает реактивные refs. `load()` идемпотентна: повторный вызов
- * во время загрузки или после успешной загрузки ничего не делает.
- * `reload()` форсит свежий fetch (для админских правок).
+ * Returns reactive refs. `load()` is idempotent: a repeated call
+ * during loading or after a successful load does nothing.
+ * `reload()` forces a fresh fetch (for admin edits).
  */
 const categories: Ref<AchievementCategory[] | null> = ref(null);
 const types: Ref<AchievementType[] | null> = ref(null);

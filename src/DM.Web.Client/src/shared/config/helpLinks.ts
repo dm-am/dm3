@@ -1,6 +1,6 @@
 /**
  * SSOT for help links and admin links across the site.
- * Used in: HelpLinksSection.vue, AdminList.vue
+ * Used in: RulesHelpLinks.vue, RulesStaffTable.vue
  */
 
 import { DISCORD_INVITE_URL } from "./contacts";
@@ -52,7 +52,7 @@ export const HELP_LINKS: HelpLink[] = [
     key: "idea",
     icon: "idea",
     problem: "Есть идея",
-    solution: "тема улучшений",
+    solution: "раздел улучшений",
     url: "/forum/improvements",
   },
 ];

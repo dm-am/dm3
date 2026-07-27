@@ -23,7 +23,7 @@ public interface IFundraisingGoalRepository
     /// </summary>
     /// <param name="update">Update data</param>
     /// <param name="updatedByUserId">User who performed the update</param>
-    /// <param name="updatedUtc">Update moment (UTC)</param>
+    /// <param name="modifiedUtc">Update moment (UTC)</param>
     /// <returns>Updated fundraising goal</returns>
-    Task<FundraisingGoal> Update(UpdateFundraisingGoal update, Guid updatedByUserId, DateTimeOffset updatedUtc);
+    Task<FundraisingGoal> Update(UpdateFundraisingGoal update, Guid updatedByUserId, DateTimeOffset modifiedUtc);
 }

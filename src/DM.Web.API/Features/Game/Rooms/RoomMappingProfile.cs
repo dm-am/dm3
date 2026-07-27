@@ -26,7 +26,11 @@ internal class RoomMappingProfile : Profile
             // ignored, which left every room in game-details responses
             // with `access = null`. Downstream tooltip logic then defaulted
             // every room to "open" and leaked the wrong character list.
-            .ForMember(d => d.Access, s => s.MapFrom(r => r.AccessType));
+            .ForMember(d => d.Access, s => s.MapFrom(r => r.AccessType))
+            // Rooms are returned nested under their game; the domain Room
+            // carries only GameId (no GameRef nav), so this back-reference
+            // stays null instead of being re-hydrated per room.
+            .ForMember(d => d.Game, opt => opt.Ignore());
 
         CreateMap<DomainRoomSettings, RoomSettings>();
 
@@ -35,10 +39,20 @@ internal class RoomMappingProfile : Profile
 
         CreateMap<Room, UpdateRoom>()
             .ForMember(d => d.RoomId, opt => opt.Ignore())
-            .ForMember(d => d.AccessType, opt => opt.Ignore())
-            .ForMember(d => d.ViewPrivateText, opt => opt.Ignore())
-            .ForMember(d => d.ViewDiceResults, opt => opt.Ignore())
-            .ForMember(d => d.DiceEnabled, opt => opt.Ignore())
+            // ChatId is server-managed (linked chat room); the API Room DTO
+            // does not expose it, so an update never reassigns it.
+            .ForMember(d => d.ChatId, opt => opt.Ignore())
+            // The settings UI edits these; the repository applies each only when
+            // its nullable is set. AccessType comes from the flat Access field,
+            // the settings toggles from the nested Settings block — a sparse
+            // PATCH with Settings omitted leaves them null (== unchanged).
+            .ForMember(d => d.AccessType, s => s.MapFrom(r => r.Access))
+            .ForMember(d => d.ViewPrivateText,
+                s => s.MapFrom(r => r.Settings != null ? (bool?)r.Settings.ViewPrivateText : null))
+            .ForMember(d => d.ViewDiceResults,
+                s => s.MapFrom(r => r.Settings != null ? (bool?)r.Settings.ViewDiceResults : null))
+            .ForMember(d => d.DiceEnabled,
+                s => s.MapFrom(r => r.Settings != null ? (bool?)r.Settings.DiceEnabled : null))
             .ForMember(d => d.IsRemoved, opt => opt.Ignore());
 
         CreateMap<DomainRoomAccess, RoomAccess>()

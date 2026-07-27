@@ -4,6 +4,7 @@ using System.Linq;
 using AutoMapper;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
+using DM.Web.API.Shared.BbRendering;
 using DtoGame = DM.Domain.Game.Features.Games.Game;
 using DtoGameDetails = DM.Domain.Game.Features.Games.GameDetails;
 using DtoGameRecruitment = DM.Domain.Game.Features.Games.GameRecruitment;
@@ -13,6 +14,7 @@ using DtoGameTag = DM.Domain.Game.Features.Games.GameTag;
 using DtoCreateGame = DM.Domain.Game.Features.Games.CreateGame;
 using DtoUpdateGame = DM.Domain.Game.Features.Games.UpdateGame;
 using DtoActiveCharacterInfo = DM.Domain.Game.Features.Games.ActiveCharacterInfo;
+using DtoPlayerCharacterInfo = DM.Domain.Game.Features.Games.PlayerCharacterInfo;
 
 namespace DM.Web.API.Features.Game.Games;
 
@@ -44,11 +46,17 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.OwnerUsernames, o => o.MapFrom(s =>
                 s.AuthorUsernames != null && s.AuthorUsernames.Any(u => !string.IsNullOrWhiteSpace(u))
                     ? new HashSet<string>(s.AuthorUsernames.Where(u => !string.IsNullOrWhiteSpace(u)))
+                    : null))
+            .ForMember(d => d.PremoderationStatuses, o => o.MapFrom(s =>
+                s.PremoderationStatuses != null && s.PremoderationStatuses.Any()
+                    ? new HashSet<PremoderationStatus>(s.PremoderationStatuses)
                     : null));
-            // RecruitmentFilter, ClosedReasonFilter, PlayerUsername map by convention
+            // RecruitmentFilter, ClosedReasonFilter, PlayerUsername,
+            // PlayerParticipation map by convention
 
         CreateMap<DtoGameRecruitment, GameRecruitment>();
         CreateMap<DtoActiveCharacterInfo, ActiveCharacterInfo>();
+        CreateMap<DtoPlayerCharacterInfo, PlayerCharacterInfo>();
 
         // Note: GameAssistantInfo → UserRef mapping is in UserRefMappingProfile
 
@@ -78,7 +86,15 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.System, s => s.MapFrom(g => g.SystemName))
             .ForMember(d => d.Setting, s => s.MapFrom(g => g.NarrativeSetting))
             .ForMember(d => d.SchemaId, s => s.MapFrom(g => g.AttributeSchemaId))
-            .ForMember(d => d.TagIds, s => s.MapFrom(g => g.TagIds));
+            .ForMember(d => d.TagIds, s => s.MapFrom(g => g.TagIds))
+            // Conditional expansion: hydrated only by the player-filtered
+            // list path; PreCondition keeps null (instead of an empty
+            // collection) so unfiltered responses omit the field entirely.
+            .ForMember(d => d.PlayerCharacters, o =>
+            {
+                o.PreCondition(g => g.FilteredPlayerCharacters != null);
+                o.MapFrom(g => g.FilteredPlayerCharacters);
+            });
 
         // GameDetails mapping (extends Game with full details)
         CreateMap<DtoGameDetails, GameDetails>()
@@ -86,16 +102,31 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.PrivacySettings, s => s.MapFrom(g => g))
             .ForMember(d => d.Schema, s => s.MapFrom(g => g.AttributeSchema))
             .ForMember(d => d.FullAssistants, s => s.MapFrom(g => g.FullAssistants))
-            .ForMember(d => d.Subscribers, s => s.MapFrom(g => g.Subscribers));
+            .ForMember(d => d.Subscribers, s => s.MapFrom(g => g.Subscribers))
+            // Readers ("Читатели") == game subscribers (GameRole.Reader is
+            // subscription based); same source as Subscribers, roster-named.
+            .ForMember(d => d.Readers, s => s.MapFrom(g => g.Subscribers))
+            // Populate the render-context envelope on the public info so the
+            // JSON converter honors the master's AuthorEdit round-trip (the
+            // settings editor sends X-Dm-Audience: author_edit to load the raw
+            // BBCode source) and downgrades any other viewer's author_edit
+            // request to permission-filtered Display.
+            .AfterMap((src, dest) =>
+            {
+                if (dest.Info is not null && src.Master is not null)
+                {
+                    dest.Info.Context = new RenderContextEnvelope
+                    {
+                        Surface = dest.Info.Surface,
+                        PostAuthorUserId = src.Master.UserId
+                    };
+                }
+            });
 
         CreateMap<DtoCharacterShortInfo, CharacterShortInfo>()
             .ForMember(d => d.Author, s => s.MapFrom(c => c.Author));
 
         CreateMap<DtoGameDetails, GamePrivacySettings>()
-            .ForMember(d => d.ViewTemper, s => s.MapFrom(g => !g.HideTemper))
-            .ForMember(d => d.ViewStory, s => s.MapFrom(g => !g.HideStory))
-            .ForMember(d => d.ViewSkills, s => s.MapFrom(g => !g.HideSkills))
-            .ForMember(d => d.ViewInventory, s => s.MapFrom(g => !g.HideInventory))
             .ForMember(d => d.ViewPrivates, s => s.MapFrom(g => g.ShowPrivateMessages))
             .ForMember(d => d.ViewDice, s => s.MapFrom(g => !g.HideDiceResult))
             .ForMember(d => d.ViewPostStats, s => s.MapFrom(g => !g.HidePostStats))
@@ -109,15 +140,13 @@ internal class GameMappingProfile : Profile
             .ForMember(g => g.SystemName, s => s.MapFrom(r => r.System))
             .ForMember(g => g.NarrativeSetting, s => s.MapFrom(r => r.Setting))
             .ForMember(g => g.AttributeSchemaId, s => s.MapFrom(r => r.SchemaId))
-            .ForMember(g => g.HideTemper, s => s.MapFrom(r => r.PrivacySettings != null && !r.PrivacySettings.ViewTemper))
-            .ForMember(g => g.HideStory, s => s.MapFrom(r => r.PrivacySettings != null && !r.PrivacySettings.ViewStory))
-            .ForMember(g => g.HideSkills, s => s.MapFrom(r => r.PrivacySettings != null && !r.PrivacySettings.ViewSkills))
-            .ForMember(g => g.HideInventory, s => s.MapFrom(r => r.PrivacySettings != null && !r.PrivacySettings.ViewInventory))
             .ForMember(g => g.HideDiceResult, s => s.MapFrom(r => r.PrivacySettings != null && !r.PrivacySettings.ViewDice))
             .ForMember(g => g.ShowPrivateMessages, s => s.MapFrom(r => r.PrivacySettings != null && r.PrivacySettings.ViewPrivates))
             .ForMember(g => g.HidePostStats, s => s.MapFrom(r => r.PrivacySettings != null && !r.PrivacySettings.ViewPostStats))
             .ForMember(g => g.CommentsAccessMode, s => s.MapFrom(r => r.PrivacySettings != null ? r.PrivacySettings.CommentariesAccess : CommentsAccessMode.Public))
-            .ForMember(g => g.DisableAlignment, s => s.Ignore())
+            // API exposes only the `Draft` bool, not draft visibility; the
+            // enum defaults to Private server-side until the API surfaces it.
+            .ForMember(g => g.DraftVisibility, opt => opt.Ignore())
             .ForMember(g => g.AssistantUsername, opt => opt.Ignore())
             .ForMember(g => g.CopyBlacklist, opt => opt.Ignore());
 
@@ -126,10 +155,6 @@ internal class GameMappingProfile : Profile
             .ForMember(g => g.SystemName, s => s.MapFrom(g => g.System))
             .ForMember(g => g.NarrativeSetting, s => s.MapFrom(g => g.Setting))
             .ForMember(g => g.AssistantUsername, opt => opt.Ignore())
-            .ForMember(g => g.HideTemper, s => s.MapFrom(g => g.PrivacySettings != null ? !g.PrivacySettings.ViewTemper : null))
-            .ForMember(g => g.HideStory, s => s.MapFrom(g => g.PrivacySettings != null ? !g.PrivacySettings.ViewStory : null))
-            .ForMember(g => g.HideSkills, s => s.MapFrom(g => g.PrivacySettings != null ? !g.PrivacySettings.ViewSkills : null))
-            .ForMember(g => g.HideInventory, s => s.MapFrom(g => g.PrivacySettings != null ? !g.PrivacySettings.ViewInventory : null))
             .ForMember(g => g.HideDiceResult, s => s.MapFrom(g => g.PrivacySettings != null ? !g.PrivacySettings.ViewDice : null))
             .ForMember(g => g.ShowPrivateMessages, s => s.MapFrom(g => g.PrivacySettings != null ? g.PrivacySettings.ViewPrivates : null))
             .ForMember(g => g.HidePostStats, s => s.MapFrom(g => g.PrivacySettings != null ? !g.PrivacySettings.ViewPostStats : null))
@@ -137,9 +162,11 @@ internal class GameMappingProfile : Profile
             .ForMember(g => g.IsRecruitmentOpen, s => s.MapFrom(g => g.Recruitment != null ? g.Recruitment.IsOpen : (bool?)null))
             .ForMember(g => g.RecruitmentPcLimit, s => s.MapFrom(g => g.Recruitment != null ? g.Recruitment.PcLimit : null))
             .ForMember(g => g.GameId, opt => opt.Ignore())
+            // Draft visibility is not part of the update contract (API has no
+            // such field); leave null so the domain keeps the current value.
+            .ForMember(g => g.DraftVisibility, opt => opt.Ignore())
             .ForMember(g => g.PremoderationStatus, opt => opt.Ignore())
             .ForMember(g => g.ClosedReason, opt => opt.Ignore())
-            .ForMember(g => g.DisableAlignment, opt => opt.Ignore())
             .ForMember(g => g.ActivatedUtc, opt => opt.Ignore())
             .ForMember(g => g.ClosedUtc, opt => opt.Ignore())
             .ForMember(g => g.IsRemoved, opt => opt.Ignore())

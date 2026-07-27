@@ -100,6 +100,28 @@ public class TopicController : ControllerBase
         Ok(await _topicApiService.GetAcrossBoards(q));
 
     /// <summary>
+    /// Get the user's most-liked topic (profile widget)
+    /// </summary>
+    /// <remarks>
+    /// Returns the single highest-liked topic authored by the user, across
+    /// every board the viewer can see. Used by the profile page's "Topics"
+    /// tab to spotlight the user's best topic — the forum counterpart of
+    /// <c>GET /v1/users/{username}/best-publication</c>.
+    ///
+    /// Tie-breaker on equal like counts is creation time (newer first).
+    /// Access policy is enforced server-side: topics on boards the viewer
+    /// cannot see never appear.
+    /// </remarks>
+    /// <param name="username">Author username</param>
+    /// <response code="200">Envelope with the topic, or <c>resource: null</c> if the user has none</response>
+    /// <response code="404">User not found</response>
+    [HttpGet("~/v1/users/{username}/best-topic", Name = nameof(GetUserBestTopic))]
+    [ProducesResponseType(typeof(Envelope<Topic>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetUserBestTopic(string username) =>
+        Ok(await _topicApiService.GetUserBestTopic(username));
+
+    /// <summary>
     /// Create new topic on board
     /// </summary>
     /// <remarks>

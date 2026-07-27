@@ -10,6 +10,7 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Forum.Features.Topics;
+using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Forum;
@@ -201,7 +202,7 @@ internal class TopicRepository : ITopicRepository
 
         if (query.CreatedToUtc.HasValue)
         {
-            dbQuery = dbQuery.Where(t => t.CreatedUtc <= query.CreatedToUtc.Value);
+            dbQuery = dbQuery.WhereAtOrBefore(t => t.CreatedUtc, query.CreatedToUtc.Value);
         }
 
         return dbQuery;
@@ -223,12 +224,58 @@ internal class TopicRepository : ITopicRepository
     }
 
     /// <inheritdoc />
+    /// <inheritdoc />
+    // IgnoreQueryFilters is the whole point of these two probes: the soft-delete
+    // filter is global, so without it they can only ever see rows that are NOT
+    // removed — which is exactly the case the caller already knows about. With
+    // the filter applied the 410 branch is unreachable and every deleted topic
+    // reports 404.
+    public Task<bool> Exists(Guid topicId, CancellationToken ct = default) =>
+        _dbContext.Topics
+            .IgnoreQueryFilters()
+            .TagWith("DM.Forum.TopicExists")
+            .AnyAsync(t => t.TopicId == topicId, ct);
+
+    /// <inheritdoc />
+    public Task<bool> ExistsByBoardAndNumber(Guid boardId, int topicNumber, CancellationToken ct = default) =>
+        _dbContext.Topics
+            .IgnoreQueryFilters()
+            .TagWith("DM.Forum.TopicExistsByNumber")
+            .AnyAsync(t => t.BoardId == boardId && t.TopicNumber == topicNumber, ct);
+
     public async Task<Topic?> GetByBoardAndNumber(Guid boardId, int topicNumber, BoardAccessPolicy accessPolicy, CancellationToken ct = default)
     {
         var topic = await _dbContext.Topics
             .TagWith("DM.Forum.TopicByBoardAndNumber")
             .Where(t => !t.IsRemoved && t.BoardId == boardId && t.TopicNumber == topicNumber &&
                         (t.Board.ViewPolicy & accessPolicy) != BoardAccessPolicy.None)
+            .AsNoTracking()
+            .ProjectTo<Topic>(_mapper.ConfigurationProvider)
+            .FirstOrDefaultAsync(ct);
+
+        await FillCounts(topic, ct);
+        return topic;
+    }
+
+    /// <inheritdoc />
+    public async Task<Topic?> GetBestUserTopic(Guid authorId, BoardAccessPolicy accessPolicy, CancellationToken ct = default)
+    {
+        // Single-query "best" lookup: sort by the same likes subquery
+        // pattern used by the listing path, take the top row, project to
+        // the Topic DTO. Soft-deleted topics and topics on boards the
+        // viewer cannot see are filtered out so the profile widget never
+        // surfaces hidden content.
+        var topic = await _dbContext.Topics
+            .TagWith("DM.Forum.GetBestUserTopic")
+            .Where(t => !t.IsRemoved && t.AuthorId == authorId &&
+                        (t.Board.ViewPolicy & accessPolicy) != BoardAccessPolicy.None)
+            .OrderByDescending(t => _dbContext.Likes.Count(l =>
+                !l.IsRemoved &&
+                l.EntityId == t.TopicId &&
+                l.EntityType == Domain.Core.Enums.LikeEntityType.Topic))
+            // Tie-breaker: newer-first so two zero-like topics still produce
+            // a deterministic result rather than relying on insertion order.
+            .ThenByDescending(t => t.CreatedUtc)
             .AsNoTracking()
             .ProjectTo<Topic>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
@@ -331,7 +378,9 @@ internal class TopicRepository : ITopicRepository
                 topic.Title = updateTopic.Title.Trim();
             }
 
-            if (!string.IsNullOrEmpty(updateTopic.Text))
+            // null = don't update (the UpdateTopic contract); an empty
+            // string is a deliberate clear — topic text is optional.
+            if (updateTopic.Text != null)
             {
                 topic.Text = updateTopic.Text.Trim();
             }

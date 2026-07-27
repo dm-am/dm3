@@ -1,35 +1,45 @@
 <script setup lang="ts">
 /**
- * GivenReviewsPage — «Поставленные оценки» пользователя.
- * Тонкая обертка над `UserRatedPostsList` в режиме `given`: чужие посты,
- * в которых этот пользователь оставил хотя бы один отзыв
- * (см. бэкенд-фильтр `reviewerUsername` в PostsQuery).
+ * GivenReviewsPage — a user's "Поставленные оценки" page.
+ * A thin wrapper over `ProfileRatedPostsList` in `given` mode: other users' posts
+ * where this user left at least one review
+ * (see the `reviewerUsername` backend filter in PostsQuery).
  */
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
+import { ErrorPage } from "@/shared/ui/ErrorPage";
 import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
-import UserRatedPostsList from "./UserRatedPostsList.vue";
+import ProfileRatedPostsList from "./ProfileRatedPostsList.vue";
+import { useProfileSubpageUser } from "./useProfileSubpageUser";
 
 const route = useRoute();
 const username = computed(() => route.params.username as string);
+
+const { notFound, canonicalUsername } = useProfileSubpageUser(username);
 
 const profileLink = computed(() => ({
   name: "profile" as const,
   params: { username: username.value },
 }));
 
-useDocumentTitle(() => `Поставленные оценки — ${username.value}`);
+useDocumentTitle(
+  () => `Поставленные оценки постов — ${canonicalUsername.value}`,
+);
 </script>
 
 <template>
-  <div class="given-reviews-page">
-    <ProfileSubpageHeader label="Поставленные оценки" :username="username">
-      Чужие посты, оцененные хотя бы раз игроком
-      <router-link :to="profileLink">{{ username }}</router-link>
+  <ErrorPage v-if="notFound" :code="404" />
+  <div v-else class="given-reviews-page">
+    <ProfileSubpageHeader
+      label="Поставленные оценки постов"
+      :username="canonicalUsername"
+    >
+      Чужие посты, которые оценил игрок
+      <router-link :to="profileLink">{{ canonicalUsername }}</router-link>
     </ProfileSubpageHeader>
 
-    <UserRatedPostsList
+    <ProfileRatedPostsList
       :username="username"
       mode="given"
       route-name="given-reviews"

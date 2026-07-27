@@ -8,10 +8,10 @@ using DM.Infrastructure.Persistence.Entities.Contracts;
 namespace DM.Infrastructure.Persistence.Entities.Community;
 
 /// <summary>
-/// DAL для записи о выдаче награды пользователю. AwardedByUserId хранится
-/// для audit (кто из админов/сениор-модов выдал), но в публичном API
-/// не отдается. ContestSeriesId — nullable, на случай будущих внеконкурсных
-/// наград; в сидере все награды привязаны к сериям.
+/// DAL for an award grant record. AwardedByUserId is stored
+/// for audit (which admin/senior mod granted it) but is not returned
+/// in the public API. ContestSeriesId is nullable, for future out-of-contest
+/// awards; in the seeder all awards are tied to series.
 /// </summary>
 [Table("UserAwards")]
 public class UserAward : ISoftDeletable
@@ -26,11 +26,11 @@ public class UserAward : ISoftDeletable
     public Guid? ContestSeriesId { get; set; }
 
     /// <summary>
-    /// Ссылка на форумный топик с самой работой (рассказом / артом /
-    /// рецензией), за которую выдана награда. Per-grant, потому что
-    /// один тип награды можно выдать разным людям за разные работы.
-    /// Опциональна (best_critic / guesser — не привязаны к конкретной
-    /// работе автора).
+    /// Link to the forum topic with the work itself (story / art /
+    /// review) the award was granted for. Per-grant, because
+    /// one award type can be granted to different people for different works.
+    /// Optional (best_critic / guesser are not tied to a specific
+    /// author's work).
     /// </summary>
     [MaxLength(500)]
     public string? WorkUrl { get; set; }

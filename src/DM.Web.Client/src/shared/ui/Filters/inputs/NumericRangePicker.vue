@@ -239,9 +239,6 @@ function canDecrement(target: "min" | "max"): boolean {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-@import "src/assets/styles/Variables"
-
 .numeric-range-picker
   padding: $small
   border-bottom: 1px solid $border
@@ -282,7 +279,6 @@ function canDecrement(target: "min" | "max"): boolean {
   background: transparent
   border: none
   cursor: pointer
-  user-select: none
 
   &:hover:not(:disabled)
     background-color: $hover-overlay

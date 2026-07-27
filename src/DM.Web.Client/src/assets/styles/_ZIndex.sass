@@ -6,14 +6,20 @@
 // See UI_STANDARDS.md for documentation.
 // =============================================================================
 
+// Chat scroll-to-latest FAB (above the message feed, below dropdowns)
+$z-chat-fab: 10
+
 // Dropdowns and autocompletes
 $z-dropdown: 100
 
 // Sticky elements (headers, sidebars)
 $z-sticky: 200
 
-// Modal backdrop
-$z-modal-backdrop: 900
+// Off-canvas navigation drawer (mobile burger menu) — above dropdowns/sticky,
+// just below the modal tier so a modal opened from inside the drawer
+// (e.g. login form via GuestActions) still layers on top of it.
+$z-drawer-scrim: 900
+$z-drawer: 950
 
 // Modal content
 $z-modal: 1000

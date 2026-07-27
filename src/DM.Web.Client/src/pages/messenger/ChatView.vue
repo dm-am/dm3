@@ -3,28 +3,27 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useMessagingStore } from "@/entities/message";
-import { useUserStore } from "@/entities/user";
+import {
+  useUserStore,
+  useMessagePermissions,
+  AvatarImg,
+} from "@/entities/user";
 import { useUiStore } from "@/shared/stores/ui";
 import { AccessPolicy } from "@/shared/api/models/community";
 import {
   groupMessagesWithSeparators,
   isDateSeparator,
-  getLikesTooltip as getLikesTooltipUtil,
   isUserOnline,
   type MessageOrSeparator,
 } from "@/shared/lib/utils/chat";
-import {
-  useMessagePermissions,
-  useVirtualScroll,
-} from "@/shared/lib/composables";
+import { useVirtualScroll } from "@/shared/lib/composables";
 import { ChatMessage } from "@/widgets/chat-message";
 import { Tooltip } from "@/shared/ui/Tooltip";
-import type { ChatId, Message } from "@/entities/message";
+import type { ChatId, Message, MessageId } from "@/entities/message";
 import dayjs from "dayjs";
 import { symbols } from "@/shared/lib/utils/icons";
-import { AvatarImg } from "@/entities/user";
 import { SvgIcon } from "@/shared/ui/Icon";
-import { BBCodeEditor } from "@/features/editor";
+import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { messagingApi } from "@/entities/message";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
 
@@ -36,9 +35,6 @@ const { isCompactLayout } = storeToRefs(useUiStore());
 const {
   selectedChat,
   messagesList,
-  loadingChat,
-  loadingMessages,
-  loadingBefore,
   sending,
   interlocutor,
   hasMoreBefore,
@@ -68,7 +64,6 @@ const canSendMessages = computed(() => currentUser.value && !isBanned.value);
 const newMessage = ref("");
 const messagesContainer = ref<HTMLElement | null>(null);
 const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
-const editEditorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 const topSentinel = ref<HTMLElement | null>(null);
 let topObserver: IntersectionObserver | null = null;
 
@@ -85,12 +80,13 @@ const messagesWithSeparators = computed((): MessageOrSeparator[] =>
 
 // Virtual scroll
 const itemCount = computed(() => messagesWithSeparators.value.length);
-const { virtualItems, totalSize, measureElement } = useVirtualScroll({
-  count: itemCount,
-  container: messagesContainer,
-  estimateSize: 80,
-  overscan: 15,
-});
+const { virtualItems, totalSize, measureElement, scrollToIndex } =
+  useVirtualScroll({
+    count: itemCount,
+    container: messagesContainer,
+    estimateSize: 80,
+    overscan: 15,
+  });
 
 // Edit state
 const editingId = ref<string | null>(null);
@@ -163,10 +159,45 @@ function cleanupInfiniteScroll() {
   topObserver = null;
 }
 
+// Scroll the virtualized list to a message and flash it (jump-to-context).
+function scrollToMessage(msgId: string) {
+  const index = messagesWithSeparators.value.findIndex(
+    (item) => !isDateSeparator(item) && (item as Message).id === msgId,
+  );
+  if (index >= 0) {
+    scrollToIndex(index, { align: "center" });
+  }
+  nextTick(() => {
+    setTimeout(() => {
+      const element = document.getElementById(`msg-${msgId}`);
+      if (element) {
+        element.classList.add("highlighted");
+        setTimeout(() => {
+          element.classList.remove("highlighted");
+          messagingStore.clearHighlight();
+        }, 1500);
+      }
+    }, 100);
+  });
+}
+
 async function loadChat() {
   const id = route.params.id as ChatId;
   await messagingStore.selectChat(id);
   if (selectedChat.value) {
+    // ?msg=<id> (from search jump-to-context) loads the window around a
+    // specific message instead of the latest page.
+    const jumpMsgId =
+      typeof route.query.msg === "string" ? route.query.msg : null;
+    if (jumpMsgId) {
+      await messagingStore.navigateToMessage(id, jumpMsgId as MessageId);
+      await messagingStore.markAsRead(id);
+      nextTick(() => {
+        setupInfiniteScroll();
+        scrollToMessage(jumpMsgId);
+      });
+      return;
+    }
     await messagingStore.fetchMessages(id);
     await messagingStore.markAsRead(id);
     scrollToBottom();
@@ -264,25 +295,8 @@ function handleScroll() {
 }
 
 // autoGrowEdit removed - BBCodeEditor handles its own sizing
-
-// Formatting
-function formatTime(dateStr: string) {
-  return dayjs(dateStr).format("HH:mm");
-}
-
-function formatFullDate(msg: Message) {
-  let result = `Отправлено: ${dayjs(msg.createdUtc).format("DD.MM.YYYY [в] HH:mm")}`;
-  if (msg.modifiedUtc) {
-    result += `\nОтредактировано: ${dayjs(msg.modifiedUtc).format("DD.MM.YYYY [в] HH:mm")}`;
-  }
-  return result;
-}
-
-function formatDeletedDate(msg: Message) {
-  let result = `Отправлено: ${dayjs(msg.createdUtc).format("DD.MM.YYYY [в] HH:mm")}`;
-  result += `\nУдалено: ${msg.modifiedUtc ? dayjs(msg.modifiedUtc).format("DD.MM.YYYY [в] HH:mm") : "неизвестно"}`;
-  return result;
-}
+// Header formatting (time / tooltips) is fully owned by ChatMessage — the
+// page renders no header markup of its own.
 
 // Track latest activity per username
 const latestActivityByUsername = computed(() => {
@@ -326,10 +340,6 @@ function isLikedByMe(msg: Message) {
   );
 }
 
-function getMsgLikesTooltip(msg: Message) {
-  return getLikesTooltipUtil(msg.likes ?? []);
-}
-
 // Edit
 function isEditing(msgId: string) {
   return editingId.value === msgId;
@@ -337,16 +347,10 @@ function isEditing(msgId: string) {
 
 async function startEdit(msg: Message) {
   editingId.value = msg.id;
-  // Fetch the original BBCode from the backend
+  // Fetch the original BBCode from the backend — seeds ChatMessage's editor
+  // once; further keystrokes stay inside ChatMessage's own local state.
   const { data } = await messagingApi.getMessageForEdit(msg.id);
-  if (data) {
-    editText.value = data.text || "";
-  } else {
-    editText.value = "";
-  }
-  nextTick(() => {
-    editEditorRef.value?.focus();
-  });
+  editText.value = data?.text || "";
 }
 
 function cancelEdit() {
@@ -354,17 +358,14 @@ function cancelEdit() {
   editText.value = "";
 }
 
-async function saveEdit(msgId: string) {
-  if (editText.value.trim()) {
-    await messagingStore.updateMessage(msgId, editText.value);
+// Receives the edited text straight from ChatMessage's @save-edit payload
+// (its own local editor state) — same contract as GlobalChatPage; the page
+// must not read back its own stale editText seed.
+async function saveEditWithText(msgId: string, text: string) {
+  if (text.trim()) {
+    await messagingStore.updateMessage(msgId, text);
   }
   cancelEdit();
-}
-
-function handleEditSubmit() {
-  if (editingId.value) {
-    saveEdit(editingId.value);
-  }
 }
 
 // Message truncation (long messages, [cut] markers, expand state) is now
@@ -393,12 +394,6 @@ async function toggleLike(msg: Message) {
   } else {
     await messagingStore.likeMessage(msg.id);
   }
-}
-
-// Anchor
-function copyAnchor(msgId: string) {
-  const url = `${window.location.origin}${window.location.pathname}#msg-${msgId}`;
-  navigator.clipboard.writeText(url);
 }
 
 // Jump to latest
@@ -435,7 +430,9 @@ function goBack() {
   router.push({ name: "messenger" });
 }
 
-watch(() => route.params.id, loadChat, { immediate: true });
+// React to chat id changes and to jumping between messages within the same
+// chat (?msg changes but params.id does not).
+watch(() => [route.params.id, route.query.msg], loadChat, { immediate: true });
 
 // Watch for new messages to init interactive BBCode elements
 watch(
@@ -639,12 +636,14 @@ onUnmounted(() => {
                         )
                       "
                       @save-edit="
-                        saveEdit(
-                          (messagesWithSeparators[virtualRow.index] as any).id,
-                        )
+                        (text) =>
+                          saveEditWithText(
+                            (messagesWithSeparators[virtualRow.index] as any)
+                              .id,
+                            text,
+                          )
                       "
                       @cancel-edit="cancelEdit"
-                      @update:edit-text="editText = $event"
                     />
                   </div>
                 </template>
@@ -768,8 +767,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/BbcodeContent"
 @import "src/assets/styles/Inputs"
 @import "src/assets/styles/ZIndex"
@@ -896,33 +893,6 @@ onUnmounted(() => {
     background-color: $bg-element
     border-radius: 0 $border-radius $border-radius 0
 
-.msg-continuation
-  .msg-time-gutter
-    width: 56px
-    flex-shrink: 0
-    display: flex
-    align-items: flex-start
-    justify-content: center
-    .msg-time-hover
-      font-size: 14px
-      color: $text-muted
-      opacity: 0
-      transition: opacity 0.1s ease
-      height: 24px
-      display: flex
-      align-items: flex-end
-      .msg-edited-icon
-        margin-left: 3px
-        margin-bottom: 4px
-
-.pm-message:hover .msg-time-gutter .msg-time-hover,
-.pm-message.hovered .msg-time-gutter .msg-time-hover
-  opacity: 1
-
-.msg-expand-row-compact
-  margin-left: 0
-  width: 100%
-
 .pm-message.highlighted
   animation: highlight-pulse 1.5s ease-out forwards
 
@@ -938,62 +908,15 @@ onUnmounted(() => {
     box-shadow: inset 3px 0 0 0 transparent
 
 
-// msg-* standalone styles moved to ChatMessage.vue
+// All msg-* header/content/reaction styles live in ChatMessage.vue (shared
+// widget, scoped there). Rules for them here would be dead: parent scoped
+// CSS does not reach a child component's inner DOM without :deep.
 
-.pm-message:hover .msg-content.collapsed::after,
-.pm-message.hovered .msg-content.collapsed::after
-  background: linear-gradient(to bottom, transparent, var(--bg-element))
-
-
-.pm-message:hover .reaction-badge,
-.pm-message.hovered .reaction-badge
-  background-color: $hover-overlay
-
-.pm-message:hover .reaction-badge:hover,
-.pm-message.hovered .reaction-badge:hover
-  background-color: $active-overlay
-
-.pm-message:hover .reaction-badge.my-reaction,
-.pm-message.hovered .reaction-badge.my-reaction
-  background-color: $active-overlay
-
-.pm-message:hover .reaction-badge.my-reaction:hover,
-.pm-message.hovered .reaction-badge.my-reaction:hover
-  background-color: $active-overlay
-
-// BBCodeEditor overlay при hover на сообщение
-// Overlay накладывается ПОВЕРХ базового $input-bg (не заменяет)
+// BBCodeEditor overlay on message hover
+// The overlay is layered ON TOP of the base $input-bg (does not replace it)
 .pm-message:hover :deep(.bbcode-editor),
 .pm-message.hovered :deep(.bbcode-editor)
   background: linear-gradient($hover-overlay, $hover-overlay), $input-bg
-
-.reaction-count
-  color: inherit
-  font-size: $secondary-font-size
-  font-weight: 500
-
-.msg-deleted
-  display: flex
-  flex-direction: column
-  justify-content: center
-  min-height: 40px
-  color: $text-muted
-  &.clickable
-    cursor: pointer
-    &:hover .msg-deleted-label
-      text-decoration: underline
-
-.msg-deleted-label
-  font-style: italic
-
-.msg-deleted-icon
-  width: 14px
-  height: 14px
-  margin-left: -3px
-  flex-shrink: 0
-  position: relative
-  top: 1px
-  color: $text-muted
 
 .input-wrapper
   flex-shrink: 0
@@ -1002,6 +925,9 @@ onUnmounted(() => {
   border-top: 1px dashed
   border-color: $border
 
+// CHAT-10: same control idiom as the global chat's scroll-to-latest and the
+// fixed scroll-nav buttons (24px square, 16px glyph, $border-radius — never
+// a circle). Keeps a soft shadow because it floats over message content.
 .scroll-to-latest
   position: absolute
   bottom: $medium
@@ -1010,16 +936,20 @@ onUnmounted(() => {
   display: flex
   align-items: center
   justify-content: center
-  width: 40px
-  height: 40px
+  width: 24px
+  height: 24px
+  padding: 0
   border: 1px solid $border
-  border-radius: 50%
+  border-radius: $border-radius
   background-color: $bg-element
   color: $text-muted
   cursor: pointer
   transition: transform 0.15s ease
   box-shadow: 0 2px 8px $shadow-color
-  z-index: 10
+  z-index: $z-chat-fab
+  svg
+    width: 16px
+    height: 16px
   &:hover
     background-color: $bg-element-accent
     color: $text
@@ -1044,7 +974,8 @@ onUnmounted(() => {
   padding: $small
   color: $accent-red
 
-// Compact display styles
+// Compact display — wrapper overrides only (own elements). The compact
+// header/content layout itself is handled by ChatMessage's `compact` prop.
 .messages-wrapper.layout-compact
   .pm-message
     padding: $tiny $small $tiny $small
@@ -1052,77 +983,4 @@ onUnmounted(() => {
 
     &.continuation
       margin-top: 0
-
-  // Hide avatars in compact layout
-  .msg-avatar-link,
-  .msg-avatar-placeholder
-    display: none
-
-  // Messages layout becomes inline
-  .msg-layout
-    display: block
-
-  .msg-body
-    display: block
-
-  .msg-header
-    display: inline-flex
-    align-items: center
-    gap: $small
-    margin-bottom: 0
-    line-height: 1
-
-  // Time group with fixed width for alignment
-  .msg-time-group
-    display: inline-flex
-    align-items: center
-    gap: 6px
-    margin-right: 0
-    min-width: 62px
-
-  .msg-author
-    display: inline-flex
-    align-items: center
-
-  // Content on new line, aligned with author name
-  .msg-content
-    display: block
-    margin-left: calc(62px + #{$small})
-    margin-top: 0
-
-  // Edit form also aligned with content
-  .msg-edit
-    margin-left: calc(62px + #{$small})
-
-  .msg-text
-    display: block
-
-  // Reactions on new line
-  .msg-reactions
-    display: block
-    margin-top: $tiny
-    margin-left: calc(62px + #{$small})
-
-  .msg-expand-row
-    display: flex
-    margin-top: $tiny
-    margin-left: 0
-    width: 100%
-
-  // Continuation messages in compact layout
-  .msg-continuation
-    display: block
-
-    .msg-time-gutter
-      display: inline-flex
-      width: 62px
-      justify-content: flex-start
-
-    .msg-body
-      display: block
-
-  // Deleted messages compact
-  .msg-deleted
-    display: inline-flex
-    min-height: auto
 </style>

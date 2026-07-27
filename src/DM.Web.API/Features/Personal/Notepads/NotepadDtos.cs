@@ -40,7 +40,7 @@ public class NotepadEntryResponse
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>Last update date</summary>
-    public DateTimeOffset? UpdatedUtc { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 }
 
 /// <summary>

@@ -1,1 +1,1 @@
-export { CreateBlogPage } from "./ui";
+export { CreateBlogForm } from "./ui";

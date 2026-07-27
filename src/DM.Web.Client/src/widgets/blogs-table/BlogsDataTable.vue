@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { DataTable, type Column, type SortState } from "@/shared/ui/DataTable";
 import { Tooltip } from "@/shared/ui/Tooltip";
+import { ErrorState } from "@/shared/ui/ErrorState";
+import { CounterPair } from "@/shared/ui/CounterPair";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import { UserLink } from "@/entities/user";
 import {
@@ -22,6 +24,10 @@ const { searchResult, searchLoading, searchError } = storeToRefs(blogsStore);
 // filterState is computed from URL (single source of truth, no sync needed)
 const { filterState, searchParams, hasActiveFilters } = useBlogsFilter();
 
+function retrySearch() {
+  blogsStore.searchBlogs(searchParams.value);
+}
+
 // Two-state empty text
 const emptyText = computed(() =>
   hasActiveFilters.value
@@ -29,8 +35,8 @@ const emptyText = computed(() =>
     : "Блогов пока нет",
 );
 const {
-  buildTooltip,
   buildStatusTooltip,
+  buildAssistantTooltip,
   getUnreadPublications,
   getUnreadComments,
   formatUnreadPublicationsTooltip,
@@ -48,7 +54,6 @@ const columns: Column[] = [
     label: "Название",
     width: "40%",
     align: "left",
-    sortable: true,
   },
   { key: "authors", label: "Ведущие", width: "25%", align: "left" },
   {
@@ -56,7 +61,6 @@ const columns: Column[] = [
     label: "Статус блога",
     width: "25%",
     align: "left",
-    sortable: true,
   },
   { key: "readers", label: "Читатели", width: "10%", align: "center" },
 ];
@@ -97,12 +101,6 @@ function createParamsKey(params: BlogsSearchParams): string {
 
 const paramsKey = computed(() => createParamsKey(searchParams.value));
 
-// Build assistant tooltip (unified with games)
-function buildAssistantTooltip(assistants: { username: string }[]): string {
-  const names = assistants.map((a) => a.username).join(", ");
-  return `Ассистент${assistants.length > 1 ? "ы" : ""}: ${names}`;
-}
-
 // Closed blogs never get the green "new" highlight (matches BlogLink)
 function isNewHighlight(blog: Blog): boolean {
   return blog.status !== "Closed" && isNew(blog);
@@ -121,6 +119,12 @@ watch(
 function handlePrefetch(page: number) {
   blogsStore.prefetchPage(page);
 }
+
+// Paging scrolls the table itself back into view (not the page top)
+const tableRef = ref<{ $el: HTMLElement } | null>(null);
+function pagingAnchor(): HTMLElement | null {
+  return tableRef.value?.$el ?? null;
+}
 </script>
 
 <template>
@@ -129,15 +133,18 @@ function handlePrefetch(page: number) {
     <BlogsFilter class="filters" />
 
     <!-- Error state -->
-    <div v-if="searchError" class="error-message">
-      {{ searchError }}
-    </div>
+    <ErrorState
+      v-if="searchError"
+      :message="searchError"
+      :retry="retrySearch"
+      class="error-state-block"
+    />
 
     <!-- Table. Hidden when the request failed and there is nothing to show,
          so the empty-state text never appears next to the error message -->
     <DataTable
       v-if="!searchError || blogs.length > 0"
-      id="results"
+      ref="tableRef"
       :columns="columns"
       :data="blogs"
       :loading="searchLoading"
@@ -152,39 +159,32 @@ function handlePrefetch(page: number) {
     >
       <!-- Title column: Title (unread/comments) -->
       <template #cell-title="{ row }">
-        <Tooltip :text="buildTooltip(row)">
-          <router-link
-            :to="{ name: 'blog', params: { id: row.id } }"
-            :class="['blog-link', { 'new-item': isNewHighlight(row) }]"
-          >
-            <span
-              v-if="filterState.search"
-              v-html="highlightMatch(row.title, filterState.search)"
-            ></span>
-            <template v-else>{{ row.title }}</template>
-          </router-link> </Tooltip
-        >{{ " "
-        }}<span class="counters"
-          ><span class="muted">(</span
-          ><Tooltip
-            :text="formatUnreadPublicationsTooltip(getUnreadPublications(row))"
-          >
-            <router-link
-              :to="{ name: 'blog', params: { id: row.id } }"
-              :aria-label="
-                formatUnreadPublicationsTooltip(getUnreadPublications(row))
-              "
-              >{{ getUnreadPublications(row) }}</router-link
-            > </Tooltip
-          ><span class="muted">/</span
-          ><Tooltip :text="formatUnreadCommentsTooltip(getUnreadComments(row))">
-            <router-link
-              :to="{ name: 'blog', params: { id: row.id } }"
-              :aria-label="formatUnreadCommentsTooltip(getUnreadComments(row))"
-              >{{ getUnreadComments(row) }}</router-link
-            > </Tooltip
-          ><span class="muted">)</span></span
+        <router-link
+          :to="{ name: 'blog', params: { id: row.publicId ?? row.id } }"
+          :class="[
+            'blog-link',
+            {
+              'new-item': isNewHighlight(row),
+              'closed-item': row.status === 'Closed',
+            },
+          ]"
         >
+          <span
+            v-if="filterState.search"
+            v-html="highlightMatch(row.title, filterState.search)"
+          ></span>
+          <template v-else>{{ row.title }}</template> </router-link
+        >{{ " "
+        }}<CounterPair
+          :first-value="getUnreadPublications(row)"
+          :first-to="{ name: 'blog', params: { id: row.publicId ?? row.id } }"
+          :first-label="
+            formatUnreadPublicationsTooltip(getUnreadPublications(row))
+          "
+          :second-value="getUnreadComments(row)"
+          :second-to="{ name: 'blog', params: { id: row.publicId ?? row.id } }"
+          :second-label="formatUnreadCommentsTooltip(getUnreadComments(row))"
+        />
       </template>
 
       <!-- Authors column (unified with games "Ведущие") -->
@@ -194,17 +194,17 @@ function handlePrefetch(page: number) {
           :user="row.author"
           :search-query="filterState.search"
           hide-badge
-        /><Tooltip
-          v-if="row.assistants?.length"
-          :text="buildAssistantTooltip(row.assistants)"
+        /><template v-if="row.assistants?.length"
+          >{{ " "
+          }}<Tooltip :text="buildAssistantTooltip(row.assistants)" focusable>
+            <span class="assistant-count">[+{{ row.assistants.length }}]</span>
+          </Tooltip></template
         >
-          <span class="assistant-count">[+{{ row.assistants.length }}]</span>
-        </Tooltip>
       </template>
 
       <!-- Status column with date tooltip -->
       <template #cell-status="{ row }">
-        <Tooltip :text="buildStatusTooltip(row)">
+        <Tooltip :text="buildStatusTooltip(row)" focusable>
           <span class="status-wrapper">
             <BlogStatusBadge :status="row.status" />
           </span>
@@ -213,7 +213,7 @@ function handlePrefetch(page: number) {
 
       <!-- Readers column (unified with games) -->
       <template #cell-readers="{ row }">
-        <Tooltip :text="buildReadersTooltip(row)">
+        <Tooltip :text="buildReadersTooltip(row)" focusable>
           <span class="readers-count">{{ row.subscribersCount ?? 0 }}</span>
         </Tooltip>
       </template>
@@ -228,6 +228,7 @@ function handlePrefetch(page: number) {
           :to="{ name: 'blogs' }"
           :use-query="true"
           :on-prefetch="handlePrefetch"
+          :scroll-anchor="pagingAnchor"
         />
       </template>
     </DataTable>
@@ -235,19 +236,13 @@ function handlePrefetch(page: number) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 .blogs-data-table
   width: 100%
 
 .filters
   margin-bottom: $medium
 
-.error-message
-  padding: $medium
-  color: $text-on-red
-  background-color: $bg-highlight-red
-  border-radius: $border-radius
+.error-state-block
   margin-bottom: $medium
 
 .blog-link
@@ -260,23 +255,16 @@ function handlePrefetch(page: number) {
     color: $accent-green
     &:hover
       color: $accent-green-hover
-
-.counters
-  white-space: nowrap
-  a
-    color: $link
+  &.closed-item
+    color: $text-muted
     &:hover
       color: $link-hover
-
-.muted
-  color: $text-muted
 
 .status-wrapper
   cursor: help
 
 .assistant-count
   color: $text-muted
-  margin-left: 0.25em
   cursor: help
 
 .readers-count

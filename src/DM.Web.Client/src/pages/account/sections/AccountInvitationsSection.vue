@@ -30,9 +30,11 @@
                   {{ invitation.inviterUsername }}
                 </RouterLink>
               </span>
+              <span class="meta-sep" aria-hidden="true">{{ " | " }}</span>
               <span class="invitation-role">{{
                 typeLabel(invitation.type)
               }}</span>
+              <span class="meta-sep" aria-hidden="true">{{ " | " }}</span>
               <span class="invitation-date">{{
                 formatDate(invitation.createdUtc)
               }}</span>
@@ -63,9 +65,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import dayjs from "dayjs";
 import { RouterLink } from "vue-router";
 import { AccountApi } from "@/shared/api";
+import { formatDate } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { Invitation, InvitationType } from "@/entities/game";
 
@@ -100,10 +102,6 @@ function typeLabel(type: InvitationType): string {
   }
 }
 
-function formatDate(dateStr: string): string {
-  return dayjs(dateStr).format("DD.MM.YYYY");
-}
-
 async function accept(invitationId: string) {
   processingId.value = invitationId;
   const { error } = await AccountApi.acceptInvitation(invitationId);
@@ -132,8 +130,6 @@ async function reject(invitationId: string) {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "../AccountPage.styles"
 
 .invitations-content
@@ -194,7 +190,6 @@ async function reject(invitationId: string) {
 .invitation-details
   display: flex
   flex-wrap: wrap
-  gap: $small
   font-size: $secondary-font-size
   color: $text-muted
 
@@ -209,15 +204,8 @@ async function reject(invitationId: string) {
   &:hover
     text-decoration: underline
 
-.invitation-role
-  &::before
-    content: "\2022"
-    margin-right: $small
-
-.invitation-date
-  &::before
-    content: "\2022"
-    margin-right: $small
+.meta-sep
+  color: $text-muted
 
 .invitation-actions
   display: flex
@@ -245,12 +233,12 @@ async function reject(invitationId: string) {
     color: $accent-green
 
     &:hover:not(:disabled)
-      background-color: rgba($accent-green, 0.1)
+      background-color: $accent-green-muted
 
   &--reject
     border: 1px solid $border
     color: $text-muted
 
     &:hover:not(:disabled)
-      background-color: rgba($text-muted, 0.1)
+      background-color: $text-muted-muted
 </style>

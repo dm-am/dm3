@@ -5,12 +5,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, RouterLinkStub } from "@vue/test-utils";
 import Paging from "../Paging.vue";
+import { scrollBlockIntoView, scrollContentToTop } from "@/shared/lib/scroll";
 
 // Mock vue-router
 vi.mock("vue-router", () => ({
   useRoute: () => ({
     query: {},
   }),
+}));
+
+// Mock the scroll helpers so click behavior can be asserted
+vi.mock("@/shared/lib/scroll", () => ({
+  scrollBlockIntoView: vi.fn(),
+  scrollContentToTop: vi.fn(),
 }));
 
 // Mock Tooltip component
@@ -189,6 +196,11 @@ describe("Paging", () => {
   // ============================================================================
 
   describe("Optimistic Update", () => {
+    beforeEach(() => {
+      vi.mocked(scrollBlockIntoView).mockClear();
+      vi.mocked(scrollContentToTop).mockClear();
+    });
+
     it("updates current page immediately on click", async () => {
       const wrapper = mountPaging({
         paging: { ...defaultPaging, current: 1 },
@@ -200,6 +212,42 @@ describe("Paging", () => {
       // Should update internal state optimistically
       const activeLink = wrapper.find(".page-number.active");
       expect(activeLink.exists()).toBe(true);
+    });
+
+    it("scrolls the content to top when no scroll anchor is set", async () => {
+      const wrapper = mountPaging({
+        paging: { ...defaultPaging, current: 1 },
+      });
+
+      await wrapper.find(".page-number:not(.active)").trigger("click");
+
+      expect(scrollContentToTop).toHaveBeenCalled();
+      expect(scrollBlockIntoView).not.toHaveBeenCalled();
+    });
+
+    it("scrolls the anchored block into view when scrollAnchor is set", async () => {
+      const anchorEl = document.createElement("div");
+      const wrapper = mountPaging({
+        paging: { ...defaultPaging, current: 1 },
+        scrollAnchor: () => anchorEl,
+      });
+
+      await wrapper.find(".page-number:not(.active)").trigger("click");
+
+      expect(scrollBlockIntoView).toHaveBeenCalledWith(anchorEl);
+      expect(scrollContentToTop).not.toHaveBeenCalled();
+    });
+
+    it("falls back to content top when the anchor getter returns null", async () => {
+      const wrapper = mountPaging({
+        paging: { ...defaultPaging, current: 1 },
+        scrollAnchor: () => null,
+      });
+
+      await wrapper.find(".page-number:not(.active)").trigger("click");
+
+      expect(scrollContentToTop).toHaveBeenCalled();
+      expect(scrollBlockIntoView).not.toHaveBeenCalled();
     });
   });
 

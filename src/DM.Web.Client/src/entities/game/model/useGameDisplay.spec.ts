@@ -28,7 +28,6 @@ function makeUser(username: string, id: string): UserRef {
     lastActivityUtc: asServed("2026-01-01T00:00:00Z"),
     role: asServed("RegularUser"),
     isNewbie: false,
-    isHonorary: false,
   } as unknown as UserRef;
 }
 
@@ -120,8 +119,8 @@ describe("useGameDisplay.buildRoomTooltip — room tooltip for featured / Pulse 
 
     const expected = [
       "Персонажи:",
-      "• Арагорн Следопыт (testuser)",
-      "• Горим Железный Кулак (seconduser)",
+      "- Арагорн Следопыт (testuser)",
+      "- Горим Железный Кулак (seconduser)",
       "",
       "Доступ: открытый",
     ].join("\n");
@@ -135,7 +134,7 @@ describe("useGameDisplay.buildRoomTooltip — room tooltip for featured / Pulse 
     const room = makeRoom();
     const result = buildRoomTooltip(room, game);
     expect(result).toContain("Персонажи:");
-    expect(result).toContain("• Арагорн Следопыт (testuser)");
+    expect(result).toContain("- Арагорн Следопыт (testuser)");
     expect(result).toContain("Доступ: открытый");
   });
 
@@ -177,5 +176,75 @@ describe("useGameDisplay.buildRoomTooltip — room tooltip for featured / Pulse 
       accesses: [],
     });
     expect(buildRoomTooltip(privateRoom, game, undefined)).toBe("");
+  });
+});
+
+describe("useGameDisplay.formatSlots — games table status column", () => {
+  it("shows current/limit when a finite pcLimit is set", () => {
+    const { formatSlots } = useGameDisplay();
+    expect(formatSlots({ recruitment: { pcCount: 2, pcLimit: 5 } })).toBe(
+      "[2/5]",
+    );
+  });
+
+  it("shows the infinity symbol when pcLimit is unset", () => {
+    const { formatSlots } = useGameDisplay();
+    expect(formatSlots({ recruitment: { pcCount: 3, pcLimit: null } })).toBe(
+      "[3/∞]",
+    );
+    expect(formatSlots({})).toBe("[0/∞]");
+  });
+});
+
+describe("useGameDisplay.buildSlotsTooltip — games table status column tooltip", () => {
+  it("lists active characters and free slot count when pcLimit is finite", () => {
+    const { buildSlotsTooltip } = useGameDisplay();
+    const result = buildSlotsTooltip({
+      recruitment: { pcCount: 1, pcLimit: 3 },
+      activeCharacters: [
+        { name: "Арагорн Следопыт", ownerUsername: "testuser" },
+      ],
+    });
+    expect(result).toBe(
+      [
+        "Персонажи:",
+        "- Арагорн Следопыт (testuser)",
+        "",
+        "Свободных мест: 2",
+      ].join("\n"),
+    );
+  });
+
+  it('shows "Мест нет" when the game is full', () => {
+    const { buildSlotsTooltip } = useGameDisplay();
+    const result = buildSlotsTooltip({
+      recruitment: { pcCount: 3, pcLimit: 3 },
+      activeCharacters: [],
+    });
+    expect(result).toBe(["Нет персонажей", "", "Мест нет"].join("\n"));
+  });
+
+  it('shows "без ограничений" when pcLimit is unset', () => {
+    const { buildSlotsTooltip } = useGameDisplay();
+    const result = buildSlotsTooltip({});
+    expect(result).toBe(
+      ["Нет персонажей", "", "Мест: без ограничений"].join("\n"),
+    );
+  });
+});
+
+describe("useGameDisplay.buildAssistantTooltip — games table master column tooltip", () => {
+  it('uses singular "Ассистент" for one assistant', () => {
+    const { buildAssistantTooltip } = useGameDisplay();
+    expect(buildAssistantTooltip([{ username: "helper1" }])).toBe(
+      "Ассистент: helper1",
+    );
+  });
+
+  it('uses plural "Ассистенты" for multiple assistants', () => {
+    const { buildAssistantTooltip } = useGameDisplay();
+    expect(
+      buildAssistantTooltip([{ username: "helper1" }, { username: "helper2" }]),
+    ).toBe("Ассистенты: helper1, helper2");
   });
 });

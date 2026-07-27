@@ -23,10 +23,14 @@ const emit = defineEmits<{
 function handleBack() {
   emit("back");
 }
+
+function handleEscape() {
+  emit("close");
+}
 </script>
 
 <template>
-  <div class="filter-dropdown-container">
+  <div class="filter-dropdown-container" @keydown.esc="handleEscape">
     <!-- Navigation header -->
     <FilterDropdownHeader
       v-if="showNavHeader && navTitle"

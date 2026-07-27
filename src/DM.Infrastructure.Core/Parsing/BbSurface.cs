@@ -12,13 +12,8 @@ public enum BbSurface
     GamePost = 0,
 
     /// <summary>
-    /// Forum topic body. Allows [mod], no [private].
-    /// </summary>
-    ForumTopic = 1,
-
-    /// <summary>
-    /// Any comment (forum, blog, game, etc.) that uses the shared
-    /// Comment entity. Allows [mod], no [private].
+    /// Any comment or topic body (forum, blog, game, etc.) that uses the
+    /// shared Comment entity. Allows [mod], no [private].
     /// </summary>
     Comment = 2,
 

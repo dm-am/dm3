@@ -84,26 +84,26 @@ export function useBlogDisplay() {
 
   /**
    * Build blog tooltip with labels (multiline):
-   * Автор: Username
-   * Ассистент(ы): A, B
-   * Читатели: Z
+   *   "Автор: Username"
+   *   "Ассистент(ы): A, B"
+   *   "Читатели: Z"
    */
   function buildTooltip(blog: Blog | BlogRef): string {
     const parts: string[] = [];
 
-    // Автор: Username
+    // "Автор: {username}"
     if (blog.author?.username) {
       parts.push(`Автор: ${blog.author.username}`);
     }
 
-    // Ассистент(ы): Username, ... (if any)
+    // "Ассистент(ы): Username, ..." (if any)
     const assistants = blog.assistants?.filter((a) => a?.username) ?? [];
     if (assistants.length > 0) {
       const label = assistants.length === 1 ? "Ассистент" : "Ассистенты";
       parts.push(`${label}: ${assistants.map((a) => a.username).join(", ")}`);
     }
 
-    // Читатели: Z
+    // "Читатели: {N}"
     const totalReaders = blog.subscribersCount ?? 0;
     parts.push(`Читатели: ${totalReaders}`);
 
@@ -111,23 +111,12 @@ export function useBlogDisplay() {
   }
 
   /**
-   * Format status for display (short form, unified with games)
+   * Build assistant(s) tooltip: "Ассистент: X" / "Ассистенты: X, Y".
+   * Unified with games (see useGameDisplay.buildAssistantTooltip).
    */
-  function formatStatus(blog: Blog | BlogRef): string {
-    if (blog.status === "Draft") return "Оформляется";
-    if (blog.status === "Active") return "Открыт";
-    if (blog.status === "Closed") return "Закрыт";
-    return String(blog.status);
-  }
-
-  /**
-   * Get status CSS class for styling
-   */
-  function getStatusClass(blog: Blog | BlogRef): string {
-    if (blog.status === "Draft") return "draft";
-    if (blog.status === "Active") return "active";
-    if (blog.status === "Closed") return "closed";
-    return "";
+  function buildAssistantTooltip(assistants: { username: string }[]): string {
+    const names = assistants.map((a) => a.username).join(", ");
+    return `Ассистент${assistants.length > 1 ? "ы" : ""}: ${names}`;
   }
 
   /**
@@ -167,13 +156,6 @@ export function useBlogDisplay() {
   }
 
   /**
-   * Check if blog has any unread content
-   */
-  function hasUnread(blog: Blog | BlogRef): boolean {
-    return getUnreadPublications(blog) > 0 || getUnreadComments(blog) > 0;
-  }
-
-  /**
    * Check if blog was activated less than 7 days ago
    * Used to highlight "new" blogs with green color
    * Optimized: uses cached timestamp instead of creating Date per call
@@ -189,13 +171,11 @@ export function useBlogDisplay() {
   return {
     buildTooltip,
     buildStatusTooltip,
-    formatStatus,
-    getStatusClass,
+    buildAssistantTooltip,
     getUnreadPublications,
     getUnreadComments,
     formatUnreadPublicationsTooltip,
     formatUnreadCommentsTooltip,
-    hasUnread,
     isNew,
   };
 }

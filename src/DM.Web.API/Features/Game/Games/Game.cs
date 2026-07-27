@@ -113,6 +113,45 @@ public class Game : GameRef
     /// Unique players (authors of active characters) - for game details page.
     /// </summary>
     public IEnumerable<UserRef>? Players { get; set; }
+
+    /// <summary>
+    /// Characters of the player targeted by the playerUsername query filter
+    /// (name + status for the profile games table). Conditional: populated
+    /// only on list responses where the playerUsername filter is set;
+    /// null (omitted from JSON) otherwise.
+    /// </summary>
+    public IEnumerable<PlayerCharacterInfo>? PlayerCharacters { get; set; }
+}
+
+/// <summary>
+/// Character info of the player targeted by the playerUsername filter
+/// </summary>
+public class PlayerCharacterInfo
+{
+    /// <summary>
+    /// Character name
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Character status
+    /// </summary>
+    public CharacterStatus Status { get; set; }
+
+    /// <summary>
+    /// Character died in game (meaningful when Status = Retired)
+    /// </summary>
+    public bool IsDead { get; set; }
+
+    /// <summary>
+    /// Player voluntarily left the game (meaningful when Status = Retired)
+    /// </summary>
+    public bool IsPlayerLeft { get; set; }
+
+    /// <summary>
+    /// Player was exiled by the master (meaningful when Status = Retired)
+    /// </summary>
+    public bool IsPlayerExiled { get; set; }
 }
 
 /// <summary>
@@ -141,7 +180,7 @@ public class GameRecruitment
     public DateTimeOffset? StartedUtc { get; set; }
 
     /// <summary>
-    /// Whether this is a subsequent recruitment (донабор, RecruitmentCount >= 2)
+    /// Whether this is a subsequent recruitment ("донабор", RecruitmentCount >= 2)
     /// </summary>
     public bool IsSubsequent { get; set; }
 }
@@ -151,26 +190,6 @@ public class GameRecruitment
 /// </summary>
 public class GamePrivacySettings
 {
-    /// <summary>
-    /// User can read characters temper
-    /// </summary>
-    public bool? ViewTemper { get; set; }
-
-    /// <summary>
-    /// User can read characters story
-    /// </summary>
-    public bool? ViewStory { get; set; }
-
-    /// <summary>
-    /// User can read characters skills
-    /// </summary>
-    public bool? ViewSkills { get; set; }
-
-    /// <summary>
-    /// User can read characters inventory
-    /// </summary>
-    public bool? ViewInventory { get; set; }
-
     /// <summary>
     /// User can read other players private messages in in-game posts
     /// </summary>

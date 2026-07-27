@@ -55,31 +55,6 @@ public class CreateGameEntity
     public DateTimeOffset? ActivatedUtc { get; set; }
 
     /// <summary>
-    /// Only GM and character author can see character temper
-    /// </summary>
-    public bool HideTemper { get; set; }
-
-    /// <summary>
-    /// Only GM and character author can see character skills
-    /// </summary>
-    public bool HideSkills { get; set; }
-
-    /// <summary>
-    /// Only GM and character author can see character inventory
-    /// </summary>
-    public bool HideInventory { get; set; }
-
-    /// <summary>
-    /// Only GM and character author can see character story
-    /// </summary>
-    public bool HideStory { get; set; }
-
-    /// <summary>
-    /// Characters has no alignment
-    /// </summary>
-    public bool DisableAlignment { get; set; }
-
-    /// <summary>
     /// Only GM and post author can see dice roll result
     /// </summary>
     public bool HideDiceResult { get; set; }
@@ -176,6 +151,11 @@ public class CreateRoomEntity
     public bool DiceEnabled { get; set; }
 
     /// <summary>
+    /// Room is archived (hidden from the active rooms list, kept for history)
+    /// </summary>
+    public bool IsArchived { get; set; }
+
+    /// <summary>
     /// Room order number
     /// </summary>
     public double OrderNumber { get; set; }
@@ -247,31 +227,6 @@ public class UpdateGameEntity
     public string? Info { get; set; }
 
     /// <summary>
-    /// Hide character temper (if changed)
-    /// </summary>
-    public bool? HideTemper { get; set; }
-
-    /// <summary>
-    /// Hide character skills (if changed)
-    /// </summary>
-    public bool? HideSkills { get; set; }
-
-    /// <summary>
-    /// Hide character inventory (if changed)
-    /// </summary>
-    public bool? HideInventory { get; set; }
-
-    /// <summary>
-    /// Hide character story (if changed)
-    /// </summary>
-    public bool? HideStory { get; set; }
-
-    /// <summary>
-    /// Disable character alignment (if changed)
-    /// </summary>
-    public bool? DisableAlignment { get; set; }
-
-    /// <summary>
     /// Hide dice roll result (if changed)
     /// </summary>
     public bool? HideDiceResult { get; set; }
@@ -315,6 +270,24 @@ public class UpdateGameEntity
     /// Whether to clear ClosedUtc (when reopening)
     /// </summary>
     public bool ClearClosedUtc { get; set; }
+
+    /// <summary>
+    /// Curating mentor user id (only applied when <see cref="SetMentorId"/> is true;
+    /// null clears the curator). Kept separate from the nullable value so that the
+    /// repository can distinguish "leave the current mentor untouched" from
+    /// "explicitly set the mentor to null".
+    /// </summary>
+    public Guid? MentorId { get; set; }
+
+    /// <summary>
+    /// Whether <see cref="MentorId"/> should be written (set or cleared).
+    /// </summary>
+    public bool SetMentorId { get; set; }
+
+    /// <summary>
+    /// Whether to clear RecruitmentStartedUtc (admin recruitment-date reset)
+    /// </summary>
+    public bool ClearRecruitmentStartedUtc { get; set; }
 }
 
 /// <summary>
@@ -366,6 +339,11 @@ public class UpdateRoomEntity
     /// Dice rolling is enabled in this room (if changed)
     /// </summary>
     public bool? DiceEnabled { get; set; }
+
+    /// <summary>
+    /// Room is archived (if changed)
+    /// </summary>
+    public bool? IsArchived { get; set; }
 
     /// <summary>
     /// Linked chat identifier (for RoomType.Chat rooms)
@@ -502,46 +480,6 @@ public class CreateCharacterEntity
     public string Name { get; set; } = null!;
 
     /// <summary>
-    /// Character race
-    /// </summary>
-    public string? Race { get; set; }
-
-    /// <summary>
-    /// Character class
-    /// </summary>
-    public string? Class { get; set; }
-
-    /// <summary>
-    /// Character alignment
-    /// </summary>
-    public Alignment? Alignment { get; set; }
-
-    /// <summary>
-    /// Character appearance
-    /// </summary>
-    public string? Appearance { get; set; }
-
-    /// <summary>
-    /// Character temper
-    /// </summary>
-    public string? Temper { get; set; }
-
-    /// <summary>
-    /// Character story
-    /// </summary>
-    public string? Story { get; set; }
-
-    /// <summary>
-    /// Character skills
-    /// </summary>
-    public string? Skills { get; set; }
-
-    /// <summary>
-    /// Character inventory
-    /// </summary>
-    public string? Inventory { get; set; }
-
-    /// <summary>
     /// Character is NPC
     /// </summary>
     public bool IsNpc { get; set; }
@@ -601,46 +539,6 @@ public class UpdateCharacterEntity
     /// Character name (if changed)
     /// </summary>
     public string? Name { get; set; }
-
-    /// <summary>
-    /// Character race (if changed)
-    /// </summary>
-    public string? Race { get; set; }
-
-    /// <summary>
-    /// Character class (if changed)
-    /// </summary>
-    public string? Class { get; set; }
-
-    /// <summary>
-    /// Character alignment (if changed)
-    /// </summary>
-    public Alignment? Alignment { get; set; }
-
-    /// <summary>
-    /// Character appearance (if changed)
-    /// </summary>
-    public string? Appearance { get; set; }
-
-    /// <summary>
-    /// Character temper (if changed)
-    /// </summary>
-    public string? Temper { get; set; }
-
-    /// <summary>
-    /// Character story (if changed)
-    /// </summary>
-    public string? Story { get; set; }
-
-    /// <summary>
-    /// Character skills (if changed)
-    /// </summary>
-    public string? Skills { get; set; }
-
-    /// <summary>
-    /// Character inventory (if changed)
-    /// </summary>
-    public string? Inventory { get; set; }
 
     /// <summary>
     /// Character is NPC (if changed)
@@ -1083,9 +981,40 @@ public class CreateAttributeSchema
 }
 
 /// <summary>
+/// Shared shape of an attribute specification on the write path
+/// </summary>
+public interface IAttributeSpecificationInput
+{
+    /// <summary>
+    /// Specification title
+    /// </summary>
+    string Title { get; }
+
+    /// <summary>
+    /// Attribute type
+    /// </summary>
+    AttributeSpecificationType Type { get; }
+
+    /// <summary>
+    /// Maximum length (text/number/BBCode types)
+    /// </summary>
+    int? MaxLength { get; }
+
+    /// <summary>
+    /// Available values (list types)
+    /// </summary>
+    IEnumerable<ListValue> Values { get; }
+
+    /// <summary>
+    /// Is descriptor attribute
+    /// </summary>
+    bool IsDescriptor { get; }
+}
+
+/// <summary>
 /// DTO for creating an attribute specification
 /// </summary>
-public class CreateAttributeSpecification
+public class CreateAttributeSpecification : IAttributeSpecificationInput
 {
     /// <summary>
     /// Specification title
@@ -1093,9 +1022,34 @@ public class CreateAttributeSpecification
     public string Title { get; set; } = null!;
 
     /// <summary>
-    /// Specification constraint (optional JSON)
+    /// Attribute type
     /// </summary>
-    public string? Constraint { get; set; }
+    public AttributeSpecificationType Type { get; set; }
+
+    /// <summary>
+    /// Value is required
+    /// </summary>
+    public bool Required { get; set; }
+
+    /// <summary>
+    /// Is descriptor attribute (shown on game main page)
+    /// </summary>
+    public bool IsDescriptor { get; set; }
+
+    /// <summary>
+    /// Is hidden attribute (only GM and owner can see)
+    /// </summary>
+    public bool IsHidden { get; set; }
+
+    /// <summary>
+    /// Maximum length (text/number/BBCode types)
+    /// </summary>
+    public int? MaxLength { get; set; }
+
+    /// <summary>
+    /// Available values (list types)
+    /// </summary>
+    public IEnumerable<ListValue> Values { get; set; } = [];
 
     /// <summary>
     /// Order index
@@ -1132,7 +1086,7 @@ public class UpdateAttributeSchema
 /// <summary>
 /// DTO for updating an attribute specification
 /// </summary>
-public class UpdateAttributeSpecification
+public class UpdateAttributeSpecification : IAttributeSpecificationInput
 {
     /// <summary>
     /// Specification identifier (null for new)
@@ -1145,9 +1099,34 @@ public class UpdateAttributeSpecification
     public string Title { get; set; } = null!;
 
     /// <summary>
-    /// Specification constraint (optional JSON)
+    /// Attribute type
     /// </summary>
-    public string? Constraint { get; set; }
+    public AttributeSpecificationType Type { get; set; }
+
+    /// <summary>
+    /// Value is required
+    /// </summary>
+    public bool Required { get; set; }
+
+    /// <summary>
+    /// Is descriptor attribute (shown on game main page)
+    /// </summary>
+    public bool IsDescriptor { get; set; }
+
+    /// <summary>
+    /// Is hidden attribute (only GM and owner can see)
+    /// </summary>
+    public bool IsHidden { get; set; }
+
+    /// <summary>
+    /// Maximum length (text/number/BBCode types)
+    /// </summary>
+    public int? MaxLength { get; set; }
+
+    /// <summary>
+    /// Available values (list types)
+    /// </summary>
+    public IEnumerable<ListValue> Values { get; set; } = [];
 
     /// <summary>
     /// Order index

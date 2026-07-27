@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
@@ -39,6 +40,36 @@ public class GameDetails : Game
     /// Game subscribers (lightweight references)
     /// </summary>
     public IEnumerable<UserRef> Subscribers { get; set; } = [];
+
+    /// <summary>
+    /// Game readers ("Читатели") - the users subscribed to the game. A reader is
+    /// exactly a game subscriber in the domain (GameRole.Reader is subscription
+    /// based), so this is the same source as <see cref="Subscribers"/>, surfaced
+    /// under the roster's expected name.
+    /// </summary>
+    public IEnumerable<UserRef> Readers { get; set; } = [];
+
+    /// <summary>
+    /// Total number of posts across all rooms ("Постов всего").
+    /// </summary>
+    public int TotalPostsCount { get; set; }
+
+    /// <summary>
+    /// Number of posts authored by the game master ("Постов мастера").
+    /// </summary>
+    public int MasterPostsCount { get; set; }
+
+    /// <summary>
+    /// Timestamp of the game master's most recent post ("Последний пост мастера").
+    /// Null if the master has not posted.
+    /// </summary>
+    public DateTimeOffset? LastMasterPostUtc { get; set; }
+
+    /// <summary>
+    /// Whether the game supports dice rolls ("Поддержка кубика") - true when any
+    /// room of the game has dice rolling enabled.
+    /// </summary>
+    public bool DiceSupported { get; set; }
 
     /// <summary>
     /// Game characters (short info)

@@ -2,7 +2,7 @@
 import { useUserStore } from "@/entities/user";
 import { ref, computed, onMounted } from "vue";
 import type { LoginCredentials } from "@/shared/api/models/account";
-import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
+import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import { PasswordInput } from "@/shared/ui/PasswordInput";
 import {
   useValidatedField,
@@ -56,14 +56,17 @@ const submit = async () => {
   const passwordValid = await passwordField.validate();
   if (!emailValid || !passwordValid) return;
 
-  // Bot protection
+  loading.value = true;
+
+  // Bot protection — transparently wait out the remainder of the minimum
+  // form-fill time instead of rejecting the submit. Password managers can
+  // fill+submit in well under 3s, so a hard error here punishes legitimate
+  // users; honeypot + server rate-limit still catch actual bots.
   const timeSinceLoad = Date.now() - formLoadTime.value;
   if (timeSinceLoad < 3000) {
-    emailField.setError("Подождите перед отправкой формы");
-    return;
+    await new Promise((resolve) => setTimeout(resolve, 3000 - timeSinceLoad));
   }
 
-  loading.value = true;
   pendingActivation.value = false;
 
   const credentials: LoginCredentials = {
@@ -129,8 +132,8 @@ const onPasswordInput = () => {
 </script>
 
 <template>
-  <Lightbox narrow>
-    <lightbox-title>Вход</lightbox-title>
+  <Dialog narrow>
+    <dialog-title>Вход</dialog-title>
 
     <Form
       @submit="submit"
@@ -202,27 +205,14 @@ const onPasswordInput = () => {
         aria-hidden="true"
       />
     </Form>
-  </Lightbox>
+  </Dialog>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 
-// Button reset that mimics the global anchor styles (Reset.sass)
 .field-action
-  background: none
-  border: none
-  padding: 0
-  font: inherit
-  text-decoration: none
-  cursor: pointer
-  transition: color $animation-time ease
-  color: $link
-
-  &:hover
-    text-decoration: underline
-    color: $link-hover
+  +inline-link-button
 
 .honeypot-field
   display: none

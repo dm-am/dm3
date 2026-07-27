@@ -1,14 +1,14 @@
 namespace DM.Domain.Core.Enums;
 
 /// <summary>
-/// Тип конкурса. Каждый тип имеет свою сквозную нумерацию (Literary #1-N,
-/// Art #1-M и т.д.). Расширяется по мере добавления новых типов конкурсов.
+/// Contest type. Each type has its own sequential numbering (Literary #1-N,
+/// Art #1-M etc.). Extended as new contest types are added.
 /// </summary>
 public enum ContestType
 {
-    /// <summary>Литературный конкурс.</summary>
+    /// <summary>Literary contest.</summary>
     Literary = 0,
 
-    /// <summary>Арт-конкурс (для будущих визуальных конкурсов).</summary>
+    /// <summary>Art contest (for future visual contests).</summary>
     Art = 1,
 }

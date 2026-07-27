@@ -7,6 +7,7 @@ using AutoMapper;
 using DM.Domain.Core.Dto;
 using DM.Domain.Community.Features.Polls;
 using DM.Infrastructure.Persistence.MongoIntegration;
+using DM.Infrastructure.Persistence.Shared.Queries;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
@@ -135,23 +136,23 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
         }
 
         // Date range filters for StartsUtc
-        if (query.StartsFrom.HasValue)
+        if (query.StartsFromUtc.HasValue)
         {
-            filter &= Filter.Gte(p => p.StartsUtc, query.StartsFrom.Value.UtcDateTime);
+            filter &= Filter.Gte(p => p.StartsUtc, query.StartsFromUtc.Value.UtcDateTime);
         }
-        if (query.StartsTo.HasValue)
+        if (query.StartsToUtc.HasValue)
         {
-            filter &= Filter.Lte(p => p.StartsUtc, query.StartsTo.Value.UtcDateTime);
+            filter &= DateRangeFilters.AtOrBefore<DbPoll>(p => p.StartsUtc, query.StartsToUtc.Value);
         }
 
         // Date range filters for EndsUtc
-        if (query.EndsFrom.HasValue)
+        if (query.EndsFromUtc.HasValue)
         {
-            filter &= Filter.Gte(p => p.EndsUtc, query.EndsFrom.Value.UtcDateTime);
+            filter &= Filter.Gte(p => p.EndsUtc, query.EndsFromUtc.Value.UtcDateTime);
         }
-        if (query.EndsTo.HasValue)
+        if (query.EndsToUtc.HasValue)
         {
-            filter &= Filter.Lte(p => p.EndsUtc, query.EndsTo.Value.UtcDateTime);
+            filter &= DateRangeFilters.AtOrBefore<DbPoll>(p => p.EndsUtc, query.EndsToUtc.Value);
         }
 
         // Anonymous/Public filter

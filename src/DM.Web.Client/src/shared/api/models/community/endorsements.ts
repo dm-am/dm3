@@ -6,7 +6,7 @@ import type { User } from "./index";
  * @module shared/api/models/community/endorsements
  *
  * Endorsements are positive-only recommendations between users who have played together.
- * - BBCode supported in text
+ * - Plain text (no BBCode)
  * - One endorsement per author-target pair
  * - NO likes support
  *
@@ -22,7 +22,7 @@ export type UserEndorsement = {
   id: Served<UserEndorsementId>;
   author?: Served<User>;
   targetUser?: Served<User>;
-  /** Endorsement text content (BBCode supported) */
+  /** Endorsement text content (plain text, no BBCode) */
   text: string;
   createdUtc: Served<string>;
   modifiedUtc?: Served<string>;

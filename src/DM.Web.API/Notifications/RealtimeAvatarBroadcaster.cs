@@ -31,13 +31,13 @@ internal class RealtimeAvatarBroadcaster : IRealtimeAvatarBroadcaster
     /// <inheritdoc />
     public async Task BroadcastAvatarChangedAsync(Guid userId)
     {
-        // Best-effort: если ошибка в SignalR — не падаем; основная операция
-        // (DB-update + S3 PUT) уже закоммичена, push — bonus.
+        // Best-effort: on a SignalR error do not fail; the main operation
+        // (DB update + S3 PUT) is already committed, the push is a bonus.
         try
         {
             var connections = _connections.GetConnectedUsers();
-            // Broadcast всем подключенным: чужие вкладки тоже видят новый
-            // аватар в чатах и комментариях после re-render.
+            // Broadcast to everyone connected: other users' tabs also see the new
+            // avatar in chats and comments after a re-render.
             var connectionIds = connections.Values.SelectMany(ids => ids).ToArray();
             if (connectionIds.Length == 0) return;
 

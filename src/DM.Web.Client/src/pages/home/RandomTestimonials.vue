@@ -14,7 +14,7 @@
       appear
       @after-enter="onTestimonialEntered"
     >
-      <Testimonial
+      <TestimonialCard
         :key="currentIndex"
         ref="testimonialRef"
         :testimonial="currentTestimonial"
@@ -23,28 +23,17 @@
     </Transition>
   </div>
 
-  <secondary-text v-else-if="loadFailed">
-    Не удалось загрузить отзывы
-  </secondary-text>
+  <ErrorState
+    v-else-if="loadFailed"
+    message="Не удалось загрузить отзывы"
+    :retry="() => loadTestimonials()"
+  />
 
   <secondary-text v-else-if="loaded"> Отзывов пока нет </secondary-text>
 
-  <!-- Skeleton reserves space equal to one collapsed testimonial bubble
-       (3 lines of text @ 16px × 1.5 line-height = 72px of content +
-       24px padding × 2 + ~24px for the author/date footer ≈ 150px).
-       Prevents the "reviews-links" paragraph + separator below from
-       jumping up when the testimonials array arrives. -->
-  <div v-else class="testimonial-skeleton" aria-hidden="true">
-    <div class="skeleton-bubble">
-      <div class="skeleton-text-line wide" />
-      <div class="skeleton-text-line" />
-      <div class="skeleton-text-line short" />
-    </div>
-    <div class="skeleton-footer">
-      <div class="skeleton-author" />
-      <div class="skeleton-date" />
-    </div>
-  </div>
+  <!-- Reserves space equal to one collapsed testimonial bubble so the
+       content below does not jump up when the testimonials array arrives. -->
+  <TestimonialSkeleton v-else />
 </template>
 
 <script setup lang="ts">
@@ -52,7 +41,8 @@ import { ref, computed, onMounted, onUnmounted } from "vue";
 import { communityApi } from "@/shared/api";
 import type { WebsiteTestimonial } from "@/shared/api/models/community";
 import { useTestimonialStore } from "@/shared/stores/testimonials";
-import { Testimonial } from "@/entities/testimonial";
+import { TestimonialCard, TestimonialSkeleton } from "@/entities/testimonial";
+import { ErrorState } from "@/shared/ui/ErrorState";
 
 const store = useTestimonialStore();
 
@@ -70,15 +60,16 @@ const isHovered = ref(false);
 const isFocusWithin = ref(false);
 const hasSelection = ref(false);
 const galleryRef = ref<HTMLElement | null>(null);
-const testimonialRef = ref<InstanceType<typeof Testimonial> | null>(null);
+const testimonialRef = ref<InstanceType<typeof TestimonialCard> | null>(null);
 
 const hasMore = computed(
   () => testimonials.value.length < totalTestimonials.value,
 );
 
 async function loadTestimonials() {
+  loadFailed.value = false;
   // Use store for initial load (benefits from 60s cache)
-  const ok = await store.fetchTestimonials({ take: 10 });
+  const ok = await store.fetchTestimonials({ take: 10 }, true);
   const data = store.testimonials;
   if (data?.resources?.length) {
     testimonials.value = [...data.resources]; // Copy to local ref for pagination
@@ -128,12 +119,18 @@ async function nextTestimonial() {
 }
 
 // Auto-rotate testimonials every 10 seconds (pause when hovered,
-// focused within, or text selected)
+// focused within, text selected, or the current testimonial is expanded —
+// swapping it out mid-read would be jarring).
 const AUTO_ROTATE_INTERVAL = 10000;
 let autoRotateTimer: ReturnType<typeof setInterval> | null = null;
 
 function shouldPauseRotation() {
-  return isHovered.value || isFocusWithin.value || hasSelection.value;
+  return (
+    isHovered.value ||
+    isFocusWithin.value ||
+    hasSelection.value ||
+    testimonialRef.value?.isExpanded === true
+  );
 }
 
 // Pause rotation while keyboard focus is inside the gallery (WCAG 2.2.2):
@@ -209,74 +206,9 @@ function onTestimonialEntered() {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-@import "src/assets/styles/Skeleton"
-
 .testimonials-gallery
   position: relative
   margin: 0 0 $small
-
-// Placeholder while the first page of testimonials loads. Matches the
-// real bubble's padding/shape (speech bubble without the arrow tail to
-// avoid a shimmering pseudo-element).
-.testimonial-skeleton
-  margin: 0 0 $small
-
-.skeleton-bubble
-  display: flex
-  flex-direction: column
-  justify-content: center
-  // Tight gap between shimmer lines — matches the compact look of the
-  // real bubble after removing its bottom padding void.
-  gap: 8px
-  padding: $medium + $tiny $medium + $small
-  margin-bottom: $small
-  border-radius: 20px
-  background-color: $bg-highlight-green
-  // Match the real .testimonial-text min-height so the skeleton
-  // reserves exactly the same pixel budget — 3 lines of content
-  // (72px at line-height 1.5 × 16px) + top padding (18px) + the
-  // 26px reserved strip for the chevron toggle. Without this the
-  // skeleton bubble was ~18px shorter than the real one and the
-  // entire home page below shifted down when the first testimonial
-  // arrived.
-  min-height: calc(1.5 * 3 * 1em + ($medium + $tiny) + 26px)
-
-// Uses +skeleton-shimmer for animation/border-radius, then overrides
-// the gradient for the green bubble context: lines are derived from
-// $text-on-green (the bubble's own text color) instead of hardcoded
-// white, so they stay visible in both light and dark themes.
-.skeleton-text-line
-  height: 14px
-  width: 100%
-  +skeleton-shimmer
-  border-radius: 3px
-  background: linear-gradient(90deg, color-mix(in srgb, $text-on-green 25%, transparent) 25%, color-mix(in srgb, $text-on-green 50%, transparent) 50%, color-mix(in srgb, $text-on-green 25%, transparent) 75%)
-  background-size: 200% 100%
-
-  &.wide
-    width: 95%
-
-  &.short
-    width: 60%
-
-.skeleton-footer
-  display: flex
-  align-items: center
-  justify-content: space-between
-  gap: $small
-  margin-top: 18px  // Clear the real bubble's tail position
-
-.skeleton-author
-  +skeleton-shimmer
-  width: 120px
-  height: 14px
-
-.skeleton-date
-  +skeleton-shimmer
-  width: 70px
-  height: 12px
 
 // Testimonial transition animation - entire component as one unit.
 //

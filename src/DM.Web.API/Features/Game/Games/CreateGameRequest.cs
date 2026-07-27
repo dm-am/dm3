@@ -69,26 +69,6 @@ public class CreateGameRequest
 public class CreateGamePrivacySettings
 {
     /// <summary>
-    /// Players can see other characters' temper
-    /// </summary>
-    public bool ViewTemper { get; set; } = true;
-
-    /// <summary>
-    /// Players can see other characters' story
-    /// </summary>
-    public bool ViewStory { get; set; } = true;
-
-    /// <summary>
-    /// Players can see other characters' skills
-    /// </summary>
-    public bool ViewSkills { get; set; } = true;
-
-    /// <summary>
-    /// Players can see other characters' inventory
-    /// </summary>
-    public bool ViewInventory { get; set; } = true;
-
-    /// <summary>
     /// Players can read private messages in posts
     /// </summary>
     public bool ViewPrivates { get; set; }

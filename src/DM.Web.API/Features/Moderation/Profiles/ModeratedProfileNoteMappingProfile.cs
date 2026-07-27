@@ -17,6 +17,6 @@ internal class ModeratedProfileNoteMappingProfile : Profile
             .ForMember(d => d.Author, s => s.MapFrom(n => n.Author))
             .ForMember(d => d.Text, s => s.MapFrom(n => n.Text))
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(n => n.CreatedUtc))
-            .ForMember(d => d.UpdatedUtc, s => s.MapFrom(n => n.UpdatedUtc));
+            .ForMember(d => d.ModifiedUtc, s => s.MapFrom(n => n.ModifiedUtc));
     }
 }

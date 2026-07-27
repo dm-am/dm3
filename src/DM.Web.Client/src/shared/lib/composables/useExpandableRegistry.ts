@@ -68,12 +68,22 @@ export function registerExpandable(handle: ExpandableHandle): () => void {
 }
 
 /**
- * Tell the registry that a participant's expand state changed externally
- * (e.g. user clicked a spoiler or accordion header). Clears the pending
- * bulk action so future registrations don't auto-sync.
+ * Tell the registry that a participant's expand state changed by a MANUAL
+ * user toggle (spoiler head, accordion header, "показать полностью").
+ * Clears the pending bulk action so future registrations don't auto-sync.
  */
 export function notifyExpandableChanged(): void {
   pendingAction = null;
+  bump();
+}
+
+/**
+ * Re-evaluate the aggregate expand state (allExpanded) WITHOUT clearing the
+ * pending bulk action. For settle events that fire for bulk-driven changes
+ * too (e.g. TruncatedContent's transitionend) — clearing there would cancel
+ * the bulk action's late-registration sync mid-animation.
+ */
+export function refreshExpandableStates(): void {
   bump();
 }
 

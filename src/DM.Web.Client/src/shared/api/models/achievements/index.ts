@@ -1,11 +1,11 @@
 import type { Envelope, ListEnvelope } from "../common";
 
 /**
- * Метрика прогресса для достижений. SSOT: серверный enum
- * `DM.Domain.Core.Enums.AchievementMetric`. При добавлении новой метрики
- * правится оба места + `getMetricValue` на FE и `AchievementMetricResolver.GetValue` на BE.
+ * Progress metric for achievements. SSOT: the server enum
+ * `DM.Domain.Core.Enums.AchievementMetric`. When adding a new metric,
+ * both places change + `getMetricValue` on the FE and `AchievementMetricResolver.GetValue` on the BE.
  *
- * Сериализуется бэкендом как строка (глобальный JsonStringEnumConverter).
+ * Serialized by the backend as a string (global JsonStringEnumConverter).
  */
 export enum AchievementMetric {
   GamePostsAuthored = "GamePostsAuthored",
@@ -23,21 +23,21 @@ export enum AchievementMetric {
   LikesReceived = "LikesReceived",
 }
 
-/** Тип конкурса. У каждого типа своя сквозная нумерация. */
+/** Contest type. Each type has its own sequential numbering. */
 export enum ContestType {
   Literary = "Literary",
   Art = "Art",
 }
 
 /**
- * Категория достижений (цепочка тиров одной метрики). SSOT для иконки,
- * описания и порядка отображения.
+ * Achievement category (a chain of tiers for one metric). SSOT for the icon,
+ * description and display order.
  */
 export interface AchievementCategory {
   id: string;
   code: string;
   title: string;
-  /** Описание метрики (что именно считается). Показывается в шапке popover-а. */
+  /** Metric description (what exactly is counted). Shown in the popover header. */
   description: string;
   iconName: string;
   metric: AchievementMetric;
@@ -45,7 +45,7 @@ export interface AchievementCategory {
   isActive: boolean;
 }
 
-/** Тир достижения. Категория-родитель включена в навигацию. */
+/** Achievement tier. The parent category is included in the navigation. */
 export interface AchievementType {
   id: string;
   code: string;
@@ -55,47 +55,47 @@ export interface AchievementType {
   category: AchievementCategory;
 }
 
-/** Факт получения достижения пользователем. */
+/** The fact that a user earned an achievement. */
 export interface UserAchievement {
   id: string;
   type: AchievementType;
   earnedUtc: string;
 }
 
-/** Тип награды (timeless каталог). */
+/** Award type (timeless catalog). */
 export interface AwardType {
   id: string;
   code: string;
   title: string;
-  /** Полная фраза («Победитель конкурса», «Лучшая работа по голосованию»). */
+  /** Full phrase ("Победитель конкурса", "Лучшая работа по голосованию"). */
   description: string;
   iconName: string;
-  /** Визуальный тир: 1=gold, 2=silver, 3=bronze. */
+  /** Visual tier: 1=gold, 2=silver, 3=bronze. */
   tier: number | null;
   sortOrder: number;
   isActive: boolean;
 }
 
-/** Серия конкурса. */
+/** Contest series. */
 export interface ContestSeries {
   id: string;
   contestType: ContestType;
-  /** Сквозной номер в рамках типа (Literary 21, 22, 23…). */
+  /** Sequential number within the type (Literary 21, 22, 23…). */
   number: number;
-  /** Год проведения (отображается в year-бейдже на тайле). */
+  /** Year held (shown in the year badge on the tile). */
   year: number;
-  /** Ссылка на форумный топик с итогами (опционально). */
+  /** Link to the forum topic with results (optional). */
   topicUrl: string | null;
   isActive: boolean;
 }
 
-/** Награда, выданная пользователю. */
+/** An award granted to a user. */
 export interface UserAward {
   id: string;
   type: AwardType;
-  /** Серия конкурса (опц.). Содержит number/year/topicUrl. */
+  /** Contest series (optional). Contains number/year/topicUrl. */
   contestSeries: ContestSeries | null;
-  /** Ссылка на топик с самой работой, за которую получена награда (опц). */
+  /** Link to the topic with the work the award was granted for (optional). */
   workUrl: string | null;
   awardedUtc: string;
 }

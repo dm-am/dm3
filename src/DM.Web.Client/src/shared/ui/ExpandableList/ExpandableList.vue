@@ -52,6 +52,10 @@ const props = withDefaults(
 defineSlots<{
   content: (props: { item: T; index: number }) => void;
   [key: `item-${string}`]: (props: { item: T }) => void;
+  // Optional per-column cell override for multi-column mode (mirrors
+  // DataTable's #cell-${key} pattern) — falls back to the plain mustache
+  // value when the consumer doesn't provide it for a given column.
+  [key: `cell-${string}`]: (props: { item: T }) => void;
 }>();
 
 const itemIds = computed(() => props.items.map((i) => i.id));
@@ -61,11 +65,20 @@ const { toggle, isExpanded } = useExpandable({
   ids: itemIds,
 });
 
-const gridTemplate = computed(() => {
-  if (!props.columns) return undefined;
-  const tracks = props.columns.map((c) => c.width ?? "1fr").join(" ");
-  return `20px ${tracks}`;
-});
+// Multi-column rows render as a CSS table (display: table/table-cell),
+// NOT a grid: Chrome's selection serializer emits a newline between
+// element grid items (a row copied as "Нарушение\nБаллы"), while table
+// cells copy tab-separated — the same behavior as the site's real data
+// tables. Fixed table layout + explicit per-cell widths reproduce the
+// former "20px icon + column widths + gap" grid geometry: the $small
+// inter-column gap lives as padding-left inside every non-first cell,
+// which content-box table columns add on top of the specified width.
+function cellStyle(column: ExpandableListColumn<T>) {
+  return {
+    width: column.width,
+    textAlign: cellAlign(column),
+  };
+}
 
 function handleKeydown(event: KeyboardEvent, id: string) {
   if (event.key === "Enter" || event.key === " ") {
@@ -79,23 +92,27 @@ function cellAlign(
 ): "left" | "center" | "right" {
   return column.align ?? "left";
 }
+
+// Idempotent open — used by consumers deep-linking to a specific item via
+// route.hash (e.g. RulesPage auto-expanding the section matching #id).
+// Does nothing if the item is already expanded or unknown.
+function expandItem(id: string) {
+  if (!isExpanded(id)) toggle(id);
+}
+
+defineExpose({ expandItem });
 </script>
 
 <template>
   <!-- No list role: children are toggle buttons + detail panels, not listitems -->
   <div class="expandable-list">
-    <div
-      v-if="columns"
-      class="expandable-header"
-      :style="{ gridTemplateColumns: gridTemplate }"
-      aria-hidden="true"
-    >
-      <span aria-hidden="true" />
+    <div v-if="columns" class="expandable-header">
+      <span class="icon-cell" aria-hidden="true" />
       <span
         v-for="column in columns"
         :key="column.key"
         class="header-cell"
-        :style="{ textAlign: cellAlign(column) }"
+        :style="cellStyle(column)"
       >
         {{ column.label }}
       </span>
@@ -105,9 +122,9 @@ function cellAlign(
       <!-- Row: multi-column -->
       <div
         v-if="columns"
+        :id="`expandable-toggle-${item.id}`"
         class="expandable-row expandable-row--grid"
         :class="{ expanded: isExpanded(item.id) }"
-        :style="{ gridTemplateColumns: gridTemplate }"
         role="button"
         tabindex="0"
         :aria-expanded="isExpanded(item.id)"
@@ -123,15 +140,18 @@ function cellAlign(
           :key="column.key"
           class="row-cell"
           :class="{ 'row-cell--bold': column.bold }"
-          :style="{ textAlign: cellAlign(column) }"
+          :style="cellStyle(column)"
         >
-          {{ item[column.key] }}
+          <slot :name="`cell-${column.key}`" :item="item">{{
+            item[column.key]
+          }}</slot>
         </span>
       </div>
 
       <!-- Row: single-title -->
       <div
         v-else
+        :id="`expandable-toggle-${item.id}`"
         class="expandable-row"
         :class="{ expanded: isExpanded(item.id) }"
         role="button"
@@ -148,13 +168,13 @@ function cellAlign(
       </div>
 
       <!-- Details: 3-level grid animation -->
-      <div class="details-grid" :class="{ open: isExpanded(item.id) }">
+      <div
+        class="details-grid"
+        :class="{ open: isExpanded(item.id) }"
+        :inert="!isExpanded(item.id)"
+      >
         <div class="details-clip">
-          <div
-            :id="`expandable-details-${item.id}`"
-            class="expandable-details"
-            :aria-hidden="!isExpanded(item.id)"
-          >
+          <div :id="`expandable-details-${item.id}`" class="expandable-details">
             <slot :name="`item-${item.id}`" :item="item">
               <slot name="content" :item="item" :index="index">
                 <template v-if="Array.isArray(item.content)">
@@ -177,8 +197,6 @@ function cellAlign(
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Animations"
 @import "src/assets/styles/Tables"
 
@@ -193,15 +211,29 @@ function cellAlign(
   border: $table-gap solid $border
 
 // --- Header ---
+// CSS table, not grid: grid items copy with newlines between cells, table
+// cells copy tab-separated (matching the site's real data tables). Fixed
+// layout + explicit cell widths reproduce the former grid tracks; the
+// former grid gap becomes padding-left inside every non-first cell
+// (content-box table columns = specified width + padding, so a "80px"
+// column occupies the same 8px-gap + 80px-track band as before).
 .expandable-header
-  display: grid
-  align-items: center
-  gap: $small
+  display: table
+  width: 100%
+  box-sizing: border-box
+  table-layout: fixed
   +table-header
   border-bottom: $table-gap solid $border
 
-.header-cell
-  padding: 0
+  > span
+    display: table-cell
+    vertical-align: middle
+
+  > .icon-cell
+    width: 20px
+
+  > .header-cell
+    padding-left: $small
 
 // --- Rows ---
 .expandable-row
@@ -210,9 +242,22 @@ function cellAlign(
     user-select: text
 
 .expandable-row--grid
-  display: grid
-  align-items: center
-  gap: $small
+  display: table
+  width: 100%
+  box-sizing: border-box
+  table-layout: fixed
+
+  > .expand-icon
+    display: table-cell
+    vertical-align: middle
+    // Override the +expand-icon 12px flex width: the icon column of the
+    // former "20px <tracks>" grid template.
+    width: 20px
+
+  > .row-cell
+    display: table-cell
+    vertical-align: middle
+    padding-left: $small
 
 .row-cell
   user-select: text
@@ -220,7 +265,6 @@ function cellAlign(
     font-weight: 600
 
 .expand-icon
-  user-select: none
   +expand-icon
 
 .item-title
@@ -235,7 +279,9 @@ function cellAlign(
   display: grid
   grid-template-rows: 0fr
   border-bottom: $table-gap solid $border
-  +transition-safe(grid-template-rows, $transition-slow)
+  // Unified reveal tokens — same tempo as TruncatedContent and the
+  // BBCode spoiler/NSFW blocks. Reduced-motion is handled in Reset.sass.
+  transition: grid-template-rows $expand-duration $expand-easing
   &:last-child
     border-bottom: none
   &.open

@@ -5,6 +5,7 @@ import type { ListEnvelope } from "@/shared/api/models/common";
 import type { Patch, Post } from "@/shared/api/models";
 import pollApi from "../api/pollApi";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
+import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 
 export const usePollsStore = defineStore("polls", () => {
   // Sidebar active polls with caching (60s TTL)
@@ -17,10 +18,24 @@ export const usePollsStore = defineStore("polls", () => {
   const loading = ref(false);
   const error = ref<string | null>(null);
 
+  // Request guard to discard stale out-of-order responses
+  const requestGuard = createRequestGuard();
+
   async function fetchPolls(params: PollsSearchParams) {
-    loading.value = true;
+    const requestId = requestGuard.next();
+
+    // Reset error up front so a stale error never survives a later,
+    // still-in-flight request winning the race.
     error.value = null;
+    loading.value = true;
+
     const { data, error: apiError } = await pollApi.getPolls(params);
+
+    // Ignore stale responses
+    if (!requestGuard.isCurrent(requestId)) {
+      return;
+    }
+
     polls.value = data ?? null;
     if (apiError) error.value = "Не удалось загрузить опросы";
     loading.value = false;
@@ -51,8 +66,9 @@ export const usePollsStore = defineStore("polls", () => {
   }
 
   async function vote(pollId: PollId, optionId: PollOptionId) {
-    const { data } = await pollApi.postPollVote(pollId, optionId);
+    const { data, error } = await pollApi.postPollVote(pollId, optionId);
     if (data) updatePoll(data);
+    return { error };
   }
 
   async function unvote(pollId: PollId) {

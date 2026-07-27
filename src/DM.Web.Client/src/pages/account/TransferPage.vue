@@ -25,9 +25,6 @@ onMounted(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .transfer-page
   max-width: 600px
   margin: $big auto

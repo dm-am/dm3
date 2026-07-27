@@ -7,7 +7,6 @@ export function useCreatePoll() {
 
   const formExpanded = ref(false);
   const formHovered = ref(false);
-  const formContent = ref<HTMLElement | null>(null);
 
   const pollTitle = ref("");
   const pollDetails = ref("");
@@ -23,27 +22,11 @@ export function useCreatePoll() {
   const isSubmitting = ref(false);
   const errorMessage = ref("");
 
+  // The reveal itself is the global CSS-only .expand-fold (Reset.sass) —
+  // an inline tool form: unified animation tempo, no registry
+  // (UI_STANDARDS, Animation Standards).
   function toggleForm() {
     formExpanded.value = !formExpanded.value;
-    if (formContent.value) {
-      if (formExpanded.value) {
-        formContent.value.style.height = "auto";
-        const expectedHeight = formContent.value.clientHeight;
-        formContent.value.style.height = "0";
-        setTimeout(() => {
-          if (formContent.value)
-            formContent.value.style.height = `${expectedHeight}px`;
-        }, 0);
-        setTimeout(() => {
-          if (formContent.value) formContent.value.style.height = "auto";
-        }, 200);
-      } else {
-        formContent.value.style.height = `${formContent.value.clientHeight}px`;
-        setTimeout(() => {
-          if (formContent.value) formContent.value.style.height = "0";
-        }, 0);
-      }
-    }
   }
 
   function addOption() {
@@ -112,7 +95,6 @@ export function useCreatePoll() {
   return {
     formExpanded,
     formHovered,
-    formContent,
     pollTitle,
     pollDetails,
     pollStartsUtc,

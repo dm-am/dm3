@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
-import { symbols } from "@/shared/lib/utils/icons";
+import { ref, onMounted, computed, reactive, type Ref } from "vue";
+import { useModal } from "vue-final-modal";
 import { useToast } from "@/shared/lib/composables/useToast";
 import moderationApi, {
   UsernameChangeRequestStatus,
@@ -9,17 +9,13 @@ import moderationApi, {
 } from "@/shared/api/moderationApi";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
-import UserLink from "@/entities/user/ui/UserLink.vue";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import UsernameChangeRejectDialog from "./dialogs/UsernameChangeRejectDialog.vue";
 
 const toast = useToast();
 const requests = ref<UsernameChangeRequest[]>([]);
 const loading = ref(false);
 const processing = ref<string | null>(null);
-
-// Modal state
-const showRejectModal = ref(false);
-const rejectingRequest = ref<UsernameChangeRequest | null>(null);
-const rejectComment = ref("");
 
 const getStatusLabel = (status: UsernameChangeRequestStatus): string => {
   switch (status) {
@@ -73,65 +69,54 @@ const fetchRequests = async () => {
   }
 };
 
-const approveRequest = async (request: UsernameChangeRequest) => {
-  if (!confirm(`Одобрить запрос на смену имени от ${request.currentUsername}?`))
-    return;
+// --- Approve (ConfirmDialog) ---
+const approveTarget = ref<UsernameChangeRequest | null>(null);
+const approving = ref(false);
 
-  processing.value = request.id;
+const confirmApprove = async () => {
+  if (!approveTarget.value || approving.value) return;
+  approving.value = true;
+  processing.value = approveTarget.value.id;
   try {
     const resolve: ResolveUsernameChangeRequest = {
       status: UsernameChangeRequestStatus.Approved,
     };
-    await moderationApi.resolveUsernameChangeRequest(request.id, resolve);
-    toast.success(`Запрос от ${request.currentUsername} одобрен`);
+    await moderationApi.resolveUsernameChangeRequest(
+      approveTarget.value.id,
+      resolve,
+    );
+    toast.success(`Запрос от ${approveTarget.value.currentUsername} одобрен`);
+    approveTarget.value = null;
     await fetchRequests();
   } catch (error) {
     toast.error("Не удалось одобрить запрос");
   } finally {
+    approving.value = false;
     processing.value = null;
   }
 };
+
+// --- Reject dialog (shared Dialog idiom) ---
+// Null until the first openRejectModal sets it; the dialog only mounts
+// after that, so the non-null cast below is safe.
+const rejectingRequest = ref<UsernameChangeRequest | null>(null);
+
+const { open: openRejectDialog, close: closeRejectDialog } = useModal({
+  component: UsernameChangeRejectDialog,
+  attrs: reactive({
+    request: rejectingRequest as Ref<UsernameChangeRequest>,
+    onSuccess: async (request: UsernameChangeRequest) => {
+      toast.success(`Запрос от ${request.currentUsername} отклонен`);
+      closeRejectDialog();
+      await fetchRequests();
+    },
+    onCancel: () => closeRejectDialog(),
+  }),
+});
 
 const openRejectModal = (request: UsernameChangeRequest) => {
   rejectingRequest.value = request;
-  rejectComment.value = "";
-  showRejectModal.value = true;
-};
-
-const closeRejectModal = () => {
-  showRejectModal.value = false;
-  rejectingRequest.value = null;
-  rejectComment.value = "";
-};
-
-const confirmReject = async () => {
-  if (!rejectingRequest.value) return;
-
-  if (!rejectComment.value.trim()) {
-    toast.error("Укажите причину отклонения");
-    return;
-  }
-
-  processing.value = rejectingRequest.value.id;
-  try {
-    const resolve: ResolveUsernameChangeRequest = {
-      status: UsernameChangeRequestStatus.Rejected,
-      comment: rejectComment.value,
-    };
-    await moderationApi.resolveUsernameChangeRequest(
-      rejectingRequest.value.id,
-      resolve,
-    );
-    toast.success(
-      `Запрос от ${rejectingRequest.value.currentUsername} отклонен`,
-    );
-    closeRejectModal();
-    await fetchRequests();
-  } catch (error) {
-    toast.error("Не удалось отклонить запрос");
-  } finally {
-    processing.value = null;
-  }
+  openRejectDialog();
 };
 
 onMounted(() => fetchRequests());
@@ -141,7 +126,7 @@ onMounted(() => fetchRequests());
   <div class="username-changes">
     <h3>Запросы на смену имени пользователя</h3>
 
-    <secondary-text v-if="loading">Загрузка...</secondary-text>
+    <secondary-text v-if="loading">Загрузка…</secondary-text>
 
     <template v-else-if="pendingRequests.length === 0">
       <secondary-text>Нет активных запросов</secondary-text>
@@ -184,9 +169,9 @@ onMounted(() => fetchRequests());
           <button
             class="approve-btn"
             :disabled="processing === request.id"
-            @click="approveRequest(request)"
+            @click="approveTarget = request"
           >
-            {{ processing === request.id ? "..." : "Одобрить" }}
+            {{ processing === request.id ? "…" : "Одобрить" }}
           </button>
           <button
             class="reject-btn"
@@ -199,55 +184,21 @@ onMounted(() => fetchRequests());
       </div>
     </div>
 
-    <!-- Reject Modal -->
-    <div
-      v-if="showRejectModal"
-      class="modal-overlay"
-      @click.self="closeRejectModal"
-    >
-      <div class="modal">
-        <div class="modal-header">
-          <h4>Отклонение запроса</h4>
-          <button class="close-btn" @click="closeRejectModal">
-            {{ symbols.close }}
-          </button>
-        </div>
-        <div class="modal-body">
-          <p>
-            Отклонить запрос на смену имени от
-            <strong>{{ rejectingRequest?.currentUsername }}</strong
-            >?
-          </p>
-          <div class="form-field">
-            <label for="reject-reason">Причина отклонения</label>
-            <textarea
-              id="reject-reason"
-              v-model="rejectComment"
-              placeholder="Укажите причину отклонения..."
-              rows="4"
-            ></textarea>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="cancel-btn" @click="closeRejectModal">Отмена</button>
-          <button
-            class="confirm-reject-btn"
-            :disabled="processing !== null"
-            @click="confirmReject"
-          >
-            {{ processing ? "Отклонение..." : "Отклонить" }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Approve confirmation -->
+    <ConfirmDialog
+      :show="approveTarget !== null"
+      title="Одобрение запроса"
+      :message="`Одобрить запрос на смену имени от ${approveTarget?.currentUsername ?? ''}?`"
+      confirm-label="Одобрить"
+      :loading="approving"
+      @update:show="(v) => !v && (approveTarget = null)"
+      @confirm="confirmApprove"
+    />
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Inputs"
-@import "src/assets/styles/ZIndex"
 
 .username-changes
   h3
@@ -333,96 +284,5 @@ onMounted(() => fetchRequests());
   +button
 
 .reject-btn
-  +button
-
-// Modal styles
-.modal-overlay
-  position: fixed
-  top: 0
-  left: 0
-  right: 0
-  bottom: 0
-  background: rgba(0, 0, 0, 0.5)
-  display: flex
-  align-items: center
-  justify-content: center
-  z-index: $z-modal
-
-.modal
-  background: $bg-element
-  border-radius: $border-radius
-  width: 100%
-  max-width: 500px
-  margin: $medium
-
-.modal-header
-  display: flex
-  justify-content: space-between
-  align-items: center
-  padding: $medium
-  border-bottom: 1px solid $border
-
-  h4
-    margin: 0
-    color: $text
-
-.close-btn
-  width: 32px
-  height: 32px
-  border: none
-  border-radius: 50%
-  background: transparent
-  color: $text-muted
-  cursor: pointer
-  font-size: 1.5rem
-  line-height: 1
-  display: flex
-  align-items: center
-  justify-content: center
-
-  &:hover
-    background: $hover-overlay
-    color: $text
-
-.modal-body
-  padding: $medium
-
-  p
-    margin: 0 0 $medium 0
-    color: $text
-
-.form-field
-  label
-    display: block
-    margin-bottom: $minor
-    font-weight: 500
-    color: $text
-
-  textarea
-    width: 100%
-    padding: $small
-    border: 1px solid $border
-    border-radius: $border-radius
-    background: $input-bg
-    color: $text
-    font-family: inherit
-    font-size: 1rem
-    resize: vertical
-
-    &:focus
-      outline: none
-      border-color: $accent-red
-
-.modal-footer
-  display: flex
-  justify-content: flex-end
-  gap: $small
-  padding: $medium
-  border-top: 1px solid $border
-
-.cancel-btn
-  +button
-
-.confirm-reject-btn
   +button
 </style>

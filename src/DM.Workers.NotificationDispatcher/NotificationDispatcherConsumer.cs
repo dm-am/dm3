@@ -76,6 +76,9 @@ internal class NotificationDispatcherConsumer : BackgroundService
                 // Blog lifecycle
                 EventType.NewBlog,
                 EventType.StatusBlogActive,
+                EventType.StatusBlogClosed,
+                EventType.StatusBlogFrozen,
+                EventType.StatusBlogFinished,
 
                 // Invitations
                 EventType.AssignmentRequestCreated,

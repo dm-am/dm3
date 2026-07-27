@@ -32,10 +32,10 @@ export interface PollsFilterComposable {
   setStatus: (status: PollStatus | "") => void;
   setPollType: (pollType: "anonymous" | "public" | "") => void;
   setSearch: (search: string) => void;
-  setStartsFrom: (date: string) => void;
-  setStartsTo: (date: string) => void;
-  setEndsFrom: (date: string) => void;
-  setEndsTo: (date: string) => void;
+  setStartsFromUtc: (date: string) => void;
+  setStartsToUtc: (date: string) => void;
+  setEndsFromUtc: (date: string) => void;
+  setEndsToUtc: (date: string) => void;
   setSort: (sortBy: PollSortBy, sortOrder?: "asc" | "desc") => void;
   toggleSortOrder: () => void;
   clearFilters: () => void;
@@ -81,19 +81,19 @@ function reducer(
       return newState;
 
     case "SET_STARTS_FROM":
-      newState.startsFrom = action.date;
+      newState.startsFromUtc = action.date;
       return newState;
 
     case "SET_STARTS_TO":
-      newState.startsTo = action.date;
+      newState.startsToUtc = action.date;
       return newState;
 
     case "SET_ENDS_FROM":
-      newState.endsFrom = action.date;
+      newState.endsFromUtc = action.date;
       return newState;
 
     case "SET_ENDS_TO":
-      newState.endsTo = action.date;
+      newState.endsToUtc = action.date;
       return newState;
 
     case "SET_SORT": {
@@ -158,10 +158,10 @@ function parseQueryToState(query: LocationQuery): PollsFilterState {
   }
 
   // Parse date filters (ISO date strings)
-  if (query.startsFrom) state.startsFrom = String(query.startsFrom);
-  if (query.startsTo) state.startsTo = String(query.startsTo);
-  if (query.endsFrom) state.endsFrom = String(query.endsFrom);
-  if (query.endsTo) state.endsTo = String(query.endsTo);
+  if (query.startsFromUtc) state.startsFromUtc = String(query.startsFromUtc);
+  if (query.startsToUtc) state.startsToUtc = String(query.startsToUtc);
+  if (query.endsFromUtc) state.endsFromUtc = String(query.endsFromUtc);
+  if (query.endsToUtc) state.endsToUtc = String(query.endsToUtc);
 
   // Parse sort
   state.sortBy = validateSortField(
@@ -185,10 +185,10 @@ function buildQueryFromState(state: PollsFilterState): Record<string, string> {
   if (state.status) query.status = state.status;
   if (state.pollType) query.pollType = state.pollType;
   if (state.search) query.search = state.search;
-  if (state.startsFrom) query.startsFrom = state.startsFrom;
-  if (state.startsTo) query.startsTo = state.startsTo;
-  if (state.endsFrom) query.endsFrom = state.endsFrom;
-  if (state.endsTo) query.endsTo = state.endsTo;
+  if (state.startsFromUtc) query.startsFromUtc = state.startsFromUtc;
+  if (state.startsToUtc) query.startsToUtc = state.startsToUtc;
+  if (state.endsFromUtc) query.endsFromUtc = state.endsFromUtc;
+  if (state.endsToUtc) query.endsToUtc = state.endsToUtc;
   if (state.sortBy !== def.sortBy) query.sortBy = state.sortBy;
   if (state.sortOrder !== def.sortOrder) query.sortOrder = state.sortOrder;
 
@@ -246,10 +246,10 @@ export function usePollsFilter(): PollsFilterComposable {
     if (state.pollType === "anonymous") params.isAnonymous = true;
     else if (state.pollType === "public") params.isAnonymous = false;
     if (state.search) params.search = state.search;
-    if (state.startsFrom) params.startsFrom = state.startsFrom;
-    if (state.startsTo) params.startsTo = state.startsTo;
-    if (state.endsFrom) params.endsFrom = state.endsFrom;
-    if (state.endsTo) params.endsTo = state.endsTo;
+    if (state.startsFromUtc) params.startsFromUtc = state.startsFromUtc;
+    if (state.startsToUtc) params.startsToUtc = state.startsToUtc;
+    if (state.endsFromUtc) params.endsFromUtc = state.endsFromUtc;
+    if (state.endsToUtc) params.endsToUtc = state.endsToUtc;
     params.sortBy = state.sortBy;
     params.sortOrder = state.sortOrder;
 
@@ -272,10 +272,10 @@ export function usePollsFilter(): PollsFilterComposable {
       state.status !== def.status ||
       state.pollType !== def.pollType ||
       state.search !== def.search ||
-      state.startsFrom !== def.startsFrom ||
-      state.startsTo !== def.startsTo ||
-      state.endsFrom !== def.endsFrom ||
-      state.endsTo !== def.endsTo
+      state.startsFromUtc !== def.startsFromUtc ||
+      state.startsToUtc !== def.startsToUtc ||
+      state.endsFromUtc !== def.endsFromUtc ||
+      state.endsToUtc !== def.endsToUtc
     );
   });
 
@@ -289,13 +289,14 @@ export function usePollsFilter(): PollsFilterComposable {
     dispatch({ type: "SET_POLL_TYPE", pollType });
   const setSearch = (search: string) =>
     dispatch({ type: "SET_SEARCH", search });
-  const setStartsFrom = (date: string) =>
+  const setStartsFromUtc = (date: string) =>
     dispatch({ type: "SET_STARTS_FROM", date });
-  const setStartsTo = (date: string) =>
+  const setStartsToUtc = (date: string) =>
     dispatch({ type: "SET_STARTS_TO", date });
-  const setEndsFrom = (date: string) =>
+  const setEndsFromUtc = (date: string) =>
     dispatch({ type: "SET_ENDS_FROM", date });
-  const setEndsTo = (date: string) => dispatch({ type: "SET_ENDS_TO", date });
+  const setEndsToUtc = (date: string) =>
+    dispatch({ type: "SET_ENDS_TO", date });
   const setSort = (sortBy: PollSortBy, sortOrder?: "asc" | "desc") =>
     dispatch({ type: "SET_SORT", sortBy, sortOrder });
   const toggleSortOrder = () => dispatch({ type: "TOGGLE_SORT_ORDER" });
@@ -308,10 +309,10 @@ export function usePollsFilter(): PollsFilterComposable {
     setStatus,
     setPollType,
     setSearch,
-    setStartsFrom,
-    setStartsTo,
-    setEndsFrom,
-    setEndsTo,
+    setStartsFromUtc,
+    setStartsToUtc,
+    setEndsFromUtc,
+    setEndsToUtc,
     setSort,
     toggleSortOrder,
     clearFilters,

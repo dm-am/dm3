@@ -1,15 +1,15 @@
 <script setup lang="ts">
 /**
- * RulesIntro - статическое приветствие и TL;DR правил
+ * RulesIntro — static greeting and rules TL;DR
  */
 </script>
 
 <template>
   <section class="rules-intro" v-once>
     <p>
-      Привет! Мы рады видеть вас на DM — одном из крупнейших русскоязычных
-      ролевых сайтов. Это большое и дружелюбное сообщество любителей текстовых
-      ролевых игр, существующее с 2007-го года.
+      Привет! Мы рады видеть вас на Dungeon Master — одном из крупнейших
+      русскоязычных ролевых сайтов. Это большое и дружелюбное сообщество
+      любителей текстовых ролевых игр, существующее с 2007-го года.
     </p>
 
     <p>
@@ -24,7 +24,7 @@
       написать их максимально коротко и понятно.
     </p>
 
-    <h4>TL;DR</h4>
+    <h3>TL;DR</h3>
     <ol>
       <li>Не оскорбляйте других людей</li>
       <li>
@@ -43,9 +43,6 @@
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .rules-intro
   margin: $medium 0
 
@@ -53,7 +50,10 @@
     margin: $medium 0
     line-height: 1.6
 
-  h4
+  // Rendered as h3 (was h4) to avoid the h1 → h4 level skip; the local
+  // styling below keeps the exact prior appearance (plain body color,
+  // 600 weight) rather than the uppercase BlockTitle look.
+  h3
     margin: $medium 0 $small
     font-weight: 600
 
@@ -64,20 +64,17 @@
     li
       margin: $minor 0
 
+  // Color and hover come from the global `a` rule (Reset.sass); only the
+  // bold weight is local.
+  .highlight-link
+    font-weight: bold
+
   .tag
     font-family: monospace
     background: $bg-element-accent
     padding: 3px 2px
     border-radius: 2px
     font-size: 0.9em
-
-  .highlight-link
-    color: $link
-    text-decoration: none
-    font-weight: bold
-    &:hover
-      color: $link-hover
-      text-decoration: underline
 
   .outro
     color: $text

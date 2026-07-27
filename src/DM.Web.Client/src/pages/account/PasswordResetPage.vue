@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useNewPasswordField } from "@/shared/lib/composables/useNewPasswordField";
 import { AccountApi } from "@/shared/api";
 import Button from "@/shared/ui/Button/Button.vue";
-import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
+import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import {
   PasswordInput,
   PasswordStrengthIndicator,
@@ -88,14 +88,6 @@ const submit = async () => {
 function goHome() {
   router.push("/");
 }
-
-function goToRecovery() {
-  router.push("/?action=recovery");
-}
-
-function goToLogin() {
-  router.push("/?action=login");
-}
 </script>
 
 <template>
@@ -107,7 +99,7 @@ function goToLogin() {
       <!-- Success state -->
       <template v-if="pageState === 'completed'">
         <status-icon type="success" />
-        <lightbox-title>Пароль изменен</lightbox-title>
+        <dialog-title>Пароль изменен</dialog-title>
         <p class="status-description">
           Теперь вы можете войти с новым паролем.
         </p>
@@ -119,24 +111,28 @@ function goToLogin() {
       <!-- Expired token -->
       <template v-else-if="pageState === 'expired'">
         <status-icon type="warning" />
-        <lightbox-title>Токен сброса пароля устарел</lightbox-title>
+        <dialog-title>Токен сброса пароля устарел</dialog-title>
         <p class="status-description">
           Срок действия токена истек.
-          <a href="#" @click.prevent="goToRecovery">Запросите новый</a>.
+          <router-link :to="{ path: '/', query: { action: 'recovery' } }"
+            >Запросите новый</router-link
+          >.
         </p>
       </template>
 
       <!-- Invalid token -->
       <template v-else-if="pageState === 'invalid'">
         <status-icon type="error" />
-        <lightbox-title>Токен сброса пароля недействителен</lightbox-title>
+        <dialog-title>Токен сброса пароля недействителен</dialog-title>
 
         <div class="error-info">
           <p><strong>Возможные причины:</strong></p>
           <ul>
             <li>
               Пароль уже был изменен — попробуйте
-              <a href="#" @click.prevent="goToLogin">войти</a>
+              <router-link :to="{ path: '/', query: { action: 'login' } }"
+                >войти</router-link
+              >
             </li>
             <li>Был запрошен новый токен — проверьте последнее письмо</li>
           </ul>
@@ -145,7 +141,7 @@ function goToLogin() {
 
       <!-- Form (ready state) -->
       <template v-if="pageState === 'ready'">
-        <lightbox-title>Новый пароль</lightbox-title>
+        <dialog-title>Новый пароль</dialog-title>
 
         <form @submit.prevent="submit" class="reset-form">
           <div class="form-field">
@@ -180,16 +176,13 @@ function goToLogin() {
 
       <div class="help-section">
         Нужна помощь? Обратитесь в
-        <a href="/support?reason=access">поддержку</a>
+        <router-link to="/support?reason=access">поддержку</router-link>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .reset-page
   max-width: 380px
   margin: $major auto

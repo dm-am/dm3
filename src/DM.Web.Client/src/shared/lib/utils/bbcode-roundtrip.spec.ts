@@ -24,7 +24,7 @@ import {
   Noparse,
   BbLink,
   BbImage,
-} from "@/features/editor/lib/tiptap-extensions";
+} from "@/shared/ui/BBCodeEditor/lib/tiptap-extensions";
 
 // Create editor with the same configuration as BBCodeEditor.vue
 function createProductionEditor() {

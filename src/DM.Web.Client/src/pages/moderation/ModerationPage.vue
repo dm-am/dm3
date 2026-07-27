@@ -18,9 +18,6 @@
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .moderation-nav
   display: flex
   gap: $medium

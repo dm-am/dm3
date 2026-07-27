@@ -66,6 +66,15 @@ public enum EventType
     [EventRoutingKey("messaging.message.deleted")]
     DeletedMessage = 14,
 
+    /// <summary>
+    /// New message has been sent to the global chat.
+    /// Emitted in addition to <see cref="NewMessage"/> so realtime
+    /// consumers can broadcast public chat traffic to every connected
+    /// client without inspecting the chat type.
+    /// </summary>
+    [EventRoutingKey("messaging.message.global.created")]
+    NewGlobalChatMessage = 15,
+
     // ========================================
     // User status events (21-29)
     // ========================================
@@ -77,12 +86,6 @@ public enum EventType
     RoleChanged = 21,
 
     /// <summary>
-    /// User has been granted honorary status
-    /// </summary>
-    [EventRoutingKey("community.user.honorary.granted")]
-    HonoraryGranted = 22,
-
-    /// <summary>
     /// User is no longer a newbie (passed probation period)
     /// </summary>
     [EventRoutingKey("community.user.newbie.graduated")]
@@ -91,8 +94,8 @@ public enum EventType
     /// <summary>
     /// User avatar has been changed (upload or reset).
     /// Transient UI hint — payload includes user ID and new
-    /// picture URLs так чтобы вкладки могли live-обновить
-    /// аватары в чатах/комментариях без перезагрузки.
+    /// picture URLs so that open tabs can live-update
+    /// avatars in chats/comments without a reload.
     /// </summary>
     [EventRoutingKey("community.user.avatar.changed")]
     UserAvatarChanged = 24,
@@ -459,10 +462,40 @@ public enum EventType
     NewBlog = 201,
 
     /// <summary>
+    /// Blog has been changed.
+    /// </summary>
+    [EventRoutingKey("blog.changed")]
+    ChangedBlog = 202,
+
+    /// <summary>
+    /// Blog is on moderation.
+    /// </summary>
+    [EventRoutingKey("blog.status.moderation")]
+    StatusBlogModeration = 221,
+
+    /// <summary>
     /// Blog has transitioned to Active status.
     /// </summary>
     [EventRoutingKey("blog.status.active")]
     StatusBlogActive = 224,
+
+    /// <summary>
+    /// Blog is frozen.
+    /// </summary>
+    [EventRoutingKey("blog.status.frozen")]
+    StatusBlogFrozen = 225,
+
+    /// <summary>
+    /// Blog is finished.
+    /// </summary>
+    [EventRoutingKey("blog.status.finished")]
+    StatusBlogFinished = 226,
+
+    /// <summary>
+    /// Blog is closed.
+    /// </summary>
+    [EventRoutingKey("blog.status.closed")]
+    StatusBlogClosed = 227,
 
     // ========================================
     // Game events (301-499)

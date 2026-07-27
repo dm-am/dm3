@@ -79,7 +79,6 @@ internal class CommunityProfileService : ICommunityProfileService
         UserRole? role = null,
         UserSort sort = UserSort.Name,
         bool sortAscending = true,
-        bool? isHonorary = null,
         bool? isNewbie = null,
         bool? isOnline = null,
         int? minRating = null,
@@ -99,12 +98,12 @@ internal class CommunityProfileService : ICommunityProfileService
         }
 
         var totalCount = await _userRepository.CountUsersAsync(
-            filter, search, role, isHonorary, isNewbie, isOnline, minRating, maxRating,
+            filter, search, role, isNewbie, isOnline, minRating, maxRating,
             minGamesHosting, maxGamesHosting, minGamesPlaying, maxGamesPlaying, minBlogsHosting, maxBlogsHosting,
             registeredFromUtc, registeredToUtc);
         var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
         var users = await _userRepository.GetUsersAsync(
-            paging, filter, search, role, sort, sortAscending, isHonorary, isNewbie, isOnline, minRating, maxRating,
+            paging, filter, search, role, sort, sortAscending, isNewbie, isOnline, minRating, maxRating,
             minGamesHosting, maxGamesHosting, minGamesPlaying, maxGamesPlaying, minBlogsHosting, maxBlogsHosting,
             registeredFromUtc, registeredToUtc);
         return (users, paging.Result);

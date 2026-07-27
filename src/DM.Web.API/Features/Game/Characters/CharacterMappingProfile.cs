@@ -1,6 +1,8 @@
 using AutoMapper;
 using DM.Domain.Game.Features.Characters;
 using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.BbRendering;
+using AttributeType = DM.Domain.Core.Enums.AttributeSpecificationType;
 using DtoCharacter = DM.Domain.Game.Features.Games.Character;
 using DtoCharacterAttribute = DM.Domain.Game.Features.Games.CharacterAttribute;
 using DtoCharacterShort = DM.Domain.Game.Features.Games.CharacterShort;
@@ -17,25 +19,75 @@ internal class CharacterMappingProfile : Profile
     public CharacterMappingProfile()
     {
         // Base Character mapping (lightweight, for lists).
-        // Picture — через AvatarPicture→UserPicture конвертер
-        // (имгпрокси thumbnails on the fly, см. AvatarPictureConverter).
+        // Picture — via the AvatarPicture→UserPicture converter
+        // (imgproxy thumbnails on the fly, see AvatarPictureConverter).
         CreateMap<DtoCharacter, Character>()
-            .ForMember(d => d.Picture, o => o.MapFrom(s => s.Picture));
+            .ForMember(d => d.Picture, o => o.MapFrom(s => s.Picture))
+            // Author rating for the "Рейтинг" roster column. Null for NPCs (no
+            // author) and for authors who disabled rating display - same rule as
+            // the GeneralUser -> User mapping in UserMappingProfile.
+            .ForMember(d => d.AuthorRating, o => o.MapFrom(s =>
+                s.Author != null && !s.Author.RatingDisabled
+                    ? new Rating { TotalPosts = s.Author.QuantityRating, PostReviewScoreSum = s.Author.QualityRating }
+                    : null));
+            // Descriptor and LastPostUtc map by name/convention.
 
         // CharacterShort -> Character (for Post.Character).
-        // Picture заполняется батчем в PostRepository.EnrichWithCharacterPictures.
+        // Picture is filled in batch by PostRepository.EnrichWithCharacterPictures.
         CreateMap<DtoCharacterShort, Character>()
             .ForMember(d => d.TotalPostsCount, opt => opt.Ignore())
-            .ForMember(d => d.Race, opt => opt.Ignore())
-            .ForMember(d => d.Class, opt => opt.Ignore())
+            // Domain CharacterShort is the lightweight post-context projection
+            // and carries no retirement flags (dead/left/exiled) — those live
+            // only on the full Character. Ignore them here; they stay default.
+            .ForMember(d => d.IsDead, opt => opt.Ignore())
+            .ForMember(d => d.IsPlayerLeft, opt => opt.Ignore())
+            .ForMember(d => d.IsPlayerExiled, opt => opt.Ignore())
+            // Roster-only fields; the post-context projection carries none of them.
+            .ForMember(d => d.LastPostUtc, opt => opt.Ignore())
+            .ForMember(d => d.Descriptor, opt => opt.Ignore())
+            .ForMember(d => d.AuthorRating, opt => opt.Ignore())
             .ForMember(d => d.Picture, o => o.MapFrom(s => s.Picture));
 
-        // CharacterDetails mapping (full)
+        // CharacterDetails mapping (full). Inherits the base Character member
+        // config (Picture converter, AuthorRating) via IncludeBase.
         CreateMap<DtoCharacter, CharacterDetails>()
-            .ForMember(c => c.Privacy, s => s.MapFrom<AccessPolicyConverter>());
+            .IncludeBase<DtoCharacter, Character>()
+            .ForMember(c => c.Privacy, s => s.MapFrom<AccessPolicyConverter>())
+            .AfterMap((src, dest) =>
+            {
+                // Owner of the character's BBCode attribute values is the
+                // character's player. Populate the render-context envelope on
+                // every BBCode attribute so the JSON converter honors the
+                // owner's AuthorEdit round-trip and downgrades any other
+                // viewer's author_edit request to permission-filtered Display.
+                // (getCharacterForEdit sends X-Dm-Audience: author_edit.)
+                var ownerUserId = src.Author?.UserId;
+                foreach (var attribute in dest.Attributes)
+                {
+                    if (attribute.ValueBbText is null) continue;
+                    attribute.ValueBbText.Context = new RenderContextEnvelope
+                    {
+                        Surface = attribute.ValueBbText.Surface,
+                        PostAuthorUserId = ownerUserId
+                    };
+                }
+            });
 
+        // Output: BbCode-typed values become a server-rendered InfoBbText
+        // payload; all other types carry the plain string. The raw stored BBCode
+        // is never placed into the plain Value (HTML sink).
         CreateMap<DtoCharacterAttribute, CharacterAttribute>()
-            .ReverseMap();
+            .ForMember(d => d.Value, o => o.MapFrom(s =>
+                s.Type == AttributeType.BbCode ? null : s.Value))
+            .ForMember(d => d.ValueBbText, o => o.MapFrom(s =>
+                s.Type == AttributeType.BbCode ? new InfoBbText { Value = s.Value } : null));
+
+        // Input: the client always submits the raw value in Value (ValueBbText is
+        // output-only). Only Id + Value reach the domain update path.
+        CreateMap<CharacterAttribute, DtoCharacterAttribute>()
+            .ForMember(d => d.AttributeId, o => o.Ignore())
+            .ForMember(d => d.Description, o => o.Ignore())
+            .ForMember(d => d.Type, o => o.Ignore());
 
         // For character creation, use CharacterDetails (has Privacy)
         CreateMap<CharacterDetails, DtoCreateCharacter>()

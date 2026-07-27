@@ -4,23 +4,23 @@ using System.Threading.Tasks;
 namespace DM.Domain.Personal.Features.Profiles;
 
 /// <summary>
-/// Прямой WebSocket-push о смене аватара пользователя (transient UI hint).
-/// Не идет через outbox/RabbitMQ — событие best-effort, потеря пуша
-/// несущественна (FE подхватит изменение при следующем page-load).
+/// Direct WebSocket push about a user's avatar change (transient UI hint).
+/// Does not go through outbox/RabbitMQ — the event is best-effort, a lost push
+/// is inconsequential (the FE picks up the change on the next page load).
 ///
-/// Аналогично presence-updates и typing-indicators: durability не нужна,
-/// важна низкая латентность доставки в открытые вкладки.
+/// Like presence updates and typing indicators: durability is not needed,
+/// what matters is low delivery latency to open tabs.
 ///
-/// Payload содержит только userId — клиент сам перезагружает свои данные,
-/// чужие аватары в DOM обновляются на следующем рендере с новыми URL
+/// The payload contains only userId — the client reloads its own data,
+/// other users' avatars in the DOM update on the next render with new URLs
 /// (immutable hash-based keys → browser cache safe).
 /// </summary>
 public interface IRealtimeAvatarBroadcaster
 {
     /// <summary>
-    /// Broadcast информацию о смене аватара. Если соответствующих
-    /// подключений нет — no-op.
+    /// Broadcast the avatar change. If there are no matching
+    /// connections — no-op.
     /// </summary>
-    /// <param name="userId">Идентификатор пользователя, чей аватар изменился.</param>
+    /// <param name="userId">Identifier of the user whose avatar changed.</param>
     Task BroadcastAvatarChangedAsync(Guid userId);
 }

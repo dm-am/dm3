@@ -75,7 +75,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 
 При запуске API EF Core применяет миграции, которые создают:
 - **Доски форума** — 11 разделов
-- **Теги игр** — 57 тегов в 3 группах
+- **Теги игр** — 65 тегов в 8 группах
 
 ### Тестовые пользователи
 
@@ -118,7 +118,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 
 | Логин | Особенность |
 |-------|-------------|
-| `TestHonorary` | Honorary goblin (почетный гоблин) |
+| `TestHonorary` | Обладатель награды "Почетный гоблин" |
 
 **Pending Registrations (для тестирования активации):**
 
@@ -132,7 +132,6 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 
 1. http://localhost:5173 → Регистрация
 2. MailHog: http://localhost:8025 (письмо активации)
-3. Смена роли: http://localhost:5173/dev/accounts
 
 ---
 
@@ -185,9 +184,11 @@ dotnet run --project src/DM.Web.API --urls "http://localhost:5000"
 
 ### Миграции
 
+Только одна миграция `InitialCreate` (см. [DATA_STORAGE.md](../conventions/DATA_STORAGE.md)). После изменения Entity — пересоздать ее, а не добавлять новую:
+
 ```bash
-dotnet ef migrations add YYYYMMDD_Name -p src/DM.Infrastructure.Persistence -s src/DM.Web.API
-dotnet ef database update -p src/DM.Infrastructure.Persistence -s src/DM.Web.API
+dotnet ef migrations remove -p src/DM.Infrastructure.Persistence -s src/DM.Web.API
+dotnet ef migrations add InitialCreate -p src/DM.Infrastructure.Persistence -s src/DM.Web.API
 ```
 
 ---
@@ -249,7 +250,6 @@ IMGPROXY_SALT=...  # 64 hex chars (32 bytes), HMAC-SHA256 salt
 | Frontend не видит API | Проверить `.env.local`: `VITE_API_HOST=http://localhost:5000` |
 | Изображения не загружаются | API создает bucket автоматически на старте. Проверь `docker logs dm-api 2>&1 \| grep -i bucket` |
 | Thumbnails не отдаются (404 на imgproxy) | `docker ps \| grep imgproxy`. Проверить `IMGPROXY_KEY`/`IMGPROXY_SALT` в `docker/.env` (64 hex chars each) |
-| Seed: письма не доходят | Используй `node scripts/seed.js` без `--with-email` |
 | Seed: "API not available" | Запусти API: `dotnet run --project src/DM.Web.API` |
 | Seed: "PostgreSQL not available" | Запусти: `docker compose up -d dm-pg` |
 | Пользователи не в "Активных" | Seed обновляет `LastActivityUtc`, перезапусти seed |

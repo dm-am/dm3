@@ -89,7 +89,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
             {
                 Id = existingNote.Id,
                 Text = createNote.Text,
-                UpdatedUtc = now
+                ModifiedUtc = now
             };
             return await _repository.Update(update, ct);
         }

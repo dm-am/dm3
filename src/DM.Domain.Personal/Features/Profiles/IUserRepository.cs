@@ -46,9 +46,9 @@ public interface IUserRepository : IUserReadRepository
     Task LinkAvatarUpload(Guid userId, Guid uploadId);
 
     /// <summary>
-    /// Сбросить аватар пользователя: User.AvatarUploadId = null,
-    /// все его UserAvatar-uploads помечаются IsRemoved=true.
-    /// Идемпотент: если аватара нет — no-op.
+    /// Reset the user's avatar: User.AvatarUploadId = null,
+    /// all their UserAvatar uploads are marked IsRemoved=true.
+    /// Idempotent: if there is no avatar — no-op.
     /// </summary>
     Task UnlinkAvatarUpload(Guid userId);
 }

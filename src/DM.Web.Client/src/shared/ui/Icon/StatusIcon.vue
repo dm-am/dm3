@@ -21,8 +21,6 @@ defineProps<{
 </script>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Variables"
-
 .status-icon
   width: 48px
   height: 48px

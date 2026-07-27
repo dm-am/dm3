@@ -26,8 +26,6 @@ const statusDisplay = computed<string>(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 .blog-status
   display: inline
   word-wrap: break-word

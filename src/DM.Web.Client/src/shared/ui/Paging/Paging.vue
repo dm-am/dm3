@@ -5,46 +5,59 @@
     class="paging"
     aria-label="Пагинация"
   >
+    <!-- Every item is followed by a zero-width .copy-space text node
+         (a preserved " " at font-size: 0): invisible in layout, but
+         Selection.toString() emits it as a real space, so the strip
+         copies as "<< ... 4 5 6 ... >>" on one line instead of one
+         page number per line (same idiom as Tabs.vue, zero-width
+         variant because the visible spacing comes from margins). -->
+
     <!-- First page << -->
-    <Tooltip v-if="showFirst" text="Первая страница">
-      <router-link
-        :to="getPageLink(1)"
-        class="nav-button"
-        @click="prematureUpdate(1)"
-        >&lt;&lt;</router-link
-      >
-    </Tooltip>
+    <template v-if="showFirst">
+      <Tooltip text="Первая страница">
+        <router-link
+          :to="getPageLink(1)"
+          class="nav-button"
+          @click="prematureUpdate(1)"
+          >&lt;&lt;</router-link
+        ></Tooltip
+      ><span class="copy-space">{{ " " }}</span>
+    </template>
 
     <!-- Left ellipsis -->
-    <Tooltip v-if="showLeftEllipsis" text="Назад">
-      <router-link
-        :to="getPageLink(leftEllipsisTarget)"
-        class="nav-button"
-        @click="prematureUpdate(leftEllipsisTarget)"
-        >...</router-link
-      >
-    </Tooltip>
+    <template v-if="showLeftEllipsis">
+      <Tooltip text="Назад">
+        <router-link
+          :to="getPageLink(leftEllipsisTarget)"
+          class="nav-button"
+          @click="prematureUpdate(leftEllipsisTarget)"
+          >...</router-link
+        ></Tooltip
+      ><span class="copy-space">{{ " " }}</span>
+    </template>
 
     <!-- Page numbers -->
-    <router-link
-      v-for="page in pageNumbers"
-      :key="page"
-      :to="getPageLink(page)"
-      :class="['page-number', { active: page === localPaging.current }]"
-      :aria-current="page === localPaging.current ? 'page' : undefined"
-      @click="prematureUpdate(page)"
-      >{{ page }}</router-link
-    >
+    <template v-for="page in pageNumbers" :key="page">
+      <router-link
+        :to="getPageLink(page)"
+        :class="['page-number', { active: page === localPaging.current }]"
+        :aria-current="page === localPaging.current ? 'page' : undefined"
+        @click="prematureUpdate(page)"
+        >{{ page }}</router-link
+      ><span class="copy-space">{{ " " }}</span>
+    </template>
 
     <!-- Right ellipsis -->
-    <Tooltip v-if="showRightEllipsis" text="Вперед">
-      <router-link
-        :to="getPageLink(rightEllipsisTarget)"
-        class="nav-button"
-        @click="prematureUpdate(rightEllipsisTarget)"
-        >...</router-link
-      >
-    </Tooltip>
+    <template v-if="showRightEllipsis">
+      <Tooltip text="Вперед">
+        <router-link
+          :to="getPageLink(rightEllipsisTarget)"
+          class="nav-button"
+          @click="prematureUpdate(rightEllipsisTarget)"
+          >...</router-link
+        ></Tooltip
+      ><span class="copy-space">{{ " " }}</span>
+    </template>
 
     <!-- Last page >> -->
     <Tooltip v-if="showLast" text="Последняя страница">
@@ -63,7 +76,7 @@ import type { Paging } from "@/shared/api/models/common";
 import { computed, ref, watch, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { Tooltip } from "@/shared/ui/Tooltip";
-import { scrollContentToTop } from "@/shared/lib/scroll";
+import { scrollBlockIntoView, scrollContentToTop } from "@/shared/lib/scroll";
 
 const props = withDefaults(
   defineProps<{
@@ -75,11 +88,19 @@ const props = withDefaults(
     queryKey?: string;
     /** Callback to prefetch next page when pagination becomes visible */
     onPrefetch?: (page: number) => void;
+    /**
+     * Getter for the top of the paginated block (table/list). When set,
+     * paging scrolls that block into view (scrollBlockIntoView) instead of
+     * jumping to the top of the page content. A getter — not a raw element —
+     * so it survives the consumer re-rendering the block between clicks.
+     */
+    scrollAnchor?: () => HTMLElement | null;
   }>(),
   {
     useQuery: false,
     queryKey: "number",
     onPrefetch: undefined,
+    scrollAnchor: undefined,
   },
 );
 
@@ -151,8 +172,15 @@ watch(
 const prematureUpdate = (page: number) => {
   localPaging.value = { ...localPaging.value, current: page };
   // Query-based paging doesn't change the route path, so the router's
-  // scroll handling won't fire — scroll the content container ourselves
-  scrollContentToTop();
+  // scroll handling won't fire — scroll ourselves. With an anchor the
+  // paginated block is brought into view (no-op when its top is already
+  // visible); without one, legacy behavior: content container to top.
+  const anchor = props.scrollAnchor?.();
+  if (anchor) {
+    scrollBlockIntoView(anchor);
+  } else {
+    scrollContentToTop();
+  }
 };
 
 // Calculate window bounds (always 10 pages or fewer)

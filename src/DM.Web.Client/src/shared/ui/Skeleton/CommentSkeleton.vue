@@ -3,7 +3,7 @@
  * Skeleton for Comment placeholders (forum and game comments).
  *
  * Layout contract — matches Comment.vue:
- *   - Full layout: flex row — avatar 64×64 left + body right
+ *   - Full layout: flex row — avatar 72×72 left + body right
  *   - Compact layout: block — no avatar, just body
  *   - Body: author name + date header, 3 content lines, footer meta
  *   - Card: $medium padding, 1px dashed $border, $bg-element
@@ -48,14 +48,14 @@ withDefaults(
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Skeleton"
 
+// Inter-card gap matches the real forum comments list ($small); the game
+// comments list packs them flush (gap 0) via its dashed-border handoff.
 .comment-skeleton-list
   display: flex
   flex-direction: column
-  gap: $medium
+  gap: $small
 
 // Matches Comment.vue: flex row, $medium padding/gap, dashed border
 .skeleton-comment
@@ -70,8 +70,8 @@ withDefaults(
 
 .skeleton-avatar
   flex-shrink: 0
-  width: 64px
-  height: 64px
+  width: 72px
+  height: 72px
   +skeleton-shimmer
 
 .skeleton-body
@@ -81,14 +81,18 @@ withDefaults(
   flex-direction: column
   gap: $small
 
+// Full-header geometry: author name (16px) stacked ABOVE the meta line
+// (12px), matching Comment.vue's author block — a row would push the body
+// text down when the real header replaces it.
 .skeleton-header
   display: flex
-  align-items: center
-  gap: $small
+  flex-direction: column
+  align-items: flex-start
+  gap: $tiny
 
 .skeleton-author
   width: 120px
-  height: 14px
+  height: 18px
   +skeleton-shimmer
 
 .skeleton-date
@@ -115,6 +119,6 @@ withDefaults(
 .skeleton-footer
   width: 150px
   height: 12px
-  margin-top: $tiny
+  margin-top: $small
   +skeleton-shimmer
 </style>

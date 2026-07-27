@@ -29,8 +29,6 @@ export {
   // Notes and moderation
   type UserProfileNote,
   type UserProfileNoteRequest,
-  type PublicWarning,
-  type PublicBan,
 } from "@/shared/api/models/community/users";
 
 // Re-export UserRef from common (lightweight user reference)

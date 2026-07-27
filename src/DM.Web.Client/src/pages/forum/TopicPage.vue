@@ -1,24 +1,32 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
-import { useRoute } from "vue-router";
+import { ref, computed, reactive, inject, onBeforeUnmount } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useModal } from "vue-final-modal";
 import { useBoardsStore } from "@/entities/forum";
-import { useUserStore } from "@/entities/user";
+import { useUserStore, userIsModerator } from "@/entities/user";
 import { storeToRefs } from "pinia";
-import { Topic as TopicDisplay } from "@/features/topic";
-import { BBCodeEditor } from "@/features/editor";
+import { TopicView as TopicDisplay } from "@/features/topic";
+import { LoginPrompt } from "@/features/auth";
+import { WarningDialog } from "@/features/moderation-actions";
+import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import { useToast } from "@/shared/lib/composables/useToast";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { forumApi } from "@/entities/forum";
-import { AccessPolicy, UserRole } from "@/shared/api/models/community";
+import { AccessPolicy } from "@/shared/api/models/community";
 import { CommentsFilter, useCommentsFilter } from "@/features/comment-filter";
-import { ErrorPage } from "@/shared/ui/ErrorPage";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
+import { usePaging } from "@/shared/lib/composables/usePaging";
+import { reportForumShellError } from "./forumShell";
 
 const route = useRoute();
+const router = useRouter();
 const boardsStore = useBoardsStore();
 const { trySelectTopicByNumber, searchComments, createComment } = boardsStore;
 const { selectedTopic: topic } = storeToRefs(boardsStore);
 const { user } = storeToRefs(useUserStore());
+const { commentsPerPage } = usePaging();
 
 // Filter setup - get search params from URL
 const { searchParams } = useCommentsFilter();
@@ -51,16 +59,7 @@ const isBanned = computed(() => {
   );
 });
 
-const isModerator = computed(() => {
-  if (!user.value) return false;
-  return (
-    user.value.roles?.some((r: UserRole) =>
-      [UserRole.Admin, UserRole.SeniorModerator, UserRole.Moderator].includes(
-        r,
-      ),
-    ) ?? false
-  );
-});
+const isModerator = computed(() => userIsModerator(user.value));
 
 const canComment = computed(
   () => user.value && !isBanned.value && topic.value && !topic.value.isClosed,
@@ -87,23 +86,81 @@ async function markAsReadIfNeeded() {
   }
 }
 
+/**
+ * Consumes the "?unread=1" deep link (from the topic's unread-comments
+ * counter): computes the page holding the first unread comment and
+ * replace-navigates to it before the mark-as-read call zeroes the counter.
+ * Guests never see the link that produces this query param (Topic.vue only
+ * renders it for authenticated users), so no guest branch is needed here.
+ *
+ * Returns whether the caller can skip its own searchComments call. That's
+ * only safe when this function actually changes the "?number=" page —
+ * CommentsList's watcher fetches on THAT change. When the first unread
+ * comment lands on the page the URL already points to (typically page 1
+ * with no "number" param), stripping "?unread" is a no-op for "number", so
+ * no watcher fires and the caller must fetch comments itself instead of
+ * leaving the topic showing stale/no comments.
+ */
+function redirectToFirstUnreadIfNeeded() {
+  if (route.query.unread !== "1") return false;
+  if (!user.value || !topic.value) return false;
+
+  const { commentsCount, unreadCommentsCount } = topic.value;
+  if (!unreadCommentsCount) return false;
+
+  const readCount = Math.max(0, commentsCount - unreadCommentsCount);
+  const firstUnreadPosition = readCount + 1;
+  const page = Math.max(
+    1,
+    Math.ceil(firstUnreadPosition / commentsPerPage.value),
+  );
+
+  const previousNumber = route.query.number;
+  const query = { ...route.query };
+  delete query.unread;
+  if (page > 1) query.number = String(page);
+  else delete query.number;
+
+  router.replace({ path: route.path, query, hash: route.hash });
+
+  // "?number=" is the only part of the query CommentsList's fetch watcher
+  // reacts to — only skip our own fetch when it actually changed.
+  const numberChanged = (query.number ?? null) !== (previousNumber ?? null);
+  return numberChanged;
+}
+
+// A missing/private/deleted topic is a page-level failure: report it to the
+// persistent forum shell, which swaps its whole header stack for the
+// full-screen ErrorPage (an error must never render squeezed under the
+// forum title and board strip). Cleared on every new load and on unmount.
+const reportShellError = inject(reportForumShellError, () => {});
+onBeforeUnmount(() => reportShellError(null));
+
 async function fetchData() {
   const alias = route.params.alias as string;
   const num = parseInt(route.params.num as string);
 
   loading.value = true;
   errorCode.value = null;
+  reportShellError(null);
 
-  const ok = await trySelectTopicByNumber(alias, num);
+  const { ok, status } = await trySelectTopicByNumber(alias, num);
   if (!ok) {
-    // The store helper swallows the status; re-read it to map the right
-    // error page (404 missing / 403 private board / 410 deleted / 500).
-    const { error } = await forumApi.getTopicByNumber(alias, num);
-    errorCode.value = mapErrorCode(error?.status);
+    errorCode.value = mapErrorCode(status);
+    reportShellError(errorCode.value);
     // Drop comments from the previously viewed topic so they never leak
     // onto an error page.
     boardsStore.comments = null;
     loading.value = false;
+    return;
+  }
+
+  if (redirectToFirstUnreadIfNeeded()) {
+    // CommentsList picks up the new "?number=" query on its own watcher —
+    // no need to fetch comments again here. Still mark as read so the
+    // counter clears once the reader has been routed to the right page.
+    loading.value = false;
+    markAsReadIfNeeded();
     return;
   }
 
@@ -136,38 +193,117 @@ async function handleUnlike(id: string) {
   await boardsStore.unlikeTopic(id);
 }
 
-function handleWarn(_id: string) {
-  // TODO: Open warning modal (P5.5 - console.log removed)
+const toast = useToast();
+
+// --- Topic lifecycle: edit / close / delete (doc 4.2.2.17 / 4.2.3.7.5) ---
+async function handleSaveEdit(
+  id: string,
+  patch: { title: string; description: string },
+) {
+  const { error } = await boardsStore.updateTopicContent(id, patch);
+  if (error) toast.error("Не удалось сохранить тему");
+}
+
+async function handleToggleClose(id: string) {
+  const closing = !topic.value?.isClosed;
+  const { error } = await boardsStore.setTopicClosed(id, closing);
+  if (error) toast.error("Не удалось изменить статус темы");
+}
+
+const showDeleteConfirm = ref(false);
+const deletingTopic = ref(false);
+
+function handleDelete() {
+  showDeleteConfirm.value = true;
+}
+
+async function confirmDeleteTopic() {
+  const id = topic.value?.id;
+  if (!id || deletingTopic.value) return;
+  deletingTopic.value = true;
+  const { error } = await boardsStore.deleteTopic(id);
+  deletingTopic.value = false;
+  showDeleteConfirm.value = false;
+  if (error) {
+    toast.error("Не удалось удалить тему");
+    return;
+  }
+  toast.success("Тема удалена");
+  router.push({ name: "forum", params: { alias: route.params.alias } });
+}
+
+// --- Moderator warning (doc 4.2.4.1) ---
+// The warn button itself is gated to Moderator+ inside <Topic> (can-warn).
+// The dialog is prefilled with the topic author and a permalink to the
+// topic as the violation reference.
+const warnUsername = ref("");
+const warnEntityId = ref<string | undefined>(undefined);
+const warnEntityLink = ref<string | undefined>(undefined);
+
+const { open: openWarnDialog, close: closeWarnDialog } = useModal({
+  component: WarningDialog,
+  attrs: reactive({
+    username: warnUsername,
+    entityId: warnEntityId,
+    entityType: "Topic",
+    entityLink: warnEntityLink,
+    onSuccess: () => closeWarnDialog(),
+    onCancel: () => closeWarnDialog(),
+  }),
+});
+
+function handleWarn(id: string) {
+  // Deleted author accounts arrive as null — nothing to warn.
+  const username = topic.value?.author?.username;
+  if (!username) return;
+
+  warnUsername.value = username;
+  warnEntityId.value = id;
+  warnEntityLink.value =
+    window.location.origin +
+    router.resolve({
+      name: "topic",
+      params: { alias: route.params.alias, num: route.params.num },
+    }).href;
+  openWarnDialog();
 }
 </script>
 
 <template>
-  <!-- Error state: missing / private / deleted topic -->
-  <ErrorPage v-if="errorCode" :code="errorCode" />
+  <!-- Error state lives on the ForumPage shell (reportForumShellError):
+       the shell hides its header stack and shows the full-screen ErrorPage,
+       so this leaf renders nothing at all while errorCode is set. -->
 
-  <!-- Loading state: skeleton before the first paint -->
-  <CommentSkeleton v-else-if="loading && !topic" :count="3" />
+  <!-- The shared forum header stack (h1 + board strip) is rendered by the
+       persistent ForumPage shell above this leaf. The strip's active item
+       doubles as the way back to the board — no separate back-link.
+       document.title still reflects the topic (see useDocumentTitle). -->
+  <template v-if="!errorCode">
+    <!-- Loading state: skeleton before the first paint -->
+    <CommentSkeleton v-if="loading && !topic" :count="3" />
 
-  <template v-else-if="topic">
-    <div class="topic-header">
-      <router-link
-        :to="{ name: 'forum', params: { alias: topic.board.alias } }"
-      >
-        Назад к разделу "{{ topic.board.title }}"
-      </router-link>
-    </div>
+    <template v-else-if="topic">
+      <!-- The topic name lives INSIDE the card as its heading (same shape
+           as the news cards on the home page). Plain text, not a link: the
+           card already sits on the topic's own page. -->
+      <TopicDisplay
+        :topic="topic"
+        heading-level="h2"
+        :title-link="false"
+        digest-expanded
+        @like="handleLike"
+        @unlike="handleUnlike"
+        @warn="handleWarn"
+        @save-edit="handleSaveEdit"
+        @delete="handleDelete"
+        @toggle-close="handleToggleClose"
+      />
 
-    <TopicDisplay
-      :topic="topic"
-      @like="handleLike"
-      @unlike="handleUnlike"
-      @warn="handleWarn"
-    />
+      <!-- Comments filter bar (below topic bubble, above pagination) -->
+      <CommentsFilter class="topic-filter" />
 
-    <!-- Comments filter bar (below topic bubble, above pagination) -->
-    <CommentsFilter class="topic-filter" />
-
-    <router-view class="topic-comments" />
+      <router-view class="topic-comments" />
+    </template>
   </template>
 
   <!-- Comment input area -->
@@ -201,24 +337,25 @@ function handleWarn(_id: string) {
       <secondary-text v-else-if="topic?.isClosed" class="comment-closed-hint">
         Топик закрыт для комментариев
       </secondary-text>
-      <secondary-text v-else class="comment-login-hint">
-        <router-link to="/?action=login">Войдите</router-link>, чтобы оставить
-        комментарий
-      </secondary-text>
+      <LoginPrompt v-else action="оставить комментарий" />
     </div>
   </div>
+
+  <!-- Topic delete confirmation -->
+  <ConfirmDialog
+    :show="showDeleteConfirm"
+    title="Удалить тему?"
+    message="Тема и все ее комментарии будут удалены. Это действие необратимо."
+    confirm-label="Удалить"
+    danger
+    :loading="deletingTopic"
+    @confirm="confirmDeleteTopic"
+    @update:show="showDeleteConfirm = $event"
+  />
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Inputs"
-
-.topic-header
-  display: flex
-  justify-content: space-between
-  align-items: baseline
-  margin-bottom: $small
 
 .topic-filter
   margin-top: $medium
@@ -242,21 +379,10 @@ function handleWarn(_id: string) {
   align-self: flex-start
   +button
 
-.comment-login-hint,
 .comment-banned-hint,
 .comment-closed-hint
   text-align: center
   padding: $small
-
-// Unified gray-bold link treatment (matches LeadText): muted bold link that
-// darkens and underlines on hover, instead of the old blue $link.
-.comment-login-hint a
-  color: $text-muted
-  font-weight: 700
-  text-decoration: none
-  &:hover
-    color: $text
-    text-decoration: underline
 
 .comment-banned-hint
   color: $accent-red

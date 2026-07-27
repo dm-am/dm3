@@ -42,9 +42,4 @@ public class UserRef
     /// Whether user is a newbie (less than 100 posts) - affects name color
     /// </summary>
     public bool IsNewbie { get; set; }
-
-    /// <summary>
-    /// Honorary status (visual badge [П] for former staff)
-    /// </summary>
-    public bool IsHonorary { get; set; }
 }

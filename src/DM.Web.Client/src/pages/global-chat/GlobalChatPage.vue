@@ -1,23 +1,36 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, nextTick, computed, watch } from "vue";
+import {
+  onMounted,
+  onUnmounted,
+  ref,
+  reactive,
+  nextTick,
+  computed,
+  watch,
+} from "vue";
 import { useRouter, useRoute } from "vue-router";
+import { useModal } from "vue-final-modal";
 import { storeToRefs } from "pinia";
 import {
   useGlobalChatStore,
   type GlobalChatMessage,
 } from "@/entities/global-chat";
-import { useUserStore } from "@/entities/user";
+import { useUserStore, useMessagePermissions } from "@/entities/user";
 import { useUiStore } from "@/shared/stores/ui";
 import { AccessPolicy } from "@/shared/api/models/community";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import dayjs from "dayjs";
 import { symbols } from "@/shared/lib/utils/icons";
 import { SvgIcon } from "@/shared/ui/Icon";
-import { DatePicker } from "@/shared/ui/DatePicker";
-import { BBCodeEditor } from "@/features/editor";
+import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { globalChatApi } from "@/entities/global-chat";
 import { ChatMessage } from "@/widgets/chat-message";
-import ChatEventBanner from "./ChatEventBanner.vue";
+import ChatEventsPanel from "./ChatEventsPanel.vue";
+import { ChatMessageSkeleton } from "@/shared/ui/Skeleton";
+import { MessageSearchPanel } from "@/features/message-search";
+import { WarningDialog } from "@/features/moderation-actions";
+import { LoginPrompt } from "@/features/auth";
+import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
 import {
   groupMessagesWithSeparators,
@@ -25,23 +38,30 @@ import {
   isUserOnline,
   type MessageOrSeparator,
 } from "@/shared/lib/utils/chat";
-import {
-  useMessagePermissions,
-  useVirtualScroll,
-} from "@/shared/lib/composables";
+import { useVirtualScroll } from "@/shared/lib/composables";
+import { useToast } from "@/shared/lib/composables/useToast";
+import { useGlobalSignalR } from "@/shared/lib/composables/useSignalR";
+import { EventType } from "@/shared/api/models/notifications/signalr";
+import type { SignalRNotification } from "@/shared/api/models/notifications/signalr";
 
 const router = useRouter();
 const route = useRoute();
 const globalChatStore = useGlobalChatStore();
 const userStore = useUserStore();
+const toast = useToast();
 const {
   messages,
   loading,
   error,
+  errorBefore,
+  errorAfter,
   sending,
   hasMoreBefore,
   hasMoreAfter,
   highlightedMessageId,
+  landedOnRequestedDate,
+  liveEvent,
+  eventDetails,
 } = storeToRefs(globalChatStore);
 const { user } = storeToRefs(userStore);
 const { isCompactLayout } = storeToRefs(useUiStore());
@@ -68,24 +88,44 @@ const isBanned = computed(() => {
 
 const canSendMessages = computed(() => user.value && !isBanned.value);
 
-// Typing indicator (placeholder - will be connected to WebSocket later)
-const typingUsers = ref<string[]>([]);
-const typingText = computed(() => {
-  if (typingUsers.value.length === 0) return "";
-  if (typingUsers.value.length === 1)
-    return `${typingUsers.value[0]} печатает...`;
-  if (typingUsers.value.length === 2)
-    return `${typingUsers.value[0]} и ${typingUsers.value[1]} печатают...`;
-  return `${typingUsers.value[0]} и еще ${typingUsers.value.length - 1} печатают...`;
+// ─────────────────────────────────────────────────────────────
+// Live event details + closed event restriction hint
+// ─────────────────────────────────────────────────────────────
+// The in-frame live banner needs full details for ANY live event (duration
+// for "идет до HH:mm" + the expandable description), and during a Live
+// event with isOpen=false the backend additionally rejects messages from
+// non-participants (see MessageService) — the participants list from the
+// same details response feeds the quiet hint above the input. Single
+// owner: the page fetches once into the shared store cache, the banner and
+// the hint both read from it.
+watch(
+  liveEvent,
+  (ev) => {
+    if (ev) {
+      globalChatStore.fetchEventDetails(ev.id);
+    }
+  },
+  { immediate: true },
+);
+
+const showClosedEventHint = computed(() => {
+  const ev = liveEvent.value;
+  if (!ev || ev.isOpen || !user.value || !canSendMessages.value) return false;
+  // Details not loaded yet — assume no restriction to avoid a false flash.
+  const details = eventDetails.value[ev.id];
+  if (!details) return false;
+  return !details.participants?.some(
+    (p) => p.user.username === user.value?.username,
+  );
 });
 
 const newMessage = ref("");
 const globalChatContainer = ref<HTMLElement | null>(null);
 const messagesContainer = ref<HTMLElement | null>(null);
 const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
-const editEditorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 const topSentinel = ref<HTMLElement | null>(null);
 const bottomSentinel = ref<HTMLElement | null>(null);
+const toolbarEl = ref<HTMLElement | null>(null);
 
 let topObserver: IntersectionObserver | null = null;
 let bottomObserver: IntersectionObserver | null = null;
@@ -97,39 +137,49 @@ const isScrolling = ref(false);
 let scrollEndTimeout: ReturnType<typeof setTimeout> | null = null;
 let isInitialScrolling = false; // Block infinite scroll during initial anchor navigation
 
+// Loads older messages while preserving the reader's visual scroll anchor
+// (the container would otherwise jump when content is prepended above the
+// viewport). Shared by the intersection-observer auto-load path and the
+// sentinel's manual "Повторить" retry button, so both anchor identically.
+async function loadOlderAnchored() {
+  if (isLoadingOlder || !hasMoreBefore.value) return;
+  isLoadingOlder = true;
+
+  const container = messagesContainer.value;
+  if (!container) {
+    isLoadingOlder = false;
+    return;
+  }
+
+  const scrollHeightBefore = container.scrollHeight;
+  await globalChatStore.fetchMoreBefore();
+
+  nextTick(() => {
+    if (container) {
+      const scrollHeightAfter = container.scrollHeight;
+      const heightDiff = scrollHeightAfter - scrollHeightBefore;
+      container.scrollTop = heightDiff;
+    }
+    isLoadingOlder = false;
+  });
+}
+
 function setupInfiniteScroll() {
   if (!messagesContainer.value) return;
 
   // Top sentinel - load older messages
   if (topSentinel.value) {
     topObserver = new IntersectionObserver(
-      async (entries) => {
+      (entries) => {
         if (
           isInitialScrolling ||
           !entries[0].isIntersecting ||
           isLoadingOlder ||
-          !hasMoreBefore.value
+          !hasMoreBefore.value ||
+          errorBefore.value // Stay put after a failure — require the explicit "Повторить" click instead of auto-retrying every intersection
         )
           return;
-        isLoadingOlder = true;
-
-        const container = messagesContainer.value;
-        if (!container) {
-          isLoadingOlder = false;
-          return;
-        }
-
-        const scrollHeightBefore = container.scrollHeight;
-        await globalChatStore.fetchMoreBefore();
-
-        nextTick(() => {
-          if (container) {
-            const scrollHeightAfter = container.scrollHeight;
-            const heightDiff = scrollHeightAfter - scrollHeightBefore;
-            container.scrollTop = heightDiff;
-          }
-          isLoadingOlder = false;
-        });
+        loadOlderAnchored();
       },
       {
         root: messagesContainer.value,
@@ -148,7 +198,8 @@ function setupInfiniteScroll() {
           isInitialScrolling ||
           !entries[0].isIntersecting ||
           isLoadingNewer ||
-          !hasMoreAfter.value
+          !hasMoreAfter.value ||
+          errorAfter.value
         )
           return;
         isLoadingNewer = true;
@@ -175,7 +226,11 @@ function cleanupInfiniteScroll() {
 
 // autoGrowEdit removed - BBCodeEditor handles its own sizing
 
-// Edit state
+// Edit state — editText holds the message's original BBCode, used only to
+// seed ChatMessage's editor on entering edit mode (:edit-text is consumed
+// as an initial value there, not synced back). The actual edited text lives
+// inside ChatMessage's own local editor state and travels back to us as the
+// @save-edit payload — never read from this ref again after startEdit.
 const editingId = ref<string | null>(null);
 const editText = ref("");
 
@@ -200,12 +255,21 @@ const isToolbarVisible = computed(() => {
 
 function handleMessageMouseEnter(event: MouseEvent, msgId: string) {
   if (isScrolling.value) return;
+  showToolbarFor(event.currentTarget as HTMLElement, msgId);
+}
+
+// Keyboard-reachable counterpart to hover: messages are tabindex="0", so
+// focus-within (focusin bubbles) reveals the same toolbar hover would.
+function handleMessageFocusIn(event: FocusEvent, msgId: string) {
+  showToolbarFor(event.currentTarget as HTMLElement, msgId);
+}
+
+function showToolbarFor(target: HTMLElement, msgId: string) {
   if (hideToolbarTimeout) {
     clearTimeout(hideToolbarTimeout);
     hideToolbarTimeout = null;
   }
 
-  const target = event.currentTarget as HTMLElement;
   const rect = target.getBoundingClientRect();
   const container = globalChatContainer.value;
 
@@ -234,6 +298,17 @@ function handleMessageMouseLeave() {
   }, 150);
 }
 
+// Focus left the message (Tab moved elsewhere) — same debounce as mouseleave
+// so moving focus into the now-visible toolbar buttons doesn't close it. The
+// toolbar is a sibling element (absolutely positioned, not a DOM descendant
+// of the message row), so focus-within alone won't keep it open when Tab
+// moves from the message into the toolbar — check relatedTarget explicitly.
+function handleMessageFocusOut(event: FocusEvent) {
+  const next = event.relatedTarget as Node | null;
+  if (next && toolbarEl.value?.contains(next)) return;
+  handleMessageMouseLeave();
+}
+
 function handleToolbarMouseEnter() {
   if (hideToolbarTimeout) {
     clearTimeout(hideToolbarTimeout);
@@ -249,6 +324,24 @@ function handleToolbarMouseLeave() {
     confirmingDeleteId.value = null;
     hideToolbarTimeout = null;
   }, 100);
+}
+
+// Keyboard counterpart to the toolbar's mouseenter/mouseleave pair — Tabbing
+// into a toolbar button must cancel the message's pending hide timer the
+// same way hovering it does, otherwise the 150ms timeout fires mid-Tab and
+// yanks the toolbar away before the button can be activated.
+function handleToolbarFocusIn() {
+  handleToolbarMouseEnter();
+}
+
+// Tabbing out of the toolbar entirely (not just between its own buttons)
+// should restart the hide countdown, matching mouseleave. relatedTarget is
+// null when focus leaves the document (e.g. address bar) — treat that as
+// "left the toolbar" too.
+function handleToolbarFocusOut(event: FocusEvent) {
+  const next = event.relatedTarget as Node | null;
+  if (next && toolbarEl.value?.contains(next)) return;
+  handleToolbarMouseLeave();
 }
 
 function handleWheel() {
@@ -274,6 +367,11 @@ function handleScroll() {
     confirmingDeleteId.value = null;
     isToolbarHovered.value = false;
   }
+  updateAtBottom();
+  // The ARCHIVE -> LIVE auto-exit is driven by the actual scroll reaching
+  // the bottom ("при докрутке до низа"), not only by ref-change watchers —
+  // guards inside make this a cheap no-op outside archive mode.
+  maybeExitArchiveToLive();
   if (scrollEndTimeout) {
     clearTimeout(scrollEndTimeout);
   }
@@ -281,6 +379,85 @@ function handleScroll() {
     isScrolling.value = false;
     scrollEndTimeout = null;
   }, 150);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Bottom-of-chat state machine
+// ─────────────────────────────────────────────────────────────
+// The feed lives in one of two modes; the ?date query param is the single
+// source of truth for which one:
+//
+// LIVE (no ?date, hasMoreAfter=false): the loaded window ends at the newest
+//   message.
+//   - New messages (SignalR push / poll fallback) append to the tail. If
+//     the reader is at the bottom, the view follows them (autoscroll); if
+//     they scrolled up to read history, the viewport is left alone.
+//   - The scroll-to-latest button shows only while scrolled up (then there
+//     is actually somewhere to jump); clicking it just scrolls — the tail
+//     is already loaded, no refetch, no URL change.
+//
+// ARCHIVE (?date=YYYY-MM-DD): the window starts at the picked day.
+//   - Intermediate page (hasMoreAfter=true): the bottom sentinel keeps
+//     paging toward "now"; the button stays visible and jumps straight to
+//     the latest messages (clears ?date, reloads the tail).
+//   - Tail page (hasMoreAfter=false): reaching the actual bottom means the
+//     reader has caught up with the present — the page auto-exits to LIVE:
+//     ?date is removed via router.replace (no reload — the loaded window
+//     already IS the tail; suppressNextDateWatch skips the route watcher),
+//     live appends resume seamlessly and the button disappears. Until that
+//     bottom is reached the button stays (still somewhere to jump).
+//
+// Transitions: LIVE -> ARCHIVE only via the date picker / URL. ARCHIVE ->
+// LIVE via the button, via the auto-exit above, or via clearing ?date
+// manually (back/forward included).
+//
+// isAtBottom: whether the viewport is scrolled to (near) the bottom of the
+// loaded window. Drives the button visibility and the autoscroll-vs-stay
+// decision; it is re-measured (not trusted) before the auto-exit fires,
+// because appending a page grows scrollHeight without a scroll event.
+const isAtBottom = ref(true);
+const AT_BOTTOM_THRESHOLD_PX = 40;
+
+// CHAT-10: the scroll-to-latest button appears only after a DEEP departure
+// from the bottom (a full chat viewport up), not on the first wheel tick,
+// and hides again once the reader is (nearly) back at the bottom. The gap
+// between the two thresholds is deliberate hysteresis — no flicker while
+// hovering around either edge.
+const isFarFromBottom = ref(false);
+
+function updateAtBottom() {
+  const container = messagesContainer.value;
+  if (!container) return;
+  const distanceFromBottom =
+    container.scrollHeight - container.scrollTop - container.clientHeight;
+  isAtBottom.value = distanceFromBottom < AT_BOTTOM_THRESHOLD_PX;
+  if (distanceFromBottom > container.clientHeight) {
+    isFarFromBottom.value = true;
+  } else if (isAtBottom.value) {
+    isFarFromBottom.value = false;
+  }
+}
+
+// ARCHIVE -> LIVE auto-exit (see state machine above): fires when the
+// reader is at the real bottom of the last available page while an archive
+// date is selected. Re-measures after the DOM settles so a freshly appended
+// page (which grows scrollHeight without a scroll event) can't fake
+// "at bottom".
+watch([isAtBottom, hasMoreAfter], () => {
+  maybeExitArchiveToLive();
+});
+
+function maybeExitArchiveToLive() {
+  if (!selectedDate.value || hasMoreAfter.value || loading.value) return;
+  nextTick(() => {
+    updateAtBottom();
+    if (!selectedDate.value || hasMoreAfter.value || !isAtBottom.value) return;
+    selectedDate.value = "";
+    if (route.query.date) {
+      suppressNextDateWatch = true;
+      router.replace({ name: "global-chat", query: {} });
+    }
+  });
 }
 
 // Expanded messages
@@ -295,12 +472,22 @@ const messagesWithSeparators = computed((): MessageOrSeparator[] =>
 
 // Virtual scroll for message list
 const itemCount = computed(() => messagesWithSeparators.value.length);
+// Stable per-item key (message id / date-separator date) instead of the
+// virtualizer's default index-based key — prevents measurements and hover/
+// highlight state from sliding onto a different message when older history
+// is prepended (fetchMoreBefore shifts every existing index).
+function chatItemKey(index: number): string {
+  const item = messagesWithSeparators.value[index];
+  if (!item) return String(index);
+  return isDateSeparator(item) ? `sep-${item.date}` : item.id;
+}
 const { virtualItems, totalSize, measureElement, scrollToIndex } =
   useVirtualScroll({
     count: itemCount,
     container: messagesContainer,
     estimateSize: 80,
     overscan: 15,
+    getItemKey: chatItemKey,
   });
 
 // Today (capped maximum for the date picker, YYYY-MM-DD)
@@ -308,6 +495,12 @@ const todayValue = dayjs().format("YYYY-MM-DD");
 
 // Currently selected archive date (drives the DatePicker)
 const selectedDate = ref("");
+
+// Set by loadArchiveDate right before it corrects the URL after a
+// fallback-to-latest (see there) — the route.query.date watcher checks this
+// to skip its own reload, since loadArchiveDate already has fresh messages
+// loaded and a second fetchMessages()/jumpToLatest() would be redundant.
+let suppressNextDateWatch = false;
 
 // User picked a date from the DatePicker — push to the URL; the
 // route.query.date watcher performs the actual load (single code path).
@@ -380,7 +573,127 @@ watch(
   },
 );
 
+// ─────────────────────────────────────────────────────────────
+// Realtime updates
+// ─────────────────────────────────────────────────────────────
+// True when the currently loaded window is the tail of the chat (no archive
+// date selected and no newer page to fetch) — the only state where a
+// pushed/polled new message should be appended live instead of silently
+// dropped (store.addMessage already no-ops otherwise).
+const isAtLatest = computed(() => !selectedDate.value && !hasMoreAfter.value);
+
+// SignalR push: the backend broadcasts EventType.NewGlobalChatMessage to
+// every open connection — guests included (the hub accepts anonymous
+// connections as receive-only broadcast listeners). The payload
+// intentionally omits message text (BBCode rendering stays server-side), so
+// on receipt we just fetch/append via the store's existing dedupe-by-id
+// path, same as the polling fallback below.
+//
+// The page holds its own lease on the shared connection: for guests it is
+// the sole owner (created on mount, released on unmount); for authenticated
+// users connect() reuses the App.vue-owned socket and releasing the page
+// lease on unmount leaves that socket untouched.
+const {
+  connect: connectChatSignalR,
+  disconnect: disconnectChatSignalR,
+  onNotification: onGlobalNotification,
+  isConnected: isSignalRConnected,
+} = useGlobalSignalR("global-chat-page");
+
+async function fetchNewMessages() {
+  if (!isAtLatest.value) return;
+  const before = messages.value?.length ?? 0;
+  // Capture BEFORE the fetch: appending grows scrollHeight without a scroll
+  // event, so afterwards isAtBottom would still (correctly) describe where
+  // the reader was. Follow the tail only if they were at the bottom —
+  // readers who scrolled up must not be yanked down (state machine, LIVE).
+  const wasAtBottom = isAtBottom.value;
+  await globalChatStore.pollForNewer();
+  if ((messages.value?.length ?? 0) > before && wasAtBottom) {
+    scrollToBottom();
+  }
+}
+
+function handleGlobalChatNotification(notification: SignalRNotification) {
+  if (notification.eventType !== EventType.NewGlobalChatMessage) return;
+  fetchNewMessages();
+}
+
+let unsubscribeSignalR: (() => void) | null = null;
+
+// Polling is demoted to a fallback transport: the tick is a no-op while the
+// SignalR socket is delivering pushes and only performs fetches when the
+// socket is down — and even then only while at the tail of the chat (avoids
+// competing with archive/history browsing) and when the tab is visible.
+const POLL_INTERVAL_MS = 30000;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+async function pollForNewMessages() {
+  if (document.hidden) return;
+  if (isSignalRConnected.value) return;
+  await fetchNewMessages();
+}
+
+// Socket state transitions: catch up immediately instead of waiting for the
+// next 30s tick — on disconnect (messages may arrive while the socket is
+// down) and on (re)connect (messages may have been missed while it was down).
+watch(isSignalRConnected, () => {
+  fetchNewMessages();
+});
+
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(pollForNewMessages, POLL_INTERVAL_MS);
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Message search (overlay panel opened from the events strip or Ctrl+F)
+// ─────────────────────────────────────────────────────────────
+const searchOpen = ref(false);
+
+function openSearch() {
+  searchOpen.value = true;
+}
+
+function closeSearch() {
+  searchOpen.value = false;
+}
+
+// Ctrl+F (Cmd+F on macOS) opens the in-chat search instead of the browser find.
+function handleSearchHotkey(event: KeyboardEvent) {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+    event.preventDefault();
+    openSearch();
+  }
+}
+
+// A global-chat search result jumps to the message in the live feed: leave
+// any archive date, then load the window around it (highlightedMessageId
+// watcher scrolls/flashes it).
+function handleJumpToGlobalMessage(messageId: string) {
+  searchOpen.value = false;
+  selectedDate.value = "";
+  if (route.query.date) {
+    suppressNextDateWatch = true;
+    router.replace({ name: "global-chat", query: {} });
+  }
+  globalChatStore.navigateToMessage(messageId);
+}
+
 onMounted(async () => {
+  document.addEventListener("keydown", handleSearchHotkey);
+
+  // Chat events (topbar banner + closed-event hint) — independent of the
+  // message load, fire and forget.
+  globalChatStore.fetchEvents();
+
   const hashMsgId = getHashMessageId();
   const dateQuery =
     typeof route.query.date === "string" ? route.query.date : null;
@@ -388,6 +701,21 @@ onMounted(async () => {
   if (hashMsgId) {
     isInitialScrolling = true;
     await globalChatStore.navigateToMessage(hashMsgId);
+    if (!messages.value?.length) {
+      // Broken/stale #msg- link (message deleted or never existed) — the
+      // store left messages empty rather than throwing, which would
+      // otherwise render a false "Сообщений пока нет.". Fall back to the
+      // normal latest-messages load and tell the guest why they landed here.
+      await globalChatStore.fetchMessages();
+      scrollToBottom();
+      toast.error("Сообщение не найдено или удалено");
+      nextTick(() => {
+        setupInfiniteScroll();
+        initBbcodeInteractive(messagesContainer.value);
+        isInitialScrolling = false;
+      });
+      return;
+    }
     nextTick(() => {
       scrollToMessage(hashMsgId);
       setupInfiniteScroll();
@@ -416,12 +744,29 @@ onMounted(async () => {
   if (isCompactLayout.value) {
     replaceImagesWithLinks(messagesContainer.value);
   }
+
+  // Realtime: everyone — guests included — gets the SignalR push. The page
+  // acquires its own lease on the shared connection (reused if App.vue
+  // already connected it for an authenticated user, created anonymously
+  // otherwise). Polling runs alongside purely as the fallback while the
+  // socket is not connected — see pollForNewMessages.
+  unsubscribeSignalR = onGlobalNotification(handleGlobalChatNotification);
+  connectChatSignalR();
+  startPolling();
+  document.addEventListener("visibilitychange", pollForNewMessages);
 });
 
 onUnmounted(() => {
+  document.removeEventListener("keydown", handleSearchHotkey);
   cleanupInfiniteScroll();
   if (hideToolbarTimeout) clearTimeout(hideToolbarTimeout);
   if (scrollEndTimeout) clearTimeout(scrollEndTimeout);
+  stopPolling();
+  unsubscribeSignalR?.();
+  // Releases only this page's lease: closes the socket when the page was
+  // its sole owner (guest), leaves the App.vue-owned one running otherwise.
+  disconnectChatSignalR();
+  document.removeEventListener("visibilitychange", pollForNewMessages);
 });
 
 // Watch for highlighted message changes
@@ -439,6 +784,10 @@ watch(
   () => route.query.date,
   (newDate, oldDate) => {
     if (newDate === oldDate) return;
+    if (suppressNextDateWatch) {
+      suppressNextDateWatch = false;
+      return;
+    }
     if (typeof newDate === "string" && newDate) {
       loadArchiveDate(newDate);
     } else {
@@ -499,16 +848,10 @@ function isEditing(msgId: string) {
 
 async function startEdit(msg: GlobalChatMessage) {
   editingId.value = msg.id;
-  // Fetch the original BBCode from the backend
+  // Fetch the original BBCode from the backend — seeds ChatMessage's editor
+  // once; further keystrokes stay inside ChatMessage's own local state.
   const { data } = await globalChatApi.getMessageForEdit(msg.id);
-  if (data) {
-    editText.value = data.text || "";
-  } else {
-    editText.value = "";
-  }
-  nextTick(() => {
-    editEditorRef.value?.focus();
-  });
+  editText.value = data?.text || "";
 }
 
 function cancelEdit() {
@@ -523,17 +866,13 @@ function cancelEdit() {
   });
 }
 
-async function saveEdit(msgId: string) {
-  if (editText.value.trim()) {
-    await globalChatStore.updateMessage(msgId, editText.value);
+// Receives the edited text straight from ChatMessage's @save-edit payload
+// (its own local editor state) — the page never reads back a stale copy.
+async function saveEditWithText(msgId: string, text: string) {
+  if (text.trim()) {
+    await globalChatStore.updateMessage(msgId, text);
   }
   cancelEdit();
-}
-
-function handleEditSubmit() {
-  if (editingId.value) {
-    saveEdit(editingId.value);
-  }
 }
 
 // Message truncation (long messages, [cut] markers, expand state) is now
@@ -565,9 +904,44 @@ async function toggleLike(msg: GlobalChatMessage) {
 }
 
 // Anchor
-function copyAnchor(msgId: string) {
+async function copyAnchor(msgId: string) {
   const url = `${window.location.origin}${window.location.pathname}#msg-${msgId}`;
-  navigator.clipboard.writeText(url);
+  try {
+    await navigator.clipboard.writeText(url);
+    toast.success("Ссылка скопирована");
+  } catch {
+    toast.error("Не удалось скопировать ссылку");
+  }
+}
+
+// --- Moderator warning (doc 4.2.4.1 / 4.2.2.4) ---
+// Global-chat messages are public, so moderators (isModerator) get an
+// "Оставить предупреждение" action in the hover toolbar. The dialog is
+// prefilled with the message author and a #msg-{id} permalink; entityType
+// "Message" lets the backend link the warning to the offending message.
+const warnUsername = ref("");
+const warnEntityId = ref<string | undefined>(undefined);
+const warnEntityLink = ref<string | undefined>(undefined);
+
+const { open: openWarnDialog, close: closeWarnDialog } = useModal({
+  component: WarningDialog,
+  attrs: reactive({
+    username: warnUsername,
+    entityId: warnEntityId,
+    entityType: "Message",
+    entityLink: warnEntityLink,
+    onSuccess: () => closeWarnDialog(),
+    onCancel: () => closeWarnDialog(),
+  }),
+});
+
+function handleWarn(msg: GlobalChatMessage) {
+  const username = msg.author?.username;
+  if (!username) return;
+  warnUsername.value = username;
+  warnEntityId.value = msg.id;
+  warnEntityLink.value = `${window.location.origin}${window.location.pathname}#msg-${msg.id}`;
+  openWarnDialog();
 }
 
 function scrollToMessage(msgId: string) {
@@ -601,33 +975,88 @@ function getHashMessageId(): string | null {
   return null;
 }
 
-// Load messages for an archive date and scroll to the top of the result.
-// The URL (?date=YYYY-MM-DD) is the single source of truth — callers change
-// the route, the route.query.date watcher routes here.
+// Load messages for an archive date and land on the first message of that
+// LOCAL day. The URL (?date=YYYY-MM-DD) is the single source of truth —
+// callers change the route, the route.query.date watcher routes here.
 async function loadArchiveDate(date: string) {
   selectedDate.value = date;
   await globalChatStore.navigateToDate(date);
+
+  // The store falls back to the latest-messages window when nothing is
+  // found near the requested date (or the request fails) — that window is
+  // NOT the picked day. Presenting it while the date picker still shows the
+  // picked date as selected would look exactly like "landed on the wrong
+  // day", so detect the fallback explicitly: sync the URL/UI back to
+  // "latest" (messages are already loaded by the store's own fallback —
+  // no second fetch needed) and tell the guest why they landed here.
+  if (!landedOnRequestedDate.value) {
+    selectedDate.value = "";
+    if (route.query.date) {
+      suppressNextDateWatch = true;
+      router.replace({ name: "global-chat", query: {} });
+    }
+    if (messages.value?.length) {
+      toast.error("Сообщений за эту дату не найдено — показаны последние");
+      scrollToBottom();
+    }
+    return;
+  }
+
+  if (!messages.value?.length) return;
+  // The store anchors the API request from local midnight, but the result
+  // window can still start slightly before the requested day (nearest-cursor
+  // semantics) — resolve the exact first message of the picked day client
+  // side and scroll/highlight that one instead of blindly using index 0.
+  const firstOfDay = messages.value.find(
+    (m) => dayjs(m.createdUtc).format("YYYY-MM-DD") === date,
+  );
+  const targetId = firstOfDay?.id ?? messages.value[0].id;
+  const index = messagesWithSeparators.value.findIndex(
+    (item) => !isDateSeparator(item) && (item as any).id === targetId,
+  );
   nextTick(() => {
-    scrollToIndex(0, { align: "start" });
+    if (index >= 0) {
+      scrollToIndex(index, { align: "start" });
+    }
+    setTimeout(() => {
+      const element = document.getElementById(`msg-${targetId}`);
+      if (element) {
+        element.classList.add("highlighted");
+        setTimeout(() => {
+          element.classList.remove("highlighted");
+        }, 1500);
+      }
+    }, 100);
   });
 }
 
 // Jump to latest. Clearing the date query lets the watcher load latest;
-// when no date query is present, load directly.
+// when no date query is present, load directly. In LIVE mode with the tail
+// already loaded (hasMoreAfter=false) there is nothing to fetch — just
+// scroll (state machine: the button then only means "back to the bottom").
 async function jumpToLatest() {
   selectedDate.value = "";
   if (route.query.date) {
     router.replace({ name: "global-chat", query: {} });
     return;
   }
+  if (!hasMoreAfter.value) {
+    scrollToBottom();
+    return;
+  }
   await globalChatStore.jumpToLatest();
   scrollToBottom();
 }
 
+// Scrolls to the last item through the virtualizer's own index-based API
+// instead of a raw scrollTop=scrollHeight assignment — the virtualizer
+// doesn't always have every row measured yet, so a DOM scrollHeight read can
+// undershoot; scrollToIndex(..., {align:"end"}) lets it settle correctly.
 function scrollToBottom() {
   nextTick(() => {
-    if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+    const lastIndex = messagesWithSeparators.value.length - 1;
+    if (lastIndex >= 0) {
+      scrollToIndex(lastIndex, { align: "end" });
     }
   });
 }
@@ -672,27 +1101,32 @@ async function confirmDelete() {
 <template>
   <page-title v-once>Глобальный чат</page-title>
 
-  <!-- One row: the active chat event (left, read-only for guests) and the
-       "jump to a past day" date picker (right). -->
-  <div class="globalChat-topbar">
-    <ChatEventBanner />
-    <DatePicker
-      class="globalChat-datepicker"
-      :model-value="selectedDate"
-      :max="todayValue"
-      label="Перейти к дате"
-      @update:model-value="onDatePicked"
-    />
-  </div>
-
   <div
     ref="globalChatContainer"
     class="globalChat-container"
     :class="{ 'layout-compact': isCompactLayout }"
   >
+    <!-- Events panel pinned inside the chat frame, above the scrolling
+         feed: the live-event row, the arrow-flipped upcoming event and the
+         compact "К дате" calendar control in one block. -->
+    <ChatEventsPanel
+      :selected-date="selectedDate"
+      :max-date="todayValue"
+      @date-picked="onDatePicked"
+      @open-search="openSearch"
+    />
+
+    <!-- Search overlay: layered over the feed, which stays mounted beneath. -->
+    <MessageSearchPanel
+      v-if="searchOpen"
+      @close="closeSearch"
+      @jump-global="handleJumpToGlobalMessage"
+    />
     <div
       ref="messagesContainer"
       class="globalChat-messages"
+      role="log"
+      aria-label="Сообщения чата"
       :class="{
         'is-scrolling': isScrolling,
         'is-empty': !loading && !messages?.length,
@@ -700,13 +1134,12 @@ async function confirmDelete() {
       @scroll="handleScroll"
       @wheel.passive="handleWheel"
     >
-      <secondary-text v-if="loading" class="globalChat-empty">
-        Загрузка сообщений...
-      </secondary-text>
+      <ChatMessageSkeleton v-if="loading" :count="6" />
       <!-- Error takes precedence over fake-empty; stale content (if any) is preserved -->
       <div
         v-else-if="error && !messages?.length"
         class="globalChat-empty globalChat-error"
+        role="alert"
       >
         <secondary-text>{{ error }}</secondary-text>
         <button type="button" class="globalChat-retry" @click="retryLoad">
@@ -725,7 +1158,18 @@ async function confirmDelete() {
           v-if="hasMoreBefore"
           ref="topSentinel"
           class="scroll-sentinel top-sentinel"
-        ></div>
+        >
+          <secondary-text v-if="errorBefore" class="sentinel-error">
+            {{ errorBefore }}
+            <button
+              type="button"
+              class="globalChat-retry sentinel-retry"
+              @click="loadOlderAnchored()"
+            >
+              Повторить
+            </button>
+          </secondary-text>
+        </div>
 
         <!-- Virtual scroll container -->
         <div
@@ -752,22 +1196,19 @@ async function confirmDelete() {
               transform: `translateY(${vRow.start}px)`,
             }"
           >
-            <div
+            <DashSeparator
               v-if="isDateSeparator(messagesWithSeparators[vRow.index])"
+              spacing="tiny"
+              :label="(messagesWithSeparators[vRow.index] as any).formattedDate"
               class="date-separator"
-            >
-              <div class="separator-line"></div>
-              <span class="separator-text">{{
-                (messagesWithSeparators[vRow.index] as any).formattedDate
-              }}</span>
-              <div class="separator-line"></div>
-            </div>
+            />
 
             <div
               v-else
               :id="`msg-${(messagesWithSeparators[vRow.index] as any).id}`"
               :data-id="(messagesWithSeparators[vRow.index] as any).id"
               class="globalChat-message"
+              tabindex="0"
               :class="{
                 removed: (messagesWithSeparators[vRow.index] as any).isRemoved,
                 hovered:
@@ -788,6 +1229,13 @@ async function confirmDelete() {
                 )
               "
               @mouseleave="handleMessageMouseLeave"
+              @focusin="
+                handleMessageFocusIn(
+                  $event,
+                  (messagesWithSeparators[vRow.index] as any).id,
+                )
+              "
+              @focusout="handleMessageFocusOut"
             >
               <ChatMessage
                 :message="messagesWithSeparators[vRow.index] as any"
@@ -832,10 +1280,13 @@ async function confirmDelete() {
                   startEdit(messagesWithSeparators[vRow.index] as any)
                 "
                 @save-edit="
-                  saveEdit((messagesWithSeparators[vRow.index] as any).id)
+                  (text) =>
+                    saveEditWithText(
+                      (messagesWithSeparators[vRow.index] as any).id,
+                      text,
+                    )
                 "
                 @cancel-edit="cancelEdit"
-                @update:edit-text="editText = $event"
               />
             </div>
           </div>
@@ -846,7 +1297,18 @@ async function confirmDelete() {
           v-if="hasMoreAfter"
           ref="bottomSentinel"
           class="scroll-sentinel bottom-sentinel"
-        ></div>
+        >
+          <secondary-text v-if="errorAfter" class="sentinel-error">
+            {{ errorAfter }}
+            <button
+              type="button"
+              class="globalChat-retry sentinel-retry"
+              @click="globalChatStore.fetchMoreAfter()"
+            >
+              Повторить
+            </button>
+          </secondary-text>
+        </div>
       </template>
     </div>
 
@@ -858,6 +1320,7 @@ async function confirmDelete() {
         !isEditing(hoveredMessage.id) &&
         isToolbarVisible
       "
+      ref="toolbarEl"
       class="msg-toolbar"
       :style="{
         top: toolbarPosition.top + 'px',
@@ -865,6 +1328,8 @@ async function confirmDelete() {
       }"
       @mouseenter="handleToolbarMouseEnter"
       @mouseleave="handleToolbarMouseLeave"
+      @focusin="handleToolbarFocusIn"
+      @focusout="handleToolbarFocusOut"
     >
       <!-- Delete confirmation mode -->
       <template v-if="confirmingDeleteId === hoveredMessage.id">
@@ -896,7 +1361,9 @@ async function confirmDelete() {
             "
             @click="toggleLike(hoveredMessage)"
           >
-            <SvgIcon name="heartEmpty" />
+            <SvgIcon
+              :name="isLikedByMe(hoveredMessage) ? 'heartFilled' : 'heartEmpty'"
+            />
           </button>
         </Tooltip>
         <Tooltip v-if="canEditMessage(hoveredMessage)" text="Редактировать">
@@ -917,6 +1384,15 @@ async function confirmDelete() {
             <SvgIcon name="trash" />
           </button>
         </Tooltip>
+        <Tooltip v-if="isModerator" text="Оставить предупреждение">
+          <button
+            class="toolbar-btn toolbar-btn-warn"
+            aria-label="Оставить предупреждение"
+            @click="handleWarn(hoveredMessage)"
+          >
+            {{ symbols.warning }}
+          </button>
+        </Tooltip>
         <Tooltip text="Ссылка на сообщение">
           <a
             class="toolbar-btn"
@@ -930,9 +1406,14 @@ async function confirmDelete() {
       </template>
     </div>
 
-    <!-- Scroll to latest button (centered over globalChat) -->
+    <!-- Scroll to latest button (centered over globalChat). Shown when
+         there is somewhere to jump (state machine above): newer pages
+         exist to fetch (hasMoreAfter), or the reader scrolled DEEP up from
+         the bottom of the loaded window (isFarFromBottom hysteresis) — in
+         ARCHIVE and LIVE mode alike. Near the bottom of the live tail it
+         has nothing to offer and hides. -->
     <button
-      v-if="hasMoreAfter"
+      v-if="messages?.length && (hasMoreAfter || isFarFromBottom)"
       class="scroll-to-latest"
       aria-label="К последним сообщениям"
       @click="jumpToLatest"
@@ -943,12 +1424,11 @@ async function confirmDelete() {
 
   <!-- Input area below globalChat window -->
   <div class="globalChat-input-wrapper">
-    <!-- Typing indicator -->
-    <div v-if="typingUsers.length > 0" class="typing-indicator">
-      <span class="typing-dots"> <span></span><span></span><span></span> </span>
-      <span class="typing-text">{{ typingText }}</span>
-    </div>
-
+    <!-- Quiet notice for non-participants while a closed event is live:
+         the backend rejects their messages, so warn before they type. -->
+    <secondary-text v-if="showClosedEventHint" class="globalChat-event-hint">
+      Идет закрытый эвент — писать могут только участники
+    </secondary-text>
     <div class="globalChat-input-container">
       <template v-if="canSendMessages">
         <BBCodeEditor
@@ -975,30 +1455,15 @@ async function confirmDelete() {
       <secondary-text v-else-if="isBanned" class="globalChat-banned-hint">
         Вы не можете отправлять сообщения из-за ограничений аккаунта
       </secondary-text>
-      <secondary-text v-else class="globalChat-login-hint">
-        <router-link to="/?action=login">Войдите</router-link>, чтобы отправлять
-        сообщения
-      </secondary-text>
+      <LoginPrompt v-else action="отправлять сообщения" />
     </div>
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/BbcodeContent"
 @import "src/assets/styles/Inputs"
 @import "src/assets/styles/ZIndex"
-
-.globalChat-topbar
-  display: flex
-  align-items: center
-  gap: $small
-  margin-bottom: $small
-
-// Always pinned right, even when no event renders on the left.
-.globalChat-datepicker
-  margin-left: auto
 
 .globalChat-container
   display: flex
@@ -1009,10 +1474,13 @@ async function confirmDelete() {
   border-color: $border
   overflow: hidden  // Clips toolbar when outside bounds
 
-  // Compact display — wrapper overrides (own element, no :deep needed)
+  // Compact display — wrapper overrides (own element, no :deep needed).
+  // Horizontal padding matches the full layout ($medium) so the compact
+  // content column ($compact-time-gutter + gap in ChatMessage) lands on the
+  // same x as the full layout's content (avatar + gap).
   &.layout-compact
     .globalChat-message
-      padding: $tiny $small $tiny $small
+      padding: $tiny $medium
       margin-bottom: $small
       &.deleted-collapsed
         margin-bottom: $tiny
@@ -1061,7 +1529,6 @@ async function confirmDelete() {
   +button
 
 .scroll-sentinel
-  height: 1px
   width: 100%
 
 .top-sentinel,
@@ -1069,32 +1536,27 @@ async function confirmDelete() {
   display: flex
   justify-content: center
   align-items: center
-  min-height: 30px
-  &:empty
-    min-height: 1px
+  min-height: 1px
+  // Grows to fit the retry banner when a history-pagination request fails;
+  // otherwise stays a hairline intersection target.
+  &:has(.sentinel-error)
+    min-height: 30px
+    padding: $small 0
 
-.date-separator
+.sentinel-error
   display: flex
   align-items: center
   gap: $small
-  padding: $small
-  margin: $small 0
+  color: $accent-red
+
+.sentinel-retry
+  flex-shrink: 0
+
+// DashSeparator owns its own flex/label layout — this override only adds
+// the GPU-compositing hint needed inside the virtualized/transformed list.
+.date-separator
   transform: translateZ(0)
   backface-visibility: hidden
-
-.separator-line
-  flex: 1
-  height: 0
-  border-top: 1px dashed
-  border-color: $border
-
-.separator-text
-  flex-shrink: 0
-  padding: 0 $small
-  font-size: $secondary-font-size
-  color: $text-muted
-  font-weight: 500
-  white-space: nowrap
 
 .globalChat-message
   // Full layout: comfortable horizontal container padding (compact overrides below)
@@ -1113,9 +1575,19 @@ async function confirmDelete() {
     margin-top: -$small
 
   &:hover,
-  &.hovered
+  &.hovered,
+  &:focus-visible
     background-color: $bg-element
     border-radius: 0 $border-radius $border-radius 0
+
+  // tabindex="0" makes the whole row focusable so keyboard users can reach
+  // the hover-only toolbar (focusin -> handleMessageFocusIn); outline only
+  // on :focus-visible so mouse clicks don't leave a visible ring.
+  &:focus
+    outline: none
+  &:focus-visible
+    outline: 2px solid $border-focus
+    outline-offset: -2px
 
 
 
@@ -1158,6 +1630,13 @@ async function confirmDelete() {
   &:hover
     color: $heading-alt !important
 
+// Warn action renders the ⚠ text glyph (no dedicated SVG icon) — size it to
+// match the SVG icons' visual weight and keep it monochrome via inherited
+// color (same treatment as StatusIcon's warning symbol).
+.toolbar-btn-warn
+  font-size: 18px
+  line-height: 1
+
 .toolbar-btn
   display: flex
   align-items: center
@@ -1185,17 +1664,17 @@ async function confirmDelete() {
     svg
       transform: scale(0.9)
 
+  // Liked: filled heart (bound in template) tinted with the shared
+  // accent-red like token so the toolbar matches the forum and chat badges.
   &.active
-    color: $text-muted
-    svg
-      fill: currentColor
+    color: $accent-red
     &:hover
       background-color: $bg-element-accent
       svg
         filter: brightness($hover-brightness)
 
-// BBCodeEditor overlay при hover на сообщение
-// Overlay накладывается ПОВЕРХ базового $input-bg (не заменяет)
+// BBCodeEditor overlay on message hover
+// The overlay is layered ON TOP of the base $input-bg (does not replace it)
 .globalChat-message:hover :deep(.bbcode-editor),
 .globalChat-message.hovered :deep(.bbcode-editor)
   background: linear-gradient($hover-overlay, $hover-overlay), $input-bg
@@ -1203,39 +1682,15 @@ async function confirmDelete() {
 .globalChat-input-wrapper
   margin-top: $medium
 
-.typing-indicator
-  display: flex
-  align-items: center
-  gap: $tiny
-  padding: 2px 0
-  margin-bottom: $small
-  font-size: 11px
-  color: $text-muted
+// Quiet single-line notice above the editor (mirrors the guest CTA styling)
+.globalChat-event-hint
+  display: block
+  text-align: center
+  padding-bottom: $tiny
 
-.typing-dots
-  display: inline-flex
-  gap: 2px
-  span
-    width: 4px
-    height: 4px
-    border-radius: 50%
-    background-color: $text-muted
-    animation: typing-bounce 1.4s infinite ease-in-out both
-    &:nth-child(1)
-      animation-delay: 0s
-    &:nth-child(2)
-      animation-delay: 0.16s
-    &:nth-child(3)
-      animation-delay: 0.32s
-
-@keyframes typing-bounce
-  0%, 80%, 100%
-    transform: scale(0.6)
-    opacity: 0.4
-  40%
-    transform: scale(1)
-    opacity: 1
-
+// CHAT-10: same control idiom as the fixed scroll-nav buttons (24px square,
+// 16px glyph, $border-radius) — the 40px square read as oversized. Keeps a
+// soft shadow because it floats over message content.
 .scroll-to-latest
   position: absolute
   bottom: $medium
@@ -1244,16 +1699,20 @@ async function confirmDelete() {
   display: flex
   align-items: center
   justify-content: center
-  width: 40px
-  height: 40px
+  width: 24px
+  height: 24px
+  padding: 0
   border: 1px solid $border
-  border-radius: 50%
+  border-radius: $border-radius
   background-color: $bg-element
   color: $text-muted
   cursor: pointer
   transition: transform 0.15s ease
   box-shadow: 0 2px 8px $shadow-color
-  z-index: 10
+  z-index: $z-chat-fab
+  svg
+    width: 16px
+    height: 16px
   &:hover
     background-color: $bg-element-accent
     color: $text
@@ -1271,15 +1730,6 @@ async function confirmDelete() {
 .globalChat-send-button
   align-self: flex-start
   +button
-
-.globalChat-login-hint
-  flex: 1
-  text-align: center
-  padding: $small
-  a
-    color: $link
-    &:hover
-      text-decoration: underline
 
 .globalChat-banned-hint
   flex: 1

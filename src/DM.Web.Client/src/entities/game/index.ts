@@ -8,6 +8,8 @@ export type {
   GamePrivacySettings,
   GameRecruitment,
   GamesQuery,
+  CreateGameInput,
+  CreateGamePrivacySettingsInput,
   Tag,
   Invitation,
   InvitationType,
@@ -18,13 +20,29 @@ export type {
   CharacterId,
   CharacterAttribute,
   CharacterAttributeId,
+  CharacterInput,
+  CharacterAttributeInput,
   CharacterPrivacySettings,
+  ApiCharacterStatus,
+  PlayerCharacterInfo,
   Room,
   RoomId,
   RoomClaim,
   RoomAccess,
   RoomSettings,
   PendingPost,
+  ChatRoom,
+  ChatRoomAccess,
+  CreateChatRoomInput,
+  UpdateChatRoomInput,
+  NotepadEntry,
+  NotepadType,
+  CreateNotepadEntryInput,
+  UpdateNotepadEntryInput,
+  CreateRoomInput,
+  PostPendencyInput,
+  CreatePostInput,
+  DiceRollInput,
   Post,
   PostId,
   PostBbText,
@@ -42,12 +60,13 @@ export {
   CommentariesAccessMode,
   AttributeSchemaType,
   AttributeSpecificationType,
-  CharacterStatus,
   Alignment,
   RoomType,
   RoomAccessType,
   RoomAccessPolicy,
   ReviewSign,
+  GameStatusTransition,
+  GamePremoderationTransition,
 } from "./model/types";
 
 // Store
@@ -61,14 +80,13 @@ export { useGameDisplay } from "./model/useGameDisplay";
 
 // API
 export { gameApi } from "./api";
-export { default as gameApiDefault } from "./api";
 
 // UI Components
 export {
   GameStatusBadge,
-  UnreadCounters,
-  PostRating,
   PostReviewItem,
   GameLink,
   RoomLink,
+  CharacterCard,
+  CharacterSheetFields,
 } from "./ui";

@@ -9,6 +9,7 @@
       <slot name="label">
         <label :for="name">{{ label }}</label>
       </slot>
+      <span v-if="optional" class="form-field-optional">необязательно</span>
     </div>
     <div class="form-field-row">
       <slot />
@@ -35,6 +36,7 @@ const props = defineProps<{
   label?: string;
   name?: string;
   errors?: string[];
+  optional?: boolean;
 }>();
 
 // Filter out empty errors (from .required("") validation)
@@ -65,8 +67,6 @@ const translateError = (error: string): string => {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 .form-field__labeled
   display: flex
   flex-direction: column
@@ -86,7 +86,7 @@ const translateError = (error: string): string => {
   display: flex
   justify-content: space-between
   align-items: center
-  color: $text-muted
+  color: $text
   font-size: $secondary-font-size
 
   label
@@ -95,9 +95,14 @@ const translateError = (error: string): string => {
   & input, & textarea, & select
     box-sizing: border-box
 
+.form-field-optional
+  flex-shrink: 0
+  color: $text-muted
+
 .form-field-row
-  input, textarea, select
-    width: 280px
+  :deep(input), :deep(textarea), :deep(select)
+    width: 100%
+    box-sizing: border-box
 
 .form-field-error
   display: block

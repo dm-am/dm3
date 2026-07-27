@@ -5,38 +5,38 @@ using System.Threading.Tasks;
 
 namespace DM.Domain.Community.Features.Achievements;
 
-/// <summary>Хранилище каталога достижений (категории, тиры) и фактов получения.</summary>
+/// <summary>Storage for the achievement catalog (categories, tiers) and earned records.</summary>
 public interface IAchievementRepository
 {
-    // ---- Категории ----
+    // ---- Categories ----
 
-    /// <summary>Все категории. Inactive по умолчанию скрыты.</summary>
+    /// <summary>All categories. Inactive ones are hidden by default.</summary>
     Task<IReadOnlyCollection<AchievementCategory>> GetCategoriesAsync(bool includeInactive, CancellationToken ct = default);
-    /// <summary>Категория по ID, либо null.</summary>
+    /// <summary>Category by ID, or null.</summary>
     Task<AchievementCategory?> GetCategoryAsync(Guid id, CancellationToken ct = default);
-    /// <summary>Частичное обновление категории.</summary>
+    /// <summary>Partial category update.</summary>
     Task<AchievementCategory> UpdateCategoryAsync(UpdateAchievementCategory update, CancellationToken ct = default);
 
-    // ---- Тиры ----
+    // ---- Tiers ----
 
-    /// <summary>Все тиры с включенной навигацией Category. Inactive (по флагу категории) по умолчанию скрыты.</summary>
+    /// <summary>All tiers with the Category navigation included. Inactive ones (by the category flag) are hidden by default.</summary>
     Task<IReadOnlyCollection<AchievementType>> GetTypesAsync(bool includeInactive, CancellationToken ct = default);
-    /// <summary>Тир по ID, либо null.</summary>
+    /// <summary>Tier by ID, or null.</summary>
     Task<AchievementType?> GetTypeAsync(Guid id, CancellationToken ct = default);
-    /// <summary>Тир по стабильному коду, либо null.</summary>
+    /// <summary>Tier by stable code, or null.</summary>
     Task<AchievementType?> GetTypeByCodeAsync(string code, CancellationToken ct = default);
-    /// <summary>Создать новый тир в существующей категории.</summary>
+    /// <summary>Create a new tier in an existing category.</summary>
     Task<AchievementType> CreateTypeAsync(CreateAchievementType create, CancellationToken ct = default);
-    /// <summary>Частичное обновление тира.</summary>
+    /// <summary>Partial tier update.</summary>
     Task<AchievementType> UpdateTypeAsync(UpdateAchievementType update, CancellationToken ct = default);
-    /// <summary>Жесткое удаление тира из каталога.</summary>
+    /// <summary>Hard-delete a tier from the catalog.</summary>
     Task DeleteTypeAsync(Guid id, CancellationToken ct = default);
 
-    // ---- Получения ----
+    // ---- Earnings ----
 
-    /// <summary>Все достижения пользователя, новые сверху.</summary>
+    /// <summary>All achievements of a user, newest first.</summary>
     Task<IReadOnlyCollection<UserAchievement>> GetUserAchievementsAsync(Guid userId, CancellationToken ct = default);
 
-    /// <summary>Идемпотентная вставка. true = реально создана; false = уже была (UNIQUE constraint).</summary>
+    /// <summary>Idempotent insert. true = actually created; false = already existed (UNIQUE constraint).</summary>
     Task<bool> TryGrantAsync(Guid userId, Guid achievementTypeId, DateTimeOffset earnedUtc, CancellationToken ct = default);
 }

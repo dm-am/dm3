@@ -28,7 +28,7 @@ internal class AchievementService : IAchievementService
         _clock = clock;
     }
 
-    // ---- Категории ----
+    // ---- Categories ----
 
     /// <inheritdoc />
     public Task<IReadOnlyCollection<AchievementCategory>> GetCategoriesAsync(bool includeInactive = false, CancellationToken ct = default) =>
@@ -43,7 +43,7 @@ internal class AchievementService : IAchievementService
         return await _repository.UpdateCategoryAsync(update, ct);
     }
 
-    // ---- Тиры ----
+    // ---- Tiers ----
 
     /// <inheritdoc />
     public Task<IReadOnlyCollection<AchievementType>> GetTypesAsync(bool includeInactive = false, CancellationToken ct = default) =>
@@ -73,7 +73,7 @@ internal class AchievementService : IAchievementService
     public Task DeleteTypeAsync(Guid id, CancellationToken ct = default) =>
         _repository.DeleteTypeAsync(id, ct);
 
-    // ---- Получения пользователем ----
+    // ---- User earnings ----
 
     /// <inheritdoc />
     public async Task<IReadOnlyCollection<UserAchievement>> GetUserAchievementsAsync(string username, CancellationToken ct = default)
@@ -91,21 +91,21 @@ internal class AchievementService : IAchievementService
         {
             if (earnedTypeIds.Contains(type.Id)) continue;
 
-            // Метрика на категории-родителе (SSOT).
+            // Metric lives on the parent category (SSOT).
             var value = AchievementMetricResolver.GetValue(type.Category.Metric, user, now);
             if (value < type.Threshold) continue;
 
-            // TryGrantAsync идемпотентен — UNIQUE-constraint молча
-            // отобьет повтор в случае гонки с event evaluator'ом.
+            // TryGrantAsync is idempotent — the UNIQUE constraint silently
+            // rejects a duplicate in case of a race with the event evaluator.
             if (await _repository.TryGrantAsync(user.UserId, type.Id, now, ct))
             {
                 newlyGranted = true;
             }
         }
 
-        // Если что-то начислено — перечитаем earned, чтобы вернуть
-        // полный список одним проходом (свежие записи с актуальным
-        // EarnedUtc + связанным Type+Category).
+        // If anything was granted, re-read earned to return
+        // the full list in one pass (fresh records with up-to-date
+        // EarnedUtc + related Type+Category).
         return newlyGranted
             ? await _repository.GetUserAchievementsAsync(user.UserId, ct)
             : earned;

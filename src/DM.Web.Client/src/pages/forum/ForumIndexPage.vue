@@ -3,24 +3,29 @@ import { computed, onMounted, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { Tooltip } from "@/shared/ui/Tooltip";
+import { ErrorState } from "@/shared/ui/ErrorState";
 import { useBoardsStore, forumApi } from "@/entities/forum";
 import { useUserStore, UserLink } from "@/entities/user";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
-import LeadText from "@/shared/ui/Layout/LeadText.vue";
+import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 
 const store = useBoardsStore();
 const { boards, boardsLoading, boardsError } = storeToRefs(store);
 const { user } = storeToRefs(useUserStore());
 
 const markingAllAsRead = ref(false);
+const markAllError = ref(false);
 
-// Columns for boards table
+// Columns for boards table. The table uses layout "auto" so the nowrap
+// "Последняя активность" cells (longest username + "DD.MM.YYYY в HH:mm")
+// take exactly the room they need on one line at any viewport, and the
+// width-less "Описание" absorbs the remaining space — descriptions render
+// on a single line wherever the viewport allows.
 const columns: Column[] = [
   { key: "title", label: "Раздел", width: "18%", align: "left" },
   {
-    key: "moderators",
-    label: "Модераторы раздела",
-    width: "28%",
+    key: "description",
+    label: "Описание",
     align: "left",
     hideOnMobile: true,
   },
@@ -29,7 +34,6 @@ const columns: Column[] = [
   {
     key: "lastActivity",
     label: "Последняя активность",
-    width: "35%",
     align: "center",
     hideOnMobile: true,
   },
@@ -58,12 +62,52 @@ function getLastActivityType(board: BoardRow): LastActivityType {
   return commentDate >= topicDate ? "comment" : "topic";
 }
 
+/**
+ * Link to the last-comment topic, targeting the page containing that
+ * comment. The board payload only carries board-wide aggregate counts
+ * (Board.CommentsCount), not the per-topic comment count needed to compute
+ * ceil(topicCommentsCount / size) — that field does not exist on
+ * BoardLastComment (see DM.Web.Api/Features/Forum/Boards/Board.cs). Using
+ * the board-wide total here would produce a page number worse than "none"
+ * for boards with many topics, so this stays a plain topic+hash link
+ * (matches the pre-existing behavior) until the backend exposes the
+ * target topic's own CommentsCount on BoardLastComment.
+ */
+function lastCommentLink(board: BoardRow) {
+  const lastComment = board.lastComment;
+  if (!lastComment) return null;
+  return {
+    name: "topic",
+    params: { alias: board.alias, num: lastComment.topicNumber },
+    hash: `#comment-${lastComment.id}`,
+  };
+}
+
+/**
+ * Link to the last-created topic at the page it appears on within the
+ * board's topic list (pinned topics aside), so a fresh topic still resolves
+ * to the right page instead of always assuming page 1.
+ */
+function lastTopicLink(board: BoardRow) {
+  const lastTopic = board.lastTopic;
+  if (!lastTopic) return null;
+  return {
+    name: "topic",
+    params: { alias: board.alias, num: lastTopic.topicNumber },
+  };
+}
+
 async function markAllAsRead() {
   if (!boards.value) return;
 
   markingAllAsRead.value = true;
+  markAllError.value = false;
   try {
-    await forumApi.markForumAsRead();
+    const { error } = await forumApi.markForumAsRead();
+    if (error) {
+      markAllError.value = true;
+      return;
+    }
     // Update local state (cast needed for Served<number> type)
     boards.value.forEach((board) => {
       (board as { unreadCommentsCount: number }).unreadCommentsCount = 0;
@@ -74,29 +118,37 @@ async function markAllAsRead() {
   }
 }
 
+function retryFetchBoards() {
+  return store.fetchBoards(true);
+}
+
 onMounted(() => store.fetchBoards());
 </script>
 
 <template>
-  <page-title v-once>Форум</page-title>
-  <LeadText v-once
-    >Заходите на форум за новостями, обсуждениями и помощью новичкам</LeadText
-  >
-
+  <!-- The h1 "Форум" comes from the persistent ForumPage shell. The boards
+       table below is the index's own navigation, so this page goes straight
+       to the table — no board strip (it would duplicate the table, and the
+       shell hides it on the index) and no lead text. -->
   <div v-if="user && boards" class="forum-actions">
     <button
       class="mark-all-read-btn"
       :disabled="markingAllAsRead || !boards.some((b) => b.unreadCommentsCount)"
       @click="markAllAsRead"
     >
-      {{ markingAllAsRead ? "Отмечаю..." : "Пометить все прочитанным" }}
+      {{ markingAllAsRead ? "Отмечаю…" : "Отметить все как прочитанное" }}
     </button>
   </div>
+  <SecondaryText v-if="markAllError" class="mark-all-error" role="alert">
+    Не удалось отметить топики прочитанными
+  </SecondaryText>
 
   <!-- Error state: a failed load must not be presented as an empty list. -->
-  <div v-if="boardsError && !boardsData.length" class="error-message">
-    Не удалось загрузить разделы. Попробуйте обновить страницу.
-  </div>
+  <ErrorState
+    v-if="boardsError && !boardsData.length"
+    message="Не удалось загрузить разделы"
+    :retry="retryFetchBoards"
+  />
 
   <DataTable
     v-else
@@ -104,26 +156,19 @@ onMounted(() => store.fetchBoards());
     :data="boardsData"
     :loading="boardsLoading"
     empty-text="Разделов пока нет"
+    table-layout="auto"
   >
     <template #cell-title="{ row }">
-      <Tooltip :text="row.description || undefined">
-        <router-link
-          :to="{ name: 'forum', params: { alias: row.alias } }"
-          class="board-link"
-        >
-          {{ row.title }}
-        </router-link>
-      </Tooltip>
+      <router-link
+        :to="{ name: 'forum', params: { alias: row.alias } }"
+        class="board-link"
+      >
+        {{ row.title }}
+      </router-link>
     </template>
 
-    <template #cell-moderators="{ row }">
-      <template v-if="row.moderators?.length">
-        <template v-for="(mod, idx) in row.moderators" :key="mod.username">
-          <span v-if="idx > 0">, </span>
-          <UserLink :user="mod" hide-badge />
-        </template>
-      </template>
-      <span v-else class="muted">—</span>
+    <template #cell-description="{ row }">
+      {{ row.description || "—" }}
     </template>
 
     <template #cell-topics="{ row }">
@@ -135,16 +180,13 @@ onMounted(() => store.fetchBoards());
       }}<!-- Unread suffix only for authenticated viewers with unread comments.
            Guests have no "unread" concept, so they see just the total. -->
       <template v-if="user && row.unreadCommentsCount"
-        ><span class="muted"> (</span
-        ><Tooltip
-          :text="`Непрочитанных комментариев: ${row.unreadCommentsCount}`"
-        >
-          <router-link
-            :to="{ name: 'forum', params: { alias: row.alias } }"
-            class="unread"
-            >{{ row.unreadCommentsCount }}</router-link
-          > </Tooltip
-        ><span class="muted">)</span></template
+        ><span class="muted" aria-hidden="true"> (</span
+        ><router-link
+          :to="{ name: 'forum', params: { alias: row.alias } }"
+          class="unread"
+          :aria-label="`Непрочитанные комментарии: ${row.unreadCommentsCount}`"
+          >{{ row.unreadCommentsCount }}</router-link
+        ><span class="muted" aria-hidden="true">)</span></template
       >
     </template>
 
@@ -158,13 +200,7 @@ onMounted(() => store.fetchBoards());
         /><span v-else class="muted">удаленный пользователь</span>,
         <Tooltip
           :text="`Комментарий в &quot;${row.lastComment.topicTitle}&quot;`"
-          ><router-link
-            :to="{
-              name: 'topic',
-              params: { alias: row.alias, num: row.lastComment.topicNumber },
-              hash: `#comment-${row.lastComment.id}`,
-            }"
-            class="last-activity-link"
+          ><router-link :to="lastCommentLink(row)!" class="last-activity-link"
             ><human-date
               :date="row.lastComment.createdUtc"
               format="DD.MM.YYYY [в] HH:mm" /></router-link
@@ -178,12 +214,7 @@ onMounted(() => store.fetchBoards());
           hide-badge
         /><span v-else class="muted">удаленный пользователь</span>,
         <Tooltip :text="`Новый топик &quot;${row.lastTopic.title}&quot;`"
-          ><router-link
-            :to="{
-              name: 'topic',
-              params: { alias: row.alias, num: row.lastTopic.topicNumber },
-            }"
-            class="last-activity-link"
+          ><router-link :to="lastTopicLink(row)!" class="last-activity-link"
             ><human-date
               :date="row.lastTopic.createdUtc"
               format="DD.MM.YYYY [в] HH:mm" /></router-link
@@ -196,7 +227,6 @@ onMounted(() => store.fetchBoards());
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Themes"
 @import "@/assets/styles/Inputs"
 
 .forum-actions
@@ -207,28 +237,14 @@ onMounted(() => store.fetchBoards());
 .mark-all-read-btn
   +button
 
-.board-link
-  color: $link
-  &:hover
-    color: $link-hover
-
-.muted
-  color: $text-muted
-
-.last-activity-link
-  color: $link
-  &:hover
-    color: $link-hover
-
-.unread
-  color: $link
-  &:hover
-    color: $link-hover
-
-.error-message
-  padding: $medium
-  color: $text-on-red
-  background-color: $bg-highlight-red
-  border-radius: $border-radius
+.mark-all-error
+  display: block
+  text-align: right
   margin-bottom: $medium
+  color: $accent-red
+
+// The name + date pair never wraps — with the auto table layout the
+// column takes exactly the width this content needs
+:deep(.col-lastActivity)
+  white-space: nowrap
 </style>

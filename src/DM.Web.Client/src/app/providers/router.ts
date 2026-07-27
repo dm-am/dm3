@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
+import { nextTick } from "vue";
 
 import { LeftSidebar, RightSidebar } from "@/widgets/sidebar";
 import {
@@ -17,6 +18,21 @@ declare module "vue-router" {
      * after their entity loads.
      */
     title?: string;
+    /**
+     * Marks a route as living inside a game (any /game/:id sub-route). The
+     * LeftSidebar keys the per-game GamePanel on this flag.
+     */
+    gameZone?: boolean;
+    /**
+     * Marks a route as living inside a blog (any /blogs/:id sub-route). The
+     * LeftSidebar keys the per-blog BlogPanel on this flag (mirrors gameZone).
+     */
+    blogZone?: boolean;
+    /**
+     * Marks a moderation-zone route (/moderation/*). The LeftSidebar mounts
+     * the ModerationPanel navigation on this flag (product doc 4.2.1.5).
+     */
+    moderationZone?: boolean;
   }
 }
 
@@ -26,6 +42,7 @@ const router = createRouter({
     {
       path: "/",
       name: "home",
+      meta: { title: "Главная страница" },
       components: {
         left: LeftSidebar,
         right: RightSidebar,
@@ -75,7 +92,7 @@ const router = createRouter({
     {
       name: "global-chat",
       path: "/global-chat",
-      meta: { title: "Чат" },
+      meta: { title: "Глобальный чат" },
       components: {
         left: LeftSidebar,
         right: RightSidebar,
@@ -104,7 +121,7 @@ const router = createRouter({
         {
           name: "direct-message",
           path: "user/:username",
-          component: () => import("@/pages/messenger/DirectChat.vue"),
+          component: () => import("@/pages/messenger/DirectChatRedirect.vue"),
         },
       ],
     },
@@ -139,6 +156,26 @@ const router = createRouter({
       },
     },
     {
+      name: "my-tickets",
+      path: "/my-tickets",
+      meta: { requiresAuth: true, title: "Мои обращения" },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/personal/MyTicketsPage.vue"),
+      },
+    },
+    {
+      name: "site-statistics",
+      path: "/statistics",
+      meta: { title: "Статистика сайта" },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/community/SiteStatisticsPage.vue"),
+      },
+    },
+    {
       name: "community",
       path: "/community",
       meta: { title: "Сообщество" },
@@ -150,12 +187,23 @@ const router = createRouter({
     },
     {
       name: "profile",
-      path: "/users/:username/:tab(about|games|blogs|topics|achievements)?",
+      path: "/users/:username",
       components: {
         left: LeftSidebar,
         right: RightSidebar,
         page: () => import("@/pages/profile/ProfilePage.vue"),
       },
+    },
+    // Legacy tab-in-URL profile links (/users/X/games etc.). Tabs are pure
+    // client state now — old URLs land on the profile with the default tab.
+    // Real profile subpages (received-reviews, given-endorsements, ...) are
+    // separate routes above/below and never match this regex.
+    {
+      path: "/users/:username/:tab(about|games|blogs|topics|achievements)",
+      redirect: (to) => ({
+        name: "profile",
+        params: { username: to.params.username },
+      }),
     },
     {
       name: "received-reviews",
@@ -193,9 +241,24 @@ const router = createRouter({
         page: () => import("@/pages/profile/GivenEndorsementsPage.vue"),
       },
     },
+    {
+      name: "profile-uploads",
+      path: "/users/:username/uploads",
+      // Owner-or-admin gating is done in-page (the router has no role
+      // mechanism); the page renders its own access notice otherwise.
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/profile/ProfileUploadsPage.vue"),
+      },
+    },
 
     {
-      path: "/forum/:alias",
+      // Single parent record for ALL forum levels (index, board, topic):
+      // ForumPage is the persistent shell owning the h1 + board strip, so
+      // the strip keeps one live instance across forum navigations and its
+      // reorder animation is visible (a per-level remount would reset it).
+      path: "/forum",
       components: {
         left: LeftSidebar,
         right: RightSidebar,
@@ -203,12 +266,18 @@ const router = createRouter({
       },
       children: [
         {
-          name: "forum",
+          name: "forum-index",
           path: "",
+          meta: { title: "Форум" },
+          component: () => import("@/pages/forum/ForumIndexPage.vue"),
+        },
+        {
+          name: "forum",
+          path: ":alias",
           component: () => import("@/pages/forum/TopicsList.vue"),
         },
         {
-          path: ":num",
+          path: ":alias/:num",
           component: () => import("@/pages/forum/TopicPage.vue"),
           children: [
             {
@@ -248,31 +317,64 @@ const router = createRouter({
       components: {
         left: LeftSidebar,
         right: RightSidebar,
-        page: () => import("@/features/create-blog/ui/CreateBlogPage.vue"),
+        page: () => import("@/pages/create-blog/CreateBlogPage.vue"),
       },
     },
     {
-      name: "blog",
+      // Blog zone (mirrors the /game/:id section): BlogPage is the shell
+      // owning the blog header + store load; sub-pages render in its
+      // <router-view>. Paths follow URL_STRUCTURE.md: /blogs/{publicId}/feed
+      // is the publication feed, publications nest under it.
       path: "/blogs/:id",
+      meta: { blogZone: true },
       components: {
         left: LeftSidebar,
         right: RightSidebar,
         page: () => import("@/pages/blog/BlogPage.vue"),
       },
-    },
-    {
-      name: "forum-index",
-      path: "/forum",
-      meta: { title: "Форум" },
-      components: {
-        left: LeftSidebar,
-        right: RightSidebar,
-        page: () => import("@/pages/forum/ForumIndexPage.vue"),
-      },
+      children: [
+        {
+          name: "blog",
+          path: "",
+          component: () => import("@/pages/blog/BlogDetails.vue"),
+        },
+        {
+          name: "blog-feed",
+          path: "feed",
+          component: () => import("@/pages/blog/BlogFeed.vue"),
+        },
+        {
+          name: "blog-publication-create",
+          path: "feed/create",
+          meta: { requiresAuth: true },
+          component: () => import("@/pages/blog/PublicationCreate.vue"),
+        },
+        {
+          name: "blog-publication-edit",
+          path: "feed/:pubId/edit",
+          meta: { requiresAuth: true },
+          component: () => import("@/pages/blog/PublicationEdit.vue"),
+        },
+        {
+          name: "blog-comments",
+          path: "comments",
+          component: () => import("@/pages/blog/BlogComments.vue"),
+        },
+        {
+          name: "blog-settings",
+          path: "settings",
+          component: () => import("@/pages/blog/BlogSettings.vue"),
+        },
+        {
+          name: "blog-notepad",
+          path: "notes",
+          component: () => import("@/pages/blog/BlogNotepad.vue"),
+        },
+      ],
     },
     {
       path: "/moderation",
-      meta: { requiresAuth: true, title: "Модерация" },
+      meta: { requiresAuth: true, moderationZone: true, title: "Модерация" },
       components: {
         left: LeftSidebar,
         right: RightSidebar,
@@ -325,6 +427,161 @@ const router = createRouter({
         },
       ],
     },
+    // Moderation zone pages (product doc 4.2.1.5, navigated from the
+    // left-sidebar ModerationPanel). Top-level records, NOT children of
+    // /moderation: each page owns its own H1 and must not render under the
+    // admin tab strip of ModerationPage. Role gating is done in-page (the
+    // router has no role mechanism); requiresAuth only screens guests.
+    {
+      name: "moderation-moderators",
+      path: "/moderation/moderators",
+      meta: { requiresAuth: true, moderationZone: true, title: "Модерация" },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/moderation/ModerationModerators.vue"),
+      },
+    },
+    {
+      name: "moderation-games",
+      path: "/moderation/games",
+      meta: {
+        requiresAuth: true,
+        moderationZone: true,
+        title: "Премодерируемые игры",
+      },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () =>
+          import("@/pages/moderation/ModerationPremoderatedGames.vue"),
+      },
+    },
+    {
+      name: "moderation-blogs",
+      path: "/moderation/blogs",
+      meta: {
+        requiresAuth: true,
+        moderationZone: true,
+        title: "Премодерируемые блоги",
+      },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () =>
+          import("@/pages/moderation/ModerationPremoderatedBlogs.vue"),
+      },
+    },
+    {
+      name: "moderation-bans",
+      path: "/moderation/bans",
+      meta: {
+        requiresAuth: true,
+        moderationZone: true,
+        title: "Последние баны",
+      },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/moderation/ModerationBans.vue"),
+      },
+    },
+    {
+      name: "moderation-warnings",
+      path: "/moderation/warnings",
+      meta: {
+        requiresAuth: true,
+        moderationZone: true,
+        title: "Последние предупреждения",
+      },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/moderation/ModerationWarnings.vue"),
+      },
+    },
+    {
+      name: "moderation-rated-posts",
+      path: "/moderation/rated-posts",
+      meta: {
+        requiresAuth: true,
+        moderationZone: true,
+        title: "Последние оцененные посты",
+      },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/moderation/ModerationRatedPosts.vue"),
+      },
+    },
+    {
+      name: "moderation-new-users",
+      path: "/moderation/new-users",
+      meta: {
+        requiresAuth: true,
+        moderationZone: true,
+        title: "Новые пользователи",
+      },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/moderation/ModerationNewUsers.vue"),
+      },
+    },
+    {
+      name: "moderation-violators",
+      path: "/moderation/violators",
+      meta: { requiresAuth: true, moderationZone: true, title: "Нарушители" },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/moderation/ModerationViolators.vue"),
+      },
+    },
+    {
+      name: "moderation-support",
+      path: "/moderation/support",
+      meta: { requiresAuth: true, moderationZone: true, title: "Поддержка" },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/moderation/ModerationSupport.vue"),
+      },
+    },
+    {
+      name: "moderation-complaints",
+      path: "/moderation/complaints",
+      meta: { requiresAuth: true, moderationZone: true, title: "Жалобы" },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/moderation/ModerationComplaints.vue"),
+      },
+    },
+    {
+      name: "moderation-ticket",
+      path: "/moderation/tickets/:ticketId",
+      meta: { requiresAuth: true, moderationZone: true, title: "Обращение" },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/moderation/ModerationTicketPage.vue"),
+      },
+    },
+    {
+      name: "moderation-uploads",
+      path: "/moderation/uploads",
+      meta: {
+        requiresAuth: true,
+        moderationZone: true,
+        title: "Все загруженные файлы",
+      },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/moderation/ModerationUploads.vue"),
+      },
+    },
     {
       name: "create-game",
       path: "/games/create",
@@ -333,11 +590,12 @@ const router = createRouter({
       components: {
         left: LeftSidebar,
         right: RightSidebar,
-        page: () => import("@/features/create-game/ui/CreateGamePage.vue"),
+        page: () => import("@/pages/create-game/CreateGamePage.vue"),
       },
     },
     {
       path: "/game/:id",
+      meta: { gameZone: true },
       components: {
         left: LeftSidebar,
         right: RightSidebar,
@@ -360,9 +618,33 @@ const router = createRouter({
           component: () => import("@/pages/game/GameRoom.vue"),
         },
         {
+          // Chat-type rooms route here (RoomType.Chat) — a message-based,
+          // cursor-paginated OOC room, distinct from the post room view.
+          name: "game-chat-room",
+          path: "chat-rooms/:num",
+          component: () => import("@/pages/game/GameChatRoom.vue"),
+        },
+        {
           name: "game-characters",
           path: "characters",
           component: () => import("@/pages/game/GameCharacters.vue"),
+        },
+        {
+          name: "game-character-create",
+          path: "characters/create",
+          meta: { requiresAuth: true },
+          component: () => import("@/pages/game/CharacterCreate.vue"),
+        },
+        {
+          name: "game-character-edit",
+          path: "characters/:characterId/edit",
+          meta: { requiresAuth: true },
+          component: () => import("@/pages/game/CharacterEdit.vue"),
+        },
+        {
+          name: "game-settings",
+          path: "settings",
+          component: () => import("@/pages/game/GameSettings.vue"),
         },
         {
           name: "game-comments",
@@ -378,6 +660,11 @@ const router = createRouter({
           name: "game-post-reviews",
           path: "post-reviews",
           component: () => import("@/pages/game/GamePostReviews.vue"),
+        },
+        {
+          name: "game-notepad",
+          path: "notes",
+          component: () => import("@/pages/game/GameNotepad.vue"),
         },
       ],
     },
@@ -479,6 +766,16 @@ const router = createRouter({
       },
     },
     {
+      name: "support-track",
+      path: "/support/track/:token",
+      meta: { title: "Статус обращения" },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/support/TicketTrackPage.vue"),
+      },
+    },
+    {
       name: "pulse",
       path: "/pulse",
       meta: { title: "Пульс" },
@@ -518,10 +815,36 @@ const router = createRouter({
         page: () => import("@/pages/legal/UserAgreementPage.vue"),
       },
     },
-    // Error page — single dynamic route for /error/:code (400, 401, 403, etc.)
+    // Forum-topic resolver: deep links that carry only a topic id (e.g.
+    // notification "Перейти") land here and are replaced with the canonical
+    // /forum/:alias/:num route once the topic is fetched. A dedicated
+    // top-level path avoids colliding with /forum/:alias/:num.
+    {
+      name: "forum-topic-redirect",
+      path: "/forum-topic/:topicId",
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/redirect/TopicRedirect.vue"),
+      },
+    },
+    // Dev-only mockup catalog (style variants) — removed once the owner
+    // picks the variants.
+    {
+      name: "dev-style-variants",
+      path: "/dev/style-variants",
+      meta: { title: "Мокапы: стиль" },
+      components: {
+        left: LeftSidebar,
+        right: RightSidebar,
+        page: () => import("@/pages/dev/StyleVariantsPage.vue"),
+      },
+    },
+    // Error page — dynamic route for /error/:code (400, 401, 403, symbolic
+    // OAuth codes…). The code segment is optional so /error?code= also matches.
     {
       name: "error",
-      path: "/error/:code",
+      path: "/error/:code?",
       meta: { title: "Ошибка" },
       components: {
         left: LeftSidebar,
@@ -564,14 +887,37 @@ router.afterEach((to, from) => {
   if (to.name !== from.name) {
     clearExpandableRegistry();
   }
-  // Query-only changes (sort, filter) keep the scroll position
-  if (to.path !== from.path) {
+  if (to.hash) {
+    // Deep-link to an in-page anchor (e.g. #section-id). Wait for the route
+    // component to render (nextTick) and for layout to settle (rAF) before
+    // measuring, then scroll the element into view. The scroll container is
+    // the custom ".main" div, not the window — scrollIntoView walks up the
+    // ancestor chain and handles that natively, unlike window.scrollTo.
+    // CommentsList owns its own hash logic (#comment-{id}) with highlight and
+    // content-settle delays — only fall back to this generic handler when the
+    // target element is actually missing, so it never fights that behavior.
+    nextTick(() => {
+      requestAnimationFrame(() => {
+        const target = document.getElementById(to.hash.slice(1));
+        if (target) {
+          target.scrollIntoView({ block: "start" });
+        } else if (to.path !== from.path) {
+          scrollContentToTop();
+        }
+      });
+    });
+  } else if (to.path !== from.path) {
+    // Query-only changes (sort, filter, pagination) keep the scroll position
     scrollContentToTop();
   }
-  // Set a default document title from the route meta. Dynamic pages override
-  // this on the same tick via `useDocumentTitle` after their entity loads, so
-  // the composable always wins; static routes keep this title.
-  document.title = formatDocumentTitle(to.meta.title);
+  // Set a default document title from the route meta — but only when the
+  // ROUTE actually changed. Same-route navigations (pagination, filters,
+  // param swaps) must not wipe a dynamic title set via `useDocumentTitle`:
+  // its watchEffect re-fires on param changes, and static routes' meta
+  // title is already in place from the initial navigation.
+  if (to.name !== from.name) {
+    document.title = formatDocumentTitle(to.meta.title);
+  }
   // A navigation completed — the chunks are valid again, so allow a future
   // reload should a later deploy invalidate them.
   sessionStorage.removeItem(CHUNK_RELOAD_FLAG);

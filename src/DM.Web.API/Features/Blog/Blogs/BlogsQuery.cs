@@ -21,6 +21,13 @@ public class BlogsQuery : PagingQuery
     public ModuleStatus? Status { get; set; }
 
     /// <summary>
+    /// Filter by premoderation status (Approved, AwaitingApproval, AwaitingEdits).
+    /// Honored only for Mentor+ callers (premoderation review queue);
+    /// silently ignored otherwise.
+    /// </summary>
+    public PremoderationStatus? PremoderationStatus { get; set; }
+
+    /// <summary>
     /// Sort field: title, status, popularity, created (default), activated, closed
     /// </summary>
     public string? SortBy { get; set; }

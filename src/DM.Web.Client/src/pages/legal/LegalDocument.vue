@@ -2,9 +2,22 @@
 /**
  * LegalDocument - shared wrapper for static legal pages (privacy, agreement).
  * Owns the .legal-content layout and the revision/publication date lines so
- * both documents stay visually in sync. The pages themselves are the SSOT for
- * the legal text.
+ * both documents stay visually in sync. The pages themselves are the SSOT
+ * for the legal text.
  */
+
+/**
+ * Section descriptor used by the legal pages: each page maps its own
+ * `sections` array over its `<section>` blocks, so ids and heading titles
+ * live in exactly one place.
+ */
+export interface LegalSection {
+  /** Stable kebab-case id used as the `<section id>` anchor. */
+  id: string;
+  /** Section heading text, e.g. "1. Общие положения". */
+  title: string;
+}
+
 defineProps<{
   /** Title rendered as the page heading. */
   title: string;
@@ -30,9 +43,6 @@ defineProps<{
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 // The page title (h1) keeps the accent heading color; only the in-document
 // section headings (h2/h3, e.g. "1. Общие положения") use the plain body
 // color — they read better in flat black for long-form legal text.
@@ -62,6 +72,26 @@ defineProps<{
 
     li
       margin: $tiny 0
+
+  // Glossary definition list (Термины и определения). Semantically a
+  // <dl> of term/definition pairs, but rendered to look exactly like the
+  // bulleted <ul> above: each grouping div is a list-item (disc marker in
+  // the same $big padding well), with the term and definition flowing
+  // inline as one "Термин — определение" line.
+  :deep(dl.term-list)
+    margin: $tiny 0 $small
+    padding-left: $big
+
+    .term-item
+      display: list-item
+      list-style: disc
+      margin: $tiny 0
+
+    dt,
+    dd
+      display: inline
+      margin: 0
+      font-weight: inherit
 
   :deep(a)
     color: $link

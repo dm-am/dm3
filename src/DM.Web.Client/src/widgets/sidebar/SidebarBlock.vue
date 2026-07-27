@@ -1,15 +1,18 @@
 <template>
-  <div>
+  <li>
     <h4
       class="sidebar-title"
       @mouseenter="hovered = true"
       @mouseleave="hovered = false"
     >
-      <slot name="title" /><button
+      <span ref="titleSlot"><slot name="title" /></span
+      ><button
+        :id="toggleId"
         type="button"
         class="toggle"
         :aria-expanded="show"
-        :aria-label="show ? 'Свернуть раздел' : 'Развернуть раздел'"
+        :aria-controls="listId"
+        :aria-label="toggleLabel"
         @click="toggle"
       >
         <span
@@ -22,59 +25,59 @@
         ></span>
       </button>
     </h4>
-    <div :class="{ list: true, collapsed: !show }" ref="content">
-      <slot />
+    <div class="expand-fold" :class="{ open: show }">
+      <div class="expand-fold-clip" :inert="!show">
+        <ul :id="listId" class="list">
+          <slot />
+        </ul>
+      </div>
     </div>
-  </div>
+  </li>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onUnmounted } from "vue";
+import { computed, ref, onMounted } from "vue";
 
-const props = defineProps<{ token: string }>();
+// `title` is optional — most callers already render the block heading via
+// the #title slot, so when the prop is omitted the slot's own text content
+// is read once on mount and used for the aria-label instead.
+const props = defineProps<{ token: string; title?: string }>();
 const storageKey = computed(() => `__HideMenuModule_${props.token}__`);
+const listId = computed(() => `sidebar-list-${props.token}`);
+const toggleId = computed(() => `sidebar-toggle-${props.token}`);
+
+const titleSlot = ref<HTMLElement | null>(null);
+const slotTitleText = ref("");
+onMounted(() => {
+  if (!props.title) {
+    slotTitleText.value = titleSlot.value?.textContent?.trim() ?? "";
+  }
+});
+const resolvedTitle = computed(() => props.title ?? slotTitleText.value);
 
 const show = ref(localStorage.getItem(storageKey.value) !== false.toString());
-const content = ref<HTMLElement | null>(null);
 const rotation = ref(show.value ? 45 : 0);
 const hovered = ref(false);
 
-// Track timers for cleanup on unmount
-const timers: ReturnType<typeof setTimeout>[] = [];
+// Computed in script rather than inline in the template: an inline template
+// literal cannot carry straight quotes around the title (v-bind does not
+// decode &quot; entities, and the attribute delimiter forbids raw quotes).
+const toggleLabel = computed(() =>
+  show.value
+    ? `Свернуть раздел "${resolvedTitle.value}"`
+    : `Развернуть раздел "${resolvedTitle.value}"`,
+);
 
-function safeTimeout(fn: () => void, delay: number) {
-  const id = setTimeout(() => {
-    fn();
-    const idx = timers.indexOf(id);
-    if (idx !== -1) timers.splice(idx, 1);
-  }, delay);
-  timers.push(id);
-}
-
-onUnmounted(() => {
-  timers.forEach(clearTimeout);
-});
-
+// The reveal itself is the global CSS-only .expand-fold (Reset.sass) —
+// persistent sidebar sections stay OUT of the expandable registry but
+// share the unified animation tempo (UI_STANDARDS, Animation Standards).
 const toggle = () => {
   localStorage.setItem(storageKey.value, (show.value = !show.value).toString());
   rotation.value = show.value ? 45 : 0;
-  if (show.value) {
-    content.value!.style.height = "auto";
-    const expectedHeight = content.value!.clientHeight;
-    content.value!.style.height = "0";
-    safeTimeout(() => (content.value!.style.height = `${expectedHeight}px`), 0);
-    safeTimeout(() => (content.value!.style.height = "auto"), 200);
-  } else {
-    content.value!.style.height = `${content.value!.clientHeight}px`;
-    safeTimeout(() => (content.value!.style.height = "0"), 0);
-  }
 };
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .sidebar-title
   display: flex
   align-items: center
@@ -86,15 +89,16 @@ const toggle = () => {
   color: $heading-alt
 
 // Only the +/- icon toggles the block (the title text is not clickable).
-// A small padding gives the icon a comfortable tap target without changing
-// its visual size.
+// Padding gives the icon a ~24px tap target without changing its visual size.
 .toggle
   cursor: pointer
   color: inherit
   display: inline-flex
   align-items: center
+  justify-content: center
   vertical-align: middle
-  padding: 2px 4px
+  width: 24px
+  height: 24px
   margin-left: 2px
   border: none
   background: none
@@ -103,6 +107,12 @@ const toggle = () => {
   // (!important overrides the inline hover-driven opacity binding)
   &:focus-visible .icon
     opacity: 1 !important
+
+  // Touch devices have no hover — keep the affordance faintly visible so
+  // it can be discovered without accidental taps everywhere.
+  @media (pointer: coarse)
+    .icon
+      opacity: 0.4
 
 .icon
   position: relative
@@ -134,15 +144,7 @@ const toggle = () => {
     transform: translate(-50%, -50%)
 
 .list
-  overflow: hidden
+  list-style: none
   padding: 6px
   margin: -6px
-  transition: height 0.3s ease, padding 0.3s ease, margin 0.3s ease
-  @media (prefers-reduced-motion: reduce)
-    transition: none
-
-  &.collapsed
-    height: 0
-    padding: 0
-    margin: 0
 </style>

@@ -22,7 +22,7 @@ namespace DM.Web.API.Features.Community.Users;
 /// </remarks>
 public class User : UserRef
 {
-    // Id, Username, LastActivityUtc, Role, IsNewbie, IsHonorary inherited from UserRef
+    // Id, Username, LastActivityUtc, Role, IsNewbie inherited from UserRef
 
     /// <summary>
     /// History of username changes
@@ -122,28 +122,28 @@ public class User : UserRef
     public int GlobalChatMessages { get; set; }
 
     /// <summary>
-    /// Number of bans this user has received. Drives the «резиновая уточка»
-    /// achievement chain — пасхалка на мем про утят-террористов.
+    /// Number of bans this user has received. Drives the "резиновая уточка"
+    /// achievement chain — an easter egg for the duckling-terrorists meme.
     /// </summary>
     public int BansReceived { get; set; }
 
     /// <summary>
     /// Number of games this user has voluntarily dropped (Retired characters
-    /// with IsPlayerLeft=true). Drives the «дропы» achievement chain.
+    /// with IsPlayerLeft=true). Drives the "дропы" achievement chain.
     /// </summary>
     public int GameDrops { get; set; }
 
     /// <summary>
     /// Number of publications (blog articles) authored by this user.
-    /// Drives the «публикации» achievement chain.
+    /// Drives the "публикации" achievement chain.
     /// </summary>
     public int PublicationsAuthored { get; set; }
 
     /// <summary>
     /// Total likes received on this user's authored content across
     /// topics, publications, comments and chat messages combined.
-    /// Drives the «лайки» achievement chain. Game posts excluded —
-    /// they have their own quality signal via «Рейтинг».
+    /// Drives the "лайки" achievement chain. Game posts excluded —
+    /// they have their own quality signal via "Рейтинг".
     /// </summary>
     public int LikesReceived { get; set; }
 
@@ -417,14 +417,6 @@ public class UsersQuery : PagingQuery
     public bool? IsOnline { get; set; }
 
     /// <summary>
-    /// Filter by honorary status (only applicable for RegularUser role)
-    /// </summary>
-    /// <remarks>
-    /// true = only honorary users, false = only non-honorary, null = all
-    /// </remarks>
-    public bool? IsHonorary { get; set; }
-
-    /// <summary>
     /// Filter by newbie status (users with less than 100 posts)
     /// </summary>
     /// <remarks>
@@ -528,7 +520,7 @@ public class PersonalNote
     /// <summary>
     /// Last modification timestamp (UTC)
     /// </summary>
-    public DateTimeOffset? UpdatedUtc { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 }
 
 /// <summary>

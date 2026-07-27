@@ -77,6 +77,19 @@ export type Topic = {
    * Likes list. Also drives the "sort by likes" column.
    */
   likesCount: Served<number>;
+  /**
+   * Set when the topic is an auto-created period digest ("Итоги …"): the
+   * closed statistics period it summarizes. The client renders the
+   * period's leaderboards inside the topic from the statistics API.
+   */
+  periodDigest?: PeriodDigestRef | null;
+};
+
+/** Closed statistics period a digest topic summarizes */
+export type PeriodDigestRef = {
+  year: number;
+  /** Calendar month 1-12; null for a yearly digest */
+  month?: number | null;
 };
 
 // Query parameters for topics list

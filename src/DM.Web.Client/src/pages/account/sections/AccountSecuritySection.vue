@@ -10,27 +10,23 @@
           Текущая почта: <strong>{{ user.email || "не указана" }}</strong>
         </div>
 
-        <div class="form-group">
-          <label for="new-email" class="form-label">Новая почта</label>
+        <FormField label="Новая почта" name="new-email">
           <input
             id="new-email"
             v-model="emailForm.newEmail"
             type="email"
-            class="form-input"
+            autocomplete="email"
           />
-        </div>
+        </FormField>
 
-        <div class="form-group">
-          <label for="email-password" class="form-label"
-            >Пароль для подтверждения</label
-          >
+        <FormField label="Пароль для подтверждения" name="email-password">
           <input
             id="email-password"
             v-model="emailForm.password"
             type="password"
-            class="form-input"
+            autocomplete="current-password"
           />
-        </div>
+        </FormField>
 
         <span v-if="changeEmailAction.error.value" class="error-text">
           {{ changeEmailAction.error.value }}
@@ -49,24 +45,21 @@
       <div class="security-block">
         <h3 class="subsection-title">Смена пароля</h3>
 
-        <div class="form-group">
-          <label for="old-password" class="form-label">Текущий пароль</label>
+        <FormField label="Текущий пароль" name="old-password">
           <input
             id="old-password"
             v-model="oldPassword"
             type="password"
-            class="form-input"
+            autocomplete="current-password"
           />
-        </div>
+        </FormField>
 
-        <div class="form-group">
-          <label for="new-password" class="form-label">Новый пароль</label>
-          <span class="form-hint">Минимум 8 символов</span>
+        <FormField label="Новый пароль" name="new-password">
           <input
             id="new-password"
             v-model="newPassword"
             type="password"
-            class="form-input"
+            autocomplete="new-password"
             @input="onNewPasswordInput"
             @blur="onNewPasswordBlur"
           />
@@ -75,28 +68,25 @@
             :hibp-status="hibpStatus"
             :is-same-as-old="isSameAsOld"
           />
-        </div>
+          <template #hint>Минимум 8 символов</template>
+        </FormField>
 
-        <div class="form-group">
-          <label for="confirm-password" class="form-label"
-            >Подтвердите новый пароль</label
-          >
+        <FormField
+          label="Подтвердите новый пароль"
+          name="confirm-password"
+          :errors="
+            confirmPassword && newPassword !== confirmPassword
+              ? ['Пароли не совпадают']
+              : []
+          "
+        >
           <input
             id="confirm-password"
             v-model="confirmPassword"
             type="password"
-            class="form-input"
-            :class="{
-              'input-error': confirmPassword && newPassword !== confirmPassword,
-            }"
+            autocomplete="new-password"
           />
-          <span
-            v-if="confirmPassword && newPassword !== confirmPassword"
-            class="error-text"
-          >
-            Пароли не совпадают
-          </span>
-        </div>
+        </FormField>
 
         <span v-if="changePasswordAction.error.value" class="error-text">
           {{ changePasswordAction.error.value }}
@@ -119,6 +109,7 @@ import { ref, computed } from "vue";
 import { useUserStore } from "@/entities/user";
 import { AccountApi } from "@/shared/api";
 import Button from "@/shared/ui/Button/Button.vue";
+import { FormField } from "@/shared/ui/Form";
 import { PasswordStrengthIndicator } from "@/shared/ui/PasswordInput";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -205,8 +196,6 @@ const changePassword = () => {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Inputs"
 @import "../AccountPage.styles"
 
@@ -226,13 +215,4 @@ const changePassword = () => {
 
   strong
     color: $text
-
-.input-error
-  border-color: $accent-red !important
-
-.form-hint
-  display: block
-  margin-bottom: $tiny
-  font-size: $tertiary-font-size
-  color: $text-muted
 </style>

@@ -11,42 +11,61 @@ internal class UserConnectionService(IAuthenticationService authenticationServic
 {
     private static readonly ConcurrentDictionary<Guid, HashSet<string>> Connections = new();
 
+    // Reverse map so disconnect cleanup does not depend on the auth token
+    // still being valid (it may already be invalidated by logout)
+    private static readonly ConcurrentDictionary<string, Guid> ConnectionOwners = new();
+
     public async Task Add(string authToken, string connectionId)
     {
         var identity = await authenticationService.Authenticate(authToken);
         if (!identity.User.IsAuthenticated)
         {
+            // Guests keep an open connection for public broadcasts, but are
+            // never registered here — per-user targeting only ever resolves
+            // connections of authenticated users
             return;
         }
 
-        Connections.AddOrUpdate(
-            identity.User.UserId,
-            _ => new HashSet<string> {connectionId},
-            (_, connectionIds) =>
-            {
-                connectionIds.Add(connectionId);
-                return connectionIds;
-            });
+        var userId = identity.User.UserId;
+        ConnectionOwners[connectionId] = userId;
+        var connectionIds = Connections.GetOrAdd(userId, _ => new HashSet<string>());
+        lock (connectionIds)
+        {
+            connectionIds.Add(connectionId);
+        }
     }
 
-    public async Task Remove(string authToken, string connectionId)
+    public Task Remove(string connectionId)
     {
-        var identity = await authenticationService.Authenticate(authToken);
-        if (!identity.User.IsAuthenticated ||
-            !Connections.TryGetValue(identity.User.UserId, out var connectionIds))
+        if (!ConnectionOwners.TryRemove(connectionId, out var userId) ||
+            !Connections.TryGetValue(userId, out var connectionIds))
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        connectionIds.Remove(connectionId);
-        if (connectionIds.Count == 0)
+        lock (connectionIds)
         {
-            Connections.TryRemove(identity.User.UserId, out _);
+            connectionIds.Remove(connectionId);
+            if (connectionIds.Count == 0)
+            {
+                Connections.TryRemove(userId, out _);
+            }
         }
+
+        return Task.CompletedTask;
     }
 
-    public IReadOnlyDictionary<Guid, IEnumerable<string>> GetConnectedUsers() => 
+    public IReadOnlyDictionary<Guid, IEnumerable<string>> GetConnectedUsers() =>
         Connections.ToDictionary(
             k => k.Key,
-            v => v.Value.Select(c => c));
+            v =>
+            {
+                // Snapshot under the same lock used for mutations — the
+                // previous lazy enumeration could observe a set being
+                // modified by a concurrent connect/disconnect
+                lock (v.Value)
+                {
+                    return (IEnumerable<string>)v.Value.ToArray();
+                }
+            });
 }

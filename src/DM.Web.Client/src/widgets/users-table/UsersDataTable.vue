@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { DataTable, type Column, type SortState } from "@/shared/ui/DataTable";
 import { Tooltip } from "@/shared/ui/Tooltip";
+import { ErrorState } from "@/shared/ui/ErrorState";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import {
   UserLink,
@@ -20,6 +21,10 @@ const { searchResult, searchLoading, searchError } =
 
 // filterState is computed from URL (single source of truth, no sync needed)
 const { filterState, searchParams, hasActiveFilters } = useUsersFilter();
+
+function retrySearch() {
+  communityStore.searchUsers(searchParams.value);
+}
 
 // Two-state empty text
 const emptyText = computed(() =>
@@ -56,23 +61,18 @@ const columns: Column[] = [
     label: "Имя пользователя",
     width: "22%",
     align: "left",
-    sortable: true,
   },
   {
     key: "activity",
     label: "Активность",
     width: "13%",
-    align: "left",
-    sortable: true,
-    defaultDirection: "desc",
+    align: "center",
   },
   {
     key: "rating",
     label: "Рейтинг",
     width: "13%",
     align: "center",
-    sortable: true,
-    defaultDirection: "desc",
   },
   {
     key: "reviews",
@@ -99,9 +99,7 @@ const columns: Column[] = [
     key: "registered",
     label: "Регистрация",
     width: "15%",
-    align: "left",
-    sortable: true,
-    defaultDirection: "desc",
+    align: "center",
     hideOnMobile: true,
   },
 ];
@@ -139,6 +137,12 @@ function handlePrefetch(page: number) {
   communityStore.prefetchPage(page);
 }
 
+// Paging scrolls the table itself back into view (not the page top)
+const tableRef = ref<{ $el: HTMLElement } | null>(null);
+function pagingAnchor(): HTMLElement | null {
+  return tableRef.value?.$el ?? null;
+}
+
 // Build hosting tooltip for games (left number)
 function buildHostingTooltip(row: {
   gamesHosting?: number;
@@ -147,7 +151,9 @@ function buildHostingTooltip(row: {
   const total = row.gamesHosting ?? 0;
   if (total === 0) return "Нет игр в роли ведущего";
   const lines = ["В роли ведущего:"];
-  lines.push(...buildStatusLines(row.gamesHostingByStatus, "игры"));
+  lines.push(
+    ...buildStatusLines(row.gamesHostingByStatus, ["игра", "игры", "игр"]),
+  );
   if (lines.length === 1) lines.push(`Игр: ${total}`);
   return lines.join("\n");
 }
@@ -160,17 +166,11 @@ function buildPlayingTooltip(row: {
   const total = row.gamesPlaying ?? 0;
   if (total === 0) return "Нет игр в роли игрока";
   const lines = ["В роли игрока:"];
-  lines.push(...buildStatusLines(row.gamesPlayingByStatus, "игры"));
+  lines.push(
+    ...buildStatusLines(row.gamesPlayingByStatus, ["игра", "игры", "игр"]),
+  );
   if (lines.length === 1) lines.push(`Игр: ${total}`);
   return lines.join("\n");
-}
-
-// Build endorsements tooltip (recommendations received, not post reviews)
-function buildEndorsementsTooltip(row: {
-  endorsementsReceived?: number;
-}): string {
-  const received = row.endorsementsReceived ?? 0;
-  return `Рекомендаций: ${received}`;
 }
 
 // Build blogs hosting tooltip
@@ -181,7 +181,9 @@ function buildBlogsTooltip(row: {
   const total = row.blogsHosting ?? 0;
   if (total === 0) return "Не ведет блогов";
   const lines = ["Ведет блоги:"];
-  lines.push(...buildStatusLines(row.blogsHostingByStatus, "блоги"));
+  lines.push(
+    ...buildStatusLines(row.blogsHostingByStatus, ["блог", "блога", "блогов"]),
+  );
   if (lines.length === 1) lines.push(`Блогов: ${total}`);
   return lines.join("\n");
 }
@@ -193,13 +195,19 @@ function buildBlogsTooltip(row: {
     <UsersFilter class="filters" />
 
     <!-- Error state -->
-    <div v-if="searchError" class="error-message">
-      {{ searchError }}
-    </div>
+    <ErrorState
+      v-if="searchError"
+      :message="searchError"
+      :retry="retrySearch"
+      class="error-state-block"
+    />
 
-    <!-- Table -->
+    <!-- Table. Hidden when the request failed and there is nothing to
+         show - an error must not be presented as an empty list. Stale
+         rows (if any) stay visible under the error message. -->
     <DataTable
-      id="results"
+      v-if="!searchError || users.length > 0"
+      ref="tableRef"
       :columns="columns"
       :data="users"
       :loading="searchLoading"
@@ -221,45 +229,66 @@ function buildBlogsTooltip(row: {
         <UserRating :user="row" />
       </template>
 
-      <!-- Games column: X/Y (hosting/playing) — plain counts with tooltips -->
+      <!-- Games column: X/Y (hosting/playing) — links to the profile -->
       <template #cell-games="{ row }">
         <span class="games-cell">
           <Tooltip :text="buildHostingTooltip(row)">
-            <span class="stats-value">{{ row.gamesHosting ?? 0 }}</span>
+            <router-link
+              :to="{ name: 'profile', params: { username: row.username } }"
+              class="stats-value"
+              :aria-label="`Игр в роли ведущего: ${row.gamesHosting ?? 0}`"
+              >{{ row.gamesHosting ?? 0 }}</router-link
+            >
           </Tooltip>
-          <span class="muted">/</span>
+          <span class="muted" aria-hidden="true">/</span>
           <Tooltip :text="buildPlayingTooltip(row)">
-            <span class="stats-value">{{ row.gamesPlaying ?? 0 }}</span>
+            <router-link
+              :to="{ name: 'profile', params: { username: row.username } }"
+              class="stats-value"
+              :aria-label="`Игр в роли игрока: ${row.gamesPlaying ?? 0}`"
+              >{{ row.gamesPlaying ?? 0 }}</router-link
+            >
           </Tooltip>
         </span>
       </template>
 
-      <!-- Blogs column: X (hosting) — plain count with tooltip -->
+      <!-- Blogs column: X (hosting) — link to the profile -->
       <template #cell-blogs="{ row }">
         <Tooltip :text="buildBlogsTooltip(row)">
-          <span class="stats-value">{{ row.blogsHosting ?? 0 }}</span>
+          <router-link
+            :to="{ name: 'profile', params: { username: row.username } }"
+            class="stats-value"
+            :aria-label="`Блогов: ${row.blogsHosting ?? 0}`"
+            >{{ row.blogsHosting ?? 0 }}</router-link
+          >
         </Tooltip>
       </template>
 
       <!-- Registration date column -->
       <template #cell-registered="{ row }">
-        <Tooltip :text="buildRegistrationTooltip(row)">
+        <Tooltip :text="buildRegistrationTooltip(row)" focusable>
           <span>{{ formatDateShort(row.registeredUtc) }}</span>
         </Tooltip>
       </template>
 
-      <!-- Recommendations column: endorsements received — plain count -->
+      <!-- Recommendations column: endorsements received — link to received-endorsements page -->
       <template #cell-reviews="{ row }">
-        <Tooltip :text="buildEndorsementsTooltip(row)">
-          <span class="stats-value">{{ row.endorsementsReceived ?? 0 }}</span>
-        </Tooltip>
+        <router-link
+          :to="{
+            name: 'received-endorsements',
+            params: { username: row.username },
+          }"
+          class="stats-value"
+          :aria-label="`Рекомендаций: ${row.endorsementsReceived ?? 0}`"
+          >{{ row.endorsementsReceived ?? 0 }}</router-link
+        >
       </template>
 
       <!-- Activity column (online/offline status) -->
       <!-- Compute isOnline once per row to ensure consistency between indicator and tooltip -->
       <template #cell-activity="{ row }">
         <template v-for="online in [isOnline(row)]" :key="String(online)">
-          <Tooltip :text="buildOnlineTooltip(row, online)">
+          <Tooltip :text="buildOnlineTooltip(row, online)" focusable>
             <span
               class="online-indicator"
               :class="{ online, offline: !online }"
@@ -280,6 +309,7 @@ function buildBlogsTooltip(row: {
           :to="{ name: 'community' }"
           :use-query="true"
           :on-prefetch="handlePrefetch"
+          :scroll-anchor="pagingAnchor"
         />
       </template>
     </DataTable>
@@ -287,24 +317,19 @@ function buildBlogsTooltip(row: {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 .users-data-table
   width: 100%
 
 .filters
   margin-bottom: $medium
 
-.error-message
-  padding: $medium
-  color: $text-on-red
-  background-color: $bg-highlight-red
-  border-radius: $border-radius
+.error-state-block
   margin-bottom: $medium
 
 .stats-value
-  color: $text
-  cursor: help
+  color: $link
+  &:hover
+    color: $link-hover
 
 .games-cell
   white-space: nowrap

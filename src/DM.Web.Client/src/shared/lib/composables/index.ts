@@ -18,6 +18,7 @@ export { useScrollToElement } from "./useScrollToElement";
 export {
   registerExpandable,
   notifyExpandableChanged,
+  refreshExpandableStates,
   clearRegistry,
   hasAny as hasAnyExpandable,
   allExpanded as allExpandablesExpanded,
@@ -42,15 +43,8 @@ export type {
   ValidatedField,
 } from "./useValidatedField";
 
-export { useUsernameValidation } from "./useUsernameValidation";
-export type { UseUsernameValidationOptions } from "./useUsernameValidation";
-
 export { useNewPasswordField } from "./useNewPasswordField";
 export type { UseNewPasswordFieldOptions } from "./useNewPasswordField";
-
-// User management
-export { useModeratedProfile } from "./useModeratedProfile";
-export { useProfileEdit } from "./useProfileEdit";
 
 // Region and mirrors
 export { useRegion } from "./useRegion";
@@ -65,13 +59,6 @@ export type {
   FilterDispatcherConfig,
   FilterDispatcher,
 } from "./createFilterDispatcher";
-
-// Dropdown keyboard navigation
-export { useDropdownKeyboard } from "./useDropdownKeyboard";
-export type {
-  UseDropdownKeyboardOptions,
-  UseDropdownKeyboardReturn,
-} from "./useDropdownKeyboard";
 
 // Filter composables
 export { useFilterSearch } from "./useFilterSearch";
@@ -88,6 +75,14 @@ export type { ToastType, Toast } from "./useToast";
 // Document title (per-route + dynamic page titles)
 export { useDocumentTitle, formatDocumentTitle } from "./useDocumentTitle";
 
+// Expandable content section — THE building block: unified reveal animation
+// + "Развернуть/Свернуть все" registry + manual-toggle semantics in one call.
+export { useExpandableSection } from "./useExpandableSection";
+
+// Smooth height animation for content-swap expand/collapse (the low-level
+// half of useExpandableSection; use the section composable in components).
+export { useAnimatedHeightToggle } from "./useAnimatedHeightToggle";
+
 // Content truncation (expand/collapse)
 export { useContentTruncation } from "./useContentTruncation";
 export type {
@@ -95,9 +90,9 @@ export type {
   ContentTruncationReturn,
 } from "./useContentTruncation";
 
-// Message permissions (edit/delete/like)
-export { useMessagePermissions } from "./useMessagePermissions";
-export type { MessagePermissions } from "./useMessagePermissions";
+// FLIP reorder animation (active-first strips: Tabs, BoardNavigation)
+export { useFlipReorder } from "./useFlipReorder";
+export type { FlipReorderOptions } from "./useFlipReorder";
 
 // Virtual scroll (@tanstack/vue-virtual wrapper)
 export { useVirtualScroll } from "./useVirtualScroll";

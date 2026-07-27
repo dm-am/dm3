@@ -20,8 +20,8 @@ internal class UserMappingProfile : Profile
     public UserMappingProfile()
     {
         // Avatar: Domain AvatarPicture (single source-key) → API UserPicture (3 URLs).
-        // Конвертер собирает imgproxy thumbnails на лету через
-        // AvatarPictureConverter (см. соседний файл) — нужен IImgproxyUrlBuilder DI.
+        // The converter builds imgproxy thumbnails on the fly via
+        // AvatarPictureConverter (see the sibling file) — needs IImgproxyUrlBuilder DI.
         CreateMap<DM.Domain.Core.Dto.AvatarPicture, UserPicture>()
             .ConvertUsing<AvatarPictureConverter>();
 
@@ -51,9 +51,9 @@ internal class UserMappingProfile : Profile
             // Lists (User DTO) only expose SmallUrl. Profile page calls
             // /v1/users/{username}/profile → UserProfile mapping below adds
             // MediumUrl for retina-quality avatars.
-            // Picture — через зарегистрированный AvatarPicture→UserPicture конвертер
-            // (imgproxy thumbnails on the fly). Lists и profile page получают
-            // одинаковую структуру (3 URL), bandwidth-cost ~200 байт/юзер пренебрежим.
+            // Picture — via the registered AvatarPicture→UserPicture converter
+            // (imgproxy thumbnails on the fly). Lists and the profile page get
+            // the same structure (3 URLs); the ~200 bytes/user bandwidth cost is negligible.
             .ForMember(d => d.Picture, o => o.MapFrom(s => s.Picture))
             .ForMember(d => d.UsernameHistory, o => o.MapFrom(s => s.UsernameHistory))
             // Statistics for community list
@@ -78,7 +78,7 @@ internal class UserMappingProfile : Profile
             .ForMember(d => d.Id, o => o.MapFrom(s => s.UserId))
             .ForMember(d => d.IsNewbie, o => o.MapFrom(s => s.QuantityRating < NewbieThreshold))
             .ForMember(d => d.Rating, o => o.MapFrom(s => new Rating { TotalPosts = s.QuantityRating, PostReviewScoreSum = s.QualityRating }))
-            // Picture — через зарегистрированный AvatarPicture→UserPicture конвертер.
+            // Picture — via the registered AvatarPicture→UserPicture converter.
             .ForMember(d => d.Picture, o => o.MapFrom(s => s.Picture))
             .ForMember(d => d.Birthday, o => o.MapFrom(s => s.ShowBirthday && s.BirthdayDate.HasValue
                 ? new Birthday { Day = s.BirthdayDate.Value.Day, Month = s.BirthdayDate.Value.Month, Year = s.BirthdayDate.Value.Year }

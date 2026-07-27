@@ -2,16 +2,17 @@ import {
   AchievementMetric,
   ContestType,
 } from "@/shared/api/models/achievements";
+import { pluralize } from "@/shared/lib/utils/pluralize";
 
 /**
- * Человекочитаемый порог для тира. SSOT для всех мест, где показываются
- * пороги (tile-цифры под bar, popover-таблица тиров).
+ * Human-readable threshold for a tier. SSOT for every place thresholds
+ * are shown (tile numbers under the bar, the popover tier table).
  *
- * Описание метрики хранится на категории; здесь — только формат числа
- * под единицу измерения метрики (постов / лет / лайков / etc).
+ * The metric description lives on the category; here only the number format
+ * for the metric's unit of measure (posts / years / likes / etc).
  *
- * При добавлении новой метрики правится здесь + парный case в
- * `getMetricValue` (он считает значение метрики у конкретного юзера).
+ * When adding a new metric, this changes + the paired case in
+ * `getMetricValue` (it computes the metric value for a specific user).
  */
 /**
  * Display-unit number for a metric value. Most metrics are raw counts shown
@@ -38,54 +39,43 @@ export function formatThreshold(
 ): string {
   switch (metric) {
     case AchievementMetric.GamePostsAuthored:
-      return `${threshold} ${plural(threshold, "пост", "поста", "постов")}`;
+      return `${threshold} ${pluralize(threshold, "пост", "поста", "постов")}`;
     case AchievementMetric.DaysSinceRegistration: {
       const years = metricDisplayNumber(metric, threshold);
-      return `${years} ${plural(years, "год", "года", "лет")}`;
+      return `${years} ${pluralize(years, "год", "года", "лет")}`;
     }
     case AchievementMetric.PostReviewScoreSum:
-      return `+${threshold}`;
+      // No "+" sign: the progress line composes "X из <threshold>", and a
+      // signed goal reads broken ("350 из +500"). Unit word instead.
+      return `${threshold} рейтинга`;
     case AchievementMetric.GamesHosted:
     case AchievementMetric.GamesPlayed:
     case AchievementMetric.GameDrops:
-      return `${threshold} ${plural(threshold, "игра", "игры", "игр")}`;
+      return `${threshold} ${pluralize(threshold, "игра", "игры", "игр")}`;
     case AchievementMetric.BlogsHosted:
-      return `${threshold} ${plural(threshold, "блог", "блога", "блогов")}`;
+      return `${threshold} ${pluralize(threshold, "блог", "блога", "блогов")}`;
     case AchievementMetric.PublicationsAuthored:
-      return `${threshold} ${plural(threshold, "публикация", "публикации", "публикаций")}`;
+      return `${threshold} ${pluralize(threshold, "публикация", "публикации", "публикаций")}`;
     case AchievementMetric.TopicsAuthored:
-      return `${threshold} ${plural(threshold, "топик", "топика", "топиков")}`;
+      return `${threshold} ${pluralize(threshold, "топик", "топика", "топиков")}`;
     case AchievementMetric.CommentsAuthored:
-      return `${threshold} ${plural(threshold, "комментарий", "комментария", "комментариев")}`;
+      return `${threshold} ${pluralize(threshold, "комментарий", "комментария", "комментариев")}`;
     case AchievementMetric.GlobalChatMessages:
-      return `${threshold} ${plural(threshold, "сообщение", "сообщения", "сообщений")}`;
+      return `${threshold} ${pluralize(threshold, "сообщение", "сообщения", "сообщений")}`;
     case AchievementMetric.LikesReceived:
-      return `${threshold} ${plural(threshold, "лайк", "лайка", "лайков")}`;
+      return `${threshold} ${pluralize(threshold, "лайк", "лайка", "лайков")}`;
     case AchievementMetric.BansReceived:
-      return `${threshold} ${plural(threshold, "бан", "бана", "банов")}`;
+      return `${threshold} ${pluralize(threshold, "бан", "бана", "банов")}`;
     default:
       return String(threshold);
   }
 }
 
 /**
- * Русские склонения числительных: 1 год / 2 года / 5 лет.
- * Учитывает «11 лет» (не «11 год»), «21 год» (не «21 лет»), etc.
- */
-function plural(n: number, one: string, few: string, many: string): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 14) return many;
-  if (mod10 === 1) return one;
-  if (mod10 >= 2 && mod10 <= 4) return few;
-  return many;
-}
-
-/**
- * Лейбл серии конкурса для тайла и popover'а:
- *   «23-й литературный конкурс», «1-й арт конкурс».
- * Используется как title тайла награды-места (contest_first/second/third)
- * — место читается по tier-color, а контекст «какой конкурс» — здесь.
+ * Contest series label for the tile and popover:
+ *   "23-й литературный конкурс", "1-й арт конкурс".
+ * Used as the tile title of a placement award (contest_first/second/third)
+ * — the placement is read from the tier color, and the "which contest" context is here.
  */
 export function formatContestSeriesTitle(
   contestType: ContestType,
@@ -95,6 +85,6 @@ export function formatContestSeriesTitle(
   if (contestType === ContestType.Literary) {
     return `${ordinal} литературный конкурс`;
   }
-  // Art и будущие типы.
+  // Art and future types.
   return `${ordinal} арт конкурс`;
 }

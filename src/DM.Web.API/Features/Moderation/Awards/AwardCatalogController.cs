@@ -16,17 +16,17 @@ using DomainUpdateContestSeries = DM.Domain.Community.Features.Awards.UpdateCont
 namespace DM.Web.API.Features.Moderation.Awards;
 
 /// <summary>
-/// CRUD каталога наград и серий конкурсов.
+/// CRUD for the award catalog and contest series.
 /// </summary>
 /// <remarks>
-/// Типы наград (`AwardType`) — timeless каталог (6 строк по умолчанию):
-/// 1/2/3 место, народное признание, лучший критик, угадайка. Каждый тип
-/// иммутабельный по семантике: переименовать можно, удалить — нельзя
-/// (только деактивировать через PATCH IsActive=false), потому что
-/// исторические UserAward ссылаются на тип через FK.
+/// Award types (`AwardType`) — a timeless catalog (6 rows by default):
+/// 1st/2nd/3rd place, popular vote, best critic, guesser. Each type
+/// is semantically immutable: it can be renamed but not deleted
+/// (only deactivated via PATCH IsActive=false), because
+/// historical UserAward records reference the type via FK.
 ///
-/// Серии конкурсов (`ContestSeries`) — каждый новый конкурс это новая
-/// запись (сквозной Number в рамках типа, Year, TopicUrl).
+/// Contest series (`ContestSeries`) — every new contest is a new
+/// record (sequential Number within the type, Year, TopicUrl).
 /// </remarks>
 [ApiController]
 [Route("v1/moderation")]
@@ -47,12 +47,12 @@ public class AwardCatalogController : ControllerBase
 
     // ---- AwardType ----
 
-    /// <summary>Создать новый тип награды в каталоге.</summary>
-    /// <response code="201">Создан.</response>
-    /// <response code="400">Неизвестная иконка или невалидные данные.</response>
-    /// <response code="401">Не аутентифицирован.</response>
-    /// <response code="403">Недостаточно прав.</response>
-    /// <response code="409">Code уже занят.</response>
+    /// <summary>Create a new award type in the catalog.</summary>
+    /// <response code="201">Created.</response>
+    /// <response code="400">Unknown icon or invalid data.</response>
+    /// <response code="401">Not authenticated.</response>
+    /// <response code="403">Insufficient permissions.</response>
+    /// <response code="409">Code is already taken.</response>
     [HttpPost("award-types", Name = nameof(CreateAwardType))]
     [ProducesResponseType(typeof(Envelope<AwardType>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
@@ -70,12 +70,12 @@ public class AwardCatalogController : ControllerBase
             new Envelope<AwardType>(api));
     }
 
-    /// <summary>Частичное обновление типа награды.</summary>
-    /// <response code="200">Обновлен.</response>
-    /// <response code="400">Неизвестная иконка или невалидные данные.</response>
-    /// <response code="401">Не аутентифицирован.</response>
-    /// <response code="403">Недостаточно прав.</response>
-    /// <response code="404">Тип не найден.</response>
+    /// <summary>Partial award type update.</summary>
+    /// <response code="200">Updated.</response>
+    /// <response code="400">Unknown icon or invalid data.</response>
+    /// <response code="401">Not authenticated.</response>
+    /// <response code="403">Insufficient permissions.</response>
+    /// <response code="404">Type not found.</response>
     [HttpPatch("award-types/{id:guid}", Name = nameof(UpdateAwardType))]
     [ProducesResponseType(typeof(Envelope<AwardType>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
@@ -90,11 +90,11 @@ public class AwardCatalogController : ControllerBase
         return Ok(new Envelope<AwardType>(_mapper.Map<AwardType>(updated)));
     }
 
-    /// <summary>Деактивировать тип награды (IsActive=false). Уже выданные награды сохраняются.</summary>
-    /// <response code="204">Деактивирован.</response>
-    /// <response code="401">Не аутентифицирован.</response>
-    /// <response code="403">Недостаточно прав.</response>
-    /// <response code="404">Тип не найден.</response>
+    /// <summary>Deactivate an award type (IsActive=false). Already granted awards are kept.</summary>
+    /// <response code="204">Deactivated.</response>
+    /// <response code="401">Not authenticated.</response>
+    /// <response code="403">Insufficient permissions.</response>
+    /// <response code="404">Type not found.</response>
     [HttpDelete("award-types/{id:guid}", Name = nameof(DeactivateAwardType))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
@@ -108,12 +108,12 @@ public class AwardCatalogController : ControllerBase
 
     // ---- ContestSeries ----
 
-    /// <summary>Создать новую серию конкурса.</summary>
-    /// <response code="201">Создана.</response>
-    /// <response code="400">Невалидные данные.</response>
-    /// <response code="401">Не аутентифицирован.</response>
-    /// <response code="403">Недостаточно прав.</response>
-    /// <response code="409">Серия с такой (ContestType, Number) уже существует.</response>
+    /// <summary>Create a new contest series.</summary>
+    /// <response code="201">Created.</response>
+    /// <response code="400">Invalid data.</response>
+    /// <response code="401">Not authenticated.</response>
+    /// <response code="403">Insufficient permissions.</response>
+    /// <response code="409">A series with this (ContestType, Number) already exists.</response>
     [HttpPost("contest-series", Name = nameof(CreateContestSeries))]
     [ProducesResponseType(typeof(Envelope<ContestSeries>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
@@ -131,12 +131,12 @@ public class AwardCatalogController : ControllerBase
             new Envelope<ContestSeries>(api));
     }
 
-    /// <summary>Частичное обновление серии конкурса.</summary>
-    /// <response code="200">Обновлена.</response>
-    /// <response code="400">Невалидные данные.</response>
-    /// <response code="401">Не аутентифицирован.</response>
-    /// <response code="403">Недостаточно прав.</response>
-    /// <response code="404">Серия не найдена.</response>
+    /// <summary>Partial contest series update.</summary>
+    /// <response code="200">Updated.</response>
+    /// <response code="400">Invalid data.</response>
+    /// <response code="401">Not authenticated.</response>
+    /// <response code="403">Insufficient permissions.</response>
+    /// <response code="404">Series not found.</response>
     [HttpPatch("contest-series/{id:guid}", Name = nameof(UpdateContestSeries))]
     [ProducesResponseType(typeof(Envelope<ContestSeries>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
@@ -151,11 +151,11 @@ public class AwardCatalogController : ControllerBase
         return Ok(new Envelope<ContestSeries>(_mapper.Map<ContestSeries>(updated)));
     }
 
-    /// <summary>Деактивировать серию (IsActive=false). Уже выданные награды сохраняются.</summary>
-    /// <response code="204">Деактивирована.</response>
-    /// <response code="401">Не аутентифицирован.</response>
-    /// <response code="403">Недостаточно прав.</response>
-    /// <response code="404">Серия не найдена.</response>
+    /// <summary>Deactivate a series (IsActive=false). Already granted awards are kept.</summary>
+    /// <response code="204">Deactivated.</response>
+    /// <response code="401">Not authenticated.</response>
+    /// <response code="403">Insufficient permissions.</response>
+    /// <response code="404">Series not found.</response>
     [HttpDelete("contest-series/{id:guid}", Name = nameof(DeactivateContestSeries))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]

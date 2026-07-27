@@ -5,22 +5,22 @@ using DM.Domain.Core.Enums;
 namespace DM.Domain.Community.Features.Achievements;
 
 /// <summary>
-/// SSOT-маппинг <see cref="AchievementMetric"/> → значение из профиля.
+/// SSOT mapping of <see cref="AchievementMetric"/> → value from the profile.
 ///
-/// Парный <c>getMetricValue</c> существует на фронтенде — обе функции
-/// должны меняться вместе при добавлении новой метрики. Это
-/// сознательный компромисс: альтернатива (вычислять прогресс ходом
-/// запросов из БД) дает N COUNT'ов на просмотр профиля; уже
-/// денормализованные счетчики на <c>GeneralUser</c> покрывают все нужное.
+/// A paired <c>getMetricValue</c> exists on the frontend — both functions
+/// must change together when a new metric is added. This is
+/// a deliberate trade-off: the alternative (computing progress with
+/// DB queries) costs N COUNTs per profile view; the already
+/// denormalized counters on <c>GeneralUser</c> cover everything needed.
 /// </summary>
 public static class AchievementMetricResolver
 {
     /// <summary>
-    /// Достать значение метрики для пользователя. <paramref name="now"/>
-    /// нужен только для time-based метрик (DaysSinceRegistration);
-    /// AchievementService прокидывает <c>_clock.Now</c>. Возвращает 0
-    /// для неизвестных значений enum — безопасный фолбэк, никогда не
-    /// триггерит порог.
+    /// Get the metric value for a user. <paramref name="now"/>
+    /// is only needed for time-based metrics (DaysSinceRegistration);
+    /// AchievementService passes <c>_clock.Now</c>. Returns 0
+    /// for unknown enum values — a safe fallback that never
+    /// triggers a threshold.
     /// </summary>
     public static int GetValue(AchievementMetric metric, GeneralUser user, DateTimeOffset now)
     {
@@ -43,7 +43,7 @@ public static class AchievementMetricResolver
         };
     }
 
-    /// <summary>Дни между регистрацией и моментом проверки (целое, не отриц.).</summary>
+    /// <summary>Days between registration and the evaluation moment (integer, non-negative).</summary>
     private static int DaysSinceRegistration(GeneralUser user, DateTimeOffset now)
     {
         if (!user.RegisteredUtc.HasValue) return 0;

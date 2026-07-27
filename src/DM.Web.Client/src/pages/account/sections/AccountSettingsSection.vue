@@ -1,97 +1,68 @@
-﻿<template>
+<template>
   <section class="section">
     <h2 class="section-title">Настройки</h2>
 
     <div class="settings-content">
-      <div class="form-group">
-        <label for="color-schema" class="form-label">Цветовая схема</label>
-        <select
-          id="color-schema"
-          v-model="settingsForm.theme"
-          class="form-select"
-        >
-          <option value="Light">Светлая</option>
-          <option value="Dark">Темная</option>
-        </select>
-      </div>
+      <FormField label="Цветовая схема">
+        <Select
+          :model-value="settingsForm.theme"
+          :options="themeOptions"
+          @update:model-value="(v) => (settingsForm.theme = v as Theme)"
+        />
+      </FormField>
 
-      <div class="form-group">
-        <label class="form-label">Pagination настройки</label>
+      <div class="pagination-group">
+        <div class="pagination-group-label">Pagination настройки</div>
         <div class="pagination-grid">
-          <div class="pagination-item">
-            <label for="posts-per-page" class="pagination-label"
-              >Постов на странице</label
-            >
-            <select
-              id="posts-per-page"
-              v-model.number="settingsForm.paging.postsPerPage"
-              class="form-select"
-            >
-              <option v-for="opt in pagingOptions" :key="opt" :value="opt">
-                {{ opt }}
-              </option>
-            </select>
-          </div>
+          <FormField label="Постов на странице">
+            <Select
+              :model-value="String(settingsForm.paging.postsPerPage)"
+              :options="pagingSelectOptions"
+              @update:model-value="
+                (v) => (settingsForm.paging.postsPerPage = Number(v))
+              "
+            />
+          </FormField>
 
-          <div class="pagination-item">
-            <label for="comments-per-page" class="pagination-label"
-              >Комментариев на странице</label
-            >
-            <select
-              id="comments-per-page"
-              v-model.number="settingsForm.paging.commentsPerPage"
-              class="form-select"
-            >
-              <option v-for="opt in pagingOptions" :key="opt" :value="opt">
-                {{ opt }}
-              </option>
-            </select>
-          </div>
+          <FormField label="Комментариев на странице">
+            <Select
+              :model-value="String(settingsForm.paging.commentsPerPage)"
+              :options="pagingSelectOptions"
+              @update:model-value="
+                (v) => (settingsForm.paging.commentsPerPage = Number(v))
+              "
+            />
+          </FormField>
 
-          <div class="pagination-item">
-            <label for="topics-per-page" class="pagination-label"
-              >Тем на странице</label
-            >
-            <select
-              id="topics-per-page"
-              v-model.number="settingsForm.paging.topicsPerPage"
-              class="form-select"
-            >
-              <option v-for="opt in pagingOptions" :key="opt" :value="opt">
-                {{ opt }}
-              </option>
-            </select>
-          </div>
+          <FormField label="Тем на странице">
+            <Select
+              :model-value="String(settingsForm.paging.topicsPerPage)"
+              :options="pagingSelectOptions"
+              @update:model-value="
+                (v) => (settingsForm.paging.topicsPerPage = Number(v))
+              "
+            />
+          </FormField>
 
-          <div class="pagination-item">
-            <label for="messages-per-page" class="pagination-label"
-              >Сообщений на странице</label
-            >
-            <select
-              id="messages-per-page"
-              v-model.number="settingsForm.paging.messagesPerPage"
-              class="form-select"
-            >
-              <option v-for="opt in pagingOptions" :key="opt" :value="opt">
-                {{ opt }}
-              </option>
-            </select>
-          </div>
+          <FormField label="Сообщений на странице">
+            <Select
+              :model-value="String(settingsForm.paging.messagesPerPage)"
+              :options="pagingSelectOptions"
+              @update:model-value="
+                (v) => (settingsForm.paging.messagesPerPage = Number(v))
+              "
+            />
+          </FormField>
 
-          <div class="pagination-item">
-            <label for="entities-per-page" class="pagination-label"
-              >Сущностей на странице</label
-            >
-            <select
-              id="entities-per-page"
-              v-model.number="settingsForm.paging.entitiesPerPage"
-              class="form-select"
-            >
-              <option v-for="opt in pagingOptions" :key="opt" :value="opt">
-                {{ opt }}
-              </option>
-            </select>
-          </div>
+          <FormField label="Сущностей на странице">
+            <Select
+              :model-value="String(settingsForm.paging.entitiesPerPage)"
+              :options="pagingSelectOptions"
+              @update:model-value="
+                (v) => (settingsForm.paging.entitiesPerPage = Number(v))
+              "
+            />
+          </FormField>
         </div>
       </div>
 
@@ -114,6 +85,8 @@ import { ref, watch } from "vue";
 import { useUserStore } from "@/entities/user";
 import { PersonalApi } from "@/shared/api";
 import Button from "@/shared/ui/Button/Button.vue";
+import { FormField } from "@/shared/ui/Form";
+import { Select, type SelectOption } from "@/shared/ui/Select";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { Theme, type Preferences } from "@/shared/api/models/personal";
@@ -128,8 +101,17 @@ const userStore = useUserStore();
 const uiStore = useUiStore();
 const toast = useToast();
 
+const themeOptions: SelectOption[] = [
+  { value: Theme.Light, label: "Светлая" },
+  { value: Theme.Dark, label: "Темная" },
+];
+
 // Backend-allowed paging values
 const pagingOptions = [5, 10, 20, 30, 40, 50, 100, 200];
+const pagingSelectOptions: SelectOption[] = pagingOptions.map((opt) => ({
+  value: String(opt),
+  label: String(opt),
+}));
 
 // Settings form
 const settingsForm = ref({
@@ -186,8 +168,6 @@ const saveSettings = () => {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Inputs"
 @import "../AccountPage.styles"
 
@@ -196,20 +176,18 @@ const saveSettings = () => {
   background-color: $bg-element
   border-radius: $border-radius
 
+.pagination-group
+  margin: $small 0
+
+.pagination-group-label
+  margin-bottom: $tiny
+  color: $text-muted
+  font-size: $secondary-font-size
+
 .pagination-grid
   display: grid
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))
   gap: $small
-
-.pagination-item
-  display: flex
-  flex-direction: column
-
-.pagination-label
-  display: block
-  margin-bottom: $tiny
-  color: $text-muted
-  font-size: $secondary-font-size
 
 @media (max-width: 768px)
   .pagination-grid

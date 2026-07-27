@@ -25,12 +25,29 @@ internal class UpdateAttributeSchemaValidator : AbstractValidator<UpdateAttribut
                 .IsInEnum().WithMessage(ValidationError.Invalid));
 
         When(s => s.Specifications != null, () =>
+        {
             RuleForEach(s => s.Specifications)
                 .ChildRules(spec =>
                 {
                     spec.RuleFor(s => s.Title)
                         .NotEmpty().WithMessage(ValidationError.Empty)
                         .MaximumLength(100).WithMessage(ValidationError.Long);
-                }));
+
+                    spec.RuleFor(s => s.Type)
+                        .IsInEnum().WithMessage(ValidationError.Invalid);
+
+                    spec.RuleFor(s => s.Order)
+                        .GreaterThanOrEqualTo(0).WithMessage(ValidationError.Invalid);
+                });
+
+            RuleFor(s => s.Specifications)
+                .Custom((specifications, context) =>
+                {
+                    foreach (var error in AttributeSpecificationRules.Collect(specifications))
+                    {
+                        context.AddFailure(error);
+                    }
+                });
+        });
     }
 }

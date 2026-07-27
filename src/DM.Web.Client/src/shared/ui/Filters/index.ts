@@ -10,12 +10,7 @@ export {
 } from "./primitives";
 
 // Inputs
-export {
-  DateRangePicker,
-  NumericRangePicker,
-  OptionsList,
-  UserMultiSelect,
-} from "./inputs";
+export { DateRangePicker, NumericRangePicker, OptionsList } from "./inputs";
 
 // Bubbles
 export { FilterBubble, ExpandableBubble, BubblesRow } from "./bubbles";

@@ -49,6 +49,11 @@ public class UpdateRoom
     /// </summary>
     public bool? DiceEnabled { get; set; }
 
+    /// <summary>
+    /// Room is archived (hidden from the active rooms list, kept for history)
+    /// </summary>
+    public bool? IsArchived { get; set; }
+
     #region Internal fields (set by service)
 
     /// <summary>

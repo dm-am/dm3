@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using NpgsqlTypes;
 
 #nullable disable
 
@@ -45,7 +46,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
 
-                    b.Property<DateTimeOffset?>("UpdatedUtc")
+                    b.Property<DateTimeOffset?>("ModifiedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("UserId")
@@ -187,9 +188,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Info")
                         .HasColumnType("text");
-
-                    b.Property<bool>("IsHonorary")
-                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsNewbie")
                         .ValueGeneratedOnAddOrUpdate()
@@ -375,7 +373,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
-                    b.Property<DateTimeOffset?>("UpdatedUtc")
+                    b.Property<DateTimeOffset?>("ModifiedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("UserProfileNoteId");
@@ -487,6 +485,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("AuthorId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("ClosedReason")
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset?>("ClosedUtc")
                         .HasColumnType("timestamp with time zone");
@@ -978,7 +979,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("UpdatedByUserId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("UpdatedUtc")
+                    b.Property<DateTimeOffset>("ModifiedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("FundraisingGoalId");
@@ -993,7 +994,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             FundraisingGoalId = new Guid("00000000-0000-0000-0005-000000000001"),
                             CollectedAmount = 17000m,
                             GoalAmount = 50000m,
-                            UpdatedUtc = new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                            ModifiedUtc = new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
                         });
                 });
 
@@ -1390,17 +1391,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<int>("AccessPolicy")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("Alignment")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Appearance")
-                        .HasColumnType("text");
-
                     b.Property<Guid?>("AuthorId")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("Class")
-                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
@@ -1413,9 +1405,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("GameId")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("Inventory")
-                        .HasColumnType("text");
 
                     b.Property<bool>("IsDead")
                         .HasColumnType("boolean");
@@ -1436,20 +1425,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("Race")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Skills")
-                        .HasColumnType("text");
-
                     b.Property<int>("Status")
                         .HasColumnType("integer");
-
-                    b.Property<string>("Story")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Temper")
-                        .HasColumnType("text");
 
                     b.HasKey("CharacterId");
 
@@ -1522,28 +1499,13 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("DeletedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("DisableAlignment")
-                        .HasColumnType("boolean");
-
                     b.Property<int>("DraftVisibility")
                         .HasColumnType("integer");
 
                     b.Property<bool>("HideDiceResult")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("HideInventory")
-                        .HasColumnType("boolean");
-
                     b.Property<bool>("HidePostStats")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("HideSkills")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("HideStory")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("HideTemper")
                         .HasColumnType("boolean");
 
                     b.Property<DateTimeOffset?>("InactivityWarningUtc")
@@ -1819,7 +1781,18 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RoomId");
 
-                    b.ToTable("RoomAccesses");
+                    b.HasIndex("RoomId", "CharacterId")
+                        .IsUnique()
+                        .HasFilter("\"CharacterId\" IS NOT NULL");
+
+                    b.HasIndex("RoomId", "ReaderUserId")
+                        .IsUnique()
+                        .HasFilter("\"ReaderUserId\" IS NOT NULL");
+
+                    b.ToTable("RoomAccesses", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_RoomAccesses_TypedTarget", "(\"CharacterId\" IS NOT NULL AND \"ReaderUserId\" IS NULL) OR (\"CharacterId\" IS NULL AND \"ReaderUserId\" IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.PostReview", b =>
@@ -1924,6 +1897,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("RoomId")
                         .HasColumnType("uuid");
 
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasComputedColumnSql("to_tsvector('russian', regexp_replace(coalesce(\"GameText\", ''), '\\[private(=[^\\]]*)?\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))", true);
+
                     b.Property<bool>("SharePrivateWithAll")
                         .HasColumnType("boolean");
 
@@ -1937,6 +1915,10 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RoomId");
 
+                    b.HasIndex("SearchVector")
+                        .HasDatabaseName("IX_Posts_SearchVector")
+                        .HasAnnotation("Npgsql:IndexMethod", "gin");
+
                     b.ToTable("Posts");
                 });
 
@@ -1946,7 +1928,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("EditedUtc")
+                    b.Property<DateTimeOffset>("ModifiedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("EditorUserId")
@@ -1987,6 +1969,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("GameId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
@@ -2159,6 +2144,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
 
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasComputedColumnSql("to_tsvector('russian', coalesce(\"Text\", ''))", true);
+
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasColumnType("text");
@@ -2168,11 +2158,14 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("MessageId");
 
-                    b.HasIndex("ChatId");
+                    b.HasIndex("ChatId", "CreatedUtc", "MessageId");
 
                     b.HasIndex("DeletedByUserId");
 
                     b.HasIndex("GlobalChatEventId");
+
+                    b.HasIndex("SearchVector")
+                        .HasAnnotation("Npgsql:IndexMethod", "gin");
 
                     b.HasIndex("UserId");
 
@@ -2185,7 +2178,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("EditedUtc")
+                    b.Property<DateTimeOffset>("ModifiedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("EditorUserId")
@@ -2311,19 +2304,28 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("GuestEmail")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset?>("ResolvedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
-                    b.Property<Guid>("TargetId")
+                    b.Property<int>("Subtype")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TargetId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("TrackingToken")
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset?>("UpdatedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("UserId")
+                    b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("WarningId")
@@ -2458,6 +2460,8 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("AuthorId");
 
+                    b.HasIndex("ContainerId", "NotepadType", "OwnerId");
+
                     b.HasIndex("DeletedByUserId");
 
                     b.ToTable("NotepadCategories");
@@ -2507,7 +2511,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<DateTimeOffset?>("UpdatedUtc")
+                    b.Property<DateTimeOffset?>("ModifiedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("EntryId");
@@ -2515,6 +2519,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasIndex("AuthorId");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("ContainerId", "NotepadType", "OwnerId");
 
                     b.HasIndex("DeletedByUserId");
 
@@ -3881,15 +3887,11 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Target")
                         .WithMany("TicketsAgainst")
-                        .HasForeignKey("TargetId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("TargetId");
 
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Author")
                         .WithMany("TicketsFiled")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("UserId");
 
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Moderation.Warning", "Warning")
                         .WithMany()

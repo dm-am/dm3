@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using DM.Domain.Core.Dto;
 using DM.Domain.Moderation.Features.Warnings;
 using Microsoft.EntityFrameworkCore;
 using DbWarning = DM.Infrastructure.Persistence.Entities.Moderation.Warning;
@@ -82,5 +83,43 @@ internal class WarningRepository : IWarningRepository
         return await _dbContext.Warnings
             .Where(w => w.TargetUserId == userId && !w.IsRemoved)
             .SumAsync(w => w.Points, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<UserWarningSummary>> GetActiveWarningSummaries(CancellationToken ct = default)
+    {
+        var aggregates = await _dbContext.Warnings
+            .Where(w => !w.IsRemoved)
+            .GroupBy(w => w.TargetUserId)
+            .Select(g => new
+            {
+                UserId = g.Key,
+                Points = g.Sum(w => w.Points),
+                LastWarningUtc = g.Max(w => w.CreatedUtc)
+            })
+            // Users with only verbal (0-point) warnings are not violators
+            .Where(a => a.Points > 0)
+            .ToListAsync(ct);
+
+        if (aggregates.Count == 0)
+        {
+            return [];
+        }
+
+        var userIds = aggregates.Select(a => a.UserId).ToList();
+        var users = await _dbContext.Users
+            .Where(u => userIds.Contains(u.UserId))
+            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
+            .ToDictionaryAsync(u => u.UserId, ct);
+
+        return aggregates
+            .Where(a => users.ContainsKey(a.UserId))
+            .Select(a => new UserWarningSummary
+            {
+                User = users[a.UserId],
+                Points = a.Points,
+                LastWarningUtc = a.LastWarningUtc
+            })
+            .ToList();
     }
 }

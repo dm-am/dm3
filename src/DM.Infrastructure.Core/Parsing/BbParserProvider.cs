@@ -138,9 +138,11 @@ public class BbParserProvider : IBbParserProvider
         new BbParserWrapper(new BbParser(DefaultTags.With(Head).Build(),
             BbParser.SecuritySubstitutions, InfoSubstitutions)));
 
-    // Chat/Message context: base tags + mod
+    // Direct/group message context: base tags only — no [mod] (private
+    // chats have no moderation, so [mod] would let a user impersonate a
+    // moderator) and no [private].
     private static readonly Lazy<IBbParser> ChatMessageParser = new(() =>
-        new BbParserWrapper(new BbParser(DefaultTags.With(Mod).Build(),
+        new BbParserWrapper(new BbParser(DefaultTags.Build(),
             BbParser.SecuritySubstitutions, ChatMessageSubstitutions)));
 
     // General chat context: safe tags + preformatted + mod
@@ -170,10 +172,6 @@ public class BbParserProvider : IBbParserProvider
         new BbParserWrapper(new BbParser(DefaultTags.With(ModAuthorEdit).Build(),
             BbParser.SecuritySubstitutions, CommonSubstitutions)));
 
-    private static readonly Lazy<IBbParser> ChatAuthorEditParser = new(() =>
-        new BbParserWrapper(new BbParser(DefaultTags.With(ModAuthorEdit).Build(),
-            BbParser.SecuritySubstitutions, ChatMessageSubstitutions)));
-
     private static readonly Lazy<IBbParser> GeneralChatAuthorEditParser = new(() =>
         new BbParserWrapper(new BbParser(DefaultSafeTags.With(Preformatted, ModAuthorEdit).Build(),
             BbParser.SecuritySubstitutions, CommonSubstitutions)));
@@ -185,28 +183,11 @@ public class BbParserProvider : IBbParserProvider
     public IBbParser CurrentInfo => InfoParser.Value;
 
     /// <inheritdoc />
-    public IBbParser CurrentChatMessage => ChatMessageParser.Value;
-
-    /// <inheritdoc />
-    public IBbParser CurrentPost => PostParser.Value;
-
-    /// <inheritdoc />
-    public IBbParser CurrentSafePost => SafePostParser.Value;
-
-    /// <inheritdoc />
-    public IBbParser CurrentSafeRating => SafeRatingParser.Value;
-
-    /// <inheritdoc />
-    public IBbParser CurrentGeneralChat => GeneralChatMessageParser.Value;
-
-    /// <inheritdoc />
     public IBbParser GetForSurface(BbSurface surface) => surface switch
     {
         // Game posts: [private] allowed, [mod] not.
         BbSurface.GamePost => PostParser.Value,
-        // Forum topics: [mod] allowed, [private] not.
-        BbSurface.ForumTopic => CommonParser.Value,
-        // All comments (forum / blog / game): [mod] allowed, [private] not.
+        // All comments / topic bodies (forum / blog / game): [mod] allowed, [private] not.
         BbSurface.Comment => CommonParser.Value,
         // Global chat: [mod] allowed, [private] not, safe tag set.
         BbSurface.GlobalChatMessage => GeneralChatMessageParser.Value,
@@ -228,11 +209,12 @@ public class BbParserProvider : IBbParserProvider
     public IBbParser GetForAuthorEdit(BbSurface surface) => surface switch
     {
         BbSurface.GamePost => PostAuthorEditParser.Value,
-        BbSurface.ForumTopic => CommonAuthorEditParser.Value,
         BbSurface.Comment => CommonAuthorEditParser.Value,
         BbSurface.GlobalChatMessage => GeneralChatAuthorEditParser.Value,
         BbSurface.Profile => InfoParser.Value, // profile has neither [mod] nor [private]
-        BbSurface.DirectMessage => ChatAuthorEditParser.Value,
+        // Direct/group messages have neither [mod] nor [private] to round-trip,
+        // so the author-edit path reuses the display parser (as Profile does).
+        BbSurface.DirectMessage => ChatMessageParser.Value,
         _ => CommonAuthorEditParser.Value
     };
 }

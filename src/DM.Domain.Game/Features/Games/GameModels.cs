@@ -84,7 +84,7 @@ public class GameRecruitment
     public DateTimeOffset? StartedUtc { get; set; }
 
     /// <summary>
-    /// Whether this is a subsequent recruitment (донабор, RecruitmentCount >= 2)
+    /// Whether this is a subsequent recruitment ("донабор", RecruitmentCount >= 2)
     /// </summary>
     public bool IsSubsequent { get; set; }
 }
@@ -123,11 +123,6 @@ public class GameAssistantInfo
     /// Whether user is a newbie (less than 100 posts) - affects name color
     /// </summary>
     public bool IsNewbie { get; set; }
-
-    /// <summary>
-    /// Honorary status (visual badge [П] for former staff)
-    /// </summary>
-    public bool IsHonorary { get; set; }
 }
 
 /// <summary>
@@ -376,6 +371,13 @@ public class Game
     /// Active characters info for [X/Y] tooltip display
     /// </summary>
     public IEnumerable<ActiveCharacterInfo> ActiveCharacters { get; set; } = [];
+
+    /// <summary>
+    /// Characters owned by the player targeted by <see cref="GamesQuery.PlayerUsername"/>.
+    /// Null when the list query had no player filter (only the filtered list path
+    /// hydrates this - see GameRepository.GetGames).
+    /// </summary>
+    public IEnumerable<PlayerCharacterInfo>? FilteredPlayerCharacters { get; set; }
 }
 
 /// <summary>
@@ -392,6 +394,38 @@ public class ActiveCharacterInfo
     /// Owner's username
     /// </summary>
     public string OwnerUsername { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Character info of the player targeted by the games list player filter
+/// (name + status for the profile games table)
+/// </summary>
+public class PlayerCharacterInfo
+{
+    /// <summary>
+    /// Character name
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Character status
+    /// </summary>
+    public CharacterStatus Status { get; set; }
+
+    /// <summary>
+    /// Character died in game (meaningful when Status = Retired)
+    /// </summary>
+    public bool IsDead { get; set; }
+
+    /// <summary>
+    /// Player voluntarily left the game (meaningful when Status = Retired)
+    /// </summary>
+    public bool IsPlayerLeft { get; set; }
+
+    /// <summary>
+    /// Player was exiled by the master (meaningful when Status = Retired)
+    /// </summary>
+    public bool IsPlayerExiled { get; set; }
 }
 
 /// <summary>
@@ -502,6 +536,11 @@ public class Room
     public RoomAccessType AccessType { get; set; }
 
     /// <summary>
+    /// Room is archived (hidden from the active rooms list, kept for history)
+    /// </summary>
+    public bool IsArchived { get; set; }
+
+    /// <summary>
     /// Room access links (characters and readers)
     /// </summary>
     public IEnumerable<RoomAccess> Accesses { get; set; } = [];
@@ -602,18 +641,8 @@ public class CharacterShort
     public string Name { get; set; } = null!;
 
     /// <summary>
-    /// Character race
-    /// </summary>
-    public string Race { get; set; } = null!;
-
-    /// <summary>
-    /// Character class
-    /// </summary>
-    public string Class { get; set; } = null!;
-
-    /// <summary>
-    /// Character avatar (3 варианта). Null URLs если аватар не загружен.
-    /// Симметрично с <see cref="GeneralUser.Picture"/>.
+    /// Character avatar (3 variants). Null URLs if no avatar is uploaded.
+    /// Symmetric with <see cref="GeneralUser.Picture"/>.
     /// </summary>
     public AvatarPicture Picture { get; set; } = new();
 
@@ -662,6 +691,13 @@ public class CharacterAttribute
     /// Attribute modifier
     /// </summary>
     public int? Modifier { get; set; }
+
+    /// <summary>
+    /// Constraint type of the backing specification. Set by the value filler
+    /// so the API layer can server-render <see cref="AttributeSpecificationType.BbCode"/>
+    /// values instead of emitting the raw stored BBCode string.
+    /// </summary>
+    public AttributeSpecificationType Type { get; set; }
 
     /// <summary>
     /// Value is inconsistent with specification
@@ -720,6 +756,20 @@ public class Character
     public int TotalPostsCount { get; set; }
 
     /// <summary>
+    /// Timestamp of the character's most recent post (null if it never posted).
+    /// Projected as an aggregate subquery, not a collection join.
+    /// </summary>
+    public DateTimeOffset? LastPostUtc { get; set; }
+
+    /// <summary>
+    /// Value of the character's descriptor attribute ("Класс" on the game main
+    /// page). Populated by CharacterAttributeValueFiller from the schema's
+    /// descriptor specification; null when the schema has no descriptor spec or
+    /// the character has no value for it.
+    /// </summary>
+    public string? Descriptor { get; set; }
+
+    /// <summary>
     /// Character author
     /// </summary>
     public GeneralUser Author { get; set; } = null!;
@@ -730,50 +780,10 @@ public class Character
     public string Name { get; set; } = null!;
 
     /// <summary>
-    /// Character race
-    /// </summary>
-    public string Race { get; set; } = null!;
-
-    /// <summary>
-    /// Character class
-    /// </summary>
-    public string Class { get; set; } = null!;
-
-    /// <summary>
-    /// Character avatar (3 варианта). Null URLs если аватар не загружен.
-    /// Симметрично с <see cref="GeneralUser.Picture"/>.
+    /// Character avatar (3 variants). Null URLs if no avatar is uploaded.
+    /// Symmetric with <see cref="GeneralUser.Picture"/>.
     /// </summary>
     public AvatarPicture Picture { get; set; } = new();
-
-    /// <summary>
-    /// Character appearance
-    /// </summary>
-    public string Appearance { get; set; } = null!;
-
-    /// <summary>
-    /// Character temper
-    /// </summary>
-    public string Temper { get; set; } = null!;
-
-    /// <summary>
-    /// Character story
-    /// </summary>
-    public string Story { get; set; } = null!;
-
-    /// <summary>
-    /// Character skills
-    /// </summary>
-    public string Skills { get; set; } = null!;
-
-    /// <summary>
-    /// Character inventory
-    /// </summary>
-    public string Inventory { get; set; } = null!;
-
-    /// <summary>
-    /// Character alignment
-    /// </summary>
-    public Alignment? Alignment { get; set; }
 
     /// <summary>
     /// Character is NPC (non-player's character)
@@ -973,7 +983,7 @@ public class AttributeSpecification
     /// <summary>
     /// Order number
     /// </summary>
-    public int OrderNumber { get; set; }
+    public int Order { get; set; }
 
     /// <summary>
     /// Attribute type
@@ -986,17 +996,7 @@ public class AttributeSpecification
     public bool Required { get; set; }
 
     /// <summary>
-    /// Minimum value (for number/list types)
-    /// </summary>
-    public int? MinValue { get; set; }
-
-    /// <summary>
-    /// Maximum value (for number/list types)
-    /// </summary>
-    public int? MaxValue { get; set; }
-
-    /// <summary>
-    /// Maximum length (for string types)
+    /// Maximum length (for text/number/BBCode types)
     /// </summary>
     public int? MaxLength { get; set; }
 
@@ -1088,34 +1088,9 @@ public class GameDetails : Game
     public string Notepad { get; set; } = null!;
 
     /// <summary>
-    /// Only GM and character author can see character temper
-    /// </summary>
-    public bool HideTemper { get; set; }
-
-    /// <summary>
-    /// Only GM and character author can see character skills
-    /// </summary>
-    public bool HideSkills { get; set; }
-
-    /// <summary>
-    /// Only GM and character author can see character inventory
-    /// </summary>
-    public bool HideInventory { get; set; }
-
-    /// <summary>
-    /// Only GM and character author can see character story
-    /// </summary>
-    public bool HideStory { get; set; }
-
-    /// <summary>
     /// Only GM and post author can see dice roll result
     /// </summary>
     public bool HideDiceResult { get; set; }
-
-    /// <summary>
-    /// Disable character alignment
-    /// </summary>
-    public bool DisableAlignment { get; set; }
 
     /// <summary>
     /// Any user can read private messages within posts
@@ -1131,6 +1106,28 @@ public class GameDetails : Game
     /// Attribute schema details
     /// </summary>
     public AttributeSchema AttributeSchema { get; set; } = null!;
+
+    /// <summary>
+    /// Total number of posts across all rooms of the game ("Постов всего").
+    /// Computed with a batched aggregate query on the details read path.
+    /// </summary>
+    public int TotalPostsCount { get; set; }
+
+    /// <summary>
+    /// Number of posts authored by the game master ("Постов мастера").
+    /// Computed with a batched aggregate query on the details read path.
+    /// </summary>
+    public int MasterPostsCount { get; set; }
+
+    /// <summary>
+    /// Timestamp of the game master's most recent post (null if none).
+    /// </summary>
+    public DateTimeOffset? LastMasterPostUtc { get; set; }
+
+    /// <summary>
+    /// Whether any room of the game has dice rolling enabled ("Поддержка кубика").
+    /// </summary>
+    public bool DiceSupported { get; set; }
 }
 
 /// <summary>

@@ -2,29 +2,37 @@
 /**
  * Tabs — accessible horizontal tab navigation.
  *
- * Visual: the active tab renders with the same typography as a BlockTitle
- * (uppercase, bold, letter-spacing 0.5px, color `$heading`) — so it reads
- * as a section header. Inactive tabs share the casing and tracking but
- * sit at non-bold weight in `$text-muted`. No underline, no box, no
- * marker glyph — the BlockTitle-equivalent weight + color carry the
- * active state, reinforced by the FLIP shuffle always placing the active
- * tab at position 0.
+ * Visual: unified with the forum board strip (pages/forum/
+ * BoardNavigation.vue) — the two must look identical: a compact
+ * left-aligned row of items with " | " separators in base ($font-size) typography.
+ * Items behave like the site's regular links: `$link` color,
+ * `$link-hover` + underline on hover; the active tab keeps the link
+ * color and is marked by semibold weight (underline only on hover —
+ * underlines are never an active-state indicator on this site).
  *
  * Active-first behavior: the selected tab is always rendered at visual
  * (and DOM) index 0; the rest follow in their declared order. When the
  * selection changes, a manual FLIP pass animates each moved button from
- * its old bounding box to the new one over 280ms.
+ * its old bounding box to the new one over 280ms. Only the buttons are
+ * animated: the " | " separators are visually identical glyphs, so they
+ * simply re-render at their new slots without drawing attention (a
+ * separator cannot be transform-animated anyway without breaking the
+ * strip's wrap-at-separator behavior).
  *
  * Accessibility: ARIA tablist/tab pattern. Roving `tabindex` keeps only
- * the active tab in the Tab-key cycle. Arrow / Home / End walk the same
- * `orderedTabs` the DOM renders, so keyboard navigation always matches
- * what the user sees.
+ * the active tab in the Tab-key cycle. Arrow / Home / End walk the
+ * visual order the DOM renders (= orderedTabs), so keyboard navigation
+ * always matches what the user sees. Each tab button gets a stable `id`
+ * and `aria-controls`; use the exposed `tabId`/`panelId` helpers (via a
+ * template ref) to wire the matching `role="tabpanel"` element on the
+ * caller's side: `id="panelId(active)"` + `aria-labelledby="tabId(active)"`.
  *
  * Usage:
- *   <Tabs v-model="active" :tabs="tabs" />
+ *   <Tabs ref="tabsRef" v-model="active" :tabs="tabs" />
  *   const tabs = [{ value: 'about', label: 'О себе' }, ...]
  */
-import { computed, onBeforeUpdate, onUpdated, ref } from "vue";
+import { computed, ref } from "vue";
+import { useFlipReorder } from "@/shared/lib/composables/useFlipReorder";
 
 export interface TabItem<V extends string = string> {
   value: V;
@@ -41,9 +49,42 @@ const props = withDefaults(
     tabs: readonly TabItem<V>[];
     /** Optional aria-label for the tablist. */
     ariaLabel?: string;
+    /**
+     * Prefix used to build per-tab / per-panel DOM ids: `${idPrefix}-tab-${value}`
+     * and `${idPrefix}-panel-${value}`. Defaults to a random instance id so
+     * multiple <Tabs> on the same page never collide.
+     */
+    idPrefix?: string;
+    /**
+     * Visual variant. "links" (default): a compact row of link-styled items
+     * with " | " separators — the forum board-strip idiom. "headings": the
+     * strip reads as a row of page-title-sized section headings — the active
+     * tab matches <PageTitle> (brown $heading, uppercase, bold), the others
+     * the same but greyed. Used by the profile page, where each tab is a
+     * section of the profile and the strip doubles as its section heading.
+     */
+    variant?: "links" | "headings";
   }>(),
-  { ariaLabel: "Разделы" },
+  {
+    ariaLabel: "Разделы",
+    idPrefix: () => `tabs-${Math.random().toString(36).slice(2, 9)}`,
+    variant: "links",
+  },
 );
+
+/** Tab-button DOM id for a given tab value — also usable by the caller
+ * (via `tabId`) to wire `aria-labelledby` on its own tabpanel element. */
+function tabId(value: V): string {
+  return `${props.idPrefix}-tab-${value}`;
+}
+
+/** Tabpanel DOM id for a given tab value — the caller sets this as the
+ * `id` on its own tabpanel element and points `aria-controls` here. */
+function panelId(value: V): string {
+  return `${props.idPrefix}-panel-${value}`;
+}
+
+defineExpose({ tabId, panelId });
 
 const emit = defineEmits<{
   "update:modelValue": [value: V];
@@ -108,139 +149,120 @@ function onKeydown(event: KeyboardEvent, currentIndex: number) {
   }
 }
 
-// ───────────────────────────── FLIP animation ─────────────────────────────
-// Map keyed by DOM element so we can correlate the same button across the
-// re-order. `onBeforeUpdate` runs while the DOM is still in the OLD layout;
-// we snapshot rects there. `onUpdated` runs after Vue commits the new layout;
-// we measure again and animate the delta back to identity.
-const FLIP_DURATION_MS = 280;
-const FLIP_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
-let prevRects: Map<HTMLButtonElement, DOMRect> | null = null;
-
-// Track in-flight animations so a rapid reorder cancels the stale one
-// and starts fresh — no stuck transforms, no animation pile-up.
-const activeAnims = new WeakMap<HTMLButtonElement, Animation>();
-
-onBeforeUpdate(() => {
-  if (!root.value) return;
-  prevRects = new Map();
-  for (const btn of root.value.querySelectorAll<HTMLButtonElement>(
-    '[role="tab"]',
-  )) {
-    prevRects.set(btn, btn.getBoundingClientRect());
-  }
-});
-
-onUpdated(() => {
-  if (!prevRects || !root.value) return;
-  for (const btn of root.value.querySelectorAll<HTMLButtonElement>(
-    '[role="tab"]',
-  )) {
-    const oldRect = prevRects.get(btn);
-    if (!oldRect) continue;
-    const newRect = btn.getBoundingClientRect();
-    const dx = oldRect.left - newRect.left;
-    const dy = oldRect.top - newRect.top;
-    if (dx === 0 && dy === 0) continue;
-
-    // Cancel any animation still running on this button from a previous
-    // rapid reorder. Otherwise we'd stack interpolations.
-    activeAnims.get(btn)?.cancel();
-
-    // Web Animations API: deterministic, decoupled from the CSS transition
-    // pipeline (no race with the cascade or with `.tab`'s color/border
-    // transitions). The element is at its NEW logical position after
-    // Vue's patch; we play it FROM the inverted offset TO identity.
-    const anim = btn.animate(
-      [
-        { transform: `translate(${dx}px, ${dy}px)` },
-        { transform: "translate(0, 0)" },
-      ],
-      {
-        duration: FLIP_DURATION_MS,
-        easing: FLIP_EASING,
-        fill: "none",
-      },
-    );
-    activeAnims.set(btn, anim);
-    anim.finished
-      .then(() => {
-        if (activeAnims.get(btn) === anim) activeAnims.delete(btn);
-      })
-      .catch(() => {
-        /* cancelled — already replaced by a fresh animation */
-      });
-  }
-  prevRects = null;
+// FLIP animation on reorder + focus restoration (the browser drops focus
+// to <body> when Vue's keyed diff detaches the focused button — restore it
+// onto the active tab, the roving tabindex target). Shared mechanics live
+// in useFlipReorder (also used by the forum BoardNavigation strip).
+useFlipReorder({
+  root,
+  itemSelector: '[role="tab"]',
+  focusSelector: '[role="tab"][tabindex="0"]',
 });
 </script>
 
 <template>
-  <div ref="root" class="tabs" role="tablist" :aria-label="ariaLabel">
-    <!-- Each iteration renders a <button> followed by a real space text
-         node. The space is a DOM text-node sibling (NOT inline-content of
-         the button, which the renderer would collapse). The Selection API
-         captures sibling text nodes, so select-all-copy yields
-         "О себе Игры Блоги …" with real spaces between labels. -->
+  <div
+    ref="root"
+    class="tabs"
+    :class="'tabs--' + variant"
+    role="tablist"
+    :aria-label="ariaLabel"
+  >
+    <!-- The separator is a real " | " text node, so a select-all copy of
+         the strip reads "О себе | Игры | ..." with actual spaces. Those
+         spaces are also the strip's only wrap opportunities (buttons are
+         nowrap). aria-hidden keeps the decorative separators out of the
+         tablist's accessible content. -->
     <template v-for="(tab, index) in orderedTabs" :key="tab.value">
+      <span v-if="index > 0" class="separator" aria-hidden="true">{{
+        " | "
+      }}</span>
       <button
         :ref="(el) => setRef(el, index)"
+        :id="tabId(tab.value)"
         type="button"
         role="tab"
         class="tab"
         :class="{ active: tab.value === modelValue }"
         :aria-selected="tab.value === modelValue"
+        :aria-controls="panelId(tab.value)"
         :tabindex="tab.value === modelValue ? 0 : -1"
         @click="selectTab(tab.value)"
         @keydown="onKeydown($event, index)"
       >
-        {{ tab.label }}</button
-      >{{ " " }}
+        {{ tab.label }}
+      </button>
     </template>
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-
+// Inline formatting context, NOT flex: flex blockifies its items, so a
+// select-all copy would serialize each item on its own line. With inline
+// items the copy reads "О себе | Игры | ..." on one line. Left-aligned
+// compact row — spacing comes only from the " | " separators, never
+// from justification.
 .tabs
   display: block
   margin-bottom: $small
-  line-height: $control-height
+
+.separator
+  color: $text-muted
+  font-size: $font-size
 
 .tab
+  // inline-block: keeps the label atomic (no internal wrapping) and
+  // makes the FLIP transform applicable.
   display: inline-block
-  padding: $small 0
-  margin-right: $big
+  padding: 0
   font-size: $font-size
   font-family: inherit
-  font-weight: bold
-  letter-spacing: 0.5px
-  text-transform: uppercase
-  color: $text-muted
+  font-weight: normal
+  color: $link
   background: none
   border: none
   cursor: pointer
   white-space: nowrap
-  // Hard kill any inherited text-decoration so the active tab can never
-  // pick up an underline from a global anchor/button rule.
+  // Hard kill any inherited text-decoration so a tab can never pick up
+  // an underline from a global anchor/button rule outside :hover.
   text-decoration: none
-  transition: color $transition-fast
 
-  // Every tab — active or not — uses the same BlockTitle typography
-  // (uppercase, bold, letter-spacing 0.5px). The active / inactive /
-  // hover states differ ONLY by color, which keeps the strip's geometry
-  // stable through clicks and through the FLIP shuffle.
-  &:hover:not(.active)
-    color: $text
+  &:hover
+    color: $link-hover
+    text-decoration: underline
 
-  // Active tab matches BlockTitle (the "Контактная информация" h2 above the
-  // strip) — same weight + tracking + casing AND `$heading` color, so it
-  // reads as a section header for the panel below it.
+  // Active tab: link color + semibold — same idiom as the forum board
+  // strip's current item; underline stays hover-only.
   &.active
-    color: $heading
+    font-weight: 600
 
   &:focus-visible
     outline: 2px solid $border-focus
     outline-offset: 2px
+
+// "headings" variant: the strip reads as a row of page-title-sized section
+// headings (the profile page — each tab is a section of the profile, and the
+// strip doubles as the section heading). The active tab matches the page
+// <PageTitle> exactly (brown $heading, $title-font-size, bold, uppercase,
+// 0.5px tracking); the rest keep the same format greyed ($heading-alt), so
+// the strip reads as the current section's heading among its muted siblings.
+.tabs--headings
+  .separator
+    font-size: $title-font-size
+    color: $heading-alt
+
+  .tab
+    font-size: $title-font-size
+    font-weight: bold
+    text-transform: uppercase
+    letter-spacing: 0.5px
+    color: $heading-alt
+
+    &:hover
+      color: $heading
+      text-decoration: none
+
+    &.active
+      font-weight: bold
+      color: $heading
 </style>

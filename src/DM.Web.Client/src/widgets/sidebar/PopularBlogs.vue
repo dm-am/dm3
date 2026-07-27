@@ -6,7 +6,14 @@
       :lines="10"
     />
     <SecondaryText v-else-if="store.popularBlogs === null">
-      Не удалось загрузить
+      Не удалось загрузить.
+      <button
+        type="button"
+        class="retry-link"
+        @click="store.fetchPopularBlogs(true)"
+      >
+        Повторить
+      </button>
     </SecondaryText>
     <SecondaryText v-else-if="store.popularBlogs.length === 0">
       Популярных блогов пока нет
@@ -20,11 +27,9 @@
         :always-show-counters="!userStore.user"
       />
     </template>
-    <div class="separator">
-      - - - - - - - - - - - - - - - - - - - - - - - - - -
-    </div>
+    <DashSeparator spacing="tiny" width="75%" />
     <div>
-      <span class="muted">- </span>
+      <span class="muted" aria-hidden="true">- </span>
       <router-link
         class="forward"
         :to="{
@@ -45,6 +50,7 @@ import BlogLink from "./BlogLink.vue";
 import { useBlogsStore } from "@/entities/blog";
 import { useUserStore } from "@/entities/user";
 import { onMounted } from "vue";
+import { DashSeparator } from "@/shared/ui/DashSeparator";
 
 const store = useBlogsStore();
 const userStore = useUserStore();
@@ -53,7 +59,7 @@ onMounted(() => store.fetchPopularBlogs());
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 
 .muted
   color: $text-muted
@@ -61,6 +67,6 @@ onMounted(() => store.fetchPopularBlogs());
 .forward
   font-weight: bold
 
-.separator
-  color: $text-muted
+.retry-link
+  +inline-link-button
 </style>

@@ -30,18 +30,18 @@ public class Upload : ISoftDeletable
     public DateTimeOffset? ConfirmedUtc { get; set; }
 
     /// <summary>
-    /// Target user (для Type=UserAvatar). Mutually exclusive с TargetCharacterId и TargetPostId.
-    /// Type-discriminated по <see cref="Type"/>; CHECK-constraint в БД обеспечивает консистентность.
+    /// Target user (for Type=UserAvatar). Mutually exclusive with TargetCharacterId and TargetPostId.
+    /// Type-discriminated by <see cref="Type"/>; a DB CHECK constraint enforces consistency.
     /// </summary>
     public Guid? TargetUserId { get; set; }
 
     /// <summary>
-    /// Target character (для Type=CharacterAvatar). Mutually exclusive с TargetUserId и TargetPostId.
+    /// Target character (for Type=CharacterAvatar). Mutually exclusive with TargetUserId and TargetPostId.
     /// </summary>
     public Guid? TargetCharacterId { get; set; }
 
     /// <summary>
-    /// Target post (для Type=PostAttachment). Mutually exclusive с TargetUserId и TargetCharacterId.
+    /// Target post (for Type=PostAttachment). Mutually exclusive with TargetUserId and TargetCharacterId.
     /// </summary>
     public Guid? TargetPostId { get; set; }
 
@@ -77,18 +77,18 @@ public class Upload : ISoftDeletable
     public long SizeBytes { get; set; }
 
     /// <summary>
-    /// S3 object key. Hash-based, immutable: для thumbnails ключи выводятся
-    /// заменой расширения и добавлением суффикса (_m/_s). Используется
-    /// GC и cleanup-логикой; FilePath/MediumFilePath/SmallFilePath — public URL
-    /// для рендера.
+    /// S3 object key. Hash-based, immutable: thumbnail keys are derived
+    /// by replacing the extension and adding a suffix (_m/_s). Used by
+    /// GC and cleanup logic; FilePath/MediumFilePath/SmallFilePath are public URLs
+    /// for rendering.
     /// </summary>
     [MaxLength(500)]
     public string ObjectKey { get; set; } = null!;
 
     /// <summary>
-    /// Public URL к source-файлу (≤1024 px, EXIF-stripped). Один файл per
-    /// upload — thumbnail-варианты генерируются on-the-fly через imgproxy
-    /// при serving, не пре-генерируются.
+    /// Public URL to the source file (≤1024 px, EXIF-stripped). One file per
+    /// upload — thumbnail variants are generated on-the-fly via imgproxy
+    /// at serving time, not pre-generated.
     /// </summary>
     [MaxLength(500)]
     public string? FilePath { get; set; }
@@ -120,8 +120,8 @@ public class Upload : ISoftDeletable
     [ForeignKey(nameof(DeletedByUserId))]
     public virtual User? DeletedBy { get; set; }
 
-    // Navigation-свойства для target-колонок не определены умышленно:
-    // FK-constraints настраиваются через OnModelCreating, а navigation
-    // на стороне Upload не нужны (consumers всегда ходят с owner-side
-    // через User.AvatarUploadId / Character.AvatarUploadId).
+    // Navigation properties for the target columns are intentionally not defined:
+    // FK constraints are configured via OnModelCreating, and navigations
+    // on the Upload side are not needed (consumers always come from the owner side
+    // via User.AvatarUploadId / Character.AvatarUploadId).
 }

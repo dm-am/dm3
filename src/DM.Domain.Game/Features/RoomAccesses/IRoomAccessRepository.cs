@@ -37,6 +37,11 @@ public interface IRoomAccessRepository
     /// </summary>
     Task<Guid?> FindCharacterGameId(Guid characterId);
 
+    /// <summary>
+    /// Check whether an access for the same room and target (character or reader) already exists
+    /// </summary>
+    Task<bool> AccessExists(Guid roomId, Guid? characterId, Guid? readerUserId);
+
     #endregion
 
     #region Write

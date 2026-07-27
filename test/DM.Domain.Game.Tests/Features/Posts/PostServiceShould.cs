@@ -33,6 +33,8 @@ public class PostServiceShould : UnitTestBase
     private readonly Mock<IIntentionManager> _intentionManager;
     private readonly Mock<IRoomRepository> _roomRepository;
     private readonly Mock<IPostRepository> _repository;
+    private readonly Mock<IDiceRollRepository> _diceRollRepository;
+    private readonly Mock<IDiceRoller> _diceRoller;
     private readonly Mock<IUnreadCountersRepository> _unreadCountersRepository;
     private readonly Mock<IEventProducer> _producer;
     private readonly Mock<IIdentityProvider> _identityProvider;
@@ -67,7 +69,8 @@ public class PostServiceShould : UnitTestBase
 
         _repository = Mock<IPostRepository>();
 
-        var diceRollRepository = Mock<IDiceRollRepository>();
+        _diceRollRepository = Mock<IDiceRollRepository>();
+        _diceRoller = Mock<IDiceRoller>();
 
         _unreadCountersRepository = Mock<IUnreadCountersRepository>();
 
@@ -90,7 +93,8 @@ public class PostServiceShould : UnitTestBase
             dateTimeProvider.Object,
             guidFactory.Object,
             _repository.Object,
-            diceRollRepository.Object,
+            _diceRollRepository.Object,
+            _diceRoller.Object,
             _unreadCountersRepository.Object,
             _producer.Object,
             _identityProvider.Object);
@@ -146,6 +150,72 @@ public class PostServiceShould : UnitTestBase
         await _service.CreateAsync(createPost);
 
         _producer.Verify(p => p.SendAsync(It.Is<IEnumerable<EventType>>(events => events.Contains(EventType.NewPost)), postId), Times.Once);
+    }
+
+    [Fact]
+    public async Task RollAndPersistDiceWhenRoomDiceEnabled()
+    {
+        var roomId = Guid.NewGuid();
+        var postId = Guid.NewGuid();
+        var createPost = new CreatePost
+        {
+            RoomId = roomId,
+            GameText = "Test post",
+            DiceRolls = new[] { new CreatePostDiceRoll { EdgesCount = 20, DiceCount = 1 } }
+        };
+        var room = new RoomToUpdate
+        {
+            Id = roomId,
+            Pendencies = new List<PostPendency>(),
+            Accesses = new List<RoomAccess>(),
+            Game = new GameDto(),
+            Settings = new RoomSettings { DiceEnabled = true }
+        };
+        var createdPost = new Post { Id = postId, RoomId = roomId };
+        var rolledDice = new List<DiceRoll> { new() { Id = Guid.NewGuid(), PostId = postId, EdgesCount = 20 } };
+
+        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
+        _repository.Setup(r => r.Create(It.IsAny<CreatePostEntity>())).ReturnsAsync(createdPost);
+        _diceRoller
+            .Setup(r => r.Roll(postId, It.IsAny<DateTimeOffset>(), It.IsAny<IEnumerable<CreatePostDiceRoll>>()))
+            .Returns(rolledDice);
+
+        var result = await _service.CreateAsync(createPost);
+
+        _diceRoller.Verify(r => r.Roll(postId, It.IsAny<DateTimeOffset>(),
+            It.Is<IEnumerable<CreatePostDiceRoll>>(s => s.Count() == 1)), Times.Once);
+        _diceRollRepository.Verify(r => r.CreateAsync(rolledDice), Times.Once);
+        result.DiceRolls.Should().BeSameAs(rolledDice);
+    }
+
+    [Fact]
+    public async Task NotPersistDiceWhenRoomDiceDisabled()
+    {
+        var roomId = Guid.NewGuid();
+        var createPost = new CreatePost
+        {
+            RoomId = roomId,
+            GameText = "Test post",
+            DiceRolls = new[] { new CreatePostDiceRoll { EdgesCount = 20, DiceCount = 1 } }
+        };
+        var room = new RoomToUpdate
+        {
+            Id = roomId,
+            Pendencies = new List<PostPendency>(),
+            Accesses = new List<RoomAccess>(),
+            Game = new GameDto(),
+            Settings = new RoomSettings { DiceEnabled = false }
+        };
+
+        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
+        _repository.Setup(r => r.Create(It.IsAny<CreatePostEntity>()))
+            .ReturnsAsync(new Post { Id = Guid.NewGuid(), RoomId = roomId });
+
+        await _service.CreateAsync(createPost);
+
+        _diceRoller.Verify(r => r.Roll(It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(),
+            It.IsAny<IEnumerable<CreatePostDiceRoll>>()), Times.Never);
+        _diceRollRepository.Verify(r => r.CreateAsync(It.IsAny<IEnumerable<DiceRoll>>()), Times.Never);
     }
 
     [Fact]

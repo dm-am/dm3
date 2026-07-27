@@ -3,69 +3,14 @@
  * Shared error page component for HTTP error states.
  *
  * Layout:
- *   1. «Упс! {title}!» — playful heading with specific error
+ *   1. "Упс! {title}!" — playful heading with specific error
  *   2. Error illustration (per code or general-error.png)
  *   3. Description text
  *   4. Action links (back / home) in a row
  */
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-
-import img400 from "@/assets/images/errors/400.png";
-import img401 from "@/assets/images/errors/401.png";
-import img403 from "@/assets/images/errors/403.png";
-import img500 from "@/assets/images/errors/500.png";
-import imgGeneral from "@/assets/images/errors/general-error.png";
-
-interface ErrorConfig {
-  title: string;
-  description: string;
-  showBack?: boolean;
-}
-
-const errorDefaults: Record<number, ErrorConfig> = {
-  400: {
-    title: "Неверный запрос",
-    description:
-      "Сервер не понял запрос. Проверьте введенные данные и попробуйте снова.",
-  },
-  401: {
-    title: "Требуется авторизация",
-    description:
-      "Эта страница доступна только авторизованным пользователям. Войдите в аккаунт или зарегистрируйтесь.",
-    showBack: false,
-  },
-  403: {
-    title: "Доступ запрещен",
-    description:
-      "У вас недостаточно прав для просмотра этой страницы. Возможно, доступ ограничен автором или администрацией.",
-  },
-  404: {
-    title: "Страница не найдена",
-    description:
-      "Такой страницы не существует. Возможно, она была перемещена или удалена.",
-  },
-  409: {
-    title: "Конфликт данных",
-    description:
-      "При обработке запроса произошел конфликт. Попробуйте повторить действие.",
-  },
-  410: {
-    title: "Страница удалена",
-    description:
-      "Этой страницы больше не существует. Возможно, она была удалена автором или модератором.",
-  },
-  500: {
-    title: "Произошла ошибка сервера",
-    description: "Что-то сломалось на нашей стороне. Попробуйте немного позже.",
-  },
-};
-
-const fallbackConfig: ErrorConfig = {
-  title: "Неизвестная ошибка",
-  description:
-    "Что-то пошло не так. Попробуйте вернуться и повторить действие.",
-};
+import { getErrorConfig } from "./errorConfig";
 
 const props = withDefaults(
   defineProps<{
@@ -93,32 +38,31 @@ const registerTo = computed(() => ({
   query: { ...route.query, action: "register" },
 }));
 
-const defaults = computed(() => errorDefaults[props.code] ?? fallbackConfig);
-const resolvedTitle = computed(() => props.title ?? defaults.value.title);
+// Single source of truth for title/description/illustration per HTTP code
+// (see ./errorConfig).
+const config = computed(() => getErrorConfig(props.code));
+const resolvedTitle = computed(() => props.title ?? config.value.title);
 const resolvedDescription = computed(
-  () => props.description ?? defaults.value.description,
+  () => props.description ?? config.value.description,
 );
 const resolvedShowBack = computed(
-  () => props.showBack ?? defaults.value.showBack ?? true,
+  () => props.showBack ?? config.value.showBack ?? true,
 );
+const resolvedImage = computed(() => props.image ?? config.value.image.src);
 
-// TODO(round-2 art): dedicated illustrations for 404 / 409 / 410 are missing.
-// They currently fall back to general-error.png. Add 404 (empty chest),
-// 409 (fighting goblins), 410 (ashes) per docs/plans/ERROR_PAGES_AND_LORE.md
-// and extend this map. 404 is the most visited error page (catch-all route).
-const codeImageMap: Record<number, string> = {
-  400: img400,
-  401: img401,
-  403: img403,
-  500: img500,
-};
-
-const resolvedImage = computed(
-  () => props.image ?? codeImageMap[props.code] ?? imgGeneral,
+// Intrinsic illustration dimensions reserve layout space before the image
+// loads (prevents CLS). Known only for the config-provided illustration;
+// a custom `image` override is a src-only string, so dimensions are omitted
+// (the attributes render as undefined) rather than guessed.
+const imageWidth = computed(() =>
+  props.image ? undefined : config.value.image.width,
+);
+const imageHeight = computed(() =>
+  props.image ? undefined : config.value.image.height,
 );
 
 // 401 means the viewer is a guest hitting an authorized-only page — the
-// «Войдите»/«зарегистрируйтесь» links are rendered inline inside the
+// "Войдите"/"зарегистрируйтесь" links are rendered inline inside the
 // description sentence (see template), not as a separate action row.
 const canGoBack = computed(() => !!window.history.state?.back);
 
@@ -135,7 +79,13 @@ function goBack() {
   <div class="error-page">
     <page-title>Упс! {{ resolvedTitle }}!</page-title>
 
-    <img :src="resolvedImage" :alt="`Ошибка ${code}`" class="error-image" />
+    <img
+      :src="resolvedImage"
+      :alt="`Ошибка ${code}`"
+      :width="imageWidth"
+      :height="imageHeight"
+      class="error-image"
+    />
 
     <!-- 401: login/register are inline links inside the sentence. -->
     <p v-if="code === 401" class="error-description">
@@ -175,8 +125,6 @@ function goBack() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 .error-page
   padding: $medium 0 $big
 

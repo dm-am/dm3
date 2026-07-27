@@ -35,11 +35,11 @@ internal class ImgproxyUrlBuilder : IImgproxyUrlBuilder
         }
 
         // imgproxy processing options:
-        //   rs:fill:{w}:{h}:1 — resize to W×H в fill mode (crop overflow, no padding).
-        //                        Параметр 1 = "extend if smaller" (мелкие сорсы апскейлятся).
-        //   g:sm              — gravity smart (определяет важную часть изображения автоматом).
-        //   q:85              — quality 85 (баланс размера и визуала для thumbnails).
-        // Format negotiation — automatic через IMGPROXY_AUTO_WEBP/AVIF + Accept header.
+        //   rs:fill:{w}:{h}:1 — resize to W×H in fill mode (crop overflow, no padding).
+        //                        Parameter 1 = "extend if smaller" (small sources are upscaled).
+        //   g:sm              — gravity smart (detects the important part of the image automatically).
+        //   q:85              — quality 85 (size/visual balance for thumbnails).
+        // Format negotiation — automatic via IMGPROXY_AUTO_WEBP/AVIF + Accept header.
         var options = $"rs:fill:{size}:{size}:1/g:sm/q:85";
         var sourceUrl = _config.SourceUrlPrefix + sourceObjectKey;
         var encodedSource = Base64UrlEncode(Encoding.UTF8.GetBytes(sourceUrl));
@@ -51,8 +51,8 @@ internal class ImgproxyUrlBuilder : IImgproxyUrlBuilder
     private string Sign(string path)
     {
         // imgproxy URL signature = HMAC-SHA256(key, salt || path_bytes), base64url no-pad.
-        // Если key/salt пусты (dev без подписи) — должен быть включен
-        // IMGPROXY_ALLOW_INSECURE_URLS=true и URL начинается с /insecure/.
+        // If key/salt are empty (dev without signing), then
+        // IMGPROXY_ALLOW_INSECURE_URLS=true must be enabled and the URL starts with /insecure/.
         if (_keyBytes.Length == 0 || _saltBytes.Length == 0)
         {
             return "insecure";

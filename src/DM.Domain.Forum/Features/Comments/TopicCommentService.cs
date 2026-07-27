@@ -9,6 +9,7 @@ using DM.Domain.Forum.Features.Topics;
 using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Comments;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
@@ -69,8 +70,8 @@ internal class TopicCommentService : ITopicCommentService
         _intentionManager.ThrowIfForbidden(TopicIntention.CreateComment, topic);
 
         // Check if topic author has blocked the current user
-        var currentUserId = _identityProvider.Current.User.UserId;
-        if (topic.Author != null && await _userBlacklistChecker.IsBlockedAsync(topic.Author.UserId, currentUserId))
+        var currentUser = _identityProvider.Current.User;
+        if (topic.Author != null && await _userBlacklistChecker.IsBlockedAsync(topic.Author.UserId, currentUser.UserId))
         {
             throw new HttpException(HttpStatusCode.Forbidden, "You cannot comment on this topic");
         }
@@ -78,8 +79,10 @@ internal class TopicCommentService : ITopicCommentService
         var createEntity = new CreateTopicCommentEntity
         {
             TopicId = topic.Id,
-            AuthorId = currentUserId,
-            Text = createComment.Text,
+            AuthorId = currentUser.UserId,
+            // Strip [mod] authored by a non-moderator (it renders as a green
+            // mod block on the Comment surface); Moderator+ may author it.
+            Text = ModBlockSanitizer.SanitizeForAuthor(createComment.Text, currentUser.Role),
             NewCommentCount = topic.TotalCommentsCount + 1
         };
 
@@ -120,6 +123,11 @@ internal class TopicCommentService : ITopicCommentService
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
 
         var text = updateComment.Text?.Trim();
+        if (!string.IsNullOrEmpty(text))
+        {
+            // Strip [mod] authored by a non-moderator before comparing/saving.
+            text = ModBlockSanitizer.SanitizeForAuthor(text, _identityProvider.Current.User.Role);
+        }
         if (string.IsNullOrEmpty(text) || text == comment.Text)
         {
             // No actual changes

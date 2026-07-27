@@ -1,11 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Persistence;
-using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Shared.Dto;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -18,141 +17,27 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
     private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IMemoryCache _cache;
-    private readonly IImgproxyUrlBuilder _imgproxy;
 
-    private const string CacheKey = "CommunityStats";
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan OnlineThreshold = TimeSpan.FromMinutes(5);
+
+    // Closed calendar periods are immutable (new content is always dated
+    // "now"), so their leaderboards can live in cache for a long time; only
+    // soft-deletes of old content can retroactively change them, hence a day
+    // rather than forever. The current (still-open) period keeps changing as
+    // reviews and posts arrive, so it gets a short TTL.
+    private static readonly TimeSpan ClosedPeriodCacheDuration = TimeSpan.FromHours(24);
+    private static readonly TimeSpan OpenPeriodCacheDuration = TimeSpan.FromMinutes(10);
+
 
     /// <inheritdoc />
     public CommunityStatsApiService(
         DmDbContext dbContext,
         IDateTimeProvider dateTimeProvider,
-        IMemoryCache cache,
-        IImgproxyUrlBuilder imgproxy)
+        IMemoryCache cache)
     {
         _dbContext = dbContext;
         _dateTimeProvider = dateTimeProvider;
         _cache = cache;
-        _imgproxy = imgproxy;
-    }
-
-    /// <inheritdoc />
-    public async Task<Envelope<CommunityStats>> GetStats()
-    {
-        var stats = await _cache.GetOrCreateAsync(CacheKey, async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = CacheDuration;
-            return await CalculateStats();
-        });
-
-        return new Envelope<CommunityStats>(stats!);
-    }
-
-    private async Task<CommunityStats> CalculateStats()
-    {
-        var now = _dateTimeProvider.Now;
-        var monthAgo = now.AddMonths(-1);
-        var yearAgo = now.AddYears(-1);
-        var twoYearsAgo = now.AddYears(-2);
-        var onlineThreshold = now - OnlineThreshold;
-
-        // Current stats
-        var totalUsersTask = _dbContext.Users.CountAsync(u => !u.IsRemoved );
-        var onlineUsersTask = _dbContext.Users.CountAsync(u =>
-            !u.IsRemoved  &&
-            u.LastActivityUtc.HasValue && u.LastActivityUtc.Value > onlineThreshold);
-        var activeGamesTask = _dbContext.Games.CountAsync(g => !g.IsRemoved && g.Status == ModuleStatus.Active);
-        var totalGamesTask = _dbContext.Games.CountAsync(g => !g.IsRemoved);
-        var totalPostsTask = _dbContext.Posts.CountAsync(p => !p.IsRemoved);
-        var totalTopicsTask = _dbContext.Topics.CountAsync(t => !t.IsRemoved);
-
-        // Monthly stats
-        var newUsersMonthTask = _dbContext.Users.CountAsync(u =>
-            !u.IsRemoved  && u.CreatedUtc > monthAgo);
-        var newGamesMonthTask = _dbContext.Games.CountAsync(g =>
-            !g.IsRemoved && g.CreatedUtc > monthAgo);
-        var newPostsMonthTask = _dbContext.Posts.CountAsync(p =>
-            !p.IsRemoved && p.CreatedUtc > monthAgo);
-        var newTopicsMonthTask = _dbContext.Topics.CountAsync(t =>
-            !t.IsRemoved && t.CreatedUtc > monthAgo);
-        var newCommentsMonthTask = _dbContext.Comments.CountAsync(c =>
-            !c.IsRemoved && c.CreatedUtc > monthAgo);
-
-        // Yearly stats
-        var newUsersYearTask = _dbContext.Users.CountAsync(u =>
-            !u.IsRemoved  && u.CreatedUtc > yearAgo);
-        var newGamesYearTask = _dbContext.Games.CountAsync(g =>
-            !g.IsRemoved && g.CreatedUtc > yearAgo);
-        var newPostsYearTask = _dbContext.Posts.CountAsync(p =>
-            !p.IsRemoved && p.CreatedUtc > yearAgo);
-        var newTopicsYearTask = _dbContext.Topics.CountAsync(t =>
-            !t.IsRemoved && t.CreatedUtc > yearAgo);
-        var newCommentsYearTask = _dbContext.Comments.CountAsync(c =>
-            !c.IsRemoved && c.CreatedUtc > yearAgo);
-
-        // Previous year stats for comparison
-        var usersLastYearTask = _dbContext.Users.CountAsync(u =>
-            !u.IsRemoved  && u.CreatedUtc > twoYearsAgo && u.CreatedUtc <= yearAgo);
-        var gamesLastYearTask = _dbContext.Games.CountAsync(g =>
-            !g.IsRemoved && g.CreatedUtc > twoYearsAgo && g.CreatedUtc <= yearAgo);
-        var postsLastYearTask = _dbContext.Posts.CountAsync(p =>
-            !p.IsRemoved && p.CreatedUtc > twoYearsAgo && p.CreatedUtc <= yearAgo);
-
-        // Await all tasks
-        await Task.WhenAll(
-            totalUsersTask, onlineUsersTask, activeGamesTask, totalGamesTask, totalPostsTask, totalTopicsTask,
-            newUsersMonthTask, newGamesMonthTask, newPostsMonthTask, newTopicsMonthTask, newCommentsMonthTask,
-            newUsersYearTask, newGamesYearTask, newPostsYearTask, newTopicsYearTask, newCommentsYearTask,
-            usersLastYearTask, gamesLastYearTask, postsLastYearTask);
-
-        var newUsersYear = await newUsersYearTask;
-        var newGamesYear = await newGamesYearTask;
-        var newPostsYear = await newPostsYearTask;
-        var usersLastYear = await usersLastYearTask;
-        var gamesLastYear = await gamesLastYearTask;
-        var postsLastYear = await postsLastYearTask;
-
-        return new CommunityStats
-        {
-            Current = new CurrentStats
-            {
-                TotalUsers = await totalUsersTask,
-                OnlineUsers = await onlineUsersTask,
-                ActiveGames = await activeGamesTask,
-                TotalGames = await totalGamesTask,
-                TotalPosts = await totalPostsTask,
-                TotalTopics = await totalTopicsTask
-            },
-            Monthly = new PeriodStats
-            {
-                NewUsers = await newUsersMonthTask,
-                NewGames = await newGamesMonthTask,
-                NewPosts = await newPostsMonthTask,
-                NewTopics = await newTopicsMonthTask,
-                NewComments = await newCommentsMonthTask
-            },
-            Yearly = new PeriodStats
-            {
-                NewUsers = newUsersYear,
-                NewGames = newGamesYear,
-                NewPosts = newPostsYear,
-                NewTopics = await newTopicsYearTask,
-                NewComments = await newCommentsYearTask
-            },
-            Comparison = new YearComparison
-            {
-                UsersGrowth = CalculateGrowth(newUsersYear, usersLastYear),
-                GamesGrowth = CalculateGrowth(newGamesYear, gamesLastYear),
-                PostsGrowth = CalculateGrowth(newPostsYear, postsLastYear)
-            }
-        };
-    }
-
-    private static double CalculateGrowth(int current, int previous)
-    {
-        if (previous == 0) return current > 0 ? 100 : 0;
-        return Math.Round((current - previous) / (double)previous * 100, 1);
     }
 
     /// <inheritdoc />
@@ -269,7 +154,10 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
     {
         var leaderboards = await _cache.GetOrCreateAsync($"Leaderboards_{year}_{month}", async entry =>
         {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1);
+            var (_, endDate) = ResolvePeriodBounds(year, month);
+            entry.AbsoluteExpirationRelativeToNow = endDate <= _dateTimeProvider.Now
+                ? ClosedPeriodCacheDuration
+                : OpenPeriodCacheDuration;
             return await CalculateLeaderboards(year, month);
         });
 
@@ -278,91 +166,173 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
 
     private async Task<Leaderboards> CalculateLeaderboards(int year, int? month)
     {
-        DateTimeOffset startDate, endDate;
-        if (month.HasValue)
-        {
-            startDate = new DateTimeOffset(year, month.Value, 1, 0, 0, 0, TimeSpan.Zero);
-            endDate = startDate.AddMonths(1);
-        }
-        else
-        {
-            startDate = new DateTimeOffset(year, 1, 1, 0, 0, 0, TimeSpan.Zero);
-            endDate = startDate.AddYears(1);
-        }
+        // year == 0 is the "all-time" period: aggregate across the full data
+        // set with no date bounds. Otherwise a calendar year or month window.
+        //
+        // Contract: every board carries POSITIVE scores only (the "only
+        // positive achievement is celebrated" product rule), enforced here so
+        // no consumer has to re-filter. The SQL tie-break on the entity id
+        // makes the Take(10) boundary deterministic across runs; the display
+        // ranks (with ties sharing a rank) are assigned in memory below.
+        var (startDate, endDate) = ResolvePeriodBounds(year, month);
 
         // Top players by rating received (sum of post review ratings)
         var topByRating = await _dbContext.PostReviews
             .Where(r => !r.IsRemoved && r.CreatedUtc >= startDate && r.CreatedUtc < endDate)
             .GroupBy(r => r.PostAuthorId)
-            .Select(g => new { UserId = g.Key, TotalRating = g.Sum(r => (int)r.SignValue) })
-            .OrderByDescending(x => x.TotalRating)
+            .Select(g => new { UserId = g.Key, Score = g.Sum(r => (int)r.SignValue) })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
             .Take(10)
-            .Join(_dbContext.Users.Include(u => u.AvatarUpload), x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
+            .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
             {
                 EntityId = u.UserId,
                 Name = u.Username,
-                // ObjectKey проектируется из EF, signed imgproxy URL
-                // строится в memory-сtep ниже (HMAC не translatable в SQL).
-                PictureUrl = u.AvatarUpload != null ? u.AvatarUpload.ObjectKey : null,
-                Score = x.TotalRating
+                Score = x.Score
             })
             .ToListAsync();
-
-        ResolveLeaderboardPictures(topByRating);
 
         // Top players by posts count
         var topByPosts = await _dbContext.Posts
             .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
             .GroupBy(p => p.AuthorId)
-            .Select(g => new { UserId = g.Key, PostCount = g.Count() })
-            .OrderByDescending(x => x.PostCount)
+            .Select(g => new { UserId = g.Key, Score = g.Count() })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
             .Take(10)
-            .Join(_dbContext.Users.Include(u => u.AvatarUpload), x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
+            .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
             {
                 EntityId = u.UserId,
                 Name = u.Username,
-                PictureUrl = u.AvatarUpload != null ? u.AvatarUpload.ObjectKey : null,
-                Score = x.PostCount
+                Score = x.Score
             })
             .ToListAsync();
-
-        ResolveLeaderboardPictures(topByPosts);
 
         // Top games by rating (sum of post review ratings)
         var topGamesByRating = await _dbContext.PostReviews
             .Where(r => !r.IsRemoved && r.CreatedUtc >= startDate && r.CreatedUtc < endDate)
             .GroupBy(r => r.GameId)
-            .Select(g => new { GameId = g.Key, TotalRating = g.Sum(r => (int)r.SignValue) })
-            .OrderByDescending(x => x.TotalRating)
+            .Select(g => new { GameId = g.Key, Score = g.Sum(r => (int)r.SignValue) })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score).ThenBy(x => x.GameId)
             .Take(10)
             .Join(_dbContext.Games, x => x.GameId, g => g.GameId, (x, g) => new LeaderboardEntry
             {
                 EntityId = g.GameId,
+                PublicId = g.PublicId,
                 Name = g.Title,
-                Score = x.TotalRating
+                Score = x.Score
             })
             .ToListAsync();
-
-        for (int i = 0; i < topGamesByRating.Count; i++)
-            topGamesByRating[i].Rank = i + 1;
 
         // Top games by posts
         var topGamesByPosts = await _dbContext.Posts
             .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
             .GroupBy(p => p.Room.GameId)
-            .Select(g => new { GameId = g.Key, PostCount = g.Count() })
-            .OrderByDescending(x => x.PostCount)
+            .Select(g => new { GameId = g.Key, Score = g.Count() })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score).ThenBy(x => x.GameId)
             .Take(10)
             .Join(_dbContext.Games, x => x.GameId, g => g.GameId, (x, g) => new LeaderboardEntry
             {
                 EntityId = g.GameId,
+                PublicId = g.PublicId,
                 Name = g.Title,
-                Score = x.PostCount
+                Score = x.Score
             })
             .ToListAsync();
 
-        for (int i = 0; i < topGamesByPosts.Count; i++)
-            topGamesByPosts[i].Rank = i + 1;
+        // Top players by written text volume ("Самый многопишущий игрок"):
+        // the total number of in-character (GameText) characters authored in
+        // the period. Score is the character count.
+        var topByVolume = await _dbContext.Posts
+            .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
+            .GroupBy(p => p.AuthorId)
+            .Select(g => new { UserId = g.Key, Score = g.Sum(p => (int)p.GameText.Length) })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
+            .Take(10)
+            .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
+            {
+                EntityId = u.UserId,
+                Name = u.Username,
+                Score = x.Score
+            })
+            .ToListAsync();
+
+        // Top blogs by rating (blog analog of TopGamesByRating). Blog publications
+        // are rated via the polymorphic Likes table (LikeEntityType.Publication),
+        // so a blog's rating is the number of likes received on its publications.
+        // Likes carry no timestamp, so the period is scoped by the publication's
+        // CreatedUtc (same window as the publications count board below). Drives
+        // from the period-filtered publications and inner-joins likes, so removed
+        // or non-publication likes are excluded and there is no cartesian product.
+        var topBlogsByRating = await _dbContext.Publications
+            .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
+            .Join(_dbContext.Likes.Where(l => !l.IsRemoved && l.EntityType == LikeEntityType.Publication),
+                p => p.PublicationId,
+                l => l.EntityId,
+                (p, l) => p.BlogId)
+            .GroupBy(blogId => blogId)
+            .Select(g => new { BlogId = g.Key, Score = g.Count() })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score).ThenBy(x => x.BlogId)
+            .Take(10)
+            .Join(_dbContext.Blogs, x => x.BlogId, b => b.BlogId, (x, b) => new LeaderboardEntry
+            {
+                EntityId = b.BlogId,
+                PublicId = b.PublicId,
+                Name = b.Title,
+                Score = x.Score
+            })
+            .ToListAsync();
+
+        // Top blogs by publications count (blog analog of TopGamesByPosts).
+        var topBlogsByPosts = await _dbContext.Publications
+            .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
+            .GroupBy(p => p.BlogId)
+            .Select(g => new { BlogId = g.Key, Score = g.Count() })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score).ThenBy(x => x.BlogId)
+            .Take(10)
+            .Join(_dbContext.Blogs, x => x.BlogId, b => b.BlogId, (x, b) => new LeaderboardEntry
+            {
+                EntityId = b.BlogId,
+                PublicId = b.PublicId,
+                Name = b.Title,
+                Score = x.Score
+            })
+            .ToListAsync();
+
+        // Top blog authors by written text volume ("Самый многопишущий блогер"):
+        // the blog analog of TopPlayersByVolume. Users are ranked by the total
+        // number of characters in their blog publications' Content authored in
+        // the period, grouped by the publication's AuthorId. Uses the same volume
+        // definition (Content character length) as the player board for
+        // consistency. Score is the character count.
+        var topBlogAuthorsByVolume = await _dbContext.Publications
+            .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
+            .GroupBy(p => p.AuthorId)
+            .Select(g => new { UserId = g.Key, Score = g.Sum(p => (int)p.Content.Length) })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
+            .Take(10)
+            .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
+            {
+                EntityId = u.UserId,
+                Name = u.Username,
+                Score = x.Score
+            })
+            .ToListAsync();
+
+        AssignCompetitionRanks(topByRating);
+        AssignCompetitionRanks(topByPosts);
+        AssignCompetitionRanks(topGamesByRating);
+        AssignCompetitionRanks(topGamesByPosts);
+        AssignCompetitionRanks(topByVolume);
+        AssignCompetitionRanks(topBlogsByRating);
+        AssignCompetitionRanks(topBlogsByPosts);
+        AssignCompetitionRanks(topBlogAuthorsByVolume);
 
         return new Leaderboards
         {
@@ -370,112 +340,57 @@ internal class CommunityStatsApiService : ICommunityStatsApiService
             TopPlayersByRating = topByRating.ToArray(),
             TopPlayersByPosts = topByPosts.ToArray(),
             TopGamesByRating = topGamesByRating.ToArray(),
-            TopGamesByPosts = topGamesByPosts.ToArray()
+            TopGamesByPosts = topGamesByPosts.ToArray(),
+            TopPlayersByVolume = topByVolume.ToArray(),
+            TopBlogsByRating = topBlogsByRating.ToArray(),
+            TopBlogsByPosts = topBlogsByPosts.ToArray(),
+            TopBlogAuthorsByVolume = topBlogAuthorsByVolume.ToArray()
         };
     }
 
     /// <summary>
-    /// Post-process leaderboard entries: ObjectKey → signed imgproxy URL
-    /// для small-thumbnail. HMAC не translatable в SQL, поэтому делается
-    /// в-memory после fetch.
+    /// Resolves the [start, end) UTC bounds for a stats period. A year of 0 is
+    /// the "all-time" period: the widest possible window so no row is filtered
+    /// out by date. Otherwise a calendar year or a specific calendar month.
+    /// Internal for unit testing of the period-window logic.
     /// </summary>
-    private void ResolveLeaderboardPictures(System.Collections.Generic.List<LeaderboardEntry> entries)
+    internal static (DateTimeOffset Start, DateTimeOffset End) ResolvePeriodBounds(int year, int? month)
     {
-        for (int i = 0; i < entries.Count; i++)
+        if (year <= 0)
         {
-            entries[i].Rank = i + 1;
-            entries[i].PictureUrl = string.IsNullOrEmpty(entries[i].PictureUrl)
-                ? null
-                : _imgproxy.BuildSquareThumbnail(entries[i].PictureUrl!, AvatarPictureConverter.SmallSize);
+            return (DateTimeOffset.MinValue, DateTimeOffset.MaxValue);
         }
-    }
 
-    /// <inheritdoc />
-    public async Task<Envelope<PeriodReport>> GetPeriodReport(int year, int? month)
-    {
-        var report = await _cache.GetOrCreateAsync($"PeriodReport_{year}_{month}", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1);
-            return await CalculatePeriodReport(year, month);
-        });
-
-        return new Envelope<PeriodReport>(report!);
-    }
-
-    private async Task<PeriodReport> CalculatePeriodReport(int year, int? month)
-    {
-        DateTimeOffset startDate, endDate;
         if (month.HasValue)
         {
-            startDate = new DateTimeOffset(year, month.Value, 1, 0, 0, 0, TimeSpan.Zero);
-            endDate = startDate.AddMonths(1);
-        }
-        else
-        {
-            startDate = new DateTimeOffset(year, 1, 1, 0, 0, 0, TimeSpan.Zero);
-            endDate = startDate.AddYears(1);
+            var monthStart = new DateTimeOffset(year, month.Value, 1, 0, 0, 0, TimeSpan.Zero);
+            return (monthStart, monthStart.AddMonths(1));
         }
 
-        var registrations = await _dbContext.Users.CountAsync(u =>
-            !u.IsRemoved  && u.CreatedUtc >= startDate && u.CreatedUtc < endDate);
-
-        var gamesCreated = await _dbContext.Games.CountAsync(g =>
-            !g.IsRemoved && g.CreatedUtc >= startDate && g.CreatedUtc < endDate);
-
-        var gamePosts = await _dbContext.Posts.CountAsync(p =>
-            !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate);
-
-        // Count all review types
-        var gameReviews = await _dbContext.GameReviews.CountAsync(r =>
-            !r.IsRemoved && r.CreatedUtc >= startDate && r.CreatedUtc < endDate);
-        var postReviews = await _dbContext.PostReviews.CountAsync(r =>
-            !r.IsRemoved && r.CreatedUtc >= startDate && r.CreatedUtc < endDate);
-        var userEndorsements = await _dbContext.UserEndorsements.CountAsync(r =>
-            !r.IsRemoved && r.CreatedUtc >= startDate && r.CreatedUtc < endDate);
-        var websiteTestimonials = await _dbContext.WebsiteTestimonials.CountAsync(r =>
-            !r.IsRemoved && r.CreatedUtc >= startDate && r.CreatedUtc < endDate);
-        var reviews = gameReviews + postReviews + userEndorsements + websiteTestimonials;
-
-        // Unique active users (posted at least once)
-        var activeUsers = await _dbContext.Posts
-            .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
-            .Select(p => p.AuthorId)
-            .Distinct()
-            .CountAsync();
-
-        return new PeriodReport
-        {
-            Period = new Period { Year = year, Month = month },
-            Registrations = registrations,
-            GamesCreated = gamesCreated,
-            GamePosts = gamePosts,
-            Reviews = reviews,
-            AverageDailyUsers = activeUsers
-        };
+        var yearStart = new DateTimeOffset(year, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        return (yearStart, yearStart.AddYears(1));
     }
 
-    /// <inheritdoc />
-    public async Task<Envelope<PeriodComparison>> ComparePeriods(int year1, int? month1, int year2, int? month2)
+    /// <summary>
+    /// Sorts entries for display (score DESC, then name for a deterministic
+    /// order among ties) and assigns plain ordinal ranks 1..N — a top list
+    /// reads as a simple numbered list; ties are broken by name rather than
+    /// sharing a rank number. Internal for unit testing.
+    /// </summary>
+    internal static void AssignCompetitionRanks(List<LeaderboardEntry> entries)
     {
-        var report1Task = CalculatePeriodReport(year1, month1);
-        var report2Task = CalculatePeriodReport(year2, month2);
-
-        await Task.WhenAll(report1Task, report2Task);
-
-        var report1 = await report1Task;
-        var report2 = await report2Task;
-
-        return new Envelope<PeriodComparison>(new PeriodComparison
+        entries.Sort((a, b) =>
         {
-            Period1 = report1,
-            Period2 = report2,
-            Growth = new GrowthMetrics
-            {
-                RegistrationsGrowth = CalculateGrowth(report2.Registrations, report1.Registrations),
-                GamesGrowth = CalculateGrowth(report2.GamesCreated, report1.GamesCreated),
-                PostsGrowth = CalculateGrowth(report2.GamePosts, report1.GamePosts),
-                ReviewsGrowth = CalculateGrowth(report2.Reviews, report1.Reviews)
-            }
+            var byScore = b.Score.CompareTo(a.Score);
+            return byScore != 0
+                ? byScore
+                : string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
         });
+
+        for (var i = 0; i < entries.Count; i++)
+        {
+            entries[i].Rank = i + 1;
+        }
     }
+
 }

@@ -110,13 +110,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from "vue";
-import dayjs from "dayjs";
 import { RouterLink } from "vue-router";
 import { useModal } from "vue-final-modal";
 import { BlacklistApi } from "@/shared/api";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { EmptyState } from "@/shared/ui";
-import BlockUserLightbox from "../BlockUserLightbox.vue";
+import { formatDate } from "@/shared/lib/utils/datetime";
+import { BlockUserDialog } from "@/features/block-user";
 import type {
   BlacklistEntry,
   BlacklistSettings,
@@ -143,7 +143,7 @@ const unblockingUsername = ref<string | null>(null);
 
 // Block modal
 const { open: openBlockModal, close: closeBlockModal } = useModal({
-  component: BlockUserLightbox,
+  component: BlockUserDialog,
   attrs: {
     onSuccess: (entry: BlacklistEntry) => {
       blockedUsers.value.unshift(entry);
@@ -207,15 +207,9 @@ async function unblock(username: string) {
     toast.success(`${username} разблокирован`);
   }
 }
-
-function formatDate(dateStr: string): string {
-  return dayjs(dateStr).format("DD.MM.YYYY");
-}
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Inputs"
 @import "../AccountPage.styles"
 
@@ -254,11 +248,6 @@ function formatDate(dateStr: string): string {
   gap: $small
   cursor: pointer
   color: $text
-
-  input[type="checkbox"]
-    width: 16px
-    height: 16px
-    accent-color: $link
 
   &:has(input:disabled)
     opacity: 0.6
@@ -313,7 +302,7 @@ function formatDate(dateStr: string): string {
   flex-shrink: 0
 
   &:hover:not(:disabled)
-    background-color: rgba($text-muted, 0.1)
+    background-color: $text-muted-muted
 
   &:disabled
     opacity: 0.5

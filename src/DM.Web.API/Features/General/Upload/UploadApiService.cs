@@ -41,13 +41,13 @@ internal class UploadApiService : IUploadApiService
     private readonly IHttpContextAccessor _httpContext;
     private readonly CdnConfiguration _cdnConfig;
 
-    /// <summary>Max upload size — 10 MB (sync с RequestSizeLimit на контроллере).</summary>
+    /// <summary>Max upload size — 10 MB (in sync with RequestSizeLimit on the controller).</summary>
     private const long MaxUploadSizeBytes = 10 * 1024 * 1024;
 
     /// <summary>
-    /// Idempotency-Key header. Клиент шлет уникальный per-логический-upload
-    /// ключ; если тот же ключ приходит дважды — возвращаем cached response,
-    /// не процессим повторно. TTL 1ч.
+    /// Idempotency-Key header. The client sends a unique per-logical-upload
+    /// key; if the same key arrives twice we return the cached response
+    /// instead of reprocessing. TTL 1h.
     /// </summary>
     private const string IdempotencyHeader = "Idempotency-Key";
     private static readonly TimeSpan IdempotencyTtl = TimeSpan.FromHours(1);
@@ -83,14 +83,14 @@ internal class UploadApiService : IUploadApiService
     {
         var currentUserId = _identityProvider.Current.User.UserId;
 
-        // Admin scope=all → все uploads системы.
+        // Admin scope=all → all uploads in the system.
         if (all)
         {
             _intentionManager.ThrowIfForbidden(UploadIntention.ListAll);
             return await GetUploadsInternal(query, userId: null);
         }
 
-        // Admin username=... → uploads конкретного пользователя.
+        // Moderator+ username=... → uploads of a specific user.
         if (!string.IsNullOrWhiteSpace(username))
         {
             _intentionManager.ThrowIfForbidden(UploadIntention.ListUser);
@@ -98,7 +98,7 @@ internal class UploadApiService : IUploadApiService
             return await GetUploadsInternal(query, user.UserId);
         }
 
-        // Default → собственные uploads.
+        // Default → own uploads.
         return await GetUploadsInternal(query, currentUserId);
     }
 
@@ -107,6 +107,7 @@ internal class UploadApiService : IUploadApiService
     {
         var userId = _identityProvider.Current.User.UserId;
         var upload = await _dbContext.Uploads
+            .Include(u => u.Owner)
             .Where(u => u.UploadId == id)
             .FirstOrDefaultAsync();
 
@@ -115,7 +116,9 @@ internal class UploadApiService : IUploadApiService
             throw new HttpException(System.Net.HttpStatusCode.NotFound, "Upload not found");
         }
 
-        if (upload.UserId != userId && _identityProvider.Current.User.Role < UserRole.Admin)
+        // Owner self-view; viewing another user's file is a moderation action
+        // (Moderator+), aligned with the list + delete endpoints.
+        if (upload.UserId != userId && _identityProvider.Current.User.Role < UserRole.Moderator)
         {
             throw new HttpException(System.Net.HttpStatusCode.Forbidden, "Access denied");
         }
@@ -136,7 +139,8 @@ internal class UploadApiService : IUploadApiService
             throw new HttpException(System.Net.HttpStatusCode.NotFound, "Upload not found");
         }
 
-        if (upload.UserId != userId && _identityProvider.Current.User.Role < UserRole.Admin)
+        // Owner self-service; deleting others' files is a moderation action (Moderator+).
+        if (upload.UserId != userId && _identityProvider.Current.User.Role < UserRole.Moderator)
         {
             throw new HttpException(System.Net.HttpStatusCode.Forbidden, "Access denied");
         }
@@ -155,10 +159,10 @@ internal class UploadApiService : IUploadApiService
         activity?.SetTag("upload.declared_content_type", file.ContentType);
         activity?.SetTag("upload.input_size_bytes", file.Length);
 
-        // Idempotency: если клиент шлет Idempotency-Key, возвращаем cached
-        // response для дублирующих retry'ев (mobile сетевые retry, double-
-        // click ниже rate-limit окна). Cache scoped per-user — кросс-юзер
-        // replay невозможен.
+        // Idempotency: if the client sends an Idempotency-Key, return the cached
+        // response for duplicate retries (mobile network retries, double-
+        // clicks below the rate-limit window). The cache is scoped per user —
+        // cross-user replay is impossible.
         var userId = _identityProvider.Current.User.UserId;
         var idempotencyKey = _httpContext.HttpContext?.Request.Headers[IdempotencyHeader].ToString();
         if (!string.IsNullOrWhiteSpace(idempotencyKey))
@@ -192,8 +196,8 @@ internal class UploadApiService : IUploadApiService
                 new("content_type", result.ContentType));
             UploadMetrics.DurationMs.Record(stopwatch.Elapsed.TotalMilliseconds, typeTag);
             UploadMetrics.InputSizeBytes.Record(file.Length, typeTag);
-            // OutputSizeBytes пишется внутри DirectUploadCore через activity tag —
-            // здесь добавим, если есть.
+            // OutputSizeBytes is written inside DirectUploadCore via an activity tag —
+            // add it here if present.
             if (activity?.GetTagItem("upload.output_size_bytes") is long outputBytes)
             {
                 UploadMetrics.OutputSizeBytes.Record(outputBytes, typeTag);
@@ -230,8 +234,8 @@ internal class UploadApiService : IUploadApiService
         var userId = _identityProvider.Current.User.UserId;
         var now = _dateTimeProvider.Now;
 
-        // Размер проверяем заранее (до magic-byte). Это дешевая проверка
-        // на DoS-вектор — не пускаем 10+ MB в buffer / процессинг.
+        // Check the size upfront (before magic bytes). A cheap check
+        // against a DoS vector — do not let 10+ MB into the buffer / processing.
         if (file.Length > MaxUploadSizeBytes)
         {
             throw new HttpBadRequestException(new Dictionary<string, string>
@@ -250,41 +254,41 @@ internal class UploadApiService : IUploadApiService
 
         if (!_imageProcessingService.IsImageType(type))
         {
-            // Не-image upload'ы (PostAttachment): простой single-PUT без процессинга.
+            // Non-image uploads (PostAttachment): a simple single PUT without processing.
             return await UploadNonImageAsync(file, type, targetId, userId, now);
         }
 
         // 1. Buffer + validate + process (in-memory; magic-byte, EXIF strip,
-        //    decompression-bomb guard, downscale до 1024 px). Один файл —
-        //    thumbnails генерируются on-the-fly через imgproxy при serving.
+        //    decompression-bomb guard, downscale to 1024 px). A single file —
+        //    thumbnails are generated on-the-fly via imgproxy at serving time.
         ProcessedImage processed;
         await using (var fileStream = file.OpenReadStream())
         {
             processed = await _imageProcessingService.ProcessAsync(fileStream, file.ContentType);
         }
 
-        // 2. Генерируем object key (расширение НОРМАЛИЗОВАНО из validated
-        //    content-type, НЕ из user-filename — anti-extension-spoofing).
+        // 2. Generate the object key (the extension is NORMALIZED from the validated
+        //    content-type, NOT from the user filename — anti-extension-spoofing).
         var objectKey = GenerateObjectKey(type, userId, processed.Extension);
 
-        // 3. Один S3 PUT (никаких batch + rollback list — один шаг,
-        //    либо успех, либо failure → следующий блок сделает rollback).
+        // 3. A single S3 PUT (no batch + rollback list — one step,
+        //    either success or failure → the next block does the rollback).
         try
         {
             await PutToS3Async(objectKey, processed.Bytes, processed.ContentType);
         }
         catch
         {
-            // Ничего PUT'ить было не успели — просто пробрасываем.
+            // Nothing was PUT yet — just rethrow.
             throw;
         }
 
         Activity.Current?.SetTag("upload.output_size_bytes", processed.Bytes.LongLength);
 
-        // 4. DB-запись. Если SaveChangesAsync упадет — rollback S3 PUT.
-        // Effective target: для UserAvatar когда targetId не задан явно,
-        // owner uploader = self (грузим свой аватар). Для CharacterAvatar
-        // и PostAttachment targetId обязателен.
+        // 4. DB record. If SaveChangesAsync fails — roll back the S3 PUT.
+        // Effective target: for UserAvatar, when targetId is not set explicitly,
+        // the owner uploader = self (uploading one's own avatar). For CharacterAvatar
+        // and PostAttachment, targetId is required.
         var effectiveTarget = targetId ?? (type == UploadType.UserAvatar ? userId : (Guid?)null);
         var upload = new DbUpload
         {
@@ -292,8 +296,8 @@ internal class UploadApiService : IUploadApiService
             UserId = userId,
             Type = type,
             Status = UploadStatus.Confirmed,
-            // Filename НОРМАЛИЗОВАН: расширение из content-type, original-имя
-            // (если пришло) только для UI display purposes.
+            // Filename is NORMALIZED: the extension comes from the content-type, the original name
+            // (if provided) is for UI display purposes only.
             FileName = SanitizeFileName(file.FileName, processed.Extension),
             ContentType = processed.ContentType,
             SizeBytes = processed.Bytes.LongLength,
@@ -359,9 +363,9 @@ internal class UploadApiService : IUploadApiService
     }
 
     /// <summary>
-    /// Заполняет одну из TargetUserId / TargetCharacterId / TargetPostId
-    /// в зависимости от <paramref name="type"/>. Кидает <see cref="HttpBadRequestException"/>
-    /// если target обязателен, но не передан.
+    /// Fills one of TargetUserId / TargetCharacterId / TargetPostId
+    /// depending on <paramref name="type"/>. Throws <see cref="HttpBadRequestException"/>
+    /// if a target is required but not provided.
     /// </summary>
     private static void AssignTypedTarget(DbUpload upload, UploadType type, Guid? target)
     {
@@ -409,8 +413,8 @@ internal class UploadApiService : IUploadApiService
             Key = objectKey,
             InputStream = stream,
             ContentType = contentType,
-            // objectKey hash-based (immutable) → агрессивное browser/CDN кеширование.
-            // Заменяем аватар = новый ключ, никаких cache-busting issues.
+            // objectKey is hash-based (immutable) → aggressive browser/CDN caching.
+            // Replacing the avatar = a new key, no cache-busting issues.
             Headers =
             {
                 CacheControl = "public, max-age=31536000, immutable",
@@ -433,7 +437,7 @@ internal class UploadApiService : IUploadApiService
             }
             catch
             {
-                // Best-effort rollback — оставшиеся orphans подметет фоновый GC.
+                // Best-effort rollback — remaining orphans are swept by the background GC.
             }
         }
     }
@@ -444,9 +448,9 @@ internal class UploadApiService : IUploadApiService
         {
             return $"image{normalizedExtension}";
         }
-        // Сохраняем base-name (для UX в Uploads-tab), расширение всегда normalized.
+        // Keep the base name (for UX in the Uploads tab); the extension is always normalized.
         var baseName = Path.GetFileNameWithoutExtension(originalName);
-        // Убираем все символы кроме букв/цифр/тире/подчеркивания (anti-path-traversal).
+        // Strip all characters except letters/digits/dashes/underscores (anti-path-traversal).
         var safe = Regex.Replace(baseName, @"[^\p{L}\p{N}_\-.]", "_");
         if (safe.Length > 80) safe = safe[..80];
         return $"{safe}{normalizedExtension}";
@@ -455,7 +459,9 @@ internal class UploadApiService : IUploadApiService
     private async Task<(IEnumerable<Shared.Dto.Upload> Uploads, PagingInfo Paging)> GetUploadsInternal(
         UploadsQuery query, Guid? userId)
     {
-        var queryable = _dbContext.Uploads.AsQueryable();
+        // Owner is loaded so the moderation "Загрузил" column can render the
+        // uploader username/profile link for every file (doc 4.2.3.8.9).
+        var queryable = _dbContext.Uploads.Include(u => u.Owner).AsQueryable();
 
         if (userId.HasValue)
         {
@@ -485,8 +491,8 @@ internal class UploadApiService : IUploadApiService
     }
 
     /// <summary>
-    /// Hash-based immutable object key: тип-папка + scope (userId) + 8-char hex.
-    /// Расширение принимаем как валидированную нормализованную строку.
+    /// Hash-based immutable object key: type folder + scope (userId) + 8-char hex.
+    /// The extension is accepted as a validated, normalized string.
     /// </summary>
     private string GenerateObjectKey(UploadType type, Guid userId, string normalizedExtension)
     {
@@ -521,8 +527,11 @@ internal class UploadApiService : IUploadApiService
         {
             Id = upload.UploadId,
             UserId = upload.UserId,
+            // Only populated when the Owner navigation was Include()d (the
+            // moderation list queries); null on the DirectUpload/self paths.
+            UploaderUsername = upload.Owner?.Username,
             Type = upload.Type,
-            // Дедуцируем TargetId из соответствующей типизированной колонки.
+            // Deduce TargetId from the corresponding typed column.
             TargetId = upload.TargetUserId ?? upload.TargetCharacterId ?? upload.TargetPostId,
             OriginalFileName = upload.FileName ?? string.Empty,
             ContentType = upload.ContentType ?? string.Empty,

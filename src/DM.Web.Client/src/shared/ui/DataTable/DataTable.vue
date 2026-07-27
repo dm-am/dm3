@@ -24,12 +24,24 @@ const props = withDefaults(
     showRowNumbers?: boolean;
     /** Starting row number (for pagination) */
     startRowNumber?: number;
+    /** Accessible label for the table element */
+    ariaLabel?: string;
+    /**
+     * Table layout algorithm. "fixed" (default) keeps columns strictly at
+     * their configured widths. "auto" lets content-sized columns (nowrap
+     * cells) take exactly the room they need at any viewport, with the
+     * width-less columns absorbing the rest — use it when a column must
+     * guarantee its content on one line without starving the others.
+     */
+    tableLayout?: "fixed" | "auto";
   }>(),
   {
     loading: false,
     emptyText: "Нет данных",
     showRowNumbers: false,
     startRowNumber: 1,
+    ariaLabel: undefined,
+    tableLayout: "fixed",
   },
 );
 
@@ -86,17 +98,20 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
 <template>
   <table
     class="data-table"
+    :class="{ 'layout-auto': tableLayout === 'auto' }"
     cellspacing="1"
     cellpadding="4"
     :aria-busy="loading ? 'true' : undefined"
+    :aria-label="ariaLabel"
   >
     <!-- Header -->
     <thead>
       <tr class="table-header">
-        <th v-if="showRowNumbers" class="col col-number">#</th>
+        <th v-if="showRowNumbers" scope="col" class="col col-number">#</th>
         <th
           v-for="column in columns"
           :key="column.key"
+          scope="col"
           class="col"
           :class="[
             `col-${column.key}`,
@@ -250,7 +265,6 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Tables"
 
 .data-table
@@ -259,6 +273,9 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
   border-collapse: separate
   border-spacing: 1px
   background-color: $border
+
+  &.layout-auto
+    table-layout: auto
 
 .table-header
   th

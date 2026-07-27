@@ -3,10 +3,10 @@ using System;
 namespace DM.Domain.Community.Features.UserEndorsements;
 
 /// <summary>
-/// Filter / search / sort параметры для рекомендаций.
-/// Используется одинаково для «полученных» и «написанных» listing'ов —
-/// различие только в том, какое из <see cref="AuthorId"/> / <see cref="RecipientId"/>
-/// устанавливается контроллером.
+/// Filter / search / sort parameters for endorsements.
+/// Used identically for the "received" and "given" listings —
+/// the only difference is which of <see cref="AuthorId"/> / <see cref="RecipientId"/>
+/// is set by the controller.
 /// </summary>
 public class UserEndorsementFilter
 {
@@ -17,19 +17,20 @@ public class UserEndorsementFilter
     public Guid? RecipientId { get; set; }
 
     /// <summary>
-    /// Подстрочный поиск (case-insensitive) по тексту рекомендации,
-    /// имени автора и имени получателя. Пусто = без поиска.
+    /// Substring search (case-insensitive) over the endorsement text,
+    /// author name and recipient name. Empty = no search.
     /// </summary>
     public string? Search { get; set; }
 
     /// <summary>
-    /// Поле сортировки: <c>created</c> (по дате) или <c>author</c>
-    /// (по имени автора, алфавитно). Дефолт — created.
+    /// Sort field: <c>created</c> (by date) or <c>author</c>
+    /// (alphabetically by counterparty name: for "received" — the author,
+    /// for "given" — the recipient). Default — created.
     /// </summary>
     public string? SortBy { get; set; }
 
     /// <summary>
-    /// Направление сортировки: <c>asc</c> или <c>desc</c>. Дефолт — desc.
+    /// Sort direction: <c>asc</c> or <c>desc</c>. Default — desc.
     /// </summary>
     public string? SortOrder { get; set; }
 }

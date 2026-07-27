@@ -8,17 +8,23 @@ using Microsoft.AspNetCore.Mvc;
 namespace DM.Web.API.Features.Community.Statistics;
 
 /// <summary>
-/// Community statistics, leaderboards, and reports
+/// Community statistics and leaderboards
 /// </summary>
 /// <remarks>
-/// Provides endpoints for real-time statistics, historical leaderboards,
-/// and period-based reports with comparison capabilities.
+/// Provides endpoints for real-time statistics and historical leaderboards.
 /// </remarks>
 [ApiController]
 [ApiExplorerSettings(GroupName = "Community")]
 [Tags("Statistics")]
 public class StatisticsController : ControllerBase
 {
+    // Wide sanity bounds for the public period routes: the site was founded
+    // in 2007, but the API stays permissive (an out-of-range-but-plausible
+    // year just returns empty boards). The bounds only reject values that
+    // would overflow date arithmetic or are plainly nonsensical.
+    private const int MinYear = 1900;
+    private const int MaxYear = 2100;
+
     private readonly ICommunityStatsApiService _statsService;
 
     /// <inheritdoc />
@@ -49,14 +55,21 @@ public class StatisticsController : ControllerBase
     /// <summary>
     /// Get yearly leaderboards
     /// </summary>
-    /// <param name="year">Year (e.g., 2025)</param>
+    /// <remarks>
+    /// Pass <c>year = 0</c> for the all-time leaderboards aggregated across the
+    /// full data set (no date bounds).
+    /// </remarks>
+    /// <param name="year">Year (e.g., 2025), or 0 for all-time</param>
     /// <response code="200">Yearly leaderboards</response>
-    /// <response code="404">Year not found or no data available</response>
+    /// <response code="400">Year out of range</response>
     [HttpGet("v1/leaderboards/{year:int}", Name = nameof(GetYearlyLeaderboards))]
     [ProducesResponseType(typeof(Envelope<Leaderboards>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetYearlyLeaderboards(int year) =>
-        Ok(await _statsService.GetLeaderboards(year, null));
+    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetYearlyLeaderboards(int year)
+    {
+        ValidatePeriod(year, null);
+        return Ok(await _statsService.GetLeaderboards(year, null));
+    }
 
     /// <summary>
     /// Get monthly leaderboards
@@ -64,96 +77,37 @@ public class StatisticsController : ControllerBase
     /// <param name="year">Year (e.g., 2025)</param>
     /// <param name="month">Month (1-12)</param>
     /// <response code="200">Monthly leaderboards</response>
-    /// <response code="404">Period not found or no data available</response>
+    /// <response code="400">Year or month out of range</response>
     [HttpGet("v1/leaderboards/{year:int}/{month:int}", Name = nameof(GetMonthlyLeaderboards))]
     [ProducesResponseType(typeof(Envelope<Leaderboards>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetMonthlyLeaderboards(int year, int month) =>
-        Ok(await _statsService.GetLeaderboards(year, month));
-
-    #endregion
-
-    #region Reports
-
-    /// <summary>
-    /// Get yearly report
-    /// </summary>
-    /// <param name="year">Year (e.g., 2025)</param>
-    /// <response code="200">Yearly report</response>
-    /// <response code="404">Year not found or no data available</response>
-    [HttpGet("v1/reports/{year:int}", Name = nameof(GetYearlyReport))]
-    [ProducesResponseType(typeof(Envelope<PeriodReport>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetYearlyReport(int year) =>
-        Ok(await _statsService.GetPeriodReport(year, null));
-
-    /// <summary>
-    /// Get monthly report
-    /// </summary>
-    /// <param name="year">Year (e.g., 2025)</param>
-    /// <param name="month">Month (1-12)</param>
-    /// <response code="200">Monthly report</response>
-    /// <response code="404">Period not found or no data available</response>
-    [HttpGet("v1/reports/{year:int}/{month:int}", Name = nameof(GetMonthlyReport))]
-    [ProducesResponseType(typeof(Envelope<PeriodReport>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetMonthlyReport(int year, int month) =>
-        Ok(await _statsService.GetPeriodReport(year, month));
-
-    /// <summary>
-    /// Compare two reports
-    /// </summary>
-    /// <remarks>
-    /// Format: "2024,2025" for years or "2025-01,2025-06" for months.
-    /// Returns comparison metrics showing growth between the two periods.
-    /// </remarks>
-    /// <param name="periods">Periods to compare (e.g., "2024,2025" or "2025-01,2025-06")</param>
-    /// <response code="200">Report comparison</response>
-    /// <response code="400">Invalid period format</response>
-    [HttpGet("v1/reports/compare", Name = nameof(CompareReports))]
-    [ProducesResponseType(typeof(Envelope<PeriodComparison>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> CompareReports([FromQuery] string periods)
+    public async Task<IActionResult> GetMonthlyLeaderboards(int year, int month)
     {
-        var parts = periods?.Split(',');
-        if (parts == null || parts.Length != 2)
-        {
-            throw new HttpBadRequestException(
-                new Dictionary<string, string> { ["periods"] = "Format: '2024,2025' for years or '2025-01,2025-06' for months" },
-                "Invalid format");
-        }
-
-        if (!TryParsePeriod(parts[0].Trim(), out var year1, out var month1) ||
-            !TryParsePeriod(parts[1].Trim(), out var year2, out var month2))
-        {
-            throw new HttpBadRequestException(
-                new Dictionary<string, string> { ["periods"] = "Use '2024' for year or '2025-01' for month" },
-                "Invalid period format");
-        }
-
-        return Ok(await _statsService.ComparePeriods(year1, month1, year2, month2));
+        ValidatePeriod(year, month);
+        return Ok(await _statsService.GetLeaderboards(year, month));
     }
 
-    private static bool TryParsePeriod(string period, out int year, out int? month)
+    /// <summary>
+    /// Rejects period values that would overflow date arithmetic (year 9999)
+    /// or are plainly invalid (month 13) with a 400 instead of letting
+    /// DateTimeOffset construction throw into a 500. year == 0 is the
+    /// documented all-time period; a month with year 0 is meaningless.
+    /// </summary>
+    private static void ValidatePeriod(int year, int? month)
     {
-        year = 0;
-        month = null;
+        var errors = new Dictionary<string, string>();
 
-        if (period.Contains('-'))
-        {
-            var periodParts = period.Split('-');
-            if (periodParts.Length == 2 &&
-                int.TryParse(periodParts[0], out year) &&
-                int.TryParse(periodParts[1], out var m) &&
-                m >= 1 && m <= 12)
-            {
-                month = m;
-                return true;
-            }
-            return false;
-        }
+        if (year != 0 && (year < MinYear || year > MaxYear))
+            errors["year"] = $"Year must be 0 (all-time) or between {MinYear} and {MaxYear}";
 
-        return int.TryParse(period, out year) && year >= 1900 && year <= 2100;
+        if (month.HasValue && (month.Value < 1 || month.Value > 12))
+            errors["month"] = "Month must be between 1 and 12";
+
+        if (month.HasValue && year == 0)
+            errors["year"] = "A monthly period requires a concrete year";
+
+        if (errors.Count > 0)
+            throw new HttpBadRequestException(errors, "Invalid period");
     }
 
     #endregion

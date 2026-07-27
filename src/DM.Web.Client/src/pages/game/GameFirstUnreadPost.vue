@@ -63,9 +63,6 @@ onMounted(async () => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .loading-state
   display: flex
   flex-direction: column

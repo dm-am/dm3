@@ -81,36 +81,6 @@ public class CreateCharacterValidatorShould : UnitTestBase
     }
 
     [Fact]
-    public async Task FailWhenRaceExceedsMaxLength()
-    {
-        var input = new CreateCharacter
-        {
-            GameId = Guid.NewGuid(),
-            Name = "Valid Name",
-            Race = new string('a', 31)
-        };
-
-        var result = await validator.TestValidateAsync(input);
-        result.ShouldHaveValidationErrorFor(x => x.Race)
-            .WithErrorMessage(ValidationError.Long);
-    }
-
-    [Fact]
-    public async Task FailWhenClassExceedsMaxLength()
-    {
-        var input = new CreateCharacter
-        {
-            GameId = Guid.NewGuid(),
-            Name = "Valid Name",
-            Class = new string('a', 31)
-        };
-
-        var result = await validator.TestValidateAsync(input);
-        result.ShouldHaveValidationErrorFor(x => x.Class)
-            .WithErrorMessage(ValidationError.Long);
-    }
-
-    [Fact]
     public async Task PassWithMaxLengthValues()
     {
         Mock<ICharacterRepository>()
@@ -120,9 +90,7 @@ public class CreateCharacterValidatorShould : UnitTestBase
         var input = new CreateCharacter
         {
             GameId = Guid.NewGuid(),
-            Name = new string('a', 50),
-            Race = new string('b', 30),
-            Class = new string('c', 30)
+            Name = new string('a', 50)
         };
 
         var result = await validator.TestValidateAsync(input);

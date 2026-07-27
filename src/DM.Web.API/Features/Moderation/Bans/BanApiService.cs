@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
+using DM.Domain.Core.Dto;
 using DM.Domain.Moderation.Features.Warnings;
 using DM.Web.API.Shared.Dto;
 
@@ -36,10 +37,25 @@ internal class BanApiService : IBanApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Ban>?> GetActiveBan(string login)
+    public async Task<PublicUserBanStatus> GetPublicUserBanStatus(string login)
+    {
+        var bans = await _banService.GetUserBans(login);
+        var activeBan = await _banService.GetActiveBan(login);
+
+        return new PublicUserBanStatus
+        {
+            Username = login,
+            IsBanned = activeBan != null,
+            ActiveBan = activeBan != null ? _mapper.Map<PublicBan>(activeBan) : null,
+            History = bans.Select(_mapper.Map<PublicBan>)
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<PublicBan>?> GetActiveBan(string login)
     {
         var ban = await _banService.GetActiveBan(login);
-        return ban != null ? new Envelope<Ban>(_mapper.Map<Ban>(ban)) : null;
+        return ban != null ? new Envelope<PublicBan>(_mapper.Map<PublicBan>(ban)) : null;
     }
 
     /// <inheritdoc />
@@ -47,6 +63,15 @@ internal class BanApiService : IBanApiService
     {
         var bans = await _banService.GetAllActiveBans();
         return new ListEnvelope<Ban>(bans.Select(_mapper.Map<Ban>));
+    }
+
+    /// <inheritdoc />
+    public async Task<ListEnvelope<Ban>> GetBanHistory(PagingQuery query)
+    {
+        var (bans, totalCount) = await _banService.GetBanHistory(query.Skip, query.Take);
+        return new ListEnvelope<Ban>(
+            bans.Select(_mapper.Map<Ban>),
+            new PagingInfo(query.Skip, query.Take, totalCount));
     }
 
     /// <inheritdoc />
@@ -58,6 +83,7 @@ internal class BanApiService : IBanApiService
             ExpiresUtc = request.ExpiresUtc,
             DurationHours = request.DurationHours,
             Comment = request.Comment,
+            AccessRestrictionPolicy = request.AccessPolicy,
             IsVoluntary = false
         };
 

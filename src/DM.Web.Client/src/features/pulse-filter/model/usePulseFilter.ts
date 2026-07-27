@@ -73,45 +73,64 @@ function reducer(
   state: PulseFilterState,
   action: PulseFilterAction,
 ): PulseFilterState {
-  const newState = {
-    ...state,
-    authorUsernames: new Set(state.authorUsernames),
-  };
-
   switch (action.type) {
-    case "SET_SEARCH":
-      newState.search = action.search;
-      return newState;
+    case "SET_SEARCH": {
+      if (action.search === state.search) return state;
+      return { ...state, search: action.search };
+    }
 
-    case "SET_SORT":
-      newState.sortBy = action.sortBy;
-      newState.sortOrder = action.sortOrder ?? "desc";
-      return newState;
+    case "SET_SORT": {
+      const sortOrder = action.sortOrder ?? "desc";
+      if (action.sortBy === state.sortBy && sortOrder === state.sortOrder)
+        return state;
+      return { ...state, sortBy: action.sortBy, sortOrder };
+    }
 
-    case "SET_RATING_RANGE":
-      newState.minRating = action.min;
-      newState.maxRating = action.max;
-      return newState;
+    case "SET_RATING_RANGE": {
+      if (action.min === state.minRating && action.max === state.maxRating)
+        return state;
+      return { ...state, minRating: action.min, maxRating: action.max };
+    }
 
-    case "ADD_AUTHOR":
-      newState.authorUsernames.add(action.username);
-      return newState;
+    case "ADD_AUTHOR": {
+      if (state.authorUsernames.has(action.username)) return state;
+      const authorUsernames = new Set(state.authorUsernames);
+      authorUsernames.add(action.username);
+      return { ...state, authorUsernames };
+    }
 
-    case "REMOVE_AUTHOR":
-      newState.authorUsernames.delete(action.username);
-      return newState;
+    case "REMOVE_AUTHOR": {
+      if (!state.authorUsernames.has(action.username)) return state;
+      const authorUsernames = new Set(state.authorUsernames);
+      authorUsernames.delete(action.username);
+      return { ...state, authorUsernames };
+    }
 
-    case "SET_CREATED_RANGE":
-      newState.createdFrom = action.from;
-      newState.createdTo = action.to;
-      return newState;
+    case "SET_CREATED_RANGE": {
+      if (action.from === state.createdFrom && action.to === state.createdTo)
+        return state;
+      return { ...state, createdFrom: action.from, createdTo: action.to };
+    }
 
-    case "SET_GAME_ID":
-      newState.gameId = action.gameId;
-      return newState;
+    case "SET_GAME_ID": {
+      if (action.gameId === state.gameId) return state;
+      return { ...state, gameId: action.gameId };
+    }
 
-    case "CLEAR_FILTERS":
-      return createDefaultState();
+    case "CLEAR_FILTERS": {
+      const defaults = createDefaultState();
+      const isAlreadyDefault =
+        state.search === defaults.search &&
+        state.sortBy === defaults.sortBy &&
+        state.sortOrder === defaults.sortOrder &&
+        state.minRating === defaults.minRating &&
+        state.maxRating === defaults.maxRating &&
+        state.authorUsernames.size === 0 &&
+        state.createdFrom === defaults.createdFrom &&
+        state.createdTo === defaults.createdTo &&
+        state.gameId === defaults.gameId;
+      return isAlreadyDefault ? state : defaults;
+    }
 
     default: {
       const _exhaustive: never = action;

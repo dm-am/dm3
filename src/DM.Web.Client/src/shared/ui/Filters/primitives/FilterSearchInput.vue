@@ -4,6 +4,7 @@
  *
  * Simple input component - debouncing is handled by parent (useFilterSearch).
  */
+import { computed } from "vue";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { symbols } from "@/shared/lib/utils/icons";
 
@@ -15,9 +16,12 @@ const props = withDefaults(
     modelValue: string;
     /** Placeholder text */
     placeholder?: string;
+    /** Accessible label for the input (defaults to placeholder) */
+    ariaLabel?: string;
   }>(),
   {
     placeholder: "Поиск",
+    ariaLabel: undefined,
   },
 );
 
@@ -28,6 +32,8 @@ const emit = defineEmits<{
   focus: [];
   blur: [];
 }>();
+
+const inputAriaLabel = computed(() => props.ariaLabel ?? props.placeholder);
 
 function handleInput(event: Event) {
   const value = (event.target as HTMLInputElement).value;
@@ -53,6 +59,7 @@ function clearInput() {
       type="text"
       class="the-input"
       :placeholder="placeholder"
+      :aria-label="inputAriaLabel"
       @input="handleInput"
       @keydown="handleKeydown"
       @focus="emit('focus')"
@@ -62,6 +69,7 @@ function clearInput() {
       v-if="modelValue"
       type="button"
       class="clear-input-btn"
+      aria-label="Очистить поиск"
       @click.stop="clearInput"
     >
       {{ symbols.close }}

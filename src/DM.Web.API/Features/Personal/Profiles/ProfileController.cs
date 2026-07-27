@@ -76,14 +76,14 @@ public class ProfileController : ControllerBase
         Ok(await _profileApiService.UpdateMyProfile(profile));
 
     /// <summary>
-    /// Сбросить мой аватар
+    /// Reset my avatar
     /// </summary>
     /// <remarks>
-    /// Снимает связь User → Upload, GC удалит S3-объекты через grace-period.
-    /// Идемпотент: вызов на пользователе без аватара возвращает 204.
+    /// Unlinks User → Upload; the GC deletes the S3 objects after the grace period.
+    /// Idempotent: calling it on a user without an avatar returns 204.
     /// </remarks>
-    /// <response code="204">Аватар сброшен (или его и не было).</response>
-    /// <response code="401">Требуется аутентификация.</response>
+    /// <response code="204">Avatar reset (or there was none).</response>
+    /// <response code="401">Authentication required.</response>
     [HttpDelete("avatar", Name = nameof(RemoveMyAvatar))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]

@@ -7,9 +7,11 @@
       show-navigation
       truncatable
     />
-    <SecondaryText v-else-if="store.bestError">
-      {{ store.bestError }}
-    </SecondaryText>
+    <ErrorState
+      v-else-if="store.bestError"
+      :message="store.bestError"
+      :retry="() => store.fetchBestOfWeek(true)"
+    />
     <SecondaryText v-else-if="store.bestLoaded">
       Оцененных постов за эту неделю пока нет
     </SecondaryText>
@@ -26,6 +28,7 @@ import { GamePost } from "@/widgets/game-post";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { GamePostSkeleton } from "@/shared/ui/Skeleton";
+import { ErrorState } from "@/shared/ui/ErrorState";
 import { useRatedPostsStore } from "@/entities/game";
 import { onMounted } from "vue";
 
@@ -36,5 +39,5 @@ onMounted(() => store.fetchBestOfWeek());
 
 <style scoped lang="sass">
 section
-  margin-bottom: 1rem
+  margin-bottom: $medium
 </style>

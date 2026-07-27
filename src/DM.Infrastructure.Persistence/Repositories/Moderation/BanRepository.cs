@@ -108,4 +108,19 @@ internal class BanRepository : IBanRepository
             .ProjectTo<Ban>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
     }
+
+    /// <inheritdoc />
+    public async Task<(IEnumerable<Ban> Bans, int TotalCount)> GetBanHistory(
+        int skip, int take, CancellationToken ct = default)
+    {
+        var totalCount = await _dbContext.Bans.CountAsync(ct);
+        var bans = await _dbContext.Bans
+            .OrderByDescending(b => b.StartedUtc)
+            .Skip(skip)
+            .Take(take)
+            .ProjectTo<Ban>(_mapper.ConfigurationProvider)
+            .ToListAsync(ct);
+
+        return (bans, totalCount);
+    }
 }

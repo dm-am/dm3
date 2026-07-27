@@ -81,7 +81,7 @@ public class Game : ISoftDeletable
     public DateTimeOffset? RecruitmentStartedUtc { get; set; }
 
     /// <summary>
-    /// Number of times recruitment has been opened (0 = never, 1 = first, 2+ = subsequent/донабор)
+    /// Number of times recruitment has been opened (0 = never, 1 = first, 2+ = subsequent, "донабор")
     /// </summary>
     public int RecruitmentCount { get; set; }
 
@@ -151,31 +151,6 @@ public class Game : ISoftDeletable
     /// Full game information
     /// </summary>
     public string? Info { get; set; }
-
-    /// <summary>
-    /// Only GM and character author can see character temper
-    /// </summary>
-    public bool HideTemper { get; set; }
-
-    /// <summary>
-    /// Only GM and character author can see character skills
-    /// </summary>
-    public bool HideSkills { get; set; }
-
-    /// <summary>
-    /// Only GM and character author can see character inventory
-    /// </summary>
-    public bool HideInventory { get; set; }
-
-    /// <summary>
-    /// Only GM and character author can see character story
-    /// </summary>
-    public bool HideStory { get; set; }
-
-    /// <summary>
-    /// Characters has no alignment
-    /// </summary>
-    public bool DisableAlignment { get; set; }
 
     /// <summary>
     /// Only GM and post author can see dice roll result

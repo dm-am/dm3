@@ -3,16 +3,17 @@
     <!-- Static content - render once (currentYear computed once at component creation) -->
     <div class="credits" v-once>
       <div class="copyright-line">
-        © DM.AM, 2007 &ndash; {{ currentYear }}. <span class="age">18+</span>
+        © Dungeon Master, {{ SITE_FOUNDED_YEAR }}–{{ currentYear }}.
+        <span class="age">18+</span>
       </div>
       <div>
-        Основатель сайта –
+        Основатель сайта —
         <router-link :to="{ name: 'profile', params: { username: 'rakot' } }"
           >rakot</router-link
         >
       </div>
       <div>
-        Администрирование –
+        Администрирование —
         <router-link :to="{ name: 'profile', params: { username: 'Evengard' } }"
           >Evengard</router-link
         >,
@@ -22,13 +23,13 @@
         >
       </div>
       <div>
-        Помощь в разработке –
+        Помощь в разработке —
         <router-link :to="{ name: 'profile', params: { username: 'Rayzen' } }"
           >Rayzen</router-link
         >
       </div>
       <div>
-        Дизайн логотипа –
+        Дизайн логотипа —
         <router-link
           :to="{ name: 'profile', params: { username: 'Azur' } }"
           @click="rickroll"
@@ -37,9 +38,7 @@
       </div>
     </div>
 
-    <div class="center-col" v-once></div>
-
-    <div class="legal" v-once>
+    <nav class="legal" aria-label="Правовая информация" v-once>
       <div class="legal-first">
         <router-link :to="{ name: 'privacy-policy' }"
           >Политика конфиденциальности</router-link
@@ -50,11 +49,13 @@
           >Пользовательское соглашение</router-link
         >
       </div>
-    </div>
+    </nav>
   </footer>
 </template>
 
 <script setup lang="ts">
+import { SITE_FOUNDED_YEAR } from "@/shared/config/site";
+
 // Static value - year doesn't change during session
 const currentYear = new Date().getFullYear();
 
@@ -70,12 +71,29 @@ function rickroll(event: MouseEvent) {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Layout"
-@import "src/assets/styles/Themes"
+// Shared column look for .credits/.legal — only the padding side differs,
+// which each caller sets itself (padding-left vs padding-right)
+%footer-column
+  position: relative
+  width: $sidebar-width
+  flex-shrink: 0
+  padding-top: $medium + $minor
+  box-sizing: border-box
+  font-size: $secondary-font-size
+  line-height: 1.3
+  // Darkened one step further than the global --text-muted token: this
+  // text sits over the decoration strip's semi-transparent overlay, which
+  // still eats a bit of contrast even after the sitewide AA fix
+  color: color-mix(in srgb, $text-muted 60%, $text)
+  display: flex
+  flex-direction: column
+  justify-content: center
+  align-self: stretch
 
 .footer
   display: flex
   align-items: stretch
+  justify-content: space-between
   position: relative
   box-sizing: border-box
   min-height: $footer-height
@@ -94,19 +112,8 @@ function rickroll(event: MouseEvent) {
     filter: $filter-invert
 
 .credits
-  position: relative
-  width: $sidebar-width
-  flex-shrink: 0
+  @extend %footer-column
   padding-left: $big
-  padding-top: $medium + $minor
-  box-sizing: border-box
-  font-size: $secondary-font-size
-  line-height: 1.3
-  color: $text-muted
-  display: flex
-  flex-direction: column
-  justify-content: center
-  align-self: stretch
 
 .copyright-line
   margin-bottom: $minor
@@ -123,28 +130,33 @@ function rickroll(event: MouseEvent) {
   vertical-align: baseline
   position: relative
   top: -2px
-  border: 1px solid $text-muted
-  color: $text-muted
-
-.center-col
-  flex-grow: 1
-  position: relative
+  border: 1px solid currentColor
+  color: inherit
 
 .legal
-  position: relative
-  width: $sidebar-width
-  flex-shrink: 0
+  @extend %footer-column
   padding-right: $big
-  padding-top: $medium + $minor
-  box-sizing: border-box
-  font-size: $secondary-font-size
-  line-height: 1.3
-  color: $text-muted
-  display: flex
-  flex-direction: column
-  justify-content: center
-  align-self: stretch
 
 .legal-first
   margin-bottom: $small
+
+@media (max-width: $min-width)
+  .footer
+    flex-direction: column
+    align-items: stretch
+    min-height: auto
+    // Decoration strip is tuned for a wide single row; relax the fixed
+    // height so stacked columns aren't clipped by it
+    overflow: visible
+    &:before
+      height: $footer-height
+
+  .credits,
+  .legal
+    width: auto
+    padding: $medium $big
+    align-self: auto
+
+  .legal
+    padding-top: 0
 </style>

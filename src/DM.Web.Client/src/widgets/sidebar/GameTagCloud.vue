@@ -3,13 +3,20 @@
     <template #title>Теги игр</template>
     <SidebarSkeleton v-if="gamesStore.tagsLoading && !tags.length" :lines="4" />
     <SecondaryText v-else-if="gamesStore.tagsError && !tags.length">
-      Не удалось загрузить
+      Не удалось загрузить.
+      <button
+        type="button"
+        class="retry-link"
+        @click="gamesStore.fetchTags(true)"
+      >
+        Повторить
+      </button>
     </SecondaryText>
     <SecondaryText v-else-if="!tags.length">Тегов пока нет</SecondaryText>
     <div v-else class="tag-cloud">
       <Tooltip v-for="tag in sortedTags" :key="tag.id">
         <template #content>
-          <RichText :text="tag.description || tag.title" />
+          <TooltipContent :text="tag.description || tag.title" />
         </template>
         <router-link
           :to="{ name: 'games', query: { requiredTags: String(tag.id) } }"
@@ -25,7 +32,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
-import { Tooltip, RichText } from "@/shared/ui/Tooltip";
+import { Tooltip, TooltipContent } from "@/shared/ui/Tooltip";
 import SidebarBlock from "./SidebarBlock.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
@@ -78,8 +85,7 @@ onMounted(() => {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 
 .tag-cloud
   display: flex
@@ -93,4 +99,7 @@ onMounted(() => {
 
   &:hover
     opacity: 0.8
+
+.retry-link
+  +inline-link-button
 </style>

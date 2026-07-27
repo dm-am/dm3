@@ -20,8 +20,6 @@ defineProps<{
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-
 .help-icon
   display: inline-flex
   :deep(svg)

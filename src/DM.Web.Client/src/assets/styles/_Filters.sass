@@ -7,7 +7,9 @@
 // Color rules:
 //   - All controls use $bg-element base with $hover-overlay (hover/active),
 //     $selected-overlay (persistent selection indicator — sort, etc.)
-//   - All dropdowns use $bg-page background (float above controls)
+//     Exception: apply buttons (FilterApplyButton) follow the +button state
+//     model (relative $control-bg-overlay base)
+//   - All dropdowns use $bg-element background (=_dropdown-panel)
 //   - Focus borders use $border-focus (gray, NOT $link)
 //   - $link only for actual links and link-styled buttons ("Сбросить")
 //   - Disabled uses $disabled-opacity, muted icons use $muted-opacity
@@ -236,7 +238,9 @@ $filter-avatar-size: 24px
     font-family: inherit
     border: 1px solid $border
     border-radius: $border-radius
-    background-color: $bg-element
+    // Relative fill (not solid $bg-element): the input sits ON the
+    // $bg-element dropdown panel — a solid fill would blend to zero delta
+    background-color: $input-bg-overlay
     color: $text
     outline: none
     box-sizing: border-box
@@ -270,90 +274,11 @@ $filter-avatar-size: 24px
     font-size: $secondary-font-size
     color: $text-muted
 
+  // Layout only — field visuals (border, fill, focus, calendar popover)
+  // live in the shared DateInput component (shared/ui/DatePicker)
   .date-input
     flex: 1
-    padding: $small
-    font-size: $secondary-font-size
-    font-family: inherit
-    border: 1px solid $border
-    border-radius: $border-radius
-    background-color: $bg-element
-    color: $text
-    color-scheme: light dark
-    outline: none
-    box-sizing: border-box
-
-    &:focus
-      border-color: $border-focus
-
-    &::-webkit-calendar-picker-indicator
-      opacity: $muted-opacity
-      cursor: pointer
-
-      &:hover
-        opacity: 1
-
-  .date-apply-btn
-    width: 100%
-    padding: $small
-    font-size: $secondary-font-size
-    font-family: inherit
-    cursor: pointer
-    border: 1px solid $border
-    border-radius: $border-radius
-    background-color: $bg-element
-    color: $text
-
-    &:hover:not(:disabled)
-      background-image: linear-gradient($hover-overlay, $hover-overlay)
-
-    &:disabled
-      opacity: $disabled-opacity
-      cursor: default
-
-// -----------------------------------------------------------------------------
-// Dropdown Items
-// -----------------------------------------------------------------------------
-
-=dropdown-items
-  .dropdown-item
-    display: flex
-    align-items: center
-    gap: $small
-    width: 100%
-    padding: $small $medium
-    font-size: $secondary-font-size
-    font-family: inherit
-    text-align: left
-    cursor: pointer
-    border: none
-    background: none
-    color: $text
-    transition: background-color $transition-fast
-
-    &.indented
-      padding-left: $large
-
-    &:hover,
-    &.highlighted
-      background-color: $hover-overlay
-
-  .item-avatar
-    width: $filter-avatar-size
-    height: $filter-avatar-size
-    flex-shrink: 0
-
-  .item-content
-    display: flex
-    flex-direction: column
-    gap: 1px
-
-  .item-label
-    color: $text
-
-  .item-hint
-    font-size: $tertiary-font-size
-    color: $text-muted
+    min-width: 0
 
 // -----------------------------------------------------------------------------
 // Filter Bubbles
@@ -365,10 +290,12 @@ $filter-avatar-size: 24px
     flex-wrap: wrap
     gap: $small
 
+  // Inline-block (not flex): a single bubble must copy as one line
+  // ("Статус: Активные", not each part on its own line) — Chrome
+  // serializes flex items with newlines. The former 2px gap is folded
+  // into the children's margins below.
   .bubble
-    display: inline-flex
-    align-items: center
-    gap: 2px
+    display: inline-block
     padding: 4px $small
     font-size: $secondary-font-size
     font-family: inherit
@@ -388,19 +315,21 @@ $filter-avatar-size: 24px
     &.bubble-single-owner .bubble-owner-item:hover
       background-color: transparent
 
+  // Gaps now come from real space text nodes (which also make the copy
+  // read "Статус: Активные ×"); only the remove button keeps a margin
+  // (its space node is zero-width so the × never wraps apart).
   .bubble-prefix
     color: $text-muted
-    margin-right: 2px
 
   .bubble-separator
     color: $text-muted
-    margin: 0 2px
 
   .bubble-value-text
     color: $text
 
   .bubble-remove-btn
-    margin-left: 4px
+    margin-left: 6px
+    vertical-align: middle
     +remove-icon-btn
 
   .clear-all-link

@@ -29,7 +29,9 @@ public class UserEndorsement
     public User? TargetUser { get; set; }
 
     /// <summary>
-    /// Endorsement text content (BBCode supported)
+    /// Endorsement text content. Plain text by contract (owner decision):
+    /// no BBCode parsing or server-side HTML rendering, the client
+    /// displays it as-is.
     /// </summary>
     public string Text { get; set; } = string.Empty;
 
@@ -50,7 +52,7 @@ public class UserEndorsement
 public class CreateUserEndorsementRequest
 {
     /// <summary>
-    /// Endorsement text content (10-5000 characters, positive only)
+    /// Endorsement text content (plain text, 10-5000 characters, positive only)
     /// </summary>
     [Required(ErrorMessage = "Endorsement text is required")]
     [StringLength(5000, MinimumLength = 10, ErrorMessage = "Endorsement text must be between 10 and 5000 characters")]
@@ -63,7 +65,7 @@ public class CreateUserEndorsementRequest
 public class UpdateUserEndorsementRequest
 {
     /// <summary>
-    /// Updated endorsement text (10-5000 characters, positive only)
+    /// Updated endorsement text (plain text, 10-5000 characters, positive only)
     /// </summary>
     [StringLength(5000, MinimumLength = 10, ErrorMessage = "Endorsement text must be between 10 and 5000 characters")]
     public string? Text { get; set; }

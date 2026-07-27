@@ -30,7 +30,7 @@ public class UserProfileNote
     /// <summary>
     /// Last update date (UTC)
     /// </summary>
-    public DateTimeOffset? UpdatedUtc { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 }
 
 /// <summary>
@@ -39,7 +39,7 @@ public class UserProfileNote
 public class UserProfileNoteRequest
 {
     /// <summary>
-    /// Note text content (max 2000 символов)
+    /// Note text content (max 2000 characters)
     /// </summary>
     public string Text { get; set; } = string.Empty;
 }

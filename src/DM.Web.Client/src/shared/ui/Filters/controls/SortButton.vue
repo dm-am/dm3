@@ -26,6 +26,7 @@ const emit = defineEmits<{
 
 // Dropdown state
 const showDropdown = ref(false);
+const triggerRef = ref<HTMLButtonElement | null>(null);
 
 // Current sort label
 const currentSortLabel = computed(() => {
@@ -44,6 +45,11 @@ function toggleDropdown() {
 
 function closeDropdown() {
   showDropdown.value = false;
+}
+
+function closeDropdownAndReturnFocus() {
+  closeDropdown();
+  triggerRef.value?.focus();
 }
 
 function selectSort(value: string) {
@@ -82,24 +88,28 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="sort-section">
+  <div class="sort-section" @keydown.esc="closeDropdownAndReturnFocus">
     <button
+      ref="triggerRef"
       type="button"
       class="sort-btn"
       :class="{ active: showDropdown }"
+      aria-haspopup="menu"
+      :aria-expanded="showDropdown"
       @click="toggleDropdown"
     >
       <SvgIcon :name="sortIcon" class="sort-icon" />
       <span>{{ currentSortLabel }}</span>
     </button>
 
-    <div v-if="showDropdown" class="sort-dropdown">
+    <div v-if="showDropdown" class="sort-dropdown" role="menu">
       <!-- Sort options -->
       <button
         v-for="option in options"
         :key="option.value"
         type="button"
         class="sort-option"
+        role="menuitem"
         :class="{ selected: option.value === sortBy }"
         @click="selectSort(option.value)"
       >
@@ -118,6 +128,7 @@ onUnmounted(() => {
       <button
         type="button"
         class="sort-option sort-direction"
+        role="menuitem"
         @click="toggleSortOrder"
       >
         <SvgIcon :name="sortIcon" class="sort-direction-icon" />

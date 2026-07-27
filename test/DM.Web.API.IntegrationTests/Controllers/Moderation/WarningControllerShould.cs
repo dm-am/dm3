@@ -1,7 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using DM.Domain.Core.Enums;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
+using DbWarning = DM.Infrastructure.Persistence.Entities.Moderation.Warning;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
@@ -12,6 +16,61 @@ public class WarningControllerShould : IntegrationTestBase
 {
     public WarningControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
+    }
+
+    [Fact]
+    public async Task GetUserWarnings_PublicView_ReturnsAggregatesWithoutModerationDetails()
+    {
+        // Arrange - seed directly: the create endpoint requires a moderator
+        // identity, while the public GET must be exercised anonymously
+        var warningId = Guid.NewGuid();
+        await using (var db = DatabaseFixture.CreateDbContext())
+        {
+            db.Warnings.Add(new DbWarning
+            {
+                WarningId = warningId,
+                TargetUserId = TestConstants.SecondUserId,
+                AuthorId = TestConstants.ModeratorUserId,
+                EntityId = Guid.Empty,
+                EntityType = WarningEntityType.Unknown,
+                CreatedUtc = DateTimeOffset.UtcNow.AddDays(-1),
+                Text = "Секретная причина модерации",
+                Points = 2,
+                IsRemoved = false
+            });
+            await db.SaveChangesAsync();
+        }
+
+        try
+        {
+            // Act - anonymous request
+            var response = await Client.GetAsync($"/v1/users/{TestConstants.SecondUserLogin}/warnings");
+
+            // Assert - aggregates are present, moderation details are not
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            root.GetProperty("totalPoints").GetInt32().Should().Be(2);
+            root.GetProperty("activeCount").GetInt32().Should().Be(1);
+
+            var warning = root.GetProperty("warnings").EnumerateArray().Single();
+            warning.GetProperty("points").GetInt32().Should().Be(2);
+            warning.GetProperty("isActive").GetBoolean().Should().BeTrue();
+            warning.TryGetProperty("createdUtc", out _).Should().BeTrue();
+            warning.TryGetProperty("reason", out _).Should().BeFalse();
+            warning.TryGetProperty("moderator", out _).Should().BeFalse();
+            warning.TryGetProperty("user", out _).Should().BeFalse();
+            warning.TryGetProperty("entityId", out _).Should().BeFalse();
+            warning.TryGetProperty("entityType", out _).Should().BeFalse();
+            json.Should().NotContain("Секретная причина модерации");
+        }
+        finally
+        {
+            await using var db = DatabaseFixture.CreateDbContext();
+            await db.Warnings.Where(w => w.WarningId == warningId).ExecuteDeleteAsync();
+        }
     }
 
     [Fact]

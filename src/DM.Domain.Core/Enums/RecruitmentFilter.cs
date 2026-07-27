@@ -32,7 +32,7 @@ public enum RecruitmentFilter
     Initial = 3,
 
     /// <summary>
-    /// Show only games with subsequent recruitment (RecruitmentCount >= 2, донабор)
+    /// Show only games with subsequent recruitment (RecruitmentCount >= 2, "донабор")
     /// </summary>
     [Description("Донабор игроков")]
     Subsequent = 4

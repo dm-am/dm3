@@ -6,47 +6,47 @@ namespace DM.Domain.Core.Enums;
 public enum Alignment
 {
     /// <summary>
-    /// Законопослушный добрый
+    /// Lawful good
     /// </summary>
     LawfulGood = 0,
 
     /// <summary>
-    /// Нейтральный добрый
+    /// Neutral good
     /// </summary>
     NeutralGood,
 
     /// <summary>
-    /// Хаотичный добрый
+    /// Chaotic good
     /// </summary>
     ChaoticGood,
 
     /// <summary>
-    /// Законопослушный нейтральный
+    /// Lawful neutral
     /// </summary>
     LawfulNeutral,
 
     /// <summary>
-    /// Нейтральный
+    /// True neutral
     /// </summary>
     TrueNeutral,
 
     /// <summary>
-    /// Хаотичный нейтральный
+    /// Chaotic neutral
     /// </summary>
     ChaoticNeutral,
 
     /// <summary>
-    /// Законопослушный злой
+    /// Lawful evil
     /// </summary>
     LawfulEvil,
 
     /// <summary>
-    /// Нейтральный злой
+    /// Neutral evil
     /// </summary>
     NeutralEvil,
 
     /// <summary>
-    /// Хаотичный злой
+    /// Chaotic evil
     /// </summary>
     ChaoticEvil
 }

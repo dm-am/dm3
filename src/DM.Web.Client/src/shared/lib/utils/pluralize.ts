@@ -29,16 +29,3 @@ export function pluralize(
 
   return many;
 }
-
-/**
- * Format count with pluralized word
- * @example formatCount(5, "пост", "поста", "постов") => "5 постов"
- */
-export function formatCount(
-  count: number,
-  one: string,
-  few: string,
-  many: string,
-): string {
-  return `${count} ${pluralize(count, one, few, many)}`;
-}

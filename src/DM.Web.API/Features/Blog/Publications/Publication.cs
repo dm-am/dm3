@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Blog.Blogs;
+using DM.Web.API.Shared.BbRendering;
 
 namespace DM.Web.API.Features.Blog.Publications;
 
@@ -42,9 +43,9 @@ public class Publication
     public string Title { get; set; } = string.Empty;
 
     /// <summary>
-    /// Publication content (HTML)
+    /// Publication content (BBCode, server-rendered to HTML)
     /// </summary>
-    public string Content { get; set; } = string.Empty;
+    public CommonBbText Content { get; set; } = null!;
 
     /// <summary>
     /// Short preview/excerpt
@@ -103,20 +104,21 @@ public class CreatePublicationRequest
     public Guid? RubricId { get; set; }
 
     /// <summary>
-    /// Publication title (1-300 символов)
+    /// Publication title (1-300 characters)
     /// </summary>
     [Required(ErrorMessage = "Заголовок обязателен")]
-    [StringLength(300, MinimumLength = 1, ErrorMessage = "Заголовок должен быть от 1 and 300 символов")]
+    [StringLength(300, MinimumLength = 1, ErrorMessage = "Заголовок должен быть от 1 до 300 символов")]
     public string Title { get; set; } = string.Empty;
 
     /// <summary>
-    /// Publication content
+    /// Publication content (BBCode)
     /// </summary>
     [Required(ErrorMessage = "Содержимое обязательно")]
+    [StringLength(100000, MinimumLength = 1, ErrorMessage = "Содержимое должно быть от 1 до 100000 символов")]
     public string Content { get; set; } = string.Empty;
 
     /// <summary>
-    /// Short preview/excerpt (max 500 символов)
+    /// Short preview/excerpt (max 500 characters)
     /// </summary>
     [StringLength(500, ErrorMessage = "Превью не должно превышать 500 символов")]
     public string Preview { get; set; } = string.Empty;
@@ -148,18 +150,19 @@ public class UpdatePublicationRequest
     public bool ClearRubric { get; set; }
 
     /// <summary>
-    /// Publication title (1-300 символов, optional)
+    /// Publication title (1-300 characters, optional)
     /// </summary>
-    [StringLength(300, MinimumLength = 1, ErrorMessage = "Заголовок должен быть от 1 and 300 символов")]
+    [StringLength(300, MinimumLength = 1, ErrorMessage = "Заголовок должен быть от 1 до 300 символов")]
     public string Title { get; set; } = string.Empty;
 
     /// <summary>
-    /// Publication content (optional)
+    /// Publication content (BBCode, optional)
     /// </summary>
+    [StringLength(100000, ErrorMessage = "Содержимое не должно превышать 100000 символов")]
     public string Content { get; set; } = string.Empty;
 
     /// <summary>
-    /// Short preview/excerpt (max 500 символов, optional)
+    /// Short preview/excerpt (max 500 characters, optional)
     /// </summary>
     [StringLength(500, ErrorMessage = "Превью не должно превышать 500 символов")]
     public string Preview { get; set; } = string.Empty;

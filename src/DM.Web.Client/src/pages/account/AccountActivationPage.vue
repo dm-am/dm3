@@ -7,7 +7,7 @@ import { AccountApi } from "@/shared/api";
 import type { User } from "@/shared/api/models/community";
 import Button from "@/shared/ui/Button/Button.vue";
 import { UsernameInput } from "@/shared/ui/UsernameInput";
-import LightboxTitle from "@/shared/ui/Layout/LightboxTitle.vue";
+import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import StatusIcon from "@/shared/ui/Icon/StatusIcon.vue";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 
@@ -194,24 +194,12 @@ async function resend() {
   }
 }
 
-function goHome() {
-  router.push("/");
-}
-
 function goToProfile() {
   if (activatedUser.value?.username) {
     router.push(`/users/${activatedUser.value.username}`);
   } else {
     router.push("/");
   }
-}
-
-function goToLogin() {
-  router.push("/?action=login");
-}
-
-function goToRegister() {
-  router.push("/?action=register");
 }
 </script>
 
@@ -223,7 +211,7 @@ function goToRegister() {
     <div class="activation-card">
       <!-- Step 1: Username Selection -->
       <template v-if="phase === 'selectUsername'">
-        <lightbox-title>Выберите имя</lightbox-title>
+        <dialog-title>Выберите имя</dialog-title>
 
         <div class="username-form">
           <label class="field-label">Имя пользователя</label>
@@ -246,7 +234,7 @@ function goToRegister() {
 
       <!-- Step 2: Confirm Username -->
       <template v-if="phase === 'confirmUsername' || phase === 'submitting'">
-        <lightbox-title>Подтвердите выбор имени</lightbox-title>
+        <dialog-title>Подтвердите выбор имени</dialog-title>
 
         <div class="confirm-form">
           <div class="username-warning">
@@ -285,7 +273,7 @@ function goToRegister() {
       <!-- Success state -->
       <template v-else-if="phase === 'success'">
         <status-icon type="success" />
-        <lightbox-title>Регистрация завершена</lightbox-title>
+        <dialog-title>Регистрация завершена</dialog-title>
         <p class="status-description">
           Добро пожаловать, <strong>{{ activatedUser?.username }}</strong
           >!
@@ -298,7 +286,7 @@ function goToRegister() {
       <!-- Expired state -->
       <template v-else-if="phase === 'expired'">
         <status-icon type="warning" />
-        <lightbox-title>Токен регистрации устарел</lightbox-title>
+        <dialog-title>Токен регистрации устарел</dialog-title>
 
         <div v-if="!resendSuccess" class="expired-action">
           <p class="main-text">
@@ -319,7 +307,7 @@ function goToRegister() {
       <!-- Not Found state -->
       <template v-else-if="phase === 'notFound'">
         <status-icon type="error" />
-        <lightbox-title>Токен регистрации недействителен</lightbox-title>
+        <dialog-title>Токен регистрации недействителен</dialog-title>
 
         <div class="error-info">
           <p v-if="error">
@@ -329,12 +317,16 @@ function goToRegister() {
           <ul>
             <li>
               Аккаунт уже активирован — попробуйте
-              <a href="#" @click.prevent="goToLogin">войти</a>
+              <router-link :to="{ path: '/', query: { action: 'login' } }"
+                >войти</router-link
+              >
             </li>
             <li>Был запрошен новый токен — проверьте последнее письмо</li>
             <li>
               Регистрация устарела —
-              <a href="#" @click.prevent="goToRegister">зарегистрируйтесь</a>
+              <router-link :to="{ path: '/', query: { action: 'register' } }"
+                >зарегистрируйтесь</router-link
+              >
               заново
             </li>
           </ul>
@@ -343,16 +335,13 @@ function goToRegister() {
 
       <div class="help-section">
         Нужна помощь? Обратитесь в
-        <a href="/support?reason=access">поддержку</a>
+        <router-link to="/support?reason=access">поддержку</router-link>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .activation-page
   max-width: 380px
   margin: $major auto

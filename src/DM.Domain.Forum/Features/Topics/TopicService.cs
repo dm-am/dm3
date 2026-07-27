@@ -5,12 +5,14 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Caching;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.UnreadCounters;
+using DM.Domain.Core.Users;
 using DM.Domain.Forum.Authorization;
 using DM.Domain.Forum.Features.Boards;
 using DM.Domain.Core.Events;
@@ -29,6 +31,7 @@ internal class TopicService : ITopicService
     private readonly IIdentityProvider _identityProvider;
     private readonly ITopicRepository _repository;
     private readonly IUnreadCountersRepository _unreadCountersRepository;
+    private readonly IUserLookupService _userLookupService;
     private readonly IEventProducer _invokedEventProducer;
     private readonly ICache _cache;
 
@@ -41,6 +44,7 @@ internal class TopicService : ITopicService
         IIdentityProvider identityProvider,
         ITopicRepository repository,
         IUnreadCountersRepository unreadCountersRepository,
+        IUserLookupService userLookupService,
         IEventProducer invokedEventProducer,
         ICache cache)
     {
@@ -52,6 +56,7 @@ internal class TopicService : ITopicService
         _identityProvider = identityProvider;
         _repository = repository;
         _unreadCountersRepository = unreadCountersRepository;
+        _userLookupService = userLookupService;
         _invokedEventProducer = invokedEventProducer;
         _cache = cache;
     }
@@ -73,14 +78,17 @@ internal class TopicService : ITopicService
         var board = await _boardService.GetBoard(createTopic.BoardTitle);
         _intentionManager.ThrowIfForbidden(ForumIntention.CreateTopic, board);
 
+        var author = _identityProvider.Current.User;
         var createEntity = new CreateTopicEntity
         {
             Title = createTopic.Title,
-            Text = createTopic.Text
+            // Topic bodies render on the Comment surface where [mod] is a green
+            // mod block; strip it when authored by a non-moderator.
+            Text = ModBlockSanitizer.SanitizeForAuthor(createTopic.Text, author.Role)
         };
         var topic = await _repository.Create(
             createEntity,
-            _identityProvider.Current.User.UserId,
+            author.UserId,
             board.Id,
             ct);
 
@@ -105,7 +113,13 @@ internal class TopicService : ITopicService
         var topic = await _repository.Get(topicId, accessPolicy, ct);
         if (topic == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, "Topic not found");
+            // 410 only for a topic that genuinely existed and was removed;
+            // an id that never existed is an honest 404.
+            throw new HttpException(
+                await _repository.Exists(topicId, ct)
+                    ? HttpStatusCode.Gone
+                    : HttpStatusCode.NotFound,
+                "Topic not found");
         }
 
         if (identity.User.IsAuthenticated)
@@ -132,7 +146,13 @@ internal class TopicService : ITopicService
         var topic = await _repository.GetByBoardAndNumber(board.Id, topicNumber, accessPolicy, ct);
         if (topic == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, $"Topic #{topicNumber} not found in board {boardAlias}");
+            // 410 only for a topic that genuinely existed and was removed;
+            // a number that never existed is an honest 404.
+            throw new HttpException(
+                await _repository.ExistsByBoardAndNumber(board.Id, topicNumber, ct)
+                    ? HttpStatusCode.Gone
+                    : HttpStatusCode.NotFound,
+                $"Topic #{topicNumber} not found in board {boardAlias}");
         }
 
         if (identity.User.IsAuthenticated)
@@ -254,6 +274,38 @@ internal class TopicService : ITopicService
         return (topics, pagingData.Result);
     }
 
+    /// <inheritdoc />
+    public async Task<Topic?> GetBestUserTopicAsync(string username, CancellationToken ct = default)
+    {
+        // Resolve username → UserId via the cross-module lookup so the
+        // repository stays typed on Guid. Throws HttpException(410) on an
+        // unknown user, which surfaces as a clean 404 to the API caller.
+        var user = await _userLookupService.GetAsync(username);
+
+        // Scope to boards the current viewer can see — the same access-policy
+        // mask the cross-board listing uses, so the widget never surfaces a
+        // topic on a board the viewer lacks access to.
+        var identity = _identityProvider.Current;
+        var accessPolicy = _accessPolicyConverter.Convert(identity.User.Role);
+        var topic = await _repository.GetBestUserTopic(user.UserId, accessPolicy, ct);
+
+        if (topic != null)
+        {
+            if (identity.User.IsAuthenticated)
+            {
+                topic.UnreadCommentsCount = (await _unreadCountersRepository.SelectByEntitiesAsync(
+                    identity.User.UserId, UnreadEntryType.Message, topic.Id))[topic.Id];
+            }
+            else
+            {
+                // Anonymous users: show total counts
+                topic.UnreadCommentsCount = topic.TotalCommentsCount;
+            }
+        }
+
+        return topic;
+    }
+
     /// <summary>
     /// A listing query is cache-friendly when it has no dynamic filters
     /// and uses the default page size (or smaller). Search, author filters,
@@ -299,11 +351,17 @@ internal class TopicService : ITopicService
             updateTopic.IsAttached = null;
         }
 
+        var bodyText = updateTopic.Text;
+        // Topic bodies render on the Comment surface where [mod] is a green mod
+        // block; strip it when the editor is a non-moderator.
+        if (!string.IsNullOrEmpty(bodyText))
+            bodyText = ModBlockSanitizer.SanitizeForAuthor(bodyText, _identityProvider.Current.User.Role);
+
         var updateEntity = new UpdateTopicEntity
         {
             TopicId = updateTopic.TopicId,
             Title = updateTopic.Title,
-            Text = updateTopic.Text,
+            Text = bodyText,
             IsClosed = updateTopic.IsClosed,
             IsAttached = updateTopic.IsAttached
         };

@@ -9,9 +9,9 @@ using Microsoft.EntityFrameworkCore;
 namespace DM.Workers.NotificationDispatcher.Implementation.Notifiers.Community;
 
 /// <summary>
-/// Создает in-app уведомление, когда пользователю выдана награда.
-/// Уведомляется получатель: что за награда, в какой серии конкурса
-/// и кто выдал — все нужное, чтобы открыть профиль и увидеть детали.
+/// Creates an in-app notification when a user is granted an award.
+/// The recipient is notified: which award, in which contest series
+/// and who granted it — everything needed to open the profile and see details.
 /// </summary>
 internal class AwardGrantedNotificationGenerator : BaseNotificationGenerator
 {

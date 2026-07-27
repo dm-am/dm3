@@ -104,7 +104,7 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
         {
             Id = updateNote.Id,
             Text = updateNote.Text,
-            UpdatedUtc = _dateTimeProvider.Now
+            ModifiedUtc = _dateTimeProvider.Now
         };
 
         await _noteRepository.Update(entity);

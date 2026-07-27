@@ -70,6 +70,30 @@ internal class BlogIntentionResolver : IIntentionResolver<BlogIntention, BlogDto
             BlogIntention.AssignMentor =>
                 user.Role >= UserRole.SeniorModerator,
 
+            // Status transitions mirror the game lead bucket: only the blog
+            // leads (owner + assistants) may move the blog on the status state
+            // machine, and only from a compatible current state
+            // (Draft -> Active, Closed -> Active reopen)
+            BlogIntention.SetStatusActive when user.IsAuthenticated =>
+                (target.Status == ModuleStatus.Draft || target.Status == ModuleStatus.Closed) &&
+                (isOwner || isAssistant),
+
+            // Active -> Closed (close/freeze/finish), or Closed -> Closed
+            // (change reason, e.g. unfreeze a Frozen blog to a plain Close)
+            BlogIntention.SetStatusClosed when user.IsAuthenticated =>
+                (target.Status == ModuleStatus.Active || target.Status == ModuleStatus.Closed) &&
+                (isOwner || isAssistant),
+
+            // Premoderation-pending blogs are hidden like games: only the owner,
+            // assistants, the assigned curator, invited users, and senior
+            // moderation can see them until they are approved
+            BlogIntention.ViewPremoderationPending =>
+                isOwner ||
+                isAssistant ||
+                isMentor ||
+                hasPendingInvitation ||
+                user.Role >= UserRole.SeniorModerator,
+
             // Anyone who can view the blog can comment (if comments enabled and not blacklisted)
             BlogIntention.CreateComment =>
                 target.CommentsEnabled &&
@@ -91,6 +115,11 @@ internal class BlogIntentionResolverWithoutTarget : IIntentionResolver<BlogInten
         {
             // Any authenticated user can create a blog
             BlogIntention.Create => user.IsAuthenticated,
+
+            // Site-wide Mentor+ gate for premoderation transitions
+            // (state checks live in the service)
+            BlogIntention.SetStatusModeration =>
+                user.IsAuthenticated && user.Role >= UserRole.Mentor,
 
             _ => false
         };

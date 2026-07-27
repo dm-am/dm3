@@ -71,7 +71,6 @@ export type ModeratedProfile = {
   location?: string;
   contacts?: { contactType: string; value: string }[];
   registeredUtc: string;
-  isHonorary?: boolean;
   isNewbie?: boolean;
   postReviewsGiven?: number;
   postReviewsReceived?: number;

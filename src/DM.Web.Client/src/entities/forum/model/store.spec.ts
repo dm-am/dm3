@@ -96,7 +96,7 @@ vi.mock("pinia", async (importOriginal) => {
   const actual = (await importOriginal()) as any;
   return {
     ...actual,
-    storeToRefs: (store: any) => ({
+    storeToRefs: () => ({
       user: mockUser,
     }),
   };

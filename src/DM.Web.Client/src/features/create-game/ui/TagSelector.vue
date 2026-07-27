@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from "vue";
 import type { Tag } from "@/entities/game";
 import { gameApi } from "@/entities/game";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { Tooltip, RichText } from "@/shared/ui/Tooltip";
+import { Tooltip, TooltipContent } from "@/shared/ui/Tooltip";
 
 const model = defineModel<number[]>({ default: () => [] });
 
@@ -97,7 +97,7 @@ onMounted(loadTags);
         <div class="category-tags">
           <Tooltip v-for="tag in group.tags" :key="tag.id">
             <template #content>
-              <RichText :text="tag.description || tag.title" />
+              <TooltipContent :text="tag.description || tag.title" />
             </template>
             <button
               type="button"
@@ -119,9 +119,6 @@ onMounted(loadTags);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .tag-selector
   min-height: $grid-step * 10
 
@@ -148,7 +145,9 @@ onMounted(loadTags);
 
 .tag-button
   padding: $tiny $small
-  background-color: $bg-element-accent
+  // Relative accent-strength base (not a solid color) so the chip reads
+  // on any background — one shade deeper than the surface it sits on
+  background-color: $control-bg-hover-overlay
   border: 1px solid $border
   border-radius: $border-radius
   color: $text

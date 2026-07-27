@@ -14,8 +14,6 @@ import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 .warnings-page
   width: 100%
 

@@ -68,7 +68,7 @@ public class NotepadEntry : ISoftDeletable
     /// <summary>
     /// Last update date
     /// </summary>
-    public DateTimeOffset? UpdatedUtc { get; set; }
+    public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
     /// Is removed (soft delete)

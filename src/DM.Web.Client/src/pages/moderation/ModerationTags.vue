@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, reactive } from "vue";
+import { useModal } from "vue-final-modal";
 import ModerationApi, {
   type ModerationTagGroup,
   type ModerationTag,
@@ -7,6 +8,12 @@ import ModerationApi, {
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { EmptyState } from "@/shared/ui";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import { useToast } from "@/shared/lib/composables/useToast";
+import TagGroupDialog from "./dialogs/TagGroupDialog.vue";
+import TagDialog from "./dialogs/TagDialog.vue";
+
+const toast = useToast();
 
 // State
 const groups = ref<ModerationTagGroup[]>([]);
@@ -16,28 +23,6 @@ const error = ref<string | null>(null);
 
 // Selected group for filtering tags
 const selectedGroupId = ref<string | null>(null);
-
-// Edit state
-const editingGroup = ref<ModerationTagGroup | null>(null);
-const editingTag = ref<ModerationTag | null>(null);
-const showGroupModal = ref(false);
-const showTagModal = ref(false);
-const isCreatingGroup = ref(false);
-const isCreatingTag = ref(false);
-
-// Form fields
-const groupForm = ref({
-  title: "",
-  description: "",
-  sortOrder: 0,
-});
-
-const tagForm = ref({
-  groupId: "",
-  title: "",
-  description: "",
-  sortOrder: 0,
-});
 
 // Computed
 const filteredTags = computed(() => {
@@ -74,142 +59,118 @@ function selectGroup(groupId: string | null) {
   selectedGroupId.value = groupId;
 }
 
-// Group modal
+// --- Group dialog (shared Dialog idiom) ---
+const editingGroup = ref<ModerationTagGroup | null>(null);
+
+const { open: openGroupDialog, close: closeGroupDialog } = useModal({
+  component: TagGroupDialog,
+  attrs: reactive({
+    group: editingGroup,
+    defaultSortOrder: computed(() => groups.value.length),
+    onSuccess: async () => {
+      closeGroupDialog();
+      await loadData();
+    },
+    onCancel: () => closeGroupDialog(),
+  }),
+});
+
 function openCreateGroupModal() {
-  isCreatingGroup.value = true;
   editingGroup.value = null;
-  groupForm.value = {
-    title: "",
-    description: "",
-    sortOrder: groups.value.length,
-  };
-  showGroupModal.value = true;
+  openGroupDialog();
 }
 
 function openEditGroupModal(group: ModerationTagGroup) {
-  isCreatingGroup.value = false;
   editingGroup.value = group;
-  groupForm.value = {
-    title: group.title,
-    description: group.description ?? "",
-    sortOrder: group.sortOrder,
-  };
-  showGroupModal.value = true;
+  openGroupDialog();
 }
 
-function closeGroupModal() {
-  showGroupModal.value = false;
-  editingGroup.value = null;
-}
+// --- Group delete (ConfirmDialog) ---
+const deleteGroupTarget = ref<ModerationTagGroup | null>(null);
+const deletingGroup = ref(false);
 
-async function saveGroup() {
-  try {
-    if (isCreatingGroup.value) {
-      await ModerationApi.createTagGroup({
-        title: groupForm.value.title,
-        description: groupForm.value.description || undefined,
-        sortOrder: groupForm.value.sortOrder,
-      });
-    } else if (editingGroup.value) {
-      await ModerationApi.updateTagGroup(editingGroup.value.id, {
-        title: groupForm.value.title,
-        description: groupForm.value.description || undefined,
-        sortOrder: groupForm.value.sortOrder,
-      });
-    }
-    closeGroupModal();
-    await loadData();
-  } catch (e) {
-    console.error(e);
-    alert("Ошибка при сохранении группы");
-  }
-}
-
-async function deleteGroup(group: ModerationTagGroup) {
+function deleteGroup(group: ModerationTagGroup) {
   if (group.tagsCount > 0) {
-    alert("Нельзя удалить группу, в которой есть теги");
+    toast.error("Нельзя удалить группу, в которой есть теги");
     return;
   }
-  if (!confirm(`Удалить группу "${group.title}"?`)) return;
+  deleteGroupTarget.value = group;
+}
+
+async function confirmDeleteGroup() {
+  if (!deleteGroupTarget.value || deletingGroup.value) return;
+  deletingGroup.value = true;
   try {
-    await ModerationApi.deleteTagGroup(group.id);
-    if (selectedGroupId.value === group.id) {
+    await ModerationApi.deleteTagGroup(deleteGroupTarget.value.id);
+    if (selectedGroupId.value === deleteGroupTarget.value.id) {
       selectedGroupId.value = null;
     }
+    deleteGroupTarget.value = null;
     await loadData();
   } catch (e) {
     console.error(e);
-    alert("Ошибка при удалении группы");
+    toast.error("Ошибка при удалении группы");
+  } finally {
+    deletingGroup.value = false;
   }
 }
 
-// Tag modal
+// --- Tag dialog (shared Dialog idiom) ---
+const editingTag = ref<ModerationTag | null>(null);
+
+const { open: openTagDialog, close: closeTagDialog } = useModal({
+  component: TagDialog,
+  attrs: reactive({
+    tag: editingTag,
+    groups,
+    defaultGroupId: computed(
+      () => selectedGroupId.value ?? groups.value[0]?.id ?? "",
+    ),
+    defaultSortOrder: computed(() => filteredTags.value.length),
+    onSuccess: async () => {
+      closeTagDialog();
+      await loadData();
+    },
+    onCancel: () => closeTagDialog(),
+  }),
+});
+
 function openCreateTagModal() {
-  isCreatingTag.value = true;
   editingTag.value = null;
-  tagForm.value = {
-    groupId: selectedGroupId.value ?? groups.value[0]?.id ?? "",
-    title: "",
-    description: "",
-    sortOrder: filteredTags.value.length,
-  };
-  showTagModal.value = true;
+  openTagDialog();
 }
 
 function openEditTagModal(tag: ModerationTag) {
-  isCreatingTag.value = false;
   editingTag.value = tag;
-  tagForm.value = {
-    groupId: tag.groupId,
-    title: tag.title,
-    description: tag.description ?? "",
-    sortOrder: tag.sortOrder,
-  };
-  showTagModal.value = true;
+  openTagDialog();
 }
 
-function closeTagModal() {
-  showTagModal.value = false;
-  editingTag.value = null;
-}
+// --- Tag delete (ConfirmDialog) ---
+const deleteTagTarget = ref<ModerationTag | null>(null);
+const deletingTag = ref(false);
 
-async function saveTag() {
-  try {
-    if (isCreatingTag.value) {
-      await ModerationApi.createTag({
-        groupId: tagForm.value.groupId,
-        title: tagForm.value.title,
-        description: tagForm.value.description || undefined,
-        sortOrder: tagForm.value.sortOrder,
-      });
-    } else if (editingTag.value) {
-      await ModerationApi.updateTag(editingTag.value.id, {
-        groupId: tagForm.value.groupId,
-        title: tagForm.value.title,
-        description: tagForm.value.description || undefined,
-        sortOrder: tagForm.value.sortOrder,
-      });
-    }
-    closeTagModal();
-    await loadData();
-  } catch (e) {
-    console.error(e);
-    alert("Ошибка при сохранении тега");
-  }
-}
-
-async function deleteTag(tag: ModerationTag) {
+function deleteTag(tag: ModerationTag) {
   if (tag.gamesCount > 0) {
-    alert(`Нельзя удалить тег, который используется в ${tag.gamesCount} играх`);
+    toast.error(
+      `Нельзя удалить тег, который используется в ${tag.gamesCount} играх`,
+    );
     return;
   }
-  if (!confirm(`Удалить тег "${tag.title}"?`)) return;
+  deleteTagTarget.value = tag;
+}
+
+async function confirmDeleteTag() {
+  if (!deleteTagTarget.value || deletingTag.value) return;
+  deletingTag.value = true;
   try {
-    await ModerationApi.deleteTag(tag.id);
+    await ModerationApi.deleteTag(deleteTagTarget.value.id);
+    deleteTagTarget.value = null;
     await loadData();
   } catch (e) {
     console.error(e);
-    alert("Ошибка при удалении тега");
+    toast.error("Ошибка при удалении тега");
+  } finally {
+    deletingTag.value = false;
   }
 }
 
@@ -340,83 +301,32 @@ onMounted(() => {
       </div>
     </template>
 
-    <!-- Group modal -->
-    <div
-      v-if="showGroupModal"
-      class="modal-overlay"
-      @click.self="closeGroupModal"
-    >
-      <div class="modal">
-        <h3>{{ isCreatingGroup ? "Новая группа" : "Редактировать группу" }}</h3>
-        <form @submit.prevent="saveGroup">
-          <div class="form-field">
-            <label>Название</label>
-            <input v-model="groupForm.title" type="text" required />
-          </div>
-          <div class="form-field">
-            <label>Описание</label>
-            <textarea v-model="groupForm.description" rows="3" />
-          </div>
-          <div class="form-field">
-            <label>Порядок сортировки</label>
-            <input v-model.number="groupForm.sortOrder" type="number" min="0" />
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="btn-action" @click="closeGroupModal">
-              Отмена
-            </button>
-            <button type="submit" class="btn-action">Сохранить</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Tag modal -->
-    <div v-if="showTagModal" class="modal-overlay" @click.self="closeTagModal">
-      <div class="modal">
-        <h3>{{ isCreatingTag ? "Новый тег" : "Редактировать тег" }}</h3>
-        <form @submit.prevent="saveTag">
-          <div class="form-field">
-            <label>Группа</label>
-            <select v-model="tagForm.groupId" required>
-              <option v-for="group in groups" :key="group.id" :value="group.id">
-                {{ group.title }}
-              </option>
-            </select>
-          </div>
-          <div class="form-field">
-            <label>Название</label>
-            <input v-model="tagForm.title" type="text" required />
-          </div>
-          <div class="form-field">
-            <label>Описание</label>
-            <textarea v-model="tagForm.description" rows="3" />
-            <small class="field-hint"
-              >Используйте [tipimg:URL]текст[/tipimg] для картинки в
-              тултипе</small
-            >
-          </div>
-          <div class="form-field">
-            <label>Порядок сортировки</label>
-            <input v-model.number="tagForm.sortOrder" type="number" min="0" />
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="btn-action" @click="closeTagModal">
-              Отмена
-            </button>
-            <button type="submit" class="btn-action">Сохранить</button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <!-- Delete confirmations -->
+    <ConfirmDialog
+      :show="deleteGroupTarget !== null"
+      title="Удаление группы"
+      :message="`Удалить группу &quot;${deleteGroupTarget?.title ?? ''}&quot;?`"
+      confirm-label="Удалить"
+      danger
+      :loading="deletingGroup"
+      @update:show="(v) => !v && (deleteGroupTarget = null)"
+      @confirm="confirmDeleteGroup"
+    />
+    <ConfirmDialog
+      :show="deleteTagTarget !== null"
+      title="Удаление тега"
+      :message="`Удалить тег &quot;${deleteTagTarget?.title ?? ''}&quot;?`"
+      confirm-label="Удалить"
+      danger
+      :loading="deletingTag"
+      @update:show="(v) => !v && (deleteTagTarget = null)"
+      @confirm="confirmDeleteTag"
+    />
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Layout"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Inputs"
-@import "src/assets/styles/ZIndex"
 
 .moderation-tags
   display: grid
@@ -584,77 +494,6 @@ onMounted(() => {
   svg
     width: 18px
     height: 18px
-
-// Modal
-.modal-overlay
-  position: fixed
-  top: 0
-  left: 0
-  right: 0
-  bottom: 0
-  display: flex
-  align-items: center
-  justify-content: center
-  background: rgba(0, 0, 0, 0.5)
-  z-index: $z-modal
-
-.modal
-  width: 100%
-  max-width: 450px
-  padding: $large
-  background: $bg-element
-  border: 1px solid $border
-  border-radius: $border-radius
-  box-shadow: 0 4px 20px $shadow-color
-
-  h3
-    margin: 0 0 $medium 0
-    font-size: $font-size
-    font-weight: 500
-
-.form-field
-  margin-bottom: $medium
-
-  label
-    display: block
-    margin-bottom: $tiny
-    font-size: $secondary-font-size
-    color: $text-muted
-
-  input,
-  textarea,
-  select
-    width: 100%
-    padding: $small
-    font-size: $secondary-font-size
-    font-family: inherit
-    border: 1px solid $border
-    border-radius: $border-radius
-    background: $bg-element
-    color: $text
-    box-sizing: border-box
-
-    &:focus
-      outline: none
-      border-color: $link
-
-  textarea
-    resize: vertical
-
-.field-hint
-  display: block
-  margin-top: $tiny
-  font-size: $tertiary-font-size
-  color: $text-muted
-
-.modal-actions
-  display: flex
-  justify-content: flex-end
-  gap: $small
-  margin-top: $large
-
-.btn-action
-  +button
 
 // Responsive
 @media (max-width: 768px)

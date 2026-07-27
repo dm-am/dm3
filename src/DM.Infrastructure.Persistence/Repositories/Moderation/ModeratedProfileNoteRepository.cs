@@ -74,7 +74,7 @@ internal class ModeratedProfileNoteRepository : IModeratedProfileNoteRepository
         {
             note.Text = entity.Text;
         }
-        note.UpdatedUtc = entity.UpdatedUtc;
+        note.ModifiedUtc = entity.ModifiedUtc;
 
         await _dbContext.SaveChangesAsync();
     }

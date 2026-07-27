@@ -6,13 +6,16 @@
       :lines="10"
     />
     <SecondaryText v-else-if="store.popularGames === null">
-      Не удалось загрузить
+      Не удалось загрузить.
+      <button type="button" class="retry-link" @click="fetchPopularGames(true)">
+        Повторить
+      </button>
     </SecondaryText>
     <SecondaryText v-else-if="store.popularGames.length === 0">
       Популярных игр пока нет
     </SecondaryText>
     <template v-else>
-      <GameLink
+      <SidebarGameLink
         v-for="game in store.popularGames"
         :key="game.id"
         :game="game"
@@ -20,9 +23,7 @@
         :alwaysShowCounters="!userStore.user"
       />
     </template>
-    <div class="separator">
-      - - - - - - - - - - - - - - - - - - - - - - - - - -
-    </div>
+    <DashSeparator spacing="tiny" width="75%" />
     <div>
       <span class="muted">- </span>
       <router-link
@@ -41,10 +42,11 @@
 import SidebarBlock from "./SidebarBlock.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import GameLink from "./GameLink.vue";
+import SidebarGameLink from "./SidebarGameLink.vue";
 import { useGamesStore } from "@/entities/game";
 import { useUserStore } from "@/entities/user";
 import { onMounted, ref } from "vue";
+import { DashSeparator } from "@/shared/ui/DashSeparator";
 
 const store = useGamesStore();
 const userStore = useUserStore();
@@ -54,14 +56,16 @@ const userStore = useUserStore();
 // the request failed (prevents an eternal skeleton).
 const failed = ref(false);
 
-onMounted(async () => {
-  await store.fetchPopularGames();
+async function fetchPopularGames(force = false) {
+  await store.fetchPopularGames(force);
   failed.value = store.popularGames === null;
-});
+}
+
+onMounted(() => fetchPopularGames());
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
+@import "src/assets/styles/Inputs"
 
 .muted
   color: $text-muted
@@ -69,6 +73,6 @@ onMounted(async () => {
 .forward
   font-weight: bold
 
-.separator
-  color: $text-muted
+.retry-link
+  +inline-link-button
 </style>

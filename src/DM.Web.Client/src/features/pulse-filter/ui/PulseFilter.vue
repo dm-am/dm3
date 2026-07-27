@@ -12,20 +12,20 @@ import {
   FilterDropdownHeader,
   FilterDropdownItem,
   NumericRangePicker,
-  UserMultiSelect,
   DateRangePicker,
   SortButton,
   FilterBubble,
   ExpandableBubble,
   BubblesRow,
 } from "@/shared/ui/Filters";
+import { UserMultiSelect } from "@/entities/user";
 import type { BubbleValue } from "@/shared/ui/Filters";
 import dayjs from "dayjs";
 
-// `hideAuthorFilter` — для страниц с неявной author-областью (профильные
-// «Полученные оценки» / «Оценил чужих постов»): scope задается
-// контейнером через query-параметр, кнопка «Авторы» в фильтре скрыта,
-// чтобы не сбивать пользователя.
+// `hideAuthorFilter` — for pages with an implicit author scope (the profile
+// "Полученные оценки" / "Оценил чужих постов" subpages): the scope is set
+// by the container via a query param, the "Авторы" filter button is hidden
+// to avoid confusing the user.
 const props = withDefaults(
   defineProps<{
     hideAuthorFilter?: boolean;
@@ -58,8 +58,8 @@ const { localInput, handleInput, applySearch } = useFilterSearch(
 const { showDropdown, navPath, closeDropdown, toggleDropdown } =
   useFilterDropdown();
 
-// Root level filter options. Опция «Авторы» прячется, когда хост
-// прибил author-scope гвоздями (профильные подстраницы).
+// Root level filter options. The "Авторы" option is hidden when the host
+// has nailed the author scope down (profile subpages).
 const filterOptions = computed(() => {
   const items = [
     { key: "rating", label: "Рейтинг", hint: "Диапазон рейтинга поста" },
@@ -270,9 +270,10 @@ function handleSearchKeydown(event: KeyboardEvent) {
           label="Фильтры"
           :active="showDropdown"
           @click="toggleDropdown"
+          @close="closeDropdown"
         />
 
-        <FilterDropdown v-if="showDropdown">
+        <FilterDropdown v-if="showDropdown" @close="closeDropdown">
           <!-- Header with back navigation (when inside a filter) -->
           <FilterDropdownHeader
             v-if="navPath"
@@ -292,9 +293,9 @@ function handleSearchKeydown(event: KeyboardEvent) {
             />
           </template>
 
-          <!-- Level 2: authors guard — даже если URL пришел с author=X
-               вручную, в hideAuthor-режиме открыть подуровень нельзя
-               (опция в filterOptions выше отсутствует). -->
+          <!-- Level 2: authors guard — even if the URL came with author=X
+               manually, in hideAuthor mode the sublevel cannot be opened
+               (the option is absent from filterOptions above). -->
           <UserMultiSelect
             v-if="!hideAuthorFilter && navPath?.filter === 'author'"
             :selected-users="filterState.authorUsernames"
@@ -379,8 +380,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-@import "src/assets/styles/Variables"
 @import "src/assets/styles/Filters"
 
 .pulse-filter

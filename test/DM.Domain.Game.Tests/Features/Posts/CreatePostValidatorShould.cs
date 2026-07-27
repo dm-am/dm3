@@ -98,4 +98,49 @@ public class CreatePostValidatorShould : UnitTestBase
         var result = await validator.TestValidateAsync(input);
         result.ShouldNotHaveAnyValidationErrors();
     }
+
+    [Fact]
+    public async Task PassForValidDiceRoll()
+    {
+        var input = new CreatePost
+        {
+            RoomId = Guid.NewGuid(),
+            GameText = "Valid text",
+            DiceRolls = new[]
+            {
+                new CreatePostDiceRoll { EdgesCount = 20, DiceCount = 2, ExplosionCount = 3 }
+            }
+        };
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public async Task FailWhenDieHasFewerThanTwoEdges()
+    {
+        var input = new CreatePost
+        {
+            RoomId = Guid.NewGuid(),
+            GameText = "Valid text",
+            DiceRolls = new[] { new CreatePostDiceRoll { EdgesCount = 1, DiceCount = 1 } }
+        };
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldHaveValidationErrorFor("DiceRolls[0].EdgesCount");
+    }
+
+    [Fact]
+    public async Task FailWhenDiceCountIsNotPositive()
+    {
+        var input = new CreatePost
+        {
+            RoomId = Guid.NewGuid(),
+            GameText = "Valid text",
+            DiceRolls = new[] { new CreatePostDiceRoll { EdgesCount = 6, DiceCount = 0 } }
+        };
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldHaveValidationErrorFor("DiceRolls[0].DiceCount");
+    }
 }

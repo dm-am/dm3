@@ -75,6 +75,16 @@ export const useAuthStore = defineStore("root", () => {
     updateUser(null);
   }
 
+  // "Выйти со всех устройств": terminate every other active session first,
+  // then sign the current one out. The backend has no single "logout
+  // everywhere" endpoint (DELETE account/sessions/others keeps the current
+  // session), so combining the two calls logs the user out on all devices.
+  async function signOutAll() {
+    await accountApi.logoutAll();
+    await accountApi.signOut();
+    updateUser(null);
+  }
+
   async function fetchUser() {
     if (!accountApi.isAuthenticated()) return;
 
@@ -117,6 +127,7 @@ export const useAuthStore = defineStore("root", () => {
     register,
     signIn,
     signOut,
+    signOutAll,
     fetchUser,
     updateUser,
   };

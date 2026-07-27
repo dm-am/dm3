@@ -25,8 +25,8 @@ internal class PersonalProfileMappingProfile : Profile
                 TotalPosts = s.QuantityRating,
                 PostReviewScoreSum = s.QualityRating
             }))
-            // Picture — через зарегистрированный AvatarPicture→UserPicture
-            // конвертер (имгпрокси thumbnails on the fly, см. AvatarPictureConverter).
+            // Picture — via the registered AvatarPicture→UserPicture
+            // converter (imgproxy thumbnails on the fly, see AvatarPictureConverter).
             .ForMember(d => d.Picture, o => o.MapFrom(s => s.Picture))
             .ForMember(d => d.Birthday, o => o.MapFrom(s => s.BirthdayDate.HasValue
                 ? new Birthday
@@ -45,6 +45,19 @@ internal class PersonalProfileMappingProfile : Profile
                 })))
             .ForMember(d => d.PostReviewsGiven, o => o.MapFrom(s => s.PostReviewsGivenCount))
             .ForMember(d => d.PostReviewsReceived, o => o.MapFrom(s => s.PostReviewsReceivedCount))
+            // Activity statistics (UserDetails : GeneralUser carries the counts).
+            // Same block UserProfile maps — the own-profile page needs them too.
+            .ForMember(d => d.ReviewsGiven, o => o.MapFrom(s => s.PostReviewsGivenCount))
+            .ForMember(d => d.ReviewsReceived, o => o.MapFrom(s => s.PostReviewsReceivedCount))
+            .ForMember(d => d.EndorsementsGiven, o => o.MapFrom(s => s.EndorsementsGivenCount))
+            .ForMember(d => d.EndorsementsReceived, o => o.MapFrom(s => s.EndorsementsReceivedCount))
+            .ForMember(d => d.TopicsAuthored, o => o.MapFrom(s => s.TopicsAuthoredCount))
+            .ForMember(d => d.CommentsAuthored, o => o.MapFrom(s => s.CommentsAuthoredCount))
+            .ForMember(d => d.GlobalChatMessages, o => o.MapFrom(s => s.GlobalChatMessagesCount))
+            .ForMember(d => d.BansReceived, o => o.MapFrom(s => s.BansReceivedCount))
+            .ForMember(d => d.GameDrops, o => o.MapFrom(s => s.GameDropsCount))
+            .ForMember(d => d.PublicationsAuthored, o => o.MapFrom(s => s.PublicationsAuthoredCount))
+            .ForMember(d => d.LikesReceived, o => o.MapFrom(s => s.LikesReceivedCount))
             .ForMember(d => d.RegisteredUtc, o => o.MapFrom(s => s.CreatedUtc))
             .ForMember(d => d.Visibility, o => o.MapFrom(s => new VisibilitySettings
             {

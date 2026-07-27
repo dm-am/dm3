@@ -33,7 +33,7 @@ internal class FundraisingGoalRepository : IFundraisingGoalRepository
     // WRITE
 
     /// <inheritdoc />
-    public async Task<FundraisingGoal> Update(UpdateFundraisingGoal update, Guid updatedByUserId, DateTimeOffset updatedUtc)
+    public async Task<FundraisingGoal> Update(UpdateFundraisingGoal update, Guid updatedByUserId, DateTimeOffset modifiedUtc)
     {
         var dbGoal = await _dbContext.FundraisingGoals.FirstOrDefaultAsync();
         if (dbGoal == null)
@@ -43,7 +43,7 @@ internal class FundraisingGoalRepository : IFundraisingGoalRepository
 
         dbGoal.GoalAmount = update.GoalAmount;
         dbGoal.CollectedAmount = update.CollectedAmount;
-        dbGoal.UpdatedUtc = updatedUtc;
+        dbGoal.ModifiedUtc = modifiedUtc;
         dbGoal.UpdatedByUserId = updatedByUserId;
 
         await _dbContext.SaveChangesAsync();

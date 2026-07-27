@@ -9,11 +9,11 @@ using Microsoft.AspNetCore.Mvc;
 namespace DM.Web.API.Features.Community.Awards;
 
 /// <summary>
-/// Публичное чтение каталога наград, серий конкурсов и наград пользователей.
+/// Public read of the award catalog, contest series and user awards.
 /// </summary>
 /// <remarks>
-/// Редактирование каталога (типы + серии) — в <c>v1/moderation/award-types</c>
-/// и <c>v1/moderation/contest-series</c>. Выдача/отзыв награды — в
+/// Catalog editing (types + series) lives in <c>v1/moderation/award-types</c>
+/// and <c>v1/moderation/contest-series</c>. Granting/revoking an award is in
 /// <c>v1/moderation/users/{username}/awards</c>.
 /// </remarks>
 [ApiController]
@@ -32,8 +32,8 @@ public class AwardController : ControllerBase
         _mapper = mapper;
     }
 
-    /// <summary>Активные типы наград (каталог).</summary>
-    /// <response code="200">Список записей каталога.</response>
+    /// <summary>Active award types (the catalog).</summary>
+    /// <response code="200">List of catalog records.</response>
     [HttpGet("award-types", Name = nameof(GetAwardTypes))]
     [ProducesResponseType(typeof(ListEnvelope<AwardType>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAwardTypes()
@@ -43,8 +43,8 @@ public class AwardController : ControllerBase
         return Ok(new ListEnvelope<AwardType>(items, null));
     }
 
-    /// <summary>Активные серии конкурсов (для UI выдачи и подсветки итогов).</summary>
-    /// <response code="200">Список серий, новые сверху (год DESC → сезон).</response>
+    /// <summary>Active contest series (for the grant UI and results highlighting).</summary>
+    /// <response code="200">List of series, newest first (year DESC → season).</response>
     [HttpGet("contest-series", Name = nameof(GetContestSeries))]
     [ProducesResponseType(typeof(ListEnvelope<ContestSeries>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetContestSeries()
@@ -54,10 +54,10 @@ public class AwardController : ControllerBase
         return Ok(new ListEnvelope<ContestSeries>(items, null));
     }
 
-    /// <summary>Награды пользователя.</summary>
-    /// <param name="username">Имя пользователя.</param>
-    /// <response code="200">Список наград (новые серии сверху, внутри — по SortOrder типа).</response>
-    /// <response code="404">Пользователь не найден.</response>
+    /// <summary>A user's awards.</summary>
+    /// <param name="username">Username.</param>
+    /// <response code="200">List of awards (newest series first, ordered by type SortOrder within).</response>
+    /// <response code="404">User not found.</response>
     [HttpGet("users/{username}/awards", Name = nameof(GetUserAwards))]
     [ProducesResponseType(typeof(ListEnvelope<UserAward>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]

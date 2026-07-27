@@ -69,20 +69,20 @@ public class CoreModule : Module
             .AsImplementedInterfaces()
             .InstancePerLifetimeScope();
 
-        // StorageBucketInitializer регистрируется через AddHostedService в Startup.cs
-        // (Autofac.IHostedService не подхватывается host-loop'ом ASP.NET Core).
+        // StorageBucketInitializer is registered via AddHostedService in Startup.cs
+        // (Autofac.IHostedService is not picked up by the ASP.NET Core host loop).
 
-        // Единственный сервис обработки картинок-аватаров: ресайз+кроп
-        // в Medium/Small WebP-thumbnails, EXIF-strip оригинала, decompression-
-        // bomb protection, magic-byte content-type detection, атомарный
-        // S3 batch-upload с компенсирующим cleanup при failure.
+        // The single avatar image processing service: resize+crop
+        // into Medium/Small WebP thumbnails, EXIF strip of the original, decompression-
+        // bomb protection, magic-byte content-type detection, atomic
+        // S3 batch upload with compensating cleanup on failure.
         builder.RegisterType<ImageProcessingService>()
             .As<IImageProcessingService>()
             .InstancePerLifetimeScope();
 
-        // GC обсолетных uploads (UploadGarbageCollector) живёт в
-        // Infrastructure.Persistence (нужен DmDbContext) и регистрируется
-        // там через PersistenceModule.
+        // GC of obsolete uploads (UploadGarbageCollector) lives in
+        // Infrastructure.Persistence (needs DmDbContext) and is registered
+        // there via PersistenceModule.
 
         // Search services
         builder.RegisterType<SearchService>()

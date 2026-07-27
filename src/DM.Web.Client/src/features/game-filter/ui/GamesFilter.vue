@@ -23,7 +23,6 @@ import {
   FilterDropdown,
   FilterDropdownHeader,
   FilterDropdownItem,
-  UserMultiSelect,
   DateRangePicker,
   OptionsList,
   SortButton,
@@ -31,6 +30,7 @@ import {
   FilterBubble,
   BubblesRow,
 } from "@/shared/ui/Filters";
+import { UserMultiSelect } from "@/entities/user";
 
 const {
   filterState,
@@ -502,7 +502,7 @@ const statusBubbleLabel = computed(() => {
     const opt = RECRUITMENT_FILTER_OPTIONS.find(
       (o) => o.value === filterState.value.recruitmentFilter,
     );
-    subLabel = opt?.label ?? "";
+    subLabel = opt?.label.toLowerCase() ?? "";
   }
   if (status === "Closed" && filterState.value.closedReasonFilter !== "any") {
     const opt = CLOSED_REASON_FILTER_OPTIONS.find(
@@ -702,9 +702,13 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
       <!-- Filter button -->
       <div v-click-outside="closeDropdown" class="filter-section">
-        <FilterButton :active="showDropdown" @click="toggleDropdown" />
+        <FilterButton
+          :active="showDropdown"
+          @click="toggleDropdown"
+          @close="closeDropdown"
+        />
 
-        <FilterDropdown v-if="showDropdown">
+        <FilterDropdown v-if="showDropdown" @close="closeDropdown">
           <!-- Navigation header when inside a sub-level -->
           <FilterDropdownHeader
             v-if="navPath"
@@ -933,8 +937,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-@import "src/assets/styles/Variables"
 @import "src/assets/styles/Filters"
 
 .games-filter

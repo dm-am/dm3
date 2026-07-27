@@ -106,7 +106,33 @@ export default new (class ForumApi {
     return Api.patch<Envelope<Topic>>(`topics/${id}`, topic);
   }
 
-  public createTopic(id: BoardId, topic: Post<Topic>) {
+  /** Delete a topic (author or moderator; backend DELETE v1/topics/{id}). */
+  public deleteTopic(id: TopicId) {
+    return Api.delete(`topics/${id}`);
+  }
+
+  /**
+   * Fetch a topic's first-post raw BBCode source for the editor (AuthorEdit
+   * audience round-trips [private]/[mod] for the author).
+   */
+  public getTopicForUpdate(id: TopicId) {
+    return Api.get<Envelope<Topic>>(
+      `topics/${id}`,
+      undefined,
+      RENDER_AUDIENCE.AuthorEdit,
+    );
+  }
+
+  /**
+   * Create a new topic on a board.
+   *
+   * The wire body intentionally does NOT reuse `Post<Topic>` — the API DTO
+   * (CreateTopicRequest on the server) takes `{ title, text }`, not
+   * `{ title, description }` like the Topic resource's own field name.
+   * Passing `description` here would silently fail to bind to the
+   * server-side `Text` property (both required, non-empty).
+   */
+  public createTopic(id: BoardId, topic: { title: string; text: string }) {
     return Api.post<Envelope<Topic>>(`boards/${id}/topics`, topic);
   }
 
@@ -173,26 +199,26 @@ export default new (class ForumApi {
   }
 
   public updateComment(id: CommentId, comment: Patch<Comment>) {
-    return Api.patch<Comment>(`topics/comments/${id}`, comment);
+    return Api.patch<Envelope<Comment>>(`forum/comments/${id}`, comment);
   }
 
   public deleteComment(id: CommentId) {
-    return Api.delete(`topics/comments/${id}`);
+    return Api.delete(`forum/comments/${id}`);
   }
 
   public getCommentForUpdate(id: CommentId) {
-    return Api.get<Comment>(
-      `topics/comments/${id}`,
+    return Api.get<Envelope<Comment>>(
+      `forum/comments/${id}`,
       undefined,
       RENDER_AUDIENCE.AuthorEdit,
     );
   }
 
   public postCommentLike(id: CommentId) {
-    return Api.post<User>(`topics/comments/${id}/likes`);
+    return Api.post<Envelope<User>>(`forum/comments/${id}/likes`);
   }
   public deleteCommentLike(id: CommentId) {
-    return Api.delete(`topics/comments/${id}/likes`);
+    return Api.delete(`forum/comments/${id}/likes`);
   }
 
   public postTopicLike(id: TopicId) {

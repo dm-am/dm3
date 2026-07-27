@@ -26,7 +26,8 @@ internal class WarningApiService : IWarningApiService
         var warnings = await _warningService.GetUserWarnings(login);
         var points = await _warningService.GetUserWarningPoints(login);
 
-        var warningList = warnings.Select(_mapper.Map<Warning>).ToList();
+        // Public endpoint: trim each warning to its aggregate facts
+        var warningList = warnings.Select(_mapper.Map<PublicWarning>).ToList();
 
         return new UserWarningsInfo
         {

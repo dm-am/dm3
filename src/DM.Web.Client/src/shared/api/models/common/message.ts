@@ -28,7 +28,7 @@ export type ChatType = "Direct" | "Group" | "Global";
  */
 export type MessageEdit = {
   id: string;
-  editedUtc: string;
+  modifiedUtc: string;
   editor: User;
 };
 

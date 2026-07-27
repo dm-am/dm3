@@ -1,186 +1,379 @@
 <script setup lang="ts">
+// Game info block ("Информация игры", dev doc 4.2.2.9): a key-value fact
+// table, the player + master character rosters, and the description — the old
+// site's module-info layout, but the fields/columns follow the doc, not the
+// legacy page (e.g. "Посты"/"Последний пост", not "Ходов"/"Последний ход"; the
+// descriptor column is titled by the schema's descriptor attribute).
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
-import { useGameDetailsStore } from "@/entities/game";
-import { useUserStore } from "@/entities/user";
+import {
+  useGameDetailsStore,
+  GameStatusBadge,
+  type Character,
+} from "@/entities/game";
+import { UserLink, useUserDisplay } from "@/entities/user";
 import { ContentText } from "@/shared/ui";
-import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { DataTable, type Column } from "@/shared/ui/DataTable";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
-import { UserLink } from "@/entities/user";
-import { GameRole } from "@/entities/game";
+import { DashSeparator } from "@/shared/ui/DashSeparator";
+import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
 
 const gameStore = useGameDetailsStore();
-const { game, rooms, characters } = storeToRefs(gameStore);
-const { user } = storeToRefs(useUserStore());
+const { game, characters } = storeToRefs(gameStore);
+const { isOnline } = useUserDisplay();
 
-const canEdit = computed(() => {
-  if (!game.value?.participation) return false;
-  return (
-    game.value.participation.includes(GameRole.Master) ||
-    game.value.participation.includes(GameRole.Mentor) ||
-    game.value.participation.includes(GameRole.Assistant)
-  );
-});
-
-const activePlayers = computed(() => {
-  return game.value?.players ?? [];
-});
-
-const activeCharacters = computed(() => {
-  return characters.value.filter((c) => c.status === "Active");
-});
-
+const assistants = computed(() => game.value?.assistants ?? []);
+const readers = computed(() => game.value?.readers ?? []);
 const tags = computed(() => game.value?.tags ?? []);
+const recruitment = computed(() => game.value?.recruitment);
+
+// "Количество игроков: X/Y" — accepted players / limit (doc). Without a limit
+// only the accepted count is shown.
+const playerCount = computed(() => {
+  const r = recruitment.value;
+  const accepted = r?.pcCount ?? game.value?.players?.length ?? 0;
+  return r?.pcLimit ? `${accepted}/${r.pcLimit}` : String(accepted);
+});
+
+function isInGame(c: Character): boolean {
+  return c.status === "Active" || c.status === "Retired";
+}
+const playerCharacters = computed(() =>
+  characters.value.filter((c) => !c.isNpc && isInGame(c)),
+);
+const npcCharacters = computed(() =>
+  characters.value.filter((c) => c.isNpc && isInGame(c)),
+);
+
+// The descriptor column is titled by the schema's descriptor attribute
+// ("[Дескриптор]. По умолчанию 'класс'").
+const descriptorTitle = computed(
+  () =>
+    game.value?.schema?.specifications.find((s) => s.isDescriptor)?.title ||
+    "Класс",
+);
+function descriptorOf(c: Character): string {
+  return c.descriptor?.trim() || "—";
+}
+
+function lastPostOf(c: Character): string {
+  return c.lastPostUtc ? formatDateFull(c.lastPostUtc) : "n/a";
+}
+
+// Character status, refined from the Retired flags.
+function statusLabel(c: Character): string {
+  if (c.status === "Active") return "В игре";
+  if (c.status === "Retired") {
+    if (c.isDead) return "Персонаж мертв";
+    if (c.isPlayerExiled) return "Игрок изгнан";
+    if (c.isPlayerLeft) return "Игрок покинул";
+    return "Выбыл";
+  }
+  return c.status;
+}
+function isRetired(c: Character): boolean {
+  return c.status === "Retired";
+}
+
+// Rating "X/Y" — X (quality) is coloured green/red; Y (quantity) stays the
+// default body colour (matches the old site: "484" green, "/5582" plain #444).
+function ratingSignClass(x: number): string {
+  if (x > 0) return "pos";
+  if (x < 0) return "neg";
+  return "";
+}
+
+// Character status colour — "В игре" green, everything else muted (old site).
+function statusClass(c: Character): string {
+  return c.status === "Active" ? "status-active" : "status-retired";
+}
+
+// Columns mirror the old site's roster: every column centred, widths in the
+// same proportions (# ~4% / Игрок 17 / Рейтинг 11 / Присутствие 13 / Имя 14 /
+// Класс 11 / Посты 7 / Последний пост 12 / Статус 11).
+const playerColumns = computed<Column[]>(() => [
+  { key: "player", label: "Игрок", align: "center", width: "17%" },
+  {
+    key: "rating",
+    label: "Рейтинг",
+    align: "center",
+    width: "11%",
+    hideOnMobile: true,
+  },
+  {
+    key: "presence",
+    label: "Присутствие",
+    align: "center",
+    width: "13%",
+    hideOnMobile: true,
+  },
+  { key: "character", label: "Имя персонажа", align: "center", width: "14%" },
+  {
+    key: "descriptor",
+    label: descriptorTitle.value,
+    align: "center",
+    width: "11%",
+  },
+  { key: "posts", label: "Посты", align: "center", width: "7%" },
+  {
+    key: "lastpost",
+    label: "Последний пост",
+    align: "center",
+    width: "12%",
+    hideOnMobile: true,
+  },
+  { key: "status", label: "Статус", align: "center", width: "11%" },
+]);
+const npcColumns = computed<Column[]>(() => [
+  { key: "character", label: "Имя персонажа", align: "center", width: "30%" },
+  {
+    key: "descriptor",
+    label: descriptorTitle.value,
+    align: "center",
+    width: "18%",
+  },
+  { key: "posts", label: "Посты", align: "center", width: "12%" },
+  {
+    key: "lastpost",
+    label: "Последний пост",
+    align: "center",
+    width: "22%",
+    hideOnMobile: true,
+  },
+  { key: "status", label: "Статус", align: "center", width: "18%" },
+]);
 </script>
 
 <template>
   <div v-if="game" class="game-details">
-    <!-- Game Description -->
-    <section class="game-section" v-if="game.info">
-      <block-title>Описание игры</block-title>
-      <content-text :html="game.info" />
+    <!-- Key-value info table (dev doc 4.2.2.9), a borderless information block. -->
+    <table class="info-table">
+      <tbody>
+        <tr>
+          <th>Статус</th>
+          <td>
+            <GameStatusBadge
+              :status="game.status"
+              :is-recruiting="game.recruitment?.isOpen"
+              :is-subsequent="game.recruitment?.isSubsequent"
+              :closed-reason="game.closedReason"
+            />
+          </td>
+        </tr>
+        <tr>
+          <th>Дата создания</th>
+          <td>{{ formatDate(game.createdUtc) }}</td>
+        </tr>
+        <tr v-if="game.activatedUtc">
+          <th>Дата начала</th>
+          <td>{{ formatDate(game.activatedUtc) }}</td>
+        </tr>
+        <tr v-if="game.status === 'Closed' && game.closedUtc">
+          <th>Дата завершения</th>
+          <td>{{ formatDate(game.closedUtc) }}</td>
+        </tr>
+        <tr>
+          <th>Игроков</th>
+          <td>{{ playerCount }}</td>
+        </tr>
+        <tr>
+          <th>Мастер</th>
+          <td><UserLink :user="game.master" hide-badge /></td>
+        </tr>
+        <tr>
+          <th>{{ assistants.length > 1 ? "Ассистенты" : "Ассистент" }}</th>
+          <td>
+            <template v-if="assistants.length"
+              ><template v-for="(a, i) in assistants" :key="a.id"
+                ><UserLink :user="a" hide-badge /><span
+                  v-if="i < assistants.length - 1"
+                  >,
+                </span></template
+              ></template
+            >
+            <span v-else class="muted">нет</span>
+          </td>
+        </tr>
+        <tr v-if="game.mentor">
+          <th>Наставник</th>
+          <td><UserLink :user="game.mentor" hide-badge /></td>
+        </tr>
+        <tr v-if="game.system">
+          <th>Система</th>
+          <td>{{ game.system }}</td>
+        </tr>
+        <tr v-if="game.setting">
+          <th>Сеттинг</th>
+          <td>{{ game.setting }}</td>
+        </tr>
+        <tr v-if="tags.length">
+          <th>Теги</th>
+          <td>
+            <template v-for="(tag, i) in tags" :key="tag.id"
+              ><router-link
+                class="tag-link"
+                :to="{ name: 'games', query: { requiredTags: String(tag.id) } }"
+                >{{ tag.title }}</router-link
+              ><span v-if="i < tags.length - 1">, </span></template
+            >
+          </td>
+        </tr>
+        <tr v-if="readers.length">
+          <th>Читатели</th>
+          <td>
+            <template v-for="(r, i) in readers" :key="r.id"
+              ><UserLink :user="r" hide-badge /><span
+                v-if="i < readers.length - 1"
+                >,
+              </span></template
+            >
+          </td>
+        </tr>
+        <tr>
+          <th>Постов мастера/всего</th>
+          <td>
+            {{ game.masterPostsCount ?? 0 }}/{{ game.totalPostsCount ?? 0 }}
+          </td>
+        </tr>
+        <tr v-if="game.lastMasterPostUtc">
+          <th>Последний пост</th>
+          <td>{{ formatDateFull(game.lastMasterPostUtc) }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Player roster -->
+    <section v-if="playerCharacters.length" class="roster">
+      <BlockTitle>Персонажи игроков</BlockTitle>
+      <DataTable
+        :columns="playerColumns"
+        :data="playerCharacters"
+        :show-row-numbers="true"
+        empty-text="Персонажей пока нет"
+      >
+        <template #cell-player="{ row }">
+          <UserLink v-if="row.author" :user="row.author" hide-badge />
+          <span v-else class="muted">—</span>
+        </template>
+        <template #cell-rating="{ row }">
+          <template v-if="row.authorRating"
+            ><span
+              :class="ratingSignClass(row.authorRating.postReviewScoreSum)"
+              >{{ row.authorRating.postReviewScoreSum }}</span
+            >/{{ row.authorRating.totalPosts }}</template
+          >
+          <span v-else>n/a</span>
+        </template>
+        <template #cell-presence="{ row }">
+          <span
+            v-if="row.author"
+            :class="isOnline(row.author) ? 'online' : 'offline'"
+            >{{ isOnline(row.author) ? "online" : "offline" }}</span
+          >
+        </template>
+        <template #cell-character="{ row }">
+          <span :class="{ retired: isRetired(row) }">{{ row.name }}</span>
+        </template>
+        <template #cell-descriptor="{ row }">{{ descriptorOf(row) }}</template>
+        <template #cell-posts="{ row }">{{ row.totalPostsCount }}</template>
+        <template #cell-lastpost="{ row }">{{ lastPostOf(row) }}</template>
+        <template #cell-status="{ row }"
+          ><span :class="statusClass(row)">{{
+            statusLabel(row)
+          }}</span></template
+        >
+      </DataTable>
     </section>
 
-    <!-- Noteworthy (master's notes visible to all) -->
-    <section class="game-section" v-if="game.notes && canEdit">
-      <block-title>Заметки мастера</block-title>
-      <content-text :html="game.notes" />
+    <!-- Master's characters (NPC) -->
+    <section v-if="npcCharacters.length" class="roster">
+      <BlockTitle>Персонажи мастера</BlockTitle>
+      <DataTable
+        :columns="npcColumns"
+        :data="npcCharacters"
+        :show-row-numbers="true"
+        empty-text="Персонажей мастера пока нет"
+      >
+        <template #cell-character="{ row }">
+          <span :class="{ retired: isRetired(row) }">{{ row.name }}</span>
+        </template>
+        <template #cell-descriptor="{ row }">{{ descriptorOf(row) }}</template>
+        <template #cell-posts="{ row }">{{ row.totalPostsCount }}</template>
+        <template #cell-lastpost="{ row }">{{ lastPostOf(row) }}</template>
+        <template #cell-status="{ row }"
+          ><span :class="statusClass(row)">{{
+            statusLabel(row)
+          }}</span></template
+        >
+      </DataTable>
     </section>
 
-    <!-- Game Stats -->
-    <section class="game-section game-stats">
-      <block-title>Статистика</block-title>
-      <div class="stats-grid">
-        <div class="stat-item">
-          <span class="stat-label">Комнат:</span>
-          <span class="stat-value">{{ rooms.length }}</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Активных персонажей:</span>
-          <span class="stat-value">{{ activeCharacters.length }}</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Игроков:</span>
-          <span class="stat-value">{{ activePlayers.length }}</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- Tags -->
-    <section class="game-section" v-if="tags.length">
-      <block-title>Теги</block-title>
-      <div class="tags-list">
-        <span v-for="tag in tags" :key="tag.id" class="tag">
-          {{ tag.title }}
-        </span>
-      </div>
-    </section>
-
-    <!-- Privacy Settings (for participants) -->
-    <section class="game-section" v-if="canEdit && game.privacySettings">
-      <block-title>Настройки приватности</block-title>
-      <div class="privacy-list">
-        <div class="privacy-item">
-          <span class="privacy-label">Показывать характер:</span>
-          <span class="privacy-value">{{
-            game.privacySettings.viewTemper ? "Да" : "Нет"
-          }}</span>
-        </div>
-        <div class="privacy-item">
-          <span class="privacy-label">Показывать историю:</span>
-          <span class="privacy-value">{{
-            game.privacySettings.viewStory ? "Да" : "Нет"
-          }}</span>
-        </div>
-        <div class="privacy-item">
-          <span class="privacy-label">Показывать навыки:</span>
-          <span class="privacy-value">{{
-            game.privacySettings.viewSkills ? "Да" : "Нет"
-          }}</span>
-        </div>
-        <div class="privacy-item">
-          <span class="privacy-label">Показывать инвентарь:</span>
-          <span class="privacy-value">{{
-            game.privacySettings.viewInventory ? "Да" : "Нет"
-          }}</span>
-        </div>
-        <div class="privacy-item">
-          <span class="privacy-label">Показывать приватные сообщения:</span>
-          <span class="privacy-value">{{
-            game.privacySettings.viewPrivates ? "Да" : "Нет"
-          }}</span>
-        </div>
-        <div class="privacy-item">
-          <span class="privacy-label">Показывать броски кубиков:</span>
-          <span class="privacy-value">{{
-            game.privacySettings.viewDice ? "Да" : "Нет"
-          }}</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- Attribute Schema -->
-    <section class="game-section" v-if="game.schema">
-      <block-title>Система атрибутов</block-title>
-      <secondary-text>{{ game.schema.title }}</secondary-text>
+    <!-- Description (BBCode, server-rendered) -->
+    <section v-if="game.info" class="description">
+      <DashSeparator />
+      <ContentText :html="game.info" />
     </section>
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .game-details
   display: flex
   flex-direction: column
   gap: $big
 
-.game-section
-  padding: $medium
-  background-color: $bg-element
-  border-radius: $border-radius
+// Compact key-value fact table — borderless information block (no card/rounding).
+.info-table
+  border-collapse: collapse
+  width: 100%
 
-.stats-grid
-  display: grid
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr))
-  gap: $small
+  th,
+  td
+    padding: 2px $small 2px 0
+    text-align: left
+    vertical-align: top
+    font-weight: normal
 
-.stat-item
+  th
+    width: 1%
+    white-space: nowrap
+    padding-right: $big
+    // Labels use the same #333 body colour as the values (matches the old
+    // site's module-info table — label and value are not colour-differentiated).
+    color: $text
+
+.tag-link
+  color: $link
+  &:hover
+    color: $link-hover
+
+.roster
   display: flex
+  flex-direction: column
   gap: $small
 
-.stat-label
+.muted
   color: $text-muted
 
-.stat-value
-  font-weight: bold
+.pos
+  color: $accent-green
 
-.tags-list
-  display: flex
-  flex-wrap: wrap
-  gap: $small
+.neg
+  color: $accent-red
 
-.tag
-  display: inline-block
-  padding: 2px $small
-  background-color: $bg-element-accent
-  border-radius: $border-radius
-  font-size: $secondary-font-size
+.online
+  color: $accent-green
+
+.offline
   color: $text-muted
 
-.privacy-list
-  display: grid
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr))
-  gap: $small
+.status-active
+  color: $accent-green
 
-.privacy-item
-  display: flex
-  gap: $small
-
-.privacy-label
+.status-retired
   color: $text-muted
 
-.privacy-value
-  font-weight: bold
+// Retired characters read as muted in the roster (dead / left / exiled).
+.retired
+  color: $text-muted
 </style>

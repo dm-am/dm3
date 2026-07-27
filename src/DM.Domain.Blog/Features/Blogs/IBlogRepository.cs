@@ -27,6 +27,9 @@ public interface IBlogRepository
     /// <param name="closedFromUtc">Closed date range start</param>
     /// <param name="closedToUtc">Closed date range end</param>
     /// <param name="excludeOwnerIds">Optional owner IDs to exclude (for blacklist filtering)</param>
+    /// <param name="premoderationStatus">Explicit premoderation filter (already role-gated by the service);
+    /// when set it replaces the default premoderation visibility restriction</param>
+    /// <param name="currentUserId">Current user id for premoderation visibility (Guid.Empty for guests)</param>
     /// <param name="ct">Cancellation token</param>
     Task<int> CountPublicBlogs(
         string? search = null,
@@ -39,6 +42,8 @@ public interface IBlogRepository
         DateTimeOffset? closedFromUtc = null,
         DateTimeOffset? closedToUtc = null,
         IReadOnlyCollection<Guid>? excludeOwnerIds = null,
+        PremoderationStatus? premoderationStatus = null,
+        Guid currentUserId = default,
         CancellationToken ct = default);
 
     /// <summary>
@@ -57,6 +62,9 @@ public interface IBlogRepository
     /// <param name="closedFromUtc">Closed date range start</param>
     /// <param name="closedToUtc">Closed date range end</param>
     /// <param name="excludeOwnerIds">Optional owner IDs to exclude (for blacklist filtering)</param>
+    /// <param name="premoderationStatus">Explicit premoderation filter (already role-gated by the service);
+    /// when set it replaces the default premoderation visibility restriction</param>
+    /// <param name="currentUserId">Current user id for premoderation visibility (Guid.Empty for guests)</param>
     /// <param name="ct">Cancellation token</param>
     Task<IEnumerable<Blog>> GetPublicBlogs(
         PagingData paging,
@@ -72,6 +80,8 @@ public interface IBlogRepository
         DateTimeOffset? closedFromUtc = null,
         DateTimeOffset? closedToUtc = null,
         IReadOnlyCollection<Guid>? excludeOwnerIds = null,
+        PremoderationStatus? premoderationStatus = null,
+        Guid currentUserId = default,
         CancellationToken ct = default);
 
     /// <summary>
@@ -190,6 +200,20 @@ public interface IBlogRepository
     /// Update rubric
     /// </summary>
     Task<Rubric> UpdateRubric(UpdateRubricEntity entity, CancellationToken ct = default);
+
+    /// <summary>
+    /// Reorder the blog's rubrics: assign each rubric's sort order from its
+    /// position in <paramref name="orderedRubricIds"/>. Ids not belonging to
+    /// the blog are ignored.
+    /// </summary>
+    Task ReorderRubrics(Guid blogId, IReadOnlyList<Guid> orderedRubricIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get the ids of published publications grouped by rubric for a blog.
+    /// Used by the service to fill per-rubric unread counters (a rubric is
+    /// not itself an unread-counter entity — its publications are).
+    /// </summary>
+    Task<IDictionary<Guid, Guid[]>> GetRubricPublicationIds(Guid blogId, CancellationToken ct = default);
 
     /// <summary>
     /// Delete rubric (soft delete)

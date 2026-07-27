@@ -88,11 +88,11 @@ public class Startup
         builder.RegisterDefaultTypes(communityAssembly);
         builder.RegisterMapper(communityAssembly);
 
-        // IIdentityProvider — нужен NotificationService для Read/Mark методов,
-        // которые в worker-контексте не вызываются (используется только
-        // CreateAsync). Регистрируем тот же IdentityProvider, что в API,
-        // чтобы DI разрешил конструктор; Current остается null до первого
-        // обращения (доступ к нему в worker'е не происходит).
+        // IIdentityProvider — needed by NotificationService for the Read/Mark methods,
+        // which are never called in the worker context (only CreateAsync
+        // is used). Register the same IdentityProvider as in the API
+        // so DI can resolve the constructor; Current stays null until first
+        // access (which never happens in the worker).
         var accountAssembly = typeof(DM.Domain.Account.Authorization.AccountIntention).Assembly;
         builder.RegisterDefaultTypes(accountAssembly);
         builder.RegisterMapper(accountAssembly);

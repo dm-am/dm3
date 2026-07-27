@@ -45,7 +45,7 @@ public class Warning
     public string Text { get; set; } = "";
 
     /// <summary>
-    /// Warning points (1-3)
+    /// Warning points (0-6, 0 = verbal warning without points)
     /// </summary>
     public int Points { get; set; }
 

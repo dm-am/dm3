@@ -72,8 +72,6 @@ function getBarWidth(
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Skeleton"
 
 // Rows inherit table-layout: fixed column widths from the parent <table>.
@@ -100,7 +98,7 @@ function getBarWidth(
     text-align: right
 
 .skeleton-bar
-  height: 16px  // approximate text line height
+  height: 18px  // matches the td text line (16px x 1.25 line-height)
   +skeleton-shimmer
 
 .skeleton-bar-number

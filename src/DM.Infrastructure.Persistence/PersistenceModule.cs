@@ -169,6 +169,10 @@ public class PersistenceModule : Module
             .As<IGlobalChatEventRepository>()
             .InstancePerLifetimeScope();
 
+        builder.RegisterType<Repositories.Search.MessageSearchRepository>()
+            .As<DM.Domain.Messaging.Features.Search.IMessageSearchRepository>()
+            .InstancePerLifetimeScope();
+
         // Moderation repositories
         builder.RegisterType<TicketRepository>()
             .As<ITicketRepository>()

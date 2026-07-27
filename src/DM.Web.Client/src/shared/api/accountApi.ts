@@ -17,7 +17,7 @@ import type {
   BotLinkResult,
   SecurityEvent,
 } from "./models/account";
-import type { Invitation } from "@/entities/game";
+import type { Invitation } from "./models/game";
 import Api from "./client";
 
 export default new (class AccountApi {

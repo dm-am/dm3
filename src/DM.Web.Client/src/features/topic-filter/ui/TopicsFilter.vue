@@ -10,13 +10,13 @@ import {
   FilterDropdown,
   FilterDropdownHeader,
   FilterDropdownItem,
-  UserMultiSelect,
   DateRangePicker,
   SortButton,
   ExpandableBubble,
   FilterBubble,
   BubblesRow,
 } from "@/shared/ui/Filters";
+import { UserMultiSelect } from "@/entities/user";
 
 // `hideAuthor` is set by the profile "Topics" tab — the author scope is
 // implicit (the profile owner) so the dropdown option and the bubble row
@@ -209,9 +209,13 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
       <!-- Filter button -->
       <div v-click-outside="closeDropdown" class="filter-section">
-        <FilterButton :active="showDropdown" @click="toggleDropdown" />
+        <FilterButton
+          :active="showDropdown"
+          @click="toggleDropdown"
+          @close="closeDropdown"
+        />
 
-        <FilterDropdown v-if="showDropdown">
+        <FilterDropdown v-if="showDropdown" @close="closeDropdown">
           <!-- Navigation header when inside a sub-level -->
           <FilterDropdownHeader
             v-if="navPath"

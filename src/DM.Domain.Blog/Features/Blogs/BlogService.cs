@@ -8,6 +8,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Blog.Authorization;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Content;
 using DM.Domain.Blog.Features.Blacklists;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -33,6 +34,7 @@ internal class BlogService : IBlogService
     private readonly IValidator<CreateBlog> _createBlogValidator;
     private readonly IValidator<UpdateBlog> _updateBlogValidator;
     private readonly IValidator<CreateRubric> _createRubricValidator;
+    private readonly IValidator<UpdateRubric> _updateRubricValidator;
     private readonly IValidator<CreatePublication> _createPublicationValidator;
     private readonly IValidator<UpdatePublication> _updatePublicationValidator;
     private readonly IGuidFactory _guidFactory;
@@ -51,6 +53,7 @@ internal class BlogService : IBlogService
         IValidator<CreateBlog> createBlogValidator,
         IValidator<UpdateBlog> updateBlogValidator,
         IValidator<CreateRubric> createRubricValidator,
+        IValidator<UpdateRubric> updateRubricValidator,
         IValidator<CreatePublication> createPublicationValidator,
         IValidator<UpdatePublication> updatePublicationValidator,
         IGuidFactory guidFactory,
@@ -67,6 +70,7 @@ internal class BlogService : IBlogService
         _createBlogValidator = createBlogValidator;
         _updateBlogValidator = updateBlogValidator;
         _createRubricValidator = createRubricValidator;
+        _updateRubricValidator = updateRubricValidator;
         _createPublicationValidator = createPublicationValidator;
         _updatePublicationValidator = updatePublicationValidator;
         _guidFactory = guidFactory;
@@ -89,6 +93,7 @@ internal class BlogService : IBlogService
         DateTimeOffset? closedFromUtc = null,
         DateTimeOffset? closedToUtc = null,
         IReadOnlyCollection<Guid>? excludeOwnerIds = null,
+        PremoderationStatus? premoderationStatus = null,
         CancellationToken ct = default)
     {
         // Resolve usernames to user IDs if provided
@@ -107,21 +112,30 @@ internal class BlogService : IBlogService
             hostUserIds = userIds.Count > 0 ? userIds : null;
         }
 
+        // The premoderation filter is a mentor review-queue tool; silently
+        // ignore it for regular callers instead of failing the request.
+        var identity = _identityProvider.Current;
+        if (identity.User.Role < UserRole.Mentor)
+        {
+            premoderationStatus = null;
+        }
+        var currentUserId = identity.User.UserId;
+
         var totalCount = await _repository.CountPublicBlogs(
             search, status, hostUserIds,
             createdFromUtc, createdToUtc,
             activatedFromUtc, activatedToUtc,
             closedFromUtc, closedToUtc,
-            excludeOwnerIds, ct);
+            excludeOwnerIds, premoderationStatus, currentUserId, ct);
 
-        var pagingData = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
+        var pagingData = new PagingData(query, identity.Settings.Paging.EntitiesPerPage, totalCount);
 
         var blogs = (await _repository.GetPublicBlogs(
             pagingData, search, status, hostUserIds, sortBy, sortOrder,
             createdFromUtc, createdToUtc,
             activatedFromUtc, activatedToUtc,
             closedFromUtc, closedToUtc,
-            excludeOwnerIds, ct)).ToArray();
+            excludeOwnerIds, premoderationStatus, currentUserId, ct)).ToArray();
 
         await FillBlogUnreadCounters(blogs);
         return (blogs, pagingData.Result);
@@ -145,7 +159,13 @@ internal class BlogService : IBlogService
             throw new HttpException(HttpStatusCode.NotFound, $"User {username} not found");
         }
 
-        var blogs = (await _repository.GetUserBlogs(user.UserId, ct)).ToArray();
+        // Premoderation-pending blogs are hidden from other viewers just like
+        // games; the owner, assistants, the curator, and senior moderation
+        // still see them in the profile list
+        var blogs = (await _repository.GetUserBlogs(user.UserId, ct))
+            .Where(b => b.PremoderationStatus == PremoderationStatus.Approved ||
+                        _intentionManager.IsAllowed(BlogIntention.ViewPremoderationPending, b))
+            .ToArray();
         await FillBlogUnreadCounters(blogs);
         return blogs;
     }
@@ -164,7 +184,10 @@ internal class BlogService : IBlogService
             _intentionManager.ThrowIfForbidden(BlogIntention.ViewDraft, blog);
         }
 
+        ThrowIfHiddenByPremoderation(blog);
+
         await FillBlogUnreadCounters(new[] { blog });
+        await FillBlogRubricCounters(blog);
         return blog;
     }
 
@@ -182,7 +205,10 @@ internal class BlogService : IBlogService
             _intentionManager.ThrowIfForbidden(BlogIntention.ViewDraft, blog);
         }
 
+        ThrowIfHiddenByPremoderation(blog);
+
         await FillBlogUnreadCounters(new[] { blog });
+        await FillBlogRubricCounters(blog);
         return blog;
     }
 
@@ -200,7 +226,10 @@ internal class BlogService : IBlogService
             _intentionManager.ThrowIfForbidden(BlogIntention.ViewDraft, blog);
         }
 
+        ThrowIfHiddenByPremoderation(blog);
+
         await FillBlogUnreadCounters(new[] { blog });
+        await FillBlogRubricCounters(blog);
         return blog;
     }
 
@@ -209,11 +238,10 @@ internal class BlogService : IBlogService
     {
         var blog = await GetAsync(blogId, ct);
 
-        // Fetch subscribers and assistants in parallel
-        var subscribersTask = _subscriptionService.GetReadersAsync(blogId, ct);
-        var assistantsTask = _repository.GetAssistantsWithJoinDate(blogId, ct);
-
-        await Task.WhenAll(subscribersTask, assistantsTask);
+        // Sequential on purpose: both queries run on this scope's single
+        // DbContext, and EF forbids concurrent operations on one context.
+        var subscribers = await _subscriptionService.GetReadersAsync(blogId, ct);
+        var assistants = await _repository.GetAssistantsWithJoinDate(blogId, ct);
 
         // Create extended model with full details
         return new BlogDetails
@@ -225,6 +253,11 @@ internal class BlogService : IBlogService
             Title = blog.Title,
             Description = blog.Description,
             CreatedUtc = blog.CreatedUtc,
+            Status = blog.Status,
+            ActivatedUtc = blog.ActivatedUtc,
+            ClosedUtc = blog.ClosedUtc,
+            ClosedReason = blog.ClosedReason,
+            PremoderationStatus = blog.PremoderationStatus,
             DraftVisibility = blog.DraftVisibility,
             CommentsEnabled = blog.CommentsEnabled,
             PublicationCount = blog.PublicationCount,
@@ -240,8 +273,8 @@ internal class BlogService : IBlogService
             BlacklistedUserIds = blog.BlacklistedUserIds,
 
             // Extended properties
-            Subscribers = await subscribersTask,
-            FullAssistants = await assistantsTask
+            Subscribers = subscribers,
+            FullAssistants = assistants
         };
     }
 
@@ -282,13 +315,16 @@ internal class BlogService : IBlogService
         _intentionManager.ThrowIfForbidden(BlogIntention.Create);
         await _createBlogValidator.ValidateAndThrowAsync(createBlog, ct);
 
-        var userId = _identityProvider.Current.User.UserId;
+        var user = _identityProvider.Current.User;
+        var userId = user.UserId;
         var entity = new CreateBlogEntity
         {
             BlogId = _guidFactory.Create(),
             OwnerId = userId,
             Title = createBlog.Title,
-            Description = createBlog.Description,
+            // Blog descriptions render on the Comment surface where [mod] is a
+            // green mod block; strip it when authored by a non-moderator.
+            Description = ModBlockSanitizer.SanitizeForAuthor(createBlog.Description, user.Role),
             DraftVisibility = createBlog.DraftVisibility,
             CommentsEnabled = createBlog.CommentsEnabled,
             CreatedUtc = _dateTimeProvider.Now
@@ -321,7 +357,10 @@ internal class BlogService : IBlogService
         {
             BlogId = updateBlog.BlogId,
             Title = updateBlog.Title,
-            Description = updateBlog.Description,
+            // Blog descriptions render on the Comment surface where [mod] is a
+            // green mod block; strip it when the editor is a non-moderator.
+            Description = ModBlockSanitizer.SanitizeForAuthor(
+                updateBlog.Description, _identityProvider.Current.User.Role),
             DraftVisibility = updateBlog.DraftVisibility,
             CommentsEnabled = updateBlog.CommentsEnabled,
             UpdatedUtc = _dateTimeProvider.Now
@@ -397,7 +436,8 @@ internal class BlogService : IBlogService
         var blog = await GetAsync(createPublication.BlogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.CreatePublication, blog);
 
-        var userId = _identityProvider.Current.User.UserId;
+        var user = _identityProvider.Current.User;
+        var userId = user.UserId;
         var now = _dateTimeProvider.Now;
         var entity = new CreatePublicationEntity
         {
@@ -406,7 +446,9 @@ internal class BlogService : IBlogService
             RubricId = createPublication.RubricId,
             AuthorId = userId,
             Title = createPublication.Title,
-            Content = createPublication.Content,
+            // Publication bodies render on the Comment surface where [mod] is a
+            // green mod block; strip it when authored by a non-moderator.
+            Content = ModBlockSanitizer.SanitizeForAuthor(createPublication.Content, user.Role),
             Preview = createPublication.Preview,
             CommentsEnabled = createPublication.CommentsEnabled,
             PublishImmediately = createPublication.PublishImmediately,
@@ -439,7 +481,10 @@ internal class BlogService : IBlogService
             RubricId = updatePublication.RubricId,
             ClearRubric = updatePublication.ClearRubric,
             Title = updatePublication.Title,
-            Content = updatePublication.Content,
+            // Publication bodies render on the Comment surface where [mod] is a
+            // green mod block; strip it when the editor is a non-moderator.
+            Content = ModBlockSanitizer.SanitizeForAuthor(
+                updatePublication.Content, _identityProvider.Current.User.Role),
             Preview = updatePublication.Preview,
             CommentsEnabled = updatePublication.CommentsEnabled,
             IsPublished = updatePublication.IsPublished,
@@ -482,6 +527,43 @@ internal class BlogService : IBlogService
     }
 
     /// <inheritdoc />
+    public async Task<Rubric> UpdateRubric(UpdateRubric updateRubric, CancellationToken ct = default)
+    {
+        await _updateRubricValidator.ValidateAndThrowAsync(updateRubric, ct);
+
+        var (rubric, blogId) = await _repository.GetRubric(updateRubric.RubricId, ct);
+        if (rubric == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, "Rubric not found");
+        }
+
+        var blog = await GetAsync(blogId, ct);
+        _intentionManager.ThrowIfForbidden(BlogIntention.CreateRubric, blog);
+
+        var entity = new UpdateRubricEntity
+        {
+            RubricId = updateRubric.RubricId,
+            Title = updateRubric.Title,
+            SortOrder = updateRubric.SortOrder
+        };
+        return await _repository.UpdateRubric(entity, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<Rubric>> ReorderRubrics(
+        Guid blogId, IReadOnlyList<Guid> orderedRubricIds, CancellationToken ct = default)
+    {
+        var blog = await GetAsync(blogId, ct);
+        _intentionManager.ThrowIfForbidden(BlogIntention.CreateRubric, blog);
+
+        await _repository.ReorderRubrics(blogId, orderedRubricIds, ct);
+
+        var rubrics = (await _repository.GetRubrics(blogId, ct)).ToArray();
+        await FillRubricCounters(blogId, rubrics);
+        return rubrics;
+    }
+
+    /// <inheritdoc />
     public async Task DeleteRubric(Guid rubricId, CancellationToken ct = default)
     {
         var (rubric, blogId) = await _repository.GetRubric(rubricId, ct);
@@ -502,7 +584,9 @@ internal class BlogService : IBlogService
     {
         // Verify blog exists and user has access
         await GetAsync(blogId, ct);
-        return await _repository.GetRubrics(blogId, ct);
+        var rubrics = (await _repository.GetRubrics(blogId, ct)).ToArray();
+        await FillRubricCounters(blogId, rubrics);
+        return rubrics;
     }
 
     /// <inheritdoc />
@@ -614,7 +698,174 @@ internal class BlogService : IBlogService
         return blogs;
     }
 
+    /// <inheritdoc />
+    public async Task<Blog> ChangePremoderationAsync(
+        string id, BlogPremoderationTransition transition, CancellationToken ct = default)
+    {
+        // Site-wide Mentor+ gate (parameterless intention). The per-blog read
+        // path hides premoderation-pending blogs from non-curators, so resolve
+        // the id and fetch via the repository directly rather than the
+        // read-gated GetAsync / GetByPublicIdAsync — otherwise the very blog
+        // this endpoint exists to moderate would be hidden from the mentor.
+        _intentionManager.ThrowIfForbidden(BlogIntention.SetStatusModeration);
+
+        var blog = Guid.TryParse(id, out var guid)
+            ? await _repository.Get(guid, ct)
+            : await _repository.GetByPublicId(id, ct);
+        if (blog == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, "Blog not found");
+        }
+
+        var blogId = blog.Id;
+        var currentUserId = _identityProvider.Current.User.UserId;
+        var update = new UpdateBlogEntity { BlogId = blogId, UpdatedUtc = _dateTimeProvider.Now };
+
+        switch (transition)
+        {
+            case BlogPremoderationTransition.SendToPremoderation:
+                if (blog.PremoderationStatus != PremoderationStatus.AwaitingEdits)
+                {
+                    throw new HttpException(HttpStatusCode.BadRequest,
+                        $"Cannot send to premoderation from status '{blog.PremoderationStatus}'");
+                }
+                update.PremoderationStatus = PremoderationStatus.AwaitingApproval;
+                update.MentorId = currentUserId;
+                update.SetMentorId = true;
+                break;
+
+            case BlogPremoderationTransition.RemoveFromPremoderation:
+                if (blog.PremoderationStatus != PremoderationStatus.AwaitingApproval)
+                {
+                    throw new HttpException(HttpStatusCode.BadRequest,
+                        $"Cannot remove from premoderation from status '{blog.PremoderationStatus}'");
+                }
+                update.PremoderationStatus = PremoderationStatus.Approved;
+                update.MentorId = null;
+                update.SetMentorId = true;
+                break;
+
+            default:
+                throw new HttpException(HttpStatusCode.BadRequest, "Unknown premoderation transition");
+        }
+
+        var result = await _repository.UpdateBlog(update, ct);
+        await _eventProducer.SendAsync(
+            new List<EventType> { EventType.ChangedBlog, EventType.StatusBlogModeration }, blogId);
+        return result;
+    }
+
+    /// <inheritdoc />
+    public async Task<Blog> ChangeStatusAsync(
+        string id, BlogStatusTransition transition, CancellationToken ct = default)
+    {
+        // The endpoint is authentication-gated; resolve the id via the ungated
+        // repository lookup (mirroring ChangePremoderationAsync) so the owner
+        // of a premoderation-pending or private-draft blog can still operate
+        // on it. The per-transition intention checks below produce the 403,
+        // and legality is checked BEFORE authorization so an illegal move on
+        // an accessible blog is a clean 400.
+        var blog = Guid.TryParse(id, out var guid)
+            ? await _repository.Get(guid, ct)
+            : await _repository.GetByPublicId(id, ct);
+        if (blog == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, "Blog not found");
+        }
+
+        var blogId = blog.Id;
+        var now = _dateTimeProvider.Now;
+        var update = new UpdateBlogEntity { BlogId = blogId, UpdatedUtc = now };
+        EventType statusEvent;
+
+        switch (transition)
+        {
+            case BlogStatusTransition.Start:
+                RequireStatus(blog, ModuleStatus.Draft, transition);
+                _intentionManager.ThrowIfForbidden(BlogIntention.SetStatusActive, blog);
+                update.Status = ModuleStatus.Active;
+                if (!blog.ActivatedUtc.HasValue) update.ActivatedUtc = now;
+                statusEvent = EventType.StatusBlogActive;
+                break;
+
+            case BlogStatusTransition.Freeze:
+                RequireStatus(blog, ModuleStatus.Active, transition);
+                _intentionManager.ThrowIfForbidden(BlogIntention.SetStatusClosed, blog);
+                update.Status = ModuleStatus.Closed;
+                update.ClosedReason = ClosedReason.Frozen;
+                update.ClosedUtc = now;
+                statusEvent = EventType.StatusBlogFrozen;
+                break;
+
+            case BlogStatusTransition.Finish:
+                RequireStatus(blog, ModuleStatus.Active, transition);
+                _intentionManager.ThrowIfForbidden(BlogIntention.SetStatusClosed, blog);
+                update.Status = ModuleStatus.Closed;
+                update.ClosedReason = ClosedReason.Finished;
+                update.ClosedUtc = now;
+                statusEvent = EventType.StatusBlogFinished;
+                break;
+
+            case BlogStatusTransition.Close:
+                // Active -> Closed+None, or Closed+Frozen -> Closed+None
+                if (blog.Status != ModuleStatus.Active &&
+                    !(blog.Status == ModuleStatus.Closed && blog.ClosedReason == ClosedReason.Frozen))
+                {
+                    throw IllegalTransition(transition, blog);
+                }
+                _intentionManager.ThrowIfForbidden(BlogIntention.SetStatusClosed, blog);
+                update.Status = ModuleStatus.Closed;
+                update.ClosedReason = ClosedReason.None;
+                if (!blog.ClosedUtc.HasValue) update.ClosedUtc = now;
+                statusEvent = EventType.StatusBlogClosed;
+                break;
+
+            case BlogStatusTransition.Reopen:
+                RequireStatus(blog, ModuleStatus.Closed, transition);
+                _intentionManager.ThrowIfForbidden(BlogIntention.SetStatusActive, blog);
+                update.Status = ModuleStatus.Active;
+                update.ClosedReason = ClosedReason.None;
+                update.ClearClosedUtc = true;
+                if (!blog.ActivatedUtc.HasValue) update.ActivatedUtc = now;
+                statusEvent = EventType.StatusBlogActive;
+                break;
+
+            default:
+                throw new HttpException(HttpStatusCode.BadRequest, "Unknown status transition");
+        }
+
+        var result = await _repository.UpdateBlog(update, ct);
+        await _eventProducer.SendAsync(new List<EventType> { EventType.ChangedBlog, statusEvent }, blogId);
+        return result;
+    }
+
+    private static void RequireStatus(Blog blog, ModuleStatus expected, BlogStatusTransition transition)
+    {
+        if (blog.Status != expected)
+        {
+            throw IllegalTransition(transition, blog);
+        }
+    }
+
+    private static HttpException IllegalTransition(BlogStatusTransition transition, Blog blog) =>
+        new(HttpStatusCode.BadRequest,
+            $"Transition '{transition}' is not allowed from status '{blog.Status}'" +
+            (blog.Status == ModuleStatus.Closed ? $" ({blog.ClosedReason})" : ""));
+
     // ═══ PRIVATE HELPERS ═══
+
+    /// <summary>
+    /// Premoderation-pending blogs are hidden from regular readers just like
+    /// games: only the owner, assistants, the assigned curator, invited users,
+    /// and senior moderation can open them until they are approved.
+    /// </summary>
+    private void ThrowIfHiddenByPremoderation(Blog blog)
+    {
+        if (blog.PremoderationStatus != PremoderationStatus.Approved)
+        {
+            _intentionManager.ThrowIfForbidden(BlogIntention.ViewPremoderationPending, blog);
+        }
+    }
 
     private async Task FillBlogUnreadCounters(Blog[] blogs)
     {
@@ -645,6 +896,63 @@ internal class BlogService : IBlogService
             b => b.Id, b => b.UnreadCommentsCount);
 
         await Task.WhenAll(fillPublicationsTask, fillCommentsTask);
+    }
+
+    /// <summary>
+    /// Fill the per-rubric "(N/A)" counter (doc 4.2.1.4): N =
+    /// <see cref="Rubric.UnreadPublicationsCount"/> (publications with unread
+    /// content), A = <see cref="Rubric.UnreadCommentsCount"/> (total unread
+    /// comments across the rubric's publications). A rubric is not itself an
+    /// unread-counter entity — its publications are — so both values are
+    /// derived from the per-publication counters, mirroring how the blog's own
+    /// counters work but scoped to the rubric.
+    /// </summary>
+    private async Task FillRubricCounters(Guid blogId, ICollection<Rubric> rubrics)
+    {
+        if (rubrics.Count == 0) return;
+
+        var publicationIdsByRubric = await _repository.GetRubricPublicationIds(blogId);
+        var allPublicationIds = publicationIdsByRubric.Values
+            .SelectMany(ids => ids)
+            .Distinct()
+            .ToArray();
+        if (allPublicationIds.Length == 0) return;
+
+        // Anonymous users can't mark anything read — everything is unread. The
+        // Guid.Empty template counter holds the total unread items per
+        // publication, so querying with any id yields the totals for them; N is
+        // set to the full publication count directly (mirrors the blog-level
+        // anonymous branch).
+        var isAuthenticated = _identityProvider.Current.User.IsAuthenticated;
+        var userId = isAuthenticated ? _identityProvider.Current.User.UserId : Guid.Empty;
+
+        var unreadByPublication = await _unreadCountersRepository.SelectByEntitiesAsync(
+            userId, UnreadEntryType.Message, allPublicationIds);
+
+        foreach (var rubric in rubrics)
+        {
+            if (!publicationIdsByRubric.TryGetValue(rubric.Id, out var ids)) continue;
+
+            rubric.UnreadCommentsCount = ids.Sum(
+                id => unreadByPublication.TryGetValue(id, out var count) ? count : 0);
+
+            rubric.UnreadPublicationsCount = isAuthenticated
+                ? ids.Count(id => unreadByPublication.TryGetValue(id, out var count) && count > 0)
+                : rubric.PublicationCount;
+        }
+    }
+
+    /// <summary>
+    /// Fill the unread counters on a single blog's embedded rubrics. The
+    /// rubric list must be materialized so mutations survive serialization.
+    /// </summary>
+    private async Task FillBlogRubricCounters(Blog blog)
+    {
+        var rubrics = blog.Rubrics as ICollection<Rubric> ?? blog.Rubrics.ToArray();
+        if (rubrics.Count == 0) return;
+
+        await FillRubricCounters(blog.Id, rubrics);
+        blog.Rubrics = rubrics;
     }
 
     private async Task FillPublicationUnreadCounters(Publication[] publications)

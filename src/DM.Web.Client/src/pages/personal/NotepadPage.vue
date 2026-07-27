@@ -134,7 +134,7 @@ onMounted(() => fetchEntries());
       <button class="add-btn" @click="openNewEntryEditor">Новая запись</button>
     </div>
 
-    <secondary-text v-if="loading">Загрузка...</secondary-text>
+    <secondary-text v-if="loading">Загрузка…</secondary-text>
 
     <template v-else-if="entries.length === 0 && !showEditor">
       <secondary-text>Нет записей в блокноте</secondary-text>
@@ -153,7 +153,7 @@ onMounted(() => fetchEntries());
         >
           <div class="entry-title">{{ entry.title }}</div>
           <div class="entry-date">
-            <human-date :date="entry.updatedUtc || entry.createdUtc" />
+            <human-date :date="entry.modifiedUtc || entry.createdUtc" />
           </div>
         </div>
       </div>
@@ -188,7 +188,7 @@ onMounted(() => fetchEntries());
               <textarea
                 id="entry-content"
                 v-model="editorContent"
-                placeholder="Текст записи..."
+                placeholder="Текст записи…"
                 rows="12"
               ></textarea>
             </div>
@@ -202,7 +202,7 @@ onMounted(() => fetchEntries());
                 Отмена
               </button>
               <button class="save-btn" @click="saveEntry" :disabled="saving">
-                {{ saving ? "Сохранение..." : "Сохранить" }}
+                {{ saving ? "Сохранение…" : "Сохранить" }}
               </button>
             </div>
           </div>
@@ -228,8 +228,8 @@ onMounted(() => fetchEntries());
             <span
               >Создано: <human-date :date="selectedEntry.createdUtc"
             /></span>
-            <span v-if="selectedEntry.updatedUtc">
-              | Изменено: <human-date :date="selectedEntry.updatedUtc" />
+            <span v-if="selectedEntry.modifiedUtc">
+              | Изменено: <human-date :date="selectedEntry.modifiedUtc" />
             </span>
           </div>
           <div class="content-body">

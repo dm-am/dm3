@@ -4,20 +4,20 @@ using DM.Domain.Core.Dto;
 namespace DM.Domain.Community.Features.Achievements;
 
 /// <summary>
-/// Факт получения достижения пользователем. Создается только evaluator'ом
-/// (либо lazy на чтении, либо event-driven worker'ом в Phase 2).
-/// Ручной grant отсутствует — единственный способ получить — пересечь
-/// порог метрики. UNIQUE(UserId, AchievementTypeId) гарантирует
-/// идемпотентность повторных оценок.
+/// The fact that a user earned an achievement. Created only by the evaluator
+/// (either lazily on read, or by the event-driven worker in Phase 2).
+/// There is no manual grant — the only way to earn one is to cross
+/// the metric threshold. UNIQUE(UserId, AchievementTypeId) guarantees
+/// idempotency of repeated evaluations.
 /// </summary>
 public class UserAchievement
 {
-    /// <summary>Идентификатор записи о получении.</summary>
+    /// <summary>Identifier of the earned record.</summary>
     public Guid Id { get; set; }
-    /// <summary>Пользователь, получивший достижение.</summary>
+    /// <summary>User who earned the achievement.</summary>
     public GeneralUser User { get; set; } = null!;
-    /// <summary>Тип достижения из каталога.</summary>
+    /// <summary>Achievement type from the catalog.</summary>
     public AchievementType Type { get; set; } = null!;
-    /// <summary>Момент пересечения порога (UTC).</summary>
+    /// <summary>Moment the threshold was crossed (UTC).</summary>
     public DateTimeOffset EarnedUtc { get; set; }
 }

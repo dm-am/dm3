@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount, config } from "@vue/test-utils";
+import { mount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import SidebarBlock from "./SidebarBlock.vue";
 
@@ -92,8 +92,8 @@ describe("SidebarBlock", () => {
         props: { token: "TestBlock" },
         slots: { default: "Content" },
       });
-      const list = wrapper.find(".list");
-      expect(list.classes()).not.toContain("collapsed");
+      const fold = wrapper.find(".expand-fold");
+      expect(fold.classes()).toContain("open");
     });
 
     it("collapses when toggle is clicked", async () => {
@@ -105,8 +105,8 @@ describe("SidebarBlock", () => {
       await wrapper.find(".toggle").trigger("click");
       await nextTick();
 
-      const list = wrapper.find(".list");
-      expect(list.classes()).toContain("collapsed");
+      const fold = wrapper.find(".expand-fold");
+      expect(fold.classes()).not.toContain("open");
     });
 
     it("expands when toggle is clicked on collapsed block", async () => {
@@ -122,8 +122,8 @@ describe("SidebarBlock", () => {
       await wrapper.find(".toggle").trigger("click");
       await nextTick();
 
-      const list = wrapper.find(".list");
-      expect(list.classes()).not.toContain("collapsed");
+      const fold = wrapper.find(".expand-fold");
+      expect(fold.classes()).toContain("open");
     });
 
     it("rotates icon on collapse", async () => {
@@ -202,8 +202,8 @@ describe("SidebarBlock", () => {
         slots: { default: "Content" },
       });
 
-      const list = wrapper.find(".list");
-      expect(list.classes()).toContain("collapsed");
+      const fold = wrapper.find(".expand-fold");
+      expect(fold.classes()).not.toContain("open");
     });
   });
 

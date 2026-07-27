@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Features.Game.AttributeSchemas;
 
@@ -29,17 +30,12 @@ public class AttributeSpecification
     public AttributeSpecificationType Type { get; set; }
 
     /// <summary>
-    /// Minimal value for number constraints
+    /// Order index within the schema
     /// </summary>
-    public int? MinValue { get; set; }
+    public int Order { get; set; }
 
     /// <summary>
-    /// Maximal value for number constraints
-    /// </summary>
-    public int? MaxValue { get; set; }
-
-    /// <summary>
-    /// Maximal length for string constraints
+    /// Maximal length for string/number/BBCode constraints
     /// </summary>
     public int? MaxLength { get; set; }
 

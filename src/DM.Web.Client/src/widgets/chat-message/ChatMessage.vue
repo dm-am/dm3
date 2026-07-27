@@ -8,7 +8,7 @@
 import { ref, computed, watch } from "vue";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { TruncatedContent } from "@/shared/ui/TruncatedContent";
-import { BBCodeEditor } from "@/features/editor";
+import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import {
   initBbcodeInteractive,
   trimHtmlWhitespace,
@@ -35,6 +35,10 @@ const props = withDefaults(
     canLike?: boolean;
     isModerator?: boolean;
     isEditing?: boolean;
+    /** Initial BBCode to seed the editor with when entering edit mode. Only
+     * consumed once (via the watch below) — further edits live in
+     * `localEditText` and travel back to the parent solely through the
+     * `save-edit` payload, never synced back into this prop. */
     editText?: string;
     isDeletedExpanded?: boolean;
     maxHeight?: number;
@@ -55,13 +59,15 @@ const props = withDefaults(
   },
 );
 
+// Deleted-message reveal (moderator): a deliberate moderation action, NOT
+// collapsible content — a plain instant swap outside the reveal contract
+// (owner rule: bulk "Развернуть все" must not uncover removed content).
 const emit = defineEmits<{
   like: [];
   "toggle-deleted": [];
   "start-edit": [];
   "save-edit": [text: string];
   "cancel-edit": [];
-  "update:editText": [text: string];
 }>();
 
 // Local state
@@ -86,7 +92,7 @@ const fullDateTooltip = computed(() => {
   let result = `Отправлено: ${dayjs(props.message.createdUtc).format("DD.MM.YYYY [в] HH:mm")}`;
   if (props.message.edits?.length) {
     for (const edit of props.message.edits) {
-      result += `\nРедактирование: ${dayjs(edit.editedUtc).format("DD.MM.YYYY [в] HH:mm")}`;
+      result += `\nРедактирование: ${dayjs(edit.modifiedUtc).format("DD.MM.YYYY [в] HH:mm")}`;
     }
   }
   return result;
@@ -145,12 +151,16 @@ function initMessageBbcode(el: HTMLElement) {
                 }}</span>
               </span>
             </Tooltip>
-            <span
-              class="msg-deleted-inline"
-              :class="{ clickable: isModerator }"
-              @click="isModerator && $emit('toggle-deleted')"
-              >Сообщение удалено</span
+            <span class="msg-gap">{{ " " }}</span>
+            <button
+              v-if="isModerator"
+              type="button"
+              class="msg-deleted-inline clickable"
+              @click="$emit('toggle-deleted')"
             >
+              Сообщение удалено
+            </button>
+            <span v-else class="msg-deleted-inline">Сообщение удалено</span>
           </div>
         </div>
       </div>
@@ -158,11 +168,15 @@ function initMessageBbcode(el: HTMLElement) {
         <div class="msg-avatar-placeholder">
           <SvgIcon name="deletedAvatar" class="deleted-avatar" />
         </div>
-        <div
-          class="msg-deleted"
-          :class="{ clickable: isModerator }"
+        <button
+          v-if="isModerator"
+          type="button"
+          class="msg-deleted clickable"
           @click="$emit('toggle-deleted')"
         >
+          <span class="msg-deleted-label">Сообщение удалено</span>
+        </button>
+        <div v-else class="msg-deleted">
           <span class="msg-deleted-label">Сообщение удалено</span>
         </div>
       </div>
@@ -188,13 +202,17 @@ function initMessageBbcode(el: HTMLElement) {
         </router-link>
         <div class="msg-body">
           <div class="msg-header" :class="{ 'msg-header-compact': compact }">
+            <!-- Icon BEFORE the time, like every other compact header row
+                 (edited icon / placeholder) — keeps the time text right-
+                 aligned to the same gutter edge across all compact rows. -->
             <template v-if="compact">
               <Tooltip :text="deletedDateTooltip">
                 <span class="msg-time-group">
-                  <span class="msg-time">{{ formattedTime }}</span>
                   <SvgIcon name="trash" class="msg-deleted-icon" />
+                  <span class="msg-time">{{ formattedTime }}</span>
                 </span>
               </Tooltip>
+              <span class="msg-gap">{{ " " }}</span>
               <router-link
                 :to="{
                   name: 'profile',
@@ -203,12 +221,13 @@ function initMessageBbcode(el: HTMLElement) {
                 class="msg-author"
                 >{{ message.author.username }}</router-link
               >
-              <a
+              <button
+                type="button"
                 class="msg-hide-link"
-                href="#"
-                @click.prevent="$emit('toggle-deleted')"
-                >(скрыть)</a
+                @click="$emit('toggle-deleted')"
               >
+                (скрыть)
+              </button>
             </template>
             <template v-else>
               <router-link
@@ -219,18 +238,20 @@ function initMessageBbcode(el: HTMLElement) {
                 class="msg-author"
                 >{{ message.author.username }}</router-link
               >
+              <span class="msg-gap">{{ " " }}</span>
               <Tooltip :text="deletedDateTooltip">
                 <span class="msg-time-group">
                   <span class="msg-time">{{ formattedTime }}</span>
                   <SvgIcon name="trash" class="msg-deleted-icon" />
                 </span>
               </Tooltip>
-              <a
+              <button
+                type="button"
                 class="msg-hide-link"
-                href="#"
-                @click.prevent="$emit('toggle-deleted')"
-                >(скрыть)</a
+                @click="$emit('toggle-deleted')"
               >
+                (скрыть)
+              </button>
             </template>
           </div>
           <div class="msg-content">
@@ -276,7 +297,10 @@ function initMessageBbcode(el: HTMLElement) {
                   :aria-label="reactionAriaLabel"
                   @click="$emit('like')"
                 >
-                  <SvgIcon name="heartEmpty" class="reaction-heart" />
+                  <SvgIcon
+                    :name="isLikedByMe ? 'heartFilled' : 'heartEmpty'"
+                    class="reaction-heart"
+                  />
                   <span class="reaction-count">{{ likesCount }}</span>
                 </button>
                 <span
@@ -285,7 +309,10 @@ function initMessageBbcode(el: HTMLElement) {
                   :class="{ 'my-reaction': isLikedByMe }"
                   :aria-label="reactionAriaLabel"
                 >
-                  <SvgIcon name="heartEmpty" class="reaction-heart" />
+                  <SvgIcon
+                    :name="isLikedByMe ? 'heartFilled' : 'heartEmpty'"
+                    class="reaction-heart"
+                  />
                   <span class="reaction-count">{{ likesCount }}</span>
                 </span>
               </Tooltip>
@@ -295,7 +322,7 @@ function initMessageBbcode(el: HTMLElement) {
             <BBCodeEditor
               v-model="localEditText"
               context="message"
-              placeholder="Редактирование сообщения..."
+              placeholder="Редактирование сообщения…"
               :min-height="60"
               :max-height="200"
               @submit="handleEditSubmit"
@@ -353,6 +380,7 @@ function initMessageBbcode(el: HTMLElement) {
                   <span class="msg-time">{{ formattedTime }}</span>
                 </span>
               </Tooltip>
+              <span class="msg-gap">{{ " " }}</span>
               <router-link
                 :to="{
                   name: 'profile',
@@ -370,7 +398,9 @@ function initMessageBbcode(el: HTMLElement) {
                   :aria-label="reactionAriaLabel"
                   @click="$emit('like')"
                 >
-                  <SvgIcon name="heartEmpty" />{{ likesCount }}
+                  <SvgIcon
+                    :name="isLikedByMe ? 'heartFilled' : 'heartEmpty'"
+                  />{{ likesCount }}
                 </button>
                 <span
                   v-else
@@ -378,7 +408,9 @@ function initMessageBbcode(el: HTMLElement) {
                   :class="{ 'my-like': isLikedByMe }"
                   :aria-label="reactionAriaLabel"
                 >
-                  <SvgIcon name="heartEmpty" />{{ likesCount }}
+                  <SvgIcon
+                    :name="isLikedByMe ? 'heartFilled' : 'heartEmpty'"
+                  />{{ likesCount }}
                 </span>
               </Tooltip>
             </template>
@@ -393,6 +425,7 @@ function initMessageBbcode(el: HTMLElement) {
                 :class="{ online: isOnline }"
                 >{{ message.author.username }}</router-link
               >
+              <span class="msg-gap">{{ " " }}</span>
               <Tooltip :text="fullDateTooltip">
                 <span class="msg-time-group">
                   <span class="msg-time">{{ formattedTime }}</span>
@@ -426,7 +459,10 @@ function initMessageBbcode(el: HTMLElement) {
                   :aria-label="reactionAriaLabel"
                   @click="$emit('like')"
                 >
-                  <SvgIcon name="heartEmpty" class="reaction-heart" />
+                  <SvgIcon
+                    :name="isLikedByMe ? 'heartFilled' : 'heartEmpty'"
+                    class="reaction-heart"
+                  />
                   <span class="reaction-count">{{ likesCount }}</span>
                 </button>
                 <span
@@ -435,7 +471,10 @@ function initMessageBbcode(el: HTMLElement) {
                   :class="{ 'my-reaction': isLikedByMe }"
                   :aria-label="reactionAriaLabel"
                 >
-                  <SvgIcon name="heartEmpty" class="reaction-heart" />
+                  <SvgIcon
+                    :name="isLikedByMe ? 'heartFilled' : 'heartEmpty'"
+                    class="reaction-heart"
+                  />
                   <span class="reaction-count">{{ likesCount }}</span>
                 </span>
               </Tooltip>
@@ -445,7 +484,7 @@ function initMessageBbcode(el: HTMLElement) {
             <BBCodeEditor
               v-model="localEditText"
               context="message"
-              placeholder="Редактирование сообщения..."
+              placeholder="Редактирование сообщения…"
               :min-height="60"
               :max-height="200"
               @submit="handleEditSubmit"
@@ -475,8 +514,6 @@ function initMessageBbcode(el: HTMLElement) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "src/assets/styles/Inputs"
 
 // ============================================================================
@@ -495,19 +532,25 @@ function initMessageBbcode(el: HTMLElement) {
   min-width: 0
   position: relative
 
+// Inline flow (deliberately NOT flex): the author name and the time then
+// share the line's text baseline naturally, and the .msg-gap space between
+// them survives selection copy — flex containers drop bare whitespace text
+// nodes from the clipboard, which used to glue "Name09:09" together.
 .msg-header
-  display: flex
-  align-items: center
-  gap: $small
   margin-bottom: $tiny
   line-height: 1
 
 .msg-header-compact
-  display: inline-flex
-  align-items: center
-  gap: $small
   margin-bottom: 0
-  line-height: 1
+
+// A real rendered space between header items ({{ " " }} inside, kept visible
+// by white-space: pre) so copied text reads "Name 09:09 ..." like prose; the
+// fixed width preserves the $small rhythm the old flex gap provided and keeps
+// the compact gutter math exact (gutter + gap = content margin).
+.msg-gap
+  display: inline-block
+  width: $small
+  white-space: pre
 
 .msg-avatar-link
   flex-shrink: 0
@@ -546,12 +589,28 @@ function initMessageBbcode(el: HTMLElement) {
 .msg-time
   font-size: $secondary-font-size
 
+// inline-block, NOT inline-flex: Chrome serializes selection text through
+// the layout tree and treats (inline-)flex containers as block boundaries,
+// which put the time on its own copied line. An inline-block box keeps the
+// time text in the header's inline flow (copy stays "Name 09:09"), gives it
+// the line's shared text baseline, and still allows the fixed-width
+// right-aligned gutter in compact mode. The atomic box also keeps the
+// time and its icon from ever wrapping apart.
 .msg-time-group
-  display: inline-flex
-  align-items: center
-  gap: 6px
+  display: inline-block
   color: $text-muted
   cursor: help
+
+// Inline-flow replacement for the old flex gap between the time text and
+// the optional edit/trash icon (works for either order — icon-first in
+// compact, time-first in full).
+.msg-time-group > :not(:first-child)
+  margin-left: 6px
+
+.msg-time-group .msg-edited-icon,
+.msg-time-group .msg-deleted-icon,
+.msg-time-group .msg-icon-placeholder
+  vertical-align: middle
 
 .msg-edited-icon,
 .msg-deleted-icon
@@ -578,6 +637,11 @@ function initMessageBbcode(el: HTMLElement) {
   display: flex
   align-items: center
   gap: $small
+  padding: 0
+  border: none
+  background: none
+  font: inherit
+  color: inherit
   &.clickable
     cursor: pointer
 
@@ -589,7 +653,12 @@ function initMessageBbcode(el: HTMLElement) {
   display: inline-flex
   align-items: center
   min-height: 16px
+  padding: 0
+  border: none
+  background: none
   color: $text-muted
+  font-family: inherit
+  font-size: inherit
   font-style: italic
   &.clickable
     cursor: pointer
@@ -597,11 +666,17 @@ function initMessageBbcode(el: HTMLElement) {
       text-decoration: underline
 
 .msg-hide-link
+  padding: 0
+  border: none
+  background: none
   color: $link
+  font-family: inherit
   font-size: $secondary-font-size
+  cursor: pointer
   margin-left: $small
   &:hover
     color: $link-hover
+    text-decoration: underline
 
 .msg-edit
   margin-top: 0
@@ -635,7 +710,6 @@ function initMessageBbcode(el: HTMLElement) {
   svg
     width: 22px
     height: 22px
-    fill: none
     transition: transform 0.15s ease
   &:hover
     background-color: $active-overlay
@@ -645,9 +719,10 @@ function initMessageBbcode(el: HTMLElement) {
   &:active
     background-color: $hover-overlay
     transform: scale(0.95)
+  // Liked: the heart icon switches to the filled variant (see template);
+  // the accent-red matches the forum like token so all surfaces agree.
   &.my-reaction
-    svg
-      fill: currentColor
+    color: $accent-red
 
 // Non-interactive variant (guests / message author): count only, no actions
 .reaction-badge-static
@@ -677,9 +752,9 @@ function initMessageBbcode(el: HTMLElement) {
   svg
     width: 16px
     height: 16px
+  // Liked: filled heart (see template) tinted with the shared accent-red.
   &.my-like
-    svg
-      fill: currentColor
+    color: $accent-red
   &:hover
     filter: brightness($hover-brightness)
 
@@ -716,33 +791,27 @@ function initMessageBbcode(el: HTMLElement) {
 // ============================================================================
 // Compact: fixed time gutter so author names and content align across rows.
 // Gutter holds the (optional) edit/trash icon + the time, right-aligned.
-$compact-time-gutter: 62px
+// 80px so that gutter + .msg-gap ($small) = 88px — exactly the full
+// layout's avatar column (72px avatar + $medium gap): with matching page
+// paddings the compact content starts on the same x as the full content.
+$compact-time-gutter: 80px
 
 .chat-message.compact
   .msg-layout-compact
     display: block
   .msg-body
     display: block
-  // Single-row header: time gutter + author + likes share one baseline
+  // Single-row header (inline flow): time gutter + author + likes share the
+  // line's text baseline; baseline mechanics live in the base .msg-header /
+  // .msg-time-group rules.
   .msg-header-compact
-    display: flex
-    align-items: baseline
-    gap: $small
     margin-bottom: 0
     line-height: 1.4
-  // Baseline (not center) so the time text sits on the same line as the
-  // username — both anchor to the header's shared baseline. The optional
-  // edit/trash icon stays vertically centered against the time text.
+  // Fixed-width right-aligned time gutter so author names and content align
+  // across rows: gutter + .msg-gap = the content margin below.
   .msg-time-group
-    flex-shrink: 0
-    display: inline-flex
-    align-items: baseline
-    justify-content: flex-end
-    gap: 6px
     width: $compact-time-gutter
-  .msg-time-group .msg-edited-icon,
-  .msg-time-group .msg-icon-placeholder
-    align-self: center
+    text-align: right
   .msg-author
     display: inline-flex
     align-items: baseline

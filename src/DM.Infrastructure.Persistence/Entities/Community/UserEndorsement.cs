@@ -10,7 +10,7 @@ namespace DM.Infrastructure.Persistence.Entities.Community;
 /// DAL model for user endorsement (positive recommendation between users)
 /// </summary>
 /// <remarks>
-/// BBCode is supported in the Text field.
+/// The Text field is plain text (owner decision) - no BBCode rendering.
 /// Only positive endorsements are allowed - this is a recommendation system.
 /// One endorsement per author-target pair.
 /// </remarks>
@@ -49,7 +49,7 @@ public class UserEndorsement : ISoftDeletable
     public Guid? ModifiedByUserId { get; set; }
 
     /// <summary>
-    /// Endorsement text (BBCode supported)
+    /// Endorsement text (plain text)
     /// </summary>
     [Required]
     public string Text { get; set; } = string.Empty;

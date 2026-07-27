@@ -11,12 +11,12 @@ using Microsoft.Extensions.Options;
 namespace DM.Infrastructure.Core.Storage;
 
 /// <summary>
-/// Startup-time идемпотент: создает bucket в S3, если он еще не существует.
-/// Полезно при свежем reset+seed в dev — MinIO volume чист и bucket надо
-/// создать до того, как первый upload попробует туда что-то PUT'нуть.
+/// Startup-time idempotent: creates the S3 bucket if it does not exist yet.
+/// Useful on a fresh reset+seed in dev — the MinIO volume is clean and the bucket must
+/// be created before the first upload tries to PUT anything there.
 ///
-/// В production buckets обычно создаются через IaC (Terraform/CDK), но
-/// running этого тоже идемпотент — лишним не будет.
+/// In production buckets are usually created via IaC (Terraform/CDK), but
+/// running this is idempotent too — it does no harm.
 /// </summary>
 public class StorageBucketInitializer : IHostedService
 {
@@ -53,9 +53,9 @@ public class StorageBucketInitializer : IHostedService
             }, cancellationToken);
             _logger.LogInformation("S3 bucket {BucketName} created", _cdn.BucketName);
 
-            // Анонимный GET для CDN-style раздачи аватаров (никаких presigned-
-            // URLs для публичного контента). Полностью симметрично production-
-            // CDN: bucket policy = read-only для всех.
+            // Anonymous GET for CDN-style avatar serving (no presigned
+            // URLs for public content). Fully symmetric with a production
+            // CDN: bucket policy = read-only for everyone.
             await _s3.PutBucketPolicyAsync(new PutBucketPolicyRequest
             {
                 BucketName = _cdn.BucketName,
@@ -75,8 +75,8 @@ public class StorageBucketInitializer : IHostedService
         }
         catch (System.Exception ex)
         {
-            // Не падаем — если bucket не создается (IAM / network), API все
-            // равно поднимется. Первый PUT тогда упадет с ясным сообщением.
+            // Do not fail — if the bucket cannot be created (IAM / network), the API still
+            // starts. The first PUT will then fail with a clear message.
             _logger.LogWarning(ex, "Failed to initialize S3 bucket {BucketName}", _cdn.BucketName);
         }
     }

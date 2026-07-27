@@ -20,17 +20,17 @@ namespace DM.Infrastructure.Core.Storage;
 /// <inheritdoc />
 internal class ImageProcessingService : IImageProcessingService
 {
-    // --- Pipeline constants (SSOT для размеров и лимитов) ---
-    /// <summary>Максимальная сторона оригинала; все больше — downscale-ится.</summary>
+    // --- Pipeline constants (SSOT for sizes and limits) ---
+    /// <summary>Maximum dimension of the original; anything larger is downscaled.</summary>
     public const int OriginalMaxDimension = ImageProcessingDefaults.OriginalMaxDimension;
-    /// <summary>Min-размер исходника (защита от мусорных upload'ов).</summary>
+    /// <summary>Minimum source size (protection from junk uploads).</summary>
     public const int MinDimension = 50;
-    /// <summary>Max-размер исходника по любой стороне (защита от decompression-bomb после декода).</summary>
+    /// <summary>Maximum source size on any side (decompression-bomb protection after decode).</summary>
     public const int MaxDimension = 8192;
     /// <summary>
-    /// Максимальная площадь декодированного изображения (W*H пикселей) —
-    /// защита от decompression-bomb атак (1 KB PNG, разворачивающийся
-    /// в 50000×50000). 67 миллионов пикселей ≈ 8K resolution.
+    /// Maximum decoded image area (W*H pixels) —
+    /// protection from decompression-bomb attacks (a 1 KB PNG expanding
+    /// to 50000×50000). 67 million pixels ≈ 8K resolution.
     /// </summary>
     public const long MaxDecodedPixels = 64L * 1024 * 1024;
 
@@ -57,7 +57,7 @@ internal class ImageProcessingService : IImageProcessingService
             ActivityKind.Internal);
         activity?.SetTag("image.declared_content_type", declaredContentType);
 
-        // 1. Magic-byte detection: НЕ доверяем client-provided content-type.
+        // 1. Magic-byte detection: do NOT trust the client-provided content-type.
         var buffered = await BufferStreamAsync(input, ct);
         activity?.SetTag("image.input_size_bytes", buffered.Length);
 
@@ -83,7 +83,7 @@ internal class ImageProcessingService : IImageProcessingService
             });
         }
 
-        // 2. Identify-only пас: размеры без полного декода (cheap).
+        // 2. Identify-only pass: dimensions without a full decode (cheap).
         ImageInfo info;
         try
         {
@@ -113,7 +113,7 @@ internal class ImageProcessingService : IImageProcessingService
             });
         }
 
-        // 3. Decompression-bomb защита: суммарная площадь до декода.
+        // 3. Decompression-bomb protection: total area before decoding.
         var pixelCount = (long)info.Width * info.Height;
         if (pixelCount > MaxDecodedPixels)
         {
@@ -123,12 +123,12 @@ internal class ImageProcessingService : IImageProcessingService
             });
         }
 
-        // 4. Полный декод (теперь безопасный — размеры проверены).
+        // 4. Full decode (safe now — dimensions are verified).
         using var image = await Image.LoadAsync(new MemoryStream(buffered, writable: false), ct);
 
-        // 5. Downscale если >1024 (Max-mode сохраняет aspect-ratio).
-        //    Это ВСЕГДА re-encode → EXIF metadata автоматически stripped
-        //    (ImageSharp по умолчанию не пишет EXIF при SaveAs*).
+        // 5. Downscale if >1024 (Max-mode preserves aspect ratio).
+        //    This is ALWAYS a re-encode → EXIF metadata is stripped automatically
+        //    (ImageSharp does not write EXIF on SaveAs* by default).
         if (image.Width > OriginalMaxDimension || image.Height > OriginalMaxDimension)
         {
             image.Mutate(c => c.Resize(new ResizeOptions
@@ -138,8 +138,8 @@ internal class ImageProcessingService : IImageProcessingService
             }));
         }
 
-        // EXIF/IPTC/XMP стрипаются явно — даже если pictures были <1024,
-        // мы re-encode'аем оригинал чтобы выкинуть GPS, серийники и т.д.
+        // EXIF/IPTC/XMP are stripped explicitly — even if pictures were <1024,
+        // we re-encode the original to drop GPS, serial numbers, etc.
         image.Metadata.ExifProfile = null;
         image.Metadata.IptcProfile = null;
         image.Metadata.XmpProfile = null;
@@ -156,8 +156,8 @@ internal class ImageProcessingService : IImageProcessingService
     private static async Task<byte[]> EncodeAsync(Image image, string contentType, CancellationToken ct)
     {
         await using var ms = new MemoryStream();
-        // Re-encode в исходном формате — никакого silent-конвертирования.
-        // EXIF/IPTC/XMP уже сброшены в Metadata.
+        // Re-encode in the source format — no silent conversion.
+        // EXIF/IPTC/XMP are already cleared in Metadata.
         switch (contentType)
         {
             case "image/jpeg":
@@ -177,7 +177,7 @@ internal class ImageProcessingService : IImageProcessingService
                 }, ct);
                 break;
             default:
-                // unreachable — guard'или выше
+                // unreachable — guarded above
                 throw new InvalidOperationException($"Unsupported content type {contentType}");
         }
         return ms.ToArray();

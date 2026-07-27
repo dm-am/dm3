@@ -20,8 +20,7 @@ internal class UserRefMappingProfile : Profile
             .ForMember(d => d.Username, s => s.MapFrom(u => u.Username))
             .ForMember(d => d.LastActivityUtc, s => s.MapFrom(u => u.LastActivityUtc))
             .ForMember(d => d.Role, s => s.MapFrom(u => u.Role))
-            .ForMember(d => d.IsNewbie, s => s.MapFrom(u => u.IsNewbie))
-            .ForMember(d => d.IsHonorary, s => s.MapFrom(u => u.IsHonorary));
+            .ForMember(d => d.IsNewbie, s => s.MapFrom(u => u.IsNewbie));
 
         // GameAssistantInfo (Domain DTO) → UserRef (API DTO)
         CreateMap<GameAssistantInfo, UserRef>()
@@ -29,8 +28,7 @@ internal class UserRefMappingProfile : Profile
             .ForMember(d => d.Username, s => s.MapFrom(a => a.Username))
             .ForMember(d => d.LastActivityUtc, s => s.MapFrom(a => a.LastActivityUtc))
             .ForMember(d => d.Role, s => s.MapFrom(a => a.Role))
-            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.IsNewbie))
-            .ForMember(d => d.IsHonorary, s => s.MapFrom(a => a.IsHonorary));
+            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.IsNewbie));
 
         // BlogAssistantInfo (Domain DTO) → UserRef (API DTO)
         CreateMap<BlogAssistantInfo, UserRef>()
@@ -38,7 +36,6 @@ internal class UserRefMappingProfile : Profile
             .ForMember(d => d.Username, s => s.MapFrom(a => a.Username))
             .ForMember(d => d.LastActivityUtc, s => s.MapFrom(a => a.LastActivityUtc))
             .ForMember(d => d.Role, s => s.MapFrom(a => a.Role))
-            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.IsNewbie))
-            .ForMember(d => d.IsHonorary, s => s.MapFrom(a => a.IsHonorary));
+            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.IsNewbie));
     }
 }

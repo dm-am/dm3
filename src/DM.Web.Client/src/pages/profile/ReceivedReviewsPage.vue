@@ -1,36 +1,44 @@
 <script setup lang="ts">
 /**
- * ReceivedReviewsPage — «Полученные оценки» пользователя.
- * Тонкая обертка над `UserRatedPostsList` в режиме `received`: посты,
- * автором которых является этот пользователь и которые получили хотя
- * бы одну оценку.
+ * ReceivedReviewsPage — a user's "Полученные оценки" page.
+ * A thin wrapper over `ProfileRatedPostsList` in `received` mode: posts
+ * authored by this user that received at
+ * least one review.
  */
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
+import { ErrorPage } from "@/shared/ui/ErrorPage";
 import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
-import UserRatedPostsList from "./UserRatedPostsList.vue";
+import ProfileRatedPostsList from "./ProfileRatedPostsList.vue";
+import { useProfileSubpageUser } from "./useProfileSubpageUser";
 
 const route = useRoute();
 const username = computed(() => route.params.username as string);
+
+const { notFound, canonicalUsername } = useProfileSubpageUser(username);
 
 const profileLink = computed(() => ({
   name: "profile" as const,
   params: { username: username.value },
 }));
 
-useDocumentTitle(() => `Полученные оценки — ${username.value}`);
+useDocumentTitle(() => `Полученные оценки постов — ${canonicalUsername.value}`);
 </script>
 
 <template>
-  <div class="received-reviews-page">
-    <ProfileSubpageHeader label="Полученные оценки" :username="username">
+  <ErrorPage v-if="notFound" :code="404" />
+  <div v-else class="received-reviews-page">
+    <ProfileSubpageHeader
+      label="Полученные оценки постов"
+      :username="canonicalUsername"
+    >
       Посты игрока
-      <router-link :to="profileLink">{{ username }}</router-link
+      <router-link :to="profileLink">{{ canonicalUsername }}</router-link
       >, оцененные хотя бы раз другими участниками сообщества
     </ProfileSubpageHeader>
 
-    <UserRatedPostsList
+    <ProfileRatedPostsList
       :username="username"
       mode="received"
       route-name="received-reviews"

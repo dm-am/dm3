@@ -37,7 +37,7 @@ const tooltip = computed(() => buildTooltip(props.game));
 const isClosedGame = computed(
   () => props.mutedClosed && props.game.status === GameStatus.Closed,
 );
-// Закрытая игра не подсвечивается как новая — muted приоритетнее.
+// A closed game is not highlighted as new — muted takes priority.
 const isNewGame = computed(
   () => props.highlightNew && !isClosedGame.value && isNew(props.game),
 );
@@ -76,14 +76,12 @@ const to = computed(() =>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Themes"
-
 .new-game
   color: $accent-green
   &:hover
     color: $accent-green-hover
 
-// Закрытые игры: приглушенный серый, при hover — обычное link-поведение.
+// Closed games: muted gray; on hover — regular link behavior.
 .closed-game
   color: $text-muted
   &:hover

@@ -17,7 +17,7 @@ export interface NotepadEntry {
   content: string;
   sortOrder: number;
   createdUtc: string;
-  updatedUtc?: string | null;
+  modifiedUtc?: string | null;
 }
 
 // Notepad category DTO

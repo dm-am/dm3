@@ -74,6 +74,11 @@ public class Blog : ISoftDeletable
     public DateTimeOffset? ClosedUtc { get; set; }
 
     /// <summary>
+    /// Reason why the blog was closed (only applicable when Status = Closed)
+    /// </summary>
+    public ClosedReason ClosedReason { get; set; }
+
+    /// <summary>
     /// Premoderation status for newbie bloggers
     /// </summary>
     public PremoderationStatus PremoderationStatus { get; set; }

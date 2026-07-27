@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import { UserAutocomplete } from "@/shared/ui/UserAutocomplete";
+import { UserAutocomplete } from "@/entities/user";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 
 const model = defineModel<string | null>();
@@ -28,9 +28,6 @@ watch(model, (newValue) => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
-
 .assistant-selector
   max-width: $grid-step * 80
 

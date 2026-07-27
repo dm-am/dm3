@@ -134,6 +134,37 @@ app → pages → widgets → features → entities → shared
 
 **Правила импортов:** Верхние слои → нижние. Слои одного уровня НЕ импортируют друг друга.
 
+#### Публичный API слайса
+
+- Каждый слайс (`entities/{x}`, `features/{x}`, `widgets/{x}`, `pages/{x}`) экспортирует наружу **только через свой barrel** `index.ts`. Deep-import мимо barrel во внутренние файлы слайса запрещен — потребитель не знает внутреннюю раскладку.
+- Имя папки слайса == его концепт (kebab-case). Одна папка — одна связная единица.
+- `*.spec.ts` лежит **рядом** с тестируемой единицей (co-located), а не в отдельном дереве тестов.
+
+#### Единственное разрешенное исключение из запрета same-layer импортов: `@x`
+
+Слои одного уровня не импортируют друг друга напрямую. Единственная санкционированная дверь между двумя слайсами одного слоя — явный cross-import public API в папке `@x`:
+
+```
+entities/user/@x/game.ts        # что entities/game имеет право взять из entities/user
+entities/user/@x/testimonial.ts # что entities/testimonial имеет право взять из entities/user
+```
+
+Потребитель импортирует из `@/entities/user/@x/game`, а не из корня чужого слайса. Всякий same-layer импорт вне `@x` — нарушение. `@x` создается точечно и держится узким (реэкспорт только реально нужных символов).
+
+#### Suffix `*Page` — только у route-target
+
+- Компонент, на который **напрямую указывает роут** верхнего уровня, несет суффикс `*Page` (`CreateGamePage`, `PulsePage`).
+- Вложенное под-представление внутри страницы (таб, секция, под-view игры/блога) — **без** глобального `*Page`; действует локальная конвенция слайса. Не навешивать `*Page` на каждый под-компонент.
+
+#### Модалки — общий примитив `Dialog`
+
+Модальные окна строятся на общем примитиве `Dialog` (`shared/ui/Layout/Dialog.vue`) + `DialogTitle`; конкретные модалки именуются `*Dialog`. **Самокатные оверлеи запрещены** — не разворачивать собственный backdrop/focus-trap/teleport в обход примитива (единственное задокументированное исключение — `MobileDrawer`, см. UI_STANDARDS).
+
+#### Размещение пикеров и редакторов
+
+- **Доменный lookup** (поиск/выбор конкретной сущности) живет в `entities/{x}`: composable в `model/`, UI-пикеры в `ui/`.
+- **Domain-free композер** (редактор, оболочка фильтров), не знающий ни одной доменной сущности, живет в `shared/ui/` и получает доменные части через слот/проп, а не импортом сущности.
+
 ### Tests — Testing Pyramid
 
 **Зачем:** Быстрая обратная связь. Unit tests дешевые и быстрые, ловят большинство багов. E2E дорогие — только критичные сценарии.
@@ -266,6 +297,10 @@ Features/Search/          # поиск
 | Файлы Vue компонентов | **PascalCase** | `UserProfile.vue`, `GameCard.vue` |
 | Composables/utils | **camelCase** | `useAuth.ts`, `formatDate.ts` |
 
+**Префикс компонентов в `entities/{module}/ui`:**
+- Компонент уровня самого модуля берет **префикс модуля** (`entities/game` → `GameCard`, `GameLink`).
+- Компонент под-сущности внутри модуля берет **имя под-сущности**, а не имя модуля (персонаж внутри `entities/game` → `Character*`, не `GameCharacter`).
+
 ---
 
 ## DTO Projection Pattern (Expansion Hierarchy)
@@ -392,7 +427,6 @@ DM.Domain.Core/
 ├── Mail/                 # IMailSender, ITemplateRenderer
 ├── Notepads/             # INotepadRepository (cross-module)
 ├── Parsing/              # UserAgentParser
-├── Reviews/              # Shared review DTOs (GameReview, UserEndorsement, etc.)
 ├── Search/               # ISearchService (cross-module)
 ├── Subscriptions/        # ISubscriptionRepository (cross-module)
 ├── Tokens/               # Token, CreateToken (shared DTO)
@@ -490,7 +524,9 @@ DM.Web.API/
 │           └── {Feature}Response.cs
 ├── Shared/
 │   ├── Authentication/
+│   ├── BackgroundServices/
 │   ├── BbRendering/
+│   ├── Binding/
 │   ├── Comments/
 │   ├── Configuration/
 │   └── Dto/

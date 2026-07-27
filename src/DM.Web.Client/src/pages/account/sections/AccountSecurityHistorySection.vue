@@ -27,7 +27,7 @@
                 {{ event.ipAddress }}
               </span>
               <span class="event-time">{{
-                formatDate(event.timestampUtc)
+                formatDateFull(event.timestampUtc)
               }}</span>
             </div>
             <div v-if="event.details" class="event-extra">
@@ -46,9 +46,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import dayjs from "dayjs";
 import { AccountApi } from "@/shared/api";
 import { EmptyState } from "@/shared/ui";
+import { formatDateFull } from "@/shared/lib/utils/datetime";
 import type {
   SecurityEvent,
   SecurityEventType,
@@ -118,15 +118,9 @@ function eventClass(type: SecurityEventType): string {
       return "";
   }
 }
-
-function formatDate(dateStr: string): string {
-  return dayjs(dateStr).format("DD.MM.YYYY [в] HH:mm");
-}
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
 @import "../AccountPage.styles"
 
 .security-history-content

@@ -18,8 +18,8 @@ internal class AwardMappingProfile : Profile
         CreateMap<EntityContestSeries, DomainContestSeries>()
             .ForMember(d => d.Id, s => s.MapFrom(s2 => s2.ContestSeriesId));
 
-        // AwardedBy and Note не маппятся в Domain — поля остаются только
-        // в БД для audit. Domain.UserAward не имеет этих свойств.
+        // AwardedBy and Note are not mapped to Domain — the fields stay only
+        // in the DB for audit. Domain.UserAward has no such properties.
         CreateMap<EntityUserAward, DomainUserAward>()
             .ForMember(d => d.Id, s => s.MapFrom(a => a.UserAwardId))
             .ForMember(d => d.Type, s => s.MapFrom(a => a.AwardType))

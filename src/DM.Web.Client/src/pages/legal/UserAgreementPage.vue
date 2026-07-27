@@ -1,9 +1,26 @@
 <script setup lang="ts">
 /**
- * UserAgreementPage - Пользовательское соглашение.
+ * UserAgreementPage — the "Пользовательское соглашение" page.
  * This page is the single source of truth for the user agreement text.
+ * `sections` is the single source of truth for section ids/titles feeding
+ * the `<section>` headings below.
  */
-import LegalDocument from "./LegalDocument.vue";
+import LegalDocument, { type LegalSection } from "./LegalDocument.vue";
+
+const sections: LegalSection[] = [
+  { id: "general", title: "1. Общие положения" },
+  { id: "terms", title: "2. Термины и определения" },
+  { id: "registration", title: "3. Регистрация и учетная запись" },
+  { id: "user-rights", title: "4. Права и обязанности Пользователя" },
+  { id: "content", title: "5. Контент и интеллектуальная собственность" },
+  { id: "moderation", title: "6. Правила и модерация" },
+  { id: "liability", title: "7. Ограничение ответственности" },
+  { id: "age", title: "8. Возрастные ограничения" },
+  { id: "termination", title: "9. Срок действия и прекращение" },
+  { id: "changes", title: "10. Изменение Соглашения" },
+  { id: "applicable-law", title: "11. Применимое право" },
+  { id: "contacts", title: "12. Контакты" },
+];
 </script>
 
 <template>
@@ -12,15 +29,15 @@ import LegalDocument from "./LegalDocument.vue";
     revision-date="31 марта 2026 года"
     publication-date="31 марта 2026 года"
   >
-    <section>
-      <h2>1. Общие положения</h2>
+    <section :id="sections[0].id">
+      <h2>{{ sections[0].title }}</h2>
       <p>
         1.1. Настоящее Пользовательское соглашение регулирует отношения между
-        администрацией платформы DM.AM и физическим лицом, использующим
+        администрацией платформы Dungeon Master и физическим лицом, использующим
         Платформу.
       </p>
       <p>
-        1.2. Платформа DM.AM — это некоммерческий интернет-проект,
+        1.2. Платформа Dungeon Master — это некоммерческий интернет-проект,
         предоставляющий возможности для участия в текстовых ролевых играх,
         ведения блогов, общения на форуме и в чатах.
       </p>
@@ -32,23 +49,49 @@ import LegalDocument from "./LegalDocument.vue";
         1.4. Регистрация на Платформе означает полное и безоговорочное принятие
         условий настоящего Соглашения.
       </p>
+      <p>
+        1.5. Обработка персональных данных Пользователя регулируется
+        <router-link to="/privacy">Политикой конфиденциальности</router-link>,
+        являющейся неотъемлемой частью настоящего Соглашения.
+      </p>
     </section>
 
-    <section>
-      <h2>2. Термины и определения</h2>
-      <ul>
-        <li>Платформа — интернет-ресурс DM.AM</li>
-        <li>Пользователь — физическое лицо, зарегистрированное на Платформе</li>
-        <li>Контент — любые материалы, размещаемые Пользователями</li>
-        <li>Ролевая игра — совместное текстовое творчество Пользователей</li>
-        <li>Мастер игры — Пользователь, создавший и ведущий ролевую игру</li>
-        <li>Игрок — Пользователь, участвующий в ролевой игре</li>
-        <li>Персонаж — вымышленный образ для участия в игре</li>
-      </ul>
+    <section :id="sections[1].id">
+      <h2>{{ sections[1].title }}</h2>
+      <dl class="term-list">
+        <div class="term-item">
+          <dt>Платформа</dt>
+          <dd>— интернет-ресурс Dungeon Master</dd>
+        </div>
+        <div class="term-item">
+          <dt>Пользователь</dt>
+          <dd>— физическое лицо, зарегистрированное на Платформе</dd>
+        </div>
+        <div class="term-item">
+          <dt>Контент</dt>
+          <dd>— любые материалы, размещаемые Пользователями</dd>
+        </div>
+        <div class="term-item">
+          <dt>Ролевая игра</dt>
+          <dd>— совместное текстовое творчество Пользователей</dd>
+        </div>
+        <div class="term-item">
+          <dt>Мастер игры</dt>
+          <dd>— Пользователь, создавший и ведущий ролевую игру</dd>
+        </div>
+        <div class="term-item">
+          <dt>Игрок</dt>
+          <dd>— Пользователь, участвующий в ролевой игре</dd>
+        </div>
+        <div class="term-item">
+          <dt>Персонаж</dt>
+          <dd>— вымышленный образ для участия в игре</dd>
+        </div>
+      </dl>
     </section>
 
-    <section>
-      <h2>3. Регистрация и учетная запись</h2>
+    <section :id="sections[2].id">
+      <h2>{{ sections[2].title }}</h2>
       <p>
         3.1. Регистрация доступна физическим лицам, достигшим возраста 18 лет.
       </p>
@@ -66,8 +109,8 @@ import LegalDocument from "./LegalDocument.vue";
       </p>
     </section>
 
-    <section>
-      <h2>4. Права и обязанности Пользователя</h2>
+    <section :id="sections[3].id">
+      <h2>{{ sections[3].title }}</h2>
       <p>Пользователь имеет право:</p>
       <ul>
         <li>Использовать функциональные возможности Платформы</li>
@@ -88,8 +131,8 @@ import LegalDocument from "./LegalDocument.vue";
       </ul>
     </section>
 
-    <section>
-      <h2>5. Контент и интеллектуальная собственность</h2>
+    <section :id="sections[4].id">
+      <h2>{{ sections[4].title }}</h2>
       <p>
         5.1. Пользователь сохраняет авторские права на созданный им оригинальный
         контент.
@@ -99,10 +142,10 @@ import LegalDocument from "./LegalDocument.vue";
         Администрации безвозмездную неисключительную лицензию на:
       </p>
       <ul>
-        <li>воспроизведение и публичное отображение контента на Платформе;</li>
-        <li>использование в подборках и на главной странице;</li>
-        <li>создание превью, цитат и фрагментов для навигации и поиска;</li>
-        <li>техническое хранение и резервное копирование.</li>
+        <li>Воспроизведение и публичное отображение контента на Платформе</li>
+        <li>Использование в подборках и на главной странице</li>
+        <li>Создание превью, цитат и фрагментов для навигации и поиска</li>
+        <li>Техническое хранение и резервное копирование</li>
       </ul>
       <p>
         5.3. Лицензия действует на период размещения контента. При удалении
@@ -120,8 +163,8 @@ import LegalDocument from "./LegalDocument.vue";
       </p>
     </section>
 
-    <section>
-      <h2>6. Правила и модерация</h2>
+    <section :id="sections[5].id">
+      <h2>{{ sections[5].title }}</h2>
       <p>
         6.1. Порядок поведения на Платформе, перечень запрещенного контента,
         система санкций и механизм обжалования определяются
@@ -134,8 +177,8 @@ import LegalDocument from "./LegalDocument.vue";
       </p>
     </section>
 
-    <section>
-      <h2>7. Ограничение ответственности</h2>
+    <section :id="sections[6].id">
+      <h2>{{ sections[6].title }}</h2>
       <p>
         7.1. Платформа предоставляется "как есть". Администрация не гарантирует
         бесперебойную работу.
@@ -150,8 +193,8 @@ import LegalDocument from "./LegalDocument.vue";
       </p>
     </section>
 
-    <section>
-      <h2>8. Возрастные ограничения</h2>
+    <section :id="sections[7].id">
+      <h2>{{ sections[7].title }}</h2>
       <p>8.1. Платформа предназначена для лиц, достигших возраста 18 лет.</p>
       <p>8.2. На Платформе может размещаться контент категории 18+.</p>
       <p>
@@ -160,8 +203,8 @@ import LegalDocument from "./LegalDocument.vue";
       </p>
     </section>
 
-    <section>
-      <h2>9. Срок действия и прекращение</h2>
+    <section :id="sections[8].id">
+      <h2>{{ sections[8].title }}</h2>
       <p>9.1. Соглашение действует бессрочно с момента регистрации.</p>
       <p>
         9.2. Пользователь вправе удалить учетную запись в любое время через
@@ -173,8 +216,8 @@ import LegalDocument from "./LegalDocument.vue";
       </p>
     </section>
 
-    <section>
-      <h2>10. Изменение Соглашения</h2>
+    <section :id="sections[9].id">
+      <h2>{{ sections[9].title }}</h2>
       <p>
         Администрация вправе изменять Соглашение. При существенных изменениях
         Пользователи уведомляются через Платформу. Продолжение использования
@@ -182,8 +225,8 @@ import LegalDocument from "./LegalDocument.vue";
       </p>
     </section>
 
-    <section>
-      <h2>11. Применимое право</h2>
+    <section :id="sections[10].id">
+      <h2>{{ sections[10].title }}</h2>
       <p>
         Настоящее Соглашение регулируется законодательством Российской
         Федерации. Споры рассматриваются в суде по месту нахождения
@@ -191,11 +234,11 @@ import LegalDocument from "./LegalDocument.vue";
       </p>
     </section>
 
-    <section>
-      <h2>12. Контакты</h2>
+    <section :id="sections[11].id">
+      <h2>{{ sections[11].title }}</h2>
       <p>
         По вопросам, связанным с Соглашением, обращайтесь через
-        <router-link to="/support">форму обратной связи</router-link>.
+        <router-link to="/support">форму поддержки</router-link>.
       </p>
     </section>
   </legal-document>

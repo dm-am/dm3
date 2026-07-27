@@ -23,6 +23,14 @@ export interface VirtualScrollOptions {
   estimateSize?: number;
   /** Number of items to render above/below viewport (default: 10) */
   overscan?: number;
+  /**
+   * Stable key for each item (e.g. message id / date-separator date).
+   * Optional — defaults to the virtualizer's own index-based key. Pass this
+   * when the underlying list can be prepended to (history pagination), so
+   * measurements/state stay attached to the same logical item instead of
+   * sliding onto whatever item now occupies that index.
+   */
+  getItemKey?: (index: number) => string | number;
 }
 
 export interface VirtualScrollReturn {
@@ -46,7 +54,13 @@ export interface VirtualScrollReturn {
 export function useVirtualScroll(
   options: VirtualScrollOptions,
 ): VirtualScrollReturn {
-  const { count, container, estimateSize = 80, overscan = 10 } = options;
+  const {
+    count,
+    container,
+    estimateSize = 80,
+    overscan = 10,
+    getItemKey,
+  } = options;
 
   // Options must be reactive (computed) for @tanstack/vue-virtual to re-measure
   // when count changes or scroll element becomes available after mount
@@ -56,6 +70,7 @@ export function useVirtualScroll(
       getScrollElement: () => container.value,
       estimateSize: () => estimateSize,
       overscan,
+      ...(getItemKey ? { getItemKey } : {}),
     })),
   );
 

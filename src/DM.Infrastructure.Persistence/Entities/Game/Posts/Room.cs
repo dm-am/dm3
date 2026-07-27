@@ -76,6 +76,11 @@ public class Room : ISoftDeletable
     /// </summary>
     public Guid? NextRoomId { get; set; }
 
+    /// <summary>
+    /// Room is archived (hidden from the active rooms list, kept for history)
+    /// </summary>
+    public bool IsArchived { get; set; }
+
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
 

@@ -5,17 +5,10 @@ import {
   useUsersFilter,
   ACTIVITY_OPTIONS,
   ROLE_OPTIONS,
-  HONORARY_OPTIONS,
   EXPERIENCE_OPTIONS,
   SORT_OPTIONS,
 } from "../model";
-import type {
-  ActivityFilter,
-  RoleFilter,
-  HonoraryFilter,
-  ExperienceFilter,
-} from "../model";
-import { UserRole } from "@/entities/user";
+import type { ActivityFilter, RoleFilter, ExperienceFilter } from "../model";
 import { formatDateForDisplay } from "@/shared/lib/filters";
 import { useFilterSearch, useFilterDropdown } from "@/shared/lib/composables";
 import {
@@ -38,7 +31,6 @@ const {
   setActivity,
   setOnlineFilter,
   setRole,
-  setHonorary,
   setExperience,
   setRatingRange,
   setGamesHostingRange,
@@ -76,12 +68,6 @@ function closeDropdown() {
 }
 
 function navigateBack() {
-  // From honorary, go back to role selection
-  if (navPath.value?.filter === "honorary") {
-    setRole("all");
-    navPath.value = { filter: "role" };
-    return;
-  }
   navigateBackBase();
 }
 
@@ -106,7 +92,6 @@ function getDropdownTitle(): string | null {
   const titles: Record<string, string> = {
     activity: "Активность",
     role: "Роль",
-    honorary: "Пользователь",
     experience: "Опыт",
     rating: "Рейтинг",
     gamesHosting: "Игры (ведущий)",
@@ -130,14 +115,6 @@ const activityListOptions = ACTIVITY_OPTIONS.map((o) => ({
 
 // Role options
 const roleListOptions = ROLE_OPTIONS.map((o) => ({
-  value: o.value,
-  label: o.label,
-  hint: o.hint,
-  hasSubOptions: "hasSubOptions" in o ? o.hasSubOptions : false,
-}));
-
-// Honorary options
-const honoraryListOptions = HONORARY_OPTIONS.map((o) => ({
   value: o.value,
   label: o.label,
   hint: o.hint,
@@ -166,18 +143,7 @@ function handleActivitySelect(value: string) {
 }
 
 function handleRoleSelect(value: string) {
-  // For RegularUser, navigate to honorary sub-level
-  if (value === UserRole.RegularUser) {
-    setRole(value as RoleFilter);
-    navPath.value = { filter: "honorary" };
-    return;
-  }
   setRole(value as RoleFilter);
-  closeDropdown();
-}
-
-function handleHonorarySelect(value: string) {
-  setHonorary(value as HonoraryFilter);
   closeDropdown();
 }
 
@@ -261,15 +227,7 @@ const activityLabel = computed(() => {
 const hasRoleFilter = computed(() => filterState.value.role !== "all");
 const roleLabel = computed(() => {
   const opt = ROLE_OPTIONS.find((o) => o.value === filterState.value.role);
-  let label = opt?.label ?? String(filterState.value.role);
-  if (
-    filterState.value.role === UserRole.RegularUser &&
-    filterState.value.honorary === "honorary"
-  ) {
-    const honoraryOpt = HONORARY_OPTIONS.find((o) => o.value === "honorary");
-    label = honoraryOpt?.label ?? "Почетные";
-  }
-  return label;
+  return opt?.label ?? String(filterState.value.role);
 });
 
 // Experience bubble
@@ -380,7 +338,6 @@ function clearActivityFilter() {
 
 function clearRoleFilter() {
   setRole("all");
-  setHonorary("all");
 }
 
 function clearAll() {
@@ -451,9 +408,13 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
       <!-- Filter button -->
       <div v-click-outside="closeDropdown" class="filter-section">
-        <FilterButton :active="showDropdown" @click="toggleDropdown" />
+        <FilterButton
+          :active="showDropdown"
+          @click="toggleDropdown"
+          @close="closeDropdown"
+        />
 
-        <FilterDropdown v-if="showDropdown">
+        <FilterDropdown v-if="showDropdown" @close="closeDropdown">
           <!-- Navigation header when inside a sub-level -->
           <FilterDropdownHeader
             v-if="navPath"
@@ -485,13 +446,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
             v-if="navPath?.filter === 'role'"
             :options="roleListOptions"
             @select="handleRoleSelect"
-          />
-
-          <!-- Honorary options (sub-level for RegularUser) -->
-          <OptionsList
-            v-if="navPath?.filter === 'honorary'"
-            :options="honoraryListOptions"
-            @select="handleHonorarySelect"
           />
 
           <!-- Experience options -->

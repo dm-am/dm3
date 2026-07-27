@@ -70,17 +70,15 @@ const isEmpty = computed(() => !props.modelValue);
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Variables"
-@import "@/assets/styles/Themes"
 @import "@/assets/styles/Inputs"
 
 // No external margin — spacing is the parent container's responsibility
 // (e.g. ProfilePersonalInfo `.info-grid` uses `gap: 0`). A built-in
 // margin would stack with the parent gap, creating an uneven rhythm
 // between rows that mix EditableField + StatLine siblings.
-// line-height 1.25 синхронизирован с StatLine — в `.info-grid` оба
-// типа полей чередуются, и любой расхождение в line-height дает
-// неравномерные межстрочные интервалы.
+// line-height 1.25 is synchronized with StatLine — in `.info-grid` both
+// field types alternate, and any line-height mismatch produces
+// uneven inter-line spacing.
 .editable-field
   display: block
   font-size: $font-size

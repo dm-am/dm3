@@ -17,6 +17,12 @@ public class BlogRef
     public Guid Id { get; set; }
 
     /// <summary>
+    /// Short public identifier for URLs (5 lowercase letters), like games.
+    /// Routes and links use this instead of the GUID.
+    /// </summary>
+    public string PublicId { get; set; } = string.Empty;
+
+    /// <summary>
     /// Blog title
     /// </summary>
     public string Title { get; set; } = string.Empty;
@@ -35,6 +41,11 @@ public class BlogRef
     /// Blog status (Draft, Active, Closed)
     /// </summary>
     public ModuleStatus Status { get; set; }
+
+    /// <summary>
+    /// Closed reason (for Closed status)
+    /// </summary>
+    public ClosedReason? ClosedReason { get; set; }
 
     /// <summary>
     /// When the blog was created

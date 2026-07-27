@@ -56,6 +56,32 @@ public class CommonBbText : BbText
     public override BbSurface Surface => BbSurface.Comment;
 }
 
+/// <summary>
+/// Global chat message text. Uses the public real-time surface whose parser
+/// wraps images in a spoiler-gated <c>SafeImage</c> so untrusted messages
+/// cannot auto-embed hotlinked/NSFW images. Derives from
+/// <see cref="CommonBbText"/> so it is assignable to shared message DTO
+/// fields; only the <see cref="Surface"/> differs.
+/// </summary>
+public class GlobalChatBbText : CommonBbText
+{
+    /// <inheritdoc />
+    public override BbSurface Surface => BbSurface.GlobalChatMessage;
+}
+
+/// <summary>
+/// Direct (1-to-1) and group message text. Uses the DirectMessage surface,
+/// whose parser allows neither [mod] nor [private]: private chats have no
+/// moderation, so a [mod] block would be a moderator-impersonation vector.
+/// Derives from <see cref="CommonBbText"/> so it stays assignable to shared
+/// message DTO fields; only the <see cref="Surface"/> differs.
+/// </summary>
+public class DirectMessageBbText : CommonBbText
+{
+    /// <inheritdoc />
+    public override BbSurface Surface => BbSurface.DirectMessage;
+}
+
 /// <inheritdoc />
 public class InfoBbText : BbText
 {
