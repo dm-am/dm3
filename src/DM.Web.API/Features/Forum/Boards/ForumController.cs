@@ -11,15 +11,11 @@ namespace DM.Web.API.Features.Forum.Boards;
 /// Forum management endpoints
 /// </summary>
 /// <remarks>
-/// Provides access to forum boards and global forum operations.
-/// The forum consists of multiple boards (sections) where users can create topics and discuss.
+/// Global forum operations that belong to no single board.
+/// The board list itself lives at GET /v1/boards.
 ///
 /// ## Available Operations
-/// - Get list of all boards with statistics
 /// - Mark all forum content as read (for authenticated users)
-///
-/// ## Caching
-/// Board list is cached for 60 seconds for better performance.
 /// </remarks>
 [ApiController]
 [Route("v1/forum")]
@@ -27,38 +23,15 @@ namespace DM.Web.API.Features.Forum.Boards;
 [Tags("Forum")]
 public class ForumController : ControllerBase
 {
-    private readonly IBoardApiService _boardApiService;
     private readonly IForumCommentApiService _commentApiService;
 
     /// <summary>
     /// Creates a new instance of ForumController
     /// </summary>
     public ForumController(
-        IBoardApiService boardApiService,
         IForumCommentApiService commentApiService)
     {
-        _boardApiService = boardApiService;
         _commentApiService = commentApiService;
-    }
-
-    /// <summary>
-    /// Get all forum boards
-    /// </summary>
-    /// <remarks>
-    /// Returns a list of all forum boards (sections) with their statistics:
-    /// - Total topics and comments count
-    /// - Unread topics and comments count (for authenticated users)
-    /// - Last comment information
-    ///
-    /// Response is cached for 60 seconds.
-    /// </remarks>
-    /// <response code="200">List of all boards</response>
-    [HttpGet(Name = nameof(GetForum))]
-    [ProducesResponseType(typeof(ListEnvelope<Board>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetForum()
-    {
-        Response.Headers.CacheControl = "public, max-age=60";
-        return Ok(await _boardApiService.GetBoards());
     }
 
     /// <summary>
