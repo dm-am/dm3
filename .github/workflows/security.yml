@@ -30,7 +30,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [csharp, javascript-typescript]
+        include:
+          # manual: the build below is what CodeQL traces. Without an explicit
+          # build-mode the action falls back to autobuild, which picks its own
+          # command and can analyse a different set of assemblies.
+          - language: csharp
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
     steps:
       - uses: actions/checkout@v4
 
@@ -38,7 +45,11 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-          queries: security-and-quality
+          build-mode: ${{ matrix.build-mode }}
+          # security-extended, not security-and-quality: the latter adds
+          # maintainability queries that would bury real findings under
+          # thousands of style alerts on a 276k-line codebase.
+          queries: security-extended
 
       - name: Setup .NET
         if: matrix.language == 'csharp'

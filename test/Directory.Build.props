@@ -1,0 +1,16 @@
+<Project>
+    <!-- MSBuild takes the nearest Directory.Build.props only, so the solution
+         wide settings must be imported explicitly or test projects would lose
+         them (TreatWarningsAsErrors, nullable, InternalsVisibleTo). -->
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+    <ItemGroup>
+        <!-- Required by the "XPlat Code Coverage" data collector: without this
+             package the collect switch is accepted, the run succeeds, and no
+             coverage file is produced at all. -->
+        <PackageReference Include="coverlet.collector">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+    </ItemGroup>
+</Project>
