@@ -1021,16 +1021,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Tokens", x => x.TokenId);
-                    table.ForeignKey(
-                        name: "FK_Tokens_Blogs_EntityId",
-                        column: x => x.EntityId,
-                        principalTable: "Blogs",
-                        principalColumn: "BlogId");
-                    table.ForeignKey(
-                        name: "FK_Tokens_Games_EntityId",
-                        column: x => x.EntityId,
-                        principalTable: "Games",
-                        principalColumn: "GameId");
+                    // NOTE: FK_Tokens_Blogs_EntityId and FK_Tokens_Games_EntityId removed —
+                    // Token.EntityId is polymorphic (a GameId, a BlogId or nothing, depending
+                    // on Type). Both constraints on one column means a value would have to
+                    // exist in Blogs AND Games simultaneously, so every invitation INSERT
+                    // failed. Same reasoning as FK_Comments_Topics_EntityId below.
+                    // Referential integrity is maintained by application logic.
                 });
 
             migrationBuilder.CreateTable(
