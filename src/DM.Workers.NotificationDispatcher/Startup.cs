@@ -1,4 +1,5 @@
 using Autofac;
+using DM.Domain.Account.Features.Identity;
 using DM.Domain.Community.Authorization;
 using DM.Domain.Personal.Authorization;
 using DM.Infrastructure.Core;
@@ -96,8 +97,7 @@ public class Startup
         var accountAssembly = typeof(DM.Domain.Account.Authorization.AccountIntention).Assembly;
         builder.RegisterDefaultTypes(accountAssembly);
         builder.RegisterMapper(accountAssembly);
-        var identityProviderType = accountAssembly.GetType("DM.Domain.Account.Features.Identity.IdentityProvider")!;
-        builder.RegisterType(identityProviderType)
+        builder.RegisterType<IdentityProvider>()
             .AsSelf()
             .AsImplementedInterfaces()
             .InstancePerLifetimeScope();
@@ -121,9 +121,6 @@ public class Startup
     /// <param name="applicationBuilder"></param>
     public void Configure(IApplicationBuilder applicationBuilder)
     {
-        applicationBuilder
-            .UseRouting()
-            .UseHealthChecks("/_health")
-            .UseEndpoints(route => route.MapControllers());
+        applicationBuilder.UseDmWorkerEndpoints(route => route.MapControllers());
     }
 }

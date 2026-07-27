@@ -26,8 +26,9 @@ test_*.json
 cookies*.txt
 *_response.json
 
-# Windows null device artifact
-nul
+# Windows null device artifact. Case-insensitive on purpose: the file is created
+# as NUL, and a lowercase pattern only matches it on a case-insensitive checkout.
+[Nn][Uu][Ll]
 
 
 # OWASP ZAP scan scratch output (created by zap-baseline.py in CI and locally)

@@ -74,9 +74,6 @@ public class Startup
     /// <param name="applicationBuilder"></param>
     public void Configure(IApplicationBuilder applicationBuilder)
     {
-        applicationBuilder
-            .UseRouting()
-            .UseHealthChecks("/_health")
-            .UseEndpoints(route => route.MapControllers());
+        applicationBuilder.UseDmWorkerEndpoints(route => route.MapControllers());
     }
 }
