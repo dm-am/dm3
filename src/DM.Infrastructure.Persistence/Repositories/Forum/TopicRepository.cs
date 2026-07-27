@@ -37,9 +37,6 @@ internal class TopicRepository : ITopicRepository
         _dateTimeProvider = dateTimeProvider;
     }
 
-    private static readonly Guid NewsBoardId = Guid.Parse("00000000-0000-0000-0000-000000000008");
-    private static readonly Guid ErrorsBoardId = Guid.Parse("00000000-0000-0000-0000-000000000006");
-
     // --- READ ---
 
     /// <inheritdoc />
