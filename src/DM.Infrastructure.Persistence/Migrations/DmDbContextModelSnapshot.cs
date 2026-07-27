@@ -1353,6 +1353,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("BoardId");
 
+                    b.HasIndex("BoardId", "TopicNumber")
+                        .IsUnique();
+
                     b.HasIndex("DeletedByUserId");
 
                     b.HasIndex("LastCommentId");

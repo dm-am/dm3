@@ -318,8 +318,24 @@ internal class TopicRepository : ITopicRepository
         var topicId = _guidFactory.Create();
         var now = _dateTimeProvider.Now;
 
-        // Calculate next TopicNumber for this board
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
+
+        // TopicNumber is allocated as MAX+1 and the board's counters are a
+        // read-modify-write, so both are wrong the moment two topics are created
+        // in one board at once. The board row is written by this method anyway:
+        // locking it first serializes creation per board, which is the smallest
+        // scope that makes the number and the counter correct at the same time.
+        // The unique index on (BoardId, TopicNumber) stays as the invariant — it
+        // is what guarantees a topic URL resolves to one topic no matter who writes.
+        await _dbContext.Database.ExecuteSqlRawAsync(
+            """SELECT "BoardId" FROM "Boards" WHERE "BoardId" = {0} FOR UPDATE""", [boardId], ct);
+
+        // IgnoreQueryFilters: a removed topic keeps its number. Counted under the
+        // soft-delete filter, deleting the newest topic handed its number to the
+        // next one, and the deleted topic's permanent URL started resolving to a
+        // different topic.
         var maxTopicNumber = await _dbContext.Topics
+            .IgnoreQueryFilters()
             .TagWith("DM.Forum.MaxTopicNumber")
             .Where(t => t.BoardId == boardId)
             .Select(t => (int?)t.TopicNumber)
@@ -356,6 +372,7 @@ internal class TopicRepository : ITopicRepository
         }
 
         await _dbContext.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return await _dbContext.Topics
             .TagWith("DM.Forum.CreatedTopic")

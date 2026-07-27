@@ -253,6 +253,16 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<Message>()
             .HasIndex(m => new { m.ChatId, m.CreatedUtc, m.MessageId });
 
+        // TopicNumber is the canonical topic URL key, and it is allocated as
+        // MAX+1: two creates in the same board at the same time read the same
+        // maximum. Without this constraint they both commit and one of the two
+        // topics becomes unreachable by its own link, silently. Removed topics
+        // keep their number — the URL of a deleted topic must stay a 410, not
+        // start resolving to a newer one.
+        modelBuilder.Entity<Topic>()
+            .HasIndex(t => new { t.BoardId, t.TopicNumber })
+            .IsUnique();
+
         #endregion
 
         // Configure both DeletedBy and ModifiedBy for editable entities (no inverse collections)

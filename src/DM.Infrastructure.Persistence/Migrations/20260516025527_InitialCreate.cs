@@ -2616,6 +2616,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "BoardId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Topics_BoardId_TopicNumber",
+                table: "Topics",
+                columns: new[] { "BoardId", "TopicNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Topics_DeletedByUserId",
                 table: "Topics",
                 column: "DeletedByUserId");
