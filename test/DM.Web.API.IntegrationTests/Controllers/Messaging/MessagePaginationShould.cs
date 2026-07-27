@@ -77,6 +77,38 @@ public class MessagePaginationShould : IntegrationTestBase
         }
     }
 
+    /// <summary>
+    /// The anchor takes one of the requested slots. Two halves of limit / 2 plus the
+    /// anchor returned limit + 1 for every even limit, so the default page was 51
+    /// messages and a request for the documented maximum returned 101.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(6)]
+    public async Task NotExceedTheRequestedWindowSize(int limit)
+    {
+        var (chatId, expected) = await CreateChat();
+        try
+        {
+            var repository = Repository(out var scope);
+            using (scope)
+            {
+                var around = await repository.GetWithCursor(chatId,
+                    new CursorQuery { AroundEntityId = expected[SameInstantCount / 2], Limit = limit });
+
+                around.Data.Should().HaveCount(limit);
+                around.Data.Select(m => m.Id).Should().Contain(expected[SameInstantCount / 2]);
+            }
+        }
+        finally
+        {
+            await DropChat(chatId);
+        }
+    }
+
     private async Task<List<Guid>> WalkBackwards(Guid chatId)
     {
         var seen = new List<Guid>();
