@@ -1,6 +1,6 @@
 // MongoDB Initialization Script for DM3
 // This script runs automatically on first container startup
-// Documentation: docs/backend/OPTIMIZATION_OWN_GAMES.md
+// Index conventions: docs/conventions/DATA_STORAGE.md
 //
 // This script is only the fast path for a fresh data volume: Mongo executes
 // /docker-entrypoint-initdb.d exactly once, when the volume is empty, so nothing changed
