@@ -170,14 +170,20 @@ internal class MessageRepository : IMessageRepository
             return CreateCursorResult(Array.Empty<Message>(), false, false);
         }
 
-        var halfCount = limit / 2;
+        // The anchor takes one of the limit slots, so the halves share limit - 1.
+        // Two halves of limit / 2 plus the anchor returned limit + 1 for every even
+        // limit — 51 messages on the default page, past the documented maximum of
+        // 100 at the top. The remainder goes to the newer side: jumping to a message
+        // is a jump into a conversation you then read forward.
+        var beforeCount = (limit - 1) / 2;
+        var afterCount = limit - 1 - beforeCount;
 
         // Relative to the whole anchor, not to its timestamp: comparing timestamps
         // alone dropped every message sharing the target's timestamp out of both
         // halves, so they vanished from the window entirely.
         var before = await OldestLast(
                 Older(ChatMessages(chatId), referenceMessage.CreatedUtc, referenceMessage.MessageId))
-            .Take(halfCount + 1)
+            .Take(beforeCount + 1)
             .ProjectTo<Message>(_mapper.ConfigurationProvider)
             .ToArrayAsync(ct);
 
@@ -188,17 +194,17 @@ internal class MessageRepository : IMessageRepository
 
         var after = await OldestFirst(
                 Newer(ChatMessages(chatId), referenceMessage.CreatedUtc, referenceMessage.MessageId))
-            .Take(halfCount + 1)
+            .Take(afterCount + 1)
             .ProjectTo<Message>(_mapper.ConfigurationProvider)
             .ToArrayAsync(ct);
 
-        var hasPrev = before.Length > halfCount;
-        var hasNext = after.Length > halfCount;
+        var hasPrev = before.Length > beforeCount;
+        var hasNext = after.Length > afterCount;
 
         var result = new List<Message>();
-        result.AddRange(ForDisplay(before, halfCount));
+        result.AddRange(ForDisplay(before, beforeCount));
         if (target != null) result.Add(target);
-        result.AddRange(after.Take(halfCount));
+        result.AddRange(after.Take(afterCount));
 
         return CreateCursorResult(result.ToArray(), hasPrev, hasNext);
     }
@@ -225,28 +231,6 @@ internal class MessageRepository : IMessageRepository
         }
 
         return await GetAround(chatId, nearestMessage.Value, limit, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task<bool> HasMessagesBefore(Guid chatId, Guid messageId, CancellationToken ct = default)
-    {
-        var referenceMessage = await ChatMessageAnchor(chatId, messageId, ct);
-
-        if (referenceMessage == null) return false;
-
-        return await Older(ChatMessages(chatId), referenceMessage.CreatedUtc, referenceMessage.MessageId)
-            .AnyAsync(ct);
-    }
-
-    /// <inheritdoc />
-    public async Task<bool> HasMessagesAfter(Guid chatId, Guid messageId, CancellationToken ct = default)
-    {
-        var referenceMessage = await ChatMessageAnchor(chatId, messageId, ct);
-
-        if (referenceMessage == null) return false;
-
-        return await Newer(ChatMessages(chatId), referenceMessage.CreatedUtc, referenceMessage.MessageId)
-            .AnyAsync(ct);
     }
 
     private CursorResult<Message> CreateCursorResult(Message[] messages, bool hasPrev, bool hasNext)
@@ -356,9 +340,11 @@ internal class MessageRepository : IMessageRepository
         // If this was the last message in chat, update LastMessageId
         if (messageInfo?.LastMessageId == messageId)
         {
-            // ChatMessages, not Messages: the update above has already flagged this
-            // message removed, and an unfiltered query picks it right back up as the
-            // chat's last message, so deleting the last message changed nothing.
+            // The tie-break is what matters here: ordered by CreatedUtc alone, two
+            // messages sharing the chat's last timestamp made LastMessageId whichever
+            // one the plan returned. Removed messages were already excluded — the
+            // global soft-delete filter applies to _dbContext.Messages too, so the
+            // message flagged just above was never a candidate.
             var newLastMessageId = await OldestLast(ChatMessages(messageInfo.ChatId))
                 .Select(m => (Guid?)m.MessageId)
                 .FirstOrDefaultAsync(ct);

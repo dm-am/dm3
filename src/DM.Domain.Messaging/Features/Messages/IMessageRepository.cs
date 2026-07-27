@@ -50,16 +50,6 @@ public interface IMessageRepository
     /// <returns>Cursor result with messages near the timestamp</returns>
     Task<CursorResult<Message>> GetNearTimestamp(Guid chatId, DateTimeOffset timestampUtc, int limit, CancellationToken ct = default);
 
-    /// <summary>
-    /// Check if there are messages before the given message
-    /// </summary>
-    Task<bool> HasMessagesBefore(Guid chatId, Guid messageId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Check if there are messages after the given message
-    /// </summary>
-    Task<bool> HasMessagesAfter(Guid chatId, Guid messageId, CancellationToken ct = default);
-
     // ═══ WRITE ═══
 
     /// <summary>
