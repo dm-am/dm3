@@ -62,9 +62,6 @@ internal class ErrorHandlingMiddleware
                 case HttpException httpException:
                     error = problemDetailsFactory.CreateFrom(httpException, httpContext);
                     break;
-                case NotImplementedException notImplementedException:
-                    error = problemDetailsFactory.CreateFrom(notImplementedException, httpContext);
-                    break;
                 case ValidationException validationException:
                     error = problemDetailsFactory.CreateFrom(validationException, httpContext);
                     break;
