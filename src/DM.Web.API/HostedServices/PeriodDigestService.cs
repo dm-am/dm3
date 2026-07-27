@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Forum.Features.Topics;
+using DM.Infrastructure.Core;
 using DM.Infrastructure.Messaging.GeneralBus;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Community;
@@ -39,8 +40,11 @@ namespace DM.Web.API.HostedServices;
 /// </summary>
 internal class PeriodDigestService : BackgroundService
 {
-    // Well-known migration-seeded ids (same idiom as GameInactivityProcessor).
-    private static readonly Guid SystemUserId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    // The system author has a canonical definition; repeating its literal is how
+    // copies drift apart.
+    private static readonly Guid SystemUserId = SystemUser.Id;
+
+    // Well-known migration-seeded board, declared at its only point of use.
     private static readonly Guid NewsBoardId = Guid.Parse("00000000-0000-0000-0000-00000000000b");
 
     // Month-boundary polling: the digest must appear shortly after midnight
