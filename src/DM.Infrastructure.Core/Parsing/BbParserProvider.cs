@@ -27,7 +27,7 @@ public class BbParserProvider : IBbParserProvider
 
     // NSFW - same structure as spoiler, but with nsfw-head toggle and nsfw-spoiler content
     private static readonly Tag Nsfw = new("nsfw",
-        "<a href=\"javascript:void(0)\" class=\"nsfw-head\" data-swaptext=\"?????? ?????????? ???????\">???????? ?????????? ???????</a><div class=\"nsfw-spoiler\">",
+        "<a href=\"javascript:void(0)\" class=\"nsfw-head\" data-swaptext=\"Скрыть шокирующий контент\">Показать шокирующий контент</a><div class=\"nsfw-spoiler\">",
         "</div>");
 
     // Warning block - red highlighted block for important warnings
@@ -72,7 +72,7 @@ public class BbParserProvider : IBbParserProvider
     private static readonly CodeTag Noparse = new("noparse", "", "");
 
     private static readonly Tag Private = new("private", $"<div class=\"{PrivateClassName}\">",
-        $"</div><div class=\"{PrivateHeaderClassName}\">??????????: {{value}}</div>", true, false);
+        $"</div><div class=\"{PrivateHeaderClassName}\">Получатели: {{value}}</div>", true, false);
 
     // AuthorEdit variant of [private] — opens with data-bb-tag and
     // data-bb-addressees carrying the raw attribute value so Tiptap's
@@ -80,7 +80,7 @@ public class BbParserProvider : IBbParserProvider
     private static readonly Tag PrivateAuthorEdit = new(
         "private",
         $"<div class=\"{PrivateClassName}\" data-bb-tag=\"private\" data-bb-addressees=\"{{value}}\">",
-        $"</div><div class=\"{PrivateHeaderClassName}\">??????????: {{value}}</div>",
+        $"</div><div class=\"{PrivateHeaderClassName}\">Получатели: {{value}}</div>",
         true, false);
 
     private static readonly Dictionary<string, string> CommonSubstitutions = new()

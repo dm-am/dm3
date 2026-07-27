@@ -29,3 +29,9 @@ cookies*.txt
 # Windows null device artifact
 nul
 
+
+# OWASP ZAP scan scratch output (created by zap-baseline.py in CI and locally)
+zap.yaml
+report_json.json
+report_md.md
+report_html.html
