@@ -41,17 +41,23 @@
 |-------|------------------|
 | XSS | HttpOnly cookies, CSP header |
 | CSRF | SameSite=Lax + CSRF middleware |
-
-> **Почему SameSite=Lax, а не Strict?** Lax — OWASP рекомендация для 90% приложений.
-> Strict блокирует cookies при переходах из email/внешних ссылок.
-> Lax необходим для mirror transfer. Defense-in-depth: CSRF middleware дополнительно защищает.
-
 | Brute-force | Rate limiting + lockout (15 попыток → 30 мин) |
 | Timing | Constant-time comparison (FixedTimeEquals) |
 | Token forgery | AES-GCM auth tag |
 | Clickjacking | X-Frame-Options: DENY |
 | MIME sniffing | X-Content-Type-Options: nosniff |
 | SSRF | Блокировка private IP в BBCode URL |
+| Подмена адреса клиента | X-Forwarded-* обрабатывает только middleware, и только для сетей из конфигурации |
+| Утечка внутренних деталей | Необработанное исключение отдает постоянный заголовок и токен корреляции, текст — только в лог |
+
+> **Почему SameSite=Lax, а не Strict?** Lax — OWASP рекомендация для 90% приложений.
+> Strict блокирует cookies при переходах из email/внешних ссылок.
+> Lax необходим для mirror transfer. Defense-in-depth: CSRF middleware дополнительно защищает.
+
+> **Адрес клиента.** Читать `X-Forwarded-For` из кода запрещено: заголовок пишет вызывающая
+> сторона, а прокси лишь дописывает в него свой пир. Достоверен только результат
+> `UseForwardedHeaders`, то есть `Connection.RemoteIpAddress`. Пустой список доверенных
+> сетей означает, что заголовок не обрабатывается вовсе.
 
 ---
 

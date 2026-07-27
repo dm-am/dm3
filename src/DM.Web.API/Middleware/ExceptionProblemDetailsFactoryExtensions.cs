@@ -53,14 +53,15 @@ internal static class ExceptionProblemDetailsFactoryExtensions
             modelStateDictionary, StatusCodes.Status400BadRequest, "Validation failed");
     }
 
-    public static ProblemDetails CreateFrom(this ProblemDetailsFactory factory,
-        NotImplementedException notImplementedException, HttpContext httpContext) =>
-        factory.CreateProblemDetails(httpContext,
-            StatusCodes.Status501NotImplemented,
-            notImplementedException.Message);
-
+    /// <summary>
+    /// Unhandled exceptions are the ones nobody wrote a message for, so their
+    /// message is a framework one: Npgsql names tables, columns and constraints,
+    /// the S3 client names buckets, IO exceptions name server paths. The caller
+    /// gets a constant title and the correlation token; the message itself is
+    /// already written to the log at LogCritical.
+    /// </summary>
     public static ProblemDetails CreateFrom(this ProblemDetailsFactory factory,
         Exception exception, HttpContext httpContext, Guid correlationId) =>
-        factory.CreateProblemDetails(httpContext, StatusCodes.Status500InternalServerError, exception.Message,
+        factory.CreateProblemDetails(httpContext, StatusCodes.Status500InternalServerError, "Internal server error",
             detail: $"Server error. Address the administration for technical support. Use the following token to help us identify your issue: {correlationId}");
 }

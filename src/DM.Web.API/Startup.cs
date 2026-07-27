@@ -102,6 +102,12 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .Validate(r => !string.IsNullOrEmpty(r.Endpoint), "RabbitMqConfiguration:Endpoint is required")
             .ValidateOnStart();
 
+        // X-Forwarded-* is honoured for the configured proxy networks only.
+        // Without this every caller could name its own address, and that address
+        // is what the login journal, the security audit and the suspicious-login
+        // detector record.
+        services.AddReverseProxySupport(configuration);
+
         // Register IProbationConfiguration interface for Domain modules
         services.AddSingleton<IProbationConfiguration>(sp =>
             sp.GetRequiredService<IOptions<ProbationConfiguration>>().Value);
@@ -431,10 +437,16 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             Environment.Exit(0);
         }
         
-        // First in the pipeline: a security header is only worth anything if it
-        // is on EVERY response. Registered after UseSwaggerUI it was skipped for
-        // every statically served Swagger asset, which is how the OWASP baseline
-        // scan found /swagger-ui.css with no headers at all.
+        // First in the pipeline: everything downstream — the rate limiter
+        // partitions, the login journal, the security audit — reads the peer
+        // address, so it has to be the client's before any of them run.
+        appBuilder.UseForwardedHeaders();
+
+        // Ahead of anything that writes a response: a security header is only
+        // worth anything if it is on EVERY response. Registered after
+        // UseSwaggerUI it was skipped for every statically served Swagger asset,
+        // which is how the OWASP baseline scan found /swagger-ui.css with no
+        // headers at all.
         appBuilder.UseMiddleware<SecurityHeadersMiddleware>();
 
         // Swagger only in development (security: hide API documentation in production)
