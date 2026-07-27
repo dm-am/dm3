@@ -96,8 +96,8 @@ internal class MessageSearchRepository : IMessageSearchRepository
             if (after.HasValue) q = q.Where(m => m.CreatedUtc >= after.Value);
             if (before.HasValue) q = q.Where(m => m.CreatedUtc <= before.Value);
             if (cursorTs.HasValue)
-                q = q.Where(m => m.CreatedUtc < cursorTs.Value ||
-                                 (m.CreatedUtc == cursorTs.Value && m.MessageId != cursorId));
+                q = q.Where(m => m.CreatedUtc <= cursorTs.Value &&
+                                 (m.CreatedUtc < cursorTs.Value || m.MessageId.CompareTo(cursorId) < 0));
 
             branches.Add(q.Select(m => new MessageSearchHit
             {
@@ -127,8 +127,8 @@ internal class MessageSearchRepository : IMessageSearchRepository
             if (after.HasValue) q = q.Where(m => m.CreatedUtc >= after.Value);
             if (before.HasValue) q = q.Where(m => m.CreatedUtc <= before.Value);
             if (cursorTs.HasValue)
-                q = q.Where(m => m.CreatedUtc < cursorTs.Value ||
-                                 (m.CreatedUtc == cursorTs.Value && m.MessageId != cursorId));
+                q = q.Where(m => m.CreatedUtc <= cursorTs.Value &&
+                                 (m.CreatedUtc < cursorTs.Value || m.MessageId.CompareTo(cursorId) < 0));
 
             branches.Add(q.Select(m => new MessageSearchHit
             {
@@ -158,8 +158,8 @@ internal class MessageSearchRepository : IMessageSearchRepository
             if (after.HasValue) q = q.Where(p => p.CreatedUtc >= after.Value);
             if (before.HasValue) q = q.Where(p => p.CreatedUtc <= before.Value);
             if (cursorTs.HasValue)
-                q = q.Where(p => p.CreatedUtc < cursorTs.Value ||
-                                 (p.CreatedUtc == cursorTs.Value && p.PostId != cursorId));
+                q = q.Where(p => p.CreatedUtc <= cursorTs.Value &&
+                                 (p.CreatedUtc < cursorTs.Value || p.PostId.CompareTo(cursorId) < 0));
 
             branches.Add(q.Select(p => new MessageSearchHit
             {
@@ -183,6 +183,7 @@ internal class MessageSearchRepository : IMessageSearchRepository
 
         var rows = await combined
             .OrderByDescending(h => h.CreatedUtc)
+            .ThenByDescending(h => h.Id)
             .Take(limit + 1)
             .ToArrayAsync(ct);
 
