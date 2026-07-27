@@ -110,4 +110,43 @@ public class BbParserWrapperShould
         result.Should().Contain($">{BbParserWrapper.DefaultSpoilerText}</a>");
         result.Should().Contain("hidden content");
     }
+
+    /// <summary>
+    /// A [link] whose URL is rejected by SanitizeUrl still has to render its
+    /// display text, and that text is attacker-controlled: it must be HTML
+    /// encoded exactly like the accepted-URL branch encodes it. Emitting it raw
+    /// is stored XSS on every content surface (comments, posts, profiles, DMs).
+    /// </summary>
+    [Theory]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("data:text/html;base64,PHN2Zz4=")]
+    [InlineData("vbscript:msgbox(1)")]
+    public void EncodeLinkText_WhenUrlIsRejected(string dangerousUrl)
+    {
+        var input = $"[link=<img src=x onerror=alert(1)>]{dangerousUrl}[/link]";
+        var parser = _parserProvider.CurrentCommon;
+        var tree = parser.Parse(input);
+
+        var result = ((BbParserWrapper.WrappedNodeTree)tree!).ToHtml();
+
+        result.Should().NotContain("<img src=x onerror=alert(1)>");
+        result.Should().Contain("&lt;img src=x onerror=alert(1)&gt;");
+    }
+
+    /// <summary>
+    /// Same guarantee for the accepted-URL branch, so the two paths cannot
+    /// drift apart again.
+    /// </summary>
+    [Fact]
+    public void EncodeLinkText_WhenUrlIsAccepted()
+    {
+        var input = "[link=<b>bold</b>]https://example.com[/link]";
+        var parser = _parserProvider.CurrentCommon;
+        var tree = parser.Parse(input);
+
+        var result = ((BbParserWrapper.WrappedNodeTree)tree!).ToHtml();
+
+        result.Should().NotContain("<b>bold</b>");
+        result.Should().Contain("&lt;b&gt;bold&lt;/b&gt;");
+    }
 }

@@ -282,6 +282,23 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                             SegmentsPerWindow = 6,
                             QueueLimit = 0,
                         }));
+
+                // Ordinary authenticated CRUD (preferences, subscriptions,
+                // invitations, blacklists): 60 per minute per user, falling back
+                // to IP. Tighter than the global 100/min because these are
+                // per-account write paths, and partitioned by user so one noisy
+                // account cannot consume a shared IP's budget.
+                options.AddPolicy("default", context =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: context.User.Identity?.Name
+                            ?? context.Connection.RemoteIpAddress?.ToString()
+                            ?? "anon",
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 60,
+                            Window = TimeSpan.FromMinutes(1),
+                            QueueLimit = 0,
+                        }));
             }
             else
             {
@@ -297,6 +314,8 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                 options.AddPolicy("uploads", _ =>
                     RateLimitPartition.GetNoLimiter<string>("unlimited"));
                 options.AddPolicy("sliding", _ =>
+                    RateLimitPartition.GetNoLimiter<string>("unlimited"));
+                options.AddPolicy("default", _ =>
                     RateLimitPartition.GetNoLimiter<string>("unlimited"));
             }
 
@@ -433,8 +452,12 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                 .AllowCredentials()
                 .SetPreflightMaxAge(TimeSpan.FromHours(1)))
             .UseMiddleware<CsrfProtectionMiddleware>()
-            .UseRateLimiter()
             .UseRouting()
+            // After UseRouting on purpose: the limiter resolves its policy from
+            // endpoint metadata, which routing is what populates. Registered
+            // before it, every [EnableRateLimiting] attribute was inert and only
+            // the global limiter ever ran.
+            .UseRateLimiter()
             .UseAuthentication()
             .UseMiddleware<AuthenticationMiddleware>()
             .UseAuthorization()

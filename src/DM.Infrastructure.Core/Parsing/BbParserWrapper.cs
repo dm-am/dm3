@@ -384,7 +384,11 @@ public partial class BbParserWrapper : IBbParser
                 {
                     var (text, url) = _linkList[index];
                     var safeUrl = SanitizeUrl(url);
-                    if (safeUrl == "#") return text ?? ""; // Remove dangerous link, keep text if any
+                    // Dangerous URL: drop the anchor but keep the text — encoded
+                    // exactly like the accepted branch below. The text comes from
+                    // [link=TEXT] and is attacker-controlled, so returning it raw
+                    // turns a rejected URL into stored XSS.
+                    if (safeUrl == "#") return System.Web.HttpUtility.HtmlEncode(text ?? "");
                     var encodedUrl = System.Web.HttpUtility.HtmlAttributeEncode(safeUrl);
                     var displayText = text ?? DefaultLinkText;
                     var encodedText = System.Web.HttpUtility.HtmlEncode(displayText);
