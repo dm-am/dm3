@@ -24,6 +24,10 @@
            AutoMapper profile is covered from here (closest worker-side
            infrastructure test project) via assembly scanning. -->
       <ProjectReference Include="..\..\src\DM.Workers.SearchIndexer\DM.Workers.SearchIndexer.csproj" />
+      <!-- Same reasoning for the notification dispatcher: its queue binding is
+           derived from the generator types, and that derivation is what these
+           tests hold in place. -->
+      <ProjectReference Include="..\..\src\DM.Workers.NotificationDispatcher\DM.Workers.NotificationDispatcher.csproj" />
     </ItemGroup>
 
 </Project>
