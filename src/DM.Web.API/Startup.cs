@@ -154,6 +154,11 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         {
             services.AddHostedService<RealtimeNotificationConsumer>();
             services.AddHostedService<WarmupService>();
+
+            // Asserts the Mongo index set. docker/mongo-init.js only runs on the first start
+            // of an empty volume, so this is what keeps deployed databases indexed.
+            services.AddHostedService<DM.Infrastructure.Persistence.MongoIntegration.MongoIndexInitializer>();
+
             services.AddHostedService<HostedServices.TokenCleanupService>();
             services.AddHostedService<HostedServices.SessionCleanupService>();
             services.AddHostedService<HostedServices.PendingRegistrationCleanupService>();
