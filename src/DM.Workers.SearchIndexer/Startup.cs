@@ -1,6 +1,7 @@
 using Autofac;
 using DM.Infrastructure.Core;
 using DM.Infrastructure.Core.Configuration;
+using DM.Domain.Account.Features.Identity;
 using DM.Domain.Core.Extensions;
 using DM.Infrastructure.Core.Extensions;
 using DM.Infrastructure.Core.Logging;
@@ -58,6 +59,8 @@ public class Startup
         services.AddDbContext<DmDbContext>(options => options
             .UseNpgsql(_configuration.GetConnectionString(nameof(ConnectionStrings.Rdb))));
 
+        services.AddHealthChecks();
+
         services.AddMvc();
         services.AddGrpc(options => options.Interceptors.Add<IdentityInterceptor>());
         services.AddGrpcReflection();
@@ -75,6 +78,17 @@ public class Startup
         builder.RegisterModuleOnce<CoreModule>();
         builder.RegisterModuleOnce<PersistenceModule>();
         builder.RegisterModuleOnce<MessageQueuingModule>();
+
+        // The gRPC interceptor sets the caller identity for the duration of a
+        // call. Nothing registered IIdentitySetter here, so the interceptor could
+        // not be constructed at all and every search request ended as a 503.
+        // Registered by hand rather than left to the assembly scan: the scan is
+        // per-dependency, and the setter and the provider have to be one instance
+        // within a scope.
+        builder.RegisterType<IdentityProvider>()
+            .AsSelf()
+            .AsImplementedInterfaces()
+            .InstancePerLifetimeScope();
     }
 
     /// <summary>
@@ -85,12 +99,10 @@ public class Startup
     public void Configure(IApplicationBuilder applicationBuilder,
         ILogger<Startup> logger)
     {
-        applicationBuilder
-            .UseRouting()
-            .UseEndpoints(route =>
-            {
-                route.MapGrpcService<SearchEngineService>();
-                route.MapGrpcReflectionService();
-            });
+        applicationBuilder.UseDmWorkerEndpoints(route =>
+        {
+            route.MapGrpcService<SearchEngineService>();
+            route.MapGrpcReflectionService();
+        });
     }
 }

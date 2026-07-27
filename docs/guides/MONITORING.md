@@ -75,18 +75,16 @@ duration: >1000
 
 ### Endpoint
 
-`/metrics` на всех .NET сервисах
+`/metrics` и `/_health` — на каждом .NET сервисе. Хост, отдающий gRPC, слушает
+cleartext HTTP/2 и не отвечает HTTP/1.1-клиенту, поэтому health и метрики у него
+на отдельном порту.
 
 ### Scrape targets
 
-| Сервис | Порт |
-|--------|------|
-| dm-api | 5000 |
-| consumer-mail | 5003 |
-| consumer-search | 5001 |
-| consumer-notification | 5002 |
-| postgres-exporter | 9187 |
-| node-exporter | 9100 |
+**Источник истины:** [`docker/prometheus.yml`](../../docker/prometheus.yml).
+Имя job обязано совпадать с `container_name` из compose: при расхождении target
+просто отсутствует, а алерт на `up == 0` молчит — именно поэтому рядом стоит
+`ConsumerScrapeTargetMissing` на `absent()`.
 
 ### Где смотреть
 

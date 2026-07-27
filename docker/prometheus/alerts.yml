@@ -37,13 +37,27 @@ groups:
   - name: dm-consumers
     rules:
       - alert: ConsumerDown
-        expr: up{job=~"dm-(notifications|search-engine|email-sender)-consumer"} == 0
+        expr: up{job=~"dm-(notification|search|mail)-worker"} == 0
         for: 2m
         labels:
           severity: critical
         annotations:
           summary: "Consumer {{ $labels.job }} is down"
           description: "{{ $labels.job }} has been unreachable for more than 2 minutes."
+
+      # A renamed or removed scrape target produces no `up` series at all, so
+      # ConsumerDown stays silent on exactly the change that breaks it.
+      - alert: ConsumerScrapeTargetMissing
+        expr: |
+          absent(up{job="dm-notification-worker"})
+          or absent(up{job="dm-search-worker"})
+          or absent(up{job="dm-mail-worker"})
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A consumer scrape target is not configured"
+          description: "Prometheus has no target for one of the consumers — check the job names against the container names."
 
   - name: dm-infrastructure
     rules:

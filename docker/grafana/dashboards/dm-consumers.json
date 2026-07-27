@@ -11,7 +11,7 @@
       "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
       "targets": [
         {
-          "expr": "up{job=~\"dm-(notifications|search-engine|email-sender)-consumer\"}",
+          "expr": "up{job=~\"dm-(notification|search|mail)-worker\"}",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -31,7 +31,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 4 },
       "targets": [
         {
-          "expr": "rate(http_server_request_duration_seconds_count{job=\"dm-email-sender-consumer\"}[5m])",
+          "expr": "rate(http_server_request_duration_seconds_count{job=\"dm-mail-worker\"}[5m])",
           "legendFormat": "requests/s",
           "refId": "A"
         }
@@ -44,7 +44,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 4 },
       "targets": [
         {
-          "expr": "rate(http_server_request_duration_seconds_count{job=\"dm-search-engine-consumer\"}[5m])",
+          "expr": "rate(http_server_request_duration_seconds_count{job=\"dm-search-worker\"}[5m])",
           "legendFormat": "requests/s",
           "refId": "A"
         }
@@ -57,7 +57,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 4 },
       "targets": [
         {
-          "expr": "rate(http_server_request_duration_seconds_count{job=\"dm-notifications-consumer\"}[5m])",
+          "expr": "rate(http_server_request_duration_seconds_count{job=\"dm-notification-worker\"}[5m])",
           "legendFormat": "requests/s",
           "refId": "A"
         }
@@ -70,7 +70,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
       "targets": [
         {
-          "expr": "process_working_set_bytes{job=~\"dm-(notifications|search-engine|email-sender)-consumer\"}",
+          "expr": "process_working_set_bytes{job=~\"dm-(notification|search|mail)-worker\"}",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -83,7 +83,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
       "targets": [
         {
-          "expr": "rate(process_runtime_dotnet_gc_collections_count_total{job=~\"dm-(notifications|search-engine|email-sender)-consumer\"}[5m])",
+          "expr": "rate(process_runtime_dotnet_gc_collections_count_total{job=~\"dm-(notification|search|mail)-worker\"}[5m])",
           "legendFormat": "{{job}} Gen {{generation}}",
           "refId": "A"
         }

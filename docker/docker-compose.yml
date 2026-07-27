@@ -36,7 +36,7 @@ x-workload-env: &workload-env
   DM_SearchEngineConfiguration__Endpoint: http://${SEARCH_HOST:-dm-es}:9200
   DM_SearchEngineConfiguration__UserName: admin
   DM_SearchEngineConfiguration__Password: admin
-  DM_SearchServiceConfiguration__GrpcEndpoint: http://${SEARCH_GRPC_HOST:-dm-search-engine-consumer}:5000
+  DM_SearchServiceConfiguration__GrpcEndpoint: http://${SEARCH_GRPC_HOST:-dm-search-worker}:5000
 
   # === CDN (MinIO) ===
   DM_CdnConfiguration__Url: http://${MINIO_HOST:-dm-minio}:9000
@@ -390,9 +390,6 @@ services:
         limits:
           memory: 64M
           cpus: '0.1'
-    profiles:
-      - monitoring
-      - full
 
   node-exporter:
     image: prom/node-exporter:v1.7.0
@@ -412,9 +409,6 @@ services:
         limits:
           memory: 64M
           cpus: '0.1'
-    profiles:
-      - monitoring
-      - full
 
   # --- Application: Migration ---
 
@@ -455,7 +449,7 @@ services:
       mailhog:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "test -d /proc/1 || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/_health || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -476,6 +470,9 @@ services:
         PROJECT_NAME: DM.Workers.SearchIndexer
     ports:
       - '5001:5000'
+      # gRPC is HTTP/2 only, so the health probe and the metrics scrape have a
+      # port of their own — on 5000 an HTTP/1.1 client is answered with 400.
+      - '5101:5100'
     environment: *workload-env
     depends_on:
       rabbitmq:
@@ -483,7 +480,7 @@ services:
       opensearch:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "test -d /proc/1 || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:5100/_health || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -511,7 +508,7 @@ services:
       mongo:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "test -d /proc/1 || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/_health || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 3
