@@ -146,6 +146,10 @@ internal class UploadApiService : IUploadApiService
         }
 
         upload.IsRemoved = true;
+        // DeletedUtc is what starts the grace period the orphan sweeper waits
+        // out before deleting the object from S3; without it the row is hidden
+        // from the site but the file stays in the bucket forever.
+        upload.DeletedUtc = _dateTimeProvider.Now;
         await _dbContext.SaveChangesAsync();
     }
 

@@ -75,7 +75,11 @@ internal class UploadOrphanCleanupService : BackgroundService
         }
     }
 
-    private async Task SweepAsync(CancellationToken ct)
+    /// <summary>
+    /// One sweep pass. Internal rather than private so the regression test can
+    /// drive a single pass without running the timer loop.
+    /// </summary>
+    internal async Task SweepAsync(CancellationToken ct)
     {
         try
         {
@@ -86,6 +90,11 @@ internal class UploadOrphanCleanupService : BackgroundService
 
             var cutoff = DateTimeOffset.UtcNow - _gracePeriod;
             var candidates = await db.Uploads
+                // Soft-deleted rows are exactly what this sweeper looks for, and
+                // the global query filter hides them: without IgnoreQueryFilters
+                // the predicate becomes "NOT IsRemoved AND IsRemoved" and no row
+                // can ever match, so nothing is ever deleted from S3.
+                .IgnoreQueryFilters()
                 .Where(u => u.IsRemoved && u.DeletedUtc != null && u.DeletedUtc < cutoff)
                 .OrderBy(u => u.DeletedUtc)
                 .Take(BatchSize)
