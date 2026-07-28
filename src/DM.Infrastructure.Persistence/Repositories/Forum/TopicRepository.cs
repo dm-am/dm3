@@ -358,18 +358,13 @@ internal class TopicRepository : ITopicRepository
         };
 
         _dbContext.Topics.Add(topic);
+        await _dbContext.SaveChangesAsync(ct);
 
-        // Update board's last topic (denormalized fields)
-        var board = await _dbContext.Boards.FindAsync([boardId], ct);
-        if (board != null)
-        {
-            board.LastTopicId = topicId;
-            board.LastTopicNumber = topicNumber;
-            board.LastTopicTitle = topic.Title;
-            board.LastTopicAuthorId = authorId;
-            board.LastTopicCreatedUtc = now;
-            board.TopicsCount++;
-        }
+        // The board summary is recomputed here too, rather than incremented, so
+        // that creation, deletion and moving share one definition of it. The row
+        // lock above already serializes creation per board, so the extra read
+        // costs a query and buys the guarantee that the three paths cannot drift.
+        await RefreshBoardTopicSummary(boardId, ct);
 
         await _dbContext.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
@@ -409,12 +404,22 @@ internal class TopicRepository : ITopicRepository
                 topic.IsAttached = updateTopic.IsAttached.Value;
             }
 
+            // A move changes the summary of both boards: the one losing the topic
+            // and the one gaining it.
+            var previousBoardId = topic.BoardId;
             if (boardId.HasValue)
             {
                 topic.BoardId = boardId.Value;
             }
 
             await _dbContext.SaveChangesAsync();
+
+            if (boardId.HasValue && boardId.Value != previousBoardId)
+            {
+                await RefreshBoardTopicSummary(previousBoardId);
+                await RefreshBoardTopicSummary(boardId.Value);
+                await _dbContext.SaveChangesAsync();
+            }
         }
 
         return await _dbContext.Topics
@@ -432,7 +437,61 @@ internal class TopicRepository : ITopicRepository
         {
             topic.IsRemoved = true;
             await _dbContext.SaveChangesAsync();
+            await RefreshBoardTopicSummary(topic.BoardId);
+            await _dbContext.SaveChangesAsync();
         }
+    }
+
+    /// <summary>
+    /// Recompute a board's denormalized topic summary from the topics themselves.
+    /// </summary>
+    /// <remarks>
+    /// Recomputed, not incremented. An increment is only ever as correct as the
+    /// number of places that remember to apply it, and the count used to be
+    /// raised on creation and adjusted nowhere else: deleting a topic or moving
+    /// one to another board left both boards claiming something untrue, with no
+    /// way back short of touching the database by hand. A recompute is the single
+    /// definition of what the summary means, and it heals a row that is already
+    /// wrong instead of carrying the error forward.
+    ///
+    /// The soft-delete filter applies, so a removed topic drops out of both the
+    /// count and the "last topic" fields, which is what a reader expects to see.
+    /// </remarks>
+    private async Task RefreshBoardTopicSummary(Guid boardId, CancellationToken ct = default)
+    {
+        var board = await _dbContext.Boards.FindAsync([boardId], ct);
+        if (board == null)
+        {
+            return;
+        }
+
+        var summary = await _dbContext.Topics
+            .TagWith("DM.Forum.BoardTopicSummary")
+            .Where(t => t.BoardId == boardId)
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Count = g.Count(),
+                Last = g.OrderByDescending(t => t.CreatedUtc)
+                    .ThenByDescending(t => t.TopicNumber)
+                    .Select(t => new
+                    {
+                        t.TopicId,
+                        t.TopicNumber,
+                        t.Title,
+                        t.AuthorId,
+                        t.CreatedUtc
+                    })
+                    .First()
+            })
+            .FirstOrDefaultAsync(ct);
+
+        board.TopicsCount = summary?.Count ?? 0;
+        board.LastTopicId = summary?.Last.TopicId;
+        board.LastTopicNumber = summary?.Last.TopicNumber;
+        board.LastTopicTitle = summary?.Last.Title;
+        board.LastTopicAuthorId = summary?.Last.AuthorId;
+        board.LastTopicCreatedUtc = summary?.Last.CreatedUtc;
     }
 
     /// <inheritdoc />
