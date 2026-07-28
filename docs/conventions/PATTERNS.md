@@ -63,8 +63,7 @@ Infrastructure.Mail/
 └── Assets/
 
 Infrastructure.Messaging/
-├── GeneralBus/       # MassTransit
-└── Outbox/           # Transactional outbox
+└── GeneralBus/       # Публикация доменных событий в RabbitMQ
 ```
 
 ### Repository Pattern
@@ -506,8 +505,7 @@ DM.Infrastructure.Mail/
 ```
 DM.Infrastructure.Messaging/
 ├── GeneralBus/
-├── Outbox/
-└── MessagingModule.cs
+└── MessageQueuingModule.cs
 ```
 
 ### DM.Web.API

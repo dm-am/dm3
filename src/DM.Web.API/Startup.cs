@@ -22,7 +22,6 @@ using DM.Infrastructure.Core.Parsing;
 using DM.Infrastructure.Mail;
 using DM.Infrastructure.Mail.Configuration;
 using DM.Infrastructure.Messaging;
-using DM.Infrastructure.Messaging.Outbox;
 using DM.Infrastructure.Persistence;
 using DM.Web.API.Shared.Binding;
 using DM.Web.API.Shared.Configuration;
@@ -83,7 +82,6 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .Configure<TokenConfiguration>(configuration.GetSection(nameof(TokenConfiguration)).Bind)
             .Configure<BotConfiguration>(configuration.GetSection(nameof(BotConfiguration)).Bind)
             .Configure<ProbationConfiguration>(configuration.GetSection(nameof(ProbationConfiguration)).Bind)
-            .Configure<OutboxConfiguration>(configuration.GetSection(nameof(OutboxConfiguration)).Bind)
             .Configure<MirrorConfiguration>(configuration.GetSection(nameof(MirrorConfiguration)).Bind)
             .AddDmLogging("DM.API", configuration);
 
@@ -397,9 +395,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .AsSelf()
             .AsImplementedInterfaces();
 
-        // Register MessageQueuingModule with OutboxProcessor enabled only when NOT migrating
-        // During migration, we don't want background services accessing the database
-        builder.RegisterModuleOnce(new MessageQueuingModule(enableOutboxProcessor: !_migrateOnStart));
+        builder.RegisterModuleOnce<MessageQueuingModule>();
 
         builder.RegisterModuleOnce<PersistenceModule>();
         builder.RegisterModuleOnce<MailModule>();

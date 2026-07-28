@@ -722,11 +722,6 @@ public class DmDbContext : DbContext
     /// </summary>
     public DbSet<Upload> Uploads { get; set; }
 
-    /// <summary>
-    /// Outbox events
-    /// </summary>
-    public DbSet<OutboxEvent> OutboxEvents { get; set; }
-
     #endregion
 
     #region Subscriptions

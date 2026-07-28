@@ -94,27 +94,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "OutboxEvents",
-                columns: table => new
-                {
-                    Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    AggregateId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EventType = table.Column<int>(type: "integer", nullable: false),
-                    Payload = table.Column<string>(type: "text", nullable: true),
-                    CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    ProcessedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    IsProcessed = table.Column<bool>(type: "boolean", nullable: false),
-                    RetryCount = table.Column<int>(type: "integer", nullable: false),
-                    NextRetryUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    LastError = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_OutboxEvents", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "PendingRegistrations",
                 columns: table => new
                 {
@@ -2611,11 +2590,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "AuthorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Topics_BoardId",
-                table: "Topics",
-                column: "BoardId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Topics_BoardId_TopicNumber",
                 table: "Topics",
                 columns: new[] { "BoardId", "TopicNumber" },
@@ -3731,9 +3705,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "NotepadEntries");
-
-            migrationBuilder.DropTable(
-                name: "OutboxEvents");
 
             migrationBuilder.DropTable(
                 name: "PendingRegistrations");
