@@ -15,6 +15,12 @@ public class Ban
     public Guid BanId { get; set; }
 
     /// <summary>
+    /// Target user identifier. Carried separately from the navigation so that
+    /// authorization checks never depend on the user object being loaded.
+    /// </summary>
+    public Guid TargetUserId { get; set; }
+
+    /// <summary>
     /// Target user
     /// </summary>
     public GeneralUser TargetUser { get; set; } = null!;

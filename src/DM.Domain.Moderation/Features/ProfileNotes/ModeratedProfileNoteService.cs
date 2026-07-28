@@ -1,3 +1,4 @@
+using FluentValidation;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -21,6 +22,8 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
     private readonly IModeratedProfileNoteRepository _noteRepository;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IGuidFactory _guidFactory;
+    private readonly IValidator<CreateModeratedProfileNote> _createValidator;
+    private readonly IValidator<UpdateModeratedProfileNote> _updateValidator;
 
     /// <inheritdoc />
     public ModeratedProfileNoteService(
@@ -29,7 +32,9 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
         IUserLookupService userLookupService,
         IModeratedProfileNoteRepository noteRepository,
         IDateTimeProvider dateTimeProvider,
-        IGuidFactory guidFactory)
+        IGuidFactory guidFactory,
+        IValidator<CreateModeratedProfileNote> createValidator,
+        IValidator<UpdateModeratedProfileNote> updateValidator)
     {
         _identityProvider = identityProvider;
         _intentionManager = intentionManager;
@@ -37,6 +42,8 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
         _noteRepository = noteRepository;
         _dateTimeProvider = dateTimeProvider;
         _guidFactory = guidFactory;
+        _createValidator = createValidator;
+        _updateValidator = updateValidator;
     }
 
     /// <inheritdoc />
@@ -66,6 +73,7 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
     /// <inheritdoc />
     public async Task<ModeratedProfileNote> Create(CreateModeratedProfileNote createNote)
     {
+        await _createValidator.ValidateAndThrowAsync(createNote);
         var user = await _userLookupService.GetAsync(createNote.Username);
 
         _intentionManager.ThrowIfForbidden(ModerationIntention.CreateModNote);
@@ -86,6 +94,7 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
     /// <inheritdoc />
     public async Task<ModeratedProfileNote> Update(UpdateModeratedProfileNote updateNote)
     {
+        await _updateValidator.ValidateAndThrowAsync(updateNote);
         var note = await _noteRepository.GetNote(updateNote.Id)
             ?? throw new HttpException(HttpStatusCode.NotFound, $"Note {updateNote.Id} not found");
 

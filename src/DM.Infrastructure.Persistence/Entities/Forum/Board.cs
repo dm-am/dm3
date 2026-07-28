@@ -56,41 +56,6 @@ public class Board
     public int TopicsCount { get; set; }
 
     /// <summary>
-    /// Total comments count (denormalized)
-    /// </summary>
-    public int CommentsCount { get; set; }
-
-    /// <summary>
-    /// Last comment identifier (denormalized)
-    /// </summary>
-    public Guid? LastCommentId { get; set; }
-
-    /// <summary>
-    /// Last comment topic identifier (denormalized)
-    /// </summary>
-    public Guid? LastCommentTopicId { get; set; }
-
-    /// <summary>
-    /// Last comment topic title (denormalized)
-    /// </summary>
-    public string? LastCommentTopicTitle { get; set; }
-
-    /// <summary>
-    /// Last comment topic number (denormalized)
-    /// </summary>
-    public int? LastCommentTopicNumber { get; set; }
-
-    /// <summary>
-    /// Last comment author identifier (denormalized)
-    /// </summary>
-    public Guid? LastCommentAuthorId { get; set; }
-
-    /// <summary>
-    /// Last comment date (denormalized, UTC)
-    /// </summary>
-    public DateTimeOffset? LastCommentUtc { get; set; }
-
-    /// <summary>
     /// Last created topic identifier (denormalized)
     /// </summary>
     public Guid? LastTopicId { get; set; }
@@ -126,18 +91,6 @@ public class Board
     /// </summary>
     [InverseProperty(nameof(Topic.Board))]
     public virtual ICollection<Topic> Topics { get; set; } = [];
-
-    /// <summary>
-    /// Last comment (navigation)
-    /// </summary>
-    [ForeignKey(nameof(LastCommentId))]
-    public virtual Comment? LastComment { get; set; }
-
-    /// <summary>
-    /// Last comment author (navigation)
-    /// </summary>
-    [ForeignKey(nameof(LastCommentAuthorId))]
-    public virtual User? LastCommentAuthor { get; set; }
 
     /// <summary>
     /// Last created topic (navigation)

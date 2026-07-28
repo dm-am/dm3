@@ -77,7 +77,7 @@ public class UpdateModeratedProfileNoteValidatorShould : UnitTestBase
         var input = new UpdateModeratedProfileNote
         {
             Id = Guid.NewGuid(),
-            Text = new string('x', 5001)
+            Text = new string('x', 4001)
         };
 
         var result = validator.TestValidate(input);
@@ -91,7 +91,7 @@ public class UpdateModeratedProfileNoteValidatorShould : UnitTestBase
         var input = new UpdateModeratedProfileNote
         {
             Id = Guid.NewGuid(),
-            Text = new string('x', 5000)
+            Text = new string('x', 4000)
         };
 
         var result = validator.TestValidate(input);

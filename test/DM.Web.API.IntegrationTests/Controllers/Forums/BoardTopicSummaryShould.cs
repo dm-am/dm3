@@ -126,6 +126,74 @@ public class BoardTopicSummaryShould : IntegrationTestBase
         }
     }
 
+    /// <summary>
+    /// The comment counter and the last-comment block are computed on read, so a
+    /// new comment has to show up on the very next render.
+    /// </summary>
+    /// <remarks>
+    /// They used to be columns that only the demo seeder ever wrote: in production
+    /// the forum showed zero comments on every board forever, and "last activity"
+    /// could never name a comment.
+    /// </remarks>
+    [Fact]
+    public async Task CountCommentsOfTheBoardAsSoonAsTheyAppear()
+    {
+        var boardId = await CreateBoard();
+        try
+        {
+            var topic = await CreateTopic(boardId, 0);
+
+            var before = await ReadBoardSummary(boardId);
+            before.CommentsCount.Should().Be(0);
+            before.LastComment.Should().BeNull();
+
+            await AddComment(topic.Id, "First");
+            await AddComment(topic.Id, "Second");
+
+            var after = await ReadBoardSummary(boardId);
+            after.CommentsCount.Should().Be(2);
+            after.LastComment.Should().NotBeNull();
+            after.LastComment!.TopicId.Should().Be(topic.Id);
+        }
+        finally
+        {
+            await DropComments(boardId);
+            await DropBoard(boardId);
+        }
+    }
+
+    private async Task AddComment(Guid topicId, string text)
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+        dbContext.Set<DM.Infrastructure.Persistence.Entities.Shared.Comment>().Add(new()
+        {
+            CommentId = Guid.NewGuid(),
+            EntityId = topicId,
+            AuthorId = TestConstants.TestUserId,
+            CreatedUtc = DateTimeOffset.UtcNow,
+            Text = text,
+        });
+        await dbContext.SaveChangesAsync();
+    }
+
+    private async Task<DM.Domain.Forum.Features.Boards.Board> ReadBoardSummary(Guid boardId)
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider
+            .GetRequiredService<DM.Domain.Forum.Features.Boards.IBoardRepository>();
+        var boards = await repository.SelectBoards(null);
+        return boards.First(b => b.Id == boardId);
+    }
+
+    private async Task DropComments(Guid boardId)
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """DELETE FROM "Comments" WHERE "EntityId" IN (SELECT "TopicId" FROM "Topics" WHERE "BoardId" = {0})""",
+            boardId);
+    }
     private async Task<Topic> CreateTopic(Guid boardId, int index)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

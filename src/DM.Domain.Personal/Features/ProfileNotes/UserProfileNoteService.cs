@@ -1,3 +1,4 @@
+using FluentValidation;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,6 +16,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IValidator<CreateUserProfileNote> _validator;
 
     /// <inheritdoc />
     public UserProfileNoteService(
@@ -22,13 +24,15 @@ internal class UserProfileNoteService : IUserProfileNoteService
         IUserRepository userRepository,
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IValidator<CreateUserProfileNote> validator)
     {
         _repository = repository;
         _userRepository = userRepository;
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
+        _validator = validator;
     }
 
     /// <inheritdoc />
@@ -52,6 +56,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
     /// <inheritdoc />
     public async Task<UserProfileNote?> UpsertNote(CreateUserProfileNote createNote, CancellationToken ct = default)
     {
+        await _validator.ValidateAndThrowAsync(createNote, ct);
         var currentUser = _identityProvider.Current.User;
         if (!currentUser.IsAuthenticated)
         {

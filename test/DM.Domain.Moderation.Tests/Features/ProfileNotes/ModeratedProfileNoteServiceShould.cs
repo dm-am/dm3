@@ -1,3 +1,6 @@
+using System.Threading;
+using FluentValidation.Results;
+using FluentValidation;
 using System;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Authentication;
@@ -49,13 +52,25 @@ public class ModeratedProfileNoteServiceShould : UnitTestBase
         _dateTimeProvider.Setup(d => d.Now).Returns(_now);
         _guidFactory.Setup(g => g.Create()).Returns(_noteId);
 
+        var createValidator = Mock<IValidator<CreateModeratedProfileNote>>();
+        createValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreateModeratedProfileNote>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ValidationResult());
+
+        var updateValidator = Mock<IValidator<UpdateModeratedProfileNote>>();
+        updateValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<UpdateModeratedProfileNote>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ValidationResult());
+
         _service = new ModeratedProfileNoteService(
             _identityProvider.Object,
             _intentionManager.Object,
             _userLookupService.Object,
             _noteRepository.Object,
             _dateTimeProvider.Object,
-            _guidFactory.Object);
+            _guidFactory.Object,
+            createValidator.Object,
+            updateValidator.Object);
     }
 
     [Fact]

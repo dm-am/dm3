@@ -1943,32 +1943,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("CommentsCount")
-                        .HasColumnType("integer");
-
                     b.Property<int>("CreateTopicPolicy")
                         .HasColumnType("integer");
 
                     b.Property<string>("Description")
                         .HasColumnType("text");
-
-                    b.Property<Guid?>("LastCommentAuthorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("LastCommentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("LastCommentTopicId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int?>("LastCommentTopicNumber")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("LastCommentTopicTitle")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("LastCommentUtc")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("LastTopicAuthorId")
                         .HasColumnType("uuid");
@@ -2000,10 +1979,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("BoardId");
 
-                    b.HasIndex("LastCommentAuthorId");
-
-                    b.HasIndex("LastCommentId");
-
                     b.HasIndex("LastTopicAuthorId");
 
                     b.HasIndex("LastTopicId");
@@ -2015,7 +1990,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             BoardId = new Guid("00000000-0000-0000-0000-000000000001"),
                             Alias = "general",
-                            CommentsCount = 0,
                             CreateTopicPolicy = 32,
                             Description = "Жизнь сообщества и решения администрации",
                             Order = 1,
@@ -2027,7 +2001,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             BoardId = new Guid("00000000-0000-0000-0000-000000000002"),
                             Alias = "game-systems",
-                            CommentsCount = 0,
                             CreateTopicPolicy = 32,
                             Description = "Обсуждение правил и помощь в выборе системы",
                             Order = 2,
@@ -2039,7 +2012,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             BoardId = new Guid("00000000-0000-0000-0000-000000000003"),
                             Alias = "looking-for-group",
-                            CommentsCount = 0,
                             CreateTopicPolicy = 32,
                             Description = "Набор игроков в игру или поиск мастера",
                             Order = 3,
@@ -2051,7 +2023,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             BoardId = new Guid("00000000-0000-0000-0000-000000000004"),
                             Alias = "ideas",
-                            CommentsCount = 0,
                             CreateTopicPolicy = 32,
                             Description = "Обкатка задумок и поиск единомышленников",
                             Order = 4,
@@ -2063,7 +2034,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             BoardId = new Guid("00000000-0000-0000-0000-000000000005"),
                             Alias = "contests",
-                            CommentsCount = 0,
                             CreateTopicPolicy = 4,
                             Description = "Литературные и творческие состязания",
                             Order = 5,
@@ -2075,7 +2045,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             BoardId = new Guid("00000000-0000-0000-0000-000000000006"),
                             Alias = "off-topic",
-                            CommentsCount = 0,
                             CreateTopicPolicy = 32,
                             Description = "Музыка, книги, кино, мемы и все остальное",
                             Order = 6,
@@ -2087,7 +2056,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             BoardId = new Guid("00000000-0000-0000-0000-000000000007"),
                             Alias = "forum-games",
-                            CommentsCount = 0,
                             CreateTopicPolicy = 32,
                             Description = "Словесные игры, ассоциации и прочие развлечения",
                             Order = 7,
@@ -2099,7 +2067,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             BoardId = new Guid("00000000-0000-0000-0000-000000000008"),
                             Alias = "improvements",
-                            CommentsCount = 0,
                             CreateTopicPolicy = 32,
                             Description = "Идеи и предложения по развитию сайта",
                             Order = 8,
@@ -2111,7 +2078,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             BoardId = new Guid("00000000-0000-0000-0000-000000000009"),
                             Alias = "bugs",
-                            CommentsCount = 0,
                             CreateTopicPolicy = 32,
                             Description = "Сообщения об ошибках на сайте",
                             Order = 9,
@@ -2123,7 +2089,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             BoardId = new Guid("00000000-0000-0000-0000-00000000000a"),
                             Alias = "newbies",
-                            CommentsCount = 0,
                             CreateTopicPolicy = 32,
                             Description = "Руководства, ответы на вопросы и помощь новичкам",
                             Order = 10,
@@ -2135,7 +2100,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             BoardId = new Guid("00000000-0000-0000-0000-00000000000b"),
                             Alias = "news",
-                            CommentsCount = 0,
                             CreateTopicPolicy = 4,
                             Description = "Официальные новости, обновления и статистика",
                             Order = 11,
@@ -3195,6 +3159,15 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsVoluntary")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("LiftReason")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("LiftedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("LiftedUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("StartedUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -3561,6 +3534,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasIndex("DeletedByUserId");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("EntityType", "EntityId");
 
                     b.ToTable("Likes");
                 });
@@ -4820,14 +4795,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Forum.Board", b =>
                 {
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "LastCommentAuthor")
-                        .WithMany()
-                        .HasForeignKey("LastCommentAuthorId");
-
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Shared.Comment", "LastComment")
-                        .WithMany()
-                        .HasForeignKey("LastCommentId");
-
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "LastTopicAuthor")
                         .WithMany()
                         .HasForeignKey("LastTopicAuthorId");
@@ -4835,10 +4802,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Forum.Topic", "LastTopic")
                         .WithMany()
                         .HasForeignKey("LastTopicId");
-
-                    b.Navigation("LastComment");
-
-                    b.Navigation("LastCommentAuthor");
 
                     b.Navigation("LastTopic");
 

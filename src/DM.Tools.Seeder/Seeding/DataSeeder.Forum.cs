@@ -334,7 +334,6 @@ internal sealed partial class DataSeeder
 
                 // Update board stats
                 board.TopicsCount++;
-                board.CommentsCount += topic.CommentCount;
             }
         }
 
@@ -361,12 +360,6 @@ internal sealed partial class DataSeeder
                 var board = boards.FirstOrDefault(b => b.BoardId == topic.BoardId);
                 if (board != null)
                 {
-                    board.LastCommentId = lastComment.CommentId;
-                    board.LastCommentTopicId = topic.TopicId;
-                    board.LastCommentTopicTitle = topic.Title;
-                    board.LastCommentTopicNumber = topic.TopicNumber;
-                    board.LastCommentUtc = lastComment.CreatedUtc;
-                    board.LastCommentAuthorId = lastComment.AuthorId;
                 }
             }
         }

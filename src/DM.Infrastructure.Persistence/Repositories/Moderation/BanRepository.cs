@@ -80,12 +80,18 @@ internal class BanRepository : IBanRepository
     }
 
     /// <inheritdoc />
-    public async Task Remove(Guid banId, CancellationToken ct = default)
+    public async Task Remove(Guid banId, Guid liftedByUserId, DateTimeOffset liftedUtc, string? reason,
+        CancellationToken ct = default)
     {
         var ban = await _dbContext.Bans.FindAsync(new object[] { banId }, ct);
         if (ban != null)
         {
             ban.IsRemoved = true;
+            // Lifting a ban used to leave no trace at all: the reason reached the
+            // service and was dropped, so nobody could tell who had lifted what.
+            ban.LiftedByUserId = liftedByUserId;
+            ban.LiftedUtc = liftedUtc;
+            ban.LiftReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
             await _dbContext.SaveChangesAsync(ct);
         }
     }

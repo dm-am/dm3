@@ -33,7 +33,13 @@ public interface IBanRepository
     /// <summary>
     /// Remove (lift) a ban
     /// </summary>
-    Task Remove(Guid banId, CancellationToken ct = default);
+    /// <param name="banId">Ban identifier</param>
+    /// <param name="liftedByUserId">Moderator lifting the ban</param>
+    /// <param name="liftedUtc">When it was lifted</param>
+    /// <param name="reason">Why it was lifted</param>
+    /// <param name="ct">Cancellation token</param>
+    Task Remove(Guid banId, Guid liftedByUserId, DateTimeOffset liftedUtc, string? reason,
+        CancellationToken ct = default);
 
     /// <summary>
     /// Check if user is currently banned

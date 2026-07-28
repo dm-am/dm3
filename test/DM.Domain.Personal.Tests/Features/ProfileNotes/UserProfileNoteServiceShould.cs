@@ -1,3 +1,5 @@
+using FluentValidation.Results;
+using FluentValidation;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -41,12 +43,18 @@ public class UserProfileNoteServiceShould : UnitTestBase
         _dateTimeProvider.Setup(d => d.Now).Returns(_now);
         _guidFactory.Setup(g => g.Create()).Returns(_noteId);
 
+        var validator = Mock<IValidator<CreateUserProfileNote>>();
+        validator
+            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreateUserProfileNote>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ValidationResult());
+
         _service = new UserProfileNoteService(
             _repository.Object,
             _userRepository.Object,
             _identityProvider.Object,
             _guidFactory.Object,
-            _dateTimeProvider.Object);
+            _dateTimeProvider.Object,
+            validator.Object);
     }
 
     [Fact]

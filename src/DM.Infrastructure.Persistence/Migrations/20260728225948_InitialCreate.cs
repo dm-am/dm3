@@ -174,7 +174,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                     Comment = table.Column<string>(type: "text", nullable: false),
                     AccessRestrictionPolicy = table.Column<int>(type: "integer", nullable: false),
                     IsVoluntary = table.Column<bool>(type: "boolean", nullable: false),
-                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false)
+                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
+                    LiftedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LiftedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    LiftReason = table.Column<string>(type: "text", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -270,13 +273,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     ViewPolicy = table.Column<int>(type: "integer", nullable: false),
                     CreateTopicPolicy = table.Column<int>(type: "integer", nullable: false),
                     TopicsCount = table.Column<int>(type: "integer", nullable: false),
-                    CommentsCount = table.Column<int>(type: "integer", nullable: false),
-                    LastCommentId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastCommentTopicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastCommentTopicTitle = table.Column<string>(type: "text", nullable: true),
-                    LastCommentTopicNumber = table.Column<int>(type: "integer", nullable: true),
-                    LastCommentAuthorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastCommentUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     LastTopicId = table.Column<Guid>(type: "uuid", nullable: true),
                     LastTopicNumber = table.Column<int>(type: "integer", nullable: true),
                     LastTopicTitle = table.Column<string>(type: "text", nullable: true),
@@ -1569,20 +1565,20 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             migrationBuilder.InsertData(
                 table: "Boards",
-                columns: new[] { "BoardId", "Alias", "CommentsCount", "CreateTopicPolicy", "Description", "LastCommentAuthorId", "LastCommentId", "LastCommentTopicId", "LastCommentTopicNumber", "LastCommentTopicTitle", "LastCommentUtc", "LastTopicAuthorId", "LastTopicCreatedUtc", "LastTopicId", "LastTopicNumber", "LastTopicTitle", "Order", "Title", "TopicsCount", "ViewPolicy" },
+                columns: new[] { "BoardId", "Alias", "CreateTopicPolicy", "Description", "LastTopicAuthorId", "LastTopicCreatedUtc", "LastTopicId", "LastTopicNumber", "LastTopicTitle", "Order", "Title", "TopicsCount", "ViewPolicy" },
                 values: new object[,]
                 {
-                    { new Guid("00000000-0000-0000-0000-000000000001"), "general", 0, 32, "Жизнь сообщества и решения администрации", null, null, null, null, null, null, null, null, null, null, null, 1, "Общий", 1, 64 },
-                    { new Guid("00000000-0000-0000-0000-000000000002"), "game-systems", 0, 32, "Обсуждение правил и помощь в выборе системы", null, null, null, null, null, null, null, null, null, null, null, 2, "Игровые системы", 0, 64 },
-                    { new Guid("00000000-0000-0000-0000-000000000003"), "looking-for-group", 0, 32, "Набор игроков в игру или поиск мастера", null, null, null, null, null, null, null, null, null, null, null, 3, "Поиск мастера и игроков", 0, 64 },
-                    { new Guid("00000000-0000-0000-0000-000000000004"), "ideas", 0, 32, "Обкатка задумок и поиск единомышленников", null, null, null, null, null, null, null, null, null, null, null, 4, "Котел идей", 0, 64 },
-                    { new Guid("00000000-0000-0000-0000-000000000005"), "contests", 0, 4, "Литературные и творческие состязания", null, null, null, null, null, null, null, null, null, null, null, 5, "Конкурсы", 0, 64 },
-                    { new Guid("00000000-0000-0000-0000-000000000006"), "off-topic", 0, 32, "Музыка, книги, кино, мемы и все остальное", null, null, null, null, null, null, null, null, null, null, null, 6, "Под столом", 0, 64 },
-                    { new Guid("00000000-0000-0000-0000-000000000007"), "forum-games", 0, 32, "Словесные игры, ассоциации и прочие развлечения", null, null, null, null, null, null, null, null, null, null, null, 7, "Неролевые игры", 0, 64 },
-                    { new Guid("00000000-0000-0000-0000-000000000008"), "improvements", 0, 32, "Идеи и предложения по развитию сайта", null, null, null, null, null, null, null, null, null, null, null, 8, "Улучшение сайта", 0, 64 },
-                    { new Guid("00000000-0000-0000-0000-000000000009"), "bugs", 0, 32, "Сообщения об ошибках на сайте", null, null, null, null, null, null, null, null, null, null, null, 9, "Ошибки", 0, 64 },
-                    { new Guid("00000000-0000-0000-0000-00000000000a"), "newbies", 0, 32, "Руководства, ответы на вопросы и помощь новичкам", null, null, null, null, null, null, null, null, null, null, null, 10, "Для новичков", 0, 64 },
-                    { new Guid("00000000-0000-0000-0000-00000000000b"), "news", 0, 4, "Официальные новости, обновления и статистика", null, null, null, null, null, null, null, null, null, null, null, 11, "Новости проекта", 0, 64 }
+                    { new Guid("00000000-0000-0000-0000-000000000001"), "general", 32, "Жизнь сообщества и решения администрации", null, null, null, null, null, 1, "Общий", 1, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000002"), "game-systems", 32, "Обсуждение правил и помощь в выборе системы", null, null, null, null, null, 2, "Игровые системы", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000003"), "looking-for-group", 32, "Набор игроков в игру или поиск мастера", null, null, null, null, null, 3, "Поиск мастера и игроков", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000004"), "ideas", 32, "Обкатка задумок и поиск единомышленников", null, null, null, null, null, 4, "Котел идей", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000005"), "contests", 4, "Литературные и творческие состязания", null, null, null, null, null, 5, "Конкурсы", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000006"), "off-topic", 32, "Музыка, книги, кино, мемы и все остальное", null, null, null, null, null, 6, "Под столом", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000007"), "forum-games", 32, "Словесные игры, ассоциации и прочие развлечения", null, null, null, null, null, 7, "Неролевые игры", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000008"), "improvements", 32, "Идеи и предложения по развитию сайта", null, null, null, null, null, 8, "Улучшение сайта", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000009"), "bugs", 32, "Сообщения об ошибках на сайте", null, null, null, null, null, 9, "Ошибки", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-00000000000a"), "newbies", 32, "Руководства, ответы на вопросы и помощь новичкам", null, null, null, null, null, 10, "Для новичков", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-00000000000b"), "news", 4, "Официальные новости, обновления и статистика", null, null, null, null, null, 11, "Новости проекта", 0, 64 }
                 });
 
             migrationBuilder.InsertData(
@@ -1858,16 +1854,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Boards_LastCommentAuthorId",
-                table: "Boards",
-                column: "LastCommentAuthorId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Boards_LastCommentId",
-                table: "Boards",
-                column: "LastCommentId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Boards_LastTopicAuthorId",
                 table: "Boards",
                 column: "LastTopicAuthorId");
@@ -2040,6 +2026,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "IX_Likes_DeletedByUserId",
                 table: "Likes",
                 column: "DeletedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Likes_EntityType_EntityId",
+                table: "Likes",
+                columns: new[] { "EntityType", "EntityId" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Likes_UserId",
@@ -2768,25 +2759,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                 onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_Boards_Comments_LastCommentId",
-                table: "Boards",
-                column: "LastCommentId",
-                principalTable: "Comments",
-                principalColumn: "CommentId");
-
-            migrationBuilder.AddForeignKey(
                 name: "FK_Boards_Topics_LastTopicId",
                 table: "Boards",
                 column: "LastTopicId",
                 principalTable: "Topics",
                 principalColumn: "TopicId");
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Boards_Users_LastCommentAuthorId",
-                table: "Boards",
-                column: "LastCommentAuthorId",
-                principalTable: "Users",
-                principalColumn: "UserId");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Boards_Users_LastTopicAuthorId",
@@ -3425,10 +3402,6 @@ namespace DM.Infrastructure.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
-                name: "FK_Boards_Users_LastCommentAuthorId",
-                table: "Boards");
-
-            migrationBuilder.DropForeignKey(
                 name: "FK_Boards_Users_LastTopicAuthorId",
                 table: "Boards");
 
@@ -3508,9 +3481,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "FK_Topics_Boards_BoardId",
                 table: "Topics");
 
-            migrationBuilder.DropForeignKey(
-                name: "FK_Topics_Comments_LastCommentId",
-                table: "Topics");
 
             migrationBuilder.DropForeignKey(
                 name: "FK_Chats_Messages_LastMessageId",
@@ -3691,10 +3661,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "Boards");
 
             migrationBuilder.DropTable(
-                name: "Comments");
+                name: "Topics");
 
             migrationBuilder.DropTable(
-                name: "Topics");
+                name: "Comments");
 
             migrationBuilder.DropTable(
                 name: "Messages");

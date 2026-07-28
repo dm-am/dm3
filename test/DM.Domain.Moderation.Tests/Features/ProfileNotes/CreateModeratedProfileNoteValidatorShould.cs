@@ -90,7 +90,7 @@ public class CreateModeratedProfileNoteValidatorShould : UnitTestBase
         var input = new CreateModeratedProfileNote
         {
             Username = "testuser",
-            Text = new string('x', 5001)
+            Text = new string('x', 4001)
         };
 
         var result = validator.TestValidate(input);
@@ -104,7 +104,7 @@ public class CreateModeratedProfileNoteValidatorShould : UnitTestBase
         var input = new CreateModeratedProfileNote
         {
             Username = "testuser",
-            Text = new string('x', 5000)
+            Text = new string('x', 4000)
         };
 
         var result = validator.TestValidate(input);
