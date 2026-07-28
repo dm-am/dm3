@@ -1,12 +1,13 @@
+using DM.Domain.Core.Mail;
 using FluentValidation;
 
 namespace DM.Infrastructure.Mail;
 
 /// <inheritdoc />
-internal class MailLetterValidator : AbstractValidator<MailLetter>
+internal class EmailLetterValidator : AbstractValidator<EmailLetter>
 {
     /// <inheritdoc />
-    public MailLetterValidator()
+    public EmailLetterValidator()
     {
         RuleFor(l => l.Address)
             .NotEmpty()
