@@ -1,3 +1,4 @@
+using DM.Domain.Core.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,8 +28,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IMapper _mapper;
 
-    private static readonly TimeSpan ActivePeriod = TimeSpan.FromDays(30);
-    private static readonly TimeSpan OnlinePeriod = TimeSpan.FromMinutes(5);
 
     /// <inheritdoc />
     public UserRepository(
@@ -122,9 +121,9 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
                     : baseQuery.OrderBy(u => u.RatingDisabled).ThenByDescending(u => u.QualityRating).ThenByDescending(u => u.QuantityRating),
                 // Online users first, then by activity time
                 UserSort.LastActivity => sortAscending
-                    ? baseQuery.OrderBy(u => u.LastActivityUtc.HasValue && u.LastActivityUtc.Value > _dateTimeProvider.Now - OnlinePeriod)
+                    ? baseQuery.OrderBy(u => u.LastActivityUtc.HasValue && u.LastActivityUtc.Value > _dateTimeProvider.Now - ActivityPolicy.OnlinePeriod)
                         .ThenBy(u => u.LastActivityUtc)
-                    : baseQuery.OrderByDescending(u => u.LastActivityUtc.HasValue && u.LastActivityUtc.Value > _dateTimeProvider.Now - OnlinePeriod)
+                    : baseQuery.OrderByDescending(u => u.LastActivityUtc.HasValue && u.LastActivityUtc.Value > _dateTimeProvider.Now - ActivityPolicy.OnlinePeriod)
                         .ThenByDescending(u => u.LastActivityUtc),
                 UserSort.Registered => sortAscending
                     ? baseQuery.OrderBy(u => u.CreatedUtc)
@@ -146,10 +145,10 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
                 UserSort.Popularity => sortAscending
                     ? baseQuery.OrderBy(u =>
                         _dmDbContext.Subscriptions.Count(s => s.TargetType == SubscriptionTargetType.User && s.TargetId == u.UserId &&
-                            s.Subscriber.LastActivityUtc.HasValue && s.Subscriber.LastActivityUtc.Value > _dateTimeProvider.Now - ActivePeriod)).ThenBy(u => u.Username)
+                            s.Subscriber.LastActivityUtc.HasValue && s.Subscriber.LastActivityUtc.Value > _dateTimeProvider.Now - ActivityPolicy.ActivePeriod)).ThenBy(u => u.Username)
                     : baseQuery.OrderByDescending(u =>
                         _dmDbContext.Subscriptions.Count(s => s.TargetType == SubscriptionTargetType.User && s.TargetId == u.UserId &&
-                            s.Subscriber.LastActivityUtc.HasValue && s.Subscriber.LastActivityUtc.Value > _dateTimeProvider.Now - ActivePeriod)).ThenBy(u => u.Username),
+                            s.Subscriber.LastActivityUtc.HasValue && s.Subscriber.LastActivityUtc.Value > _dateTimeProvider.Now - ActivityPolicy.ActivePeriod)).ThenBy(u => u.Username),
                 // Count distinct games where user has at least one character (current or former player)
                 UserSort.GamesPlaying => sortAscending
                     ? baseQuery.OrderBy(u =>
@@ -555,8 +554,8 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         }
 
         var now = _dateTimeProvider.Now;
-        var activeRange = now - ActivePeriod;
-        var onlineRange = now - OnlinePeriod;
+        var activeRange = now - ActivityPolicy.ActivePeriod;
+        var onlineRange = now - ActivityPolicy.OnlinePeriod;
 
         if (filter == UserActivityFilter.Active)
         {

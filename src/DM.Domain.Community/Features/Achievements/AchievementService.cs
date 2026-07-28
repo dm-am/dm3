@@ -8,6 +8,7 @@ using DM.Domain.Community.Features.Icons;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Users;
+using FluentValidation;
 
 namespace DM.Domain.Community.Features.Achievements;
 
@@ -17,15 +18,24 @@ internal class AchievementService : IAchievementService
     private readonly IAchievementRepository _repository;
     private readonly IUserLookupService _userLookup;
     private readonly IDateTimeProvider _clock;
+    private readonly IValidator<CreateAchievementType> _createTypeValidator;
+    private readonly IValidator<UpdateAchievementType> _updateTypeValidator;
+    private readonly IValidator<UpdateAchievementCategory> _updateCategoryValidator;
 
     public AchievementService(
         IAchievementRepository repository,
         IUserLookupService userLookup,
-        IDateTimeProvider clock)
+        IDateTimeProvider clock,
+        IValidator<CreateAchievementType> createTypeValidator,
+        IValidator<UpdateAchievementType> updateTypeValidator,
+        IValidator<UpdateAchievementCategory> updateCategoryValidator)
     {
         _repository = repository;
         _userLookup = userLookup;
         _clock = clock;
+        _createTypeValidator = createTypeValidator;
+        _updateTypeValidator = updateTypeValidator;
+        _updateCategoryValidator = updateCategoryValidator;
     }
 
     // ---- Categories ----
@@ -37,6 +47,7 @@ internal class AchievementService : IAchievementService
     /// <inheritdoc />
     public async Task<AchievementCategory> UpdateCategoryAsync(UpdateAchievementCategory update, CancellationToken ct = default)
     {
+        await _updateCategoryValidator.ValidateAndThrowAsync(update, ct);
         if (update.IconName != null) EnsureIconValid(update.IconName);
         _ = await _repository.GetCategoryAsync(update.Id, ct)
             ?? throw new HttpException(HttpStatusCode.NotFound, "Achievement category not found");
@@ -52,6 +63,13 @@ internal class AchievementService : IAchievementService
     /// <inheritdoc />
     public async Task<AchievementType> CreateTypeAsync(CreateAchievementType create, CancellationToken ct = default)
     {
+        await _createTypeValidator.ValidateAndThrowAsync(create, ct);
+
+        // Without this the unknown category surfaced as a foreign-key violation,
+        // i.e. a 500, while the endpoint advertised 400 for exactly this case.
+        _ = await _repository.GetCategoryAsync(create.AchievementCategoryId, ct)
+            ?? throw new HttpException(HttpStatusCode.NotFound, "Achievement category not found");
+
         var existing = await _repository.GetTypeByCodeAsync(create.Code, ct);
         if (existing != null)
         {
@@ -64,14 +82,22 @@ internal class AchievementService : IAchievementService
     /// <inheritdoc />
     public async Task<AchievementType> UpdateTypeAsync(UpdateAchievementType update, CancellationToken ct = default)
     {
+        await _updateTypeValidator.ValidateAndThrowAsync(update, ct);
         _ = await _repository.GetTypeAsync(update.Id, ct)
             ?? throw new HttpException(HttpStatusCode.NotFound, "Achievement type not found");
         return await _repository.UpdateTypeAsync(update, ct);
     }
 
     /// <inheritdoc />
-    public Task DeleteTypeAsync(Guid id, CancellationToken ct = default) =>
-        _repository.DeleteTypeAsync(id, ct);
+    public async Task DeleteTypeAsync(Guid id, CancellationToken ct = default)
+    {
+        // The repository returns silently when the row is absent, so without this
+        // a delete of a nonexistent tier answered 204 and the declared 404 could
+        // never fire.
+        _ = await _repository.GetTypeAsync(id, ct)
+            ?? throw new HttpException(HttpStatusCode.NotFound, "Achievement type not found");
+        await _repository.DeleteTypeAsync(id, ct);
+    }
 
     // ---- User earnings ----
 

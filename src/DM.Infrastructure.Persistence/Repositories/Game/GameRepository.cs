@@ -28,8 +28,6 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 /// </summary>
 internal class GameRepository : IGameRepository
 {
-    private static readonly TimeSpan ActivePeriod = TimeSpan.FromDays(30);
-
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
     private readonly IGuidFactory _guidFactory;
