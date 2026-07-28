@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
-import SortButton from "../controls/SortButton.vue";
+import SortButton from "./SortButton.vue";
 
 // Mock SvgIcon
 const SvgIconStub = {

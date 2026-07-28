@@ -13,11 +13,11 @@ import {
 setupDayjs();
 
 // Import global styles
-import "./styles/ThemeVariables.css";
-import "./styles/Reset.sass";
-import "./styles/Fonts.sass";
-import "./styles/Inputs.sass";
-import "./styles/BbcodeGlobal.sass";
+import "@/assets/styles/ThemeVariables.css";
+import "@/assets/styles/Reset.sass";
+import "@/assets/styles/Fonts.sass";
+import "@/assets/styles/Inputs.sass";
+import "@/assets/styles/BbcodeGlobal.sass";
 
 // Create app
 const application = createApp(App);

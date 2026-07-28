@@ -77,8 +77,8 @@ const isAccessRecoveryAuthenticated = computed(
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
+@import "@/assets/styles/Variables"
+@import "@/assets/styles/Themes"
 
 .recovery-card
   display: flex

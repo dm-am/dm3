@@ -232,7 +232,7 @@ const {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/ZIndex"
+@import "@/assets/styles/ZIndex"
 
 .scroll-nav
   position: fixed

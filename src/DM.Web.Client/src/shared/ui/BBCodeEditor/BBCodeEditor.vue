@@ -1515,8 +1515,8 @@ defineExpose({
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/BbcodeContent"
-@import "src/assets/styles/ZIndex"
+@import "@/assets/styles/BbcodeContent"
+@import "@/assets/styles/ZIndex"
 
 .bbcode-editor-wrapper
   position: relative

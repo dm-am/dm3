@@ -175,8 +175,8 @@ const isEmpty = computed(() => !loading.value && bans.value.length === 0);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/Skeleton"
 
 .ban-list
   display: flex

@@ -65,7 +65,7 @@ function handleSelect(option: ListOption) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Filters"
+@import "@/assets/styles/Filters"
 
 .options-list
   max-height: 250px

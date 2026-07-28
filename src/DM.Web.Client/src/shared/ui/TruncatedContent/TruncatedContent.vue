@@ -428,8 +428,8 @@ onBeforeUnmount(() => unregisterExpand?.());
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/Animations"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/Animations"
 
 .truncated-content-wrapper
   display: flex

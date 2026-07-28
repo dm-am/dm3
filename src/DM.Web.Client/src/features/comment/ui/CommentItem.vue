@@ -494,7 +494,7 @@ watch(
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/BbcodeContent"
+@import "@/assets/styles/BbcodeContent"
 
 .comment
   display: flex

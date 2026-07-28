@@ -144,8 +144,8 @@ const isEmpty = computed(() => !loading.value && warnings.value.length === 0);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/Skeleton"
 
 .warning-list
   display: flex

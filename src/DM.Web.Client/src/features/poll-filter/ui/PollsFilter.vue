@@ -374,7 +374,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Filters"
+@import "@/assets/styles/Filters"
 
 .polls-filter
   display: flex

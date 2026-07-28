@@ -355,7 +355,7 @@ function handleWarn(id: string) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .topic-filter
   margin-top: $medium

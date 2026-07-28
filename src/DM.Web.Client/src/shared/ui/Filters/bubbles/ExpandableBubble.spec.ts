@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
-import ExpandableBubble from "../bubbles/ExpandableBubble.vue";
+import ExpandableBubble from "./ExpandableBubble.vue";
 
 // Mock SvgIcon
 const SvgIconStub = {

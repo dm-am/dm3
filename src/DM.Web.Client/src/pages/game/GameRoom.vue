@@ -516,7 +516,7 @@ async function dismissPendency(pendencyId: string) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .game-room
   min-height: $grid-step * 50

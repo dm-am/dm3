@@ -90,8 +90,8 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/ZIndex"
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/ZIndex"
+@import "@/assets/styles/Inputs"
 
 .date-picker
   position: relative

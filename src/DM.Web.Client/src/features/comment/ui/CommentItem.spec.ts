@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia } from "pinia";
-import CommentItem from "../ui/CommentItem.vue";
+import CommentItem from "./CommentItem.vue";
 import type { Comment } from "@/shared/api/models/common/comment";
 
 vi.mock("vue-router", () => ({

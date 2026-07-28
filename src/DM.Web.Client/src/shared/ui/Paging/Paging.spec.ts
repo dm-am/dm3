@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, RouterLinkStub } from "@vue/test-utils";
-import Paging from "../Paging.vue";
+import Paging from "./Paging.vue";
 import { scrollBlockIntoView, scrollContentToTop } from "@/shared/lib/scroll";
 
 // Mock vue-router

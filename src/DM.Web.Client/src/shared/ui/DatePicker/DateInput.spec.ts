@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
-import DateInput from "../DateInput.vue";
+import DateInput from "./DateInput.vue";
 
 describe("DateInput", () => {
   const mountComponent = (props: Record<string, unknown> = {}) => {

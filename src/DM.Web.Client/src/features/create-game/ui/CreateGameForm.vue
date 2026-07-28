@@ -263,7 +263,7 @@ async function handleSubmit() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .create-game-form
   max-width: $grid-step * 150

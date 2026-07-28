@@ -197,8 +197,8 @@ function clearSearch() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Filters"
-@import "src/assets/styles/ZIndex"
+@import "@/assets/styles/Filters"
+@import "@/assets/styles/ZIndex"
 
 .messenger-list
   display: flex

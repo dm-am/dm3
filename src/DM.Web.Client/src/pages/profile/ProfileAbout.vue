@@ -66,7 +66,7 @@ watch(
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/BbcodeContent"
+@import "@/assets/styles/BbcodeContent"
 
 .profile-about
   // Flat — no boxes, no rounded corners. Spacing comes from BlockTitle margins.

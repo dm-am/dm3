@@ -319,7 +319,7 @@ function initCardBbcode(el: HTMLElement) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/BbcodeContent"
+@import "@/assets/styles/BbcodeContent"
 
 .topic
   padding: $medium

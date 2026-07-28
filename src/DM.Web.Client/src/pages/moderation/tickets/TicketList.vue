@@ -146,7 +146,7 @@ const isEmpty = computed(() => !loading.value && tickets.value.length === 0);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Skeleton"
 
 .filters
   display: flex

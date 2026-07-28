@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import { nextTick } from "vue";
-import NumericRangePicker from "../inputs/NumericRangePicker.vue";
+import NumericRangePicker from "./NumericRangePicker.vue";
 
 // Stub FilterApplyButton (renders its own button so DOM-level click works)
 const FilterApplyButtonStub = {

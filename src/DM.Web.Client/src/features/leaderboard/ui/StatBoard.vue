@@ -96,7 +96,7 @@ function formatScore(score: number): string {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Skeleton"
 
 // Dashed content card with the site element background (poll/topic idiom).
 .stat-board

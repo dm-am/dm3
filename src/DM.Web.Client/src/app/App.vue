@@ -279,7 +279,7 @@ onMounted(async () => {
 
 <style scoped lang="sass">
 // Variables from Layout and Themes are injected globally via vite.config.ts additionalData
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .main
   height: 100%

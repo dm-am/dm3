@@ -1,3 +1,4 @@
+export * from "./module-status";
 // Note: Single resources are returned directly without wrapper (per API_STANDARDS.md)
 // Only collections use ListEnvelope or CursorEnvelope
 

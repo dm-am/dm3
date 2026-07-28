@@ -1,3 +1,4 @@
+import { ModuleStatus } from "@/shared/api/models/common";
 import { BlogStatusTransition, type BlogStatus } from "@/entities/blog";
 
 export interface BlogStatusTransitionOption {
@@ -23,10 +24,10 @@ export interface BlogStatusTransitionOption {
 export function availableStatusTransitions(
   status: BlogStatus | undefined,
 ): BlogStatusTransitionOption[] {
-  if (status === "Draft") {
+  if (status === ModuleStatus.Draft) {
     return [{ value: BlogStatusTransition.Start, label: "Опубликовать блог" }];
   }
-  if (status === "Active") {
+  if (status === ModuleStatus.Active) {
     return [
       {
         value: BlogStatusTransition.Close,
@@ -35,7 +36,7 @@ export function availableStatusTransitions(
       },
     ];
   }
-  if (status === "Closed") {
+  if (status === ModuleStatus.Closed) {
     return [{ value: BlogStatusTransition.Reopen, label: "Переоткрыть блог" }];
   }
   return [];

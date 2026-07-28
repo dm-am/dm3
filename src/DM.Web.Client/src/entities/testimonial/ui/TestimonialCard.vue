@@ -307,8 +307,8 @@ onBeforeUnmount(() => unregister?.());
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/Animations"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/Animations"
 
 .testimonial
   margin: 0

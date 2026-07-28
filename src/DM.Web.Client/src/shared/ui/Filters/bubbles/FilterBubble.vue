@@ -45,7 +45,7 @@ const emit = defineEmits<{
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Filters"
+@import "@/assets/styles/Filters"
 
 +filter-bubbles
 </style>

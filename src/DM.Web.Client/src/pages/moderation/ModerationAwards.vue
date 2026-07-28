@@ -131,8 +131,8 @@ function openSeries(id: string) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/Tables"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/Tables"
 
 .awards-admin
   display: flex

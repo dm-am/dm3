@@ -226,7 +226,7 @@ async function handleSignOutAll() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 // Bottom padding that aligns the three header columns on a shared baseline.
 $baseline-pad: 9px

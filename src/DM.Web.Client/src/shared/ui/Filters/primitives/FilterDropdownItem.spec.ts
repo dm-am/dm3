@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
-import FilterDropdownItem from "../primitives/FilterDropdownItem.vue";
+import FilterDropdownItem from "./FilterDropdownItem.vue";
 
 describe("FilterDropdownItem", () => {
   const mountComponent = (props = {}) => {

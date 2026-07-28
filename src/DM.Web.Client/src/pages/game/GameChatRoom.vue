@@ -331,8 +331,8 @@ onUnmounted(cleanupObserver);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/BbcodeContent"
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/BbcodeContent"
+@import "@/assets/styles/Inputs"
 
 .chat-room
   min-height: $grid-step * 50

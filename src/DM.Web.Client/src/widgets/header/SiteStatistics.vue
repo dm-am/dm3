@@ -111,7 +111,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Skeleton"
 
 .site-stats
   font-size: $secondary-font-size

@@ -265,7 +265,7 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Tables"
+@import "@/assets/styles/Tables"
 
 .data-table
   width: 100%
