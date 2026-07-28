@@ -17,7 +17,6 @@ import {
 } from "@/entities/global-chat";
 import { useUserStore, useMessagePermissions } from "@/entities/user";
 import { useUiStore } from "@/shared/stores/ui";
-import { AccessPolicy } from "@/shared/api/models/community";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import dayjs from "dayjs";
 import { symbols } from "@/shared/lib/utils/icons";
@@ -76,17 +75,10 @@ const {
   canLike: canLikeMsg,
 } = useMessagePermissions(user);
 
-const isBanned = computed(() => {
-  if (!user.value?.accessPolicy) return false;
-  const policy = user.value.accessPolicy;
-  return (
-    policy === AccessPolicy.DemocraticBan || policy === AccessPolicy.FullBan
-  );
-});
 
 // isModerator provided by useMessagePermissions above
 
-const canSendMessages = computed(() => user.value && !isBanned.value);
+const canSendMessages = computed(() => Boolean(user.value));
 
 // ─────────────────────────────────────────────────────────────
 // Live event details + closed event restriction hint
@@ -1078,8 +1070,17 @@ async function handleSend() {
   const text = newMessage.value;
   newMessage.value = "";
   editorRef.value?.clear();
-  await globalChatStore.sendMessage(text);
-  scrollToBottom();
+  const result = await globalChatStore.sendMessage(text);
+  const failed = Boolean(result?.error);
+  // Give the text back on failure. Clearing before the request is what makes
+  // sending feel instant; losing what was written when it fails is not part
+  // of that bargain.
+  if (failed) {
+    newMessage.value = text;
+  }
+  if (!failed) {
+    scrollToBottom();
+  }
 }
 
 function requestDelete(id: string) {
@@ -1452,9 +1453,7 @@ async function confirmDelete() {
           Отправить
         </button>
       </template>
-      <secondary-text v-else-if="isBanned" class="globalChat-banned-hint">
-        Вы не можете отправлять сообщения из-за ограничений аккаунта
-      </secondary-text>
+
       <LoginPrompt v-else action="отправлять сообщения" />
     </div>
   </div>
@@ -1731,9 +1730,5 @@ async function confirmDelete() {
   align-self: flex-start
   +button
 
-.globalChat-banned-hint
-  flex: 1
-  text-align: center
-  padding: $small
-  color: $accent-red
+
 </style>

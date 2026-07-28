@@ -14,7 +14,6 @@ import { useToast } from "@/shared/lib/composables/useToast";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { forumApi } from "@/entities/forum";
-import { AccessPolicy } from "@/shared/api/models/community";
 import { CommentsFilter, useCommentsFilter } from "@/features/comment-filter";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
 import { usePaging } from "@/shared/lib/composables/usePaging";
@@ -51,18 +50,11 @@ const newComment = ref("");
 const sending = ref(false);
 const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 
-const isBanned = computed(() => {
-  if (!user.value?.accessPolicy) return false;
-  const policy = user.value.accessPolicy;
-  return (
-    policy === AccessPolicy.DemocraticBan || policy === AccessPolicy.FullBan
-  );
-});
 
 const isModerator = computed(() => userIsModerator(user.value));
 
 const canComment = computed(
-  () => user.value && !isBanned.value && topic.value && !topic.value.isClosed,
+  () => user.value && topic.value && !topic.value.isClosed,
 );
 
 async function handleSend() {
@@ -71,8 +63,15 @@ async function handleSend() {
   newComment.value = "";
   editorRef.value?.clear();
   sending.value = true;
-  await createComment(text);
+  const result = await createComment(text);
   sending.value = false;
+  const failed = Boolean(result?.error);
+  // Give the text back on failure. Clearing before the request is what makes
+  // sending feel instant; losing what was written when it fails is not part
+  // of that bargain.
+  if (failed) {
+    newComment.value = text;
+  }
 }
 
 async function markAsReadIfNeeded() {
@@ -331,9 +330,7 @@ function handleWarn(id: string) {
           Отправить
         </button>
       </template>
-      <secondary-text v-else-if="isBanned" class="comment-banned-hint">
-        Вы не можете отправлять комментарии из-за ограничений аккаунта
-      </secondary-text>
+
       <secondary-text v-else-if="topic?.isClosed" class="comment-closed-hint">
         Топик закрыт для комментариев
       </secondary-text>
@@ -379,11 +376,7 @@ function handleWarn(id: string) {
   align-self: flex-start
   +button
 
-.comment-banned-hint,
 .comment-closed-hint
   text-align: center
   padding: $small
-
-.comment-banned-hint
-  color: $accent-red
 </style>

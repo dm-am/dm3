@@ -167,7 +167,9 @@ export interface User extends UserRef {
   /** User status message */
   status?: string;
   /** User access policy (moderation restrictions) */
-  accessPolicy?: AccessPolicy;
+  // accessPolicy is deliberately absent: the API does not send it for the
+  // current user, and the ban rule it would gate exempts your own game and your
+  // own blog, which a flat client-side flag cannot express. The server decides.
   /** User settings (only for authenticated user) */
   settings?: import("@/shared/api/models/personal").UserSettings;
 

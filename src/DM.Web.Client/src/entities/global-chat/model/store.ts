@@ -292,11 +292,13 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     highlightedMessageId.value = null;
   }
 
+  /** Returns the error when the send failed, so the caller can restore the text. */
   async function sendMessage(text: string) {
-    if (!text.trim()) return;
+    if (!text.trim()) return { error: null };
     sending.value = true;
     try {
-      const { data } = await globalChatApi.sendMessage(text);
+      const { data, error } = await globalChatApi.sendMessage(text);
+      if (error) return { error };
       if (data) {
         // If we're not at the latest, jump to latest first
         if (hasMoreAfter.value) {
@@ -308,6 +310,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     } finally {
       sending.value = false;
     }
+    return { error: null };
   }
 
   function addMessage(message: GlobalChatMessage) {

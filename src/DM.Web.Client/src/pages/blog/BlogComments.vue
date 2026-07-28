@@ -20,7 +20,6 @@ import { LoginPrompt } from "@/features/auth";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import Button from "@/shared/ui/Button/Button.vue";
-import { AccessPolicy } from "@/shared/api/models/community";
 
 const route = useRoute();
 const blogStore = useBlogDetailsStore();
@@ -81,23 +80,16 @@ const newComment = ref("");
 const sending = ref(false);
 const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 
-const isBanned = computed(() => {
-  if (!user.value?.accessPolicy) return false;
-  const policy = user.value.accessPolicy;
-  return (
-    policy === AccessPolicy.DemocraticBan || policy === AccessPolicy.FullBan
-  );
-});
 
 const isModerator = computed(() => userIsModerator(user.value));
 
-// Blogs expose one switch: commentsEnabled. The blacklist is enforced
-// server-side (a blacklisted user's POST is rejected), bans are surfaced
-// with the account-restriction hint below.
+// Blogs expose one switch: commentsEnabled. Blacklist and bans are enforced
+// server-side — a rejected POST is the signal, and the ban rule exempts your
+// own blog, which a blanket client-side gate could not express.
 const commentsEnabled = computed(() => blog.value?.commentsEnabled !== false);
 
 const canComment = computed(
-  () => !!user.value && !isBanned.value && commentsEnabled.value,
+  () => !!user.value && commentsEnabled.value,
 );
 
 // Scroll to target element when comments are loaded
@@ -129,12 +121,24 @@ async function handleSend() {
   editorRef.value?.clear();
   sending.value = true;
 
+  let failed = false;
   try {
-    await blogApi.createBlogComment(blog.value.id, { text });
-    // Reload comments
-    await blogStore.loadComments(blog.value.id, getPage());
+    const { error } = await blogApi.createBlogComment(blog.value.id, { text });
+    failed = Boolean(error);
+    if (!failed) {
+      // Reload comments
+      await blogStore.loadComments(blog.value.id, getPage());
+    }
+  } catch {
+    failed = true;
   } finally {
     sending.value = false;
+  }
+  // Give the text back on failure. Clearing before the request is what makes
+  // sending feel instant; losing what was written when it fails is not part
+  // of that bargain.
+  if (failed) {
+    newComment.value = text;
   }
 }
 
@@ -230,9 +234,7 @@ useFetchData(
               Отправить
             </Button>
           </template>
-          <secondary-text v-else-if="isBanned" class="comment-banned-hint">
-            Вы не можете отправлять комментарии из-за ограничений аккаунта
-          </secondary-text>
+
           <secondary-text v-else-if="!commentsEnabled" class="comment-hint">
             Комментарии в этом блоге отключены
           </secondary-text>
@@ -275,11 +277,7 @@ useFetchData(
   :deep(.bbcode-editor-wrapper)
     width: 100%
 
-.comment-hint,
-.comment-banned-hint
+.comment-hint
   text-align: center
   padding: $small
-
-.comment-banned-hint
-  color: $accent-red
 </style>
