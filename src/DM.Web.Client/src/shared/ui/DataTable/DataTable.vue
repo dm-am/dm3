@@ -1,12 +1,9 @@
 <script setup lang="ts" generic="T extends { id: string | number }">
 import { computed, ref } from "vue";
-import { useVirtualizer } from "@tanstack/vue-virtual";
 import type { Column, SortState } from "./types";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import DataTableSkeleton from "./DataTableSkeleton.vue";
 
-// Virtual scroll threshold - use virtualization for large lists
-const VIRTUAL_THRESHOLD = 50;
 
 const props = withDefaults(
   defineProps<{
@@ -56,25 +53,8 @@ defineSlots<{
   footer: () => void;
 }>();
 
-// Virtual scroll setup
-const tableBodyRef = ref<HTMLElement | null>(null);
-const useVirtual = computed(() => props.data.length > VIRTUAL_THRESHOLD);
-const ROW_HEIGHT = 40; // Approximate row height in pixels
 
-const virtualizer = useVirtualizer(
-  computed(() => ({
-    count: props.data.length,
-    getScrollElement: () => tableBodyRef.value,
-    estimateSize: () => ROW_HEIGHT,
-    overscan: 5,
-    enabled: useVirtual.value,
-  })),
-);
-
-const virtualRows = computed(() => virtualizer.value.getVirtualItems());
-const totalHeight = computed(() => virtualizer.value.getTotalSize());
-
-// Get row by index (for both virtual and non-virtual rendering)
+// Get row by index
 function getRow(index: number): T {
   return props.data[index];
 }
@@ -145,8 +125,7 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
       />
     </tbody>
 
-    <!-- Non-virtual tbody (for small lists) -->
-    <tbody v-else-if="!useVirtual">
+    <tbody v-else>
       <!-- Empty state -->
       <tr v-if="!data?.length" class="table-empty-row">
         <td :colspan="showRowNumbers ? columns.length + 1 : columns.length">
@@ -178,74 +157,6 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
             <slot :name="`cell-${column.key}`" :row="row" :index="index">
               {{ cellValue(row, column.key) }}
             </slot>
-          </td>
-        </tr>
-      </template>
-    </tbody>
-
-    <!-- Virtual tbody (for large lists > 50 items) -->
-    <tbody
-      v-else
-      ref="tableBodyRef"
-      class="virtual-tbody"
-      :style="{ height: '600px' }"
-    >
-      <!-- Empty state -->
-      <tr v-if="!data?.length" class="table-empty-row">
-        <td :colspan="showRowNumbers ? columns.length + 1 : columns.length">
-          <slot name="empty">
-            <secondary-text class="table-empty">
-              {{ emptyText }}
-            </secondary-text>
-          </slot>
-        </td>
-      </tr>
-
-      <!-- Virtual rows container -->
-      <template v-else>
-        <tr
-          class="virtual-spacer"
-          :style="{ height: `${totalHeight}px`, position: 'relative' }"
-        >
-          <td :colspan="showRowNumbers ? columns.length + 1 : columns.length">
-            <!-- Virtual rows -->
-            <table class="virtual-inner-table" cellspacing="1" cellpadding="4">
-              <tr
-                v-for="virtualRow in virtualRows"
-                :key="getRow(virtualRow.index).id"
-                class="table-row"
-                :style="{
-                  position: 'absolute',
-                  top: `${virtualRow.start}px`,
-                  left: 0,
-                  right: 0,
-                  height: `${virtualRow.size}px`,
-                }"
-              >
-                <td v-if="showRowNumbers" class="col col-number">
-                  {{ startRowNumber + virtualRow.index }}
-                </td>
-                <td
-                  v-for="column in columns"
-                  :key="column.key"
-                  class="col"
-                  :class="[
-                    `col-${column.key}`,
-                    `align-${column.align || 'left'}`,
-                    { 'hide-mobile': column.hideOnMobile },
-                  ]"
-                  :style="column.width ? { width: column.width } : {}"
-                >
-                  <slot
-                    :name="`cell-${column.key}`"
-                    :row="getRow(virtualRow.index)"
-                    :index="virtualRow.index"
-                  >
-                    {{ cellValue(getRow(virtualRow.index), column.key) }}
-                  </slot>
-                </td>
-              </tr>
-            </table>
           </td>
         </tr>
       </template>
@@ -341,18 +252,4 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
   .hide-mobile
     display: none
 
-// Virtual scroll styles
-.virtual-tbody
-  display: block
-  overflow-y: auto
-  contain: strict
-
-.virtual-spacer
-  display: block
-
-.virtual-inner-table
-  width: 100%
-  table-layout: fixed
-  border-collapse: separate
-  border-spacing: 1px
 </style>
