@@ -2817,6 +2817,8 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("SubscriberId");
 
+                    b.HasIndex("TargetType", "TargetId");
+
                     b.ToTable("Subscriptions");
                 });
 

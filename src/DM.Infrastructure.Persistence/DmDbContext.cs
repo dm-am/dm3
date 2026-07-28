@@ -253,6 +253,13 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<Message>()
             .HasIndex(m => new { m.ChatId, m.CreatedUtc, m.MessageId });
 
+        // Subscribers are always looked up as a pair: "who follows this board /
+        // this game / this blog". Only SubscriberId was indexed — the reverse
+        // direction, which is the one the profile, game and blog pages issue on
+        // every render, scanned the whole table.
+        modelBuilder.Entity<Subscription>()
+            .HasIndex(s => new { s.TargetType, s.TargetId });
+
         // TopicNumber is the canonical topic URL key, and it is allocated as
         // MAX+1: two creates in the same board at the same time read the same
         // maximum. Without this constraint they both commit and one of the two
