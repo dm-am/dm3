@@ -19,6 +19,11 @@ message SearchRequest {
   repeated SearchEntityType searchAcross = 2;
   int32 skip = 3;
   int32 size = 4;
+
+  // Who is searching. The worker has no session of its own, so authorization
+  // cannot come from an ambient identity there — it has to travel with the call.
+  int32 searcherRole = 5;
+  string searcherUserId = 6;
 }
 
 message SearchResponse {

@@ -17,19 +17,24 @@ internal class SearchService(
 {
     /// <inheritdoc />
     public async Task<(IEnumerable<FoundEntity> results, PagingResult paging)> Search(string query,
-        IEnumerable<SearchEntityType> types, PagingQuery pagingQuery)
+        IEnumerable<SearchEntityType> types, PagingQuery pagingQuery,
+        UserRole searcherRole, Guid searcherUserId)
     {
-        var identity = identityProvider.Current;
-        var pageSize = identity.Settings.Paging.EntitiesPerPage;
+        var pageSize = identityProvider.Current.Settings.Paging.EntitiesPerPage;
         if (string.IsNullOrWhiteSpace(query))
         {
             return (Enumerable.Empty<FoundEntity>(), PagingResult.Empty(pageSize));
         }
 
         var pagingData = new PagingData(pagingQuery, pageSize, int.MaxValue);
-        var userRoles = Enum.GetValues<UserRole>().Where(r => identity.User.Role.HasFlag(r));
+
+        // Exactly the searcher's own role, as a single-element set: a document
+        // lists every role its access policy admits, so authorization is set
+        // membership. The previous expression asked HasFlag of an enum that has no
+        // [Flags] attribute and whose members are 0..6, so it derived an arbitrary
+        // role set from the bit pattern of the value.
         var (entities, totalCount) = await searchEngineRepository.Search(
-            query, types, pagingData, userRoles, identity.User.UserId);
+            query, types, pagingData, new[] { searcherRole }, searcherUserId);
 
         pagingData = new PagingData(pagingQuery, pageSize, totalCount);
         return (entities, pagingData.Result);

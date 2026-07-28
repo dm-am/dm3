@@ -4,6 +4,7 @@ using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Exceptions;
+using DM.Domain.Core.Identity;
 using DM.Workers.SearchIndexer.Grpc;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
@@ -25,11 +26,15 @@ namespace DM.Web.API.Features.General.Search;
 public class SearchController : ControllerBase
 {
     private readonly SearchEngine.SearchEngineClient _searchClient;
+    private readonly IIdentityProvider _identityProvider;
 
     /// <inheritdoc />
-    public SearchController(SearchEngine.SearchEngineClient searchClient)
+    public SearchController(
+        SearchEngine.SearchEngineClient searchClient,
+        IIdentityProvider identityProvider)
     {
         _searchClient = searchClient;
+        _identityProvider = identityProvider;
     }
 
     /// <summary>
@@ -62,11 +67,16 @@ public class SearchController : ControllerBase
     {
         try
         {
+            // The search worker authorizes on this, so it has to carry who is
+            // asking; it has no session of its own to read.
+            var searcher = _identityProvider.Current.User;
             var searchResponse = await _searchClient.SearchAsync(new SearchRequest
             {
                 Query = query,
                 Skip = q.Skip,
                 Size = q.Take,
+                SearcherRole = (int)searcher.Role,
+                SearcherUserId = searcher.UserId.ToString(),
             });
 
             var entities = searchResponse.Entities.Select(e => new SearchEntity
