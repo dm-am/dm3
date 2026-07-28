@@ -147,6 +147,10 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["RateLimiting:Enabled"] = "false",
                 // Point MongoDB to the test container
                 ["ConnectionStrings:Mongo"] = _databaseFixture.MongoConnectionString,
+                // The encryption key has no default in the repository, so the host
+                // refuses to start without one. A fixed throwaway key keeps the
+                // tests deterministic and is never a deployment's key.
+                ["CryptoConfiguration:KeyBase64"] = "ZG0zLWludGVncmF0aW9uLXRlc3RzLXRocm93YXdheS0=",
                 // Lower lockout threshold and disable progressive delays for faster tests
                 ["AuthenticationConfiguration:AccountLockoutThreshold"] = "5",
                 ["AuthenticationConfiguration:LoginDelaySchedule:0:0"] = "1000",

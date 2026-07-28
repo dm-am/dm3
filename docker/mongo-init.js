@@ -12,6 +12,22 @@
 // Switch to the application database
 db = db.getSiblingDB('dm3');
 
+// Least-privilege application user. The root account exists only to bootstrap
+// this one and to run health checks; the application never uses it. readWrite on
+// dm3 is enough — it covers index creation, which MongoIndexInitializer performs
+// on every startup.
+const appUser = process.env.DM_MONGO_USER;
+const appPassword = process.env.DM_MONGO_PASSWORD;
+if (!appUser || !appPassword) {
+    throw new Error('DM_MONGO_USER and DM_MONGO_PASSWORD must be set: refusing to leave dm3 without an application user');
+}
+db.createUser({
+    user: appUser,
+    pwd: appPassword,
+    roles: [{ role: 'readWrite', db: 'dm3' }]
+});
+print('Application user created: ' + appUser);
+
 print('Creating indexes for DM3...');
 
 // ============================================================================

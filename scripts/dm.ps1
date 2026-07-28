@@ -247,6 +247,19 @@ function Start-Services {
         Copy-Item (Join-Path $DockerDir ".env.example") $envFile
     }
 
+    # The encryption key has no default in the repository on purpose, so the
+    # template ships it empty and the app refuses to start without it. Generate a
+    # per-machine key once instead of asking every developer to do it by hand.
+    $envContent = Get-Content $envFile -Raw
+    if ($envContent -match '(?m)^DM_CryptoConfiguration__KeyBase64=\s*$') {
+        $keyBytes = New-Object byte[] 32
+        [System.Security.Cryptography.RandomNumberGenerator]::Fill($keyBytes)
+        $key = [Convert]::ToBase64String($keyBytes)
+        $envContent = $envContent -replace '(?m)^DM_CryptoConfiguration__KeyBase64=\s*$', "DM_CryptoConfiguration__KeyBase64=$key"
+        Set-Content -Path $envFile -Value $envContent -Encoding utf8 -NoNewline
+        Write-Host "  Generated a local encryption key in docker/.env" -ForegroundColor Yellow
+    }
+
     Push-Location $DockerDir
     try {
         # Building (with animation)

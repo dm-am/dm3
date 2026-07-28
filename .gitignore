@@ -7,9 +7,15 @@ bundles
 *.tmp
 launchSettings.json
 
-# Configuration files with secrets - NEVER commit these
-**/appsettings.json
-appsettings.*.json
+# Configuration convention: appsettings.json carries localhost defaults only and
+# IS tracked, so a fresh clone builds and runs. Anything that is a real
+# credential in any environment has no in-repo default and comes from DM_* env
+# vars or a secrets/ file; a missing value fails at startup rather than falling
+# back to a value everyone can read. Blanket-ignoring appsettings.json is what
+# left the worker projects without configuration on a fresh clone.
+appsettings.Local.json
+appsettings.*.local.json
+secrets/
 
 # Nginx credentials
 docker/nginx/.htpasswd
