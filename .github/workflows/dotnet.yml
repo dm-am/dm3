@@ -162,3 +162,104 @@ jobs:
           PROJECT_NAME=${{ matrix.project }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+
+  # The frontend has its own context and Dockerfile, so it cannot ride the
+  # publish matrix without conditionals in every step. Until this job existed the
+  # SPA image was never built by CI at all: the only thing that referenced it was
+  # a compose service pointing at a directory that does not exist.
+  publish-frontend:
+    needs: [build, frontend, dependency-scan]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-front
+        tags: |
+          type=sha,prefix=
+          type=ref,event=branch
+          type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+    - name: Build and push image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./src/DM.Web.Client
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # A build context that does not exist, an overlay that no longer parses or a
+  # service renamed out from under the installer must fail here, not on the
+  # server. This is the check that would have caught the frontend context
+  # pointing at a directory removed long ago.
+  compose-topology:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Validate the deployed overlay combination
+      working-directory: docker
+      env:
+        DM_CryptoConfiguration__KeyBase64: ci-validation-placeholder
+        MONGO_ROOT_PASSWORD: ci-validation-placeholder
+        MONGO_PASSWORD: ci-validation-placeholder
+        POSTGRES_PASSWORD: ci-validation-placeholder
+        RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
+        MINIO_ROOT_PASSWORD: ci-validation-placeholder
+        GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
+        OPENSEARCH_PASSWORD: ci-validation-placeholder
+        IMGPROXY_KEY: ci-validation-placeholder
+        IMGPROXY_SALT: ci-validation-placeholder
+      run: |
+        docker compose --env-file /dev/null -f docker-compose.yml config --quiet
+        docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.preview.yml config --quiet
+
+    - name: Every build context the overlay names must exist
+      working-directory: docker
+      env:
+        DM_CryptoConfiguration__KeyBase64: ci-validation-placeholder
+        MONGO_ROOT_PASSWORD: ci-validation-placeholder
+        MONGO_PASSWORD: ci-validation-placeholder
+        POSTGRES_PASSWORD: ci-validation-placeholder
+        RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
+        MINIO_ROOT_PASSWORD: ci-validation-placeholder
+        GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
+        OPENSEARCH_PASSWORD: ci-validation-placeholder
+        IMGPROXY_KEY: ci-validation-placeholder
+        IMGPROXY_SALT: ci-validation-placeholder
+      run: |
+        # Take everything after the key rather than a whitespace-split field:
+        # compose resolves contexts to absolute paths, and a path may contain
+        # spaces.
+        docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.preview.yml config \
+          | sed -n 's/^[[:space:]]*context:[[:space:]]*//p' | sort -u | while read -r ctx; do
+              echo "checking build context: $ctx"
+              test -d "$ctx" || { echo "::error::build context does not exist: $ctx"; exit 1; }
+            done
+
+    - name: The unit systemd runs must name the same files as the installer
+      run: |
+        installer=$(grep -oE '\-f [a-z.-]+\.yml' docker/setup-server.sh | sort -u)
+        unit=$(grep -oE '\-f [a-z.-]+\.yml' docker/dm3.service | sort -u)
+        echo "installer: $installer"
+        echo "unit:      $unit"
+        test "$installer" = "$unit" || { echo "::error::dm3.service and setup-server.sh disagree on the compose files"; exit 1; }
