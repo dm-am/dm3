@@ -85,10 +85,6 @@ x-workload-env: &workload-env
   # === Зеркало ===
   DM_MirrorConfiguration__CurrentMirrorId: ${MIRROR_ID:-main}
 
-  # === Криптография (только для production/mirror — в .env) ===
-  # Для локальной разработки используется дефолт из appsettings.json
-  # КРИТИЧНО: на всех зеркалах должен быть ОДИНАКОВЫЙ ключ!
-
 x-docker-context: &docker-context
   context: ./..
   dockerfile: ./docker/app.Dockerfile
@@ -353,7 +349,7 @@ services:
     container_name: 'dm-prometheus'
     image: 'prom/prometheus:v2.51.0'
     ports:
-      - '9090:9090'
+      - '127.0.0.1:9090:9090'
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
       - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml
@@ -373,7 +369,7 @@ services:
     container_name: 'dm-grafana'
     image: 'grafana/grafana:10.4.0'
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-admin}
     volumes:
@@ -458,7 +454,7 @@ services:
       args:
         PROJECT_NAME: DM.Workers.Mail
     ports:
-      - '5003:5000'
+      - '127.0.0.1:5003:5000'
     environment: *workload-env
     depends_on:
       rabbitmq:
@@ -486,10 +482,10 @@ services:
       args:
         PROJECT_NAME: DM.Workers.SearchIndexer
     ports:
-      - '5001:5000'
+      - '127.0.0.1:5001:5000'
       # gRPC is HTTP/2 only, so the health probe and the metrics scrape have a
       # port of their own — on 5000 an HTTP/1.1 client is answered with 400.
-      - '5101:5100'
+      - '127.0.0.1:5101:5100'
     environment: *workload-env
     depends_on:
       rabbitmq:
@@ -517,7 +513,7 @@ services:
       args:
         PROJECT_NAME: DM.Workers.NotificationDispatcher
     ports:
-      - '5002:5000'
+      - '127.0.0.1:5002:5000'
     environment: *workload-env
     depends_on:
       rabbitmq:
