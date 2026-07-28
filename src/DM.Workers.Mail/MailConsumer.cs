@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
+using DM.Domain.Core.Mail;
 namespace DM.Workers.Mail;
 
 internal class MailConsumer : BackgroundService
@@ -55,7 +56,7 @@ internal class MailConsumer : BackgroundService
             // never attached to them.
             DeadLetterExchange = DeadLetterExchangeName,
         };
-        var consumer = _consumerBuilder.BuildRabbit<MailLetter, MailSendingProcessor>(parameters);
+        var consumer = _consumerBuilder.BuildRabbit<EmailLetter, MailSendingProcessor>(parameters);
         _consumeRetryPolicy.Execute(consumer.Subscribe);
 
         _logger.LogDebug("[👂] Mail sending consumer is listening to {QueueName} queue", parameters.QueueName);

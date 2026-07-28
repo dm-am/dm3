@@ -15,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 
+using DM.Domain.Core.Mail;
 namespace DM.Workers.NotificationDispatcher.Implementation.Email;
 
 /// <inheritdoc />
@@ -163,7 +164,7 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
 
                 var body = BuildEmailBody(eventType, notification.Metadata);
 
-                await _mailSender.SendAsync(new MailLetter
+                await _mailSender.SendAsync(new EmailLetter
                 {
                     Address = email,
                     Subject = subject,

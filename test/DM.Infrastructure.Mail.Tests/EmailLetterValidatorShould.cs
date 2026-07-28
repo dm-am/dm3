@@ -3,22 +3,23 @@ using DM.Testing;
 using FluentAssertions;
 using FluentValidation.TestHelper;
 using Xunit;
+using DM.Domain.Core.Mail;
 
 namespace DM.Infrastructure.Mail.Tests;
 
-public class MailLetterValidatorShould : UnitTestBase
+public class EmailLetterValidatorShould : UnitTestBase
 {
-    private readonly MailLetterValidator validator;
+    private readonly EmailLetterValidator validator;
 
-    public MailLetterValidatorShould()
+    public EmailLetterValidatorShould()
     {
-        validator = new MailLetterValidator();
+        validator = new EmailLetterValidator();
     }
 
     [Fact]
-    public void PassForValidMailLetter()
+    public void PassForValidEmailLetter()
     {
-        var letter = new MailLetter
+        var letter = new EmailLetter
         {
             Address = "test@example.com",
             Subject = "Test Subject",
@@ -32,7 +33,7 @@ public class MailLetterValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenAddressIsEmpty()
     {
-        var letter = new MailLetter
+        var letter = new EmailLetter
         {
             Address = "",
             Subject = "Test Subject",
@@ -46,7 +47,7 @@ public class MailLetterValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenAddressIsInvalid()
     {
-        var letter = new MailLetter
+        var letter = new EmailLetter
         {
             Address = "not-an-email",
             Subject = "Test Subject",
@@ -60,7 +61,7 @@ public class MailLetterValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenSubjectIsEmpty()
     {
-        var letter = new MailLetter
+        var letter = new EmailLetter
         {
             Address = "test@example.com",
             Subject = "",
@@ -74,7 +75,7 @@ public class MailLetterValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenSubjectExceedsMaxLength()
     {
-        var letter = new MailLetter
+        var letter = new EmailLetter
         {
             Address = "test@example.com",
             Subject = new string('a', 101),
@@ -88,7 +89,7 @@ public class MailLetterValidatorShould : UnitTestBase
     [Fact]
     public void PassWhenSubjectIsAtMaxLength()
     {
-        var letter = new MailLetter
+        var letter = new EmailLetter
         {
             Address = "test@example.com",
             Subject = new string('a', 100),
@@ -102,7 +103,7 @@ public class MailLetterValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenBodyIsEmpty()
     {
-        var letter = new MailLetter
+        var letter = new EmailLetter
         {
             Address = "test@example.com",
             Subject = "Test Subject",
@@ -116,7 +117,7 @@ public class MailLetterValidatorShould : UnitTestBase
     [Fact]
     public void PassWithMinimalValidInput()
     {
-        var letter = new MailLetter
+        var letter = new EmailLetter
         {
             Address = "a@b.c",
             Subject = "A",
