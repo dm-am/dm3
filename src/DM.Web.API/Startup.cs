@@ -180,6 +180,10 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             // of an empty volume, so this is what keeps deployed databases indexed.
             services.AddHostedService<DM.Infrastructure.Persistence.MongoIntegration.MongoIndexInitializer>();
 
+            // Asserts the relational indexes EF cannot express in the model. Keeping them
+            // out of the migration is what lets the migration stay entirely generated.
+            services.AddHostedService<DM.Infrastructure.Persistence.RelationalStorage.ExpressionIndexInitializer>();
+
             services.AddHostedService<HostedServices.TokenCleanupService>();
             services.AddHostedService<HostedServices.SessionCleanupService>();
             services.AddHostedService<HostedServices.PendingRegistrationCleanupService>();

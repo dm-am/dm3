@@ -2791,17 +2791,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                 table: "Users",
                 column: "AvatarUploadId");
 
-            // Expression indexes, not column indexes: every username and email
-            // lookup in the application compares lower(column) to lower(value),
-            // and a b-tree over the raw column cannot serve that predicate — it
-            // seq-scans Users on every login. Unique over lower(...) also gives
-            // the invariant the product needs: two accounts cannot differ by
-            // letter case alone. EF has no model-level expression index, hence
-            // raw SQL here (see the note in DmDbContext).
-            migrationBuilder.Sql(
-                """CREATE UNIQUE INDEX "IX_Users_Email_Lower" ON "Users" (lower("Email"));""");
-            migrationBuilder.Sql(
-                """CREATE UNIQUE INDEX "IX_Users_Username_Lower" ON "Users" (lower("Username"));""");
+            // The two expression indexes over lower(Email) and lower(Username) are not here:
+            // EF cannot express them in the model, so written by hand they would be content
+            // the generator does not know about and regenerating this migration would drop
+            // them silently. ExpressionIndexInitializer asserts them on every startup.
 
             migrationBuilder.CreateIndex(
                 name: "IX_Warnings_AuthorId",
