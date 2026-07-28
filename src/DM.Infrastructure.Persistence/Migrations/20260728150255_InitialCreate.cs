@@ -1,9 +1,11 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using NpgsqlTypes;
 
 #nullable disable
+
+#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
 
 namespace DM.Infrastructure.Persistence.Migrations
 {
@@ -13,11 +15,8 @@ namespace DM.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Trigram extension powers fuzzy username/title search
-            // (EF.Functions.TrigramsSimilarity -> pg similarity()). Created
-            // up-front, idempotently, so Database.Migrate() provisions it on a
-            // fresh database (matches the integration-test fixture).
-            migrationBuilder.Sql("CREATE EXTENSION IF NOT EXISTS pg_trgm;");
+            migrationBuilder.AlterDatabase()
+                .Annotation("Npgsql:PostgresExtension:pg_trgm", ",,");
 
             migrationBuilder.CreateTable(
                 name: "AchievementCategories",
@@ -35,28 +34,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AchievementCategories", x => x.AchievementCategoryId);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AchievementTypes",
-                columns: table => new
-                {
-                    AchievementTypeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Code = table.Column<string>(type: "character varying(80)", maxLength: 80, nullable: false),
-                    Title = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    Threshold = table.Column<int>(type: "integer", nullable: false),
-                    Tier = table.Column<int>(type: "integer", nullable: true),
-                    AchievementCategoryId = table.Column<Guid>(type: "uuid", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AchievementTypes", x => x.AchievementTypeId);
-                    table.ForeignKey(
-                        name: "FK_AchievementTypes_AchievementCategories_AchievementCategoryId",
-                        column: x => x.AchievementCategoryId,
-                        principalTable: "AchievementCategories",
-                        principalColumn: "AchievementCategoryId",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -113,6 +90,21 @@ namespace DM.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "PeriodDigestTopics",
+                columns: table => new
+                {
+                    PeriodDigestTopicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Year = table.Column<int>(type: "integer", nullable: false),
+                    Month = table.Column<int>(type: "integer", nullable: true),
+                    TopicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PeriodDigestTopics", x => x.PeriodDigestTopicId);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "TagGroups",
                 columns: table => new
                 {
@@ -124,6 +116,28 @@ namespace DM.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_TagGroups", x => x.TagGroupId);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AchievementTypes",
+                columns: table => new
+                {
+                    AchievementTypeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Code = table.Column<string>(type: "character varying(80)", maxLength: 80, nullable: false),
+                    Title = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    Threshold = table.Column<int>(type: "integer", nullable: false),
+                    Tier = table.Column<int>(type: "integer", nullable: true),
+                    AchievementCategoryId = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AchievementTypes", x => x.AchievementTypeId);
+                    table.ForeignKey(
+                        name: "FK_AchievementTypes_AchievementCategories_AchievementCategoryId",
+                        column: x => x.AchievementCategoryId,
+                        principalTable: "AchievementCategories",
+                        principalColumn: "AchievementCategoryId",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -374,6 +388,21 @@ namespace DM.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Comments", x => x.CommentId);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "FundraisingGoals",
+                columns: table => new
+                {
+                    FundraisingGoalId = table.Column<Guid>(type: "uuid", nullable: false),
+                    GoalAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    CollectedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    ModifiedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    UpdatedByUserId = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_FundraisingGoals", x => x.FundraisingGoalId);
                 });
 
             migrationBuilder.CreateTable(
@@ -662,21 +691,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "PeriodDigestTopics",
-                columns: table => new
-                {
-                    PeriodDigestTopicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Year = table.Column<int>(type: "integer", nullable: false),
-                    Month = table.Column<int>(type: "integer", nullable: true),
-                    TopicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PeriodDigestTopics", x => x.PeriodDigestTopicId);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "PostEdits",
                 columns: table => new
                 {
@@ -821,11 +835,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_RoomAccesses", x => x.AccessId);
-                    // CHECK: exactly one typed target column is non-null.
-                    table.CheckConstraint(
-                        "CK_RoomAccesses_TypedTarget",
-                        "(\"CharacterId\" IS NOT NULL AND \"ReaderUserId\" IS NULL) OR " +
-                        "(\"CharacterId\" IS NULL AND \"ReaderUserId\" IS NOT NULL)");
+                    table.CheckConstraint("CK_RoomAccesses_TypedTarget", "(\"CharacterId\" IS NOT NULL AND \"ReaderUserId\" IS NULL) OR (\"CharacterId\" IS NULL AND \"ReaderUserId\" IS NOT NULL)");
                     table.ForeignKey(
                         name: "FK_RoomAccesses_Characters_CharacterId",
                         column: x => x.CharacterId,
@@ -1000,12 +1010,17 @@ namespace DM.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Tokens", x => x.TokenId);
-                    // NOTE: FK_Tokens_Blogs_EntityId and FK_Tokens_Games_EntityId removed —
-                    // Token.EntityId is polymorphic (a GameId, a BlogId or nothing, depending
-                    // on Type). Both constraints on one column means a value would have to
-                    // exist in Blogs AND Games simultaneously, so every invitation INSERT
-                    // failed. Same reasoning as FK_Comments_Topics_EntityId below.
-                    // Referential integrity is maintained by application logic.
+                    // FK_Tokens_Blogs_EntityId and FK_Tokens_Games_EntityId are deliberately
+                    // absent. Token.EntityId is polymorphic — a GameId, a BlogId or nothing,
+                    // depending on Type — and two constraints on one column would demand the
+                    // value exist in Blogs AND Games at once, so every invitation INSERT
+                    // failed. EF generates both from the Game.Tokens and Blog.Tokens
+                    // navigations, which real queries use, so they cannot simply be dropped
+                    // from the model. Referential integrity is application logic here.
+                    //
+                    // This is the one thing regenerating this migration reintroduces, and it
+                    // is guarded: InvitationTokenPersistenceShould fails loudly if either
+                    // constraint comes back. See DATA_STORAGE.md.
                 });
 
             migrationBuilder.CreateTable(
@@ -1084,13 +1099,19 @@ namespace DM.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Uploads", x => x.UploadId);
-                    // CHECK: exactly one typed target column is non-null AND matches Type.
-                    // UploadType: UserAvatar=1, CharacterAvatar=2, PostAttachment=3.
-                    table.CheckConstraint(
-                        "CK_Uploads_TypedTarget",
-                        "(\"Type\" = 1 AND \"TargetUserId\" IS NOT NULL AND \"TargetCharacterId\" IS NULL AND \"TargetPostId\" IS NULL) OR " +
-                        "(\"Type\" = 2 AND \"TargetCharacterId\" IS NOT NULL AND \"TargetUserId\" IS NULL AND \"TargetPostId\" IS NULL) OR " +
-                        "(\"Type\" = 3 AND \"TargetPostId\" IS NOT NULL AND \"TargetUserId\" IS NULL AND \"TargetCharacterId\" IS NULL)");
+                    table.CheckConstraint("CK_Uploads_TypedTarget", "(\"Type\" = 1 AND \"TargetUserId\" IS NOT NULL AND \"TargetCharacterId\" IS NULL AND \"TargetPostId\" IS NULL) OR (\"Type\" = 2 AND \"TargetCharacterId\" IS NOT NULL AND \"TargetUserId\" IS NULL AND \"TargetPostId\" IS NULL) OR (\"Type\" = 3 AND \"TargetPostId\" IS NOT NULL AND \"TargetUserId\" IS NULL AND \"TargetCharacterId\" IS NULL)");
+                    table.ForeignKey(
+                        name: "FK_Uploads_Characters_TargetCharacterId",
+                        column: x => x.TargetCharacterId,
+                        principalTable: "Characters",
+                        principalColumn: "CharacterId",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_Uploads_Posts_TargetPostId",
+                        column: x => x.TargetPostId,
+                        principalTable: "Posts",
+                        principalColumn: "PostId",
+                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
@@ -1512,403 +1533,239 @@ namespace DM.Infrastructure.Persistence.Migrations
                         onDelete: ReferentialAction.SetNull);
                 });
 
-            migrationBuilder.CreateTable(
-                name: "FundraisingGoals",
-                columns: table => new
-                {
-                    FundraisingGoalId = table.Column<Guid>(type: "uuid", nullable: false),
-                    GoalAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    CollectedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    ModifiedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    UpdatedByUserId = table.Column<Guid>(type: "uuid", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_FundraisingGoals", x => x.FundraisingGoalId);
-                    table.ForeignKey(
-                        name: "FK_FundraisingGoals_Users_UpdatedByUserId",
-                        column: x => x.UpdatedByUserId,
-                        principalTable: "Users",
-                        principalColumn: "UserId",
-                        onDelete: ReferentialAction.SetNull);
-                });
-
-            // SEED: TagGroups / Tags / Boards / Users / Chats / Topics.
-            // NOT via DbContext.HasData — when the migration is regenerated
-            // these blocks are restored from the old migration's git history.
             migrationBuilder.InsertData(
-                table: "TagGroups",
-                columns: new[] { "TagGroupId", "Title", "Description", "SortOrder" },
+                table: "AchievementCategories",
+                columns: new[] { "AchievementCategoryId", "Code", "Description", "IconName", "IsActive", "Metric", "SortOrder", "Title" },
                 values: new object[,]
                 {
-                    { Guid.Parse("00000000-0000-0000-0000-000000000000"), "Система", "Ролевая система или набор правил, по которым ведется игра", 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000001"), "Жанр", "Жанр и сеттинг игрового мира", 1 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000002"), "Формат игры", "Тип игрового процесса и взаимодействия между участниками", 2 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000003"), "Формат постов", "Стиль и объем игровых постов", 3 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000004"), "Темп", "Ожидаемая скорость игры и частота постов", 4 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000005"), "Ограничения", "Особые требования и ограничения для участников", 5 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000006"), "Новички", "Игры от новичков и для новичков", 6 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000007"), "Деликатный контент", "Контент, требующий осознанного согласия участников", 7 }
+                    { new Guid("00000000-0000-0000-0003-000000000001"), "days_since_registration", "Время с момента регистрации на сайте.", "hourglass", true, 2, 1, "Выслуга лет" },
+                    { new Guid("00000000-0000-0000-0003-000000000002"), "game_posts_authored", "Игровые посты в активных играх. Считаются все, включая удаленные игры.", "scroll-quill", true, 1, 2, "Игровые посты" },
+                    { new Guid("00000000-0000-0000-0003-000000000003"), "post_review_score_sum", "Сумма положительных оценок твоих игровых постов. Отрицательные оценки рейтинг не уменьшают.", "laurels", true, 3, 3, "Рейтинг" },
+                    { new Guid("00000000-0000-0000-0003-000000000004"), "games_hosted", "Игры, где ты мастер или ассистент.", "scepter", true, 4, 4, "Игры в роли ведущего" },
+                    { new Guid("00000000-0000-0000-0003-000000000005"), "games_played", "Игры, где у тебя есть активный или бывший персонаж.", "sword", true, 5, 5, "Игры в роли игрока" },
+                    { new Guid("00000000-0000-0000-0003-000000000006"), "blogs_hosted", "Блоги, где ты автор или ассистент.", "book", true, 6, 6, "Блоги в роли ведущего" },
+                    { new Guid("00000000-0000-0000-0003-000000000007"), "publications_authored", "Статьи в блогах. Черновики тоже считаются.", "papers", true, 12, 7, "Публикации" },
+                    { new Guid("00000000-0000-0000-0003-000000000008"), "topics_authored", "Форумные топики, которые ты создал.", "stabbed-note", true, 7, 8, "Топики" },
+                    { new Guid("00000000-0000-0000-0003-000000000009"), "comments_authored", "Все комментарии: форум, блоги, игры, публикации.", "discussion", true, 8, 9, "Комментарии" },
+                    { new Guid("00000000-0000-0000-0003-00000000000a"), "global_chat_messages", "Сообщения в глобальном чате сайта.", "talk", true, 9, 10, "Глобальный чат" },
+                    { new Guid("00000000-0000-0000-0003-00000000000b"), "likes_received", "Лайки на топиках, публикациях, комментариях и сообщениях чата. Игровые посты учитываются через \"Рейтинг\".", "heart-organ", true, 13, 11, "Лайки" },
+                    { new Guid("00000000-0000-0000-0003-00000000000c"), "game_drops", "Игры, которые ты покинул добровольно. Смерть персонажа и изгнание мастером не считаются.", "walking-boot", true, 11, 12, "Дропы" },
+                    { new Guid("00000000-0000-0000-0003-00000000000d"), "bans_received", "Баны, полученные от модерации.", "plastic-duck", true, 10, 13, "Баны" }
                 });
 
             migrationBuilder.InsertData(
-                table: "Tags",
-                columns: new[] { "TagId", "ShortId", "TagGroupId", "Title", "Description", "SortOrder" },
+                table: "AwardTypes",
+                columns: new[] { "AwardTypeId", "Code", "Description", "IconName", "IsActive", "SortOrder", "Tier", "Title" },
                 values: new object[,]
                 {
-                    // === System ===
-                    { Guid.Parse("00000000-0000-0000-0000-000000000001"), 1, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Black Bird Pie", "Простая система с кубиком d6", 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000002"), 2, Guid.Parse("00000000-0000-0000-0000-000000000000"), "D&D", "Dungeons & Dragons — все редакции классической ролевой системы", 1 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000003"), 3, Guid.Parse("00000000-0000-0000-0000-000000000000"), "D&D 5e", "Dungeons & Dragons 5th Edition", 2 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000004"), 4, Guid.Parse("00000000-0000-0000-0000-000000000000"), "D100", "Системы на основе процентного броска", 3 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000005"), 5, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Dawn of Worlds", "Система для совместного создания мира", 4 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000006"), 6, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Fallout", "Адаптация сеттинга Fallout", 5 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000007"), 7, Guid.Parse("00000000-0000-0000-0000-000000000000"), "FATAL", "Без комментариев", 6 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000008"), 8, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Fate", "Нарративная система с аспектами и фейт-пойнтами", 7 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000009"), 9, Guid.Parse("00000000-0000-0000-0000-000000000000"), "FUDGE", "Универсальный движок для реализации практически любого концепта", 8 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000000a"), 10, Guid.Parse("00000000-0000-0000-0000-000000000000"), "GURPS", "Универсальная система на базе броска 3d6 vs Сложность", 9 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000000b"), 11, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Interlock", "Система от R. Talsorian Games (Cyberpunk 2020 и другие)", 10 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000000c"), 12, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Microscope", "Система для создания эпических историй", 11 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000000d"), 13, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Pathfinder 1e", "Pathfinder первой редакции", 12 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000000e"), 14, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Pathfinder 2e", "Pathfinder второй редакции", 13 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000000f"), 15, Guid.Parse("00000000-0000-0000-0000-000000000000"), "PbtA", "Нарративные системы на базе 2d6 vs Сложность", 14 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000010"), 16, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Risus", "Минималистичная комедийная система", 15 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000011"), 17, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Savage Worlds", "Легковесная универсальная система — Fast! Furious! Fun!", 16 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000012"), 18, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Starfinder 1e", "Sci-fi спин-офф Pathfinder", 17 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000013"), 19, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Starfinder 2e", "Starfinder второй редакции", 18 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000014"), 20, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Warhammer", "Системы по вселенной Warhammer", 19 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000015"), 21, Guid.Parse("00000000-0000-0000-0000-000000000000"), "World of Darkness", "Мир Тьмы — вампиры, оборотни, маги", 20 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000016"), 22, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Авторская", "Оригинальная система от мастера игры", 21 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000017"), 23, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Мафия", "Психологическая детективная командная игра", 22 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000018"), 24, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Словеска", "Игра без формальной системы правил", 23 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000019"), 25, Guid.Parse("00000000-0000-0000-0000-000000000000"), "Эра Водолея", "Отечественная система ролевых игр", 24 },
-
-                    // === Genre ===
-                    { Guid.Parse("00000000-0000-0000-0000-00000000001a"), 26, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Альтернативная история", "Переосмысление исторических событий", 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000001b"), 27, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Боевик", "Акцент на экшн и сражениях", 1 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000001c"), 28, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Детектив", "Расследования и разгадывание тайн", 2 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000001d"), 29, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Зомби", "Зомби-апокалипсис и выживание", 3 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000001e"), 30, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Историческое", "Действие в реальную историческую эпоху", 4 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000001f"), 31, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Киберпанк", "Высокие технологии, низкий уровень жизни", 5 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000020"), 32, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Комедия", "Юмор и абсурдные ситуации", 6 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000021"), 33, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Космоопера", "Эпические приключения в космосе", 7 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000022"), 34, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Мистика", "Сверхъестественные элементы и тайны", 8 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000023"), 35, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Наши дни", "Современный реалистичный сеттинг", 9 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000024"), 36, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Постапокалипсис", "Мир после катастрофы", 10 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000025"), 37, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Психоделика", "Сюрреалистичные и необычные миры", 11 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000026"), 38, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Стимпанк", "Паровые технологии и викторианская эстетика", 12 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000027"), 39, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Триллер", "Напряжение и саспенс", 13 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000028"), 40, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Трэш", "Нарочито нелепый и провокационный контент", 14 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000029"), 41, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Ужасы", "Хоррор и атмосфера страха", 15 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000002a"), 42, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Фантастика", "Научная фантастика и будущее", 16 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000002b"), 43, Guid.Parse("00000000-0000-0000-0000-000000000001"), "Фэнтези", "Магия, мечи и волшебные миры", 17 },
-
-                    // === Game format ===
-                    { Guid.Parse("00000000-0000-0000-0000-00000000002c"), 44, Guid.Parse("00000000-0000-0000-0000-000000000002"), "Dungeon Crawl", "Исследование подземелий и сражения с монстрами", 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000002d"), 45, Guid.Parse("00000000-0000-0000-0000-000000000002"), "PvP", "Противостояние между игроками", 1 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000002e"), 46, Guid.Parse("00000000-0000-0000-0000-000000000002"), "Выживание", "Борьба за выживание в суровых условиях", 2 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000002f"), 47, Guid.Parse("00000000-0000-0000-0000-000000000002"), "Песочница", "Открытый мир без сюжетных ограничений", 3 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000030"), 48, Guid.Parse("00000000-0000-0000-0000-000000000002"), "Стратегия", "Управление ресурсами и принятие глобальных решений", 4 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000031"), 49, Guid.Parse("00000000-0000-0000-0000-000000000002"), "Сюжетная", "Фокус на развитии истории", 5 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000032"), 50, Guid.Parse("00000000-0000-0000-0000-000000000002"), "Тактика", "Тактические бои и позиционирование", 6 },
-
-                    // === Post format ===
-                    { Guid.Parse("00000000-0000-0000-0000-000000000033"), 51, Guid.Parse("00000000-0000-0000-0000-000000000003"), "Короткопост", "Короткие посты в 1-3 абзаца", 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000034"), 52, Guid.Parse("00000000-0000-0000-0000-000000000003"), "Литературная", "Развернутые литературные посты", 1 },
-
-                    // === Pace ===
-                    { Guid.Parse("00000000-0000-0000-0000-000000000035"), 53, Guid.Parse("00000000-0000-0000-0000-000000000004"), "Неторопливый", "Посты раз в несколько дней", 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000036"), 54, Guid.Parse("00000000-0000-0000-0000-000000000004"), "Скоростной", "Несколько постов в день", 1 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000003e"), 62, Guid.Parse("00000000-0000-0000-0000-000000000004"), "Сухие сезоны", "Возможны продолжительные периоды без постов", 2 },
-
-                    // === Restrictions ===
-                    { Guid.Parse("00000000-0000-0000-0000-000000000037"), 55, Guid.Parse("00000000-0000-0000-0000-000000000005"), "Без мата", "Нецензурная лексика запрещена", 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000038"), 56, Guid.Parse("00000000-0000-0000-0000-000000000005"), "Без насилия", "Минимум жестокости и крови", 1 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000039"), 57, Guid.Parse("00000000-0000-0000-0000-000000000005"), "Grammar Nazi", "Повышенные требования к грамотности", 2 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000003a"), 58, Guid.Parse("00000000-0000-0000-0000-000000000005"), "Для своих", "Игра для знакомой компании", 3 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000003b"), 59, Guid.Parse("00000000-0000-0000-0000-000000000005"), "Обязателен мессенджер", "Обсуждение игровых вопросов во внешнем мессенджере", 4 },
-
-                    // === Newcomers ===
-                    { Guid.Parse("00000000-0000-0000-0000-00000000003c"), 60, Guid.Parse("00000000-0000-0000-0000-000000000006"), "Для новичков", "Игра подходит для начинающих", 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000003d"), 61, Guid.Parse("00000000-0000-0000-0000-000000000006"), "Мастер-новичок", "Мастер игры — начинающий", 1 },
-
-                    // === Sensitive content ===
-                    { Guid.Parse("00000000-0000-0000-0000-00000000003f"), 63, Guid.Parse("00000000-0000-0000-0000-000000000007"), "ERP", "Erotic Role-Play: [tipimg:/images/erp-tooltip.gif]эротические сцены[/tipimg] как основа игрового процесса", 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000040"), 64, Guid.Parse("00000000-0000-0000-0000-000000000007"), "Шок-контент", "Чернуха, максимально шокирующий и отталкивающий контент без ограничений", 1 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000041"), 65, Guid.Parse("00000000-0000-0000-0000-000000000007"), "Острые темы", "Игра затрагивает спорные или чувствительные социальные темы", 2 }
+                    { new Guid("00000000-0000-0000-0001-000000000001"), "contest_first", "Победитель конкурса", "trophy-cup", true, 1, 1, "Литконкурс" },
+                    { new Guid("00000000-0000-0000-0001-000000000002"), "contest_second", "Серебряный призер конкурса", "trophy-cup", true, 2, 2, "Литконкурс" },
+                    { new Guid("00000000-0000-0000-0001-000000000003"), "contest_third", "Бронзовый призер конкурса", "trophy-cup", true, 3, 3, "Литконкурс" },
+                    { new Guid("00000000-0000-0000-0001-000000000004"), "popular_vote", "Лучшая работа конкурса по голосованию участников", "ribbon-medal", true, 4, 1, "Народное признание, например" },
+                    { new Guid("00000000-0000-0000-0001-000000000005"), "best_critic", "Лучшие рецензии сезона по решению жюри", "quill-ink", true, 5, 1, "Лучший критик" },
+                    { new Guid("00000000-0000-0000-0001-000000000006"), "guesser", "Угадал больше всех авторов конкурсных работ", "magnifying-glass", true, 6, 1, "Угадайка" },
+                    { new Guid("00000000-0000-0000-0001-000000000007"), "honorary_goblin", "Бывший гоблин, отдавший сообществу годы службы", "goblin", true, 7, 5, "Почетный гоблин" }
                 });
 
             migrationBuilder.InsertData(
                 table: "Boards",
-                columns: new[] { "BoardId", "Title", "Alias", "Description", "Order", "ViewPolicy", "CreateTopicPolicy", "TopicsCount", "CommentsCount" },
+                columns: new[] { "BoardId", "Alias", "CommentsCount", "CreateTopicPolicy", "Description", "LastCommentAuthorId", "LastCommentId", "LastCommentTopicId", "LastCommentTopicNumber", "LastCommentTopicTitle", "LastCommentUtc", "LastTopicAuthorId", "LastTopicCreatedUtc", "LastTopicId", "LastTopicNumber", "LastTopicTitle", "Order", "Title", "TopicsCount", "ViewPolicy" },
                 values: new object[,]
                 {
-                    { Guid.Parse("00000000-0000-0000-0000-000000000001"), "Общий", "general", "Жизнь сообщества и решения администрации", 1, 64, 32, 1, 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000002"), "Игровые системы", "game-systems", "Обсуждение правил и помощь в выборе системы", 2, 64, 32, 0, 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000003"), "Поиск мастера и игроков", "looking-for-group", "Набор игроков в игру или поиск мастера", 3, 64, 32, 0, 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000004"), "Котел идей", "ideas", "Обкатка задумок и поиск единомышленников", 4, 64, 32, 0, 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000005"), "Конкурсы", "contests", "Литературные и творческие состязания", 5, 64, 4, 0, 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000006"), "Под столом", "off-topic", "Музыка, книги, кино, мемы и все остальное", 6, 64, 32, 0, 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000007"), "Неролевые игры", "forum-games", "Словесные игры, ассоциации и прочие развлечения", 7, 64, 32, 0, 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000008"), "Улучшение сайта", "improvements", "Идеи и предложения по развитию сайта", 8, 64, 32, 0, 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-000000000009"), "Ошибки", "bugs", "Сообщения об ошибках на сайте", 9, 64, 32, 0, 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000000a"), "Для новичков", "newbies", "Руководства, ответы на вопросы и помощь новичкам", 10, 64, 32, 0, 0 },
-                    { Guid.Parse("00000000-0000-0000-0000-00000000000b"), "Новости проекта", "news", "Официальные новости, обновления и статистика", 11, 64, 4, 0, 0 }
-                });
-
-            migrationBuilder.InsertData(
-                table: "Users",
-                columns: new[] { "UserId", "Username", "Email", "CreatedUtc", "Role", "AccessPolicy", "Salt", "PasswordHash", "PasswordHashVersion", "RatingDisabled", "QualityRating", "QuantityRating", "IsRemoved", "Gender", "ShowBirthday" },
-                values: new object[]
-                {
-                    Guid.Parse("00000000-0000-0000-0000-000000000001"), // SystemUser.Id
-                    "Робот-Администратор", // SystemUser.Username
-                    "system@dm.local", // SystemUser.Email
-                    new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero), // CreatedUtc
-                    6, // UserRole.System
-                    0, // AccessPolicy.NotSpecified
-                    "", // Salt (not used, cannot login)
-                    "", // PasswordHash (not used, cannot login)
-                    0, // PasswordHashVersion
-                    true, // RatingDisabled
-                    0, // QualityRating
-                    0, // QuantityRating
-                    false, // IsRemoved
-                    0, // Gender.NotSpecified
-                    false // ShowBirthday
+                    { new Guid("00000000-0000-0000-0000-000000000001"), "general", 0, 32, "Жизнь сообщества и решения администрации", null, null, null, null, null, null, null, null, null, null, null, 1, "Общий", 1, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000002"), "game-systems", 0, 32, "Обсуждение правил и помощь в выборе системы", null, null, null, null, null, null, null, null, null, null, null, 2, "Игровые системы", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000003"), "looking-for-group", 0, 32, "Набор игроков в игру или поиск мастера", null, null, null, null, null, null, null, null, null, null, null, 3, "Поиск мастера и игроков", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000004"), "ideas", 0, 32, "Обкатка задумок и поиск единомышленников", null, null, null, null, null, null, null, null, null, null, null, 4, "Котел идей", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000005"), "contests", 0, 4, "Литературные и творческие состязания", null, null, null, null, null, null, null, null, null, null, null, 5, "Конкурсы", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000006"), "off-topic", 0, 32, "Музыка, книги, кино, мемы и все остальное", null, null, null, null, null, null, null, null, null, null, null, 6, "Под столом", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000007"), "forum-games", 0, 32, "Словесные игры, ассоциации и прочие развлечения", null, null, null, null, null, null, null, null, null, null, null, 7, "Неролевые игры", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000008"), "improvements", 0, 32, "Идеи и предложения по развитию сайта", null, null, null, null, null, null, null, null, null, null, null, 8, "Улучшение сайта", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000009"), "bugs", 0, 32, "Сообщения об ошибках на сайте", null, null, null, null, null, null, null, null, null, null, null, 9, "Ошибки", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-00000000000a"), "newbies", 0, 32, "Руководства, ответы на вопросы и помощь новичкам", null, null, null, null, null, null, null, null, null, null, null, 10, "Для новичков", 0, 64 },
+                    { new Guid("00000000-0000-0000-0000-00000000000b"), "news", 0, 4, "Официальные новости, обновления и статистика", null, null, null, null, null, null, null, null, null, null, null, 11, "Новости проекта", 0, 64 }
                 });
 
             migrationBuilder.InsertData(
                 table: "Chats",
-                columns: new[] { "ChatId", "Type", "Title", "RoomId", "LastMessageId" },
-                values: new object[]
-                {
-                    Guid.Parse("00000000-0000-0000-0000-000000000001"), // Chat.GlobalChatId
-                    2, // ChatType.Global
-                    "Глобальный чат", // Title
-                    null, // RoomId
-                    null // LastMessageId
-                });
+                columns: new[] { "ChatId", "LastMessageId", "PublicId", "RoomId", "Title", "Type" },
+                values: new object[] { new Guid("00000000-0000-0000-0000-000000000001"), null, null, null, "Глобальный чат", 2 });
 
-            migrationBuilder.InsertData(
-                table: "Topics",
-                columns: new[] { "TopicId", "BoardId", "TopicNumber", "AuthorId", "CreatedUtc", "Title", "Text", "IsAttached", "IsClosed", "CommentCount", "LastCommentId", "IsRemoved", "DeletedByUserId", "DeletedUtc" },
-                values: new object[]
-                {
-                    Guid.Parse("00000000-0000-0000-0000-000000000001"), // TopicId
-                    Guid.Parse("00000000-0000-0000-0000-000000000001"), // BoardId (the "Общий" board)
-                    1, // TopicNumber
-                    Guid.Parse("00000000-0000-0000-0000-000000000001"), // AuthorId (Robot)
-                    new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero), // CreatedUtc
-                    "Отзывы о ДМ", // Title
-                    "Ваши отзывы отсюда попадают (после минимального анализа на нарушения правил) прямиком на главную.", // Text
-                    true, // IsAttached (pinned)
-                    false, // IsClosed
-                    0, // CommentCount
-                    null, // LastCommentId
-                    false, // IsRemoved
-                    null, // DeletedByUserId
-                    null // DeletedUtc
-                });
-
-            migrationBuilder.InsertData(
-                table: "Topics",
-                columns: new[] { "TopicId", "BoardId", "TopicNumber", "AuthorId", "CreatedUtc", "Title", "Text", "IsAttached", "IsClosed", "CommentCount", "LastCommentId", "IsRemoved", "DeletedByUserId", "DeletedUtc" },
-                values: new object[]
-                {
-                    Guid.Parse("00000000-0000-0000-0000-000000000100"), // TopicId (well-known ID)
-                    Guid.Parse("00000000-0000-0000-0000-000000000001"), // BoardId (the "Общий" board)
-                    2, // TopicNumber
-                    Guid.Parse("00000000-0000-0000-0000-000000000001"), // AuthorId (Robot)
-                    new DateTimeOffset(2020, 1, 1, 0, 0, 1, TimeSpan.Zero), // CreatedUtc (+1 sec to be "newer")
-                    "Обсуждение действий администрации", // Title
-                    "Здесь можно обсудить решения модераторов и администрации. Конструктивная критика приветствуется.", // Text
-                    true, // IsAttached (pinned)
-                    false, // IsClosed
-                    0, // CommentCount
-                    null, // LastCommentId
-                    false, // IsRemoved
-                    null, // DeletedByUserId
-                    null // DeletedUtc
-                });
-
-            // SEED: catalog of 13 achievement categories. A category = SSOT for
-            // (Title, Description, IconName, Metric, SortOrder, IsActive)
-            // one chain of tiers. One Metric = one category (UNIQUE).
-            // Description spells out "what exactly is counted" — needed because
-            // a numeric threshold alone does not explain the nuances
-            // (positive reviews, drops vs exiles, etc.).
-            // Ordering (SortOrder):
-            //   1. Выслуга лет, 2. Игровые посты, 3. Рейтинг,
-            //   4. Игры в роли ведущего, 5. Игры в роли игрока,
-            //   6. Блоги в роли ведущего, 7. Публикации, 8. Топики,
-            //   9. Комментарии, 10. Глобальный чат, 11. Лайки,
-            //   12. Дропы, 13. Баны.
-            // "Игровые посты" comes before "Рейтинг" — the rating derives from post quality.
-            // "Лайки" is a positive reaction sum, placed before the negative chains (Дропы, Баны).
-            migrationBuilder.InsertData(
-                table: "AchievementCategories",
-                columns: new[] { "AchievementCategoryId", "Code", "Title", "Description", "IconName", "Metric", "SortOrder", "IsActive" },
-                values: new object[,]
-                {
-                    { new Guid("00000000-0000-0000-0003-000000000001"), "days_since_registration", "Выслуга лет",            "Время с момента регистрации на сайте.",                                                                                "hourglass",      2,  1, true },
-                    { new Guid("00000000-0000-0000-0003-000000000002"), "game_posts_authored",     "Игровые посты",          "Игровые посты в активных играх. Считаются все, включая удаленные игры.",                                              "scroll-quill",   1,  2, true },
-                    { new Guid("00000000-0000-0000-0003-000000000003"), "post_review_score_sum",   "Рейтинг",                "Сумма положительных оценок твоих игровых постов. Отрицательные оценки рейтинг не уменьшают.",                          "laurels",        3,  3, true },
-                    { new Guid("00000000-0000-0000-0003-000000000004"), "games_hosted",            "Игры в роли ведущего",   "Игры, где ты мастер или ассистент.",                                                                                   "scepter",        4,  4, true },
-                    { new Guid("00000000-0000-0000-0003-000000000005"), "games_played",            "Игры в роли игрока",     "Игры, где у тебя есть активный или бывший персонаж.",                                                                  "sword",          5,  5, true },
-                    { new Guid("00000000-0000-0000-0003-000000000006"), "blogs_hosted",            "Блоги в роли ведущего",  "Блоги, где ты автор или ассистент.",                                                                                   "book",           6,  6, true },
-                    { new Guid("00000000-0000-0000-0003-000000000007"), "publications_authored",  "Публикации",             "Статьи в блогах. Черновики тоже считаются.",                                                                           "papers",        12,  7, true },
-                    { new Guid("00000000-0000-0000-0003-000000000008"), "topics_authored",         "Топики",                 "Форумные топики, которые ты создал.",                                                                                  "stabbed-note",   7,  8, true },
-                    { new Guid("00000000-0000-0000-0003-000000000009"), "comments_authored",       "Комментарии",            "Все комментарии: форум, блоги, игры, публикации.",                                                                     "discussion",     8,  9, true },
-                    { new Guid("00000000-0000-0000-0003-00000000000a"), "global_chat_messages",    "Глобальный чат",         "Сообщения в глобальном чате сайта.",                                                                                        "talk",           9, 10, true },
-                    { new Guid("00000000-0000-0000-0003-00000000000b"), "likes_received",          "Лайки",                  "Лайки на топиках, публикациях, комментариях и сообщениях чата. Игровые посты учитываются через \"Рейтинг\".",            "heart-organ",   13, 11, true },
-                    { new Guid("00000000-0000-0000-0003-00000000000c"), "game_drops",              "Дропы",                  "Игры, которые ты покинул добровольно. Смерть персонажа и изгнание мастером не считаются.",                            "walking-boot",  11, 12, true },
-                    { new Guid("00000000-0000-0000-0003-00000000000d"), "bans_received",           "Баны",                   "Баны, полученные от модерации.",                                                                                       "plastic-duck",  10, 13, true },
-                });
-
-            // SEED: 13 chains × 4 tiers = 52 types. A thin record: only
-            // Code/Title/Threshold/Tier/CategoryId. Everything else lives on the category.
-            // Titles are noun phrases and set idioms; within a chain the levels
-            // grow in meaning (reach/scale/duration), and the level constructions
-            // do not repeat. Negativity is allowed only in the joke chains:
-            // Дропы is a disappearance arc, Баны is a duck coming-of-age arc.
-            // Выслуга лет: thresholds are ceil(N×365.25) — guarantees triggering
-            // on or after the anniversary day (no leap-year off-by-one).
-            migrationBuilder.InsertData(
-                table: "AchievementTypes",
-                columns: new[] { "AchievementTypeId", "Code", "Title", "Threshold", "Tier", "AchievementCategoryId" },
-                values: new object[,]
-                {
-                    // ─── Выслуга лет ─── (366/1827/3653/5479 days = 1/5/10/15 years, leap-aware)
-                    { new Guid("00000000-0000-0000-0002-000000000005"), "DAYS_366",       "Поселенец",        366,    1, new Guid("00000000-0000-0000-0003-000000000001") },
-                    { new Guid("00000000-0000-0000-0002-000000000006"), "DAYS_1827",      "Старожил",         1827,   2, new Guid("00000000-0000-0000-0003-000000000001") },
-                    { new Guid("00000000-0000-0000-0002-000000000007"), "DAYS_3653",      "Ветеран",          3653,   3, new Guid("00000000-0000-0000-0003-000000000001") },
-                    { new Guid("00000000-0000-0000-0002-000000000008"), "DAYS_5479",      "Древний",          5479,   4, new Guid("00000000-0000-0000-0003-000000000001") },
-                    // ─── Игровые посты ───
-                    { new Guid("00000000-0000-0000-0002-000000000001"), "POSTS_100",      "Простые начала",         100,    1, new Guid("00000000-0000-0000-0003-000000000002") },
-                    { new Guid("00000000-0000-0000-0002-000000000002"), "POSTS_500",      "Продолжение следует",    500,    2, new Guid("00000000-0000-0000-0003-000000000002") },
-                    { new Guid("00000000-0000-0000-0002-000000000003"), "POSTS_2000",     "Долгая партия",          2000,   3, new Guid("00000000-0000-0000-0003-000000000002") },
-                    { new Guid("00000000-0000-0000-0002-000000000004"), "POSTS_5000",     "Приключение в жизнь",    5000,   4, new Guid("00000000-0000-0000-0003-000000000002") },
-                    // ─── Рейтинг ───
-                    { new Guid("00000000-0000-0000-0002-000000000009"), "RATING_100",     "Подающий надежды",       100,    1, new Guid("00000000-0000-0000-0003-000000000003") },
-                    { new Guid("00000000-0000-0000-0002-00000000000a"), "RATING_250",     "Видный талант",          250,    2, new Guid("00000000-0000-0000-0003-000000000003") },
-                    { new Guid("00000000-0000-0000-0002-00000000000b"), "RATING_500",     "Опытный зубр",           500,    3, new Guid("00000000-0000-0000-0003-000000000003") },
-                    { new Guid("00000000-0000-0000-0002-00000000000c"), "RATING_1000",    "Мастодонт-аксакал",      1000,   4, new Guid("00000000-0000-0000-0003-000000000003") },
-                    // ─── Игры в роли ведущего ───
-                    { new Guid("00000000-0000-0000-0002-00000000000d"), "HOST_3",         "Подмастерье",            3,      1, new Guid("00000000-0000-0000-0003-000000000004") },
-                    { new Guid("00000000-0000-0000-0002-00000000000e"), "HOST_10",        "Мастер",                 10,     2, new Guid("00000000-0000-0000-0003-000000000004") },
-                    { new Guid("00000000-0000-0000-0002-00000000000f"), "HOST_30",        "Грандмастер",            30,     3, new Guid("00000000-0000-0000-0003-000000000004") },
-                    { new Guid("00000000-0000-0000-0002-000000000010"), "HOST_100",       "Архитектор миров",       100,    4, new Guid("00000000-0000-0000-0003-000000000004") },
-                    // ─── Игры в роли игрока ───
-                    { new Guid("00000000-0000-0000-0002-000000000011"), "PLAY_5",         "Искатель",               5,      1, new Guid("00000000-0000-0000-0003-000000000005") },
-                    { new Guid("00000000-0000-0000-0002-000000000012"), "PLAY_20",        "Авантюрист",             20,     2, new Guid("00000000-0000-0000-0003-000000000005") },
-                    { new Guid("00000000-0000-0000-0002-000000000013"), "PLAY_100",       "Герой",                  100,    3, new Guid("00000000-0000-0000-0003-000000000005") },
-                    { new Guid("00000000-0000-0000-0002-000000000014"), "PLAY_500",       "Легенда",                500,    4, new Guid("00000000-0000-0000-0003-000000000005") },
-                    // ─── Блоги в роли ведущего ───
-                    { new Guid("00000000-0000-0000-0002-000000000015"), "BLOGS_1",        "Свежий взгляд",          1,      1, new Guid("00000000-0000-0000-0003-000000000006") },
-                    { new Guid("00000000-0000-0000-0002-000000000016"), "BLOGS_5",        "Небольшая подборка",     5,      2, new Guid("00000000-0000-0000-0003-000000000006") },
-                    { new Guid("00000000-0000-0000-0002-000000000017"), "BLOGS_15",       "Именная коллекция",      15,     3, new Guid("00000000-0000-0000-0003-000000000006") },
-                    { new Guid("00000000-0000-0000-0002-000000000018"), "BLOGS_50",       "Библиотека",             50,     4, new Guid("00000000-0000-0000-0003-000000000006") },
-                    // ─── Публикации ───
-                    { new Guid("00000000-0000-0000-0002-00000000002d"), "PUBS_5",         "Проба пера",             5,      1, new Guid("00000000-0000-0000-0003-000000000007") },
-                    { new Guid("00000000-0000-0000-0002-00000000002e"), "PUBS_25",        "Мысли вслух",            25,     2, new Guid("00000000-0000-0000-0003-000000000007") },
-                    { new Guid("00000000-0000-0000-0002-00000000002f"), "PUBS_100",       "Постоянная рубрика",     100,    3, new Guid("00000000-0000-0000-0003-000000000007") },
-                    { new Guid("00000000-0000-0000-0002-000000000030"), "PUBS_500",       "Без строчки ни дня",     500,    4, new Guid("00000000-0000-0000-0003-000000000007") },
-                    // ─── Топики ───
-                    { new Guid("00000000-0000-0000-0002-000000000019"), "TOPICS_5",       "Повод для обсуждения",   5,      1, new Guid("00000000-0000-0000-0003-000000000008") },
-                    { new Guid("00000000-0000-0000-0002-00000000001a"), "TOPICS_25",      "Занятные темы",          25,     2, new Guid("00000000-0000-0000-0003-000000000008") },
-                    { new Guid("00000000-0000-0000-0002-00000000001b"), "TOPICS_100",     "Дневная повестка",       100,    3, new Guid("00000000-0000-0000-0003-000000000008") },
-                    { new Guid("00000000-0000-0000-0002-00000000001c"), "TOPICS_500",     "На целый раздел",        500,    4, new Guid("00000000-0000-0000-0003-000000000008") },
-                    // ─── Комментарии ───
-                    { new Guid("00000000-0000-0000-0002-00000000001d"), "COMMENTS_100",   "Свои пять копеек",       100,    1, new Guid("00000000-0000-0000-0003-000000000009") },
-                    { new Guid("00000000-0000-0000-0002-00000000001e"), "COMMENTS_500",   "Живое участие",          500,    2, new Guid("00000000-0000-0000-0003-000000000009") },
-                    { new Guid("00000000-0000-0000-0002-00000000001f"), "COMMENTS_2000",  "В гуще событий",         2000,   3, new Guid("00000000-0000-0000-0003-000000000009") },
-                    { new Guid("00000000-0000-0000-0002-000000000020"), "COMMENTS_10000", "Всегда есть что сказать", 10000, 4, new Guid("00000000-0000-0000-0003-000000000009") },
-                    // ─── Глобальный чат ───
-                    { new Guid("00000000-0000-0000-0002-000000000021"), "CHAT_500",       "Прохожий",               500,    1, new Guid("00000000-0000-0000-0003-00000000000a") },
-                    { new Guid("00000000-0000-0000-0002-000000000022"), "CHAT_5000",      "Свой человек",           5000,   2, new Guid("00000000-0000-0000-0003-00000000000a") },
-                    { new Guid("00000000-0000-0000-0002-000000000023"), "CHAT_25000",     "Чат-завсегдатай",        25000,  3, new Guid("00000000-0000-0000-0003-00000000000a") },
-                    { new Guid("00000000-0000-0000-0002-000000000024"), "CHAT_100000",    "Вечный онлайн",          100000, 4, new Guid("00000000-0000-0000-0003-00000000000a") },
-                    // ─── Лайки ───
-                    { new Guid("00000000-0000-0000-0002-000000000031"), "LIKES_25",       "В узких кругах",         25,     1, new Guid("00000000-0000-0000-0003-00000000000b") },
-                    { new Guid("00000000-0000-0000-0002-000000000032"), "LIKES_100",      "Душа компании",          100,    2, new Guid("00000000-0000-0000-0003-00000000000b") },
-                    { new Guid("00000000-0000-0000-0002-000000000033"), "LIKES_500",      "Народный любимец",       500,    3, new Guid("00000000-0000-0000-0003-00000000000b") },
-                    { new Guid("00000000-0000-0000-0002-000000000034"), "LIKES_2000",     "Первый в сердцах",       2000,   4, new Guid("00000000-0000-0000-0003-00000000000b") },
-                    // ─── Дропы ───
-                    { new Guid("00000000-0000-0000-0002-000000000029"), "DROPS_1",        "Перекати-поле",          1,      1, new Guid("00000000-0000-0000-0003-00000000000c") },
-                    { new Guid("00000000-0000-0000-0002-00000000002a"), "DROPS_3",        "Беглец",                 3,      2, new Guid("00000000-0000-0000-0003-00000000000c") },
-                    { new Guid("00000000-0000-0000-0002-00000000002b"), "DROPS_10",       "Дезертир",               10,     3, new Guid("00000000-0000-0000-0003-00000000000c") },
-                    { new Guid("00000000-0000-0000-0002-00000000002c"), "DROPS_30",       "Пропавший без вести",    30,     4, new Guid("00000000-0000-0000-0003-00000000000c") },
-                    // ─── Баны ─── (duck coming-of-age arc: from eggshell to drake)
-                    { new Guid("00000000-0000-0000-0002-000000000025"), "BANS_1",         "Яйцо с характером",      1,  1, new Guid("00000000-0000-0000-0003-00000000000d") },
-                    { new Guid("00000000-0000-0000-0002-000000000026"), "BANS_3",         "Выпавший из гнезда",     3,  2, new Guid("00000000-0000-0000-0003-00000000000d") },
-                    { new Guid("00000000-0000-0000-0002-000000000027"), "BANS_10",        "Утенок-террорист",       10, 3, new Guid("00000000-0000-0000-0003-00000000000d") },
-                    { new Guid("00000000-0000-0000-0002-000000000028"), "BANS_30",        "Селезень-Рецидивист",    30, 4, new Guid("00000000-0000-0000-0003-00000000000d") },
-                });
-
-            // SEED: timeless award type catalog (6 rows). The specific year
-            // and season of a contest live in ContestSeries, grants in UserAward
-            // with FKs to both. The catalog does not grow every year — only a
-            // new ContestSeries is added for each new contest.
-            // Tier for literary contest placements: 1=gold/1st, 2=silver/2nd, 3=bronze/3rd.
-            // Special awards (Народное признание, Лучший критик, Угадайка) have Tier=1 (gold).
-            migrationBuilder.InsertData(
-                table: "AwardTypes",
-                columns: new[] { "AwardTypeId", "Code", "Title", "Description", "IconName", "Tier", "SortOrder", "IsActive" },
-                values: new object[,]
-                {
-                    // Descriptions are intentionally generic ("работа" rather than "рассказ") — the catalog
-                    // is reused for future contest types (art etc.). The type of a specific
-                    // contest surfaces via ContestSeries.ContestType (Literary/Art/...) in the popover.
-                    // 1st/2nd/3rd place are the same "Литконкурс" award with a single icon
-                    // (cup); the placement is read from the tier color
-                    // (1=gold, 2=silver, 3=bronze) on the frontend.
-                    { new Guid("00000000-0000-0000-0001-000000000001"), "contest_first",  "Литконкурс",         "Победитель конкурса",                              "trophy-cup",       1, 1, true },
-                    { new Guid("00000000-0000-0000-0001-000000000002"), "contest_second", "Литконкурс",         "Серебряный призер конкурса",                       "trophy-cup",       2, 2, true },
-                    { new Guid("00000000-0000-0000-0001-000000000003"), "contest_third",  "Литконкурс",         "Бронзовый призер конкурса",                        "trophy-cup",       3, 3, true },
-                    // Award title is intentionally "Народное признание, например"
-                    // — the ", например" is a deliberate joke in the site's humor
-                    // register (cf. "Утенок-террорист", the /about motto). NEVER
-                    // "correct" it by dropping the suffix; the full string is the name.
-                    { new Guid("00000000-0000-0000-0001-000000000004"), "popular_vote",   "Народное признание, например", "Лучшая работа конкурса по голосованию участников", "ribbon-medal",     1, 4, true },
-                    { new Guid("00000000-0000-0000-0001-000000000005"), "best_critic",    "Лучший критик",      "Лучшие рецензии сезона по решению жюри",           "quill-ink",        1, 5, true },
-                    { new Guid("00000000-0000-0000-0001-000000000006"), "guesser",        "Угадайка",           "Угадал больше всех авторов конкурсных работ",      "magnifying-glass", 1, 6, true },
-                    { new Guid("00000000-0000-0000-0001-000000000007"), "honorary_goblin", "Почетный гоблин",   "Бывший гоблин, отдавший сообществу годы службы",   "goblin",           5, 7, true },
-                });
-
-            // SEED: literary contest series. Each contest has
-            // a global sequential Number within its ContestType (Literary 1..N,
-            // Art 1..M). Year is a display field for the year badge on the tile.
-            // We seed Literary 20..23 and Art 1..2 so demo awards show
-            // both contest types and a realistic year progression.
             migrationBuilder.InsertData(
                 table: "ContestSeries",
-                columns: new[] { "ContestSeriesId", "ContestType", "Number", "Year", "TopicUrl", "IsActive" },
+                columns: new[] { "ContestSeriesId", "ContestType", "IsActive", "Number", "TopicUrl", "Year" },
                 values: new object[,]
                 {
-                    // ContestType: 0=Literary, 1=Art. TopicUrl is a placeholder for the contest
-                    // results (a forum topic); real URLs will be set by the contest committee.
-                    { new Guid("00000000-0000-0000-0004-000000000001"), 0, 23, 2024, "https://dm.am/forum/topic/contest-results-lit-23", true },
-                    { new Guid("00000000-0000-0000-0004-000000000002"), 0, 22, 2023, "https://dm.am/forum/topic/contest-results-lit-22", true },
-                    { new Guid("00000000-0000-0000-0004-000000000003"), 0, 21, 2023, "https://dm.am/forum/topic/contest-results-lit-21", true },
-                    { new Guid("00000000-0000-0000-0004-000000000004"), 0, 20, 2022, "https://dm.am/forum/topic/contest-results-lit-20", true },
-                    { new Guid("00000000-0000-0000-0004-000000000005"), 1,  2, 2024, "https://dm.am/forum/topic/contest-results-art-2",  true },
-                    { new Guid("00000000-0000-0000-0004-000000000006"), 1,  1, 2023, "https://dm.am/forum/topic/contest-results-art-1",  true },
+                    { new Guid("00000000-0000-0000-0004-000000000001"), 0, true, 23, "https://dm.am/forum/topic/contest-results-lit-23", 2024 },
+                    { new Guid("00000000-0000-0000-0004-000000000002"), 0, true, 22, "https://dm.am/forum/topic/contest-results-lit-22", 2023 },
+                    { new Guid("00000000-0000-0000-0004-000000000003"), 0, true, 21, "https://dm.am/forum/topic/contest-results-lit-21", 2023 },
+                    { new Guid("00000000-0000-0000-0004-000000000004"), 0, true, 20, "https://dm.am/forum/topic/contest-results-lit-20", 2022 },
+                    { new Guid("00000000-0000-0000-0004-000000000005"), 1, true, 2, "https://dm.am/forum/topic/contest-results-art-2", 2024 },
+                    { new Guid("00000000-0000-0000-0004-000000000006"), 1, true, 1, "https://dm.am/forum/topic/contest-results-art-1", 2023 }
                 });
 
-            // SEED: fundraising progress — single-row table with a fixed GUID
-            // (zero-family, block 0005). Mirrors HasData in DmDbContext.
-            // GET /v1/fundraising reads this row; PUT updates it in place.
             migrationBuilder.InsertData(
                 table: "FundraisingGoals",
-                columns: new[] { "FundraisingGoalId", "GoalAmount", "CollectedAmount", "ModifiedUtc", "UpdatedByUserId" },
-                values: new object[]
+                columns: new[] { "FundraisingGoalId", "CollectedAmount", "GoalAmount", "ModifiedUtc", "UpdatedByUserId" },
+                values: new object[] { new Guid("00000000-0000-0000-0005-000000000001"), 17000m, 50000m, new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null });
+
+            migrationBuilder.InsertData(
+                table: "TagGroups",
+                columns: new[] { "TagGroupId", "Description", "SortOrder", "Title" },
+                values: new object[,]
                 {
-                    new Guid("00000000-0000-0000-0005-000000000001"), // FundraisingGoalId (fixed, single row)
-                    50000m, // GoalAmount
-                    17000m, // CollectedAmount
-                    new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero), // ModifiedUtc
-                    null // UpdatedByUserId (seeded, not updated by anyone yet)
+                    { new Guid("00000000-0000-0000-0005-000000000001"), "Ролевая система или набор правил, по которым ведется игра", 0, "Система" },
+                    { new Guid("00000000-0000-0000-0005-000000000002"), "Жанр и сеттинг игрового мира", 1, "Жанр" },
+                    { new Guid("00000000-0000-0000-0005-000000000003"), "Тип игрового процесса и взаимодействия между участниками", 2, "Формат игры" },
+                    { new Guid("00000000-0000-0000-0005-000000000004"), "Стиль и объем игровых постов", 3, "Формат постов" },
+                    { new Guid("00000000-0000-0000-0005-000000000005"), "Ожидаемая скорость игры и частота постов", 4, "Темп" },
+                    { new Guid("00000000-0000-0000-0005-000000000006"), "Особые требования и ограничения для участников", 5, "Ограничения" },
+                    { new Guid("00000000-0000-0000-0005-000000000007"), "Игры от новичков и для новичков", 6, "Новички" },
+                    { new Guid("00000000-0000-0000-0005-000000000008"), "Контент, требующий осознанного согласия участников", 7, "Деликатный контент" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "Users",
+                columns: new[] { "UserId", "AccessPolicy", "AvatarUploadId", "BirthdayDate", "CreatedUtc", "DiscordId", "Email", "Gender", "Info", "IsRemoved", "LastActivityUtc", "Location", "Name", "PasswordHash", "PasswordHashVersion", "QualityRating", "QuantityRating", "RatingDisabled", "Role", "Salt", "ShowBirthday", "Status", "TelegramId", "Username" },
+                values: new object[] { new Guid("00000000-0000-0000-0000-000000000001"), 0, null, null, new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, "system@dm.local", 0, null, false, null, null, null, "", 0, 0, 0, true, 6, "", false, null, null, "Робот-Администратор" });
+
+            migrationBuilder.InsertData(
+                table: "AchievementTypes",
+                columns: new[] { "AchievementTypeId", "AchievementCategoryId", "Code", "Threshold", "Tier", "Title" },
+                values: new object[,]
+                {
+                    { new Guid("00000000-0000-0000-0002-000000000001"), new Guid("00000000-0000-0000-0003-000000000002"), "POSTS_100", 100, 1, "Простые начала" },
+                    { new Guid("00000000-0000-0000-0002-000000000002"), new Guid("00000000-0000-0000-0003-000000000002"), "POSTS_500", 500, 2, "Продолжение следует" },
+                    { new Guid("00000000-0000-0000-0002-000000000003"), new Guid("00000000-0000-0000-0003-000000000002"), "POSTS_2000", 2000, 3, "Долгая партия" },
+                    { new Guid("00000000-0000-0000-0002-000000000004"), new Guid("00000000-0000-0000-0003-000000000002"), "POSTS_5000", 5000, 4, "Приключение в жизнь" },
+                    { new Guid("00000000-0000-0000-0002-000000000005"), new Guid("00000000-0000-0000-0003-000000000001"), "DAYS_366", 366, 1, "Поселенец" },
+                    { new Guid("00000000-0000-0000-0002-000000000006"), new Guid("00000000-0000-0000-0003-000000000001"), "DAYS_1827", 1827, 2, "Старожил" },
+                    { new Guid("00000000-0000-0000-0002-000000000007"), new Guid("00000000-0000-0000-0003-000000000001"), "DAYS_3653", 3653, 3, "Ветеран" },
+                    { new Guid("00000000-0000-0000-0002-000000000008"), new Guid("00000000-0000-0000-0003-000000000001"), "DAYS_5479", 5479, 4, "Древний" },
+                    { new Guid("00000000-0000-0000-0002-000000000009"), new Guid("00000000-0000-0000-0003-000000000003"), "RATING_100", 100, 1, "Подающий надежды" },
+                    { new Guid("00000000-0000-0000-0002-00000000000a"), new Guid("00000000-0000-0000-0003-000000000003"), "RATING_250", 250, 2, "Видный талант" },
+                    { new Guid("00000000-0000-0000-0002-00000000000b"), new Guid("00000000-0000-0000-0003-000000000003"), "RATING_500", 500, 3, "Опытный зубр" },
+                    { new Guid("00000000-0000-0000-0002-00000000000c"), new Guid("00000000-0000-0000-0003-000000000003"), "RATING_1000", 1000, 4, "Мастодонт-аксакал" },
+                    { new Guid("00000000-0000-0000-0002-00000000000d"), new Guid("00000000-0000-0000-0003-000000000004"), "HOST_3", 3, 1, "Подмастерье" },
+                    { new Guid("00000000-0000-0000-0002-00000000000e"), new Guid("00000000-0000-0000-0003-000000000004"), "HOST_10", 10, 2, "Мастер" },
+                    { new Guid("00000000-0000-0000-0002-00000000000f"), new Guid("00000000-0000-0000-0003-000000000004"), "HOST_30", 30, 3, "Грандмастер" },
+                    { new Guid("00000000-0000-0000-0002-000000000010"), new Guid("00000000-0000-0000-0003-000000000004"), "HOST_100", 100, 4, "Архитектор миров" },
+                    { new Guid("00000000-0000-0000-0002-000000000011"), new Guid("00000000-0000-0000-0003-000000000005"), "PLAY_5", 5, 1, "Искатель" },
+                    { new Guid("00000000-0000-0000-0002-000000000012"), new Guid("00000000-0000-0000-0003-000000000005"), "PLAY_20", 20, 2, "Авантюрист" },
+                    { new Guid("00000000-0000-0000-0002-000000000013"), new Guid("00000000-0000-0000-0003-000000000005"), "PLAY_100", 100, 3, "Герой" },
+                    { new Guid("00000000-0000-0000-0002-000000000014"), new Guid("00000000-0000-0000-0003-000000000005"), "PLAY_500", 500, 4, "Легенда" },
+                    { new Guid("00000000-0000-0000-0002-000000000015"), new Guid("00000000-0000-0000-0003-000000000006"), "BLOGS_1", 1, 1, "Свежий взгляд" },
+                    { new Guid("00000000-0000-0000-0002-000000000016"), new Guid("00000000-0000-0000-0003-000000000006"), "BLOGS_5", 5, 2, "Небольшая подборка" },
+                    { new Guid("00000000-0000-0000-0002-000000000017"), new Guid("00000000-0000-0000-0003-000000000006"), "BLOGS_15", 15, 3, "Именная коллекция" },
+                    { new Guid("00000000-0000-0000-0002-000000000018"), new Guid("00000000-0000-0000-0003-000000000006"), "BLOGS_50", 50, 4, "Библиотека" },
+                    { new Guid("00000000-0000-0000-0002-000000000019"), new Guid("00000000-0000-0000-0003-000000000008"), "TOPICS_5", 5, 1, "Повод для обсуждения" },
+                    { new Guid("00000000-0000-0000-0002-00000000001a"), new Guid("00000000-0000-0000-0003-000000000008"), "TOPICS_25", 25, 2, "Занятные темы" },
+                    { new Guid("00000000-0000-0000-0002-00000000001b"), new Guid("00000000-0000-0000-0003-000000000008"), "TOPICS_100", 100, 3, "Дневная повестка" },
+                    { new Guid("00000000-0000-0000-0002-00000000001c"), new Guid("00000000-0000-0000-0003-000000000008"), "TOPICS_500", 500, 4, "На целый раздел" },
+                    { new Guid("00000000-0000-0000-0002-00000000001d"), new Guid("00000000-0000-0000-0003-000000000009"), "COMMENTS_100", 100, 1, "Свои пять копеек" },
+                    { new Guid("00000000-0000-0000-0002-00000000001e"), new Guid("00000000-0000-0000-0003-000000000009"), "COMMENTS_500", 500, 2, "Живое участие" },
+                    { new Guid("00000000-0000-0000-0002-00000000001f"), new Guid("00000000-0000-0000-0003-000000000009"), "COMMENTS_2000", 2000, 3, "В гуще событий" },
+                    { new Guid("00000000-0000-0000-0002-000000000020"), new Guid("00000000-0000-0000-0003-000000000009"), "COMMENTS_10000", 10000, 4, "Всегда есть что сказать" },
+                    { new Guid("00000000-0000-0000-0002-000000000021"), new Guid("00000000-0000-0000-0003-00000000000a"), "CHAT_500", 500, 1, "Прохожий" },
+                    { new Guid("00000000-0000-0000-0002-000000000022"), new Guid("00000000-0000-0000-0003-00000000000a"), "CHAT_5000", 5000, 2, "Свой человек" },
+                    { new Guid("00000000-0000-0000-0002-000000000023"), new Guid("00000000-0000-0000-0003-00000000000a"), "CHAT_25000", 25000, 3, "Чат-завсегдатай" },
+                    { new Guid("00000000-0000-0000-0002-000000000024"), new Guid("00000000-0000-0000-0003-00000000000a"), "CHAT_100000", 100000, 4, "Вечный онлайн" },
+                    { new Guid("00000000-0000-0000-0002-000000000025"), new Guid("00000000-0000-0000-0003-00000000000d"), "BANS_1", 1, 1, "Яйцо с характером" },
+                    { new Guid("00000000-0000-0000-0002-000000000026"), new Guid("00000000-0000-0000-0003-00000000000d"), "BANS_3", 3, 2, "Выпавший из гнезда" },
+                    { new Guid("00000000-0000-0000-0002-000000000027"), new Guid("00000000-0000-0000-0003-00000000000d"), "BANS_10", 10, 3, "Утенок-террорист" },
+                    { new Guid("00000000-0000-0000-0002-000000000028"), new Guid("00000000-0000-0000-0003-00000000000d"), "BANS_30", 30, 4, "Селезень-Рецидивист" },
+                    { new Guid("00000000-0000-0000-0002-000000000029"), new Guid("00000000-0000-0000-0003-00000000000c"), "DROPS_1", 1, 1, "Перекати-поле" },
+                    { new Guid("00000000-0000-0000-0002-00000000002a"), new Guid("00000000-0000-0000-0003-00000000000c"), "DROPS_3", 3, 2, "Беглец" },
+                    { new Guid("00000000-0000-0000-0002-00000000002b"), new Guid("00000000-0000-0000-0003-00000000000c"), "DROPS_10", 10, 3, "Дезертир" },
+                    { new Guid("00000000-0000-0000-0002-00000000002c"), new Guid("00000000-0000-0000-0003-00000000000c"), "DROPS_30", 30, 4, "Пропавший без вести" },
+                    { new Guid("00000000-0000-0000-0002-00000000002d"), new Guid("00000000-0000-0000-0003-000000000007"), "PUBS_5", 5, 1, "Проба пера" },
+                    { new Guid("00000000-0000-0000-0002-00000000002e"), new Guid("00000000-0000-0000-0003-000000000007"), "PUBS_25", 25, 2, "Мысли вслух" },
+                    { new Guid("00000000-0000-0000-0002-00000000002f"), new Guid("00000000-0000-0000-0003-000000000007"), "PUBS_100", 100, 3, "Постоянная рубрика" },
+                    { new Guid("00000000-0000-0000-0002-000000000030"), new Guid("00000000-0000-0000-0003-000000000007"), "PUBS_500", 500, 4, "Без строчки ни дня" },
+                    { new Guid("00000000-0000-0000-0002-000000000031"), new Guid("00000000-0000-0000-0003-00000000000b"), "LIKES_25", 25, 1, "В узких кругах" },
+                    { new Guid("00000000-0000-0000-0002-000000000032"), new Guid("00000000-0000-0000-0003-00000000000b"), "LIKES_100", 100, 2, "Душа компании" },
+                    { new Guid("00000000-0000-0000-0002-000000000033"), new Guid("00000000-0000-0000-0003-00000000000b"), "LIKES_500", 500, 3, "Народный любимец" },
+                    { new Guid("00000000-0000-0000-0002-000000000034"), new Guid("00000000-0000-0000-0003-00000000000b"), "LIKES_2000", 2000, 4, "Первый в сердцах" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "Tags",
+                columns: new[] { "TagId", "Description", "ShortId", "SortOrder", "TagGroupId", "Title" },
+                values: new object[,]
+                {
+                    { new Guid("00000000-0000-0000-0000-000000000001"), "Простая система с кубиком d6", 1, 0, new Guid("00000000-0000-0000-0005-000000000001"), "Black Bird Pie" },
+                    { new Guid("00000000-0000-0000-0000-000000000002"), "Dungeons & Dragons — все редакции классической ролевой системы", 2, 1, new Guid("00000000-0000-0000-0005-000000000001"), "D&D" },
+                    { new Guid("00000000-0000-0000-0000-000000000003"), "Dungeons & Dragons 5th Edition", 3, 2, new Guid("00000000-0000-0000-0005-000000000001"), "D&D 5e" },
+                    { new Guid("00000000-0000-0000-0000-000000000004"), "Системы на основе процентного броска", 4, 3, new Guid("00000000-0000-0000-0005-000000000001"), "D100" },
+                    { new Guid("00000000-0000-0000-0000-000000000005"), "Система для совместного создания мира", 5, 4, new Guid("00000000-0000-0000-0005-000000000001"), "Dawn of Worlds" },
+                    { new Guid("00000000-0000-0000-0000-000000000006"), "Адаптация сеттинга Fallout", 6, 5, new Guid("00000000-0000-0000-0005-000000000001"), "Fallout" },
+                    { new Guid("00000000-0000-0000-0000-000000000007"), "Без комментариев", 7, 6, new Guid("00000000-0000-0000-0005-000000000001"), "FATAL" },
+                    { new Guid("00000000-0000-0000-0000-000000000008"), "Нарративная система с аспектами и фейт-пойнтами", 8, 7, new Guid("00000000-0000-0000-0005-000000000001"), "Fate" },
+                    { new Guid("00000000-0000-0000-0000-000000000009"), "Универсальный движок для реализации практически любого концепта", 9, 8, new Guid("00000000-0000-0000-0005-000000000001"), "FUDGE" },
+                    { new Guid("00000000-0000-0000-0000-00000000000a"), "Универсальная система на базе броска 3d6 vs Сложность", 10, 9, new Guid("00000000-0000-0000-0005-000000000001"), "GURPS" },
+                    { new Guid("00000000-0000-0000-0000-00000000000b"), "Система от R. Talsorian Games (Cyberpunk 2020 и другие)", 11, 10, new Guid("00000000-0000-0000-0005-000000000001"), "Interlock" },
+                    { new Guid("00000000-0000-0000-0000-00000000000c"), "Система для создания эпических историй", 12, 11, new Guid("00000000-0000-0000-0005-000000000001"), "Microscope" },
+                    { new Guid("00000000-0000-0000-0000-00000000000d"), "Pathfinder первой редакции", 13, 12, new Guid("00000000-0000-0000-0005-000000000001"), "Pathfinder 1e" },
+                    { new Guid("00000000-0000-0000-0000-00000000000e"), "Pathfinder второй редакции", 14, 13, new Guid("00000000-0000-0000-0005-000000000001"), "Pathfinder 2e" },
+                    { new Guid("00000000-0000-0000-0000-00000000000f"), "Нарративные системы на базе 2d6 vs Сложность", 15, 14, new Guid("00000000-0000-0000-0005-000000000001"), "PbtA" },
+                    { new Guid("00000000-0000-0000-0000-000000000010"), "Минималистичная комедийная система", 16, 15, new Guid("00000000-0000-0000-0005-000000000001"), "Risus" },
+                    { new Guid("00000000-0000-0000-0000-000000000011"), "Легковесная универсальная система — Fast! Furious! Fun!", 17, 16, new Guid("00000000-0000-0000-0005-000000000001"), "Savage Worlds" },
+                    { new Guid("00000000-0000-0000-0000-000000000012"), "Sci-fi спин-офф Pathfinder", 18, 17, new Guid("00000000-0000-0000-0005-000000000001"), "Starfinder 1e" },
+                    { new Guid("00000000-0000-0000-0000-000000000013"), "Starfinder второй редакции", 19, 18, new Guid("00000000-0000-0000-0005-000000000001"), "Starfinder 2e" },
+                    { new Guid("00000000-0000-0000-0000-000000000014"), "Системы по вселенной Warhammer", 20, 19, new Guid("00000000-0000-0000-0005-000000000001"), "Warhammer" },
+                    { new Guid("00000000-0000-0000-0000-000000000015"), "Мир Тьмы — вампиры, оборотни, маги", 21, 20, new Guid("00000000-0000-0000-0005-000000000001"), "World of Darkness" },
+                    { new Guid("00000000-0000-0000-0000-000000000016"), "Оригинальная система от мастера игры", 22, 21, new Guid("00000000-0000-0000-0005-000000000001"), "Авторская" },
+                    { new Guid("00000000-0000-0000-0000-000000000017"), "Психологическая детективная командная игра", 23, 22, new Guid("00000000-0000-0000-0005-000000000001"), "Мафия" },
+                    { new Guid("00000000-0000-0000-0000-000000000018"), "Игра без формальной системы правил", 24, 23, new Guid("00000000-0000-0000-0005-000000000001"), "Словеска" },
+                    { new Guid("00000000-0000-0000-0000-000000000019"), "Отечественная система ролевых игр", 25, 24, new Guid("00000000-0000-0000-0005-000000000001"), "Эра Водолея" },
+                    { new Guid("00000000-0000-0000-0000-00000000001a"), "Переосмысление исторических событий", 26, 0, new Guid("00000000-0000-0000-0005-000000000002"), "Альтернативная история" },
+                    { new Guid("00000000-0000-0000-0000-00000000001b"), "Акцент на экшн и сражениях", 27, 1, new Guid("00000000-0000-0000-0005-000000000002"), "Боевик" },
+                    { new Guid("00000000-0000-0000-0000-00000000001c"), "Расследования и разгадывание тайн", 28, 2, new Guid("00000000-0000-0000-0005-000000000002"), "Детектив" },
+                    { new Guid("00000000-0000-0000-0000-00000000001d"), "Зомби-апокалипсис и выживание", 29, 3, new Guid("00000000-0000-0000-0005-000000000002"), "Зомби" },
+                    { new Guid("00000000-0000-0000-0000-00000000001e"), "Действие в реальную историческую эпоху", 30, 4, new Guid("00000000-0000-0000-0005-000000000002"), "Историческое" },
+                    { new Guid("00000000-0000-0000-0000-00000000001f"), "Высокие технологии, низкий уровень жизни", 31, 5, new Guid("00000000-0000-0000-0005-000000000002"), "Киберпанк" },
+                    { new Guid("00000000-0000-0000-0000-000000000020"), "Юмор и абсурдные ситуации", 32, 6, new Guid("00000000-0000-0000-0005-000000000002"), "Комедия" },
+                    { new Guid("00000000-0000-0000-0000-000000000021"), "Эпические приключения в космосе", 33, 7, new Guid("00000000-0000-0000-0005-000000000002"), "Космоопера" },
+                    { new Guid("00000000-0000-0000-0000-000000000022"), "Сверхъестественные элементы и тайны", 34, 8, new Guid("00000000-0000-0000-0005-000000000002"), "Мистика" },
+                    { new Guid("00000000-0000-0000-0000-000000000023"), "Современный реалистичный сеттинг", 35, 9, new Guid("00000000-0000-0000-0005-000000000002"), "Наши дни" },
+                    { new Guid("00000000-0000-0000-0000-000000000024"), "Мир после катастрофы", 36, 10, new Guid("00000000-0000-0000-0005-000000000002"), "Постапокалипсис" },
+                    { new Guid("00000000-0000-0000-0000-000000000025"), "Сюрреалистичные и необычные миры", 37, 11, new Guid("00000000-0000-0000-0005-000000000002"), "Психоделика" },
+                    { new Guid("00000000-0000-0000-0000-000000000026"), "Паровые технологии и викторианская эстетика", 38, 12, new Guid("00000000-0000-0000-0005-000000000002"), "Стимпанк" },
+                    { new Guid("00000000-0000-0000-0000-000000000027"), "Напряжение и саспенс", 39, 13, new Guid("00000000-0000-0000-0005-000000000002"), "Триллер" },
+                    { new Guid("00000000-0000-0000-0000-000000000028"), "Нарочито нелепый и провокационный контент", 40, 14, new Guid("00000000-0000-0000-0005-000000000002"), "Трэш" },
+                    { new Guid("00000000-0000-0000-0000-000000000029"), "Хоррор и атмосфера страха", 41, 15, new Guid("00000000-0000-0000-0005-000000000002"), "Ужасы" },
+                    { new Guid("00000000-0000-0000-0000-00000000002a"), "Научная фантастика и будущее", 42, 16, new Guid("00000000-0000-0000-0005-000000000002"), "Фантастика" },
+                    { new Guid("00000000-0000-0000-0000-00000000002b"), "Магия, мечи и волшебные миры", 43, 17, new Guid("00000000-0000-0000-0005-000000000002"), "Фэнтези" },
+                    { new Guid("00000000-0000-0000-0000-00000000002c"), "Исследование подземелий и сражения с монстрами", 44, 0, new Guid("00000000-0000-0000-0005-000000000003"), "Dungeon Crawl" },
+                    { new Guid("00000000-0000-0000-0000-00000000002d"), "Противостояние между игроками", 45, 1, new Guid("00000000-0000-0000-0005-000000000003"), "PvP" },
+                    { new Guid("00000000-0000-0000-0000-00000000002e"), "Борьба за выживание в суровых условиях", 46, 2, new Guid("00000000-0000-0000-0005-000000000003"), "Выживание" },
+                    { new Guid("00000000-0000-0000-0000-00000000002f"), "Открытый мир без сюжетных ограничений", 47, 3, new Guid("00000000-0000-0000-0005-000000000003"), "Песочница" },
+                    { new Guid("00000000-0000-0000-0000-000000000030"), "Управление ресурсами и принятие глобальных решений", 48, 4, new Guid("00000000-0000-0000-0005-000000000003"), "Стратегия" },
+                    { new Guid("00000000-0000-0000-0000-000000000031"), "Фокус на развитии истории", 49, 5, new Guid("00000000-0000-0000-0005-000000000003"), "Сюжетная" },
+                    { new Guid("00000000-0000-0000-0000-000000000032"), "Тактические бои и позиционирование", 50, 6, new Guid("00000000-0000-0000-0005-000000000003"), "Тактика" },
+                    { new Guid("00000000-0000-0000-0000-000000000033"), "Короткие посты в 1-3 абзаца", 51, 0, new Guid("00000000-0000-0000-0005-000000000004"), "Короткопост" },
+                    { new Guid("00000000-0000-0000-0000-000000000034"), "Развернутые литературные посты", 52, 1, new Guid("00000000-0000-0000-0005-000000000004"), "Литературная" },
+                    { new Guid("00000000-0000-0000-0000-000000000035"), "Посты раз в несколько дней", 53, 0, new Guid("00000000-0000-0000-0005-000000000005"), "Неторопливый" },
+                    { new Guid("00000000-0000-0000-0000-000000000036"), "Несколько постов в день", 54, 1, new Guid("00000000-0000-0000-0005-000000000005"), "Скоростной" },
+                    { new Guid("00000000-0000-0000-0000-000000000037"), "Нецензурная лексика запрещена", 55, 0, new Guid("00000000-0000-0000-0005-000000000006"), "Без мата" },
+                    { new Guid("00000000-0000-0000-0000-000000000038"), "Минимум жестокости и крови", 56, 1, new Guid("00000000-0000-0000-0005-000000000006"), "Без насилия" },
+                    { new Guid("00000000-0000-0000-0000-000000000039"), "Повышенные требования к грамотности", 57, 2, new Guid("00000000-0000-0000-0005-000000000006"), "Grammar Nazi" },
+                    { new Guid("00000000-0000-0000-0000-00000000003a"), "Игра для знакомой компании", 58, 3, new Guid("00000000-0000-0000-0005-000000000006"), "Для своих" },
+                    { new Guid("00000000-0000-0000-0000-00000000003b"), "Обсуждение игровых вопросов во внешнем мессенджере", 59, 4, new Guid("00000000-0000-0000-0005-000000000006"), "Обязателен мессенджер" },
+                    { new Guid("00000000-0000-0000-0000-00000000003c"), "Игра подходит для начинающих", 60, 0, new Guid("00000000-0000-0000-0005-000000000007"), "Для новичков" },
+                    { new Guid("00000000-0000-0000-0000-00000000003d"), "Мастер игры — начинающий", 61, 1, new Guid("00000000-0000-0000-0005-000000000007"), "Мастер-новичок" },
+                    { new Guid("00000000-0000-0000-0000-00000000003e"), "Возможны продолжительные периоды без постов", 62, 2, new Guid("00000000-0000-0000-0005-000000000005"), "Сухие сезоны" },
+                    { new Guid("00000000-0000-0000-0000-00000000003f"), "Erotic Role-Play: [tipimg:/images/erp-tooltip.gif]эротические сцены[/tipimg] как основа игрового процесса", 63, 0, new Guid("00000000-0000-0000-0005-000000000008"), "ERP" },
+                    { new Guid("00000000-0000-0000-0000-000000000040"), "Чернуха, максимально шокирующий и отталкивающий контент без ограничений", 64, 1, new Guid("00000000-0000-0000-0005-000000000008"), "Шок-контент" },
+                    { new Guid("00000000-0000-0000-0000-000000000041"), "Игра затрагивает спорные или чувствительные социальные темы", 65, 2, new Guid("00000000-0000-0000-0005-000000000008"), "Острые темы" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "Topics",
+                columns: new[] { "TopicId", "AttachOrder", "AuthorId", "BoardId", "CommentCount", "CreatedUtc", "DeletedByUserId", "DeletedUtc", "IsAttached", "IsClosed", "IsRemoved", "LastCommentId", "Text", "Title", "TopicNumber" },
+                values: new object[,]
+                {
+                    { new Guid("00000000-0000-0000-0000-000000000001"), null, new Guid("00000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000001"), 0, new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, true, false, false, null, "Ваши отзывы отсюда попадают (после минимального анализа на нарушения правил) прямиком на главную.", "Отзывы о ДМ", 1 },
+                    { new Guid("00000000-0000-0000-0000-000000000100"), null, new Guid("00000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000001"), 0, new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 1, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, true, false, false, null, "Здесь можно обсудить решения модераторов и администрации. Конструктивная критика приветствуется.", "Обсуждение действий администрации", 2 }
                 });
 
             migrationBuilder.CreateIndex(
@@ -1938,12 +1795,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "IX_AwardTypes_Code",
                 table: "AwardTypes",
                 column: "Code",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ContestSeries_ContestType_Number",
-                table: "ContestSeries",
-                columns: new[] { "ContestType", "Number" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -2087,6 +1938,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "EntityId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_ContestSeries_ContestType_Number",
+                table: "ContestSeries",
+                columns: new[] { "ContestType", "Number" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_FundraisingGoals_UpdatedByUserId",
                 table: "FundraisingGoals",
                 column: "UpdatedByUserId");
@@ -2205,12 +2062,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 columns: new[] { "ChatId", "CreatedUtc", "MessageId" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Messages_SearchVector",
-                table: "Messages",
-                column: "SearchVector")
-                .Annotation("Npgsql:IndexMethod", "gin");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Messages_DeletedByUserId",
                 table: "Messages",
                 column: "DeletedByUserId");
@@ -2219,6 +2070,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "IX_Messages_GlobalChatEventId",
                 table: "Messages",
                 column: "GlobalChatEventId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Messages_SearchVector",
+                table: "Messages",
+                column: "SearchVector")
+                .Annotation("Npgsql:IndexMethod", "gin");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Messages_UserId",
@@ -2288,6 +2145,20 @@ namespace DM.Infrastructure.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_PeriodDigestTopics_Year",
+                table: "PeriodDigestTopics",
+                column: "Year",
+                unique: true,
+                filter: "\"Month\" IS NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PeriodDigestTopics_Year_Month",
+                table: "PeriodDigestTopics",
+                columns: new[] { "Year", "Month" },
+                unique: true,
+                filter: "\"Month\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_PostEdits_EditorUserId",
                 table: "PostEdits",
                 column: "EditorUserId");
@@ -2325,6 +2196,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                 filter: "\"IsRemoved\" = false");
 
             migrationBuilder.CreateIndex(
+                name: "IX_PostReviews_CreatedUtc",
+                table: "PostReviews",
+                column: "CreatedUtc",
+                filter: "\"IsRemoved\" = false");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_PostReviews_DeletedByUserId",
                 table: "PostReviews",
                 column: "DeletedByUserId");
@@ -2353,40 +2230,20 @@ namespace DM.Infrastructure.Persistence.Migrations
                 filter: "\"IsRemoved\" = false");
 
             migrationBuilder.CreateIndex(
-                name: "IX_PeriodDigestTopics_Year",
-                table: "PeriodDigestTopics",
-                column: "Year",
-                unique: true,
-                filter: "\"Month\" IS NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PeriodDigestTopics_Year_Month",
-                table: "PeriodDigestTopics",
-                columns: new[] { "Year", "Month" },
-                unique: true,
-                filter: "\"Month\" IS NOT NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PostReviews_CreatedUtc",
-                table: "PostReviews",
-                column: "CreatedUtc",
-                filter: "\"IsRemoved\" = false");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Posts_AuthorId",
                 table: "Posts",
                 column: "AuthorId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Posts_CharacterId",
+                table: "Posts",
+                column: "CharacterId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Posts_CreatedUtc",
                 table: "Posts",
                 column: "CreatedUtc",
                 filter: "\"IsRemoved\" = false");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Posts_CharacterId",
-                table: "Posts",
-                column: "CharacterId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Posts_DeletedByUserId",
@@ -2616,19 +2473,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "DeletedByUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Uploads_UserId",
-                table: "Uploads",
-                column: "UserId");
-
-            // Partial indexes on the typed target FKs — speed up batched
-            // "find user/character avatars" queries from ImageEnrichment.
-            migrationBuilder.CreateIndex(
-                name: "IX_Uploads_TargetUserId",
-                table: "Uploads",
-                column: "TargetUserId",
-                filter: "\"TargetUserId\" IS NOT NULL");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Uploads_TargetCharacterId",
                 table: "Uploads",
                 column: "TargetCharacterId",
@@ -2639,6 +2483,17 @@ namespace DM.Infrastructure.Persistence.Migrations
                 table: "Uploads",
                 column: "TargetPostId",
                 filter: "\"TargetPostId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Uploads_TargetUserId",
+                table: "Uploads",
+                column: "TargetUserId",
+                filter: "\"TargetUserId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Uploads_UserId",
+                table: "Uploads",
+                column: "UserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserAchievements_AchievementTypeId",
@@ -2790,11 +2645,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "IX_Users_AvatarUploadId",
                 table: "Users",
                 column: "AvatarUploadId");
-
-            // The two expression indexes over lower(Email) and lower(Username) are not here:
-            // EF cannot express them in the model, so written by hand they would be content
-            // the generator does not know about and regenerating this migration would drop
-            // them silently. ExpressionIndexInitializer asserts them on every startup.
 
             migrationBuilder.CreateIndex(
                 name: "IX_Warnings_AuthorId",
@@ -3015,12 +2865,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                 principalColumn: "UserId",
                 onDelete: ReferentialAction.Cascade);
 
-            // NOTE: FK_Comments_Topics_EntityId removed — Comment.EntityId is polymorphic
-            // (Topic / Game / Blog / Publication). EF Core generates this constraint from
-            // `modelBuilder.Entity<Topic>().HasMany(t => t.Comments).WithOne(c => c.Topic)` —
-            // the navigation is needed for Include/ProjectTo, but the DB-level FK breaks any
-            // comments on non-Topic entities. Referential integrity is held by application
-            // logic. When the migration is regenerated this block must be removed again.
+            // FK_Comments_Topics_EntityId is deliberately absent, for the same reason as the
+            // two token constraints above: Comment.EntityId is polymorphic and points at a
+            // topic, a game, a blog or a publication. The constraint would reject every
+            // comment that is not on a topic. Guarded by the same integration test.
+
             migrationBuilder.AddForeignKey(
                 name: "FK_Comments_Users_AuthorId",
                 table: "Comments",
@@ -3033,6 +2882,14 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "FK_Comments_Users_DeletedByUserId",
                 table: "Comments",
                 column: "DeletedByUserId",
+                principalTable: "Users",
+                principalColumn: "UserId",
+                onDelete: ReferentialAction.SetNull);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_FundraisingGoals_Users_UpdatedByUserId",
+                table: "FundraisingGoals",
+                column: "UpdatedByUserId",
                 principalTable: "Users",
                 principalColumn: "UserId",
                 onDelete: ReferentialAction.SetNull);
@@ -3548,17 +3405,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 principalColumn: "UserId");
 
             migrationBuilder.AddForeignKey(
-                name: "FK_Uploads_Users_UserId",
-                table: "Uploads",
-                column: "UserId",
-                principalTable: "Users",
-                principalColumn: "UserId",
-                onDelete: ReferentialAction.Cascade);
-
-            // Typed target FKs (the polymorphic EntityId is replaced).
-            // SET NULL on target deletion — the Upload record is kept
-            // and swept by the GC worker.
-            migrationBuilder.AddForeignKey(
                 name: "FK_Uploads_Users_TargetUserId",
                 table: "Uploads",
                 column: "TargetUserId",
@@ -3567,20 +3413,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                 onDelete: ReferentialAction.SetNull);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_Uploads_Characters_TargetCharacterId",
+                name: "FK_Uploads_Users_UserId",
                 table: "Uploads",
-                column: "TargetCharacterId",
-                principalTable: "Characters",
-                principalColumn: "CharacterId",
-                onDelete: ReferentialAction.SetNull);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Uploads_Posts_TargetPostId",
-                table: "Uploads",
-                column: "TargetPostId",
-                principalTable: "Posts",
-                principalColumn: "PostId",
-                onDelete: ReferentialAction.SetNull);
+                column: "UserId",
+                principalTable: "Users",
+                principalColumn: "UserId",
+                onDelete: ReferentialAction.Cascade);
         }
 
         /// <inheritdoc />
@@ -3595,12 +3433,32 @@ namespace DM.Infrastructure.Persistence.Migrations
                 table: "Boards");
 
             migrationBuilder.DropForeignKey(
+                name: "FK_Characters_Users_AuthorId",
+                table: "Characters");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_Characters_Users_DeletedByUserId",
+                table: "Characters");
+
+            migrationBuilder.DropForeignKey(
                 name: "FK_Comments_Users_AuthorId",
                 table: "Comments");
 
             migrationBuilder.DropForeignKey(
                 name: "FK_Comments_Users_DeletedByUserId",
                 table: "Comments");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_Games_Users_DeletedByUserId",
+                table: "Games");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_Games_Users_MasterId",
+                table: "Games");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_Games_Users_MentorId",
+                table: "Games");
 
             migrationBuilder.DropForeignKey(
                 name: "FK_GlobalChatEvents_Users_CreatedByUserId",
@@ -3615,6 +3473,18 @@ namespace DM.Infrastructure.Persistence.Migrations
                 table: "Messages");
 
             migrationBuilder.DropForeignKey(
+                name: "FK_Posts_Users_AuthorId",
+                table: "Posts");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_Posts_Users_DeletedByUserId",
+                table: "Posts");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_Rooms_Users_DeletedByUserId",
+                table: "Rooms");
+
+            migrationBuilder.DropForeignKey(
                 name: "FK_Topics_Users_AuthorId",
                 table: "Topics");
 
@@ -3627,21 +3497,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                 table: "Uploads");
 
             migrationBuilder.DropForeignKey(
-                name: "FK_Uploads_Users_UserId",
-                table: "Uploads");
-
-            // Typed target FKs must be dropped before the referenced tables
-            // (Posts/Characters/Users) are dropped — Uploads is dropped after them.
-            migrationBuilder.DropForeignKey(
                 name: "FK_Uploads_Users_TargetUserId",
                 table: "Uploads");
 
             migrationBuilder.DropForeignKey(
-                name: "FK_Uploads_Characters_TargetCharacterId",
-                table: "Uploads");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_Uploads_Posts_TargetPostId",
+                name: "FK_Uploads_Users_UserId",
                 table: "Uploads");
 
             migrationBuilder.DropForeignKey(
@@ -3780,9 +3640,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "NotepadCategories");
 
             migrationBuilder.DropTable(
-                name: "Posts");
-
-            migrationBuilder.DropTable(
                 name: "Rubrics");
 
             migrationBuilder.DropTable(
@@ -3790,9 +3647,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "AchievementTypes");
-
-            migrationBuilder.DropTable(
-                name: "AchievementCategories");
 
             migrationBuilder.DropTable(
                 name: "AwardTypes");
@@ -3804,12 +3658,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "TagGroups");
 
             migrationBuilder.DropTable(
-                name: "Characters");
-
-            migrationBuilder.DropTable(
-                name: "Rooms");
-
-            migrationBuilder.DropTable(
                 name: "Blogs");
 
             migrationBuilder.DropTable(
@@ -3819,13 +3667,25 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "Warnings");
 
             migrationBuilder.DropTable(
-                name: "Games");
+                name: "AchievementCategories");
 
             migrationBuilder.DropTable(
                 name: "Users");
 
             migrationBuilder.DropTable(
                 name: "Uploads");
+
+            migrationBuilder.DropTable(
+                name: "Posts");
+
+            migrationBuilder.DropTable(
+                name: "Characters");
+
+            migrationBuilder.DropTable(
+                name: "Rooms");
+
+            migrationBuilder.DropTable(
+                name: "Games");
 
             migrationBuilder.DropTable(
                 name: "Boards");
