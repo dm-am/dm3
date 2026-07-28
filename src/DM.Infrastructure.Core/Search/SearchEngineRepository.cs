@@ -57,10 +57,16 @@ internal class SearchEngineRepository : ISearchEngineRepository
                     querySearch = querySearch && q.Terms(t => t.Field(f => f.EntityType).Terms(searchEntityTypes));
                 }
 
+                // Granted by role OR by explicit user, AND not explicitly denied.
+                // The last clause used to be a third alternative, and since nothing
+                // ever writes UnauthorizedUsers it was true for every document —
+                // which made the whole expression true for every document, so the
+                // filter matched everything and restricted content was returned to
+                // anyone, including anonymous callers.
                 var authorizeSearch =
-                    q.Terms(t => t.Field(f => f.AuthorizedRoles).Terms(roles.Cast<int>()).Boost(0)) ||
-                    q.Terms(t => t.Field(f => f.AuthorizedUsers).Terms(userId).Boost(0)) ||
-                    !q.Terms(t => t.Field(f => f.UnauthorizedUsers).Terms(userId).Boost(0));
+                    (q.Terms(t => t.Field(f => f.AuthorizedRoles).Terms(roles.Cast<int>())) ||
+                        q.Terms(t => t.Field(f => f.AuthorizedUsers).Terms(userId))) &&
+                    !q.Terms(t => t.Field(f => f.UnauthorizedUsers).Terms(userId));
 
                 return querySearch && authorizeSearch;
             })
