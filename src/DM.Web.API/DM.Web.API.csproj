@@ -60,11 +60,4 @@
         </Content>
     </ItemGroup>
 
-    <ItemGroup>
-        <EmbeddedResource Include="Assets\Seed\diopside.jpg" />
-        <EmbeddedResource Include="Assets\Seed\Chuck.png" />
-        <EmbeddedResource Include="Assets\Seed\SolohinLex.jpg" />
-        <EmbeddedResource Include="Assets\Seed\SolohinLex.bbcode" />
-    </ItemGroup>
-
 </Project>

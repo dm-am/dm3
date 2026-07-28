@@ -569,6 +569,32 @@ services:
         reservations:
           memory: 256M
 
+  # --- Application: Tools ---
+
+  # Сидер тестовых данных. Профиль "tools" держит его в стороне от обычного
+  # docker compose up: это разовая задача, а не сервис.
+  # Запуск: docker compose run --rm seeder [all|users|content]
+  seeder:
+    image: 'dm-seeder:local'
+    build:
+      <<: *docker-context
+      args:
+        PROJECT_NAME: DM.Tools.Seeder
+    # Entrypoint образа запускает приложение через sh -c и аргументы до него не
+    # доходят, а команда сидера передается именно аргументом.
+    entrypoint: ["dotnet", "DM.Tools.Seeder.dll"]
+    environment: *workload-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: "no"
+    profiles:
+      - tools
+
   # --- Infrastructure: Auto-update ---
 
   watchtower:
