@@ -46,6 +46,16 @@ public class DmDbContext : DbContext
 
         var isPostgres = Database.IsNpgsql();
 
+        if (isPostgres)
+        {
+            // Declared here rather than as raw SQL in the migration, for the same reason as
+            // the seed: what the generator does not know about disappears when the migration
+            // is regenerated. Installed for the substring predicates the search paths use —
+            // a b-tree cannot serve ILIKE '%...%'. No index needs gin_trgm_ops yet; the first
+            // one that does will find the extension already in place.
+            modelBuilder.HasPostgresExtension("pg_trgm");
+        }
+
         #region UserEndorsement Indexes
 
         // One active endorsement per author-target pair
@@ -367,50 +377,1608 @@ public class DmDbContext : DbContext
             entity.HasIndex(a => new { a.UserId, a.EarnedUtc });
         });
 
-        // ---- Bootstrap seed: exactly one record per catalog ----
-        // Fixed GUIDs (the zero family) — so a repeated seed does not
-        // create duplicates and code outside migrations can reference these
-        // records by a predictable ID when needed.
-        // The full seed (52 achievement types, 13 categories, 6 award types,
-        // 2 series) lives in InitialCreate.cs via InsertData.
+        // ---- Bootstrap seed ----
+        // Declared here rather than written into the migration by hand. Seed the
+        // migration does not know about is lost the moment the migration is
+        // regenerated, which is the documented way to change the schema: the site
+        // would come up with no boards, no tags, no system user and no global chat,
+        // and nothing would say so. Declared in the model, EF emits it into every
+        // migration it generates, and EnsureCreated and Migrate produce the same
+        // database.
+        //
+        // Fixed identifiers from the zero family, so a repeated seed cannot create
+        // duplicates and code outside migrations can reference a record by a
+        // predictable id.
 
-        var seedAwardId = Guid.Parse("00000000-0000-0000-0001-000000000001");
-        var seedCategoryId = Guid.Parse("00000000-0000-0000-0003-000000000002");
-        var seedAchievementId = Guid.Parse("00000000-0000-0000-0002-000000000001");
+        modelBuilder.Entity<TagGroup>().HasData(
+            new TagGroup
+            {
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Система",
+                Description = "Ролевая система или набор правил, по которым ведется игра",
+                SortOrder = 0
+            },
+            new TagGroup
+            {
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Жанр",
+                Description = "Жанр и сеттинг игрового мира",
+                SortOrder = 1
+            },
+            new TagGroup
+            {
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000003"),
+                Title = "Формат игры",
+                Description = "Тип игрового процесса и взаимодействия между участниками",
+                SortOrder = 2
+            },
+            new TagGroup
+            {
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000004"),
+                Title = "Формат постов",
+                Description = "Стиль и объем игровых постов",
+                SortOrder = 3
+            },
+            new TagGroup
+            {
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000005"),
+                Title = "Темп",
+                Description = "Ожидаемая скорость игры и частота постов",
+                SortOrder = 4
+            },
+            new TagGroup
+            {
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000006"),
+                Title = "Ограничения",
+                Description = "Особые требования и ограничения для участников",
+                SortOrder = 5
+            },
+            new TagGroup
+            {
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000007"),
+                Title = "Новички",
+                Description = "Игры от новичков и для новичков",
+                SortOrder = 6
+            },
+            new TagGroup
+            {
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000008"),
+                Title = "Деликатный контент",
+                Description = "Контент, требующий осознанного согласия участников",
+                SortOrder = 7
+            });
 
-        modelBuilder.Entity<AwardType>().HasData(new AwardType
-        {
-            AwardTypeId = seedAwardId,
-            Code = "contest_first",
-            Title = "Литконкурс",
-            Description = "Победитель конкурса",
-            IconName = "trophy-cup",
-            Tier = 1,
-            SortOrder = 1,
-            IsActive = true,
-        });
+        modelBuilder.Entity<Tag>().HasData(
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                ShortId = 1,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Black Bird Pie",
+                Description = "Простая система с кубиком d6",
+                SortOrder = 0
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000002"),
+                ShortId = 2,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "D&D",
+                Description = "Dungeons & Dragons — все редакции классической ролевой системы",
+                SortOrder = 1
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000003"),
+                ShortId = 3,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "D&D 5e",
+                Description = "Dungeons & Dragons 5th Edition",
+                SortOrder = 2
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000004"),
+                ShortId = 4,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "D100",
+                Description = "Системы на основе процентного броска",
+                SortOrder = 3
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000005"),
+                ShortId = 5,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Dawn of Worlds",
+                Description = "Система для совместного создания мира",
+                SortOrder = 4
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000006"),
+                ShortId = 6,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Fallout",
+                Description = "Адаптация сеттинга Fallout",
+                SortOrder = 5
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000007"),
+                ShortId = 7,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "FATAL",
+                Description = "Без комментариев",
+                SortOrder = 6
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000008"),
+                ShortId = 8,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Fate",
+                Description = "Нарративная система с аспектами и фейт-пойнтами",
+                SortOrder = 7
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000009"),
+                ShortId = 9,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "FUDGE",
+                Description = "Универсальный движок для реализации практически любого концепта",
+                SortOrder = 8
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000000a"),
+                ShortId = 10,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "GURPS",
+                Description = "Универсальная система на базе броска 3d6 vs Сложность",
+                SortOrder = 9
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000000b"),
+                ShortId = 11,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Interlock",
+                Description = "Система от R. Talsorian Games (Cyberpunk 2020 и другие)",
+                SortOrder = 10
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000000c"),
+                ShortId = 12,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Microscope",
+                Description = "Система для создания эпических историй",
+                SortOrder = 11
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000000d"),
+                ShortId = 13,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Pathfinder 1e",
+                Description = "Pathfinder первой редакции",
+                SortOrder = 12
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000000e"),
+                ShortId = 14,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Pathfinder 2e",
+                Description = "Pathfinder второй редакции",
+                SortOrder = 13
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000000f"),
+                ShortId = 15,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "PbtA",
+                Description = "Нарративные системы на базе 2d6 vs Сложность",
+                SortOrder = 14
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000010"),
+                ShortId = 16,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Risus",
+                Description = "Минималистичная комедийная система",
+                SortOrder = 15
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000011"),
+                ShortId = 17,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Savage Worlds",
+                Description = "Легковесная универсальная система — Fast! Furious! Fun!",
+                SortOrder = 16
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000012"),
+                ShortId = 18,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Starfinder 1e",
+                Description = "Sci-fi спин-офф Pathfinder",
+                SortOrder = 17
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000013"),
+                ShortId = 19,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Starfinder 2e",
+                Description = "Starfinder второй редакции",
+                SortOrder = 18
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000014"),
+                ShortId = 20,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Warhammer",
+                Description = "Системы по вселенной Warhammer",
+                SortOrder = 19
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000015"),
+                ShortId = 21,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "World of Darkness",
+                Description = "Мир Тьмы — вампиры, оборотни, маги",
+                SortOrder = 20
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000016"),
+                ShortId = 22,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Авторская",
+                Description = "Оригинальная система от мастера игры",
+                SortOrder = 21
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000017"),
+                ShortId = 23,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Мафия",
+                Description = "Психологическая детективная командная игра",
+                SortOrder = 22
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000018"),
+                ShortId = 24,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Словеска",
+                Description = "Игра без формальной системы правил",
+                SortOrder = 23
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000019"),
+                ShortId = 25,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Эра Водолея",
+                Description = "Отечественная система ролевых игр",
+                SortOrder = 24
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000001a"),
+                ShortId = 26,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Альтернативная история",
+                Description = "Переосмысление исторических событий",
+                SortOrder = 0
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000001b"),
+                ShortId = 27,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Боевик",
+                Description = "Акцент на экшн и сражениях",
+                SortOrder = 1
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000001c"),
+                ShortId = 28,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Детектив",
+                Description = "Расследования и разгадывание тайн",
+                SortOrder = 2
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000001d"),
+                ShortId = 29,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Зомби",
+                Description = "Зомби-апокалипсис и выживание",
+                SortOrder = 3
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000001e"),
+                ShortId = 30,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Историческое",
+                Description = "Действие в реальную историческую эпоху",
+                SortOrder = 4
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000001f"),
+                ShortId = 31,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Киберпанк",
+                Description = "Высокие технологии, низкий уровень жизни",
+                SortOrder = 5
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000020"),
+                ShortId = 32,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Комедия",
+                Description = "Юмор и абсурдные ситуации",
+                SortOrder = 6
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000021"),
+                ShortId = 33,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Космоопера",
+                Description = "Эпические приключения в космосе",
+                SortOrder = 7
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000022"),
+                ShortId = 34,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Мистика",
+                Description = "Сверхъестественные элементы и тайны",
+                SortOrder = 8
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000023"),
+                ShortId = 35,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Наши дни",
+                Description = "Современный реалистичный сеттинг",
+                SortOrder = 9
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000024"),
+                ShortId = 36,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Постапокалипсис",
+                Description = "Мир после катастрофы",
+                SortOrder = 10
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000025"),
+                ShortId = 37,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Психоделика",
+                Description = "Сюрреалистичные и необычные миры",
+                SortOrder = 11
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000026"),
+                ShortId = 38,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Стимпанк",
+                Description = "Паровые технологии и викторианская эстетика",
+                SortOrder = 12
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000027"),
+                ShortId = 39,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Триллер",
+                Description = "Напряжение и саспенс",
+                SortOrder = 13
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000028"),
+                ShortId = 40,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Трэш",
+                Description = "Нарочито нелепый и провокационный контент",
+                SortOrder = 14
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000029"),
+                ShortId = 41,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Ужасы",
+                Description = "Хоррор и атмосфера страха",
+                SortOrder = 15
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000002a"),
+                ShortId = 42,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Фантастика",
+                Description = "Научная фантастика и будущее",
+                SortOrder = 16
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000002b"),
+                ShortId = 43,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
+                Title = "Фэнтези",
+                Description = "Магия, мечи и волшебные миры",
+                SortOrder = 17
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000002c"),
+                ShortId = 44,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000003"),
+                Title = "Dungeon Crawl",
+                Description = "Исследование подземелий и сражения с монстрами",
+                SortOrder = 0
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000002d"),
+                ShortId = 45,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000003"),
+                Title = "PvP",
+                Description = "Противостояние между игроками",
+                SortOrder = 1
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000002e"),
+                ShortId = 46,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000003"),
+                Title = "Выживание",
+                Description = "Борьба за выживание в суровых условиях",
+                SortOrder = 2
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000002f"),
+                ShortId = 47,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000003"),
+                Title = "Песочница",
+                Description = "Открытый мир без сюжетных ограничений",
+                SortOrder = 3
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000030"),
+                ShortId = 48,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000003"),
+                Title = "Стратегия",
+                Description = "Управление ресурсами и принятие глобальных решений",
+                SortOrder = 4
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000031"),
+                ShortId = 49,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000003"),
+                Title = "Сюжетная",
+                Description = "Фокус на развитии истории",
+                SortOrder = 5
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000032"),
+                ShortId = 50,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000003"),
+                Title = "Тактика",
+                Description = "Тактические бои и позиционирование",
+                SortOrder = 6
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000033"),
+                ShortId = 51,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000004"),
+                Title = "Короткопост",
+                Description = "Короткие посты в 1-3 абзаца",
+                SortOrder = 0
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000034"),
+                ShortId = 52,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000004"),
+                Title = "Литературная",
+                Description = "Развернутые литературные посты",
+                SortOrder = 1
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000035"),
+                ShortId = 53,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000005"),
+                Title = "Неторопливый",
+                Description = "Посты раз в несколько дней",
+                SortOrder = 0
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000036"),
+                ShortId = 54,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000005"),
+                Title = "Скоростной",
+                Description = "Несколько постов в день",
+                SortOrder = 1
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000003e"),
+                ShortId = 62,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000005"),
+                Title = "Сухие сезоны",
+                Description = "Возможны продолжительные периоды без постов",
+                SortOrder = 2
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000037"),
+                ShortId = 55,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000006"),
+                Title = "Без мата",
+                Description = "Нецензурная лексика запрещена",
+                SortOrder = 0
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000038"),
+                ShortId = 56,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000006"),
+                Title = "Без насилия",
+                Description = "Минимум жестокости и крови",
+                SortOrder = 1
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000039"),
+                ShortId = 57,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000006"),
+                Title = "Grammar Nazi",
+                Description = "Повышенные требования к грамотности",
+                SortOrder = 2
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000003a"),
+                ShortId = 58,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000006"),
+                Title = "Для своих",
+                Description = "Игра для знакомой компании",
+                SortOrder = 3
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000003b"),
+                ShortId = 59,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000006"),
+                Title = "Обязателен мессенджер",
+                Description = "Обсуждение игровых вопросов во внешнем мессенджере",
+                SortOrder = 4
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000003c"),
+                ShortId = 60,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000007"),
+                Title = "Для новичков",
+                Description = "Игра подходит для начинающих",
+                SortOrder = 0
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000003d"),
+                ShortId = 61,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000007"),
+                Title = "Мастер-новичок",
+                Description = "Мастер игры — начинающий",
+                SortOrder = 1
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-00000000003f"),
+                ShortId = 63,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000008"),
+                Title = "ERP",
+                Description = "Erotic Role-Play: [tipimg:/images/erp-tooltip.gif]эротические сцены[/tipimg] как основа игрового процесса",
+                SortOrder = 0
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000040"),
+                ShortId = 64,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000008"),
+                Title = "Шок-контент",
+                Description = "Чернуха, максимально шокирующий и отталкивающий контент без ограничений",
+                SortOrder = 1
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000041"),
+                ShortId = 65,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000008"),
+                Title = "Острые темы",
+                Description = "Игра затрагивает спорные или чувствительные социальные темы",
+                SortOrder = 2
+            });
 
-        modelBuilder.Entity<AchievementCategory>().HasData(new AchievementCategory
-        {
-            AchievementCategoryId = seedCategoryId,
-            Code = "game_posts_authored",
-            Title = "Игровые посты",
-            Description = "Игровые посты в активных играх. Считаются все, включая удаленные игры.",
-            IconName = "scroll-quill",
-            Metric = AchievementMetric.GamePostsAuthored,
-            SortOrder = 2,
-            IsActive = true,
-        });
+        modelBuilder.Entity<Board>().HasData(
+            new Board
+            {
+                BoardId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                Title = "Общий",
+                Alias = "general",
+                Description = "Жизнь сообщества и решения администрации",
+                Order = 1,
+                ViewPolicy = BoardAccessPolicy.Guest,
+                CreateTopicPolicy = BoardAccessPolicy.RegularUser,
+                TopicsCount = 1,
+                CommentsCount = 0
+            },
+            new Board
+            {
+                BoardId = Guid.Parse("00000000-0000-0000-0000-000000000002"),
+                Title = "Игровые системы",
+                Alias = "game-systems",
+                Description = "Обсуждение правил и помощь в выборе системы",
+                Order = 2,
+                ViewPolicy = BoardAccessPolicy.Guest,
+                CreateTopicPolicy = BoardAccessPolicy.RegularUser,
+                TopicsCount = 0,
+                CommentsCount = 0
+            },
+            new Board
+            {
+                BoardId = Guid.Parse("00000000-0000-0000-0000-000000000003"),
+                Title = "Поиск мастера и игроков",
+                Alias = "looking-for-group",
+                Description = "Набор игроков в игру или поиск мастера",
+                Order = 3,
+                ViewPolicy = BoardAccessPolicy.Guest,
+                CreateTopicPolicy = BoardAccessPolicy.RegularUser,
+                TopicsCount = 0,
+                CommentsCount = 0
+            },
+            new Board
+            {
+                BoardId = Guid.Parse("00000000-0000-0000-0000-000000000004"),
+                Title = "Котел идей",
+                Alias = "ideas",
+                Description = "Обкатка задумок и поиск единомышленников",
+                Order = 4,
+                ViewPolicy = BoardAccessPolicy.Guest,
+                CreateTopicPolicy = BoardAccessPolicy.RegularUser,
+                TopicsCount = 0,
+                CommentsCount = 0
+            },
+            new Board
+            {
+                BoardId = Guid.Parse("00000000-0000-0000-0000-000000000005"),
+                Title = "Конкурсы",
+                Alias = "contests",
+                Description = "Литературные и творческие состязания",
+                Order = 5,
+                ViewPolicy = BoardAccessPolicy.Guest,
+                CreateTopicPolicy = BoardAccessPolicy.Moderator,
+                TopicsCount = 0,
+                CommentsCount = 0
+            },
+            new Board
+            {
+                BoardId = Guid.Parse("00000000-0000-0000-0000-000000000006"),
+                Title = "Под столом",
+                Alias = "off-topic",
+                Description = "Музыка, книги, кино, мемы и все остальное",
+                Order = 6,
+                ViewPolicy = BoardAccessPolicy.Guest,
+                CreateTopicPolicy = BoardAccessPolicy.RegularUser,
+                TopicsCount = 0,
+                CommentsCount = 0
+            },
+            new Board
+            {
+                BoardId = Guid.Parse("00000000-0000-0000-0000-000000000007"),
+                Title = "Неролевые игры",
+                Alias = "forum-games",
+                Description = "Словесные игры, ассоциации и прочие развлечения",
+                Order = 7,
+                ViewPolicy = BoardAccessPolicy.Guest,
+                CreateTopicPolicy = BoardAccessPolicy.RegularUser,
+                TopicsCount = 0,
+                CommentsCount = 0
+            },
+            new Board
+            {
+                BoardId = Guid.Parse("00000000-0000-0000-0000-000000000008"),
+                Title = "Улучшение сайта",
+                Alias = "improvements",
+                Description = "Идеи и предложения по развитию сайта",
+                Order = 8,
+                ViewPolicy = BoardAccessPolicy.Guest,
+                CreateTopicPolicy = BoardAccessPolicy.RegularUser,
+                TopicsCount = 0,
+                CommentsCount = 0
+            },
+            new Board
+            {
+                BoardId = Guid.Parse("00000000-0000-0000-0000-000000000009"),
+                Title = "Ошибки",
+                Alias = "bugs",
+                Description = "Сообщения об ошибках на сайте",
+                Order = 9,
+                ViewPolicy = BoardAccessPolicy.Guest,
+                CreateTopicPolicy = BoardAccessPolicy.RegularUser,
+                TopicsCount = 0,
+                CommentsCount = 0
+            },
+            new Board
+            {
+                BoardId = Guid.Parse("00000000-0000-0000-0000-00000000000a"),
+                Title = "Для новичков",
+                Alias = "newbies",
+                Description = "Руководства, ответы на вопросы и помощь новичкам",
+                Order = 10,
+                ViewPolicy = BoardAccessPolicy.Guest,
+                CreateTopicPolicy = BoardAccessPolicy.RegularUser,
+                TopicsCount = 0,
+                CommentsCount = 0
+            },
+            new Board
+            {
+                BoardId = Guid.Parse("00000000-0000-0000-0000-00000000000b"),
+                Title = "Новости проекта",
+                Alias = "news",
+                Description = "Официальные новости, обновления и статистика",
+                Order = 11,
+                ViewPolicy = BoardAccessPolicy.Guest,
+                CreateTopicPolicy = BoardAccessPolicy.Moderator,
+                TopicsCount = 0,
+                CommentsCount = 0
+            });
 
-        modelBuilder.Entity<AchievementType>().HasData(new AchievementType
-        {
-            AchievementTypeId = seedAchievementId,
-            Code = "POSTS_100",
-            Title = "Автор",
-            Threshold = 100,
-            Tier = 1,
-            AchievementCategoryId = seedCategoryId,
-        });
+        modelBuilder.Entity<AchievementCategory>().HasData(
+            new AchievementCategory
+            {
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000001"),
+                Code = "days_since_registration",
+                Title = "Выслуга лет",
+                Description = "Время с момента регистрации на сайте.",
+                IconName = "hourglass",
+                Metric = AchievementMetric.DaysSinceRegistration,
+                SortOrder = 1,
+                IsActive = true
+            },
+            new AchievementCategory
+            {
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000002"),
+                Code = "game_posts_authored",
+                Title = "Игровые посты",
+                Description = "Игровые посты в активных играх. Считаются все, включая удаленные игры.",
+                IconName = "scroll-quill",
+                Metric = AchievementMetric.GamePostsAuthored,
+                SortOrder = 2,
+                IsActive = true
+            },
+            new AchievementCategory
+            {
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000003"),
+                Code = "post_review_score_sum",
+                Title = "Рейтинг",
+                Description = "Сумма положительных оценок твоих игровых постов. Отрицательные оценки рейтинг не уменьшают.",
+                IconName = "laurels",
+                Metric = AchievementMetric.PostReviewScoreSum,
+                SortOrder = 3,
+                IsActive = true
+            },
+            new AchievementCategory
+            {
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000004"),
+                Code = "games_hosted",
+                Title = "Игры в роли ведущего",
+                Description = "Игры, где ты мастер или ассистент.",
+                IconName = "scepter",
+                Metric = AchievementMetric.GamesHosted,
+                SortOrder = 4,
+                IsActive = true
+            },
+            new AchievementCategory
+            {
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000005"),
+                Code = "games_played",
+                Title = "Игры в роли игрока",
+                Description = "Игры, где у тебя есть активный или бывший персонаж.",
+                IconName = "sword",
+                Metric = AchievementMetric.GamesPlayed,
+                SortOrder = 5,
+                IsActive = true
+            },
+            new AchievementCategory
+            {
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000006"),
+                Code = "blogs_hosted",
+                Title = "Блоги в роли ведущего",
+                Description = "Блоги, где ты автор или ассистент.",
+                IconName = "book",
+                Metric = AchievementMetric.BlogsHosted,
+                SortOrder = 6,
+                IsActive = true
+            },
+            new AchievementCategory
+            {
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000007"),
+                Code = "publications_authored",
+                Title = "Публикации",
+                Description = "Статьи в блогах. Черновики тоже считаются.",
+                IconName = "papers",
+                Metric = AchievementMetric.PublicationsAuthored,
+                SortOrder = 7,
+                IsActive = true
+            },
+            new AchievementCategory
+            {
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000008"),
+                Code = "topics_authored",
+                Title = "Топики",
+                Description = "Форумные топики, которые ты создал.",
+                IconName = "stabbed-note",
+                Metric = AchievementMetric.TopicsAuthored,
+                SortOrder = 8,
+                IsActive = true
+            },
+            new AchievementCategory
+            {
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000009"),
+                Code = "comments_authored",
+                Title = "Комментарии",
+                Description = "Все комментарии: форум, блоги, игры, публикации.",
+                IconName = "discussion",
+                Metric = AchievementMetric.CommentsAuthored,
+                SortOrder = 9,
+                IsActive = true
+            },
+            new AchievementCategory
+            {
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000a"),
+                Code = "global_chat_messages",
+                Title = "Глобальный чат",
+                Description = "Сообщения в глобальном чате сайта.",
+                IconName = "talk",
+                Metric = AchievementMetric.GlobalChatMessages,
+                SortOrder = 10,
+                IsActive = true
+            },
+            new AchievementCategory
+            {
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000b"),
+                Code = "likes_received",
+                Title = "Лайки",
+                Description = "Лайки на топиках, публикациях, комментариях и сообщениях чата. Игровые посты учитываются через \"Рейтинг\".",
+                IconName = "heart-organ",
+                Metric = AchievementMetric.LikesReceived,
+                SortOrder = 11,
+                IsActive = true
+            },
+            new AchievementCategory
+            {
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000c"),
+                Code = "game_drops",
+                Title = "Дропы",
+                Description = "Игры, которые ты покинул добровольно. Смерть персонажа и изгнание мастером не считаются.",
+                IconName = "walking-boot",
+                Metric = AchievementMetric.GameDrops,
+                SortOrder = 12,
+                IsActive = true
+            },
+            new AchievementCategory
+            {
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000d"),
+                Code = "bans_received",
+                Title = "Баны",
+                Description = "Баны, полученные от модерации.",
+                IconName = "plastic-duck",
+                Metric = AchievementMetric.BansReceived,
+                SortOrder = 13,
+                IsActive = true
+            });
+
+        modelBuilder.Entity<AchievementType>().HasData(
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000005"),
+                Code = "DAYS_366",
+                Title = "Поселенец",
+                Threshold = 366,
+                Tier = 1,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000001")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000006"),
+                Code = "DAYS_1827",
+                Title = "Старожил",
+                Threshold = 1827,
+                Tier = 2,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000001")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000007"),
+                Code = "DAYS_3653",
+                Title = "Ветеран",
+                Threshold = 3653,
+                Tier = 3,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000001")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000008"),
+                Code = "DAYS_5479",
+                Title = "Древний",
+                Threshold = 5479,
+                Tier = 4,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000001")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000001"),
+                Code = "POSTS_100",
+                Title = "Простые начала",
+                Threshold = 100,
+                Tier = 1,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000002")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000002"),
+                Code = "POSTS_500",
+                Title = "Продолжение следует",
+                Threshold = 500,
+                Tier = 2,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000002")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000003"),
+                Code = "POSTS_2000",
+                Title = "Долгая партия",
+                Threshold = 2000,
+                Tier = 3,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000002")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000004"),
+                Code = "POSTS_5000",
+                Title = "Приключение в жизнь",
+                Threshold = 5000,
+                Tier = 4,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000002")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000009"),
+                Code = "RATING_100",
+                Title = "Подающий надежды",
+                Threshold = 100,
+                Tier = 1,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000003")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000000a"),
+                Code = "RATING_250",
+                Title = "Видный талант",
+                Threshold = 250,
+                Tier = 2,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000003")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000000b"),
+                Code = "RATING_500",
+                Title = "Опытный зубр",
+                Threshold = 500,
+                Tier = 3,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000003")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000000c"),
+                Code = "RATING_1000",
+                Title = "Мастодонт-аксакал",
+                Threshold = 1000,
+                Tier = 4,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000003")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000000d"),
+                Code = "HOST_3",
+                Title = "Подмастерье",
+                Threshold = 3,
+                Tier = 1,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000004")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000000e"),
+                Code = "HOST_10",
+                Title = "Мастер",
+                Threshold = 10,
+                Tier = 2,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000004")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000000f"),
+                Code = "HOST_30",
+                Title = "Грандмастер",
+                Threshold = 30,
+                Tier = 3,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000004")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000010"),
+                Code = "HOST_100",
+                Title = "Архитектор миров",
+                Threshold = 100,
+                Tier = 4,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000004")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000011"),
+                Code = "PLAY_5",
+                Title = "Искатель",
+                Threshold = 5,
+                Tier = 1,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000005")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000012"),
+                Code = "PLAY_20",
+                Title = "Авантюрист",
+                Threshold = 20,
+                Tier = 2,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000005")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000013"),
+                Code = "PLAY_100",
+                Title = "Герой",
+                Threshold = 100,
+                Tier = 3,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000005")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000014"),
+                Code = "PLAY_500",
+                Title = "Легенда",
+                Threshold = 500,
+                Tier = 4,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000005")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000015"),
+                Code = "BLOGS_1",
+                Title = "Свежий взгляд",
+                Threshold = 1,
+                Tier = 1,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000006")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000016"),
+                Code = "BLOGS_5",
+                Title = "Небольшая подборка",
+                Threshold = 5,
+                Tier = 2,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000006")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000017"),
+                Code = "BLOGS_15",
+                Title = "Именная коллекция",
+                Threshold = 15,
+                Tier = 3,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000006")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000018"),
+                Code = "BLOGS_50",
+                Title = "Библиотека",
+                Threshold = 50,
+                Tier = 4,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000006")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000002d"),
+                Code = "PUBS_5",
+                Title = "Проба пера",
+                Threshold = 5,
+                Tier = 1,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000007")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000002e"),
+                Code = "PUBS_25",
+                Title = "Мысли вслух",
+                Threshold = 25,
+                Tier = 2,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000007")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000002f"),
+                Code = "PUBS_100",
+                Title = "Постоянная рубрика",
+                Threshold = 100,
+                Tier = 3,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000007")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000030"),
+                Code = "PUBS_500",
+                Title = "Без строчки ни дня",
+                Threshold = 500,
+                Tier = 4,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000007")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000019"),
+                Code = "TOPICS_5",
+                Title = "Повод для обсуждения",
+                Threshold = 5,
+                Tier = 1,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000008")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000001a"),
+                Code = "TOPICS_25",
+                Title = "Занятные темы",
+                Threshold = 25,
+                Tier = 2,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000008")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000001b"),
+                Code = "TOPICS_100",
+                Title = "Дневная повестка",
+                Threshold = 100,
+                Tier = 3,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000008")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000001c"),
+                Code = "TOPICS_500",
+                Title = "На целый раздел",
+                Threshold = 500,
+                Tier = 4,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000008")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000001d"),
+                Code = "COMMENTS_100",
+                Title = "Свои пять копеек",
+                Threshold = 100,
+                Tier = 1,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000009")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000001e"),
+                Code = "COMMENTS_500",
+                Title = "Живое участие",
+                Threshold = 500,
+                Tier = 2,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000009")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000001f"),
+                Code = "COMMENTS_2000",
+                Title = "В гуще событий",
+                Threshold = 2000,
+                Tier = 3,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000009")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000020"),
+                Code = "COMMENTS_10000",
+                Title = "Всегда есть что сказать",
+                Threshold = 10000,
+                Tier = 4,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000009")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000021"),
+                Code = "CHAT_500",
+                Title = "Прохожий",
+                Threshold = 500,
+                Tier = 1,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000a")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000022"),
+                Code = "CHAT_5000",
+                Title = "Свой человек",
+                Threshold = 5000,
+                Tier = 2,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000a")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000023"),
+                Code = "CHAT_25000",
+                Title = "Чат-завсегдатай",
+                Threshold = 25000,
+                Tier = 3,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000a")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000024"),
+                Code = "CHAT_100000",
+                Title = "Вечный онлайн",
+                Threshold = 100000,
+                Tier = 4,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000a")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000031"),
+                Code = "LIKES_25",
+                Title = "В узких кругах",
+                Threshold = 25,
+                Tier = 1,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000b")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000032"),
+                Code = "LIKES_100",
+                Title = "Душа компании",
+                Threshold = 100,
+                Tier = 2,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000b")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000033"),
+                Code = "LIKES_500",
+                Title = "Народный любимец",
+                Threshold = 500,
+                Tier = 3,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000b")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000034"),
+                Code = "LIKES_2000",
+                Title = "Первый в сердцах",
+                Threshold = 2000,
+                Tier = 4,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000b")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000029"),
+                Code = "DROPS_1",
+                Title = "Перекати-поле",
+                Threshold = 1,
+                Tier = 1,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000c")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000002a"),
+                Code = "DROPS_3",
+                Title = "Беглец",
+                Threshold = 3,
+                Tier = 2,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000c")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000002b"),
+                Code = "DROPS_10",
+                Title = "Дезертир",
+                Threshold = 10,
+                Tier = 3,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000c")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000002c"),
+                Code = "DROPS_30",
+                Title = "Пропавший без вести",
+                Threshold = 30,
+                Tier = 4,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000c")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000025"),
+                Code = "BANS_1",
+                Title = "Яйцо с характером",
+                Threshold = 1,
+                Tier = 1,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000d")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000026"),
+                Code = "BANS_3",
+                Title = "Выпавший из гнезда",
+                Threshold = 3,
+                Tier = 2,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000d")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000027"),
+                Code = "BANS_10",
+                Title = "Утенок-террорист",
+                Threshold = 10,
+                Tier = 3,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000d")
+            },
+            new AchievementType
+            {
+                AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000028"),
+                Code = "BANS_30",
+                Title = "Селезень-Рецидивист",
+                Threshold = 30,
+                Tier = 4,
+                AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000d")
+            });
+
+        modelBuilder.Entity<AwardType>().HasData(
+            new AwardType
+            {
+                AwardTypeId = new Guid("00000000-0000-0000-0001-000000000001"),
+                Code = "contest_first",
+                Title = "Литконкурс",
+                Description = "Победитель конкурса",
+                IconName = "trophy-cup",
+                Tier = 1,
+                SortOrder = 1,
+                IsActive = true
+            },
+            new AwardType
+            {
+                AwardTypeId = new Guid("00000000-0000-0000-0001-000000000002"),
+                Code = "contest_second",
+                Title = "Литконкурс",
+                Description = "Серебряный призер конкурса",
+                IconName = "trophy-cup",
+                Tier = 2,
+                SortOrder = 2,
+                IsActive = true
+            },
+            new AwardType
+            {
+                AwardTypeId = new Guid("00000000-0000-0000-0001-000000000003"),
+                Code = "contest_third",
+                Title = "Литконкурс",
+                Description = "Бронзовый призер конкурса",
+                IconName = "trophy-cup",
+                Tier = 3,
+                SortOrder = 3,
+                IsActive = true
+            },
+            new AwardType
+            {
+                AwardTypeId = new Guid("00000000-0000-0000-0001-000000000004"),
+                Code = "popular_vote",
+                Title = "Народное признание, например",
+                Description = "Лучшая работа конкурса по голосованию участников",
+                IconName = "ribbon-medal",
+                Tier = 1,
+                SortOrder = 4,
+                IsActive = true
+            },
+            new AwardType
+            {
+                AwardTypeId = new Guid("00000000-0000-0000-0001-000000000005"),
+                Code = "best_critic",
+                Title = "Лучший критик",
+                Description = "Лучшие рецензии сезона по решению жюри",
+                IconName = "quill-ink",
+                Tier = 1,
+                SortOrder = 5,
+                IsActive = true
+            },
+            new AwardType
+            {
+                AwardTypeId = new Guid("00000000-0000-0000-0001-000000000006"),
+                Code = "guesser",
+                Title = "Угадайка",
+                Description = "Угадал больше всех авторов конкурсных работ",
+                IconName = "magnifying-glass",
+                Tier = 1,
+                SortOrder = 6,
+                IsActive = true
+            },
+            new AwardType
+            {
+                AwardTypeId = new Guid("00000000-0000-0000-0001-000000000007"),
+                Code = "honorary_goblin",
+                Title = "Почетный гоблин",
+                Description = "Бывший гоблин, отдавший сообществу годы службы",
+                IconName = "goblin",
+                Tier = 5,
+                SortOrder = 7,
+                IsActive = true
+            });
+
+        modelBuilder.Entity<ContestSeries>().HasData(
+            new ContestSeries
+            {
+                ContestSeriesId = new Guid("00000000-0000-0000-0004-000000000001"),
+                ContestType = ContestType.Literary,
+                Number = 23,
+                Year = 2024,
+                TopicUrl = "https://dm.am/forum/topic/contest-results-lit-23",
+                IsActive = true
+            },
+            new ContestSeries
+            {
+                ContestSeriesId = new Guid("00000000-0000-0000-0004-000000000002"),
+                ContestType = ContestType.Literary,
+                Number = 22,
+                Year = 2023,
+                TopicUrl = "https://dm.am/forum/topic/contest-results-lit-22",
+                IsActive = true
+            },
+            new ContestSeries
+            {
+                ContestSeriesId = new Guid("00000000-0000-0000-0004-000000000003"),
+                ContestType = ContestType.Literary,
+                Number = 21,
+                Year = 2023,
+                TopicUrl = "https://dm.am/forum/topic/contest-results-lit-21",
+                IsActive = true
+            },
+            new ContestSeries
+            {
+                ContestSeriesId = new Guid("00000000-0000-0000-0004-000000000004"),
+                ContestType = ContestType.Literary,
+                Number = 20,
+                Year = 2022,
+                TopicUrl = "https://dm.am/forum/topic/contest-results-lit-20",
+                IsActive = true
+            },
+            new ContestSeries
+            {
+                ContestSeriesId = new Guid("00000000-0000-0000-0004-000000000005"),
+                ContestType = ContestType.Art,
+                Number = 2,
+                Year = 2024,
+                TopicUrl = "https://dm.am/forum/topic/contest-results-art-2",
+                IsActive = true
+            },
+            new ContestSeries
+            {
+                ContestSeriesId = new Guid("00000000-0000-0000-0004-000000000006"),
+                ContestType = ContestType.Art,
+                Number = 1,
+                Year = 2023,
+                TopicUrl = "https://dm.am/forum/topic/contest-results-art-1",
+                IsActive = true
+            });
+
+        // The system author every automated action is attributed to. Cannot log in:
+        // no salt, no hash.
+        modelBuilder.Entity<User>().HasData(
+            new User
+            {
+                UserId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                Username = "Робот-Администратор",
+                Email = "system@dm.local",
+                CreatedUtc = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero),
+                Role = UserRole.System,
+                AccessPolicy = AccessPolicy.NotSpecified,
+                Salt = "",
+                PasswordHash = "",
+                PasswordHashVersion = 0,
+                RatingDisabled = true,
+                QualityRating = 0,
+                QuantityRating = 0,
+                IsRemoved = false,
+                Gender = Gender.Unknown,
+                ShowBirthday = false
+            });
+
+        modelBuilder.Entity<Chat>().HasData(
+            new Chat
+            {
+                ChatId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                Type = ChatType.Global,
+                Title = "Глобальный чат"
+            });
+
+        modelBuilder.Entity<Topic>().HasData(
+            new Topic
+            {
+                TopicId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                BoardId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                TopicNumber = 1,
+                AuthorId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                CreatedUtc = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero),
+                Title = "Отзывы о ДМ",
+                Text = "Ваши отзывы отсюда попадают (после минимального анализа на нарушения правил) прямиком на главную.",
+                IsAttached = true,
+                IsClosed = false,
+                CommentCount = 0,
+                IsRemoved = false
+            },
+            new Topic
+            {
+                TopicId = Guid.Parse("00000000-0000-0000-0000-000000000100"),
+                BoardId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                TopicNumber = 2,
+                AuthorId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                // One second later, so "the newest topic" is unambiguous
+                CreatedUtc = new DateTimeOffset(2020, 1, 1, 0, 0, 1, TimeSpan.Zero),
+                Title = "Обсуждение действий администрации",
+                Text = "Здесь можно обсудить решения модераторов и администрации. Конструктивная критика приветствуется.",
+                IsAttached = true,
+                IsClosed = false,
+                CommentCount = 0,
+                IsRemoved = false
+            });
 
         // Token has 3 user relationships: User (owner), Creator, DeletedBy
         modelBuilder.Entity<Token>()
