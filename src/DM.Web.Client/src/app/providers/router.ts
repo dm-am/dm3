@@ -817,18 +817,24 @@ const router = createRouter({
         page: () => import("@/pages/redirect/TopicRedirect.vue"),
       },
     },
-    // Dev-only mockup catalog (style variants) — removed once the owner
-    // picks the variants.
-    {
-      name: "dev-style-variants",
-      path: "/dev/style-variants",
-      meta: { title: "Мокапы: стиль" },
-      components: {
-        left: LeftSidebar,
-        right: RightSidebar,
-        page: () => import("@/pages/dev/StyleVariantsPage.vue"),
-      },
-    },
+    // Mockup catalogs under /dev are registered in development builds only. Vite
+    // substitutes import.meta.env.DEV with false when building, so rollup drops the
+    // branch together with the dynamic import and the chunk is never emitted. A
+    // comment promising future removal is not a mechanism; this is.
+    ...(import.meta.env.DEV
+      ? [
+          {
+            name: "dev-style-variants",
+            path: "/dev/style-variants",
+            meta: { title: "Мокапы: стиль" },
+            components: {
+              left: LeftSidebar,
+              right: RightSidebar,
+              page: () => import("@/pages/dev/StyleVariantsPage.vue"),
+            },
+          },
+        ]
+      : []),
     // Error page — dynamic route for /error/:code (400, 401, 403, symbolic
     // OAuth codes…). The code segment is optional so /error?code= also matches.
     {

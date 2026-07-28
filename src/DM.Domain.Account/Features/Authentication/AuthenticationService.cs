@@ -62,7 +62,7 @@ internal class AuthenticationService : IAuthenticationService
         // Pending registrations have no password to brute-force
         if (await _repository.IsPendingRegistration(email))
         {
-            _logger.LogInformation("Login failed: pending registration. Email={Email}", email);
+            _logger.LogInformation("Login failed: pending registration");
             return Identity.Fail(AuthenticationError.PendingRegistration);
         }
 
@@ -70,8 +70,8 @@ internal class AuthenticationService : IAuthenticationService
         if (await _loginAttemptTracker.IsAccountLocked(email))
         {
             var remainingSeconds = await _loginAttemptTracker.GetRemainingLockoutSeconds(email);
-            _logger.LogWarning("Login failed: account locked due to too many failed attempts. Email={Email}, RemainingSeconds={RemainingSeconds}",
-                email, remainingSeconds);
+            _logger.LogWarning("Login failed: account locked due to too many failed attempts. RemainingSeconds={RemainingSeconds}",
+                remainingSeconds);
 
             // Try to find user to log the event (may not exist)
             var (found, lockedUser) = await _repository.TryFindUserByEmail(email);
@@ -99,19 +99,19 @@ internal class AuthenticationService : IAuthenticationService
         {
             case false:
                 await _loginAttemptTracker.RecordFailedAttempt(email);
-                _logger.LogWarning("Login failed: user not found. Email={Email}", email);
+                _logger.LogWarning("Login failed: user not found");
                 return Identity.Fail(AuthenticationError.WrongLogin);
             case true when user!.IsRemoved:
-                _logger.LogWarning("Login failed: account removed. UserId={UserId}, Email={Email}", user.UserId, email);
+                _logger.LogWarning("Login failed: account removed. UserId={UserId}", user.UserId);
                 return Identity.Fail(AuthenticationError.Removed);
             case true when user.AccessPolicy.HasFlag(AccessPolicy.FullBan):
-                _logger.LogWarning("Login failed: account banned. UserId={UserId}, Email={Email}", user.UserId, email);
+                _logger.LogWarning("Login failed: account banned. UserId={UserId}", user.UserId);
                 return Identity.Fail(AuthenticationError.Banned);
             case true when !_securityManager.ComparePasswords(password, user.Salt, user.PasswordHash):
                 await _loginAttemptTracker.RecordFailedAttempt(email);
                 await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
                     context?.IpAddress, context?.UserAgent, "Wrong password");
-                _logger.LogWarning("Login failed: wrong password. UserId={UserId}, Email={Email}", user.UserId, email);
+                _logger.LogWarning("Login failed: wrong password. UserId={UserId}", user.UserId);
                 return Identity.Fail(AuthenticationError.WrongPassword);
 
             default:
@@ -129,8 +129,7 @@ internal class AuthenticationService : IAuthenticationService
                 await _auditService.LogAsync(user.UserId, SecurityEventType.LoginSuccess,
                     context?.IpAddress, context?.UserAgent);
 
-                _logger.LogInformation("User authenticated successfully. UserId={UserId}, Email={Email}",
-                    user.UserId, email);
+                _logger.LogInformation("User authenticated successfully. UserId={UserId}", user.UserId);
                 return await CreateAuthenticationResult(user, session, settings);
         }
     }
