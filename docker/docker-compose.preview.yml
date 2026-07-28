@@ -39,12 +39,20 @@ services:
 
   dmfront:
     container_name: 'dm-front'
-    image: 'dm-front:local'
+    # Same shape as dmapi: pull the published image by default, build only when
+    # FRONT_IMAGE names a local tag. Publishing an image that no deployment ever
+    # pulls is how the API image went unused for months.
+    image: ${FRONT_IMAGE:-ghcr.io/dm-am/dm-front:latest}
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     build:
-      context: ../frontend/DM.Web.Modern
+      context: ../src/DM.Web.Client
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ""
+        # Empty on purpose: the SPA calls relative URLs and nginx routes them to
+        # the API. The name must match the ARG the Dockerfile declares — the
+        # previous VITE_API_URL was declared nowhere and silently did nothing.
+        VITE_API_HOST: ""
     depends_on:
       dmapi:
         condition: service_healthy
