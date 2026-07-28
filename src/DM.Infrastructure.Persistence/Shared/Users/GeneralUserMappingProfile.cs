@@ -70,11 +70,15 @@ internal class GeneralUserMappingProfile : Profile
 
         CreateMap<EntityUserContact, CoreUserContact>();
 
+        // The ban window travels with the restriction: whether a ban is in force
+        // is a question about time, and the answer belongs to whoever holds a
+        // clock, not to the projection. Removed bans are already excluded by the
+        // global soft-delete filter.
         CreateMap<User, AuthenticatedUser>()
             .IncludeBase<User, GeneralUser>()
-            .ForMember(d => d.AccessRestrictionPolicies, s => s.MapFrom(
+            .ForMember(d => d.AccessRestrictions, s => s.MapFrom(
                 u => u.BansReceived
-                    .Select(b => b.AccessRestrictionPolicy)
+                    .Select(b => new AccessRestriction(b.AccessRestrictionPolicy, b.StartedUtc, b.EndedUtc))
                     .ToList()));
 
         CreateMap<DbUserSettings, UserSettings>()

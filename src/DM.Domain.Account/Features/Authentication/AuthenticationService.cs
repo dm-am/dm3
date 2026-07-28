@@ -93,6 +93,7 @@ internal class AuthenticationService : IAuthenticationService
 
         // 3. FIND USER BY EMAIL
         var (userFound, user) = await _repository.TryFindUserByEmail(email);
+        ApplyActiveBans(user);
 
         switch (userFound)
         {
@@ -162,6 +163,7 @@ internal class AuthenticationService : IAuthenticationService
         var user = await fetchUser;
         var session = await fetchSession;
         var settings = await fetchSettings;
+        ApplyActiveBans(user);
 
         // Validate user state (could have changed since token was issued)
         if (user == null)
@@ -309,4 +311,26 @@ internal class AuthenticationService : IAuthenticationService
         return Identity.Success(user, newSession, settings, token);
     }
 
+    /// <summary>
+    /// Fold the bans that are in force right now into the policy every
+    /// authorization check reads.
+    /// </summary>
+    /// <remarks>
+    /// Bans live in their own table and nothing writes the user's own
+    /// AccessPolicy column, so without this fold no ban restricts anything: not
+    /// the ordinary ban at the content surfaces, not even the full ban at login.
+    /// Doing it here, at the single point where an identity is built, is also
+    /// what makes a ban start and stop by itself — an expired ban stops being in
+    /// force on the next request with no job to run, and a ban issued mid-session
+    /// takes effect on the next request rather than at session expiry.
+    /// </remarks>
+    private void ApplyActiveBans(AuthenticatedUser? user)
+    {
+        if (user == null)
+        {
+            return;
+        }
+
+        user.AccessPolicy = user.EffectiveAccessPolicyAt(_dateTimeProvider.Now);
+    }
 }

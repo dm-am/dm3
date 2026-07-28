@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using DM.Domain.Core.Authorization;
@@ -32,15 +33,26 @@ public class AuthenticatedUser : GeneralUser, IAuthorizationSubject
     public bool IsRemoved { get; set; }
 
     /// <summary>
-    /// Ban access restriction policies
+    /// Restrictions from the user's bans, each with the window it is in force for
     /// </summary>
-    public IEnumerable<AccessPolicy> AccessRestrictionPolicies { get; set; } = [];
+    public IEnumerable<AccessRestriction> AccessRestrictions { get; set; } = [];
 
     /// <summary>
-    /// Calculated restriction policy based on ban and personal restrictions
+    /// The policy that actually applies at the given moment: the user's own
+    /// restriction plus every ban in force right now.
     /// </summary>
-    public AccessPolicy GeneralAccessPolicy =>
-        AccessRestrictionPolicies.Aggregate(AccessPolicy, (seed, restriction) => seed | restriction);
+    /// <remarks>
+    /// This must be folded into <see cref="GeneralUser.AccessPolicy" /> once, when
+    /// the identity is built, because that is the property every authorization
+    /// resolver reads and resolvers have no clock. Bans live in their own table
+    /// and nothing ever writes the user's own column, so reading the column
+    /// without this fold means no ban has any effect whatsoever.
+    /// </remarks>
+    /// <param name="moment">Current moment</param>
+    public AccessPolicy EffectiveAccessPolicyAt(DateTimeOffset moment) =>
+        AccessRestrictions
+            .Where(restriction => restriction.IsInForceAt(moment))
+            .Aggregate(AccessPolicy, (seed, restriction) => seed | restriction.Policy);
 
     /// <summary>
     /// Basic guest user (unauthenticated)
