@@ -12,22 +12,6 @@ namespace DM.Web.API.Tests.Features.Game;
 
 public class GameMappingProfileShould : UnitTestBase
 {
-    private readonly IMapper _mapper;
-
-    public GameMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UserMappingProfile>();
-            cfg.AddProfile<UserRefMappingProfile>();
-            cfg.AddProfile<BbTextMappingProfile>();
-            cfg.AddProfile<CharacterMappingProfile>();
-            cfg.AddProfile<AttributeSchemaMappingProfile>();
-            cfg.AddProfile<GameMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
-
     [Fact]
     public void HaveValidConfiguration()
     {

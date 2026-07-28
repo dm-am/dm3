@@ -16,7 +16,7 @@ using DM.Domain.Forum.Authorization;
 using DM.Domain.Forum.Features.Boards;
 using DM.Domain.Forum.Features.Comments;
 using DM.Domain.Forum.Features.Topics;
-using DM.Domain.Forum.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using FluentValidation;
@@ -60,7 +60,7 @@ public class TopicCommentServiceShould : UnitTestBase
 
         var userId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identity.User(userId, UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
 
         var dateTimeProvider = Mock<IDateTimeProvider>();
         dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);

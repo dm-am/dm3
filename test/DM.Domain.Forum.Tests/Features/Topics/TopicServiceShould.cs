@@ -15,7 +15,7 @@ using DM.Domain.Core.Users;
 using DM.Domain.Forum.Authorization;
 using DM.Domain.Forum.Features.Boards;
 using DM.Domain.Forum.Features.Topics;
-using DM.Domain.Forum.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using FluentValidation;
@@ -65,7 +65,7 @@ public class TopicServiceShould : UnitTestBase
 
         var userId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identity.User(userId, UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
 
         _repository = Mock<ITopicRepository>();
         _createTopicSetup = _repository.Setup(r => r.Create(

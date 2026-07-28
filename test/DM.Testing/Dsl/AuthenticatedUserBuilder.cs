@@ -1,10 +1,12 @@
 using System;
-using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 
-namespace DM.Domain.Account.Tests.Dsl;
+namespace DM.Testing.Dsl;
 
+/// <summary>
+/// Builds an authenticated user for a test.
+/// </summary>
 public class AuthenticatedUserBuilder(Guid userId)
 {
     private readonly AuthenticatedUser user = new() { UserId = userId };

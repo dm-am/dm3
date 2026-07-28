@@ -17,7 +17,7 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Blog;
 
-public class BlogRepositoryShould : UnitTestBase
+public class BlogRepositoryShould : UnitTestBase, IDisposable
 {
     private readonly DmDbContext _dbContext;
     private readonly BlogRepository _repository;
@@ -110,9 +110,5 @@ public class BlogRepositoryShould : UnitTestBase
         (await _dbContext.Rubrics.FindAsync(first))!.SortOrder.Should().Be(2);
     }
 
-    public override void Dispose()
-    {
-        _dbContext.Dispose();
-        base.Dispose();
-    }
+    public void Dispose() => _dbContext.Dispose();
 }

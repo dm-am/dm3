@@ -10,20 +10,6 @@ namespace DM.Web.API.Tests.Features.Game;
 
 public class CharacterMappingProfileShould : UnitTestBase
 {
-    private readonly IMapper _mapper;
-
-    public CharacterMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UserMappingProfile>();
-            cfg.AddProfile<UserRefMappingProfile>();
-            cfg.AddProfile<BbTextMappingProfile>();
-            cfg.AddProfile<CharacterMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
-
     [Fact]
     public void HaveValidConfiguration()
     {

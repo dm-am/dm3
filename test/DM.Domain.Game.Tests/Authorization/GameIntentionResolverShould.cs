@@ -3,6 +3,7 @@ using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Authorization;
+using DM.Testing.Dsl;
 using DM.Domain.Game.Tests.Dsl;
 using DM.Testing;
 using FluentAssertions;
@@ -56,7 +57,7 @@ public class GameIntentionResolverShould : UnitTestBase
     [Fact]
     public void AllowReadPublicGameForAnyone()
     {
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithStatus(ModuleStatus.Active)
             .WithPremoderationStatus(PremoderationStatus.Approved)
             .Please();
@@ -67,7 +68,7 @@ public class GameIntentionResolverShould : UnitTestBase
     [Fact]
     public void ForbidReadDraftGameForGuest()
     {
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithStatus(ModuleStatus.Draft)
             .Please();
 
@@ -78,7 +79,7 @@ public class GameIntentionResolverShould : UnitTestBase
     public void AllowReadDraftGameForMaster()
     {
         var masterId = Guid.NewGuid();
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithMaster(masterId)
             .WithStatus(ModuleStatus.Draft)
             .Please();
@@ -91,7 +92,7 @@ public class GameIntentionResolverShould : UnitTestBase
     public void AllowEditGameForMaster()
     {
         var masterId = Guid.NewGuid();
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithMaster(masterId)
             .Please();
         var user = Create.User(masterId).WithRole(UserRole.RegularUser).Please();
@@ -103,7 +104,7 @@ public class GameIntentionResolverShould : UnitTestBase
     public void AllowEditGameForAssistant()
     {
         var assistantId = Guid.NewGuid();
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithAssistants(assistantId)
             .Please();
         var user = Create.User(assistantId).WithRole(UserRole.RegularUser).Please();
@@ -115,7 +116,7 @@ public class GameIntentionResolverShould : UnitTestBase
     public void ForbidEditGameForPlayer()
     {
         var playerId = Guid.NewGuid();
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithPlayers(playerId)
             .Please();
         var user = Create.User(playerId).WithRole(UserRole.RegularUser).Please();
@@ -127,7 +128,7 @@ public class GameIntentionResolverShould : UnitTestBase
     public void AllowDeleteGameForMaster()
     {
         var masterId = Guid.NewGuid();
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithMaster(masterId)
             .Please();
         var user = Create.User(masterId).WithRole(UserRole.RegularUser).Please();
@@ -140,7 +141,7 @@ public class GameIntentionResolverShould : UnitTestBase
     {
         var masterId = Guid.NewGuid();
         var assistantId = Guid.NewGuid();
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithMaster(masterId)
             .WithAssistants(assistantId)
             .Please();
@@ -152,7 +153,7 @@ public class GameIntentionResolverShould : UnitTestBase
     [Fact]
     public void AllowReadCommentsWhenAccessModeIsPublic()
     {
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithCommentsAccessMode(CommentsAccessMode.Public)
             .Please();
 
@@ -162,7 +163,7 @@ public class GameIntentionResolverShould : UnitTestBase
     [Fact]
     public void ForbidReadCommentsWhenAccessModeIsPrivateAndUserHasNoRole()
     {
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithCommentsAccessMode(CommentsAccessMode.Private)
             .Please();
         var user = Create.User().WithRole(UserRole.RegularUser).Please();
@@ -174,7 +175,7 @@ public class GameIntentionResolverShould : UnitTestBase
     public void AllowReadPrivateCommentsForPlayer()
     {
         var playerId = Guid.NewGuid();
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithCommentsAccessMode(CommentsAccessMode.Private)
             .WithPlayers(playerId)
             .Please();
@@ -186,7 +187,7 @@ public class GameIntentionResolverShould : UnitTestBase
     [Fact]
     public void ForbidCommentingSomebodyElsesGameUnderTheOrdinaryBan()
     {
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithCommentsAccessMode(CommentsAccessMode.Public)
             .Please();
         var user = Create.User()
@@ -204,7 +205,7 @@ public class GameIntentionResolverShould : UnitTestBase
     public void AllowCommentingOwnGameUnderTheOrdinaryBan(bool asMaster, bool asAssistant, bool asPlayer)
     {
         var userId = Guid.NewGuid();
-        var builder = Create.Game().WithCommentsAccessMode(CommentsAccessMode.Public);
+        var builder = new GameBuilder().WithCommentsAccessMode(CommentsAccessMode.Public);
         if (asMaster) builder = builder.WithMaster(userId);
         if (asAssistant) builder = builder.WithAssistants(userId);
         if (asPlayer) builder = builder.WithPlayers(userId);
@@ -223,7 +224,7 @@ public class GameIntentionResolverShould : UnitTestBase
     public void NotTreatASubscriptionAsOwningTheGameUnderTheOrdinaryBan()
     {
         var userId = Guid.NewGuid();
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithCommentsAccessMode(CommentsAccessMode.Public)
             .WithSubscribers(userId)
             .Please();
@@ -244,7 +245,7 @@ public class GameIntentionResolverShould : UnitTestBase
         // An application in review puts nobody into Players — that list is built
         // from authors of Active non-NPC characters only. Applying may also leave
         // a subscription behind, which must not stand in for acceptance either.
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithCommentsAccessMode(CommentsAccessMode.Public)
             .WithSubscribers(applicantId)
             .Please();
@@ -260,7 +261,7 @@ public class GameIntentionResolverShould : UnitTestBase
     public void LetTheApplicantCommentOnceTheCharacterIsAccepted()
     {
         var playerId = Guid.NewGuid();
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithCommentsAccessMode(CommentsAccessMode.Public)
             .WithSubscribers(playerId)
             .WithPlayers(playerId)
@@ -278,7 +279,7 @@ public class GameIntentionResolverShould : UnitTestBase
     public void LetTheCuratorCommentInTheGameTheyMentorUnderTheOrdinaryBan()
     {
         var mentorId = Guid.NewGuid();
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithCommentsAccessMode(CommentsAccessMode.Public)
             .WithMentor(mentorId)
             .Please();
@@ -297,7 +298,7 @@ public class GameIntentionResolverShould : UnitTestBase
     public void ForbidCommentingOwnGameUnderAFullBan()
     {
         var masterId = Guid.NewGuid();
-        var game = Create.Game()
+        var game = new GameBuilder()
             .WithMaster(masterId)
             .WithCommentsAccessMode(CommentsAccessMode.Public)
             .Please();

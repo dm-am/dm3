@@ -1,7 +1,7 @@
 using DM.Domain.Account.Authorization;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
-using DM.Domain.Account.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Domain.Core.Enums;
 using DM.Testing;
 using FluentAssertions;

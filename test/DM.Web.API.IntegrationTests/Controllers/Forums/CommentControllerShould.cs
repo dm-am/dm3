@@ -147,13 +147,13 @@ public class CommentControllerShould : IntegrationTestBase
     /// Get comment with invalid GUID should return error
     /// </summary>
     [Fact]
-    public async Task GetForumComment_WithInvalidGuid_ReturnsError()
+    public async Task GetForumComment_WithInvalidGuid_ReturnsBadRequest()
     {
         // Act
         var response = await Client.GetAsync("/v1/forum/comments/not-a-guid");
 
-        // Assert - invalid GUID in route returns 404 Not Found or 400
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.NotFound, HttpStatusCode.BadRequest);
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     #endregion

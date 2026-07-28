@@ -11,21 +11,6 @@ namespace DM.Web.API.Tests.Features.Game;
 
 public class RoomMappingProfileShould : UnitTestBase
 {
-    private readonly IMapper _mapper;
-
-    public RoomMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UserMappingProfile>();
-            cfg.AddProfile<UserRefMappingProfile>();
-            cfg.AddProfile<BbTextMappingProfile>();
-            cfg.AddProfile<CharacterMappingProfile>();
-            cfg.AddProfile<RoomMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
-
     [Fact]
     public void HaveValidConfiguration()
     {

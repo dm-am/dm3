@@ -8,7 +8,7 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.Blacklists;
 using DM.Domain.Personal.Features.Profiles;
-using DM.Domain.Personal.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using Moq;
@@ -37,7 +37,7 @@ public class UserBlacklistServiceShould : UnitTestBase
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
 
-        var identity = Identity.Authenticated(_currentUserId, "CurrentUser", UserRole.RegularUser);
+        var identity = Identities.User(_currentUserId, "CurrentUser", UserRole.RegularUser);
         _identityProvider.Setup(p => p.Current).Returns(identity);
         _dateTimeProvider.Setup(d => d.Now).Returns(_now);
         _guidFactory.Setup(g => g.Create()).Returns(_entryId);

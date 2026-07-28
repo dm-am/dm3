@@ -9,19 +9,6 @@ namespace DM.Web.API.Tests.Features.Messaging;
 
 public class MessagingMappingProfileShould : UnitTestBase
 {
-    private readonly IMapper _mapper;
-
-    public MessagingMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UserMappingProfile>();
-            cfg.AddProfile<BbTextMappingProfile>();
-            cfg.AddProfile<MessagingMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
-
     [Fact]
     public void HaveValidConfiguration()
     {

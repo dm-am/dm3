@@ -7,17 +7,6 @@ namespace DM.Web.API.Tests.Features.Account;
 
 public class RegistrationMappingProfileShould : UnitTestBase
 {
-    private readonly IMapper _mapper;
-
-    public RegistrationMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<RegistrationMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
-
     [Fact]
     public void HaveValidConfiguration()
     {
