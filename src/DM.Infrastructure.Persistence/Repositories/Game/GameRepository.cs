@@ -15,6 +15,7 @@ using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.Games;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
+using DM.Infrastructure.Persistence.Shared.Users;
 using GameDto = DM.Domain.Game.Features.Games.Game;
 using Microsoft.EntityFrameworkCore;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
@@ -182,20 +183,38 @@ internal class GameRepository : IGameRepository
         }
 
         // Players — unique authors of active non-NPC characters.
-        // AsNoTracking: these are read-only on this path, and one User entity per
-        // active character on the page is change-tracker weight for nothing.
+        // Projected, not materialized: selecting the Author navigation pulled whole
+        // User rows — Salt and PasswordHash included — into memory for every active
+        // character on the page, and left Picture empty besides, because AvatarUpload
+        // is not loaded and lazy loading is off.
         var playerData = await _dbContext.Characters
             .AsNoTracking()
-            .Where(c => gameIds.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc && c.AuthorId.HasValue)
-            .Select(c => new { c.GameId, c.Author })
-            .Where(c => c.Author != null)
+            .Where(c => gameIds.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc &&
+                        c.AuthorId.HasValue && c.Author != null)
+            .Select(c => new
+            {
+                c.GameId,
+                Author = new GeneralUser
+                {
+                    UserId = c.Author!.UserId,
+                    Username = c.Author.Username,
+                    Role = c.Author.Role,
+                    Status = c.Author.Status,
+                    LastActivityUtc = c.Author.LastActivityUtc,
+                    RegisteredUtc = c.Author.CreatedUtc,
+                    // Carried on purpose: IsNewbie derives from it, and dropping it
+                    // would silently mark every player a newbie.
+                    QuantityRating = c.Author.QuantityRating,
+                    Picture = AvatarProjections.From(c.Author.AvatarUpload),
+                },
+            })
             .ToListAsync(ct);
 
         var playersMap = playerData
             .GroupBy(c => c.GameId)
             .ToDictionary(
                 g => g.Key,
-                g => g.Select(c => c.Author!).DistinctBy(u => u.UserId).ToList());
+                g => g.Select(c => c.Author).DistinctBy(u => u.UserId).ToList());
 
         // Subscriber ids for participation detection.
         var subscriptionMap = await _dbContext.Subscriptions
@@ -206,7 +225,7 @@ internal class GameRepository : IGameRepository
         foreach (var game in games)
         {
             game.Players = playersMap.TryGetValue(game.Id, out var players)
-                ? players.Select(u => _mapper.Map<GeneralUser>(u)).ToList()
+                ? players.ToList()
                 : [];
             game.SubscriberIds = subscriptionMap.GetValueOrDefault(game.Id, []);
         }

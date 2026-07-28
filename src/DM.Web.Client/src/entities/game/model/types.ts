@@ -28,15 +28,30 @@ export enum DraftVisibility {
   Public = "Public",
 }
 
-export enum GameRole {
-  None = "None",
-  Reader = "Reader",
-  Applicant = "Applicant",
-  Player = "Player",
-  Mentor = "Mentor",
-  Assistant = "Assistant",
-  Master = "Master",
-}
+/**
+ * How the current user takes part in a game.
+ *
+ * Mirrors the API's GameParticipation flags, which is what the wire actually
+ * carries. The client used to mirror the domain's site-level GameRole instead —
+ * only Player and Reader overlap between the two, so a master's own games
+ * matched no bucket at all and the sidebar block came out empty.
+ */
+export const GameParticipation = {
+  /** Game master. */
+  Owner: "Owner",
+  /** Master or assistant. */
+  Authority: "Authority",
+  /** Invited as assistant, not yet accepted. */
+  PendingAssistant: "PendingAssistant",
+  Player: "Player",
+  /** Subscribed reader. */
+  Reader: "Reader",
+  /** Game mentor. */
+  Moderator: "Moderator",
+} as const;
+
+export type GameParticipation =
+  (typeof GameParticipation)[keyof typeof GameParticipation];
 
 // === Tags ===
 
@@ -101,7 +116,7 @@ export type GameRef = {
   master: Served<UserRef>;
   assistants: Served<UserRef[]>;
   /** User participation flags */
-  participation: Served<GameRole[]>;
+  participation: Served<GameParticipation[]>;
   subscribersCount: number;
   recruitment: Served<GameRecruitment>;
   unreadPostsCount: Served<number>;

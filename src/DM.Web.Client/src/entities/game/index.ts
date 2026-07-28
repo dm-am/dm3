@@ -55,7 +55,7 @@ export type {
 // Enums (exported as values, can also be used as types)
 export {
   GameStatus,
-  GameRole,
+  GameParticipation,
   ClosedReason,
   CommentariesAccessMode,
   AttributeSchemaType,
