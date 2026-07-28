@@ -17,7 +17,9 @@ namespace DM.Web.API.Shared.Authentication;
 /// Security features:
 /// - HttpOnly: Cookie cannot be accessed by JavaScript (XSS protection)
 /// - Secure: Cookie only sent over HTTPS (in production)
-/// - SameSite=Strict: Cookie not sent with cross-site requests (CSRF protection)
+/// - SameSite=Lax: Cookie withheld from cross-site subrequests, but still sent
+///   on top-level navigation, which activation and password-reset links from
+///   email depend on. CSRF is covered by the origin check middleware.
 /// - Path=/: Cookie available for all API endpoints
 /// </remarks>
 internal class ApiCredentialsStorage : ICredentialsStorage
@@ -56,7 +58,7 @@ internal class ApiCredentialsStorage : ICredentialsStorage
         {
             HttpOnly = true,
             Secure = !httpContext.Request.Host.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase),
-            SameSite = SameSiteMode.Lax, // Lax allows cookies on cross-site navigation (required for mirror transfer)
+            SameSite = SameSiteMode.Lax, // Sent on top-level navigation so email links keep the session
             Path = "/",
             IsEssential = true
         };
@@ -79,7 +81,7 @@ internal class ApiCredentialsStorage : ICredentialsStorage
         {
             HttpOnly = true,
             Secure = !httpContext.Request.Host.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase),
-            SameSite = SameSiteMode.Lax, // Lax allows cookies on cross-site navigation (required for mirror transfer)
+            SameSite = SameSiteMode.Lax, // Sent on top-level navigation so email links keep the session
             Path = "/",
             Expires = DateTimeOffset.UnixEpoch,
             IsEssential = true

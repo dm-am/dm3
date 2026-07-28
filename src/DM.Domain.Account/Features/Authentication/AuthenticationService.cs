@@ -29,9 +29,6 @@ internal class AuthenticationService : IAuthenticationService
 
     private const string UserIdKey = "userId";
     private const string SessionIdKey = "sessionId";
-    private const string TimestampKey = "ts";
-    private const string TransferKey = "transfer";
-    private const int TransferTokenValidityMinutes = 5;
 
     /// <inheritdoc />
     public AuthenticationService(
@@ -312,104 +309,4 @@ internal class AuthenticationService : IAuthenticationService
         return Identity.Success(user, newSession, settings, token);
     }
 
-    /// <inheritdoc />
-    public async Task<string?> CreateTransferToken()
-    {
-        var identity = _identityProvider.Current;
-        if (!identity.User.IsAuthenticated || identity.Session == null)
-        {
-            return null;
-        }
-
-        var transferData = new Dictionary<string, string>
-        {
-            [TransferKey] = "1",
-            [UserIdKey] = identity.User.UserId.ToString(),
-            [SessionIdKey] = identity.Session.Id.ToString(),
-            [TimestampKey] = _dateTimeProvider.Now.ToUnixTimeSeconds().ToString()
-        };
-
-        return await _cryptoService.Encrypt(JsonSerializer.Serialize(transferData));
-    }
-
-    /// <inheritdoc />
-    public async Task<IIdentity> AuthenticateWithTransferToken(string transferToken)
-    {
-        try
-        {
-            var decrypted = await _cryptoService.Decrypt(transferToken);
-            var transferData = JsonSerializer.Deserialize<Dictionary<string, string>>(decrypted);
-
-            if (transferData == null ||
-                !transferData.ContainsKey(TransferKey) ||
-                !transferData.TryGetValue(UserIdKey, out var userIdStr) ||
-                !transferData.TryGetValue(SessionIdKey, out var sessionIdStr) ||
-                !transferData.TryGetValue(TimestampKey, out var timestampStr))
-            {
-                _logger.LogWarning("Transfer token authentication failed: invalid format");
-                return Identity.Fail(AuthenticationError.ForgedToken);
-            }
-
-            if (!Guid.TryParse(userIdStr, out var userId) ||
-                !Guid.TryParse(sessionIdStr, out var sessionId) ||
-                !long.TryParse(timestampStr, out var timestamp))
-            {
-                _logger.LogWarning("Transfer token authentication failed: invalid data");
-                return Identity.Fail(AuthenticationError.ForgedToken);
-            }
-
-            // Check if token has expired
-            var tokenTime = DateTimeOffset.FromUnixTimeSeconds(timestamp);
-            if (_dateTimeProvider.Now - tokenTime > TimeSpan.FromMinutes(TransferTokenValidityMinutes))
-            {
-                _logger.LogWarning("Transfer token authentication failed: token expired. UserId={UserId}", userId);
-                return Identity.Fail(AuthenticationError.SessionExpired);
-            }
-
-            // Verify user and session exist
-            var user = await _repository.FindUser(userId);
-            var session = await _repository.FindUserSession(sessionId);
-            var settings = await _repository.FindUserSettings(userId);
-
-            if (user == null)
-            {
-                _logger.LogWarning("Transfer token authentication failed: user not found. UserId={UserId}", userId);
-                return Identity.Fail(AuthenticationError.SessionExpired);
-            }
-
-            if (user.IsRemoved)
-            {
-                _logger.LogWarning("Transfer token authentication failed: user removed. UserId={UserId}", userId);
-                return Identity.Fail(AuthenticationError.Removed);
-            }
-
-            if (user.AccessPolicy.HasFlag(AccessPolicy.FullBan))
-            {
-                _logger.LogWarning("Transfer token authentication failed: user banned. UserId={UserId}", userId);
-                return Identity.Fail(AuthenticationError.Banned);
-            }
-
-            if (session == null || session.ExpirationUtc < _dateTimeProvider.Now)
-            {
-                _logger.LogWarning("Transfer token authentication failed: session expired. UserId={UserId}", userId);
-                return Identity.Fail(AuthenticationError.SessionExpired);
-            }
-
-            // Create a new auth token for this mirror
-            var authData = new Dictionary<string, Guid>
-            {
-                [UserIdKey] = userId,
-                [SessionIdKey] = sessionId
-            };
-            var newAuthToken = await _cryptoService.Encrypt(JsonSerializer.Serialize(authData));
-
-            _logger.LogInformation("User authenticated via mirror transfer. UserId={UserId}", userId);
-            return Identity.Success(user, session, settings, newAuthToken);
-        }
-        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or FormatException or CryptographicException)
-        {
-            _logger.LogWarning(ex, "Transfer token authentication failed: invalid token");
-            return Identity.Fail(AuthenticationError.ForgedToken);
-        }
-    }
 }

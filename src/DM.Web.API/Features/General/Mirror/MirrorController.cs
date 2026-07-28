@@ -1,12 +1,6 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
-using System.Threading.Tasks;
-using DM.Domain.Account.Features.Authentication;
 using DM.Infrastructure.Core.Configuration;
-using DM.Domain.Core.Exceptions;
-using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -17,8 +11,9 @@ namespace DM.Web.API.Features.General.Mirror;
 /// Controller for site mirrors management
 /// </summary>
 /// <remarks>
-/// Manages site mirror configuration. Session transfer between mirrors
-/// is supported via transfer tokens (valid for 5 minutes).
+/// Exposes the configured mirrors so the client can offer a region switch.
+/// Carrying a session across mirrors is not supported: a mirror authenticates
+/// its visitors itself.
 /// </remarks>
 [ApiController]
 [Route("v1/mirrors")]
@@ -27,17 +22,13 @@ namespace DM.Web.API.Features.General.Mirror;
 public class MirrorController : ControllerBase
 {
     private readonly MirrorConfiguration _config;
-    private readonly IAuthenticationService _authService;
 
     /// <summary>
     /// Creates a new instance of MirrorController
     /// </summary>
-    public MirrorController(
-        IOptions<MirrorConfiguration> config,
-        IAuthenticationService authService)
+    public MirrorController(IOptions<MirrorConfiguration> config)
     {
         _config = config.Value;
-        _authService = authService;
     }
 
     /// <summary>
@@ -66,77 +57,6 @@ public class MirrorController : ControllerBase
         {
             CurrentMirrorId = _config.CurrentMirrorId,
             Mirrors = mirrors
-        });
-    }
-
-    /// <summary>
-    /// Get transfer URL for switching to another mirror
-    /// </summary>
-    /// <remarks>
-    /// Returns a URL to the target mirror with a session transfer token.
-    /// The token is valid for 5 minutes and allows seamless authentication on the target mirror.
-    /// </remarks>
-    /// <param name="targetMirror">Target mirror ID</param>
-    /// <param name="returnUrl">Optional URL to redirect to after transfer</param>
-    /// <response code="200">Transfer URL with optional session token</response>
-    /// <response code="400">Invalid or unavailable mirror</response>
-    [HttpGet("transfer", Name = nameof(GetTransferToken))]
-    [ProducesResponseType(typeof(TransferResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<TransferResponse>> GetTransferToken(
-        [FromQuery] string targetMirror,
-        [FromQuery] string? returnUrl = null)
-    {
-        if (!_config.Mirrors.TryGetValue(targetMirror, out var target) ||
-            string.IsNullOrEmpty(target.WebUrl))
-        {
-            throw new HttpException(HttpStatusCode.BadRequest, "Invalid or unavailable mirror");
-        }
-
-        var transferToken = await _authService.CreateTransferToken();
-
-        var transferUrl = target.WebUrl;
-        if (!string.IsNullOrEmpty(returnUrl))
-        {
-            transferUrl += returnUrl;
-        }
-
-        // If user is authenticated, append transfer token
-        if (!string.IsNullOrEmpty(transferToken))
-        {
-            var separator = transferUrl.Contains('?') ? "&" : "?";
-            transferUrl += $"{separator}transfer={Uri.EscapeDataString(transferToken)}";
-        }
-
-        return Ok(new TransferResponse { TransferUrl = transferUrl });
-    }
-
-    /// <summary>
-    /// Accept transfer token from another mirror
-    /// </summary>
-    /// <remarks>
-    /// Validates the transfer token and returns authentication credentials for this mirror.
-    /// The frontend should call this when it detects a transfer token in the URL.
-    /// </remarks>
-    /// <param name="transferToken">Transfer token from source mirror</param>
-    /// <response code="200">Authentication result with token</response>
-    /// <response code="400">Invalid or expired transfer token</response>
-    [HttpPost("transfer/accept", Name = nameof(AcceptTransfer))]
-    [ProducesResponseType(typeof(TransferAcceptResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<TransferAcceptResponse>> AcceptTransfer([FromQuery] string transferToken)
-    {
-        var identity = await _authService.AuthenticateWithTransferToken(transferToken);
-
-        if (!identity.User.IsAuthenticated)
-        {
-            throw new HttpException(HttpStatusCode.BadRequest, "Invalid or expired transfer token");
-        }
-
-        return Ok(new TransferAcceptResponse
-        {
-            AuthToken = identity.AuthenticationToken!,
-            Username = identity.User.Username
         });
     }
 }
@@ -181,31 +101,4 @@ public record MirrorDto
     /// Whether this is the current mirror
     /// </summary>
     public bool IsCurrent { get; init; }
-}
-
-/// <summary>
-/// Transfer token response
-/// </summary>
-public record TransferResponse
-{
-    /// <summary>
-    /// URL to redirect to for switching mirror (includes transfer token if authenticated)
-    /// </summary>
-    public string? TransferUrl { get; init; }
-}
-
-/// <summary>
-/// Transfer acceptance response
-/// </summary>
-public record TransferAcceptResponse
-{
-    /// <summary>
-    /// Authentication token to use on this mirror
-    /// </summary>
-    public required string AuthToken { get; init; }
-
-    /// <summary>
-    /// Username of the authenticated user
-    /// </summary>
-    public required string Username { get; init; }
 }

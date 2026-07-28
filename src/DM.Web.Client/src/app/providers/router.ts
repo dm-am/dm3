@@ -694,17 +694,6 @@ const router = createRouter({
         page: () => import("@/pages/account/AuthCallbackPage.vue"),
       },
     },
-    // Session transfer from another mirror
-    {
-      name: "auth-transfer",
-      path: "/auth/transfer",
-      meta: { title: "Вход" },
-      components: {
-        left: LeftSidebar,
-        right: RightSidebar,
-        page: () => import("@/pages/account/TransferPage.vue"),
-      },
-    },
     {
       name: "account",
       path: "/account",
