@@ -127,15 +127,7 @@ NIST SP 800-63B-4 (2024): composition rules не требуются при си�
 
 ## Security Headers
 
-| Header | Значение |
-|--------|----------|
-| X-Frame-Options | DENY |
-| X-Content-Type-Options | nosniff |
-| X-XSS-Protection | 1; mode=block |
-| Referrer-Policy | strict-origin-when-cross-origin |
-| Permissions-Policy | Минимальные разрешения |
-| Content-Security-Policy | default-src 'self' |
-| Strict-Transport-Security | max-age=31536000 (production) |
+Требования — в [SECURITY.md](../conventions/SECURITY.md#security-headers-требования).
 
 ---
 

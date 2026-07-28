@@ -216,16 +216,18 @@ GET /v1/posts?sort=rating:desc&take=1        # Best post
 |----------|----------|
 | Endpoint | `/whatsup` |
 | Протокол | WebSocket |
-| Аутентификация | Query parameter `access_token` |
+| Аутентификация | HttpOnly cookie сессии (та же, что у обычных запросов) |
 
 **Особенности:**
 - Receive-only (клиент не вызывает методы)
 - Connection tracking — in-memory
 - Адресация по connection ID (без групп)
+- Токен в query-строке не принимается: URL попадает в логи прокси, а это
+  обесценивает HttpOnly-куку, ради которой существует BFF
 
 ```javascript
 const connection = new signalR.HubConnectionBuilder()
-  .withUrl("/whatsup?access_token=" + token)
+  .withUrl("/whatsup", { withCredentials: true })
   .build();
 
 connection.on("Send", (notification) => {

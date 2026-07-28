@@ -108,7 +108,12 @@
 | Content-Security-Policy | default-src 'self' |
 | Strict-Transport-Security | max-age=31536000 (production) |
 
-**Файл:** `src/DM.Web.API/Middleware/SecurityHeadersMiddleware.cs`
+Требование распространяется на оба origin — и на ответы API, и на HTML-документ.
+Заголовок, выставленный только на JSON-ответах, не защищает ни одной страницы:
+`frame-ancestors` и `script-src` имеют смысл там, где живет документ. Отсюда же
+правило не дублировать заголовок на обоих слоях: `add_header` не заменяет
+пришедший от upstream, а добавляет второй, и браузер игнорирует всю директиву,
+если значения расходятся.
 
 ---
 

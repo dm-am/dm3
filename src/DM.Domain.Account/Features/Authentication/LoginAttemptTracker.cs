@@ -29,16 +29,16 @@ internal class LoginAttemptTracker : ILoginAttemptTracker
     }
 
     /// <inheritdoc />
-    public async Task<int> GetDelayForUser(string email)
+    public async Task<int> GetDelayForUser(LoginAttemptOrigin origin)
     {
-        var attempts = await _repository.GetFailedAttemptCount(email);
+        var attempts = await _repository.GetFailedAttemptCount(origin);
         return CalculateDelay(attempts);
     }
 
     /// <inheritdoc />
-    public async Task<bool> IsAccountLocked(string email)
+    public async Task<bool> IsAccountLocked(LoginAttemptOrigin origin)
     {
-        var lockoutStart = await _repository.GetLockoutStart(email);
+        var lockoutStart = await _repository.GetLockoutStart(origin);
         if (lockoutStart == null)
         {
             return false;
@@ -50,16 +50,16 @@ internal class LoginAttemptTracker : ILoginAttemptTracker
         // Clear expired lockout
         if (!isLocked)
         {
-            await _repository.ResetAttempts(email);
+            await _repository.ResetAttempts(origin.Email);
         }
 
         return isLocked;
     }
 
     /// <inheritdoc />
-    public async Task<int> GetRemainingLockoutSeconds(string email)
+    public async Task<int> GetRemainingLockoutSeconds(LoginAttemptOrigin origin)
     {
-        var lockoutStart = await _repository.GetLockoutStart(email);
+        var lockoutStart = await _repository.GetLockoutStart(origin);
         if (lockoutStart == null)
         {
             return 0;
@@ -72,14 +72,14 @@ internal class LoginAttemptTracker : ILoginAttemptTracker
     }
 
     /// <inheritdoc />
-    public async Task RecordFailedAttempt(string email)
+    public async Task RecordFailedAttempt(LoginAttemptOrigin origin)
     {
-        var newAttempts = await _repository.RecordFailedAttempt(email);
+        var newAttempts = await _repository.RecordFailedAttempt(origin);
 
         // Check if we should lock the account
         if (newAttempts >= _config.AccountLockoutThreshold)
         {
-            await _repository.SetLockout(email, _dateTimeProvider.Now.UtcDateTime);
+            await _repository.SetLockout(origin, _dateTimeProvider.Now.UtcDateTime);
         }
     }
 
