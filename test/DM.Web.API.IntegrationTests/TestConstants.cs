@@ -20,7 +20,10 @@ public static class TestConstants
     public const string InactiveUser2Username = "inactiveuser2";
 
     // Boards
-    public static readonly Guid TestBoardId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    // Deliberately outside the range InitialCreate seeds: this id used to be
+    // 0...001, which is the shipped "Общий" board, so the fixture was silently
+    // testing against a board that only looked like its own.
+    public static readonly Guid TestBoardId = Guid.Parse("00000000-0000-0000-0000-0000000000b0");
     public const string TestBoardTitle = "Test Board";
 
     // Topics

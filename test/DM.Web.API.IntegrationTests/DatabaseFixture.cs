@@ -68,15 +68,15 @@ public class DatabaseFixture : IAsyncLifetime
         RabbitMqConnectionString = _rabbitMqContainer.GetConnectionString();
 
         await using var context = CreateDbContext();
-        // Schema built from the model, not by running the migration. Running the
-        // migration here is the right thing and it does not work yet: InitialCreate
-        // inserts seed rows — boards, topics, tags, chats, achievements, awards and
-        // a system user — that the model does not declare through HasData, so the
-        // two produce different databases and this fixture's seed collides with the
-        // migration's. Closing that gap means reconciling InitialCreate with the
-        // model, not changing this line.
-        await context.Database.EnsureCreatedAsync();
-        await context.Database.ExecuteSqlRawAsync("CREATE EXTENSION IF NOT EXISTS pg_trgm;");
+        // The migration builds the schema, not the model. This is the database the
+        // site actually starts from: InitialCreate seeds boards, tag groups, tags,
+        // topics, achievement and award types, the contest series and the system
+        // user, and nothing else ever exercises the application against that
+        // starting state. Building from the model instead would silently drop all
+        // of it, and would also let the migration rot while the tests stayed green.
+        // The migration creates the pg_trgm extension itself, before the indexes
+        // that need it, so no preparation is required here.
+        await context.Database.MigrateAsync();
         await SeedAllAsync(context);
         IsSeeded = true;
     }
@@ -107,7 +107,6 @@ public class DatabaseFixture : IAsyncLifetime
         SeedBoards(db);
         SeedTopics(db);
         SeedGames(db);
-        SeedTags(db);
         SeedBlogs(db);
         SeedRooms(db);
         SeedCharacters(db);
@@ -190,7 +189,10 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedTopics(DmDbContext db)
     {
-        if (db.Set<Topic>().Any()) return;
+        // Keyed on this fixture's own row, not on "any topic exists": the
+        // migration ships topics of its own, and a bare Any() would silently skip
+        // the whole seeder and take every forum test down with it.
+        if (db.Set<Topic>().Any(t => t.TopicId == TestConstants.TestTopicId)) return;
 
         var topics = new (Guid Id, Guid AuthorId, string Title, string Text, int HoursAgo, int TopicNumber)[]
         {
@@ -261,63 +263,6 @@ public class DatabaseFixture : IAsyncLifetime
             RecruitmentStartedUtc = g.IsOpen ? DateTimeOffset.UtcNow.AddDays(-Math.Min(5, g.CreatedDaysAgo)) : null,
             CommentsAccessMode = g.Comments,
             IsRemoved = false
-        }));
-    }
-
-    private static void SeedTags(DmDbContext db)
-    {
-        if (db.Set<Tag>().Any()) return;
-
-        static Guid GroupId(int n) => Guid.Parse($"00000001-0000-0000-0000-00000000000{n}");
-        static Guid TagId(string hex) => Guid.Parse($"00000000-0000-0000-0000-0000000000{hex}");
-
-        // Tag Groups: (Id, Title, Order)
-        var groups = new (Guid Id, string Title, int Order)[]
-        {
-            (GroupId(1), "Система", 1),
-            (GroupId(2), "Жанр", 2),
-            (GroupId(3), "Формат игры", 3),
-            (GroupId(4), "Формат постов", 4),
-            (GroupId(5), "Темп", 5),
-            (GroupId(6), "Ограничения", 6),
-            (GroupId(7), "Для новичков", 7),
-        };
-
-        db.Set<TagGroup>().AddRange(groups.Select(g => new TagGroup
-        {
-            TagGroupId = g.Id,
-            Title = g.Title,
-            SortOrder = g.Order
-        }));
-
-        // Tags: (Hex, GroupIndex, Title, ShortId, SortOrder)
-        var tags = new (string Hex, int Group, string Title, int ShortId, int Sort)[]
-        {
-            // Система
-            ("03", 1, "D&D 5e", 3, 3), ("08", 1, "Fate", 8, 8), ("0a", 1, "GURPS", 10, 10),
-            ("0d", 1, "Pathfinder 1e", 13, 13), ("15", 1, "World of Darkness", 21, 21), ("18", 1, "Словеска", 24, 24),
-            // Жанр
-            ("1b", 2, "Боевик", 27, 1), ("1c", 2, "Детектив", 28, 2), ("22", 2, "Мистика", 34, 8),
-            ("23", 2, "Наши дни", 35, 9), ("27", 2, "Триллер", 39, 13), ("29", 2, "Ужасы", 41, 15), ("2b", 2, "Фэнтези", 43, 17),
-            // Формат игры
-            ("2c", 3, "Dungeon Crawl", 44, 1), ("2f", 3, "Песочница", 47, 4), ("31", 3, "Сюжетная", 49, 6),
-            // Формат постов
-            ("33", 4, "Короткопост", 51, 1), ("34", 4, "Литературная", 52, 2),
-            // Темп
-            ("35", 5, "Неторопливый", 53, 1), ("36", 5, "Скоростной", 54, 2), ("3e", 5, "Сухие сезоны", 62, 3),
-            // Ограничения
-            ("39", 6, "Grammar Nazi", 57, 2), ("3a", 6, "Для своих", 58, 3),
-            // Для новичков
-            ("3c", 7, "Для новичков", 60, 1),
-        };
-
-        db.Set<Tag>().AddRange(tags.Select(t => new Tag
-        {
-            TagId = TagId(t.Hex),
-            TagGroupId = GroupId(t.Group),
-            Title = t.Title,
-            ShortId = t.ShortId,
-            SortOrder = t.Sort
         }));
     }
 
@@ -477,15 +422,9 @@ public class DatabaseFixture : IAsyncLifetime
     {
         if (db.Chats.Any(c => c.ChatId == TestConstants.TestChatId)) return;
 
-        // Global chat (must exist for global chat functionality)
-        db.Chats.Add(new Chat
-        {
-            ChatId = Chat.GlobalChatId,
-            SerialNumber = 1,
-            PublicId = "globa",
-            Type = ChatType.Global,
-            Title = "Global Chat"
-        });
+        // The global chat is not seeded here: InitialCreate ships it, and the
+        // tests must see the row the site actually starts with rather than a
+        // convenient copy of it.
 
         // Direct chat between TestUser and SecondUser
         db.Chats.Add(new Chat
