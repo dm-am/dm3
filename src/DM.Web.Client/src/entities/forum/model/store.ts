@@ -397,11 +397,6 @@ export const useBoardsStore = defineStore("boards", () => {
     }
   }
 
-  // Legacy method for backwards compatibility
-  async function fetchComments(number: number) {
-    await searchComments({ number });
-  }
-
   async function createComment(text: string) {
     if (!selectedTopic.value) return { error: new Error("No topic selected") };
 
@@ -582,7 +577,6 @@ export const useBoardsStore = defineStore("boards", () => {
     trySelectTopic,
     trySelectTopicByNumber,
     selectedTopic,
-    fetchComments,
     searchComments,
     comments,
     commentsLoading,
