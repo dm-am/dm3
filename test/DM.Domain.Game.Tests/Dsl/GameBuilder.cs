@@ -77,6 +77,12 @@ public class GameBuilder
         return this;
     }
 
+    public GameBuilder WithMentor(Guid userId)
+    {
+        game.Mentor = new GeneralUser { UserId = userId };
+        return this;
+    }
+
     public GameBuilder WithCommentsAccessMode(CommentsAccessMode mode)
     {
         game.CommentsAccessMode = mode;

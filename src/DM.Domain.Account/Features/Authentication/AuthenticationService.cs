@@ -224,6 +224,24 @@ internal class AuthenticationService : IAuthenticationService
             return Identity.Guest();
         }
 
+        // This overload mints a real session without a password, so it needs the
+        // same account-state gates as the other two: it is authentication, not a
+        // lookup. Today only the activation auto-login reaches it, but nothing
+        // about the signature says so.
+        ApplyActiveBans(user);
+
+        if (user.IsRemoved)
+        {
+            _logger.LogWarning("Direct authentication failed: user removed. UserId={UserId}", userId);
+            return Identity.Fail(AuthenticationError.Removed);
+        }
+
+        if (user.AccessPolicy.HasFlag(AccessPolicy.FullBan))
+        {
+            _logger.LogWarning("Direct authentication failed: user banned. UserId={UserId}", userId);
+            return Identity.Fail(AuthenticationError.Banned);
+        }
+
         var session = _sessionFactory.Create(false, true);
         var settings = await _repository.FindUserSettings(userId);
         return await CreateAuthenticationResult(user, session, settings);

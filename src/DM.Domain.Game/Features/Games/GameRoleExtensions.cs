@@ -74,6 +74,22 @@ public static class GameRoleExtensions
     }
 
     /// <summary>
+    /// Whether the user takes part in the game rather than merely watching it.
+    /// </summary>
+    /// <remarks>
+    /// Participation is master, assistant or a player with an accepted character.
+    /// A Reader is a self-service subscription — anyone may subscribe to any
+    /// public game in one request — so it grants no belonging; a Mentor curates
+    /// the game without playing in it. This is the predicate for "own game", and
+    /// it must stay narrower than <see cref="HasAnyRole" />, which answers the
+    /// different question of whether the user is connected to the game at all.
+    /// </remarks>
+    public static bool IsParticipant(this IEnumerable<GameRole> roles)
+    {
+        return roles.Any(r => r is GameRole.Master or GameRole.Assistant or GameRole.Player);
+    }
+
+    /// <summary>
     /// Checks if user has a pending invitation (player or reader)
     /// </summary>
     public static bool HasPendingInvitation(this Game game, Guid userId)
