@@ -9,19 +9,6 @@ namespace DM.Web.API.Tests.Shared;
 
 public class CommentMappingProfileShould : UnitTestBase
 {
-    private readonly IMapper _mapper;
-
-    public CommentMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UserMappingProfile>();
-            cfg.AddProfile<BbTextMappingProfile>();
-            cfg.AddProfile<CommentMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
-
     [Fact]
     public void HaveValidConfiguration()
     {

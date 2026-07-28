@@ -28,31 +28,26 @@ public class GameControllerShould : IntegrationTestBase
         var response = await Client.GetAsync("/v1/games");
         var content = await response.Content.ReadAsStringAsync();
 
-        // Assert - log content if not OK for debugging
-        if (response.StatusCode != HttpStatusCode.OK)
-        {
-            throw new Exception($"Expected OK but got {response.StatusCode}. Content: {content}");
-        }
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "body was: {0}", content);
         content.Should().Contain("resources");
     }
 
     /// <summary>
-    /// Get list of games with query parameters should return OK
+    /// Paging parameters should be echoed back in the paging envelope
     /// </summary>
     [Fact]
-    public async Task GetGames_WithQueryParameters_ReturnsOk()
+    public async Task GetGames_WithPaging_EchoesSkipAndTake()
     {
         // Act
-        var response = await Client.GetAsync("/v1/games?size=10&number=1");
+        var response = await Client.GetAsync("/v1/games?skip=0&take=10");
         var content = await response.Content.ReadAsStringAsync();
 
-        // Assert - log content if not OK for debugging
-        if (response.StatusCode != HttpStatusCode.OK)
-        {
-            throw new Exception($"Expected OK but got {response.StatusCode}. Content: {content}");
-        }
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "body was: {0}", content);
+        var paging = JsonDocument.Parse(content).RootElement.GetProperty("paging");
+        paging.GetProperty("skip").GetInt32().Should().Be(0);
+        paging.GetProperty("take").GetInt32().Should().Be(10);
     }
 
     #endregion
@@ -67,9 +62,12 @@ public class GameControllerShould : IntegrationTestBase
     {
         // Act - participating=true for anonymous returns empty list
         var response = await Client.GetAsync("/v1/games?participating=true");
+        var content = await response.Content.ReadAsStringAsync();
 
         // Assert - API returns empty list for anonymous users
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "body was: {0}", content);
+        JsonDocument.Parse(content).RootElement
+            .GetProperty("resources").EnumerateArray().Should().BeEmpty();
     }
 
     #endregion

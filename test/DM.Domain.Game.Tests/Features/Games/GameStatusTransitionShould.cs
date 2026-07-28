@@ -19,7 +19,7 @@ using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Domain.Game.Features.Invitations;
 using DM.Domain.Game.Features.Rooms;
 using DM.Domain.Game.Features.Subscriptions;
-using DM.Domain.Game.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using FluentValidation;
@@ -73,7 +73,7 @@ public class GameStatusTransitionShould : UnitTestBase
 
         _currentUserId = Guid.NewGuid();
         var identityProvider = Mock<IIdentityProvider>();
-        identityProvider.Setup(p => p.Current).Returns(Identity.User(_currentUserId, UserRole.RegularUser));
+        identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         var userBlacklistChecker = Mock<DM.Domain.Core.Blacklists.IUserBlacklistChecker>();
         userBlacklistChecker.Setup(c => c.GetBlockedUserIdsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))

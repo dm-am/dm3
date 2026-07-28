@@ -16,38 +16,23 @@ namespace DM.Web.API.Tests.Features.Game;
 
 public class PostMappingProfileShould : UnitTestBase
 {
+    private readonly MapperConfiguration _configuration = new(cfg =>
+    {
+        cfg.AddProfile<UserMappingProfile>();
+        cfg.AddProfile<UserRefMappingProfile>();
+        cfg.AddProfile<CharacterMappingProfile>();
+        cfg.AddProfile<AttributeSchemaMappingProfile>();
+        cfg.AddProfile<GameMappingProfile>();
+        cfg.AddProfile<BbTextMappingProfile>();
+        cfg.AddProfile<PostMappingProfile>();
+    });
+
     private readonly IMapper _mapper;
 
-    public PostMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UserMappingProfile>();
-            cfg.AddProfile<UserRefMappingProfile>();
-            cfg.AddProfile<CharacterMappingProfile>();
-            cfg.AddProfile<AttributeSchemaMappingProfile>();
-            cfg.AddProfile<GameMappingProfile>();
-            cfg.AddProfile<BbTextMappingProfile>();
-            cfg.AddProfile<PostMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
+    public PostMappingProfileShould() => _mapper = _configuration.CreateMapper();
 
     [Fact]
-    public void HaveValidConfiguration()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UserMappingProfile>();
-            cfg.AddProfile<UserRefMappingProfile>();
-            cfg.AddProfile<CharacterMappingProfile>();
-            cfg.AddProfile<AttributeSchemaMappingProfile>();
-            cfg.AddProfile<GameMappingProfile>();
-            cfg.AddProfile<BbTextMappingProfile>();
-            cfg.AddProfile<PostMappingProfile>();
-        });
-        configuration.AssertConfigurationIsValid();
-    }
+    public void HaveValidConfiguration() => _configuration.AssertConfigurationIsValid();
 
     [Fact]
     public void MapCreateDiceRollRequestToDomainSpec()

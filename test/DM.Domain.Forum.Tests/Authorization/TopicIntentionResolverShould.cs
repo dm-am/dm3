@@ -5,7 +5,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Forum.Authorization;
 using DM.Domain.Forum.Features.Boards;
 using DM.Domain.Forum.Features.Topics;
-using DM.Domain.Forum.Tests.Dsl;
+using DM.Testing.Dsl;
 using FluentAssertions;
 using Xunit;
 

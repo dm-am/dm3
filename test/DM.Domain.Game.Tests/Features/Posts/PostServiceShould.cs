@@ -18,7 +18,7 @@ using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Domain.Game.Features.Posts;
 using DM.Domain.Game.Features.Rooms;
 using DM.Domain.Core.Users;
-using DM.Domain.Game.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using FluentValidation;
@@ -81,7 +81,7 @@ public class PostServiceShould : UnitTestBase
             .Returns(Task.CompletedTask);
 
         _identityProvider = Mock<IIdentityProvider>();
-        var identity = Identity.User(Guid.NewGuid(), "testuser");
+        var identity = Identities.User(Guid.NewGuid(), "testuser");
         _identityProvider.Setup(p => p.Current).Returns(identity);
 
         _service = new PostService(

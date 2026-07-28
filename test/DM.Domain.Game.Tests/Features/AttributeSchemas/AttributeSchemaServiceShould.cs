@@ -8,7 +8,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.AttributeSchemas;
 using DM.Domain.Game.Features.Games;
-using DM.Domain.Game.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using Moq;
@@ -33,7 +33,7 @@ public class AttributeSchemaServiceShould : UnitTestBase
 
         _identityProvider = Mock<IIdentityProvider>();
         var userId = Guid.NewGuid();
-        _identityProvider.Setup(p => p.Current).Returns(Identity.User(userId, UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
 
         _service = new AttributeSchemaService(
             _intentionManager.Object,
@@ -60,7 +60,7 @@ public class AttributeSchemaServiceShould : UnitTestBase
     public async Task CreateSchemaWithCurrentUser()
     {
         var userId = Guid.NewGuid();
-        _identityProvider.Setup(p => p.Current).Returns(Identity.User(userId, UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
         var createSchema = new CreateAttributeSchema { Title = "Test Schema" };
         var schema = new AttributeSchema { Id = Guid.NewGuid() };
         _repository.Setup(r => r.Create(createSchema, userId))

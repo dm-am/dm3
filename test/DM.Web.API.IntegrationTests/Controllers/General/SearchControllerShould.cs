@@ -14,15 +14,13 @@ public class SearchControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Search_WithValidQuery_ReturnsOkOrServiceUnavailable()
+    public async Task Search_WhenEngineUnreachable_DegradesToServiceUnavailable()
     {
         // Act
         var response = await Client.GetAsync("/v1/search?query=test");
 
-        // Assert - Search service may not be available in integration tests
-        response.StatusCode.Should().BeOneOf(
-            HttpStatusCode.OK,
-            HttpStatusCode.ServiceUnavailable);
+        // Assert - the fixture runs no search worker, so this covers graceful degradation
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
     }
 
     [Fact]
@@ -46,14 +44,12 @@ public class SearchControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Search_WithPagination_ReturnsOkOrServiceUnavailable()
+    public async Task Search_WithPaging_WhenEngineUnreachable_DegradesToServiceUnavailable()
     {
         // Act
         var response = await Client.GetAsync("/v1/search?query=test&skip=0&take=10");
 
-        // Assert - Search service may not be available in integration tests
-        response.StatusCode.Should().BeOneOf(
-            HttpStatusCode.OK,
-            HttpStatusCode.ServiceUnavailable);
+        // Assert - the fixture runs no search worker, so this covers graceful degradation
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
     }
 }

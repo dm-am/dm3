@@ -204,13 +204,13 @@ public class TopicControllerShould : IntegrationTestBase
     /// Get topic with invalid GUID should return error
     /// </summary>
     [Fact]
-    public async Task GetTopic_WithInvalidGuid_ReturnsError()
+    public async Task GetTopic_WithInvalidGuid_ReturnsBadRequest()
     {
         // Act
         var response = await Client.GetAsync("/v1/topics/not-a-guid");
 
-        // Assert - invalid GUID in route returns 404 Not Found (route not matched) or 400
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.NotFound, HttpStatusCode.BadRequest);
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     #endregion

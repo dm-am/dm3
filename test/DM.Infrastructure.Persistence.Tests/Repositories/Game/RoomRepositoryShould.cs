@@ -14,7 +14,7 @@ using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Game;
 
-public class RoomRepositoryShould : UnitTestBase
+public class RoomRepositoryShould : UnitTestBase, IDisposable
 {
     private readonly DmDbContext _dbContext;
     private readonly RoomRepository _repository;
@@ -106,9 +106,5 @@ public class RoomRepositoryShould : UnitTestBase
         room!.IsArchived.Should().BeTrue();
     }
 
-    public override void Dispose()
-    {
-        _dbContext.Dispose();
-        base.Dispose();
-    }
+    public void Dispose() => _dbContext.Dispose();
 }

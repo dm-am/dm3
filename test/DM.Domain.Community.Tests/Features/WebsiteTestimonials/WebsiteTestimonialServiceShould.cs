@@ -11,7 +11,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
-using DM.Domain.Community.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using FluentValidation;
@@ -52,7 +52,7 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
 
         _currentUserId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identity.User(_currentUserId, UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         _guidFactory = Mock<IGuidFactory>();
         _guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());

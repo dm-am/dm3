@@ -10,7 +10,7 @@ using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Games;
 using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Domain.Game.Features.Unread;
-using DM.Domain.Game.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using Moq;
@@ -56,7 +56,7 @@ public class FirstUnreadServiceShould : UnitTestBase
         };
 
         _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
+        _identityProvider.Setup(p => p.Current).Returns(Identities.Guest());
         _firstUnreadRepository.Setup(r => r.GetAccessibleRoomIds(gameId, It.IsAny<Guid>()))
             .ReturnsAsync(new List<Guid>());
 
@@ -75,7 +75,7 @@ public class FirstUnreadServiceShould : UnitTestBase
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         });
-        _identityProvider.Setup(p => p.Current).Returns(Identity.User(Guid.NewGuid(), UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(Guid.NewGuid(), UserRole.RegularUser));
         _firstUnreadRepository.Setup(r => r.GetAccessibleRoomIds(gameId, It.IsAny<Guid>()))
             .ReturnsAsync(new List<Guid>());
 
@@ -96,7 +96,7 @@ public class FirstUnreadServiceShould : UnitTestBase
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         });
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
+        _identityProvider.Setup(p => p.Current).Returns(Identities.Guest());
         _firstUnreadRepository.Setup(r => r.GetAccessibleRoomIds(gameId, It.IsAny<Guid>()))
             .ReturnsAsync(roomIds);
         _firstUnreadRepository.Setup(r => r.GetFirstPostInRooms(roomIds))
@@ -121,7 +121,7 @@ public class FirstUnreadServiceShould : UnitTestBase
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         });
-        _identityProvider.Setup(p => p.Current).Returns(Identity.User(userId, UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
         _firstUnreadRepository.Setup(r => r.GetAccessibleRoomIds(gameId, userId))
             .ReturnsAsync(roomIds);
         _unreadCountersRepository.Setup(r => r.GetLastReadTimesAsync(userId, UnreadEntryType.Message, It.IsAny<Guid[]>()))
@@ -148,7 +148,7 @@ public class FirstUnreadServiceShould : UnitTestBase
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         });
-        _identityProvider.Setup(p => p.Current).Returns(Identity.User(userId, UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
         _firstUnreadRepository.Setup(r => r.GetAccessibleRoomIds(gameId, userId))
             .ReturnsAsync(roomIds);
         _unreadCountersRepository.Setup(r => r.GetLastReadTimesAsync(userId, UnreadEntryType.Message, It.IsAny<Guid[]>()))
@@ -174,7 +174,7 @@ public class FirstUnreadServiceShould : UnitTestBase
         };
 
         _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
+        _identityProvider.Setup(p => p.Current).Returns(Identities.Guest());
         _firstUnreadRepository.Setup(r => r.GetFirstComment(gameId))
             .ReturnsAsync(new FirstUnreadCommentResult { HasUnread = false });
 
@@ -194,7 +194,7 @@ public class FirstUnreadServiceShould : UnitTestBase
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         });
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
+        _identityProvider.Setup(p => p.Current).Returns(Identities.Guest());
         _firstUnreadRepository.Setup(r => r.GetFirstComment(gameId))
             .ReturnsAsync(expectedResult);
 
@@ -216,7 +216,7 @@ public class FirstUnreadServiceShould : UnitTestBase
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         });
-        _identityProvider.Setup(p => p.Current).Returns(Identity.User(userId, UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
         _unreadCountersRepository.Setup(r => r.GetLastReadTimeAsync(userId, gameId, UnreadEntryType.Message))
             .ReturnsAsync(lastRead);
         _firstUnreadRepository.Setup(r => r.FindFirstUnreadComment(gameId, lastRead))
@@ -240,7 +240,7 @@ public class FirstUnreadServiceShould : UnitTestBase
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         });
-        _identityProvider.Setup(p => p.Current).Returns(Identity.User(userId, UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
         _unreadCountersRepository.Setup(r => r.GetLastReadTimeAsync(userId, gameId, UnreadEntryType.Message))
             .ReturnsAsync(lastRead);
         _firstUnreadRepository.Setup(r => r.FindFirstUnreadComment(gameId, lastRead))

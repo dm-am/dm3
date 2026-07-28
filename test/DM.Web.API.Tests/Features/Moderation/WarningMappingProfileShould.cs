@@ -8,18 +8,6 @@ namespace DM.Web.API.Tests.Features.Moderation;
 
 public class WarningMappingProfileShould : UnitTestBase
 {
-    private readonly IMapper _mapper;
-
-    public WarningMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UserMappingProfile>();
-            cfg.AddProfile<WarningMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
-
     [Fact]
     public void HaveValidConfiguration()
     {

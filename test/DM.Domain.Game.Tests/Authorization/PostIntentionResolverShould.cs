@@ -3,6 +3,7 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Games;
+using DM.Testing.Dsl;
 using DM.Domain.Game.Tests.Dsl;
 using DM.Testing;
 using FluentAssertions;
@@ -46,7 +47,7 @@ public class PostIntentionResolverShould : UnitTestBase
     public void AllowEditTextForModerator()
     {
         var user = Create.User().WithRole(UserRole.Moderator).Please();
-        var room = new RoomToUpdate { Game = Create.Game().Please() };
+        var room = new RoomToUpdate { Game = new GameBuilder().Please() };
 
         _resolver.IsAllowed(user, PostIntention.EditText, (PostBy(Guid.NewGuid()), room))
             .Should().BeTrue();
@@ -57,7 +58,7 @@ public class PostIntentionResolverShould : UnitTestBase
     {
         var authorId = Guid.NewGuid();
         var user = Create.User(authorId).WithRole(UserRole.RegularUser).Please();
-        var room = new RoomToUpdate { Game = Create.Game().Please() };
+        var room = new RoomToUpdate { Game = new GameBuilder().Please() };
 
         _resolver.IsAllowed(user, PostIntention.EditText, (PostBy(authorId), room))
             .Should().BeTrue();
@@ -68,7 +69,7 @@ public class PostIntentionResolverShould : UnitTestBase
     {
         var user = Create.User().WithRole(UserRole.RegularUser).Please();
         // A different master; the actor is neither author, moderator, nor lead.
-        var room = new RoomToUpdate { Game = Create.Game().WithMaster(Guid.NewGuid()).Please() };
+        var room = new RoomToUpdate { Game = new GameBuilder().WithMaster(Guid.NewGuid()).Please() };
 
         _resolver.IsAllowed(user, PostIntention.EditText, (PostBy(Guid.NewGuid()), room))
             .Should().BeFalse();

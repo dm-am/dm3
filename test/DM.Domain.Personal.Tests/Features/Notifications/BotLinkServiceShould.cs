@@ -6,7 +6,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Tokens;
 using DM.Domain.Personal.Features.Notifications;
-using DM.Domain.Personal.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using Moq;
@@ -32,7 +32,7 @@ public class BotLinkServiceShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
         _repository = Mock<IBotLinkRepository>();
 
-        var identity = Identity.Authenticated(_currentUserId, "CurrentUser", UserRole.RegularUser);
+        var identity = Identities.User(_currentUserId, "CurrentUser", UserRole.RegularUser);
         _identityProvider.Setup(p => p.Current).Returns(identity);
         _dateTimeProvider.Setup(d => d.Now).Returns(_now);
         _guidFactory.Setup(g => g.Create()).Returns(_tokenId);

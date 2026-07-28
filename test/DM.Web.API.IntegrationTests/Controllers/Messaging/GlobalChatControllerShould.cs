@@ -86,13 +86,13 @@ public class GlobalChatControllerShould : IntegrationTestBase
     /// Get active global chat event should return OK or NoContent (depending on whether an event is active)
     /// </summary>
     [Fact]
-    public async Task GetActiveGlobalChatEvent_WhenNotAuthenticated_ReturnsOkOrNoContent()
+    public async Task GetActiveGlobalChatEvent_WhenNoneActive_ReturnsNoContent()
     {
         // Act
         var response = await Client.GetAsync("/v1/global-chat/events/active");
 
-        // Assert - either OK (event exists) or NoContent (no active event)
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.NoContent);
+        // Assert - nothing in the fixture opens an event
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 
     /// <summary>

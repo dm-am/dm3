@@ -7,7 +7,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.ProfileNotes;
 using DM.Domain.Personal.Features.Profiles;
-using DM.Domain.Personal.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using Moq;
@@ -36,7 +36,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
 
-        var identity = Identity.Authenticated(_currentUserId, "CurrentUser", UserRole.RegularUser);
+        var identity = Identities.User(_currentUserId, "CurrentUser", UserRole.RegularUser);
         _identityProvider.Setup(p => p.Current).Returns(identity);
         _dateTimeProvider.Setup(d => d.Now).Returns(_now);
         _guidFactory.Setup(g => g.Create()).Returns(_noteId);
@@ -52,7 +52,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenGettingNoteWithoutAuthentication()
     {
-        var guestIdentity = Identity.Guest();
+        var guestIdentity = Identities.Guest();
         _identityProvider.Setup(p => p.Current).Returns(guestIdentity);
 
         var act = () => _service.GetNote("Subject");
@@ -90,7 +90,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenUpsertingNoteWithoutAuthentication()
     {
-        var guestIdentity = Identity.Guest();
+        var guestIdentity = Identities.Guest();
         _identityProvider.Setup(p => p.Current).Returns(guestIdentity);
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "Subject", Text = "Note" };
@@ -209,7 +209,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenDeletingNoteWithoutAuthentication()
     {
-        var guestIdentity = Identity.Guest();
+        var guestIdentity = Identities.Guest();
         _identityProvider.Setup(p => p.Current).Returns(guestIdentity);
 
         var act = () => _service.DeleteNote("Subject");

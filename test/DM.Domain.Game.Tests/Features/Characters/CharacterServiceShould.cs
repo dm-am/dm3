@@ -16,7 +16,7 @@ using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.Games;
 using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Domain.Game.Features.Subscriptions;
-using DM.Domain.Game.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using FluentValidation;
@@ -76,7 +76,7 @@ public class CharacterServiceShould : UnitTestBase
 
         _currentUserId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identity.User(_currentUserId, UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         _guidFactory = Mock<IGuidFactory>();
         _guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());

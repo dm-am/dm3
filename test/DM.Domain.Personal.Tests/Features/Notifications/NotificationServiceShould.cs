@@ -7,7 +7,7 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.Notifications;
-using DM.Domain.Personal.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using Moq;
@@ -36,7 +36,7 @@ public class NotificationServiceShould : UnitTestBase
         {
             Paging = new PagingSettings { EntitiesPerPage = 10 }
         };
-        var identity = Identity.Authenticated(_currentUserId, "CurrentUser", UserRole.RegularUser, settings);
+        var identity = Identities.User(_currentUserId, "CurrentUser", UserRole.RegularUser, settings);
         _identityProvider.Setup(p => p.Current).Returns(identity);
         _dateTimeProvider.Setup(d => d.Now).Returns(_now);
 

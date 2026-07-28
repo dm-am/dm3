@@ -1,7 +1,10 @@
 using System;
 
-namespace DM.Domain.Forum.Tests.Dsl;
+namespace DM.Testing.Dsl;
 
+/// <summary>
+/// Entry point for the shared test builders.
+/// </summary>
 public static class Create
 {
     public static AuthenticatedUserBuilder User(Guid userId) => new(userId);

@@ -9,19 +9,6 @@ namespace DM.Web.API.Tests.Features.Game;
 
 public class AttributeSchemaMappingProfileShould : UnitTestBase
 {
-    private readonly IMapper _mapper;
-
-    public AttributeSchemaMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UserMappingProfile>();
-            cfg.AddProfile<UserRefMappingProfile>();
-            cfg.AddProfile<AttributeSchemaMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
-
     [Fact]
     public void HaveValidConfiguration()
     {

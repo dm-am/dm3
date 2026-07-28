@@ -16,7 +16,7 @@ using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Comments;
 using DM.Domain.Game.Features.Games;
 using GameDto = DM.Domain.Game.Features.Games.Game;
-using DM.Domain.Game.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using FluentValidation;
@@ -54,7 +54,7 @@ public class GameCommentServiceShould : UnitTestBase
 
         _currentUserId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identity.User(_currentUserId, UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         var dateTimeProvider = Mock<IDateTimeProvider>();
         dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);

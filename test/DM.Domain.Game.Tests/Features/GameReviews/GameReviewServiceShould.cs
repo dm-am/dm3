@@ -12,7 +12,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.GameReviews;
 using DM.Domain.Game.Features.Games;
-using DM.Domain.Game.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using FluentValidation;
@@ -51,7 +51,7 @@ public class GameReviewServiceShould : UnitTestBase
 
         _currentUserId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identity.User(_currentUserId, UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         _guidFactory = Mock<IGuidFactory>();
         _guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());

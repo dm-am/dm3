@@ -27,7 +27,7 @@ namespace DM.Web.API.Tests.Features.General;
 /// These tests pin both halves of the contract — a row past the grace period IS
 /// collected, and rows that are fresh or live are NOT.
 /// </summary>
-public class UploadOrphanCleanupShould : UnitTestBase
+public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
 {
     private const string Bucket = "dm-test";
 
@@ -123,9 +123,5 @@ public class UploadOrphanCleanupShould : UnitTestBase
         (await RemainingUploads()).Should().Be(1);
     }
 
-    public override void Dispose()
-    {
-        _serviceProvider.Dispose();
-        base.Dispose();
-    }
+    public void Dispose() => _serviceProvider.Dispose();
 }

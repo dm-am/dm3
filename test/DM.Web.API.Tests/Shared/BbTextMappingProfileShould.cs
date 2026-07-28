@@ -7,17 +7,6 @@ namespace DM.Web.API.Tests.Shared;
 
 public class BbTextMappingProfileShould : UnitTestBase
 {
-    private readonly IMapper _mapper;
-
-    public BbTextMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<BbTextMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
-
     [Fact]
     public void HaveValidConfiguration()
     {
