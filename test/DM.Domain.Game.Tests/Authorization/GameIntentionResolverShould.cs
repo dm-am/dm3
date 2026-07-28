@@ -275,7 +275,7 @@ public class GameIntentionResolverShould : UnitTestBase
     }
 
     [Fact]
-    public void NotTreatCuratorshipAsOwningTheGameUnderTheOrdinaryBan()
+    public void LetTheCuratorCommentInTheGameTheyMentorUnderTheOrdinaryBan()
     {
         var mentorId = Guid.NewGuid();
         var game = Create.Game()
@@ -287,9 +287,10 @@ public class GameIntentionResolverShould : UnitTestBase
             .WithAccessPolicy(AccessPolicy.DemocraticBan)
             .Please();
 
-        // A mentor curates the game without playing in it — the same reason they
-        // are not a game lead for [private] visibility
-        resolver.IsAllowed(user, GameIntention.CreateComment, game).Should().BeFalse();
+        // Curating is a job in the game: a mentor speaks in the game they
+        // supervise. Being a game lead for [private] visibility is a different
+        // question and stays master + assistant.
+        resolver.IsAllowed(user, GameIntention.CreateComment, game).Should().BeTrue();
     }
 
     [Fact]

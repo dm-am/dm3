@@ -359,6 +359,19 @@ public class BlogIntentionResolverShould
     }
 
     [Fact]
+    public void AllowTheCuratorToCommentInTheBlogTheyMentorUnderTheOrdinaryBan()
+    {
+        var user = CreateUser(_mentorId, accessPolicy: AccessPolicy.DemocraticBan);
+        var blog = CreateBlog(
+            draftVisibility: DraftVisibility.Public,
+            commentsEnabled: true,
+            mentor: new GeneralUser { UserId = _mentorId });
+
+        // Curating is a job in the blog, the same as in a game
+        _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeTrue();
+    }
+
+    [Fact]
     public void DenyASubscriberToCommentUnderTheOrdinaryBan()
     {
         var user = CreateUser(_otherUserId, accessPolicy: AccessPolicy.DemocraticBan);
