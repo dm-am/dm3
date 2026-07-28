@@ -425,16 +425,18 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
     /// </summary>
     /// <param name="appBuilder"></param>
     /// <param name="integrationOptions"></param>
-    /// <param name="dbContext"></param>
     /// <param name="logger"></param>
     public void Configure(IApplicationBuilder appBuilder,
         IOptions<IntegrationSettings> integrationOptions,
-        DmDbContext dbContext,
         ILogger<Startup> logger)
     {
         if (_migrateOnStart)
         {
-            dbContext.Database.Migrate();
+            // In a scope, not as a Configure parameter: the context is pooled, and
+            // a parameter here leases one from the root container for the whole
+            // process — never returned, so the pool runs one lease short forever.
+            using var migrationScope = appBuilder.ApplicationServices.CreateScope();
+            migrationScope.ServiceProvider.GetRequiredService<DmDbContext>().Database.Migrate();
             Environment.Exit(0);
         }
         
