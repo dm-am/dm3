@@ -137,9 +137,10 @@ public class TopicNumberAllocationShould : IntegrationTestBase
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
         // The board points back at its last topic, so the denormalized link has to
-        // be released before the topics it references can go.
+        // be released before the topics it references can go. The last-comment link
+        // is gone: that value is computed on read now.
         await dbContext.Database.ExecuteSqlRawAsync(
-            """UPDATE "Boards" SET "LastTopicId" = NULL, "LastCommentId" = NULL WHERE "BoardId" = {0}""",
+            """UPDATE "Boards" SET "LastTopicId" = NULL WHERE "BoardId" = {0}""",
             boardId);
         await dbContext.Database.ExecuteSqlRawAsync(
             """DELETE FROM "Topics" WHERE "BoardId" = {0}""", boardId);

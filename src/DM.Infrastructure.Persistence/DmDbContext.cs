@@ -270,6 +270,14 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<Subscription>()
             .HasIndex(s => new { s.TargetType, s.TargetId });
 
+        // Likes are polymorphic and had no index at all. Every aggregate reads them
+        // either as "likes of this entity" or as "likes of this kind" followed by a
+        // join on EntityId, so EntityType leads: with the reverse order the join-shaped
+        // reads (profile counters, community statistics) would not take the index at
+        // all. The table grows without bound, so the scan degrades superlinearly.
+        modelBuilder.Entity<Like>()
+            .HasIndex(l => new { l.EntityType, l.EntityId });
+
         // TopicNumber is the canonical topic URL key, and it is allocated as
         // MAX+1: two creates in the same board at the same time read the same
         // maximum. Without this constraint they both commit and one of the two
@@ -1045,8 +1053,7 @@ public class DmDbContext : DbContext
                 Order = 1,
                 ViewPolicy = BoardAccessPolicy.Guest,
                 CreateTopicPolicy = BoardAccessPolicy.RegularUser,
-                TopicsCount = 1,
-                CommentsCount = 0
+                TopicsCount = 1
             },
             new Board
             {
@@ -1057,8 +1064,7 @@ public class DmDbContext : DbContext
                 Order = 2,
                 ViewPolicy = BoardAccessPolicy.Guest,
                 CreateTopicPolicy = BoardAccessPolicy.RegularUser,
-                TopicsCount = 0,
-                CommentsCount = 0
+                TopicsCount = 0
             },
             new Board
             {
@@ -1069,8 +1075,7 @@ public class DmDbContext : DbContext
                 Order = 3,
                 ViewPolicy = BoardAccessPolicy.Guest,
                 CreateTopicPolicy = BoardAccessPolicy.RegularUser,
-                TopicsCount = 0,
-                CommentsCount = 0
+                TopicsCount = 0
             },
             new Board
             {
@@ -1081,8 +1086,7 @@ public class DmDbContext : DbContext
                 Order = 4,
                 ViewPolicy = BoardAccessPolicy.Guest,
                 CreateTopicPolicy = BoardAccessPolicy.RegularUser,
-                TopicsCount = 0,
-                CommentsCount = 0
+                TopicsCount = 0
             },
             new Board
             {
@@ -1093,8 +1097,7 @@ public class DmDbContext : DbContext
                 Order = 5,
                 ViewPolicy = BoardAccessPolicy.Guest,
                 CreateTopicPolicy = BoardAccessPolicy.Moderator,
-                TopicsCount = 0,
-                CommentsCount = 0
+                TopicsCount = 0
             },
             new Board
             {
@@ -1105,8 +1108,7 @@ public class DmDbContext : DbContext
                 Order = 6,
                 ViewPolicy = BoardAccessPolicy.Guest,
                 CreateTopicPolicy = BoardAccessPolicy.RegularUser,
-                TopicsCount = 0,
-                CommentsCount = 0
+                TopicsCount = 0
             },
             new Board
             {
@@ -1117,8 +1119,7 @@ public class DmDbContext : DbContext
                 Order = 7,
                 ViewPolicy = BoardAccessPolicy.Guest,
                 CreateTopicPolicy = BoardAccessPolicy.RegularUser,
-                TopicsCount = 0,
-                CommentsCount = 0
+                TopicsCount = 0
             },
             new Board
             {
@@ -1129,8 +1130,7 @@ public class DmDbContext : DbContext
                 Order = 8,
                 ViewPolicy = BoardAccessPolicy.Guest,
                 CreateTopicPolicy = BoardAccessPolicy.RegularUser,
-                TopicsCount = 0,
-                CommentsCount = 0
+                TopicsCount = 0
             },
             new Board
             {
@@ -1141,8 +1141,7 @@ public class DmDbContext : DbContext
                 Order = 9,
                 ViewPolicy = BoardAccessPolicy.Guest,
                 CreateTopicPolicy = BoardAccessPolicy.RegularUser,
-                TopicsCount = 0,
-                CommentsCount = 0
+                TopicsCount = 0
             },
             new Board
             {
@@ -1153,8 +1152,7 @@ public class DmDbContext : DbContext
                 Order = 10,
                 ViewPolicy = BoardAccessPolicy.Guest,
                 CreateTopicPolicy = BoardAccessPolicy.RegularUser,
-                TopicsCount = 0,
-                CommentsCount = 0
+                TopicsCount = 0
             },
             new Board
             {
@@ -1165,8 +1163,7 @@ public class DmDbContext : DbContext
                 Order = 11,
                 ViewPolicy = BoardAccessPolicy.Guest,
                 CreateTopicPolicy = BoardAccessPolicy.Moderator,
-                TopicsCount = 0,
-                CommentsCount = 0
+                TopicsCount = 0
             });
 
         modelBuilder.Entity<AchievementCategory>().HasData(
