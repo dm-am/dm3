@@ -13,7 +13,6 @@ using DM.Domain.Game.Features.Games;
 using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
 using FluentValidation;
-using Npgsql;
 
 namespace DM.Domain.Game.Features.GameReviews;
 
@@ -97,7 +96,7 @@ internal class GameReviewService : IGameReviewService
         {
             return await _repository.CreateAsync(entity);
         }
-        catch (Exception ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        catch (DuplicateEntityException)
         {
             throw new HttpException(HttpStatusCode.Conflict, "You have already reviewed this game");
         }

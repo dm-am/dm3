@@ -1,3 +1,4 @@
+using DM.Domain.Core.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,7 +26,6 @@ namespace DM.Infrastructure.Persistence.Repositories.Blog;
 /// <inheritdoc cref="IBlogRepository" />
 internal class BlogRepository : IBlogRepository
 {
-    private static readonly TimeSpan ActivePeriod = TimeSpan.FromDays(30);
 
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
@@ -901,7 +901,7 @@ internal class BlogRepository : IBlogRepository
         if (blogs.Count == 0) return;
 
         var blogIdSet = blogs.Select(b => b.Id).ToHashSet();
-        var activeThreshold = _dateTimeProvider.Now - ActivePeriod;
+        var activeThreshold = _dateTimeProvider.Now - ActivityPolicy.ActivePeriod;
 
         // Load subscriber IDs (for participation detection) - same pattern as GameRepository
         var subscriptionMap = await _dbContext.Subscriptions

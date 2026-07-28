@@ -11,7 +11,6 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using FluentValidation;
-using Npgsql;
 
 namespace DM.Domain.Community.Features.UserEndorsements;
 
@@ -98,7 +97,7 @@ internal class UserEndorsementService : IUserEndorsementService
         {
             return await _repository.CreateAsync(entity);
         }
-        catch (Exception ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        catch (DuplicateEntityException)
         {
             throw new HttpException(HttpStatusCode.Conflict, "You have already endorsed this user");
         }

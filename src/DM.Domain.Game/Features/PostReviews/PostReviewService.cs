@@ -13,7 +13,6 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Games;
 using FluentValidation;
-using Npgsql;
 
 namespace DM.Domain.Game.Features.PostReviews;
 
@@ -122,7 +121,7 @@ internal class PostReviewService : IPostReviewService
 
             return result;
         }
-        catch (Exception ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        catch (DuplicateEntityException)
         {
             throw new HttpException(HttpStatusCode.Conflict, "You have already reviewed this post");
         }

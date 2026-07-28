@@ -19,7 +19,6 @@
       <PackageReference Include="FluentValidation" />
       <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
       <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
-      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     </ItemGroup>
 
 </Project>
