@@ -3,6 +3,7 @@ import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useUserStore } from "@/entities/user";
+import { useGamesStore } from "@/entities/game";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import Button from "@/shared/ui/Button/Button.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
@@ -23,6 +24,7 @@ import { useToast } from "@/shared/lib/composables/useToast";
 
 const router = useRouter();
 const { user } = storeToRefs(useUserStore());
+const gamesStore = useGamesStore();
 const toast = useToast();
 
 const commentariesAccessOptions = [
@@ -122,6 +124,9 @@ async function handleSubmit() {
     }
 
     if (data) {
+      // The lists are cached; without dropping them the game the user just
+      // created is missing from /games and from the sidebar until they expire.
+      gamesStore.resetAllGames();
       router.push({ name: "game", params: { id: data.resource.id } });
     }
   } finally {
