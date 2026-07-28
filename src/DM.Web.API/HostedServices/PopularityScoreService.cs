@@ -97,7 +97,6 @@ internal class PopularityScoreService : BackgroundService
 
             // Calculate active players per game (unique authors of active non-NPC characters who were active on site)
             var playerCounts = await dbContext.Characters
-                .Include(c => c.Author)
                 .Where(c => gameIds.Contains(c.GameId) &&
                            c.Status == CharacterStatus.Active &&
                            !c.IsNpc &&

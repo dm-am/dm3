@@ -42,6 +42,18 @@ public class LoginControllerShould : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Login_AsCredentiallessSystemAccount_ReturnsBadRequest()
+    {
+        // The system author is seeded with an empty salt and hash, and the seed
+        // comment states it cannot log in. Nothing enforces that explicitly — it
+        // holds because a stored empty hash can never equal a computed one — so
+        // this pins the invariant rather than leaving it to be rediscovered.
+        var credentials = new { email = "system@dm.local", password = "anything123" };
+        var response = await Client.PostAsJsonAsync("/v1/account/login", credentials);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Logout_WhenNotAuthenticated_ReturnsUnauthorized()
     {
         var response = await Client.DeleteAsync("/v1/account/login");

@@ -168,7 +168,6 @@ internal class PostReviewRepository : IPostReviewRepository
     {
         return await _dbContext.Posts
             .TagWith("DM.PostReview.GetPostInfo")
-            .Include(p => p.Room)
             .Where(p => p.PostId == postId)
             .Select(p => new PostInfo
             {

@@ -211,10 +211,17 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             }
             services.AddSingleton<ICompromisedPasswordChecker, TestCompromisedPasswordChecker>();
 
-            // Register DbContext with PostgreSQL connection string from Testcontainers
+            // Register DbContext with PostgreSQL connection string from Testcontainers.
+            // EnableRetryOnFailure mirrors Startup: with a retrying execution strategy
+            // EF refuses a user-initiated transaction, so code that opens one without
+            // going through CreateExecutionStrategy fails in production and nowhere else.
             services.AddDbContext<DmDbContext>(options =>
             {
-                options.UseNpgsql(_databaseFixture.ConnectionString)
+                options.UseNpgsql(_databaseFixture.ConnectionString,
+                        npgsql => npgsql.EnableRetryOnFailure(
+                            maxRetryCount: 3,
+                            maxRetryDelay: TimeSpan.FromSeconds(5),
+                            errorCodesToAdd: null))
                     .EnableSensitiveDataLogging()
                     .EnableDetailedErrors();
             }, ServiceLifetime.Scoped, ServiceLifetime.Scoped);

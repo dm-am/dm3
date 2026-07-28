@@ -27,8 +27,6 @@ internal class ModeratedProfileNoteRepository : IModeratedProfileNoteRepository
     public async Task<IEnumerable<ModeratedProfileNote>> GetNotes(Guid userId) =>
         await _dbContext.ModeratedProfileNotes
             .Where(n => !n.IsRemoved && n.UserId == userId)
-            .Include(n => n.User)
-            .Include(n => n.Author)
             .OrderByDescending(n => n.CreatedUtc)
             .ProjectTo<ModeratedProfileNote>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
@@ -37,8 +35,6 @@ internal class ModeratedProfileNoteRepository : IModeratedProfileNoteRepository
     public Task<ModeratedProfileNote?> GetNote(Guid noteId) =>
         _dbContext.ModeratedProfileNotes
             .Where(n => !n.IsRemoved && n.ModeratedProfileNoteId == noteId)
-            .Include(n => n.User)
-            .Include(n => n.Author)
             .ProjectTo<ModeratedProfileNote>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
 

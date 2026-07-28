@@ -318,56 +318,70 @@ internal class TopicRepository : ITopicRepository
         var topicId = _guidFactory.Create();
         var now = _dateTimeProvider.Now;
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
-
-        // TopicNumber is allocated as MAX+1 and the board's counters are a
-        // read-modify-write, so both are wrong the moment two topics are created
-        // in one board at once. The board row is written by this method anyway:
-        // locking it first serializes creation per board, which is the smallest
-        // scope that makes the number and the counter correct at the same time.
-        // The unique index on (BoardId, TopicNumber) stays as the invariant — it
-        // is what guarantees a topic URL resolves to one topic no matter who writes.
-        await _dbContext.Database.ExecuteSqlRawAsync(
-            """SELECT "BoardId" FROM "Boards" WHERE "BoardId" = {0} FOR UPDATE""", [boardId], ct);
-
-        // IgnoreQueryFilters: a removed topic keeps its number. Counted under the
-        // soft-delete filter, deleting the newest topic handed its number to the
-        // next one, and the deleted topic's permanent URL started resolving to a
-        // different topic.
-        var maxTopicNumber = await _dbContext.Topics
-            .IgnoreQueryFilters()
-            .TagWith("DM.Forum.MaxTopicNumber")
-            .Where(t => t.BoardId == boardId)
-            .Select(t => (int?)t.TopicNumber)
-            .MaxAsync(ct) ?? 0;
-        var topicNumber = maxTopicNumber + 1;
-
-        var topic = new Entities.Forum.Topic
+        // The API host configures EnableRetryOnFailure, and a retrying execution
+        // strategy refuses a transaction opened by hand — it has no way to replay
+        // one. Everything below therefore runs as a single retriable unit.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
+        await strategy.ExecuteAsync(async () =>
         {
-            TopicId = topicId,
-            BoardId = boardId,
-            TopicNumber = topicNumber,
-            AuthorId = authorId,
-            Title = createTopic.Title.Trim(),
-            Text = createTopic.Text.Trim(),
-            CreatedUtc = now,
-            IsRemoved = false,
-            IsClosed = false,
-            IsAttached = false,
-            CommentCount = 0
-        };
+            if (attempted)
+            {
+                // A retry replays this whole block, so anything the failed attempt
+                // left tracked has to go: still Added it would insert the topic a
+                // second time, already Unchanged it would insert nothing at all.
+                _dbContext.ChangeTracker.Clear();
+            }
 
-        _dbContext.Topics.Add(topic);
-        await _dbContext.SaveChangesAsync(ct);
+            attempted = true;
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
 
-        // The board summary is recomputed here too, rather than incremented, so
-        // that creation, deletion and moving share one definition of it. The row
-        // lock above already serializes creation per board, so the extra read
-        // costs a query and buys the guarantee that the three paths cannot drift.
-        await RefreshBoardTopicSummary(boardId, ct);
+            // TopicNumber is allocated as MAX+1 and the board's counters are a
+            // read-modify-write, so both are wrong the moment two topics are created
+            // in one board at once. The board row is written by this method anyway:
+            // locking it first serializes creation per board, which is the smallest
+            // scope that makes the number and the counter correct at the same time.
+            // The unique index on (BoardId, TopicNumber) stays as the invariant — it
+            // is what guarantees a topic URL resolves to one topic no matter who writes.
+            await _dbContext.Database.ExecuteSqlRawAsync(
+                """SELECT "BoardId" FROM "Boards" WHERE "BoardId" = {0} FOR UPDATE""", [boardId], ct);
 
-        await _dbContext.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
+            // IgnoreQueryFilters: a removed topic keeps its number. Counted under the
+            // soft-delete filter, deleting the newest topic handed its number to the
+            // next one, and the deleted topic's permanent URL started resolving to a
+            // different topic.
+            var maxTopicNumber = await _dbContext.Topics
+                .IgnoreQueryFilters()
+                .TagWith("DM.Forum.MaxTopicNumber")
+                .Where(t => t.BoardId == boardId)
+                .Select(t => (int?)t.TopicNumber)
+                .MaxAsync(ct) ?? 0;
+
+            _dbContext.Topics.Add(new Entities.Forum.Topic
+            {
+                TopicId = topicId,
+                BoardId = boardId,
+                TopicNumber = maxTopicNumber + 1,
+                AuthorId = authorId,
+                Title = createTopic.Title.Trim(),
+                Text = createTopic.Text.Trim(),
+                CreatedUtc = now,
+                IsRemoved = false,
+                IsClosed = false,
+                IsAttached = false,
+                CommentCount = 0
+            });
+            await _dbContext.SaveChangesAsync(ct);
+
+            // The board summary is recomputed here too, rather than incremented, so
+            // that creation, deletion and moving share one definition of it. The row
+            // lock above already serializes creation per board, so the extra read
+            // costs a query and buys the guarantee that the three paths cannot drift.
+            await RefreshBoardTopicSummary(boardId, ct);
+
+            await _dbContext.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        });
 
         return await _dbContext.Topics
             .TagWith("DM.Forum.CreatedTopic")

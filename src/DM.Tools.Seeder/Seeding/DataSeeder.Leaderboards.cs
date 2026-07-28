@@ -309,7 +309,6 @@ internal sealed partial class DataSeeder
         if (gameIds.Count > 0)
         {
             var playerCounts = await _dbContext.Set<Character>()
-                .Include(c => c.Author)
                 .Where(c => gameIds.Contains(c.GameId) &&
                            c.Status == CharacterStatus.Active &&
                            !c.IsNpc &&

@@ -64,6 +64,13 @@ internal class GameRepository : IGameRepository
         // The GameId tiebreaker makes the ordering unique so split-query
         // pagination stays deterministic: each collection subquery re-runs the
         // same ORDER BY + OFFSET/FETCH and must select the identical page.
+        // That fixes the ordering, not the snapshot: the subqueries are separate
+        // statements under READ COMMITTED, so a game created or removed between
+        // them shifts the OFFSET window and a card can render with another card's
+        // tags. Accepted deliberately — the window is milliseconds against a
+        // handful of writes a day, the damage is one wrong collection on one
+        // render, and the only real cure is keyset pagination, which changes the
+        // API contract. Revisit if game creation ever becomes high-volume.
         var orderedGames = ApplySorting(gamesQuery, query).ThenBy(g => g.GameId);
 
         var games = await orderedGames
@@ -177,7 +184,10 @@ internal class GameRepository : IGameRepository
         }
 
         // Players — unique authors of active non-NPC characters.
+        // AsNoTracking: these are read-only on this path, and one User entity per
+        // active character on the page is change-tracker weight for nothing.
         var playerData = await _dbContext.Characters
+            .AsNoTracking()
             .Where(c => gameIds.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc && c.AuthorId.HasValue)
             .Select(c => new { c.GameId, c.Author })
             .Where(c => c.Author != null)
@@ -205,6 +215,7 @@ internal class GameRepository : IGameRepository
 
         // Invitation tokens — single query instead of N subqueries.
         var tokens = await _dbContext.Tokens
+            .AsNoTracking()
             .Include(t => t.User)
             .Where(t => !t.IsRemoved &&
                         t.EntityId.HasValue &&
