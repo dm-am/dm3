@@ -56,13 +56,3 @@ export type WebsiteTestimonialsQuery = PagingQuery & {
   sortBy?: "created" | "author";
   sortOrder?: "asc" | "desc";
 };
-
-// Legacy type aliases for backwards compatibility
-/** @deprecated Use WebsiteTestimonialId instead */
-export type TestimonialId = WebsiteTestimonialId;
-
-/** @deprecated Use WebsiteTestimonial instead */
-export type Testimonial = WebsiteTestimonial;
-
-/** @deprecated Use WebsiteTestimonialsQuery instead */
-export type TestimonialsQuery = WebsiteTestimonialsQuery;

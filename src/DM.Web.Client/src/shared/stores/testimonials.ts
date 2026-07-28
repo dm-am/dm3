@@ -69,7 +69,7 @@ export const useTestimonialStore = defineStore("testimonials", () => {
   }
 
   async function removeTestimonial(id: WebsiteTestimonialId) {
-    const { error } = await CommunityApi.removeTestimonial(id);
+    const { error } = await CommunityApi.deleteTestimonial(id);
     if (!error && testimonials.value) {
       testimonials.value.resources = testimonials.value.resources.filter(
         (r) => r.id !== id,
@@ -79,7 +79,7 @@ export const useTestimonialStore = defineStore("testimonials", () => {
   }
 
   async function createTestimonial(text: string) {
-    const { data, error } = await CommunityApi.postTestimonial({ text });
+    const { data, error } = await CommunityApi.createTestimonial({ text });
     if (!error && data && testimonials.value) {
       testimonials.value.resources.unshift(data);
     }

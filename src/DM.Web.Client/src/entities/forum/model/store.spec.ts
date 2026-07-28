@@ -198,7 +198,7 @@ describe("useBoardsStore", () => {
       expect(typeof store.trySelectBoard).toBe("function");
       expect(typeof store.searchTopics).toBe("function");
       expect(typeof store.trySelectTopic).toBe("function");
-      expect(typeof store.fetchComments).toBe("function");
+      expect(typeof store.searchComments).toBe("function");
       expect(typeof store.fetchNews).toBe("function");
     });
 
@@ -427,7 +427,7 @@ describe("useBoardsStore", () => {
   // FETCH COMMENTS
   // ============================================================================
 
-  describe("fetchComments", () => {
+  describe("searchComments", () => {
     it("fetches comments for selected topic", async () => {
       const mockTopic = createMockTopic("topic-1", "Topic", "board-1");
       const mockComments = [createMockComment("comment-1", "Comment text")];
@@ -450,7 +450,7 @@ describe("useBoardsStore", () => {
 
       const store = useBoardsStore();
       await store.trySelectTopic("topic-1" as TopicId);
-      await store.fetchComments(1);
+      await store.searchComments({ number: 1 });
 
       expect(store.comments?.resources).toEqual(mockComments);
     });
@@ -469,7 +469,7 @@ describe("useBoardsStore", () => {
       });
 
       // Comments are cleared at start of fetch
-      const fetchPromise = store.fetchComments(1);
+      const fetchPromise = store.searchComments({ number: 1 });
       expect(store.comments).toBeNull();
 
       await fetchPromise;

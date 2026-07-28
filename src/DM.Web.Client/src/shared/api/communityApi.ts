@@ -6,7 +6,6 @@ import type {
   CreateWebsiteTestimonialRequest,
   UpdateWebsiteTestimonialRequest,
   // Legacy aliases
-  TestimonialId,
   User,
   UserProfile,
   Username,
@@ -147,20 +146,6 @@ export default new (class CommunityApi {
    */
   public deleteTestimonial(id: WebsiteTestimonialId) {
     return Api.delete(`testimonials/${id}`);
-  }
-
-  // Legacy aliases for backwards compatibility
-  /** @deprecated Use createTestimonial instead */
-  public postTestimonial(testimonial: {
-    text: string;
-    authorUsername?: string;
-  }) {
-    return this.createTestimonial({ text: testimonial.text });
-  }
-
-  /** @deprecated Use deleteTestimonial instead */
-  public removeTestimonial(id: TestimonialId) {
-    return this.deleteTestimonial(id);
   }
 
   public getUsernameHistory(username: Username) {
