@@ -17,11 +17,16 @@ export type PollOption = {
   id: Served<PollOptionId>;
   text: string;
   votesCount: Served<number>;
-  voted: Served<boolean | null>;
-  /** Users who voted for this option (null for anonymous polls, max 15) */
-  voters: UserRef[] | null;
-  /** Total voters count if exceeds 15 (null otherwise) */
-  totalVoters: number | null;
+  /**
+   * Optional on the wire, not just nullable: the API omits null fields
+   * (DefaultIgnoreCondition = WhenWritingNull), so an anonymous poll sends
+   * neither of the three fields below at all.
+   */
+  voted?: Served<boolean | null>;
+  /** Users who voted for this option (absent for anonymous polls, max 15) */
+  voters?: UserRef[] | null;
+  /** Total voters count if it exceeds 15 (absent otherwise) */
+  totalVoters?: number | null;
 };
 
 /**
