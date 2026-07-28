@@ -429,6 +429,21 @@ function Invoke-WithAnimationAndOutput {
     }
 }
 
+function Get-SeedSummary {
+    param(
+        [string]$Output,
+        [string]$Prefix
+    )
+
+    # The seeder prints exactly one "<prefix>: ..." summary line per command,
+    # already filtered down to what it actually created
+    $line = ($Output -split "`n" | Where-Object { $_ -match "^${Prefix}:" } | Select-Object -First 1)
+    if ($line) {
+        return ($line -replace "^${Prefix}:\s*", "").Trim()
+    }
+    return "done"
+}
+
 function Invoke-Seed {
     Write-Host ""
     Write-Host "DM3 Seed" -ForegroundColor Cyan
@@ -442,32 +457,22 @@ function Invoke-Seed {
         exit 1
     }
 
-    # Users (with animation)
-    $response = Invoke-WithAnimationAndOutput -Label "Users" -Command "curl.exe" -Arguments '-s -X POST "http://localhost:5000/v1/moderation/seed" -H "Content-Type: application/json"'
-    if ($null -eq $response) { exit 1 }
-    $result = $response | ConvertFrom-Json
-    Write-CompletedStep -Label "Users" -Total 1 -Detail "$($result.created) created"
+    # Seeding runs in its own container (tools profile), not over HTTP.
+    # --build keeps the image in step with the seed data in the sources.
+    Push-Location $DockerDir
+    try {
+        # Users (with animation)
+        $response = Invoke-WithAnimationAndOutput -Label "Users" -Command $script:DockerPath -Arguments "compose run --rm -T --build seeder users"
+        if ($null -eq $response) { exit 1 }
+        Write-CompletedStep -Label "Users" -Total 1 -Detail (Get-SeedSummary -Output $response -Prefix "users")
 
-    # Content (with animation)
-    $compResponse = Invoke-WithAnimationAndOutput -Label "Content" -Command "curl.exe" -Arguments '-s -X POST "http://localhost:5000/v1/moderation/seed/comprehensive" -H "Content-Type: application/json"'
-    if ($null -eq $compResponse) { exit 1 }
-    $compResult = $compResponse | ConvertFrom-Json
-
-    # Build content summary
-    $contentParts = @()
-    if ($compResult.gamesCreated -gt 0) { $contentParts += "$($compResult.gamesCreated) games" }
-    if ($compResult.postsCreated -gt 0) { $contentParts += "$($compResult.postsCreated) posts" }
-    if ($compResult.charactersCreated -gt 0) { $contentParts += "$($compResult.charactersCreated) chars" }
-    if ($compResult.topicsCreated -gt 0) { $contentParts += "$($compResult.topicsCreated) topics" }
-    if ($compResult.commentsCreated -gt 0) { $contentParts += "$($compResult.commentsCreated) comments" }
-    if ($compResult.blogsCreated -gt 0) { $contentParts += "$($compResult.blogsCreated) blogs" }
-    if ($compResult.publicationsCreated -gt 0) { $contentParts += "$($compResult.publicationsCreated) pubs" }
-    if ($compResult.messagesCreated -gt 0) { $contentParts += "$($compResult.messagesCreated) msgs" }
-    if ($compResult.pollsCreated -gt 0) { $contentParts += "$($compResult.pollsCreated) polls" }
-    if ($compResult.reviewsCreated -gt 0) { $contentParts += "$($compResult.reviewsCreated) reviews" }
-
-    $contentSummary = if ($contentParts.Count -gt 0) { $contentParts -join ", " } else { "nothing new (already seeded)" }
-    Write-CompletedStep -Label "Content" -Total 1 -Detail $contentSummary
+        # Content (with animation)
+        $compResponse = Invoke-WithAnimationAndOutput -Label "Content" -Command $script:DockerPath -Arguments "compose run --rm -T --build seeder content"
+        if ($null -eq $compResponse) { exit 1 }
+        Write-CompletedStep -Label "Content" -Total 1 -Detail (Get-SeedSummary -Output $compResponse -Prefix "content")
+    } finally {
+        Pop-Location
+    }
 
     # Restart API (with animation)
     if (-not (Invoke-WithAnimation -Label "Restart API" -Command $script:DockerPath -Arguments "restart dm-api")) {

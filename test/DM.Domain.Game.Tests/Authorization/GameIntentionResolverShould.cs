@@ -238,6 +238,43 @@ public class GameIntentionResolverShould : UnitTestBase
     }
 
     [Fact]
+    public void NotLetAnApplicantCommentUntilTheCharacterIsAccepted()
+    {
+        var applicantId = Guid.NewGuid();
+        // An application in review puts nobody into Players — that list is built
+        // from authors of Active non-NPC characters only. Applying may also leave
+        // a subscription behind, which must not stand in for acceptance either.
+        var game = Create.Game()
+            .WithCommentsAccessMode(CommentsAccessMode.Public)
+            .WithSubscribers(applicantId)
+            .Please();
+        var user = Create.User(applicantId)
+            .WithRole(UserRole.RegularUser)
+            .WithAccessPolicy(AccessPolicy.DemocraticBan)
+            .Please();
+
+        resolver.IsAllowed(user, GameIntention.CreateComment, game).Should().BeFalse();
+    }
+
+    [Fact]
+    public void LetTheApplicantCommentOnceTheCharacterIsAccepted()
+    {
+        var playerId = Guid.NewGuid();
+        var game = Create.Game()
+            .WithCommentsAccessMode(CommentsAccessMode.Public)
+            .WithSubscribers(playerId)
+            .WithPlayers(playerId)
+            .Please();
+        var user = Create.User(playerId)
+            .WithRole(UserRole.RegularUser)
+            .WithAccessPolicy(AccessPolicy.DemocraticBan)
+            .Please();
+
+        // Acceptance is what changes the answer, and only acceptance
+        resolver.IsAllowed(user, GameIntention.CreateComment, game).Should().BeTrue();
+    }
+
+    [Fact]
     public void NotTreatCuratorshipAsOwningTheGameUnderTheOrdinaryBan()
     {
         var mentorId = Guid.NewGuid();
