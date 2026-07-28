@@ -5,6 +5,7 @@ import { DataTable, type Column, type SortState } from "@/shared/ui/DataTable";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import Paging from "@/shared/ui/Paging/Paging.vue";
+import { formatDate } from "@/shared/lib/utils/datetime";
 import {
   UserLink,
   UserRating,
@@ -32,12 +33,8 @@ const emptyText = computed(() =>
     ? "Пользователей по заданным фильтрам не найдено"
     : "Пользователей пока нет",
 );
-const {
-  isOnline,
-  buildOnlineTooltip,
-  buildRegistrationTooltip,
-  formatDateShort,
-} = useUserDisplay();
+const { isOnline, buildOnlineTooltip, buildRegistrationTooltip } =
+  useUserDisplay();
 
 // Map column keys to sort field names (only for sortable columns)
 const columnToSortKey: Record<string, string> = {
@@ -267,7 +264,7 @@ function buildBlogsTooltip(row: {
       <!-- Registration date column -->
       <template #cell-registered="{ row }">
         <Tooltip :text="buildRegistrationTooltip(row)" focusable>
-          <span>{{ formatDateShort(row.registeredUtc) }}</span>
+          <span>{{ formatDate(row.registeredUtc) }}</span>
         </Tooltip>
       </template>
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from "@/shared/lib/utils/datetime";
 import { computed, ref, onMounted, watch } from "vue";
 import type { Username } from "@/shared/api/models/community";
 // The public warnings/bans endpoints return bare `UserWarningsInfo` /
@@ -13,7 +14,6 @@ import moderationApi, {
   type PublicBan,
 } from "@/shared/api/moderationApi";
 import { StatLine } from "@/shared/ui/StatLine";
-import dayjs from "dayjs";
 
 // Mirrors the backend warning policy (6+ points in 30 days triggers an
 // automatic ban — see WarningController.cs remarks). Not exposed by the
@@ -59,14 +59,12 @@ const warningPoints = computed(() => warningsInfo.value?.totalPoints ?? 0);
 
 function formatActiveBan(ban: PublicBan): string {
   if (ban.type === BanType.Permanent) return "полный бессрочный";
-  if (ban.expiresUtc) return `до ${dayjs(ban.expiresUtc).format("DD.MM.YYYY")}`;
+  if (ban.expiresUtc) return `до ${formatDate(ban.expiresUtc)}`;
   return "активный";
 }
 
 function formatLastBan(ban: PublicBan, ordinal: number): string {
-  const start = ban.startedUtc
-    ? dayjs(ban.startedUtc).format("DD.MM.YYYY")
-    : "";
+  const start = ban.startedUtc ? formatDate(ban.startedUtc) : "";
   return `${ordinal}-й${start ? ` с ${start}` : ""}`;
 }
 </script>

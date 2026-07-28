@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from "@/shared/lib/utils/datetime";
 import { computed, onMounted, reactive, ref, toRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { LocationQueryRaw } from "vue-router";
@@ -246,7 +247,7 @@ const lastActivityFormatted = computed(() =>
 
 const registrationDate = computed(() => {
   const value = user.value?.registeredUtc ?? user.value?.registrationUtc;
-  return value ? dayjs(value).format("DD.MM.YYYY") : "";
+  return formatDate(value, "");
 });
 
 const ratingEnabled = computed(() => user.value?.rating?.isEnabled ?? false);
@@ -553,7 +554,7 @@ watch(usernameParam, async () => {
             >
               <span class="history-old">{{ entry.oldUsername }}</span>
               <span class="history-when">{{
-                dayjs(entry.changedUtc).format("DD.MM.YYYY")
+                formatDate(entry.changedUtc)
               }}</span>
             </div>
           </div>

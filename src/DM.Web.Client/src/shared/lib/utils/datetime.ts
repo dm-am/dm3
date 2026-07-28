@@ -4,10 +4,21 @@ import dayjs from "dayjs";
 
 /**
  * Format a date string as "DD.MM.YYYY" (local time) — date only, no time.
- * Returns "—" for null/undefined/empty input.
+ *
+ * The empty token is a parameter so that exactly one place owns the format
+ * string while a caller that needs a falsy placeholder can ask for one: a filter
+ * chip renders "" where a table cell renders "—", and that is the only thing
+ * the four separate implementations this replaced actually disagreed about.
+ *
+ * Parsing goes through dayjs on purpose. A bare "YYYY-MM-DD" is local midnight
+ * to dayjs and UTC midnight to `new Date`, so the naive route shifts the day by
+ * one for anyone west of Greenwich.
  */
-export function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return "—";
+export function formatDate(
+  dateStr: string | null | undefined,
+  emptyToken = "—",
+): string {
+  if (!dateStr) return emptyToken;
   return dayjs(dateStr).format("DD.MM.YYYY");
 }
 

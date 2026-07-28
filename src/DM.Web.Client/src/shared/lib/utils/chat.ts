@@ -1,3 +1,4 @@
+import { formatDate } from "@/shared/lib/utils/datetime";
 /**
  * Pure utility functions for chat message rendering.
  * Shared between GlobalChatPage, ChatView, and future chat components.
@@ -65,7 +66,7 @@ export function formatSeparatorDate(dateStr: string): string {
 
   if (date.isSame(today, "day")) return "Сегодня";
   if (date.isSame(yesterday, "day")) return "Вчера";
-  return date.format("DD.MM.YYYY");
+  return formatDate(dateStr);
 }
 
 // =============================================================================
