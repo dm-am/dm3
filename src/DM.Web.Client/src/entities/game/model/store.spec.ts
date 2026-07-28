@@ -512,6 +512,44 @@ describe("useGameDetailsStore", () => {
   // LOAD ROOMS
   // ============================================================================
 
+  describe("participation flags", () => {
+    // The wire carries GameParticipation names (Owner/Authority/Moderator), not
+    // the site-level GameRole names the client used to mirror. Only Player and
+    // Reader overlapped between the two, so a master matched nothing at all.
+    it.each([
+      [["Owner", "Authority"], { isMaster: true, isAssistant: false, isPlayer: true }],
+      [["Authority"], { isMaster: false, isAssistant: true, isPlayer: false }],
+      [["Moderator"], { isMaster: false, isAssistant: false, isPlayer: true }],
+      [["Player"], { isMaster: false, isAssistant: false, isPlayer: true }],
+      [["Reader"], { isMaster: false, isAssistant: false, isPlayer: false }],
+    ])("reads %j", async (participation, expected) => {
+      const mockGame = {
+        ...createMockGame("game-1", "Test Game"),
+        participation: asServed(participation),
+      };
+      mockGetGame.mockResolvedValue({ data: mockGame, error: null });
+
+      const store = useGameDetailsStore();
+      await store.loadGame("game-1");
+
+      expect(store.isMaster).toBe(expected.isMaster);
+      expect(store.isAssistant).toBe(expected.isAssistant);
+      expect(store.isPlayer).toBe(expected.isPlayer);
+    });
+
+    it("treats the master as subscribed only when Reader is present", async () => {
+      const mockGame = {
+        ...createMockGame("game-1", "Test Game"),
+        participation: asServed(["Owner", "Authority"]),
+      };
+      mockGetGame.mockResolvedValue({ data: mockGame, error: null });
+
+      const store = useGameDetailsStore();
+      await store.loadGame("game-1");
+
+      expect(store.isSubscribed).toBe(false);
+    });
+  });
   describe("loadRooms", () => {
     it("loads rooms for game", async () => {
       const mockRooms: Room[] = [

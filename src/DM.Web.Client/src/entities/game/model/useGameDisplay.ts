@@ -1,6 +1,6 @@
 import { ref, onUnmounted } from "vue";
 import type { Game, GameRef, Room } from "./types";
-import { GameRole, RoomAccessPolicy, RoomAccessType } from "./types";
+import { GameParticipation, RoomAccessPolicy, RoomAccessType } from "./types";
 import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
 import { useAuthStore } from "@/shared/stores/auth";
 
@@ -248,9 +248,9 @@ export function useGameDisplay() {
 
     const participation = game?.participation;
     if (
-      participation?.includes(GameRole.Master) ||
-      participation?.includes(GameRole.Assistant) ||
-      participation?.includes(GameRole.Mentor)
+      participation?.includes(GameParticipation.Owner) ||
+      participation?.includes(GameParticipation.Authority) ||
+      participation?.includes(GameParticipation.Moderator)
     ) {
       return true;
     }

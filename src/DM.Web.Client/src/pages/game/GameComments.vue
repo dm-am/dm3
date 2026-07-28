@@ -16,7 +16,7 @@ import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import Button from "@/shared/ui/Button/Button.vue";
 import { gameApi } from "@/entities/game";
 import { AccessPolicy } from "@/shared/api/models/community";
-import { CommentariesAccessMode, GameRole } from "@/entities/game";
+import { CommentariesAccessMode, GameParticipation } from "@/entities/game";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
@@ -89,10 +89,10 @@ const isModerator = computed(() => userIsModerator(user.value));
 const isParticipant = computed(() => {
   if (!game.value?.participation) return false;
   return (
-    game.value.participation.includes(GameRole.Player) ||
-    game.value.participation.includes(GameRole.Mentor) ||
-    game.value.participation.includes(GameRole.Master) ||
-    game.value.participation.includes(GameRole.Reader)
+    game.value.participation.includes(GameParticipation.Player) ||
+    game.value.participation.includes(GameParticipation.Moderator) ||
+    game.value.participation.includes(GameParticipation.Owner) ||
+    game.value.participation.includes(GameParticipation.Reader)
   );
 });
 

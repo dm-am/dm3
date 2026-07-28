@@ -17,6 +17,7 @@ import type {
   GameStatusTransition,
   GamePremoderationTransition,
 } from "./types";
+import { GameParticipation } from "./types";
 import type {
   ListEnvelope,
   Paging,
@@ -354,18 +355,25 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   // which serializes the API's GameParticipation flags (see DM.Web.API
   // Game.cs), NOT GameRole names: Owner (master), Authority (master or
   // assistant), PendingAssistant, Player, Reader, Moderator (game mentor).
-  const participation = computed<string[]>(
-    () => (game.value?.participation as unknown as string[]) ?? [],
+  const participation = computed<GameParticipation[]>(
+    () => game.value?.participation ?? [],
   );
-  const isMaster = computed(() => participation.value.includes("Owner"));
+  const isMaster = computed(() =>
+    participation.value.includes(GameParticipation.Owner),
+  );
   const isAssistant = computed(
-    () => participation.value.includes("Authority") && !isMaster.value,
+    () =>
+      participation.value.includes(GameParticipation.Authority) && !isMaster.value,
   );
-  const isMentor = computed(() => participation.value.includes("Moderator"));
-  const isSubscribed = computed(() => participation.value.includes("Reader"));
+  const isMentor = computed(() =>
+    participation.value.includes(GameParticipation.Moderator),
+  );
+  const isSubscribed = computed(() =>
+    participation.value.includes(GameParticipation.Reader),
+  );
   const isPlayer = computed(
     () =>
-      participation.value.includes("Player") ||
+      participation.value.includes(GameParticipation.Player) ||
       isMentor.value ||
       isMaster.value,
   );
