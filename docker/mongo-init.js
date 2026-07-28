@@ -164,6 +164,25 @@ db.Dice.createIndex(
 print('Dice indexes created');
 
 // ============================================================================
+// LoginAttempts Collection (login throttling and lockout)
+// Used by: LoginAttemptRepository
+// Query: Email = X (reset from every address on a successful login)
+// TTL: counters have to decay, otherwise typos spread over months add up
+// ============================================================================
+
+db.LoginAttempts.createIndex(
+    { Email: 1 },
+    { name: "IX_LoginAttempts_Email", background: true }
+);
+
+db.LoginAttempts.createIndex(
+    { LastAttemptUtc: 1 },
+    { name: "IX_LoginAttempts_Expiry", background: true, expireAfterSeconds: 86400 }
+);
+
+print('LoginAttempts indexes created');
+
+// ============================================================================
 // Summary
 // ============================================================================
 
@@ -173,6 +192,7 @@ print('Collections indexed:');
 print('  - UnreadCounters (4 indexes) - CRITICAL for sidebar performance');
 print('  - UserSessions (1 index) - CRITICAL for every authenticated request');
 print('  - UserSettings (1 index)');
+print('  - LoginAttempts (2 indexes, one TTL)');
 print('  - RealtimeNotifications (2 indexes)');
 print('  - Polls (2 indexes)');
 print('  - AttributeSchemata (1 index)');

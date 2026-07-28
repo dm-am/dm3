@@ -78,8 +78,8 @@ public class AuthenticationServiceShould : UnitTestBase
     {
         var email = "test@example.com";
         _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(email)).ReturnsAsync(true);
-        _loginAttemptTracker.Setup(t => t.GetRemainingLockoutSeconds(email)).ReturnsAsync(300);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(true);
+        _loginAttemptTracker.Setup(t => t.GetRemainingLockoutSeconds(new LoginAttemptOrigin(email, null))).ReturnsAsync(300);
 
         var result = await _service.Authenticate(email, "password");
 
@@ -92,15 +92,15 @@ public class AuthenticationServiceShould : UnitTestBase
     {
         var email = "test@example.com";
         _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(email)).ReturnsAsync(0);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
         _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync(((bool, AuthenticatedUser?))(false, null));
 
         var result = await _service.Authenticate(email, "password");
 
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.WrongLogin);
-        _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(email), Times.Once);
+        _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(new LoginAttemptOrigin(email, null)), Times.Once);
     }
 
     [Fact]
@@ -118,8 +118,8 @@ public class AuthenticationServiceShould : UnitTestBase
         };
 
         _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(email)).ReturnsAsync(0);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
         _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
         _securityManager.Setup(s => s.ComparePasswords("wrongpassword", user.Salt, user.PasswordHash))
             .Returns(false);
@@ -128,7 +128,7 @@ public class AuthenticationServiceShould : UnitTestBase
 
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.WrongPassword);
-        _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(email), Times.Once);
+        _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(new LoginAttemptOrigin(email, null)), Times.Once);
         _auditService.Verify(a => a.LogAsync(user.UserId, SecurityEventType.LoginFailure,
             It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()), Times.Once);
     }
@@ -155,8 +155,8 @@ public class AuthenticationServiceShould : UnitTestBase
         var settings = UserSettings.Default;
 
         _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(email)).ReturnsAsync(0);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
         _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
         _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
             .Returns(true);
@@ -186,8 +186,8 @@ public class AuthenticationServiceShould : UnitTestBase
             .Please();
 
         _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(email)).ReturnsAsync(0);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
         _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
         _securityManager.Setup(s => s.ComparePasswords("password", "salt", "hash")).Returns(true);
 
@@ -344,8 +344,8 @@ public class AuthenticationServiceShould : UnitTestBase
         ];
 
         _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(email)).ReturnsAsync(0);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
         _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
         _securityManager.Setup(s => s.ComparePasswords("password", "salt", "hash")).Returns(true);
 

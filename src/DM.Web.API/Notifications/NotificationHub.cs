@@ -61,6 +61,15 @@ public class NotificationHub : Hub<INotificationHub>
         await base.OnDisconnectedAsync(exception);
     }
 
+    /// <remarks>
+    /// Cookie only. There used to be an access_token query-string fallback "for
+    /// non-browser clients" — it had none: the SPA connects with credentials and
+    /// no accessTokenFactory, and nothing else in the repository talks to the hub.
+    /// What it did have was a full session credential in a URL, which the reverse
+    /// proxy writes verbatim into its access log, undoing the HttpOnly guarantee
+    /// the BFF design exists for. A future non-browser client belongs on the
+    /// Authorization header at negotiate, not in the query string.
+    /// </remarks>
     private (bool success, string token) TryExtractAuthToken()
     {
         var httpContext = Context.GetHttpContext();
@@ -71,19 +80,9 @@ public class NotificationHub : Hub<INotificationHub>
 
         // BFF cookie-based auth: the SignalR negotiate/upgrade request
         // carries the same HttpOnly session cookie as regular API calls
-        if (httpContext.Request.Cookies.TryGetValue(ApiCredentialsStorage.AuthCookieName, out var cookieToken) &&
-            !string.IsNullOrEmpty(cookieToken))
-        {
-            return (true, cookieToken);
-        }
-
-        // Fallback: explicit access_token query parameter (non-browser clients)
-        if (httpContext.Request.Query.TryGetValue("access_token", out var queryValues) &&
-            queryValues.Any() && !string.IsNullOrEmpty(queryValues.First()))
-        {
-            return (true, queryValues.First()!);
-        }
-
-        return (false, string.Empty);
+        return httpContext.Request.Cookies.TryGetValue(ApiCredentialsStorage.AuthCookieName, out var cookieToken)
+               && !string.IsNullOrEmpty(cookieToken)
+            ? (true, cookieToken)
+            : (false, string.Empty);
     }
 }

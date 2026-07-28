@@ -10,32 +10,32 @@ public interface ILoginAttemptTracker
     /// <summary>
     /// Get the delay that should be applied before allowing a login attempt
     /// </summary>
-    /// <param name="email">User email</param>
+    /// <param name="origin">Account and client address of the attempt</param>
     /// <returns>Delay in seconds</returns>
-    Task<int> GetDelayForUser(string email);
+    Task<int> GetDelayForUser(LoginAttemptOrigin origin);
 
     /// <summary>
-    /// Check if account is locked due to too many failed attempts
+    /// Check if the attempt is locked out due to too many failed attempts
     /// </summary>
-    /// <param name="email">User email</param>
-    /// <returns>True if account is locked, false otherwise</returns>
-    Task<bool> IsAccountLocked(string email);
+    /// <param name="origin">Account and client address of the attempt</param>
+    /// <returns>True if locked out, false otherwise</returns>
+    Task<bool> IsAccountLocked(LoginAttemptOrigin origin);
 
     /// <summary>
     /// Get the remaining lockout time in seconds
     /// </summary>
-    /// <param name="email">User email</param>
+    /// <param name="origin">Account and client address of the attempt</param>
     /// <returns>Remaining lockout time in seconds, 0 if not locked</returns>
-    Task<int> GetRemainingLockoutSeconds(string email);
+    Task<int> GetRemainingLockoutSeconds(LoginAttemptOrigin origin);
 
     /// <summary>
     /// Record a failed login attempt
     /// </summary>
-    /// <param name="email">User email</param>
-    Task RecordFailedAttempt(string email);
+    /// <param name="origin">Account and client address of the attempt</param>
+    Task RecordFailedAttempt(LoginAttemptOrigin origin);
 
     /// <summary>
-    /// Reset login attempts for a user (called on successful login)
+    /// Reset login attempts for an account, from every address (called on successful login)
     /// </summary>
     /// <param name="email">User email</param>
     Task ResetAttempts(string email);

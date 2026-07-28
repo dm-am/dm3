@@ -66,10 +66,12 @@ internal class AuthenticationService : IAuthenticationService
             return Identity.Fail(AuthenticationError.PendingRegistration);
         }
 
-        // 2. THROTTLING - only for actual login attempts
-        if (await _loginAttemptTracker.IsAccountLocked(email))
+        // 2. THROTTLING - only for actual login attempts.
+        // Counted per account and address, not per account: see LoginAttemptOrigin.
+        var origin = new LoginAttemptOrigin(email, context?.IpAddress);
+        if (await _loginAttemptTracker.IsAccountLocked(origin))
         {
-            var remainingSeconds = await _loginAttemptTracker.GetRemainingLockoutSeconds(email);
+            var remainingSeconds = await _loginAttemptTracker.GetRemainingLockoutSeconds(origin);
             _logger.LogWarning("Login failed: account locked due to too many failed attempts. RemainingSeconds={RemainingSeconds}",
                 remainingSeconds);
 
@@ -85,7 +87,7 @@ internal class AuthenticationService : IAuthenticationService
         }
 
         // Progressive delay for bot protection
-        var delaySeconds = await _loginAttemptTracker.GetDelayForUser(email);
+        var delaySeconds = await _loginAttemptTracker.GetDelayForUser(origin);
         if (delaySeconds > 0)
         {
             await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
@@ -98,7 +100,7 @@ internal class AuthenticationService : IAuthenticationService
         switch (userFound)
         {
             case false:
-                await _loginAttemptTracker.RecordFailedAttempt(email);
+                await _loginAttemptTracker.RecordFailedAttempt(origin);
                 _logger.LogWarning("Login failed: user not found");
                 return Identity.Fail(AuthenticationError.WrongLogin);
             case true when user!.IsRemoved:
@@ -108,7 +110,7 @@ internal class AuthenticationService : IAuthenticationService
                 _logger.LogWarning("Login failed: account banned. UserId={UserId}", user.UserId);
                 return Identity.Fail(AuthenticationError.Banned);
             case true when !_securityManager.ComparePasswords(password, user.Salt, user.PasswordHash):
-                await _loginAttemptTracker.RecordFailedAttempt(email);
+                await _loginAttemptTracker.RecordFailedAttempt(origin);
                 await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
                     context?.IpAddress, context?.UserAgent, "Wrong password");
                 _logger.LogWarning("Login failed: wrong password. UserId={UserId}", user.UserId);

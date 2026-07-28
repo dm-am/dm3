@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using DbAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema;
 using DbDiceRoll = DM.Infrastructure.Persistence.Entities.Game.Posts.DiceRoll;
+using DbLoginAttempt = DM.Infrastructure.Persistence.Entities.Account.LoginAttempt;
 using DbNotification = DM.Infrastructure.Persistence.Entities.Personal.Notifications.Notification;
 using DbPoll = DM.Infrastructure.Persistence.Entities.Forum.Poll;
 using DbSession = DM.Infrastructure.Persistence.Entities.Account.Session;
@@ -160,7 +161,31 @@ public class MongoIndexInitializer : IHostedService
             Index<DbDiceRoll>("IX_Dice_PostId", keys => keys
                 .Ascending(d => d.PostId)),
         }, cancellationToken);
+
+        // LoginAttempts — LoginAttemptRepository
+        await Assert(client.GetCollection<DbLoginAttempt>(), new[]
+        {
+            // ResetAttempts on a successful login clears the account's records from
+            // every address: Eq(x => x.Email, email). The _id is the (email, address)
+            // pair, so this predicate has no covering index of its own.
+            Index<DbLoginAttempt>("IX_LoginAttempts_Email", keys => keys
+                .Ascending(a => a.Email)),
+
+            // Counters have to decay. Without this a handful of typos spread over
+            // months accumulates to the lockout threshold and locks the account out
+            // of nowhere. CleanupExpiredRecords exists but nothing calls it.
+            Index<DbLoginAttempt>("IX_LoginAttempts_Expiry", keys => keys
+                .Ascending(a => a.LastAttemptUtc),
+                expireAfter: TimeSpan.FromHours(LoginAttemptRetentionHours)),
+        }, cancellationToken);
     }
+
+    /// <summary>
+    /// Mirrors AuthenticationConfiguration.LoginAttemptExpirationHours. A TTL index
+    /// is part of the stored index descriptor, so it cannot be bound to configuration
+    /// without dropping and recreating the index on every value change.
+    /// </summary>
+    private const int LoginAttemptRetentionHours = 24;
 
     /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
@@ -168,8 +193,10 @@ public class MongoIndexInitializer : IHostedService
     private static CreateIndexModel<TEntity> Index<TEntity>(
         string name,
         Func<IndexKeysDefinitionBuilder<TEntity>, IndexKeysDefinition<TEntity>> keys,
-        bool unique = false) =>
-        new(keys(Builders<TEntity>.IndexKeys), new CreateIndexOptions { Name = name, Unique = unique });
+        bool unique = false,
+        TimeSpan? expireAfter = null) =>
+        new(keys(Builders<TEntity>.IndexKeys),
+            new CreateIndexOptions { Name = name, Unique = unique, ExpireAfter = expireAfter });
 
     private async Task Assert<TEntity>(
         IMongoCollection<TEntity> collection,
