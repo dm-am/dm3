@@ -220,6 +220,42 @@ public class GameIntentionResolverShould : UnitTestBase
     }
 
     [Fact]
+    public void NotTreatASubscriptionAsOwningTheGameUnderTheOrdinaryBan()
+    {
+        var userId = Guid.NewGuid();
+        var game = Create.Game()
+            .WithCommentsAccessMode(CommentsAccessMode.Public)
+            .WithSubscribers(userId)
+            .Please();
+        var user = Create.User(userId)
+            .WithRole(UserRole.RegularUser)
+            .WithAccessPolicy(AccessPolicy.DemocraticBan)
+            .Please();
+
+        // Subscribing is one self-service request against any public game. If it
+        // counted as belonging, the ban would be undone by pressing a button.
+        resolver.IsAllowed(user, GameIntention.CreateComment, game).Should().BeFalse();
+    }
+
+    [Fact]
+    public void NotTreatCuratorshipAsOwningTheGameUnderTheOrdinaryBan()
+    {
+        var mentorId = Guid.NewGuid();
+        var game = Create.Game()
+            .WithCommentsAccessMode(CommentsAccessMode.Public)
+            .WithMentor(mentorId)
+            .Please();
+        var user = Create.User(mentorId)
+            .WithRole(UserRole.RegularUser)
+            .WithAccessPolicy(AccessPolicy.DemocraticBan)
+            .Please();
+
+        // A mentor curates the game without playing in it — the same reason they
+        // are not a game lead for [private] visibility
+        resolver.IsAllowed(user, GameIntention.CreateComment, game).Should().BeFalse();
+    }
+
+    [Fact]
     public void ForbidCommentingOwnGameUnderAFullBan()
     {
         var masterId = Guid.NewGuid();

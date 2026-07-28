@@ -9,7 +9,6 @@ import {
   AvatarImg,
 } from "@/entities/user";
 import { useUiStore } from "@/shared/stores/ui";
-import { AccessPolicy } from "@/shared/api/models/community";
 import {
   groupMessagesWithSeparators,
   isDateSeparator,
@@ -43,14 +42,6 @@ const {
 
 const MAX_MESSAGE_HEIGHT = 200;
 
-const isBanned = computed(() => {
-  if (!currentUser.value?.accessPolicy) return false;
-  const policy = currentUser.value.accessPolicy;
-  return (
-    policy === AccessPolicy.DemocraticBan || policy === AccessPolicy.FullBan
-  );
-});
-
 // Message permissions (shared composable)
 const {
   isModerator,
@@ -59,7 +50,10 @@ const {
   canLike: canLikeMsg,
 } = useMessagePermissions(currentUser);
 
-const canSendMessages = computed(() => currentUser.value && !isBanned.value);
+// Private correspondence is deliberately outside the ordinary ban, so the only
+// condition here is being signed in. The server agrees: the ban check in
+// ChatIntentionResolver applies to the global chat branch alone.
+const canSendMessages = computed(() => !!currentUser.value);
 
 const newMessage = ref("");
 const messagesContainer = ref<HTMLElement | null>(null);
@@ -687,9 +681,6 @@ onUnmounted(() => {
               Отправить
             </button>
           </template>
-          <secondary-text v-else-if="isBanned" class="banned-hint">
-            Вы не можете отправлять сообщения из-за ограничений аккаунта
-          </secondary-text>
         </div>
       </div>
 
@@ -968,11 +959,6 @@ onUnmounted(() => {
   align-self: flex-start
   +button
 
-.banned-hint
-  flex: 1
-  text-align: center
-  padding: $small
-  color: $accent-red
 
 // Compact display — wrapper overrides only (own elements). The compact
 // header/content layout itself is handled by ChatMessage's `compact` prop.

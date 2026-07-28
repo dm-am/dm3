@@ -92,7 +92,7 @@ internal class GameIntentionResolver :
                 !target.BlacklistedUsers.Any(b => b.UserId == user.UserId) &&
                 (target.CommentsAccessMode == CommentsAccessMode.Public ||
                 target.GetRoles(user.UserId).HasAnyRole()) &&
-                user.MaySpeak(inOwnSpace: target.GetRoles(user.UserId).HasAnyRole()),
+                user.MaySpeak(inOwnSpace: target.GetRoles(user.UserId).IsParticipant()),
 
             // Character creation when:
             // - game is active AND recruitment is open, OR

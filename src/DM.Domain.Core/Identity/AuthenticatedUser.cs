@@ -57,5 +57,11 @@ public class AuthenticatedUser : GeneralUser, IAuthorizationSubject
     /// <summary>
     /// Basic guest user (unauthenticated)
     /// </summary>
-    public static readonly AuthenticatedUser Guest = new();
+    /// <remarks>
+    /// A fresh instance per call, not a shared one: identities are mutated after
+    /// construction when active bans are folded in, and a single object handed to
+    /// every anonymous request in the process would carry one request's mutation
+    /// into all the others.
+    /// </remarks>
+    public static AuthenticatedUser Guest => new();
 }

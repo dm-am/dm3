@@ -761,16 +761,29 @@ internal class GameRepository : IGameRepository
         return game;
     }
 
-    public Task<GameDto?> GetGame(Guid gameId, Guid userId, CancellationToken ct = default)
+    public async Task<GameDto?> GetGame(Guid gameId, Guid userId, CancellationToken ct = default)
     {
-        return _dbContext.Games
+        var game = await _dbContext.Games
             .Where(GameAccessibilityFilters.GameAvailable(userId))
             .Where(g => g.GameId == gameId)
             // GameDto's three collections (GameTags/Assistants/BlackList) would
             // otherwise multiply into a cartesian product on a single query.
             .ProjectTo<GameDto>(_mapper.ConfigurationProvider)
             .AsSplitQuery()
-            .FirstOrDefaultAsync(ct)!;
+            .FirstOrDefaultAsync(ct);
+
+        if (game is not null)
+        {
+            // Players and SubscriberIds are ignored by the projection and filled
+            // only here. This load is the one every authorization decision about
+            // a game is made on — GetRoles cannot see a player at all without it,
+            // so without this call an accepted player is indistinguishable from a
+            // stranger: private-comment access and the ban's own-game exemption
+            // both resolve against an empty player list.
+            await EnrichGamesAsync(new[] { game }, ct);
+        }
+
+        return game;
     }
 
     public Task<GameDto?> GetGameByPublicId(string publicId, Guid userId, CancellationToken ct = default)

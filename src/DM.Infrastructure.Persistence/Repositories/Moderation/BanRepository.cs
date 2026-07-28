@@ -42,7 +42,7 @@ internal class BanRepository : IBanRepository
     {
         var now = _dateTimeProvider.Now;
         return await _dbContext.Bans
-            .Where(b => b.TargetUserId == userId && !b.IsRemoved && b.EndedUtc > now)
+            .Where(b => b.TargetUserId == userId && !b.IsRemoved && b.StartedUtc <= now && b.EndedUtc > now)
             .OrderByDescending(b => b.EndedUtc)
             .ProjectTo<Ban>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
@@ -95,7 +95,7 @@ internal class BanRepository : IBanRepository
     {
         var now = _dateTimeProvider.Now;
         return await _dbContext.Bans
-            .AnyAsync(b => b.TargetUserId == userId && !b.IsRemoved && b.EndedUtc > now, ct);
+            .AnyAsync(b => b.TargetUserId == userId && !b.IsRemoved && b.StartedUtc <= now && b.EndedUtc > now, ct);
     }
 
     /// <inheritdoc />
@@ -103,7 +103,7 @@ internal class BanRepository : IBanRepository
     {
         var now = _dateTimeProvider.Now;
         return await _dbContext.Bans
-            .Where(b => !b.IsRemoved && b.EndedUtc > now)
+            .Where(b => !b.IsRemoved && b.StartedUtc <= now && b.EndedUtc > now)
             .OrderByDescending(b => b.StartedUtc)
             .ProjectTo<Ban>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);

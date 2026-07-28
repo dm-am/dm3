@@ -21,8 +21,13 @@ public readonly record struct AccessRestriction(
     DateTimeOffset EndedUtc)
 {
     /// <summary>
-    /// Whether the restriction is in force at the given moment
+    /// Whether the restriction is in force at the given moment.
     /// </summary>
+    /// <remarks>
+    /// This is the single definition of "banned right now". Any query that lists
+    /// active bans must express the same predicate, or the moderation screens and
+    /// the enforcement disagree about the same user.
+    /// </remarks>
     public bool IsInForceAt(DateTimeOffset moment) =>
-        StartedUtc <= moment && moment <= EndedUtc;
+        StartedUtc <= moment && moment < EndedUtc;
 }
