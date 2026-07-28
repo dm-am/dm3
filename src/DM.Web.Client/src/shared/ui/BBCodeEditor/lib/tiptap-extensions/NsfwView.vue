@@ -99,7 +99,7 @@ onBeforeUnmount(unregister);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/BbcodeContent"
+@import "@/assets/styles/BbcodeContent"
 
 .nsfw-wrapper
   display: block

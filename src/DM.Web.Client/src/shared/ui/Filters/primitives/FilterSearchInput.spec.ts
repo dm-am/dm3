@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
-import FilterSearchInput from "../primitives/FilterSearchInput.vue";
+import FilterSearchInput from "./FilterSearchInput.vue";
 
 // Mock SvgIcon
 const SvgIconStub = {

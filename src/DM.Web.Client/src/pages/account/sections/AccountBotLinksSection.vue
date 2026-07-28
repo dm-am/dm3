@@ -260,7 +260,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 @import "../AccountPage.styles"
 
 .bot-links-content

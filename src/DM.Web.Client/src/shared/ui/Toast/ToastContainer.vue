@@ -43,7 +43,7 @@ const { toasts, dismiss, pause, resume } = useToast();
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/ZIndex"
+@import "@/assets/styles/ZIndex"
 
 .toast-container
   position: fixed

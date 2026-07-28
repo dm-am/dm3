@@ -48,7 +48,7 @@ withDefaults(
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Skeleton"
 
 // Inter-card gap matches the real forum comments list ($small); the game
 // comments list packs them flush (gap 0) via its dashed-border handoff.

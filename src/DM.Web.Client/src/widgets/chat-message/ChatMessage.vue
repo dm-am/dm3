@@ -514,7 +514,7 @@ function initMessageBbcode(el: HTMLElement) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 // ============================================================================
 // ChatMessage — shared message styles for global chat and messenger

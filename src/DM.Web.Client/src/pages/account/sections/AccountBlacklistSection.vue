@@ -210,7 +210,7 @@ async function unblock(username: string) {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 @import "../AccountPage.styles"
 
 .blacklist-content

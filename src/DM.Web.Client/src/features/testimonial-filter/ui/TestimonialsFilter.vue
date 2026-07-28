@@ -76,7 +76,7 @@ function handleSortOrderChange(order: "asc" | "desc") {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Filters"
+@import "@/assets/styles/Filters"
 
 .testimonials-filter
   display: flex

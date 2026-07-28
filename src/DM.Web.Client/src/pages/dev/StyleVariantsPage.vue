@@ -732,7 +732,7 @@ const calYears = Array.from({ length: 12 }, (_, i) => 2015 + i);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .section-intro
   margin: 0 0 $medium

@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
-import MonthYearPicker from "../MonthYearPicker.vue";
+import MonthYearPicker from "./MonthYearPicker.vue";
 
 describe("MonthYearPicker", () => {
   const mountComponent = (props: Record<string, unknown> = {}) => {

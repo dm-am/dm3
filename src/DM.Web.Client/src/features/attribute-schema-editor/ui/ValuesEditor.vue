@@ -106,7 +106,7 @@ function removeRow(key: number) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .values-editor
   display: flex

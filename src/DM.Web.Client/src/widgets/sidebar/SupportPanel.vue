@@ -65,7 +65,7 @@ void fetch();
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .fetch-error
   display: block

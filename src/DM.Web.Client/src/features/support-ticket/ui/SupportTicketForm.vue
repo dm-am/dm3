@@ -326,8 +326,8 @@ const reset = () => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
+@import "@/assets/styles/Variables"
+@import "@/assets/styles/Themes"
 
 .support-form
   :deep(.form-field-row) input

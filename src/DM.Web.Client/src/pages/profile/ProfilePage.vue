@@ -938,8 +938,8 @@ watch(usernameParam, async () => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/_ZIndex"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/_ZIndex"
 
 // gap=$small (8) is the base — for the H1→identity and identity→"Контакты" pairs,
 // which perceptually work better tighter. Between "Контакты" and Tabs,

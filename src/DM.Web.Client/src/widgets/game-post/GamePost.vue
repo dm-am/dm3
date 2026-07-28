@@ -822,8 +822,8 @@ async function submitReview() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/Animations"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/Animations"
 
 // ============================================================================
 // Game Post — layout dimensions matching DM2

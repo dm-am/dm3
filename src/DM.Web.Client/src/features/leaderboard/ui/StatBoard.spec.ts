@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import { createPinia } from "pinia";
-import StatBoard from "../ui/StatBoard.vue";
+import StatBoard from "./StatBoard.vue";
 import type { LeaderboardEntry } from "@/shared/api/models/community";
 
 const entry = (over: Partial<LeaderboardEntry> = {}): LeaderboardEntry => ({

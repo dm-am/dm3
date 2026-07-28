@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia } from "pinia";
-import PeriodDigestBoards from "../ui/PeriodDigestBoards.vue";
+import PeriodDigestBoards from "./PeriodDigestBoards.vue";
 import {
   expandAll,
   collapseAll,

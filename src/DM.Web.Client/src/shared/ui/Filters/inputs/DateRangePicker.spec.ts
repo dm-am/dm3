@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
-import DateRangePicker from "../inputs/DateRangePicker.vue";
+import DateRangePicker from "./DateRangePicker.vue";
 import FilterApplyButton from "../primitives/FilterApplyButton.vue";
 import DateInput from "@/shared/ui/DatePicker/DateInput.vue";
 

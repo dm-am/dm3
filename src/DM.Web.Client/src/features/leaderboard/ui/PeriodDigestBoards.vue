@@ -99,7 +99,7 @@ const boardList = computed(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 // The reveal animation lives on the global .expand-zone class (Reset.sass),
 // driven by useExpandableSection.

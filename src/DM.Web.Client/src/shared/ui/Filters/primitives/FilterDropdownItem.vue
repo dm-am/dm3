@@ -72,7 +72,7 @@ function handleMouseEnter() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Filters"
+@import "@/assets/styles/Filters"
 
 .dropdown-item
   display: flex

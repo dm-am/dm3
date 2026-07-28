@@ -70,7 +70,7 @@ const matching = computed(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 // The active/inactive subscriber distinction stays in the ordering
 // (active first), not in the color — one uniform muted-links look.

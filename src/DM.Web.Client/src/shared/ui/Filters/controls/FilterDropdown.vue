@@ -44,7 +44,7 @@ function handleEscape() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Filters"
+@import "@/assets/styles/Filters"
 
 .filter-dropdown-container
   +_dropdown-panel

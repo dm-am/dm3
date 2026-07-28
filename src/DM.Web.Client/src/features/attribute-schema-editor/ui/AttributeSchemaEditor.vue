@@ -385,8 +385,8 @@ defineExpose({ validate, requestSave });
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/ZIndex"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/ZIndex"
 
 .schema-editor
   display: flex

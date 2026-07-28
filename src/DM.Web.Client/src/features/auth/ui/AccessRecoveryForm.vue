@@ -189,7 +189,7 @@ const cancel = () => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .field-action
   +inline-link-button

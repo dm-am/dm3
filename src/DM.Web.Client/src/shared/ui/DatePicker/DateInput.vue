@@ -261,7 +261,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/ZIndex"
+@import "@/assets/styles/ZIndex"
 
 .date-input-control
   position: relative

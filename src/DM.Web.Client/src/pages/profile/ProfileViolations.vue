@@ -98,7 +98,7 @@ function formatLastBan(ban: PublicBan, ordinal: number): string {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 // Reserve height for the inline "Нарушения" line while it loads, so the
 // identity column doesn't jump once the fetch resolves (one StatLine ==

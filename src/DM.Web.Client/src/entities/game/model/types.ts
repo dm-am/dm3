@@ -9,14 +9,13 @@ import type {
   UserRef,
 } from "@/shared/api/models/common";
 import type { Id, Served } from "@/shared/api/models";
+import { ModuleStatus } from "@/shared/api/models/common";
 
 // === Game Status & Roles ===
 
-export enum GameStatus {
-  Draft = "Draft",
-  Active = "Active",
-  Closed = "Closed",
-}
+/** Game lifecycle status — an alias of the shared {@link ModuleStatus}. */
+export const GameStatus = ModuleStatus;
+export type GameStatus = ModuleStatus;
 
 export enum ClosedReason {
   None = "None",

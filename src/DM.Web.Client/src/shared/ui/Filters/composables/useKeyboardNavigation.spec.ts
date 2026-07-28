@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { ref } from "vue";
-import { useKeyboardNavigation } from "../composables/useKeyboardNavigation";
+import { useKeyboardNavigation } from "./useKeyboardNavigation";
 
 describe("useKeyboardNavigation", () => {
   const createMockEvent = (key: string): KeyboardEvent => {

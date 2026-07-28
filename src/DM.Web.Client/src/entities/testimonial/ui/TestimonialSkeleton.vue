@@ -42,7 +42,7 @@ withDefaults(
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Skeleton"
 
 .testimonial-skeleton-list
   display: flex

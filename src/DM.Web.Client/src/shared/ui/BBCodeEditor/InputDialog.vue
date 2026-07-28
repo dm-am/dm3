@@ -225,9 +225,9 @@ function handleBackdropClick(e: MouseEvent) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/ZIndex"
-@import "src/assets/styles/Animations"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/ZIndex"
+@import "@/assets/styles/Animations"
 
 .dialog-backdrop
   position: fixed

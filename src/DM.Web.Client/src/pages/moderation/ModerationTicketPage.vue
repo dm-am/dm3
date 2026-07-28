@@ -341,7 +341,7 @@ async function resolve() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Skeleton"
 
 .moderation-ticket
   display: flex

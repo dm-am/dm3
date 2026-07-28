@@ -1,10 +1,12 @@
 import type { UserRef } from "@/shared/api/models/common";
+import { ModuleStatus } from "@/shared/api/models/common";
 
 export type BlogId = string & { readonly __brand: unique symbol };
 export type PublicationId = string & { readonly __brand: unique symbol };
 
-/** Blog status (same as game status) */
-export type BlogStatus = "Draft" | "Active" | "Closed";
+/** Blog lifecycle status — an alias of the shared {@link ModuleStatus}. */
+export const BlogStatus = ModuleStatus;
+export type BlogStatus = ModuleStatus;
 
 /**
  * Premoderation status for newbie blogs (mirrors backend PremoderationStatus).

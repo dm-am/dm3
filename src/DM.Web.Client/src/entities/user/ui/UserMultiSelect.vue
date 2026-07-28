@@ -162,7 +162,7 @@ function handleKeydown(event: KeyboardEvent) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Filters"
+@import "@/assets/styles/Filters"
 
 // Use standard mixins for consistent styling
 +dropdown-search-input

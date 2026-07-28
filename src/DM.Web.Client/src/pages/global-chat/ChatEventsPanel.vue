@@ -374,10 +374,10 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/ZIndex"
-@import "src/assets/styles/Animations"
-@import "src/assets/styles/BbcodeContent"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/ZIndex"
+@import "@/assets/styles/Animations"
+@import "@/assets/styles/BbcodeContent"
 
 // One thin surface pinned to the top of the chat frame. The dashed bottom
 // border hands over to the feed below. No rounding — this is an informational

@@ -59,7 +59,7 @@ defineSlots<{ item(props: { item: T }): unknown }>();
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .retry
   margin-left: $small

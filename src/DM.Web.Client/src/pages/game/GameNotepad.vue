@@ -287,8 +287,8 @@ onMounted(() => fetchEntries());
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/Skeleton"
 
 .notepad-page
   display: flex

@@ -247,7 +247,7 @@ onMounted(() => fetchEntries());
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .notepad-page
   padding: $medium
