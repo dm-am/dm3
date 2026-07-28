@@ -256,12 +256,6 @@ internal class UploadApiService : IUploadApiService
             });
         }
 
-        if (!_imageProcessingService.IsImageType(type))
-        {
-            // Non-image uploads (PostAttachment): a simple single PUT without processing.
-            return await UploadNonImageAsync(file, type, targetId, userId, now);
-        }
-
         // 1. Buffer + validate + process (in-memory; magic-byte, EXIF strip,
         //    decompression-bomb guard, downscale to 1024 px). A single file —
         //    thumbnails are generated on-the-fly via imgproxy at serving time.
@@ -324,45 +318,6 @@ internal class UploadApiService : IUploadApiService
             throw;
         }
 
-        return MapToDto(upload);
-    }
-
-    private async Task<Shared.Dto.Upload> UploadNonImageAsync(
-        IFormFile file, UploadType type, Guid? targetId, Guid userId, DateTimeOffset now)
-    {
-        var extension = Path.GetExtension(file.FileName) ?? string.Empty;
-        var objectKey = GenerateObjectKey(type, userId, extension);
-        await using (var stream = file.OpenReadStream())
-        {
-            await PutToS3Async(objectKey, stream, file.ContentType);
-        }
-
-        var upload = new DbUpload
-        {
-            UploadId = Guid.NewGuid(),
-            UserId = userId,
-            Type = type,
-            Status = UploadStatus.Confirmed,
-            FileName = SanitizeFileName(file.FileName, extension),
-            ContentType = file.ContentType,
-            SizeBytes = file.Length,
-            ObjectKey = objectKey,
-            Original = true,
-            FilePath = GeneratePublicUrl(objectKey),
-            CreatedUtc = now,
-            ConfirmedUtc = now,
-        };
-        AssignTypedTarget(upload, type, targetId);
-        try
-        {
-            await _dbContext.Uploads.AddAsync(upload);
-            await _dbContext.SaveChangesAsync();
-        }
-        catch
-        {
-            await RollbackS3PutsAsync(new[] { objectKey });
-            throw;
-        }
         return MapToDto(upload);
     }
 

@@ -43,8 +43,16 @@ internal class ImageProcessingService : IImageProcessingService
     };
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Every upload type the product has is an image, and every one of them goes
+    /// through this pipeline. PostAttachment used to be excluded, which routed it
+    /// to a path that took the object's extension from the client's file name and
+    /// its Content-Type from the client's header — so a .html file declared as
+    /// text/html landed in a public, anonymously readable bucket that the reverse
+    /// proxy serves from the application's own origin.
+    /// </remarks>
     public bool IsImageType(UploadType type) =>
-        type is UploadType.UserAvatar or UploadType.CharacterAvatar;
+        type is UploadType.UserAvatar or UploadType.CharacterAvatar or UploadType.PostAttachment;
 
     /// <inheritdoc />
     public async Task<ProcessedImage> ProcessAsync(
