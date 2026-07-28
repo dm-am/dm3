@@ -50,7 +50,13 @@ useFetchData(
   [
     {
       param: (p) => p.id,
-      callback: (id) => blogStore.loadBlog(id as string),
+      callback: (id) => {
+        // Same as the game shell: the detail store is not keyed by id and the
+        // route record is shared, so without wiping first the previous blog's
+        // publications and comments stay under the new title.
+        blogStore.reset();
+        return blogStore.loadBlog(id as string);
+      },
     },
   ],
 );

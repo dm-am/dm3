@@ -614,7 +614,10 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
   async function deleteBlog(): Promise<boolean> {
     if (!blog.value) return false;
     const { error } = await blogApi.deleteBlog(blog.value.id);
-    return !error;
+    if (error) return false;
+    // Same as games: without this the deleted blog stays in every list.
+    useBlogsStore().resetAllBlogs();
+    return true;
   }
 
   async function createRubric(input: CreateRubricInput): Promise<boolean> {

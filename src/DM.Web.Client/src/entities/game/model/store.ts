@@ -687,7 +687,11 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   async function deleteGame(): Promise<boolean> {
     if (!game.value) return false;
     const { error } = await gameApi.deleteGame(game.value.id);
-    return !error;
+    if (error) return false;
+    // Drop the list caches: otherwise the game the user just deleted keeps
+    // showing in /games and in the sidebar until the entries expire.
+    useGamesStore().resetAllGames();
+    return true;
   }
 
   async function createRoom(room: CreateRoomInput): Promise<boolean> {
