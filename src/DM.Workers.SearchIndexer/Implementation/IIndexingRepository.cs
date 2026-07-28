@@ -35,11 +35,4 @@ internal interface IIndexingRepository
     /// <param name="parentEntityId">Parent entity identifier</param>
     /// <param name="roles">New authorized roles list</param>
     Task UpdateByParent(Guid parentEntityId, IEnumerable<UserRole> roles);
-
-    /// <summary>
-    /// Update indexed documents authorized user ids by parent entity identifier
-    /// </summary>
-    /// <param name="parentEntityId">Parent entity identifier</param>
-    /// <param name="userIds">New authorized users ids list</param>
-    Task UpdateByParent(Guid parentEntityId, IEnumerable<Guid> userIds);
 }

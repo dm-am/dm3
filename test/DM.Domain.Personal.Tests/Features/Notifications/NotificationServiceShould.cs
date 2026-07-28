@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
@@ -109,6 +110,77 @@ public class NotificationServiceShould : UnitTestBase
 
         _factory.Verify(f => f.Create(It.IsAny<CreateNotification>(), _now), Times.Exactly(2));
         _repository.Verify(r => r.Create(It.IsAny<CreateNotificationEntity[]>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task NotStoreNotificationsNobodyCanRead()
+    {
+        var addressedId = Guid.NewGuid();
+        var createNotifications = new[]
+        {
+            new CreateNotification
+            {
+                EventType = EventType.NewMessage,
+                UsersInterested = [Guid.NewGuid()]
+            },
+            // Global chat fans out through the realtime hub, so it produces a
+            // notification with no recipients on purpose
+            new CreateNotification
+            {
+                EventType = EventType.NewGlobalChatMessage,
+                UsersInterested = []
+            }
+        };
+
+        _factory.Setup(f => f.Create(It.IsAny<CreateNotification>(), _now))
+            .Returns<CreateNotification, DateTimeOffset>((n, d) =>
+                new CreateNotificationEntity
+                {
+                    NotificationId = n.UsersInterested.Any() ? addressedId : Guid.NewGuid(),
+                    UsersInterested = n.UsersInterested,
+                    EventType = n.EventType,
+                    Metadata = n.Metadata
+                });
+
+        CreateNotificationEntity[]? stored = null;
+        _repository.Setup(r => r.Create(It.IsAny<CreateNotificationEntity[]>()))
+            .Callback<IEnumerable<CreateNotificationEntity>>(n => stored = n.ToArray())
+            .Returns(Task.CompletedTask);
+
+        var result = (await _service.CreateAsync(createNotifications)).ToArray();
+
+        stored.Should().NotBeNull();
+        stored!.Should().HaveCount(1);
+        stored![0].EventType.Should().Be(EventType.NewMessage);
+
+        // Both entities come back: the caller broadcasts them and needs the ids
+        result.Should().HaveCount(2);
+        result.Should().OnlyContain(n => n.NotificationId != Guid.Empty);
+    }
+
+    [Fact]
+    public async Task NotTouchTheRepositoryWhenNoNotificationHasRecipients()
+    {
+        _factory.Setup(f => f.Create(It.IsAny<CreateNotification>(), _now))
+            .Returns<CreateNotification, DateTimeOffset>((n, d) =>
+                new CreateNotificationEntity
+                {
+                    NotificationId = Guid.NewGuid(),
+                    UsersInterested = n.UsersInterested,
+                    EventType = n.EventType,
+                    Metadata = n.Metadata
+                });
+
+        var result = await _service.CreateAsync([
+            new CreateNotification
+            {
+                EventType = EventType.NewGlobalChatMessage,
+                UsersInterested = []
+            }
+        ]);
+
+        _repository.Verify(r => r.Create(It.IsAny<CreateNotificationEntity[]>()), Times.Never);
+        result.Should().HaveCount(1);
     }
 
     [Fact]

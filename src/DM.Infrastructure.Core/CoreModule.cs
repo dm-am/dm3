@@ -58,7 +58,6 @@ public class CoreModule : Module
             {
                 var configuration = x.Resolve<IOptions<SearchEngineConfiguration>>().Value;
                 return new ConnectionSettings(new Uri(configuration.Endpoint))
-                    .ServerCertificateValidationCallback((sender, cert, chain, errs) => true)
                     .BasicAuthentication(configuration.Username, configuration.Password)
                     .DefaultMappingFor<SearchEntity>(m => m
                         .IndexName(SearchEngineConfiguration.IndexName));

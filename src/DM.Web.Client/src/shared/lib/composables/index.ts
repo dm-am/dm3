@@ -66,7 +66,7 @@ export { useFilterDropdown } from "./useFilterDropdown";
 export type { FilterNavPath } from "./useFilterDropdown";
 
 // Real-time communication
-export { useSignalR, useGlobalSignalR } from "./useSignalR";
+export { useGlobalSignalR } from "./useSignalR";
 
 // Notifications
 export { useToast } from "./useToast";

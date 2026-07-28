@@ -9,11 +9,14 @@ namespace DM.Web.API.Realtime;
 
 internal class UserConnectionService(IAuthenticationService authenticationService) : IUserConnectionService
 {
-    private static readonly ConcurrentDictionary<Guid, HashSet<string>> Connections = new();
+    // Instance state, not static: the process-wide lifetime comes from the
+    // single-instance registration. A static map would additionally survive
+    // across container instances, which is what makes it leak between tests.
+    private readonly ConcurrentDictionary<Guid, HashSet<string>> _connections = new();
 
     // Reverse map so disconnect cleanup does not depend on the auth token
     // still being valid (it may already be invalidated by logout)
-    private static readonly ConcurrentDictionary<string, Guid> ConnectionOwners = new();
+    private readonly ConcurrentDictionary<string, Guid> _connectionOwners = new();
 
     public async Task Add(string authToken, string connectionId)
     {
@@ -27,8 +30,8 @@ internal class UserConnectionService(IAuthenticationService authenticationServic
         }
 
         var userId = identity.User.UserId;
-        ConnectionOwners[connectionId] = userId;
-        var connectionIds = Connections.GetOrAdd(userId, _ => new HashSet<string>());
+        _connectionOwners[connectionId] = userId;
+        var connectionIds = _connections.GetOrAdd(userId, _ => new HashSet<string>());
         lock (connectionIds)
         {
             connectionIds.Add(connectionId);
@@ -37,8 +40,8 @@ internal class UserConnectionService(IAuthenticationService authenticationServic
 
     public Task Remove(string connectionId)
     {
-        if (!ConnectionOwners.TryRemove(connectionId, out var userId) ||
-            !Connections.TryGetValue(userId, out var connectionIds))
+        if (!_connectionOwners.TryRemove(connectionId, out var userId) ||
+            !_connections.TryGetValue(userId, out var connectionIds))
         {
             return Task.CompletedTask;
         }
@@ -48,7 +51,7 @@ internal class UserConnectionService(IAuthenticationService authenticationServic
             connectionIds.Remove(connectionId);
             if (connectionIds.Count == 0)
             {
-                Connections.TryRemove(userId, out _);
+                _connections.TryRemove(userId, out _);
             }
         }
 
@@ -56,7 +59,7 @@ internal class UserConnectionService(IAuthenticationService authenticationServic
     }
 
     public IReadOnlyDictionary<Guid, IEnumerable<string>> GetConnectedUsers() =>
-        Connections.ToDictionary(
+        _connections.ToDictionary(
             k => k.Key,
             v =>
             {
