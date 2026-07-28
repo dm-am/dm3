@@ -95,11 +95,15 @@ internal class BlogIntentionResolver : IIntentionResolver<BlogIntention, BlogDto
                 user.Role >= UserRole.SeniorModerator,
 
             // Anyone who can view the blog can comment (if comments enabled and not blacklisted)
+            // An ordinary ban silences discussion of other people's blogs; the
+            // user's own blog stays open. Publications themselves are a
+            // different intention and are not affected.
             BlogIntention.CreateComment =>
                 target.CommentsEnabled &&
                 user.IsAuthenticated &&
                 !target.BlacklistedUserIds.Contains(user.UserId) &&
-                (target.DraftVisibility == DraftVisibility.Public || isOwner || isAssistant || isSubscriber || isMentor || user.Role >= UserRole.Admin),
+                (target.DraftVisibility == DraftVisibility.Public || isOwner || isAssistant || isSubscriber || isMentor || user.Role >= UserRole.Admin) &&
+                user.MaySpeak(inOwnSpace: isOwner || isAssistant),
 
             _ => false
         };

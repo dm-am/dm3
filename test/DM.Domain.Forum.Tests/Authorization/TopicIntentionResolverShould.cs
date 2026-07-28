@@ -38,6 +38,19 @@ public class TopicIntentionResolverShould
     }
 
     [Fact]
+    public void ForbidCreateCommentUnderTheOrdinaryBan()
+    {
+        var actual = resolver.IsAllowed(
+            Create.User().WithRole(UserRole.RegularUser).WithAccessPolicy(AccessPolicy.DemocraticBan).Please(),
+            TopicIntention.CreateComment,
+            new Topic { IsClosed = false });
+
+        // Forum discussion is public speech and there is no own-space exemption
+        // on the forum
+        actual.Should().BeFalse();
+    }
+
+    [Fact]
     public void AllowCreateCommentInOpenTopic()
     {
         var actual = resolver.IsAllowed(

@@ -125,10 +125,9 @@ internal class BanService : IBanService
             endedUtc = now.AddYears(100);
         }
 
-        // Only the two ban scopes from the doc (4.2.4.2) are honored; any other
-        // value (NotSpecified, GlobalChatBan, RestrictContentEditing) falls back
-        // to FullBan so a malformed request never produces a weaker ban than the
-        // safe default.
+        // Only the two ban scopes from the doc (4.2.4.2) exist; an omitted or
+        // unrecognized value falls back to FullBan so a malformed request never
+        // produces a weaker ban than the safe default.
         var accessPolicy = createBan.AccessRestrictionPolicy == AccessPolicy.DemocraticBan
             ? AccessPolicy.DemocraticBan
             : AccessPolicy.FullBan;

@@ -12,7 +12,7 @@ internal class TopicIntentionResolver : IIntentionResolver<TopicIntention, Topic
     /// <inheritdoc />
     public bool IsAllowed(IAuthorizationSubject user, TopicIntention intention, Topic target) => intention switch
     {
-        TopicIntention.CreateComment when user.IsAuthenticated => !target.IsClosed,
+        TopicIntention.CreateComment when user.IsAuthenticated => !target.IsClosed && user.MaySpeak(),
         TopicIntention.Edit when user.IsAuthenticated => target.Author.UserId == user.UserId && !target.IsClosed ||
                                                          target.Board.ModeratorIds.Contains(user.UserId) || user.Role >= UserRole.Moderator,
         TopicIntention.Like when user.IsAuthenticated => target.Author.UserId != user.UserId,

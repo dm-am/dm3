@@ -10,6 +10,7 @@ using DM.Domain.Blog.Features.PublicationComments;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Comments;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
@@ -81,7 +82,7 @@ public class PublicationCommentServiceShould : UnitTestBase
         var userId = Guid.NewGuid();
         var commentId = Guid.NewGuid();
         var publication = new Publication { Id = publicationId, BlogId = blogId };
-        var blog = new BlogDto { Id = blogId, BlacklistedUserIds = new HashSet<Guid>() };
+        var blog = new BlogDto { Id = blogId, Author = new GeneralUser { UserId = Guid.NewGuid() }, Assistants = Array.Empty<BlogAssistantInfo>(), BlacklistedUserIds = new HashSet<Guid>() };
         var createComment = new CreateComment { EntityId = publicationId, Text = "Test comment" };
         var identity = CreateAuthenticatedIdentity(userId);
 
@@ -103,7 +104,7 @@ public class PublicationCommentServiceShould : UnitTestBase
         var blogId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         var publication = new Publication { Id = publicationId, BlogId = blogId };
-        var blog = new BlogDto { Id = blogId, BlacklistedUserIds = new HashSet<Guid> { userId } };
+        var blog = new BlogDto { Id = blogId, Author = new GeneralUser { UserId = Guid.NewGuid() }, Assistants = Array.Empty<BlogAssistantInfo>(), BlacklistedUserIds = new HashSet<Guid> { userId } };
         var createComment = new CreateComment { EntityId = publicationId, Text = "Test comment" };
         var identity = CreateAuthenticatedIdentity(userId);
 
@@ -125,7 +126,7 @@ public class PublicationCommentServiceShould : UnitTestBase
         var userId = Guid.NewGuid();
         var commentId = Guid.NewGuid();
         var publication = new Publication { Id = publicationId, BlogId = blogId };
-        var blog = new BlogDto { Id = blogId, BlacklistedUserIds = new HashSet<Guid>() };
+        var blog = new BlogDto { Id = blogId, Author = new GeneralUser { UserId = Guid.NewGuid() }, Assistants = Array.Empty<BlogAssistantInfo>(), BlacklistedUserIds = new HashSet<Guid>() };
         var createComment = new CreateComment { EntityId = publicationId, Text = "Test comment" };
         var identity = CreateAuthenticatedIdentity(userId);
 
