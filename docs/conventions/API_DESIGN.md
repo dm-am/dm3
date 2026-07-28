@@ -45,7 +45,7 @@
 | Одиночный ресурс | `Envelope<T>` с полем `resource` |
 | Коллекция | `ListEnvelope<T>` с `paging` |
 | Курсорная пагинация | `CursorEnvelope<T>` с `cursor` |
-| Ошибка | `ErrorEnvelope` |
+| Ошибка | RFC 7807 `ProblemDetails` |
 
 ```json
 // Одиночный ресурс — Envelope
@@ -54,12 +54,23 @@
 // Коллекция — ListEnvelope
 { "resources": [...], "paging": { "skip": 0, "take": 20, "total": 150 } }
 
-// Ошибка — ErrorEnvelope
-{ "errors": [{ "code": "not_found", "message": "User not found" }] }
+// Ошибка — ProblemDetails, Content-Type: application/problem+json
+{ "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5",
+  "title": "Blog not found", "status": 404, "traceId": "00-..." }
+
+// Ошибка валидации — то же плюс errors по полям
+{ "title": "Validation failed", "status": 400,
+  "errors": { "AcceptedRules": ["Необходимо принять правила сайта"] } }
 ```
 
 > **Правило:** `Envelope<T>` — стандарт для всех одиночных ресурсов.
 > Endpoint'ы, возвращающие DTO без конверта, — legacy; при доработке приводить к `Envelope<T>`.
+
+> **Об ошибках.** Машиночитаемого кода ошибки в контракте нет: тип ошибки несет
+> HTTP-статус, человекочитаемое сообщение лежит в `title`. Заводить поле `code` не
+> нужно — нужно, чтобы статус был выбран правильно. Сообщение необработанного
+> исключения клиенту не уходит никогда: 500 отдает постоянный заголовок и токен
+> корреляции для поиска в логах.
 
 ---
 
@@ -171,7 +182,7 @@ GET /v1/posts?sort=rating:desc&take=1        # Best post
 | Username check | 20 req/min на IP |
 | Email check | 10 req/min на IP |
 
-**При превышении:** `429 Too Many Requests` + заголовки `X-RateLimit-*`, `Retry-After`
+**При превышении:** `429 Too Many Requests` + заголовок `Retry-After`
 
 ---
 

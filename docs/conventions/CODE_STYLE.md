@@ -144,7 +144,7 @@
 
 **Одиночный ресурс** — напрямую
 **Коллекция** — `ListEnvelope` с `paging`
-**Ошибка** — `ErrorEnvelope`
+**Ошибка** — RFC 7807 `ProblemDetails`, подробности в [API_DESIGN.md](API_DESIGN.md)
 
 ### Pagination
 
