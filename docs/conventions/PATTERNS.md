@@ -105,7 +105,7 @@ Features/{Module}/{Feature}/
 
 ```
 Workers.{Name}/
-├── {Name}Consumer.cs     # MassTransit consumer
+├── {Name}Consumer.cs     # Jamq consumer
 ├── Program.cs
 └── Startup.cs
 ```

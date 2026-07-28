@@ -73,13 +73,6 @@ public interface IModerationApiService
     /// <returns>List of users sorted by role and login</returns>
     Task<IReadOnlyList<TestAccountInfo>> GetAllUsers();
 
-    /// <summary>
-    /// Moderate user profile (SeniorModerator+ only)
-    /// </summary>
-    /// <param name="login">User login</param>
-    /// <param name="profile">Moderation data</param>
-    /// <returns>Updated user profile</returns>
-    Task<Envelope<UserProfile>> ModerateUserProfile(string login, ModerateProfile profile);
 
     /// <summary>
     /// Seed test users for development (DEVELOPMENT ONLY)
