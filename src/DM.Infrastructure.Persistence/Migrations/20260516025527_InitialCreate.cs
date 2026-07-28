@@ -2510,6 +2510,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "SubscriberId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Subscriptions_TargetType_TargetId",
+                table: "Subscriptions",
+                columns: new[] { "TargetType", "TargetId" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Tags_TagGroupId",
                 table: "Tags",
                 column: "TagGroupId");
