@@ -154,7 +154,7 @@ internal class AuthenticationService : IAuthenticationService
         }
 
         var fetchUser = _repository.FindUser(userId);
-        var fetchSession = _repository.FindUserSession(sessionId);
+        var fetchSession = _repository.FindUserSession(userId, sessionId);
         var fetchSettings = _repository.FindUserSettings(userId);
 
         await Task.WhenAll(fetchUser, fetchSession, fetchSettings);

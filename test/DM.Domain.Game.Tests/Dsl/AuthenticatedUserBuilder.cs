@@ -15,5 +15,11 @@ public class AuthenticatedUserBuilder(Guid userId)
         return this;
     }
 
+    public AuthenticatedUserBuilder WithAccessPolicy(AccessPolicy policy)
+    {
+        user.AccessPolicy = policy;
+        return this;
+    }
+
     public AuthenticatedUser Please() => user;
 }

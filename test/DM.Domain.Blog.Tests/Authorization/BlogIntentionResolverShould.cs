@@ -20,12 +20,16 @@ public class BlogIntentionResolverShould
     private readonly Guid _assistantId = Guid.NewGuid();
     private readonly Guid _mentorId = Guid.NewGuid();
 
-    private AuthenticatedUser CreateUser(Guid userId, UserRole role = UserRole.RegularUser)
+    private AuthenticatedUser CreateUser(
+        Guid userId,
+        UserRole role = UserRole.RegularUser,
+        AccessPolicy accessPolicy = AccessPolicy.NotSpecified)
     {
         return new AuthenticatedUser
         {
             UserId = userId,
-            Role = role
+            Role = role,
+            AccessPolicy = accessPolicy
         };
     }
 
@@ -322,6 +326,58 @@ public class BlogIntentionResolverShould
         var result = _resolver.IsAllowed(user, BlogIntention.CreateComment, blog);
 
         result.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DenyCommentingSomebodyElsesBlogUnderTheOrdinaryBan()
+    {
+        var user = CreateUser(_otherUserId, accessPolicy: AccessPolicy.DemocraticBan);
+        var blog = CreateBlog(draftVisibility: DraftVisibility.Public, commentsEnabled: true);
+
+        _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AllowCommentingOwnBlogUnderTheOrdinaryBan()
+    {
+        var user = CreateUser(_ownerId, accessPolicy: AccessPolicy.DemocraticBan);
+        var blog = CreateBlog(draftVisibility: DraftVisibility.Public, commentsEnabled: true);
+
+        _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AllowAnAssistantToCommentTheirBlogUnderTheOrdinaryBan()
+    {
+        var user = CreateUser(_assistantId, accessPolicy: AccessPolicy.DemocraticBan);
+        var blog = CreateBlog(
+            draftVisibility: DraftVisibility.Public,
+            commentsEnabled: true,
+            assistants: new[] { new BlogAssistantInfo { UserId = _assistantId } });
+
+        _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeTrue();
+    }
+
+    [Fact]
+    public void DenyASubscriberToCommentUnderTheOrdinaryBan()
+    {
+        var user = CreateUser(_otherUserId, accessPolicy: AccessPolicy.DemocraticBan);
+        var blog = CreateBlog(
+            draftVisibility: DraftVisibility.Public,
+            commentsEnabled: true,
+            subscriberIds: new HashSet<Guid> { _otherUserId });
+
+        // Reading somebody else's blog is not the same as belonging to it
+        _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeFalse();
+    }
+
+    [Fact]
+    public void DenyCommentingOwnBlogUnderAFullBan()
+    {
+        var user = CreateUser(_ownerId, accessPolicy: AccessPolicy.FullBan);
+        var blog = CreateBlog(draftVisibility: DraftVisibility.Public, commentsEnabled: true);
+
+        _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeFalse();
     }
 }
 

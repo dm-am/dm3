@@ -74,6 +74,22 @@ public class ForumIntentionResolverShould : UnitTestBase
     }
 
     [Fact]
+    public void ForbidCreateTopicUnderTheOrdinaryBan()
+    {
+        policyConverter
+            .Setup(c => c.Convert(UserRole.RegularUser))
+            .Returns(BoardAccessPolicy.RegularUser);
+
+        var actual = resolver.IsAllowed(
+            Create.User().WithRole(UserRole.RegularUser).WithAccessPolicy(AccessPolicy.DemocraticBan).Please(),
+            ForumIntention.CreateTopic,
+            new Board { CreateTopicPolicy = BoardAccessPolicy.RegularUser });
+
+        // The board policy admits the role; the ban is what refuses
+        actual.Should().BeFalse();
+    }
+
+    [Fact]
     public void ForbidTopicAdministrationWhenUserNotAdministratorOrLocalModerator()
     {
         var actual = resolver.IsAllowed(

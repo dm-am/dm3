@@ -47,8 +47,6 @@ export enum AccessPolicy {
   NotSpecified = "NotSpecified",
   DemocraticBan = "DemocraticBan",
   FullBan = "FullBan",
-  GlobalChatBan = "GlobalChatBan",
-  RestrictContentEditing = "RestrictContentEditing",
 }
 
 // ============================================================================

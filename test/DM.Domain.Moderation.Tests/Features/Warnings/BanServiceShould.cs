@@ -255,7 +255,7 @@ public class BanServiceShould : UnitTestBase
             Username = "Target",
             DurationHours = 24,
             Comment = "Spam",
-            AccessRestrictionPolicy = AccessPolicy.GlobalChatBan
+            AccessRestrictionPolicy = AccessPolicy.NotSpecified
         };
 
         await _service.CreateBan(createBan);

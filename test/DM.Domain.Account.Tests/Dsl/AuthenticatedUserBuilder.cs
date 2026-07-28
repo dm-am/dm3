@@ -15,5 +15,18 @@ public class AuthenticatedUserBuilder(Guid userId)
         return this;
     }
 
+    public AuthenticatedUserBuilder WithAccessPolicy(AccessPolicy policy)
+    {
+        user.AccessPolicy = policy;
+        return this;
+    }
+
+    public AuthenticatedUserBuilder WithCredentials(string salt, string passwordHash)
+    {
+        user.Salt = salt;
+        user.PasswordHash = passwordHash;
+        return this;
+    }
+
     public AuthenticatedUser Please() => user;
 }

@@ -182,4 +182,56 @@ public class GameIntentionResolverShould : UnitTestBase
 
         resolver.IsAllowed(user, GameIntention.ReadComments, game).Should().BeTrue();
     }
+
+    [Fact]
+    public void ForbidCommentingSomebodyElsesGameUnderTheOrdinaryBan()
+    {
+        var game = Create.Game()
+            .WithCommentsAccessMode(CommentsAccessMode.Public)
+            .Please();
+        var user = Create.User()
+            .WithRole(UserRole.RegularUser)
+            .WithAccessPolicy(AccessPolicy.DemocraticBan)
+            .Please();
+
+        resolver.IsAllowed(user, GameIntention.CreateComment, game).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public void AllowCommentingOwnGameUnderTheOrdinaryBan(bool asMaster, bool asAssistant, bool asPlayer)
+    {
+        var userId = Guid.NewGuid();
+        var builder = Create.Game().WithCommentsAccessMode(CommentsAccessMode.Public);
+        if (asMaster) builder = builder.WithMaster(userId);
+        if (asAssistant) builder = builder.WithAssistants(userId);
+        if (asPlayer) builder = builder.WithPlayers(userId);
+
+        var user = Create.User(userId)
+            .WithRole(UserRole.RegularUser)
+            .WithAccessPolicy(AccessPolicy.DemocraticBan)
+            .Please();
+
+        // Being accepted into a game keeps its discussion open under the
+        // ordinary ban, whichever way the user belongs to it
+        resolver.IsAllowed(user, GameIntention.CreateComment, builder.Please()).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ForbidCommentingOwnGameUnderAFullBan()
+    {
+        var masterId = Guid.NewGuid();
+        var game = Create.Game()
+            .WithMaster(masterId)
+            .WithCommentsAccessMode(CommentsAccessMode.Public)
+            .Please();
+        var user = Create.User(masterId)
+            .WithRole(UserRole.RegularUser)
+            .WithAccessPolicy(AccessPolicy.FullBan)
+            .Please();
+
+        resolver.IsAllowed(user, GameIntention.CreateComment, game).Should().BeFalse();
+    }
 }

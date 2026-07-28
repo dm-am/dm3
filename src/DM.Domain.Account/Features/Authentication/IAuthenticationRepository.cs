@@ -25,11 +25,17 @@ public interface IAuthenticationRepository
     Task<AuthenticatedUser?> FindUser(Guid userId);
 
     /// <summary>
-    /// Search for authentication session by its id
+    /// Search for an authentication session owned by the given user
     /// </summary>
+    /// <remarks>
+    /// The session must belong to <paramref name="userId" />. A session id that
+    /// exists but belongs to somebody else resolves to null: both halves of the
+    /// token have to agree.
+    /// </remarks>
+    /// <param name="userId">Owning user id</param>
     /// <param name="sessionId">Authentication session id</param>
-    /// <returns>Session, or null if not found</returns>
-    Task<Session?> FindUserSession(Guid sessionId);
+    /// <returns>Session, or null if the user has no such session</returns>
+    Task<Session?> FindUserSession(Guid userId, Guid sessionId);
 
     /// <summary>
     /// Search for user settings by user id

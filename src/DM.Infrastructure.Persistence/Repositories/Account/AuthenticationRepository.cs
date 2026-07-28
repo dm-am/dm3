@@ -55,11 +55,14 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
     }
 
     /// <inheritdoc />
-    public async Task<Session?> FindUserSession(Guid sessionId)
+    public async Task<Session?> FindUserSession(Guid userId, Guid sessionId)
     {
+        // Scoped to the owning document by _id, not searched across every user's
+        // session array: a token whose userId and sessionId belong to different
+        // people must not authenticate. It also turns the hottest query on the
+        // site into a primary-key lookup.
         var userSessions = await Collection<UserSession>()
-            .Find(Filter<UserSession>()
-                .ElemMatch(u => u.Sessions, s => s.Id == sessionId))
+            .Find(Filter<UserSession>().Eq(u => u.Id, userId))
             .FirstOrDefaultAsync();
         var matchingSession = userSessions?.Sessions.FirstOrDefault(s => s.Id == sessionId);
         return matchingSession == null
