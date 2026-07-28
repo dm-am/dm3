@@ -46,9 +46,9 @@ internal class AttributeSchemaApiService : IAttributeSchemaApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<AttributeSchema>> Update(Guid schemaId, AttributeSchema schema)
+    public async Task<Envelope<AttributeSchema>> Update(Guid schemaId, UpdateAttributeSchemaRequest request)
     {
-        var updateSchema = _mapper.Map<UpdateAttributeSchema>(schema);
+        var updateSchema = _mapper.Map<UpdateAttributeSchema>(request);
         updateSchema.SchemaId = schemaId;
         var updatedSchema = await _schemaService.UpdateAsync(updateSchema);
         return new Envelope<AttributeSchema>(_mapper.Map<AttributeSchema>(updatedSchema));

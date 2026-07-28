@@ -68,14 +68,14 @@ public class BlacklistController : ControllerBase
     /// <remarks>
     /// Updates behavior settings for blocked users.
     /// </remarks>
-    /// <param name="settings">New settings</param>
+    /// <param name="request">Flags to change</param>
     /// <response code="200">Updated settings</response>
     /// <response code="401">User must be authenticated</response>
     [HttpPatch("settings", Name = nameof(UpdateBlacklistSettings))]
     [ProducesResponseType(typeof(BlacklistSettings), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> UpdateBlacklistSettings([FromBody] BlacklistSettings settings) =>
-        Ok(await _apiService.UpdateSettings(settings));
+    public async Task<IActionResult> UpdateBlacklistSettings([FromBody] UpdateBlacklistSettingsRequest request) =>
+        Ok(await _apiService.UpdateSettings(request));
 
     /// <summary>
     /// Block a user

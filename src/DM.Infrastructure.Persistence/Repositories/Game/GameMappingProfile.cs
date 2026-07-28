@@ -254,7 +254,6 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.Subscribers, s => s.Ignore())
             .ForMember(d => d.FullAssistants, s => s.MapFrom(g => g.Assistants.Select(a => a.User)))
             .ForMember(d => d.Characters, s => s.MapFrom(g => g.Characters))
-            .ForMember(d => d.Notepad, opt => opt.Ignore())
             .ForMember(d => d.AttributeSchema, opt => opt.Ignore())
             .ForMember(d => d.Pendencies, opt => opt.Ignore())
             .ForMember(d => d.UnreadPostsCount, opt => opt.Ignore())

@@ -98,7 +98,11 @@ internal class CharacterMappingProfile : Profile
 
         // For character update, use CharacterDetails (has Privacy)
         CreateMap<CharacterDetails, DtoUpdateCharacter>()
-            .ForMember(c => c.IsNpc, s => s.MapFrom(c => c.Privacy != null && c.Privacy.IsNpc))
+            // Nullable on purpose: the destination is bool? and "no privacy block
+            // in the request" has to stay absent. The `!= null &&` form returns a
+            // plain false, which the update path then wrote — patching an NPC
+            // without a privacy block demoted it to a player character.
+            .ForMember(c => c.IsNpc, s => s.MapFrom(c => c.Privacy != null ? (bool?)c.Privacy.IsNpc : null))
             .ForMember(c => c.AccessPolicy, s => s.MapFrom<AccessPolicyConverter>())
             .ForMember(c => c.CharacterId, opt => opt.Ignore())
             .ForMember(c => c.IsDead, opt => opt.Ignore())

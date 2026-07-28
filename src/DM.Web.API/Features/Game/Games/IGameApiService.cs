@@ -101,19 +101,5 @@ public interface IGameApiService
     /// <returns>List envelope containing all game tags</returns>
     Task<ListEnvelope<Tag>> GetTags();
 
-    /// <summary>
-    /// Get game notes (private notepad for GM)
-    /// </summary>
-    /// <param name="gameId">Game identifier</param>
-    /// <returns>Envelope with game notes</returns>
-    Task<Envelope<GameNotes>> GetNotes(Guid gameId);
-
-    /// <summary>
-    /// Update game notes
-    /// </summary>
-    /// <param name="gameId">Game identifier</param>
-    /// <param name="notes">Notes to update</param>
-    /// <returns>Envelope with updated game notes</returns>
-    Task<Envelope<GameNotes>> UpdateNotes(Guid gameId, GameNotes notes);
 
 }

@@ -24,7 +24,7 @@ public interface IUserBlacklistApiService
     /// <summary>
     /// Update blacklist settings
     /// </summary>
-    Task<BlacklistSettings> UpdateSettings(BlacklistSettings settings);
+    Task<BlacklistSettings> UpdateSettings(UpdateBlacklistSettingsRequest request);
 
     /// <summary>
     /// Block a user

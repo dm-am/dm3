@@ -123,24 +123,4 @@ internal class GameApiService : IGameApiService
         var tags = await _gameService.GetTagsAsync();
         return new ListEnvelope<Tag>(tags.Select(_mapper.Map<Tag>));
     }
-
-    /// <inheritdoc />
-    public async Task<Envelope<GameNotes>> GetNotes(Guid gameId)
-    {
-        var game = await _gameService.GetDetailsAsync(gameId);
-        return new Envelope<GameNotes>(new GameNotes { Notes = game.Notepad });
-    }
-
-    /// <inheritdoc />
-    public Task<Envelope<GameNotes>> UpdateNotes(Guid gameId, GameNotes notes)
-    {
-        // Legacy single-field notepad is deprecated. Use structured notepad API instead.
-        // GET /games/{id}/notepad - list entries
-        // POST /games/{id}/notepad - create entry
-        throw new InvalidOperationException(
-            "Legacy game notes endpoint is deprecated. Use the structured notepad API: " +
-            $"GET /v1/games/{gameId}/notepad to list entries, " +
-            $"POST /v1/games/{gameId}/notepad to create entries.");
-    }
-
 }

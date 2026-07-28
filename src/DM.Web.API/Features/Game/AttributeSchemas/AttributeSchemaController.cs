@@ -76,7 +76,7 @@ public class AttributeSchemaController : ControllerBase
     /// Update attribute schema
     /// </summary>
     /// <param name="id">Schema identifier</param>
-    /// <param name="schema">Updated schema details</param>
+    /// <param name="request">Fields to change</param>
     /// <response code="200">Returns the updated attribute schema</response>
     /// <response code="400">Some of schema parameters were invalid</response>
     /// <response code="401">User must be authenticated</response>
@@ -89,8 +89,8 @@ public class AttributeSchemaController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchSchema(Guid id, [FromBody] AttributeSchema schema) =>
-        Ok(await _schemaApiService.Update(id, schema));
+    public async Task<IActionResult> PatchSchema(Guid id, [FromBody] UpdateAttributeSchemaRequest request) =>
+        Ok(await _schemaApiService.Update(id, request));
 
     /// <summary>
     /// Delete attribute schema

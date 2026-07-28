@@ -27,14 +27,8 @@ internal class BlacklistMappingProfile : Profile
                 AutoPopulateContentBlacklist = src.HasFlag(UserBlacklistSettings.AutoPopulateContentBlacklist)
             });
 
-        // DTO → Enum (for API requests)
-        CreateMap<BlacklistSettings, UserBlacklistSettings>()
-            .ConvertUsing(src =>
-                (src.HideComments ? UserBlacklistSettings.HideComments : UserBlacklistSettings.None) |
-                (src.HideMessages ? UserBlacklistSettings.HideMessages : UserBlacklistSettings.None) |
-                (src.HideGames ? UserBlacklistSettings.HideGames : UserBlacklistSettings.None) |
-                (src.HideBlogs ? UserBlacklistSettings.HideBlogs : UserBlacklistSettings.None) |
-                (src.BlockDirectMessages ? UserBlacklistSettings.BlockDirectMessages : UserBlacklistSettings.None) |
-                (src.AutoPopulateContentBlacklist ? UserBlacklistSettings.AutoPopulateContentBlacklist : UserBlacklistSettings.None));
+        // There is deliberately no DTO → enum map: the write model is
+        // UpdateBlacklistSettingsRequest, and folding it onto the current flags
+        // needs the current value, which a mapper does not have.
     }
 }

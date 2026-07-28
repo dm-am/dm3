@@ -29,10 +29,14 @@ internal class TopicMappingProfile : Profile
         CreateMap<CreateTopicRequest, DomainCreateTopic>()
             .ForMember(d => d.BoardTitle, opt => opt.Ignore());
 
-        CreateMap<Topic, DomainUpdateTopic>()
+        CreateMap<UpdateTopicRequest, DomainUpdateTopic>()
             .ForMember(d => d.Text, s => s.MapFrom(t => t.Description))
-            .ForMember(d => d.TopicId, s => s.MapFrom(t => t.Id))
-            .ForMember(d => d.BoardTitle, s => s.MapFrom(t => t.Board.Id));
+            .ForMember(d => d.TopicId, opt => opt.Ignore())
+            // The domain resolves a board by alias, title or id, and compares the
+            // incoming value with the current board title to decide whether this is
+            // a move. Mapping it from the board id made that comparison always
+            // differ, so every edit carrying a board looked like a move.
+            .ForMember(d => d.BoardTitle, s => s.MapFrom(t => t.Board));
 
         CreateMap<TopicsQuery, DomainTopicsQuery>();
     }

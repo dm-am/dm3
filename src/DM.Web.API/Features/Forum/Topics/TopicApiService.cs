@@ -118,9 +118,9 @@ internal class TopicApiService : ITopicApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Topic>> Update(Guid topicId, Topic topic)
+    public async Task<Envelope<Topic>> Update(Guid topicId, UpdateTopicRequest request)
     {
-        var updateTopic = _mapper.Map<DomainUpdateTopic>(topic);
+        var updateTopic = _mapper.Map<DomainUpdateTopic>(request);
         updateTopic.TopicId = topicId;
         var updatedTopic = await _topicService.UpdateAsync(updateTopic);
         var mapped = _mapper.Map<Topic>(updatedTopic);

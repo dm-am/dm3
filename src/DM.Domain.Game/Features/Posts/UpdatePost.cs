@@ -19,14 +19,15 @@ public class UpdatePost
     public Optional<Guid>? CharacterId { get; set; }
 
     /// <summary>
-    /// Game text (in-character content)
+    /// Game text (in-character content). Null keeps the current value.
     /// </summary>
-    public string GameText { get; set; } = null!;
+    public string? GameText { get; set; }
 
     /// <summary>
-    /// Metagame text (OOC commentary)
+    /// Metagame text (OOC commentary). Null keeps the current value,
+    /// an empty string clears it.
     /// </summary>
-    public string MetagameText { get; set; } = null!;
+    public string? MetagameText { get; set; }
 
     #region Internal fields (set by service)
 

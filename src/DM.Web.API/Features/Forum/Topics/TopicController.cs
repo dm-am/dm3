@@ -216,7 +216,7 @@ public class TopicController : ControllerBase
     /// - Attached: Pin/unpin topic (moderator only)
     /// </remarks>
     /// <param name="id">Topic identifier (GUID)</param>
-    /// <param name="topic">Fields to update</param>
+    /// <param name="request">Fields to change</param>
     /// <response code="200">Updated topic</response>
     /// <response code="400">Invalid update data</response>
     /// <response code="401">User must be authenticated</response>
@@ -229,8 +229,8 @@ public class TopicController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchTopic(Guid id, [FromBody] Topic topic) =>
-        Ok(await _topicApiService.Update(id, topic));
+    public async Task<IActionResult> PatchTopic(Guid id, [FromBody] UpdateTopicRequest request) =>
+        Ok(await _topicApiService.Update(id, request));
 
     /// <summary>
     /// Delete topic
