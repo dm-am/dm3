@@ -270,6 +270,92 @@ public class AuthenticationServiceShould : UnitTestBase
     }
 
     [Fact]
+    public async Task ApplyABanRowToTheIdentityItBuilds()
+    {
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+
+        var user = Create.User(userId).WithRole(UserRole.RegularUser).Please();
+        // The ban lives in its own table and reaches the identity as a restriction
+        // with a window; the user's own column stays NotSpecified forever
+        user.AccessRestrictions = [
+            new AccessRestriction(AccessPolicy.DemocraticBan, now.AddDays(-1), now.AddDays(1))
+        ];
+
+        _cryptoService.Setup(c => c.Decrypt("token"))
+            .ReturnsAsync($"{{\"userId\":\"{userId}\",\"sessionId\":\"{sessionId}\"}}");
+        _repository.Setup(r => r.FindUser(userId)).ReturnsAsync(user);
+        _repository.Setup(r => r.FindUserSettings(userId)).ReturnsAsync(UserSettings.Default);
+        _repository.Setup(r => r.FindUserSession(userId, sessionId))
+            .ReturnsAsync(new Session { Id = sessionId, ExpirationUtc = now.AddDays(1).UtcDateTime });
+
+        var result = await _service.Authenticate("token");
+
+        result.User.IsAuthenticated.Should().BeTrue();
+        // Every authorization resolver reads AccessPolicy. Without the fold the
+        // ban would be invisible to all of them.
+        result.User.AccessPolicy.Should().HaveFlag(AccessPolicy.DemocraticBan);
+    }
+
+    [Theory]
+    [InlineData(-10, -5)] // ban already served
+    [InlineData(5, 10)]   // ban scheduled but not started
+    public async Task IgnoreABanThatIsNotInForce(int startsInDays, int endsInDays)
+    {
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+
+        var user = Create.User(userId).WithRole(UserRole.RegularUser).Please();
+        user.AccessRestrictions = [
+            new AccessRestriction(AccessPolicy.DemocraticBan, now.AddDays(startsInDays), now.AddDays(endsInDays))
+        ];
+
+        _cryptoService.Setup(c => c.Decrypt("token"))
+            .ReturnsAsync($"{{\"userId\":\"{userId}\",\"sessionId\":\"{sessionId}\"}}");
+        _repository.Setup(r => r.FindUser(userId)).ReturnsAsync(user);
+        _repository.Setup(r => r.FindUserSettings(userId)).ReturnsAsync(UserSettings.Default);
+        _repository.Setup(r => r.FindUserSession(userId, sessionId))
+            .ReturnsAsync(new Session { Id = sessionId, ExpirationUtc = now.AddDays(1).UtcDateTime });
+
+        var result = await _service.Authenticate("token");
+
+        // The row stays for the moderation history; it must stop restricting the
+        // moment it stops being in force, with no job to run
+        result.User.AccessPolicy.Should().Be(AccessPolicy.NotSpecified);
+    }
+
+    [Fact]
+    public async Task RefuseLoginWhenTheFullBanComesFromABanRow()
+    {
+        var email = "banned@example.com";
+        var now = DateTimeOffset.UtcNow;
+        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+
+        var user = Create.User()
+            .WithRole(UserRole.RegularUser)
+            .WithCredentials("salt", "hash")
+            .Please();
+        user.AccessRestrictions = [
+            new AccessRestriction(AccessPolicy.FullBan, now.AddHours(-1), now.AddHours(1))
+        ];
+
+        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(email)).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(email)).ReturnsAsync(0);
+        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
+        _securityManager.Setup(s => s.ComparePasswords("password", "salt", "hash")).Returns(true);
+
+        var result = await _service.Authenticate(email, "password");
+
+        result.User.IsAuthenticated.Should().BeFalse();
+        result.Error.Should().Be(AuthenticationError.Banned);
+    }
+
+    [Fact]
     public async Task LogoutAndRemoveSession()
     {
         var userId = Guid.NewGuid();
