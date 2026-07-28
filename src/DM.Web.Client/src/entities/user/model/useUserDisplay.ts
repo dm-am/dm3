@@ -1,5 +1,5 @@
 import { ref, onUnmounted } from "vue";
-import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
+import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { ONLINE_THRESHOLD_MS } from "@/shared/lib/constants/user";
 import type { User, UserRef } from "./types";
 import { UserRole } from "./types";
@@ -53,14 +53,6 @@ export function useUserDisplay() {
   }
 
   /**
-   * Format a date string to dd.MM.yyyy — delegates to the shared
-   * datetime helper (kept under the historical composable name).
-   */
-  function formatDateShort(dateStr: string | null | undefined): string {
-    return formatDate(dateStr);
-  }
-
-  /**
    * Build online status tooltip with last activity time
    * @param user - User or UserRef object
    * @param onlineStatus - Pre-computed online status (use isOnline() result to ensure consistency with indicator)
@@ -99,6 +91,5 @@ export function useUserDisplay() {
     isOnline,
     buildOnlineTooltip,
     buildRegistrationTooltip,
-    formatDateShort,
   };
 }

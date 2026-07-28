@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from "@/shared/lib/utils/datetime";
 /**
  * ModerationAwardsSeries — contest series details: an edit form (topic
  * URL / IsActive), a grant form (award a user within this series) and the
@@ -18,7 +19,6 @@ import { formatContestSeriesTitle } from "@/shared/lib/achievements/formatThresh
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { UserAutocomplete } from "@/entities/user";
 import { GameIcon } from "@/shared/ui/Icon";
-import dayjs from "dayjs";
 
 const route = useRoute();
 const router = useRouter();
@@ -226,9 +226,7 @@ onMounted(async () => {
           <li v-for="a in grants" :key="a.id" class="grant-row">
             <GameIcon :name="a.type.iconName" class="grant-icon" />
             <span class="grant-title">{{ a.type.title }}</span>
-            <span class="grant-date">{{
-              dayjs(a.awardedUtc).format("DD.MM.YYYY")
-            }}</span>
+            <span class="grant-date">{{ formatDate(a.awardedUtc) }}</span>
             <button type="button" class="text-button" @click="revoke(a)">
               Отозвать
             </button>

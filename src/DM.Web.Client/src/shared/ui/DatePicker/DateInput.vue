@@ -15,6 +15,7 @@
 import { ref, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { SvgIcon } from "@/shared/ui/Icon";
 import CalendarGrid from "./CalendarGrid.vue";
+import { formatDate } from "@/shared/lib/utils/datetime";
 
 const props = withDefaults(
   defineProps<{
@@ -43,10 +44,7 @@ const isOpen = ref(false);
 
 /** YYYY-MM-DD → DD.MM.YYYY for display. */
 function formatForDisplay(value: string | null | undefined): string {
-  if (!value) return "";
-  const parts = value.split("-");
-  if (parts.length !== 3) return value;
-  return `${parts[2]}.${parts[1]}.${parts[0]}`;
+  return formatDate(value, "");
 }
 
 /**

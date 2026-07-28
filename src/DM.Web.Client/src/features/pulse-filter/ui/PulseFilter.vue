@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from "@/shared/lib/utils/datetime";
 import { computed, ref, watch } from "vue";
 import { vClickOutside } from "@/shared/directives";
 import { gameApi } from "@/entities/game";
@@ -20,7 +21,6 @@ import {
 } from "@/shared/ui/Filters";
 import { UserMultiSelect } from "@/entities/user";
 import type { BubbleValue } from "@/shared/ui/Filters";
-import dayjs from "dayjs";
 
 // `hideAuthorFilter` — for pages with an implicit author scope (the profile
 // "Полученные оценки" / "Оценил чужих постов" subpages): the scope is set
@@ -186,8 +186,8 @@ const hasDateFilter = computed(
 
 const dateBubbleLabel = computed(() => {
   const { createdFrom, createdTo } = filterState.value;
-  const from = createdFrom ? dayjs(createdFrom).format("DD.MM.YYYY") : null;
-  const to = createdTo ? dayjs(createdTo).format("DD.MM.YYYY") : null;
+  const from = createdFrom ? formatDate(createdFrom) : null;
+  const to = createdTo ? formatDate(createdTo) : null;
   if (from && to) return `с ${from} по ${to}`;
   if (from) return `с ${from}`;
   if (to) return `по ${to}`;

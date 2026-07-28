@@ -6,6 +6,7 @@
  * - Conversion between URL, State and API formats
  */
 
+import { formatDate } from "@/shared/lib/utils/datetime";
 import type { DateRange, SortDirection } from "./types";
 
 // =============================================================================
@@ -92,11 +93,7 @@ export function dateToApiEnd(date: string | null): string | undefined {
  * Format YYYY-MM-DD to DD.MM.YYYY for display
  */
 export function formatDateForDisplay(date: string | null | undefined): string {
-  if (!date) return "";
-  const parts = date.split("-");
-  if (parts.length !== 3) return date;
-  const [year, month, day] = parts;
-  return `${day}.${month}.${year}`;
+  return formatDate(date, "");
 }
 
 /**
