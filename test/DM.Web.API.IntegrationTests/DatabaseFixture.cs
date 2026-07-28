@@ -68,6 +68,13 @@ public class DatabaseFixture : IAsyncLifetime
         RabbitMqConnectionString = _rabbitMqContainer.GetConnectionString();
 
         await using var context = CreateDbContext();
+        // Schema built from the model, not by running the migration. Running the
+        // migration here is the right thing and it does not work yet: InitialCreate
+        // inserts seed rows — boards, topics, tags, chats, achievements, awards and
+        // a system user — that the model does not declare through HasData, so the
+        // two produce different databases and this fixture's seed collides with the
+        // migration's. Closing that gap means reconciling InitialCreate with the
+        // model, not changing this line.
         await context.Database.EnsureCreatedAsync();
         await context.Database.ExecuteSqlRawAsync("CREATE EXTENSION IF NOT EXISTS pg_trgm;");
         await SeedAllAsync(context);
@@ -117,7 +124,7 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedUsers(DmDbContext db)
     {
-        if (db.Users.Any()) return;
+        if (db.Users.Any(u => u.UserId == TestConstants.TestUserId)) return;
 
         // (Id, Username, Email, Role, DaysAgo, InactiveDays)
         // InactiveDays: null = active (LastActivityUtc = now), otherwise = days since last activity
@@ -166,7 +173,7 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedBoards(DmDbContext db)
     {
-        if (db.Set<Board>().Any()) return;
+        if (db.Set<Board>().Any(b => b.BoardId == TestConstants.TestBoardId)) return;
 
         db.Set<Board>().Add(new Board
         {
@@ -342,7 +349,7 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedBlogs(DmDbContext db)
     {
-        if (db.Blogs.Any()) return;
+        if (db.Blogs.Any(b => b.BlogId == TestConstants.TestBlogId)) return;
 
         var blogs = new (Guid Id, Guid AuthorId, string Title, string Description, int DaysAgo)[]
         {
@@ -468,7 +475,7 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedChats(DmDbContext db)
     {
-        if (db.Chats.Any()) return;
+        if (db.Chats.Any(c => c.ChatId == TestConstants.TestChatId)) return;
 
         // Global chat (must exist for global chat functionality)
         db.Chats.Add(new Chat

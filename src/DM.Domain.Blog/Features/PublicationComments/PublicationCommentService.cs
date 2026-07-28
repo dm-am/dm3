@@ -75,7 +75,8 @@ internal class PublicationCommentService : IPublicationCommentService
         // ownership. The blog is loaded above anyway. The rule itself is not
         // duplicated — AccessRestrictions.MaySpeak owns it.
         var isOwnBlog = blog.Author.UserId == currentUser.UserId ||
-            blog.Assistants.Any(a => a.UserId == currentUser.UserId);
+            blog.Assistants.Any(a => a.UserId == currentUser.UserId) ||
+            blog.Mentor?.UserId == currentUser.UserId;
         if (!currentUser.MaySpeak(inOwnSpace: isOwnBlog))
         {
             throw new HttpException(HttpStatusCode.Forbidden, "Commenting is not available while you are banned");
