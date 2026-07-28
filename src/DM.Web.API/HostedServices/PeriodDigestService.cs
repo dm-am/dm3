@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Forum.Features.Topics;
+using DM.Domain.Core.Identity;
 using DM.Infrastructure.Core;
 using DM.Infrastructure.Messaging.GeneralBus;
 using DM.Infrastructure.Persistence;

@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Identity;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Features.Comments;
@@ -14,11 +15,6 @@ namespace DM.Domain.Game.Features.Inactivity;
 /// <inheritdoc />
 internal class GameInactivityProcessor : IGameInactivityProcessor
 {
-    /// <summary>
-    /// System user ID (Robot Administrator) - well-known constant
-    /// </summary>
-    private static readonly Guid SystemUserId = Guid.Parse("00000000-0000-0000-0000-000000000001");
-
     private readonly IInactivityRepository _inactivityRepository;
     private readonly IGameCommentRepository _commentRepository;
     private readonly IUnreadCountersRepository _countersRepository;
@@ -176,7 +172,7 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
         {
             CommentId = commentId,
             GameId = gameId,
-            AuthorId = SystemUserId,
+            AuthorId = SystemUser.Id,
             Text = text,
             NewCommentCount = currentCount + 1,
             CreatedUtc = now

@@ -109,28 +109,6 @@ public class ModerationController : ControllerBase
     }
 
     /// <summary>
-    /// Moderate user profile
-    /// </summary>
-    /// <remarks>
-    /// Allows SeniorModerator or higher to edit user profile Info field.
-    /// Used to remove inappropriate content from user profiles.
-    /// </remarks>
-    /// <param name="login">User login</param>
-    /// <param name="profile">Profile moderation data</param>
-    /// <response code="200">Profile moderated successfully</response>
-    /// <response code="401">User not authenticated</response>
-    /// <response code="403">SeniorModerator or higher role required</response>
-    /// <response code="404">User not found</response>
-    [HttpPatch("users/{login}/profile", Name = nameof(ModerateUserProfileLegacy))]
-    [RequireRole(UserRole.SeniorModerator)]
-    [ProducesResponseType(typeof(Envelope<UserProfile>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> ModerateUserProfileLegacy(string login, [FromBody] ModerateProfile profile) =>
-        Ok(await _moderationApiService.ModerateUserProfile(login, profile));
-
-    /// <summary>
     /// Seed test users (DEVELOPMENT ONLY)
     /// </summary>
     /// <remarks>

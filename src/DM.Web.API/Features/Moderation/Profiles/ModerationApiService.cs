@@ -361,22 +361,6 @@ internal class ModerationApiService : IModerationApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<UserProfile>> ModerateUserProfile(string login, ModerateProfile profile)
-    {
-        var user = await _userService.GetAsync(login);
-        _intentionManager.ThrowIfForbidden(UserIntention.Moderate, user);
-
-        var updateUser = new UpdateUser
-        {
-            Username = login,
-            Info = profile.Info ?? string.Empty
-        };
-
-        var updatedUser = await _userService.UpdateAsync(updateUser);
-        return new Envelope<UserProfile>(_mapper.Map<UserProfile>(updatedUser));
-    }
-
-    /// <inheritdoc />
     public async Task<SeedResult> SeedTestUsers()
     {
         const string defaultPassword = "Test123!";

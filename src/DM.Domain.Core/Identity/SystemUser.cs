@@ -1,6 +1,6 @@
 using System;
 
-namespace DM.Infrastructure.Core;
+namespace DM.Domain.Core.Identity;
 
 /// <summary>
 /// System user (Robot Administrator) for automated actions.
