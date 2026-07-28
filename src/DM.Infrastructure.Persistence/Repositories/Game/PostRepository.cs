@@ -425,25 +425,49 @@ internal class PostRepository : IPostRepository
             MetagameText = createPost.MetagameText,
             IsRemoved = false
         };
-        _dbContext.Posts.Add(dbPost);
-
-        // Increment author's post count (QuantityRating)
-        await _dbContext.Users
-            .Where(u => u.UserId == createPost.AuthorId)
-            .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, x => x.QuantityRating + 1));
-
-        // Update game's LastPostCreatedUtc and reset inactivity warning if any
-        var room = await _dbContext.Rooms.FindAsync(createPost.RoomId);
-        if (room != null)
+        // ExecuteUpdate runs and commits immediately while Add is deferred to
+        // SaveChanges, so without a transaction a failure between them left the
+        // author's QuantityRating incremented and the game's activity stamp moved
+        // for a post that does not exist. QuantityRating feeds the user rating and
+        // the stored IsNewbie column, so that drift is user-visible and nothing
+        // recomputes it. The strategy wrapper is required because the API host
+        // configures EnableRetryOnFailure.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
+        await strategy.ExecuteAsync(async () =>
         {
-            await _dbContext.Games
-                .Where(g => g.GameId == room.GameId)
-                .ExecuteUpdateAsync(g => g
-                    .SetProperty(x => x.LastPostCreatedUtc, createPost.CreatedUtc)
-                    .SetProperty(x => x.InactivityWarningUtc, (DateTimeOffset?)null));
-        }
+            if (attempted)
+            {
+                // A retry replays this block; the post the failed attempt left
+                // tracked would otherwise be inserted twice or not at all.
+                _dbContext.ChangeTracker.Clear();
+            }
 
-        await _dbContext.SaveChangesAsync();
+            attempted = true;
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+            _dbContext.Posts.Add(dbPost);
+            await _dbContext.SaveChangesAsync();
+
+            // Increment author's post count (QuantityRating)
+            await _dbContext.Users
+                .Where(u => u.UserId == createPost.AuthorId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, x => x.QuantityRating + 1));
+
+            // Update game's LastPostCreatedUtc and reset inactivity warning if any
+            var room = await _dbContext.Rooms.FindAsync(createPost.RoomId);
+            if (room != null)
+            {
+                await _dbContext.Games
+                    .Where(g => g.GameId == room.GameId)
+                    .ExecuteUpdateAsync(g => g
+                        .SetProperty(x => x.LastPostCreatedUtc, createPost.CreatedUtc)
+                        .SetProperty(x => x.InactivityWarningUtc, (DateTimeOffset?)null));
+            }
+
+            await transaction.CommitAsync();
+        });
+
         return await _dbContext.Posts
             .Where(p => p.PostId == createPost.PostId)
             .ProjectTo<Post>(_mapper.ConfigurationProvider)

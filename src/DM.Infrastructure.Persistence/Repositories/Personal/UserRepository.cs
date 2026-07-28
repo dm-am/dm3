@@ -179,7 +179,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     public async Task<GeneralUser?> GetUserAsync(string username)
     {
         var user = await _dmDbContext.Users
-            .Include(u => u.AvatarUpload)
             .Where(u => !u.IsRemoved && u.Username.ToLower() == username.ToLower())
             .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
@@ -196,7 +195,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     public async Task<GeneralUser?> GetUserAsync(Guid userId)
     {
         var user = await _dmDbContext.Users
-            .Include(u => u.AvatarUpload)
             .Where(u => !u.IsRemoved && u.UserId == userId)
             .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
@@ -213,7 +211,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     public async Task<UserDetails?> GetUserDetailsAsync(string username)
     {
         var userDetails = await _dmDbContext.Users
-            .Include(u => u.AvatarUpload)
             .Where(u => !u.IsRemoved && u.Username.ToLower() == username.ToLower())
             .ProjectTo<UserDetails>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
@@ -238,7 +235,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     public async Task<UserDetails?> GetUserDetailsAsync(Guid userId)
     {
         var userDetails = await _dmDbContext.Users
-            .Include(u => u.AvatarUpload)
             .Where(u => !u.IsRemoved && u.UserId == userId)
             .ProjectTo<UserDetails>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
@@ -263,7 +259,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     public async Task<UserDetails?> GetUserDetailsByEmail(string email)
     {
         var userDetails = await _dmDbContext.Users
-            .Include(u => u.AvatarUpload)
             .Where(u => !u.IsRemoved && EF.Functions.ILike(u.Email, email))
             .ProjectTo<UserDetails>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
@@ -288,7 +283,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     public async Task<IEnumerable<GeneralUser>> GetUsersByRoleAsync(UserRole role)
     {
         var users = await _dmDbContext.Users
-            .Include(u => u.AvatarUpload)
             .Where(u => !u.IsRemoved && u.Role == role)
             .OrderBy(u => u.Username)
             .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
@@ -314,7 +308,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         }
 
         var users = await _dmDbContext.Users
-            .Include(u => u.AvatarUpload)
             .Where(u => !u.IsRemoved && idsList.Contains(u.UserId))
             .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
             .ToArrayAsync();

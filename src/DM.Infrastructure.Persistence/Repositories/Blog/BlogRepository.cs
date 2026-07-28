@@ -375,10 +375,6 @@ internal class BlogRepository : IBlogRepository
     {
         return await _dbContext.Publications
             .TagWith("DM.Blog.GetPublication")
-            .Include(p => p.Blog)
-            .ThenInclude(b => b.Author)
-            .Include(p => p.Author)
-            .Include(p => p.Rubric)
             .Where(p => p.PublicationId == publicationId)
             .ProjectTo<Publication>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
@@ -393,10 +389,6 @@ internal class BlogRepository : IBlogRepository
         // out so the profile widget can never surface drafts.
         return await _dbContext.Publications
             .TagWith("DM.Blog.GetBestUserPublication")
-            .Include(p => p.Blog)
-            .ThenInclude(b => b.Author)
-            .Include(p => p.Author)
-            .Include(p => p.Rubric)
             .Where(p => !p.IsRemoved && p.IsPublished && p.AuthorId == authorId)
             .OrderByDescending(p => _dbContext.Likes.Count(l =>
                 !l.IsRemoved &&
@@ -499,7 +491,6 @@ internal class BlogRepository : IBlogRepository
     {
         return await _dbContext.BlogAssistants
             .TagWith("DM.Blog.Assistants")
-            .Include(a => a.User)
             .Where(a => a.BlogId == blogId)
             .Select(a => new GeneralUser
             {

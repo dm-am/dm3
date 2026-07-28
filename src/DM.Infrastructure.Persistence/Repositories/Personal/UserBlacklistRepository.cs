@@ -35,7 +35,6 @@ internal class UserBlacklistRepository : MongoCollectionRepository<UserSettings>
     public async Task<IEnumerable<BlacklistEntry>> GetBlacklist(Guid ownerId, CancellationToken ct = default)
     {
         return await _dbContext.UserBlacklists
-            .Include(b => b.BlockedUser)
             .Where(b => b.OwnerId == ownerId)
             .OrderByDescending(b => b.CreatedUtc)
             .ProjectTo<BlacklistEntry>(_mapper.ConfigurationProvider)
@@ -46,7 +45,6 @@ internal class UserBlacklistRepository : MongoCollectionRepository<UserSettings>
     public async Task<BlacklistEntry?> Get(Guid entryId, CancellationToken ct = default)
     {
         return await _dbContext.UserBlacklists
-            .Include(b => b.BlockedUser)
             .Where(b => b.EntryId == entryId)
             .ProjectTo<BlacklistEntry>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
@@ -56,7 +54,6 @@ internal class UserBlacklistRepository : MongoCollectionRepository<UserSettings>
     public async Task<BlacklistEntry?> Find(Guid ownerId, Guid blockedUserId, CancellationToken ct = default)
     {
         return await _dbContext.UserBlacklists
-            .Include(b => b.BlockedUser)
             .Where(b => b.OwnerId == ownerId && b.BlockedUserId == blockedUserId)
             .ProjectTo<BlacklistEntry>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);

@@ -154,7 +154,6 @@ internal class GameReviewRepository : IGameReviewRepository
         // User can review a game if they have at least one post in it
         return await _dbContext.Posts
             .TagWith("DM.GameReview.CanReview")
-            .Include(p => p.Room)
             .AnyAsync(p => p.AuthorId == userId && p.Room.GameId == gameId);
     }
 
