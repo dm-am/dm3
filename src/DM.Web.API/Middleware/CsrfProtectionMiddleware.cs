@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Configuration;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -74,9 +75,18 @@ public class CsrfProtectionMiddleware
                 "CSRF protection blocked request from origin {Origin}. Allowed: {AllowedOrigins}",
                 origin, string.Join(", ", settings.Value.CorsUrls));
 
+            // Та же форма, что у остальных ошибок API: RFC 7807 ProblemDetails.
+            // Собственная форма {"error": "..."} была пятой в наборе и не читалась
+            // ни одним клиентом.
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync("{\"error\":\"Invalid origin\"}");
+            await context.Response.WriteAsJsonAsync(
+                new ProblemDetails
+                {
+                    Status = StatusCodes.Status403Forbidden,
+                    Title = "Request origin is not allowed",
+                },
+                options: null,
+                contentType: "application/problem+json");
             return;
         }
 

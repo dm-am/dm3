@@ -17,6 +17,8 @@ namespace DM.Web.API.Middleware;
 /// </summary>
 internal class ErrorHandlingMiddleware
 {
+    private const string ProblemJsonContentType = "application/problem+json";
+
     private readonly RequestDelegate _next;
 
     /// <inheritdoc />
@@ -74,8 +76,10 @@ internal class ErrorHandlingMiddleware
             httpContext.Response.StatusCode = error is ProblemDetails { Status: not null } problemDetails
                 ? problemDetails.Status.Value
                 : StatusCodes.Status500InternalServerError;
-            httpContext.Response.ContentType = "application/problem+json";
-            await httpContext.Response.WriteAsJsonAsync(error);
+            // Через перегрузку с contentType: присваивание ContentType до
+            // WriteAsJsonAsync перетиралось им на application/json, и клиент не мог
+            // отличить ошибку по типу содержимого.
+            await httpContext.Response.WriteAsJsonAsync(error, error.GetType(), options: null, ProblemJsonContentType);
         }
     }
 }
