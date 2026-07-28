@@ -85,7 +85,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .Configure<MirrorConfiguration>(configuration.GetSection(nameof(MirrorConfiguration)).Bind)
             .AddDmLogging("DM.API", configuration);
 
-        // Validate critical configuration on startup � fail fast if misconfigured
+        // Validate critical configuration on startup: fail fast if misconfigured
         services.AddOptions<ConnectionStrings>()
             .Bind(configuration.GetSection(nameof(ConnectionStrings)))
             .Validate(cs => !string.IsNullOrEmpty(cs.Rdb) && !string.IsNullOrEmpty(cs.Mongo),
@@ -98,6 +98,18 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         services.AddOptions<RabbitMqConfiguration>()
             .Bind(configuration.GetSection(nameof(RabbitMqConfiguration)))
             .Validate(r => !string.IsNullOrEmpty(r.Endpoint), "RabbitMqConfiguration:Endpoint is required")
+            .ValidateOnStart();
+        // The session and token encryption key has no in-repo default on purpose:
+        // a deployment that silently inherits a key from the repository has no
+        // secret at all, and every session token becomes forgeable by anyone who
+        // can read the source. Missing key must stop the host, not surface on the
+        // first authenticated request.
+        services.AddOptions<CryptoConfiguration>()
+            .Bind(configuration.GetSection(nameof(CryptoConfiguration)))
+            .Validate(IsUsableEncryptionKey,
+                "CryptoConfiguration:KeyBase64 must be a base64-encoded 32-byte key. " +
+                "Generate one with `openssl rand -base64 32` and supply it as " +
+                "DM_CryptoConfiguration__KeyBase64. All mirrors must share the same value.")
             .ValidateOnStart();
 
         // X-Forwarded-* is honoured for the configured proxy networks only.
@@ -563,5 +575,18 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         builder.RegisterType(moderationIntentionResolverType)
             .As(typeof(IIntentionResolver<ModerationIntention>))
             .InstancePerLifetimeScope();
+    }
+
+    private static bool IsUsableEncryptionKey(CryptoConfiguration crypto)
+    {
+        if (string.IsNullOrWhiteSpace(crypto.KeyBase64))
+        {
+            return false;
+        }
+
+        // AES-256 takes exactly 32 bytes. A shorter value would be rejected later
+        // by the crypto service, on the first request instead of at startup.
+        Span<byte> key = stackalloc byte[64];
+        return Convert.TryFromBase64String(crypto.KeyBase64, key, out var written) && written == 32;
     }
 }

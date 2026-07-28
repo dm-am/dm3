@@ -22,9 +22,16 @@ x-workload-env: &workload-env
 
   # === Базы данных ===
   DM_ConnectionStrings__Rdb: Host=${DB_HOST:-dm-pg};Port=5432;User ID=postgres;Password=${POSTGRES_PASSWORD};Database=dm3;Pooling=true;MinPoolSize=0;MaxPoolSize=100;Connection Idle Lifetime=60;${DB_SSL_MODE:-}
-  DM_ConnectionStrings__Mongo: mongodb://${MONGO_HOST:-dm-mongo}:27017/dm3?maxPoolSize=1000${MONGO_TLS:-}
+  DM_ConnectionStrings__Mongo: mongodb://${MONGO_USER:-dm}:${MONGO_PASSWORD}@${MONGO_HOST:-dm-mongo}:27017/dm3?authSource=dm3&maxPoolSize=1000${MONGO_TLS:-}
   DM_ConnectionStrings__Logs: http://${LOGS_HOST:-dm-es}:9200
   DM_ConnectionStrings__TracingEndpoint: http://${TRACING_HOST:-dm-jaeger}:4317
+
+  # === Криптография ===
+  # Дефолта нет: пустое значение валит старт приложения. Так и задумано - ключ,
+  # унаследованный из репозитория, секретом не является. Все зеркала должны
+  # получать одно и то же значение, иначе ссылка из письма, выданная одним
+  # зеркалом, не расшифруется другим.
+  DM_CryptoConfiguration__KeyBase64: ${DM_CryptoConfiguration__KeyBase64:?DM_CryptoConfiguration__KeyBase64 is required, generate with openssl rand -base64 32}
 
   # === RabbitMQ ===
   DM_RabbitMqConfiguration__Endpoint: amqp://${RABBITMQ_HOST:-dm-rmq}:5672
@@ -119,11 +126,21 @@ services:
     image: 'mongo:7'
     ports:
       - '127.0.0.1:27017:27017'
+    environment:
+      # Authentication is on. The store holds sessions, the security audit log
+      # and login attempts: without it everything on the compose network reads
+      # and writes all of that with no credential at all.
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}
+      MONGO_INITDB_DATABASE: dm3
+      # Consumed by mongo-init.js to create the least-privilege application user
+      DM_MONGO_USER: ${MONGO_USER:-dm}
+      DM_MONGO_PASSWORD: ${MONGO_PASSWORD:?MONGO_PASSWORD is required}
     volumes:
       - mongodata:/data/db
       - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--quiet", "-u", "${MONGO_ROOT_USER:-root}", "-p", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
