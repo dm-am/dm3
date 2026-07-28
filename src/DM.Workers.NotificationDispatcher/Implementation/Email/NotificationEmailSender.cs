@@ -170,7 +170,9 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
                     Body = body
                 });
 
-                _logger.LogDebug("Sent email notification to {Email} for event {EventType}", email, eventType);
+                // Recipient identified by user, not by address: the log store has no
+                // retention and an address names a person.
+                _logger.LogDebug("Sent email notification for event {EventType}", eventType);
             }
             catch (Exception ex)
             {

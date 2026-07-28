@@ -146,8 +146,10 @@ internal class AuthenticationApiService : IAuthenticationApiService
         }
         catch (Exception ex)
         {
-            // Login recording is non-critical — never block the login flow
-            _logger.LogWarning(ex, "Failed to record login attempt for {Email}", email);
+            // Login recording is non-critical — never block the login flow.
+            // The address is not in the message: it identifies a person and the log store
+            // has no retention. The trace id and the security audit log carry the rest.
+            _logger.LogWarning(ex, "Failed to record login attempt");
         }
     }
 

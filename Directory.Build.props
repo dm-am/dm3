@@ -4,6 +4,13 @@
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
         <!-- Exclude nullable warnings from being treated as errors (gradual adoption) -->
         <WarningsNotAsErrors>CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CS8619;CS8620;CS8625;CS8765</WarningsNotAsErrors>
+        <!-- Vulnerability warnings are silenced at build time, not ignored: with
+             TreatWarningsAsErrors any advisory on a direct dependency would stop every
+             build, and the .NET 8 SDK has no per-advisory suppression to exempt the one
+             that is reviewed and accepted. The single enforcement point is the
+             dependency-scan job, which fails on anything outside
+             .github/vulnerability-allowlist.txt — putting the same policy in MSBuild too
+             would give it two sources of truth. -->
         <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
         <LangVersion>preview</LangVersion>
         <GenerateAssemblyInfo>true</GenerateAssemblyInfo>

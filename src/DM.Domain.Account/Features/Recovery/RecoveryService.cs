@@ -58,7 +58,7 @@ internal class RecoveryService : IRecoveryService
             await _passwordResetRepository.ReplacePasswordResetToken(user.UserId, token);
             await _passwordResetEmailSender.Send(user.Email, user.Username, token.TokenId);
 
-            _logger.LogInformation("Password reset email sent for active user. Email={Email}", normalizedEmail);
+            _logger.LogInformation("Password reset email sent for active user");
             return RecoveryResult.PasswordReset;
         }
 
@@ -72,12 +72,12 @@ internal class RecoveryService : IRecoveryService
             await _registrationRepository.UpdatePending(pending);
             await _activationEmailSender.Send(pending.Email, pending.TokenId);
 
-            _logger.LogInformation("Activation email resent for pending registration. Email={Email}", normalizedEmail);
+            _logger.LogInformation("Activation email resent for pending registration");
             return RecoveryResult.ActivationResent;
         }
 
         // Email not found
-        _logger.LogInformation("Recovery requested for unknown email. Email={Email}", normalizedEmail);
+        _logger.LogInformation("Recovery requested for unknown email");
         return RecoveryResult.NotFound;
     }
 }
