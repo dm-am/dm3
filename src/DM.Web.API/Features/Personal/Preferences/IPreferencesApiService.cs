@@ -15,5 +15,5 @@ public interface IPreferencesApiService
     /// <summary>
     /// Update current user's preferences
     /// </summary>
-    Task<Preferences> UpdateMyPreferences(Preferences preferences);
+    Task<Preferences> UpdateMyPreferences(UpdatePreferencesRequest request);
 }

@@ -41,14 +41,31 @@ internal class PreferencesApiService : IPreferencesApiService
     }
 
     /// <inheritdoc />
-    public async Task<Preferences> UpdateMyPreferences(Preferences preferences)
+    public async Task<Preferences> UpdateMyPreferences(UpdatePreferencesRequest request)
     {
         var currentUser = _identityProvider.Current.User;
+
+        // The write is a wholesale replace of the settings document, so a partial
+        // request has to be folded onto what the user has now — otherwise every
+        // field the request omits is written as its default.
+        var current = await GetMyPreferences();
+        var merged = new Preferences
+        {
+            Theme = request.Theme ?? current.Theme,
+            Paging = new Paging
+            {
+                PostsPerPage = request.Paging?.PostsPerPage ?? current.Paging.PostsPerPage,
+                CommentsPerPage = request.Paging?.CommentsPerPage ?? current.Paging.CommentsPerPage,
+                TopicsPerPage = request.Paging?.TopicsPerPage ?? current.Paging.TopicsPerPage,
+                MessagesPerPage = request.Paging?.MessagesPerPage ?? current.Paging.MessagesPerPage,
+                EntitiesPerPage = request.Paging?.EntitiesPerPage ?? current.Paging.EntitiesPerPage,
+            }
+        };
 
         var updateUser = new UpdateUser
         {
             Username = currentUser.Username,
-            Settings = _mapper.Map<ServiceUserSettings>(preferences)
+            Settings = _mapper.Map<ServiceUserSettings>(merged)
         };
 
         var updatedUser = await _userService.UpdateAsync(updateUser);

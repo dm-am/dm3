@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using DM.Infrastructure.Persistence.Entities.Forum;
 using FluentAssertions;
 using Xunit;
@@ -216,6 +217,31 @@ public class TopicControllerShould : IntegrationTestBase
     #endregion
 
     #region PatchTopic Tests
+
+    /// <summary>
+    /// Pinning a topic sends only that flag — the rest of the topic must survive
+    /// </summary>
+    /// <remarks>
+    /// This is exactly what the client does (`{ isAttached: true }`). While the
+    /// PATCH body was the read model, its Title initialized to an empty string,
+    /// the update validator saw "set the title to empty" and answered 400 — so
+    /// pinning and closing a topic were broken from the UI.
+    /// </remarks>
+    [Fact]
+    public async Task PatchTopic_WithOnlyOneFlag_KeepsEverythingElse()
+    {
+        // Act
+        var request = CreateAdminRequest(HttpMethod.Patch, $"/v1/topics/{TestConstants.TestTopicId}");
+        request.Content = JsonContent.Create(new { isAttached = true });
+        var response = await Client.SendAsync(request);
+        var content = await response.Content.ReadAsStringAsync();
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "body was: {0}", content);
+        var topic = JsonDocument.Parse(content).RootElement.GetProperty("resource");
+        topic.GetProperty("isAttached").GetBoolean().Should().BeTrue();
+        topic.GetProperty("title").GetString().Should().NotBeNullOrEmpty();
+    }
 
     /// <summary>
     /// Update topic without authentication should return Unauthorized

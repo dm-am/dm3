@@ -30,7 +30,7 @@ internal class AttributeSchemaMappingProfile : Profile
         CreateMap<AttributeSchema, DomainCreateSchema>();
         CreateMap<AttributeSpecification, DomainCreateSpecification>();
 
-        CreateMap<AttributeSchema, DomainUpdateSchema>()
+        CreateMap<UpdateAttributeSchemaRequest, DomainUpdateSchema>()
             .ForMember(d => d.SchemaId, o => o.Ignore());
         CreateMap<AttributeSpecification, DomainUpdateSpecification>()
             // A zero Guid denotes a brand new specification (no persisted id yet)

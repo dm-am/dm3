@@ -33,9 +33,9 @@ public interface IAttributeSchemaApiService
     /// Update existing attribute schema
     /// </summary>
     /// <param name="schemaId">Schema identifier</param>
-    /// <param name="schema">Schema DTO</param>
+    /// <param name="request">Fields to change</param>
     /// <returns>Envelope containing the updated attribute schema</returns>
-    Task<Envelope<AttributeSchema>> Update(Guid schemaId, AttributeSchema schema);
+    Task<Envelope<AttributeSchema>> Update(Guid schemaId, UpdateAttributeSchemaRequest request);
 
     /// <summary>
     /// Delete existing attribute schema

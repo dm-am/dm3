@@ -1083,11 +1083,6 @@ public class GameDetails : Game
     public string Info { get; set; } = null!;
 
     /// <summary>
-    /// Game private master information
-    /// </summary>
-    public string Notepad { get; set; } = null!;
-
-    /// <summary>
     /// Only GM and post author can see dice roll result
     /// </summary>
     public bool HideDiceResult { get; set; }
