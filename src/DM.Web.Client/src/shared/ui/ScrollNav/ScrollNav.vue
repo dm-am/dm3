@@ -102,7 +102,7 @@ const {
   switchTooltip,
   switchRegion,
   isHydrated,
-  isTransferring,
+  isSwitching,
 } = useRegion();
 </script>
 
@@ -214,9 +214,9 @@ const {
             <button
               type="button"
               class="mirror-btn"
-              :class="{ 'is-loading': isTransferring }"
+              :class="{ 'is-loading': isSwitching }"
               :aria-label="switchTooltip"
-              :disabled="!canSwitch || isTransferring"
+              :disabled="!canSwitch || isSwitching"
               @click="switchRegion"
             >
               <span v-if="currentRegion?.id === 'main'" class="flag-icon"

@@ -11,7 +11,7 @@ export interface RegionConfig {
 export function useRegion() {
   const mirrors = ref<RegionConfig[]>([]);
   const isHydrated = ref(false);
-  const isTransferring = ref(false);
+  const isSwitching = ref(false);
   const isLoading = ref(true);
 
   async function fetchMirrors() {
@@ -59,28 +59,16 @@ export function useRegion() {
     return `Перейти на ${alternateRegion.value?.name}`;
   });
 
-  async function switchRegion() {
+  // The session does not travel with the visitor: each mirror authenticates its
+  // own visitors. Switching keeps the path so the same page opens on the other
+  // side, and the visitor signs in there if they need to be signed in.
+  function switchRegion() {
     const target = alternateRegion.value;
-    if (!target || isTransferring.value) return;
+    if (!target || isSwitching.value) return;
 
-    isTransferring.value = true;
-    const returnUrl = window.location.pathname + window.location.search;
-
-    try {
-      // Get transfer token with returnUrl (if authenticated)
-      const { data } = await AccountApi.getTransferToken(target.id, returnUrl);
-
-      if (data?.transferUrl) {
-        // With session transfer (returnUrl is already included in transferUrl)
-        window.location.href = data.transferUrl;
-      } else {
-        // Without auth — just redirect to same path
-        window.location.href = target.webUrl + returnUrl;
-      }
-    } catch {
-      // Fallback — redirect without session transfer
-      window.location.href = target.webUrl + returnUrl;
-    }
+    isSwitching.value = true;
+    window.location.href =
+      target.webUrl + window.location.pathname + window.location.search;
   }
 
   return {
@@ -91,7 +79,7 @@ export function useRegion() {
     switchTooltip,
     switchRegion,
     isHydrated,
-    isTransferring,
+    isSwitching,
     isLoading,
   };
 }

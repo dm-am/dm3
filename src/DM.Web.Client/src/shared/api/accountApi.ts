@@ -181,19 +181,6 @@ export default new (class AccountApi {
     }>("mirrors");
   }
 
-  /**
-   * Get transfer token for switching to another mirror
-   * @param targetMirror Target mirror ID
-   * @param returnUrl Optional URL to redirect to after transfer
-   */
-  public getTransferToken(targetMirror: string, returnUrl?: string) {
-    let url = `mirrors/transfer?targetMirror=${encodeURIComponent(targetMirror)}`;
-    if (returnUrl) {
-      url += `&returnUrl=${encodeURIComponent(returnUrl)}`;
-    }
-    return Api.get<{ transferUrl: string | null }>(url);
-  }
-
   // ========== Username Change ==========
 
   /**
