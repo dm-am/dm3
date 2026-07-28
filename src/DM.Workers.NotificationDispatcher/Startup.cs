@@ -11,7 +11,6 @@ using DM.Infrastructure.Core.Logging;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Mail;
 using DM.Infrastructure.Messaging;
-using DM.Infrastructure.Messaging.Outbox;
 using DM.Workers.NotificationDispatcher.Implementation.Bot;
 using DM.Workers.NotificationDispatcher.Implementation.Email;
 using Jamq.Client.Abstractions.Consuming;
@@ -51,7 +50,6 @@ public class Startup
             .Configure<ConnectionStrings>(_configuration.GetSection(nameof(ConnectionStrings)).Bind)
             .Configure<RabbitMqConfiguration>(_configuration.GetSection(nameof(RabbitMqConfiguration)).Bind)
             .Configure<BotConfiguration>(_configuration.GetSection(nameof(BotConfiguration)).Bind)
-            .Configure<OutboxConfiguration>(_configuration.GetSection(nameof(OutboxConfiguration)).Bind)
             .Configure<EmailConfiguration>(_configuration.GetSection(nameof(EmailConfiguration)).Bind)
             .AddDmLogging("DM.Notifications.Consumer", _configuration);
 
