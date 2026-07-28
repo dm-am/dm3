@@ -38,6 +38,8 @@ public interface IGameService
 
 **Где применяется:** Domain.* (`IGameService`), Web.API (`IGameApiService`).
 
+**Граница между двумя слоями сервисов.** Доменный сервис владеет правилами: авторизация, инварианты, работа с репозиториями, публикация событий. API-сервис владеет формой HTTP-ответа: маппинг в DTO, конверт, сборка ответа из нескольких доменных вызовов, разрешение публичного идентификатора. Правило одностороннее: правило предметной области в API-сервисе — дефект, а знание о конверте и DTO в доменном сервисе — тоже дефект. Если API-сервису нечего делать кроме прямого проброса, он все равно нужен: он держит форму ответа стабильной, когда доменная сигнатура меняется.
+
 ### Infrastructure.* — Technical Concerns
 
 **Зачем:** Четкое разделение технических ответственностей. Легко найти где реализован кэш, где парсинг, где репозитории.
@@ -45,26 +47,12 @@ public interface IGameService
 Организация по **техническому назначению**, НЕ по бизнес-фичам:
 
 ```
-Infrastructure.Core/
-├── Authorization/    # IntentionManager
-├── Caching/          # Реализация ICache
-├── Correlation/      # Реализация ICorrelationTokenProvider
-├── Logging/          # Конфигурация логирования
-└── Parsing/          # BBCode parser
-
-Infrastructure.Persistence/
-├── Entities/         # EF Core entities (группировка по модулям)
-├── Repositories/     # Реализации IXxxRepository (группировка по модулям)
-├── Shared/           # Cross-module реализации
-└── Migrations/
-
-Infrastructure.Mail/
-├── Rendering/        # Email templates
-└── Assets/
-
-Infrastructure.Messaging/
-└── GeneralBus/       # Публикация доменных событий в RabbitMQ
+Infrastructure.{Name}/
+└── {Concern}/            # одна техническая ответственность на папку
+    └── {Module}/         # если реализаций много — группировка по модулям внутри
 ```
+
+Группировка по модулям допустима только **внутри** технической папки, не вместо нее.
 
 ### Repository Pattern
 
@@ -101,16 +89,9 @@ Features/{Module}/{Feature}/
 
 **Зачем:** Асинхронная обработка событий. Отправка email, уведомления, индексация — не блокируют HTTP-ответ.
 
-Минимальная структура — workers это тонкий слой оркестрации:
+Worker — отдельный процесс: consumer, подписанный на очередь, хост-бутстрап и собственная политика повторов. Обработка события организуется по техническому назначению, как в Infrastructure.*.
 
-```
-Workers.{Name}/
-├── {Name}Consumer.cs     # Jamq consumer
-├── Program.cs
-└── Startup.cs
-```
-
-**Workers DM3:** `Mail`, `NotificationDispatcher`, `SearchIndexer`.
+**Правило:** политика повторов объявляется в самом worker'е. Общей на все workers нет.
 
 ### Frontend — Feature-Sliced Design (FSD)
 
@@ -248,19 +229,6 @@ Blacklist
 | Публичная информация о пользователях? | Community |
 | Данные для модераторов? | Moderation |
 | Данные конкретного контента? | Messaging / Game / Blog / Forum |
-
-**Карта сущностей:**
-
-| Модуль | Сущности | Примечание |
-|--------|----------|------------|
-| **Account** | Session, Token, Credentials, LoginAttempt | Аутентификация |
-| **Personal** | PersonalProfile, UserProfileNote, UserSettings, Notification, Subscription, UserBlacklist | Данные текущего пользователя |
-| **Community** | User, UserProfile, Poll, UserEndorsement, WebsiteTestimonial | Публичные данные |
-| **Moderation** | ModeratedProfile, ModeratedProfileNote, Warning, Ban, Ticket, Mentorship | Данные для модераторов |
-| **Messaging** | Chat, Message, GlobalChatEvent | — |
-| **Game** | Game, Room, Post, Character, GameComment, GameBlacklist, GameNotepad, GameInvitation | — |
-| **Blog** | Blog, Publication, BlogComment, PublicationComment, BlogBlacklist, BlogInvitation | — |
-| **Forum** | Board, Topic, TopicComment | — |
 
 ### 5. Правила для папок Features
 
@@ -410,29 +378,10 @@ BlogRef → Blog → BlogDetails
 
 ```
 DM.Domain.Core/
-├── Abstractions/         # IDateTimeProvider, IGuidFactory, etc.
-├── Authorization/        # IIntentionManager, CommentIntention
-├── Blacklists/           # IUserBlacklistChecker, IContentBlacklistService
-├── Caching/              # ICache, CachePolicy
-├── Comments/             # ICommentService, Comment (cross-module)
-├── Configuration/        # Shared configs
-├── Dto/                  # PagingResult, CursorResult, GeneralUser
-├── Enums/                # UserRole, GameRole, EventType, etc.
-├── Events/               # IEventProducer, DomainEvent
-├── Exceptions/           # HttpException, ValidationError
-├── Extensions/           # QueryableExtensions, etc.
-├── Identity/             # IIdentity, Session, UserSettings
-├── Likes/                # ILikable, ILikeOperations (cross-module)
-├── Mail/                 # IMailSender, ITemplateRenderer
-├── Notepads/             # INotepadRepository (cross-module)
-├── Parsing/              # UserAgentParser
-├── Search/               # ISearchService (cross-module)
-├── Subscriptions/        # ISubscriptionRepository (cross-module)
-├── Tokens/               # Token, CreateToken (shared DTO)
-├── UnreadCounters/       # IUnreadCountersRepository (cross-module)
-├── Uploads/              # IImageProcessingService, IUploadGarbageCollector (cross-module)
-└── Users/                # IUserLookupService (cross-module)
+└── {Concern}/            # интерфейсы, DTO и enums одной cross-module области
 ```
+
+Одна папка — одна область контракта. Реализаций и бизнес-логики здесь нет.
 
 ### DM.Domain.{Module}
 
@@ -452,60 +401,15 @@ DM.Domain.{Module}/
 └── Configuration/
 ```
 
-### DM.Infrastructure.Core
+### DM.Infrastructure.{Name}
 
 ```
-DM.Infrastructure.Core/
-├── Authorization/
-├── Caching/
-├── Configuration/
-├── Correlation/
-├── Extensions/
-├── Logging/
-├── Parsing/
-├── Search/
-├── Storage/
-├── Tracing/
-└── CoreModule.cs
-```
-
-### DM.Infrastructure.Persistence
-
-```
-DM.Infrastructure.Persistence/
-├── Entities/
-│   └── {Module}/
-├── Repositories/
-│   └── {Module}/
-│       └── {Feature}Repository.cs
+DM.Infrastructure.{Name}/
+├── {Concern}/
+│   └── {Module}/         # группировка по модулям — внутри технической папки
 ├── Shared/
-│   ├── Comments/
-│   ├── Likes/
-│   ├── Notepads/
-│   ├── Subscriptions/
-│   ├── UnreadCounters/
-│   └── Users/
-├── Migrations/
-├── Design/
-├── DmDbContext.cs
-└── PersistenceModule.cs
-```
-
-### DM.Infrastructure.Mail
-
-```
-DM.Infrastructure.Mail/
-├── Rendering/
-├── Assets/
-└── MailModule.cs
-```
-
-### DM.Infrastructure.Messaging
-
-```
-DM.Infrastructure.Messaging/
-├── GeneralBus/
-└── MessageQueuingModule.cs
+│   └── {Concern}/        # реализации cross-module контрактов Domain.Core
+└── {Name}Module.cs       # DI-регистрации проекта
 ```
 
 ### DM.Web.API
@@ -514,27 +418,10 @@ DM.Infrastructure.Messaging/
 DM.Web.API/
 ├── Features/
 │   └── {Module}/
-│       └── {Feature}/
-│           ├── {Feature}Controller.cs
-│           ├── I{Feature}ApiService.cs
-│           ├── {Feature}ApiService.cs
-│           ├── {Feature}Request.cs
-│           └── {Feature}Response.cs
+│       └── {Feature}/    # состав папки — см. "Web.API — Feature Folders"
 ├── Shared/
-│   ├── Authentication/
-│   ├── BackgroundServices/
-│   ├── BbRendering/
-│   ├── Binding/
-│   ├── Comments/
-│   ├── Configuration/
-│   └── Dto/
-├── HostedServices/
-├── Middleware/
-├── Notifications/
-├── Realtime/
-├── Swagger/
-├── Validation/
-├── Warmup/
+│   └── {Concern}/        # cross-feature код API-слоя
+├── {Concern}/            # техническая обвязка хоста
 ├── Program.cs
 └── Startup.cs
 ```
@@ -543,36 +430,20 @@ DM.Web.API/
 
 ```
 DM.Web.Client/src/
-├── app/
-│   ├── providers/
-│   ├── styles/
-│   ├── App.vue
-│   └── main.ts
-├── pages/
-│   └── {domain}/
-├── widgets/
-│   └── {Widget}/
-├── features/
-│   └── {feature}/
-├── entities/
-│   └── {entity}/
-│       ├── model/
-│       ├── api/
-│       └── ui/
-├── shared/
-│   ├── ui/
-│   ├── api/
-│   ├── lib/
-│   ├── stores/        # Auth, UI state (used by all layers)
-│   └── config/
-└── assets/
+└── {layer}/              # слои и их порядок — см. "Frontend — Feature-Sliced Design (FSD)"
+    └── {slice}/
+        ├── model/        # store, composables
+        ├── api/          # запросы
+        ├── ui/           # компоненты
+        └── index.ts      # barrel: публичный API слайса
 ```
 
 ### DM.Workers.{Name}
 
 ```
 DM.Workers.{Name}/
-├── {Name}Consumer.cs
+├── {Name}Consumer.cs     # подписка на очередь
+├── {Concern}/            # обработка события
 ├── Program.cs
 └── Startup.cs
 ```
@@ -581,16 +452,8 @@ DM.Workers.{Name}/
 
 ```
 test/
-├── DM.Domain.{Module}.Tests/
-│   ├── Authorization/
-│   ├── Features/
-│   │   └── {Feature}/
-│   └── Dsl/
-├── DM.Infrastructure.{Name}.Tests/
-├── DM.Web.API.IntegrationTests/
-│   └── Controllers/
-│       └── {Module}/
-└── DM.Testing/
+└── {Project}.Tests/      # зеркало структуры {Project}
+    └── Dsl/              # билдеры и фикстуры тестов этого проекта
 ```
 
 ---
@@ -655,9 +518,9 @@ test/
 
 Нет. Feature Folders в Web.API — это только организация API-слоя. Бизнес-логика остается в Domain.
 
-### ❌ "Workers содержат бизнес-логику"
+### ❌ "Раз worker обрабатывает событие, правила можно писать в нем"
 
-Нет. Workers — тонкий слой оркестрации. Вся бизнес-логика в Domain.*.
+Нет. Worker владеет обработкой своего технического назначения — рендерингом письма, генерацией текста уведомления, построением документа для индекса. Правила предметной области (кто что может, что считается активным, когда начисляется награда) остаются в `Domain.*`, и worker их только вызывает.
 
 ### ❌ "Сервисы надо разбивать на CreateGameService, UpdateGameService"
 

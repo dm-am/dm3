@@ -50,7 +50,7 @@ Internet → Nginx → Frontend (Vue.js)
 curl -sSL https://raw.githubusercontent.com/dm-am/dm3/dev/docker/setup-server.sh | bash
 ```
 
-Результат: http://<IP> (Basic Auth: `preview` / `dm2026preview`)
+Результат: http://<IP> за Basic Auth. Учетные данные лежат в [`docker/nginx/.htpasswd`](../../docker/nginx/.htpasswd) и в документации не публикуются — задать свои командой из [Смена пароля](#preview-окружение).
 
 ### Ручная установка
 

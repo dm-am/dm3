@@ -126,7 +126,6 @@ var games = await context.Games
 |---------|------------|
 | **Response Compression** | Brotli/Gzip middleware (Fastest level для TTFB) |
 | **Response Cache** | `[ResponseCache(Duration=N)]` для статических справочников |
-| **Distributed Cache** | Сессии, частые запросы |
 | **Memory Cache** | Горячие данные (статистика, счетчики) |
 | **Query Cache** | EF Core second-level cache (опционально) |
 
@@ -199,8 +198,11 @@ void enrichGame(bestOfWeek.value).then(g => { bestOfWeekGame.value = g; });
 
 ### Caching Layer
 
-- **Redis** — для distributed cache
-- **Инвалидация** — pub/sub для синхронизации между инстансами
+Кэш процессный, distributed cache нет. Что из этого следует для кода:
+
+- **Кэш не источник истины** — любое кэшированное значение воспроизводимо из БД.
+- **Общего кэша между инстансами не предполагать** — у каждого инстанса свой прогрев и свой TTL.
+- Если distributed cache появится — инвалидация через pub/sub между инстансами. Планы по кэшированию — в [ROADMAP.md](../plans/ROADMAP.md).
 
 ### CDN
 
@@ -266,267 +268,30 @@ function measureText(text: string, font: string): number {
 
 ## URL-Synced Filters: Action Queue Pattern
 
-Паттерн для composables с URL-синхронизацией (фильтры, сортировка, пагинация).
+Фильтры, сортировка и пагинация синхронизируются с URL. Наивная реализация — прочитать состояние из `route.query`, поменять одно поле, заменить URL — теряет обновления: второе действие читает URL, который первое еще не успело обновить из-за debounce, и правка первого исчезает. Поэтому состояние меняется только через очередь действий с редьюсером.
 
-### Архитектура
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           ACTION QUEUE PATTERN                               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  setSearch("та") ──┐                                                         │
-│                    ├──► dispatch() ──► reducer() ──► pendingState            │
-│  setStatus("Active")                                                         │
-│                    │                                                         │
-│                    └──► [debounce 50ms] ──► router.replace() ──► URL         │
-│                                                                              │
-│  URL ◄─────────────────────────────────────────────────────────────────────  │
-│   │                                                                          │
-│   └──► computed filterState ◄── parseQueryToState(route.query)               │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Проблема: Lost Updates
-
-```typescript
-// ПЛОХО: Race condition при быстрых действиях
-function setSearch(search: string) {
-  const newState = { ...filterState.value };  // ❌ Читает URL (stale!)
-  newState.search = search;
-  updateUrl(newState);  // Ставит pendingState, debounce 50ms
-}
-
-function setStatus(status: string) {
-  const newState = { ...filterState.value };  // ❌ URL еще не обновился!
-  newState.status = status;                   // Потеряли search="та"
-  updateUrl(newState);
-}
-
-// Пользователь вводит "та", кликает статус → search="" (потерян!)
-```
-
-### Решение: Action Queue + Reducer
-
-```typescript
-// =============================================================================
-// CONSTANTS
-// =============================================================================
-
-/** Debounce delay for URL updates. Batches rapid clicks into single navigation. */
-const DEBOUNCE_MS = 50;
-
-// =============================================================================
-// RETURN TYPE (explicit interface for better DX)
-// =============================================================================
-
-export interface FilterComposable {
-  filterState: ComputedRef<FilterState>;
-  searchParams: ComputedRef<SearchParams>;
-  hasActiveFilters: ComputedRef<boolean>;
-  setSearch: (search: string) => void;
-  setStatus: (status: StatusValue | null) => void;
-  // ... other actions
-}
-
-// =============================================================================
-// ACTION TYPES (Discriminated Union)
-// =============================================================================
-
-type FilterAction =
-  | { type: "SET_SEARCH"; search: string }
-  | { type: "SET_STATUS"; status: StatusValue | null }
-  | { type: "ADD_TAG"; tagId: number }
-  | { type: "REMOVE_TAG"; tagId: number }
-  | { type: "SET_SORT"; sortBy: string; sortOrder?: "asc" | "desc" }
-  | { type: "CLEAR_FILTERS" };
-
-// =============================================================================
-// PURE REDUCER (Testable, no side effects)
-// =============================================================================
-
-function reducer(state: FilterState, action: FilterAction): FilterState {
-  const newState: FilterState = {
-    ...state,
-    tags: new Set(state.tags),  // ✅ Новые Set для immutability
-  };
-
-  switch (action.type) {
-    case "SET_SEARCH":
-      newState.search = action.search;
-      return newState;
-
-    case "SET_STATUS":
-      // Сбрасываем под-фильтры при смене статуса
-      if (newState.status !== action.status) {
-        newState.recruitmentFilter = "any";
-      }
-      newState.status = action.status;
-      return newState;
-
-    case "ADD_TAG":
-      newState.tags.add(action.tagId);
-      return newState;
-
-    case "REMOVE_TAG":
-      newState.tags.delete(action.tagId);
-      return newState;
-
-    case "SET_SORT": {
-      newState.sortBy = action.sortBy;
-      newState.sortOrder = action.sortOrder ?? getDefaultSortOrder(action.sortBy);
-      return newState;
-    }
-
-    case "CLEAR_FILTERS":
-      return createDefaultState();
-
-    default: {
-      // ✅ Exhaustiveness check — TypeScript ошибка если забыли case
-      const _exhaustive: never = action;
-      return _exhaustive;
-    }
-  }
-}
-
-// =============================================================================
-// MODULE-LEVEL DISPATCH INFRASTRUCTURE
-// =============================================================================
-
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingState: FilterState | null = null;
-let isNavigating = false;
-let routerInstance: ReturnType<typeof useRouter> | null = null;
-
-/**
- * Dispatch an action - applies it to pending state and schedules URL update.
- * This is the ONLY way to modify filter state.
- */
-function dispatch(action: FilterAction, getCurrentState: () => FilterState) {
-  // ✅ Читаем pendingState если есть, иначе URL
-  const baseState = pendingState ?? getCurrentState();
-  const newState = reducer(baseState, action);
-
-  // ✅ Reducer может вернуть тот же объект (оптимизация)
-  if (newState === baseState) return;
-
-  pendingState = newState;
-
-  if (debounceTimer) clearTimeout(debounceTimer);
-
-  debounceTimer = setTimeout(async () => {
-    debounceTimer = null;
-    if (!pendingState || !routerInstance) return;
-    if (isNavigating) return;
-
-    const query = buildQueryFromState(pendingState);
-    pendingState = null;
-
-    // ✅ router.currentRoute.value — не closure!
-    const currentRoute = routerInstance.currentRoute.value;
-
-    // Skip if unchanged
-    if (queriesEqual(query, currentRoute.query)) return;
-
-    isNavigating = true;
-    try {
-      // ✅ route NAME, не path — Vue Router распознает тот же route
-      await routerInstance.replace({ name: currentRoute.name as string, query });
-    } catch (err: unknown) {
-      const error = err as { name?: string };
-      if (error?.name !== "NavigationDuplicated" && error?.name !== "NavigationCancelled") {
-        console.error("[useFilter] Navigation error:", err);
-      }
-    } finally {
-      isNavigating = false;
-    }
-  }, DEBOUNCE_MS);
-}
-
-// =============================================================================
-// COMPOSABLE
-// =============================================================================
-
-export function useFilter(): FilterComposable {
-  const route = useRoute();
-  const router = useRouter();
-
-  routerInstance = router;
-
-  // ✅ URL — единственный источник истины
-  const filterState = computed<FilterState>(() => parseQueryToState(route.query));
-
-  const getCurrentState = () => filterState.value;
-
-  // ✅ Тонкие обертки — просто создают action и dispatch
-  const setSearch = (search: string) =>
-    dispatch({ type: "SET_SEARCH", search }, getCurrentState);
-
-  const setStatus = (status: StatusValue | null) =>
-    dispatch({ type: "SET_STATUS", status }, getCurrentState);
-
-  const addTag = (tagId: number) =>
-    dispatch({ type: "ADD_TAG", tagId }, getCurrentState);
-
-  const setSort = (sortBy: string, sortOrder?: "asc" | "desc") =>
-    dispatch({ type: "SET_SORT", sortBy, sortOrder }, getCurrentState);
-
-  const clearFilters = () =>
-    dispatch({ type: "CLEAR_FILTERS" }, getCurrentState);
-
-  return {
-    filterState,
-    setSearch,
-    setStatus,
-    addTag,
-    setSort,
-    clearFilters,
-  };
-}
-```
-
-### Преимущества Action Queue
-
-| Аспект | getBaseState() | Action Queue |
-|--------|----------------|--------------|
-| Правильность | Можно забыть вызвать | Невозможно пропустить |
-| Тестируемость | Нужен router mock | Reducer — чистая функция |
-| TypeScript | Ручная проверка | Exhaustiveness check |
-| Расширяемость | Дублирование логики | Один switch |
-| Отладка | Сложно | Actions можно логировать |
+Место в структуре: композабл фильтра на сущность — в слое фич, общая dispatch-инфраструктура — в shared-композаблах.
 
 ### Ключевые правила
 
 1. **URL — единственный источник истины** (computed от route.query)
 2. **Все мутации через dispatch()** — единственная точка изменения состояния
 3. **Reducer — чистая функция** — тестируется без router
-4. **Module-level state** — debounceTimer, pendingState, isNavigating НА УРОВНЕ МОДУЛЯ
-5. **router.currentRoute.value** — внутри setTimeout для избежания stale closures
-6. **Route NAME, не path** — `router.replace({ name, query })`
-7. **Exhaustiveness check** — `default: { const _: never = action; return _; }`
-8. **Константы** — `const DEBOUNCE_MS = 50` вместо magic numbers
-9. **Explicit return types** — `export interface FilterComposable { ... }`
+4. **База для действия — pending-состояние, а не URL** — иначе быстрая серия действий теряет предыдущие
+5. **Dispatch-состояние живет вне композабла** — debounce-таймер, pending-состояние и флаг навигации создаются один раз на тип фильтра, а не на экземпляр компонента
+6. **Текущий route читать в момент навигации** (`router.currentRoute.value` внутри debounce-колбэка), а не из замыкания
+7. **Route NAME, не path** — на path компонент перемонтируется при изменении query
+8. **Exhaustiveness check в редьюсере** — забытый case ловится компилятором, а не в рантайме
+9. **Debounce URL-обновления** — 50ms, батчит быстрые клики в одну навигацию; значение в именованной константе
+10. **Явный return type композабла** — интерфейс, а не вывод типа
 
 ### Симптомы нарушения паттерна
 
 | Симптом | Причина |
 |---------|---------|
-| Потеря фильтров при быстрых кликах | Читали URL вместо pendingState |
+| Потеря фильтров при быстрых кликах | Читали URL вместо pending-состояния |
 | Бесконечная загрузка | Race condition между navigations |
 | Мерцание UI | Компонент remount из-за path вместо name |
-| vue-i18n `__disposer` TypeError | `legacy: false` не установлен |
-
-### vue-i18n конфигурация
-
-```typescript
-// plugins.ts
-export const i18n = createI18n({
-  locale: "ru",
-  legacy: false, // ✅ ОБЯЗАТЕЛЬНО! Composition API mode
-});
-```
-Без `legacy: false` возникает `__disposer` TypeError при быстром unmount.
 
 ---
 
@@ -540,7 +305,7 @@ export const i18n = createI18n({
 - Index as key в v-for
 - Fetching в каждом mount без кэша
 - Создание DOM элементов в горячем пути (loop, scroll)
-- Множественные watchEffect в singleton composables (см. выше)
+- Множественные watchEffect в singleton composables
 
 ### Backend
 
