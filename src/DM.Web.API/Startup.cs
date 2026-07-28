@@ -111,7 +111,12 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             sp.GetRequiredService<IOptions<ProbationConfiguration>>().Value);
 
         services
-            .AddAutoMapper(config => config.AllowNullCollections = true)
+            // No AddAutoMapper here: the mapper is owned by the Autofac
+            // registration in RegisterMapper, which is applied after Populate and
+            // therefore always won. This call registered a second mapper — with an
+            // empty profile set, because it was given no assemblies — and its
+            // AllowNullCollections never took effect. The setting now lives in the
+            // configuration that is actually built.
             .AddMemoryCache()
             .AddResponseCompression(options =>
             {
