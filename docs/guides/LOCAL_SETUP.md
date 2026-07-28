@@ -263,7 +263,7 @@ cd docker
 docker compose -f docker-compose.yml -f docker-compose.preview.yml up -d --build
 ```
 
-URL: http://localhost:80 (Basic Auth: `preview` / `dm2026preview`)
+URL: http://localhost:80 за Basic Auth. Пароль в документации не публикуется: он лежит в `docker/nginx/.htpasswd`, задать свой — [DEPLOYMENT.md](./DEPLOYMENT.md#preview-окружение).
 
 ---
 
