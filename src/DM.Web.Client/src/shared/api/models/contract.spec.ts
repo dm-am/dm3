@@ -51,18 +51,28 @@ const MAPPING: Record<string, string> = {
   "DM.Web.API.Shared.Dto.Upload": "Upload",
   "DM.Web.API.Features.Messaging.Messages.Message": "Message",
   "DM.Web.API.Features.Personal.Notepads.NotepadEntryResponse": "NotepadEntry",
+  "DM.Web.API.Shared.Dto.Comment": "Comment",
 
-  // Deliberately absent, both for reasons recorded in the audit register:
-  //
-  // User — the client interface is one union of three server shapes (User,
-  // UserProfile and the community-list projection) with every extra field
-  // optional and commented as such. There is no single schema to hold it to.
-  //
-  // Comment — the client declares isRemoved and branches on it in four places,
-  // including a moderator-only "show deleted" path, while the API DTO has six
-  // fields and none of them is isRemoved, and no comment repository ever
-  // ignores the soft-delete filter. The feature is dead end to end; mapping it
-  // here would only paint the symptom red.
+  // Deliberately absent: User. The client interface is one union of three
+  // server shapes (User, UserProfile and the community-list projection) with
+  // every extra field optional and commented as such. There is no single
+  // schema to hold it to.
+};
+
+/**
+ * Properties a client model owns outright, per interface.
+ *
+ * The point of this test is that a field the client reads is a field the
+ * server sends. A few are genuinely local — optimistic state the store writes
+ * after a mutation — and those have to be named here rather than left to be
+ * inferred, so that adding one is a decision somebody made and not a typo that
+ * quietly widened the exception.
+ */
+const CLIENT_ONLY: Record<string, string[]> = {
+  // Set after a successful delete so the entry becomes a placeholder instead
+  // of vanishing under the reader. No endpoint returns a removed comment, and
+  // a reload drops it entirely.
+  Comment: ["isRemoved"],
 };
 
 /**
@@ -214,12 +224,29 @@ describe("API contract", () => {
 
       it("declares no property the API does not send", () => {
         const served = new Set(snapshot[schemaId] ?? []);
+        const local = new Set(CLIENT_ONLY[interfaceName] ?? []);
         const declared = propertiesOf(interfaceName, interfaces);
-        const invented = [...declared].filter((p) => !served.has(p));
+        const invented = [...declared].filter(
+          (p) => !served.has(p) && !local.has(p),
+        );
 
         expect(
           invented,
           `${interfaceName} declares fields the API does not publish: reading them yields undefined`,
+        ).toEqual([]);
+      });
+
+      it("declares every property it claims as client-only", () => {
+        const declared = propertiesOf(interfaceName, interfaces);
+        const stale = (CLIENT_ONLY[interfaceName] ?? []).filter(
+          (p) => !declared.has(p),
+        );
+
+        // An exception for a field that no longer exists is an exception
+        // nobody will notice has stopped applying.
+        expect(
+          stale,
+          `${interfaceName} lists client-only fields it no longer declares`,
         ).toEqual([]);
       });
     });

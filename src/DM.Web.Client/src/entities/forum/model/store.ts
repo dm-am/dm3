@@ -11,6 +11,7 @@ import type {
   CommentsQuery,
 } from "./types";
 import type { ListEnvelope, User } from "@/shared/api/models/common";
+import { markRemoved } from "@/shared/api/models/common";
 import { unwrapResource } from "@/shared/api";
 import forumApi from "../api/forumApi";
 import { useAuthStore } from "@/shared/stores";
@@ -439,10 +440,9 @@ export const useBoardsStore = defineStore("boards", () => {
     if (comments.value) {
       const index = comments.value.resources.findIndex((c) => c.id === id);
       if (index !== -1) {
-        comments.value.resources[index] = {
-          ...comments.value.resources[index],
-          isRemoved: true as unknown as Comment["isRemoved"],
-        };
+        comments.value.resources[index] = markRemoved(
+          comments.value.resources[index],
+        );
       }
     }
   }

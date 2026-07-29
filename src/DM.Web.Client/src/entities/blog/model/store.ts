@@ -6,6 +6,7 @@ import type {
   Paging,
   User,
 } from "@/shared/api/models/common";
+import { markRemoved } from "@/shared/api/models/common";
 import type {
   Blog,
   BlogPremoderationTransition,
@@ -490,10 +491,7 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     await blogApi.deleteBlogComment(id);
     const index = comments.value.findIndex((c) => c.id === id);
     if (index !== -1) {
-      comments.value[index] = {
-        ...comments.value[index],
-        isRemoved: true as unknown as Comment["isRemoved"],
-      };
+      comments.value[index] = markRemoved(comments.value[index]);
     }
   }
 

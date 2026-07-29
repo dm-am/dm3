@@ -60,7 +60,6 @@ const { user: currentUser } = storeToRefs(useAuthStore());
 // State
 const isEditing = ref(false);
 const editText = ref("");
-const showDeletedContent = ref(false);
 
 // Max collapsed height before TruncatedContent shows "показать полностью".
 // 300px ≈ 15-20 lines of BBCode text, matches DM2 comment visual rhythm.
@@ -130,8 +129,7 @@ const hasFooterContent = computed(
     likesCount.value > 0 ||
     canEdit.value ||
     canDelete.value ||
-    canWarn.value ||
-    (props.comment.isRemoved && isModerator.value),
+    canWarn.value,
 );
 
 const commentAnchor = computed(() => `#comment-${props.comment.id}`);
@@ -208,14 +206,6 @@ function handleWarn() {
   emit("warn", props.comment.id);
 }
 
-// Deleted-comment reveal (moderator "Показать/Скрыть"): a deliberate
-// moderation action, NOT collapsible content — it stays a plain instant
-// swap and never participates in the reveal contract (owner rule: bulk
-// "Развернуть все" must not uncover removed content).
-function toggleDeletedContent() {
-  showDeletedContent.value = !showDeletedContent.value;
-}
-
 async function copyAnchorLink() {
   // Canonical link: keep only the page number (default sort, no active
   // search/author/date filters) so the copied permalink always resolves for
@@ -267,21 +257,16 @@ watch(
     :id="`comment-${comment.id}`"
     class="comment"
     :class="{
-      removed: comment.isRemoved && !showDeletedContent,
+      removed: comment.isRemoved,
       compact: compact,
     }"
   >
-    <!-- Deleted comment placeholder -->
-    <template v-if="comment.isRemoved && !showDeletedContent">
+    <!-- Deleted comment placeholder. isRemoved is set locally when this
+         session deletes the comment; the server never sends a removed one,
+         so this is what keeps the list from jumping under the reader. -->
+    <template v-if="comment.isRemoved">
       <div class="deleted-placeholder">
         <span class="deleted-text">Комментарий удален</span>
-        <button
-          v-if="isModerator"
-          class="show-deleted-btn"
-          @click="toggleDeletedContent"
-        >
-          Показать
-        </button>
       </div>
     </template>
 
@@ -464,13 +449,6 @@ watch(
             >
               Предупреждение
             </button>
-            <button
-              v-if="comment.isRemoved && isModerator"
-              class="action-btn"
-              @click="toggleDeletedContent"
-            >
-              Скрыть
-            </button>
           </span>
 
           <!-- Number (anchor link) — compact layout only (no '#'). Wrapped in a
@@ -519,18 +497,6 @@ watch(
 
 .deleted-text
   font-style: italic
-
-.show-deleted-btn
-  padding: $tiny $small
-  font-size: $secondary-font-size
-  border: none
-  border-radius: $tiny
-  cursor: pointer
-  background-color: $bg-element-accent
-  color: $text-muted
-
-  &:hover
-    color: $link
 
 .avatar-link
   flex-shrink: 0
