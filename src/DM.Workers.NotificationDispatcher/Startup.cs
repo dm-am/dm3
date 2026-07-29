@@ -1,5 +1,4 @@
 using Autofac;
-using DM.Domain.Account.Features.Identity;
 using DM.Domain.Community.Authorization;
 using DM.Domain.Personal.Authorization;
 using DM.Infrastructure.Core;
@@ -95,10 +94,7 @@ public class Startup
         var accountAssembly = typeof(DM.Domain.Account.Authorization.AccountIntention).Assembly;
         builder.RegisterDefaultTypes(accountAssembly);
         builder.RegisterMapper(accountAssembly);
-        builder.RegisterType<IdentityProvider>()
-            .AsSelf()
-            .AsImplementedInterfaces()
-            .InstancePerLifetimeScope();
+        builder.RegisterModuleOnce<DM.Domain.Account.AccountModule>();
 
         builder.RegisterModuleOnce<MailModule>();
 

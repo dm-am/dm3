@@ -14,7 +14,7 @@
 
 Паттерн из DDD. Domain.Core содержит общие контракты для всех модулей:
 - Интерфейсы системных абстракций (`IDateTimeProvider`, `IGuidFactory`)
-- Интерфейсы cross-module фич (`ICommentService`, `INotepadRepository`)
+- Интерфейсы cross-module фич (`IUserLookupService`, `INotepadRepository`)
 - Общие DTO, enums, exceptions
 
 **Правило:** Domain.* НЕ импортирует другие Domain.* — только через Domain.Core.
