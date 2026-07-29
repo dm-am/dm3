@@ -2145,9 +2145,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("BoardId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("CommentCount")
-                        .HasColumnType("integer");
-
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -2199,7 +2196,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TopicId = new Guid("00000000-0000-0000-0000-000000000001"),
                             AuthorId = new Guid("00000000-0000-0000-0000-000000000001"),
                             BoardId = new Guid("00000000-0000-0000-0000-000000000001"),
-                            CommentCount = 0,
                             CreatedUtc = new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsAttached = true,
                             IsClosed = false,
@@ -2213,7 +2209,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TopicId = new Guid("00000000-0000-0000-0000-000000000100"),
                             AuthorId = new Guid("00000000-0000-0000-0000-000000000001"),
                             BoardId = new Guid("00000000-0000-0000-0000-000000000001"),
-                            CommentCount = 0,
                             CreatedUtc = new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 1, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsAttached = true,
                             IsClosed = false,
@@ -2618,9 +2613,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTimeOffset?>("FulfilledUtc")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsRemoved")
-                        .HasColumnType("boolean");
 
                     b.Property<DateTimeOffset?>("LastReminderUtc")
                         .HasColumnType("timestamp with time zone");

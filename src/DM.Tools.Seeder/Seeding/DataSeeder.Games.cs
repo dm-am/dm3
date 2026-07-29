@@ -408,7 +408,6 @@ internal sealed partial class DataSeeder
                 HidePostStats = false,
                 CommentsAccessMode = CommentsAccessMode.Public,
                 CommentCount = 0,
-                IsRemoved = false,
                 // Temporary placeholder - will be updated after SaveChanges
                 PublicId = $"t{_guidFactory.Create():N}"[..10]
             };
@@ -880,8 +879,7 @@ internal sealed partial class DataSeeder
                     CreatedById = master.UserId,
                     CreatedUtc = now.AddDays(-2),
                     FulfilledUtc = null,
-                    LastReminderUtc = null,
-                    IsRemoved = false
+                    LastReminderUtc = null
                 });
 
                 // Baseline unread counter for the main room so any user who

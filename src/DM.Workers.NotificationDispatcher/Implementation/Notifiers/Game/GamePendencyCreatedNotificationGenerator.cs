@@ -30,7 +30,7 @@ internal class GamePendencyCreatedNotificationGenerator : BaseNotificationGenera
     public override async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
         var data = await _dbContext.PostPendencies
-            .Where(p => p.PendencyId == entityId && !p.IsRemoved)
+            .Where(p => p.PendencyId == entityId)
             .Select(p => new
             {
                 p.PendencyId,

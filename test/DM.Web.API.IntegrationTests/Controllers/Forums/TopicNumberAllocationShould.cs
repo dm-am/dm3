@@ -59,8 +59,8 @@ public class TopicNumberAllocationShould : IntegrationTestBase
             var insertDuplicate = async () => await dbContext.Database.ExecuteSqlRawAsync(
                 """
                 INSERT INTO "Topics" ("TopicId", "BoardId", "TopicNumber", "AuthorId", "Title", "Text",
-                                      "CreatedUtc", "IsRemoved", "IsClosed", "IsAttached", "CommentCount")
-                VALUES ({0}, {1}, 1, {2}, 'duplicate', '', now(), false, false, false, 0)
+                                      "CreatedUtc", "IsRemoved", "IsClosed", "IsAttached")
+                VALUES ({0}, {1}, 1, {2}, 'duplicate', '', now(), false, false, false)
                 """,
                 Guid.NewGuid(), boardId, TestConstants.TestUserId);
 

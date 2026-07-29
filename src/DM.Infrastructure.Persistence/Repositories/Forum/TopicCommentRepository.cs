@@ -159,7 +159,6 @@ internal class TopicCommentRepository : ITopicCommentRepository
         var topic = await _dbContext.Topics.FindAsync(createComment.TopicId);
         if (topic != null)
         {
-            topic.CommentCount = createComment.NewCommentCount;
             topic.LastCommentId = commentId;
         }
 
@@ -204,12 +203,11 @@ internal class TopicCommentRepository : ITopicCommentRepository
         // Get topic info: comment count and last comment id
         var topicInfo = await _dbContext.Topics
             .Where(t => t.TopicId == comment.EntityId)
-            .Select(t => new { t.CommentCount, t.LastCommentId })
+            .Select(t => new { t.LastCommentId })
             .FirstOrDefaultAsync();
 
         if (topicInfo != null)
         {
-            comment.TopicCommentCount = topicInfo.CommentCount;
             comment.IsLastComment = topicInfo.LastCommentId == commentId;
         }
 
@@ -241,7 +239,6 @@ internal class TopicCommentRepository : ITopicCommentRepository
         var topic = await _dbContext.Topics.FindAsync(deleteComment.TopicId);
         if (topic != null)
         {
-            topic.CommentCount = deleteComment.NewCommentCount;
             topic.LastCommentId = deleteComment.NewLastCommentId;
         }
 

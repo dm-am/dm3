@@ -1,3 +1,4 @@
+using DM.Domain.Core.Identity;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -68,7 +69,7 @@ public class User : IUser, IRemovable
     /// <summary>
     /// Password hash algorithm version (4 = Argon2id)
     /// </summary>
-    public int PasswordHashVersion { get; set; } = 4;
+    public int PasswordHashVersion { get; set; } = PasswordHashing.CurrentVersion;
 
     /// <inheritdoc />
     public bool RatingDisabled { get; set; }

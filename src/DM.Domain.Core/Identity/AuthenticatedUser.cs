@@ -25,7 +25,7 @@ public class AuthenticatedUser : GeneralUser, IAuthorizationSubject
     /// <summary>
     /// Password hash algorithm version (4 = Argon2id)
     /// </summary>
-    public int PasswordHashVersion { get; set; } = 4;
+    public int PasswordHashVersion { get; set; } = PasswordHashing.CurrentVersion;
 
     /// <summary>
     /// Removed flag

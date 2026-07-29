@@ -82,8 +82,7 @@ internal class TopicCommentService : ITopicCommentService
             AuthorId = currentUser.UserId,
             // Strip [mod] authored by a non-moderator (it renders as a green
             // mod block on the Comment surface); Moderator+ may author it.
-            Text = ModBlockSanitizer.SanitizeForAuthor(createComment.Text, currentUser.Role),
-            NewCommentCount = topic.TotalCommentsCount + 1
+            Text = ModBlockSanitizer.SanitizeForAuthor(createComment.Text, currentUser.Role)
         };
 
         var createdComment = await _repository.Create(createEntity);
@@ -167,7 +166,6 @@ internal class TopicCommentService : ITopicCommentService
         {
             CommentId = commentId,
             TopicId = comment.TopicId,
-            NewCommentCount = Math.Max(0, comment.TopicCommentCount - 1),
             NewLastCommentId = newLastCommentId
         };
 

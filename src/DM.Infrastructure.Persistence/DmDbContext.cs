@@ -1958,7 +1958,6 @@ public class DmDbContext : DbContext
                 Text = "Ваши отзывы отсюда попадают (после минимального анализа на нарушения правил) прямиком на главную.",
                 IsAttached = true,
                 IsClosed = false,
-                CommentCount = 0,
                 IsRemoved = false
             },
             new Topic
@@ -1973,7 +1972,6 @@ public class DmDbContext : DbContext
                 Text = "Здесь можно обсудить решения модераторов и администрации. Конструктивная критика приветствуется.",
                 IsAttached = true,
                 IsClosed = false,
-                CommentCount = 0,
                 IsRemoved = false
             });
 

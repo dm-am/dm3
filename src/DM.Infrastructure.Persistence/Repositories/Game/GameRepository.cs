@@ -700,7 +700,7 @@ internal class GameRepository : IGameRepository
             .ToArrayAsync(ct);
 
         return await _dbContext.PostPendencies
-            .Where(p => !p.IsRemoved && roomIds.Contains(p.RoomId))
+            .Where(p => roomIds.Contains(p.RoomId))
             .ProjectTo<PostPendency>(_mapper.ConfigurationProvider)
             .ToArrayAsync(ct);
     }
@@ -712,9 +712,9 @@ internal class GameRepository : IGameRepository
 
         // Single query with Include instead of 2 separate queries
         var rooms = await _dbContext.Rooms
-            .Include(r => r.PostPendencies.Where(p => !p.IsRemoved))
+            .Include(r => r.PostPendencies)
                 .ThenInclude(p => p.WaitingForUser)
-            .Include(r => r.PostPendencies.Where(p => !p.IsRemoved))
+            .Include(r => r.PostPendencies)
                 .ThenInclude(p => p.CreatedBy)
             .Where(GameAccessibilityFilters.RoomAvailable(userId))
             .Where(r => gameIdList.Contains(r.GameId))
