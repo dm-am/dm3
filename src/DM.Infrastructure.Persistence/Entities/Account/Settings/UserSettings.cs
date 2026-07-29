@@ -30,11 +30,6 @@ public class UserSettings
     public Theme Theme { get; set; }
 
     /// <summary>
-    /// Personal blacklist behavior settings
-    /// </summary>
-    public UserBlacklistSettings BlacklistSettings { get; set; }
-
-    /// <summary>
     /// Discord notification channel preferences. Null = channel not connected.
     /// </summary>
     public NotificationChannelPreference? DiscordPreferences { get; set; }

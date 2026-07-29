@@ -169,6 +169,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("BirthdayDate")
                         .HasColumnType("date");
 
+                    b.Property<int>("BlacklistSettings")
+                        .HasColumnType("integer");
+
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -258,6 +261,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             UserId = new Guid("00000000-0000-0000-0000-000000000001"),
                             AccessPolicy = 0,
+                            BlacklistSettings = 19,
                             CreatedUtc = new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Email = "system@dm.local",
                             Gender = 0,

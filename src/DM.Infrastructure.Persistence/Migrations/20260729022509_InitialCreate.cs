@@ -1135,6 +1135,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     Gender = table.Column<int>(type: "integer", nullable: false),
                     BirthdayDate = table.Column<DateOnly>(type: "date", nullable: true),
                     ShowBirthday = table.Column<bool>(type: "boolean", nullable: false),
+                    BlacklistSettings = table.Column<int>(type: "integer", nullable: false),
                     Info = table.Column<string>(type: "text", nullable: true),
                     AvatarUploadId = table.Column<Guid>(type: "uuid", nullable: true),
                     DiscordId = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
@@ -1621,8 +1622,8 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             migrationBuilder.InsertData(
                 table: "Users",
-                columns: new[] { "UserId", "AccessPolicy", "AvatarUploadId", "BirthdayDate", "CreatedUtc", "DiscordId", "Email", "Gender", "Info", "IsRemoved", "LastActivityUtc", "Location", "Name", "PasswordHash", "PasswordHashVersion", "QualityRating", "QuantityRating", "RatingDisabled", "Role", "Salt", "ShowBirthday", "Status", "TelegramId", "Username" },
-                values: new object[] { new Guid("00000000-0000-0000-0000-000000000001"), 0, null, null, new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, "system@dm.local", 0, null, false, null, null, null, "", 0, 0, 0, true, 6, "", false, null, null, "Робот-Администратор" });
+                columns: new[] { "UserId", "AccessPolicy", "AvatarUploadId", "BirthdayDate", "BlacklistSettings", "CreatedUtc", "DiscordId", "Email", "Gender", "Info", "IsRemoved", "LastActivityUtc", "Location", "Name", "PasswordHash", "PasswordHashVersion", "QualityRating", "QuantityRating", "RatingDisabled", "Role", "Salt", "ShowBirthday", "Status", "TelegramId", "Username" },
+                values: new object[] { new Guid("00000000-0000-0000-0000-000000000001"), 0, null, null, 19, new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, "system@dm.local", 0, null, false, null, null, null, "", 0, 0, 0, true, 6, "", false, null, null, "Робот-Администратор" });
 
             migrationBuilder.InsertData(
                 table: "AchievementTypes",

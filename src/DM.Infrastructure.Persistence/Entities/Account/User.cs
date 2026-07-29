@@ -124,6 +124,18 @@ public class User : IUser, IRemovable
     public bool ShowBirthday { get; set; } = true;
 
     /// <summary>
+    /// What the personal blacklist actually does: which surfaces hide a blocked
+    /// user's content, and whether direct messages from them are refused.
+    /// </summary>
+    /// <remarks>
+    /// Lives here rather than in the Mongo settings document because the entries
+    /// it governs are rows in Postgres with a foreign key: keeping the switch in
+    /// the other store made "is this user blocked, and does it apply here" two
+    /// reads across two databases with no way to make them agree.
+    /// </remarks>
+    public UserBlacklistSettings BlacklistSettings { get; set; } = UserBlacklistSettings.Default;
+
+    /// <summary>
     /// Full user information
     /// </summary>
     public string? Info { get; set; }
