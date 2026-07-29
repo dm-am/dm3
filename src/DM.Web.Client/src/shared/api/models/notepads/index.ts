@@ -28,12 +28,9 @@ export interface CreateNotepadEntryRequest {
   content: string;
 }
 
-/**
- * A PATCH, but title and content are not optional: the server binds them into
- * non-nullable properties and rejects the request when either is missing.
- */
+/** A PATCH: omitted fields are left unchanged.*/
 export interface UpdateNotepadEntryRequest {
-  title: string;
-  content: string;
+  title?: string;
+  content?: string;
   sortOrder?: number | null;
 }
