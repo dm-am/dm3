@@ -1,12 +1,16 @@
-// Notepad type
-export enum NotepadType {
-  Player = 1,
-  Master = 2,
-  Blog = 3,
-  User = 4,
-}
+/**
+ * Notepad contract (`/v1/users/me/notepad`, `/v1/games/{id}/notepad`,
+ * `/v1/blogs/{id}/notepad`) — one shape for all three, because the server
+ * serves all three from one DTO. The game and blog entities used to declare
+ * their own copies and they drifted; this module is the only declaration.
+ */
 
-// Notepad entry DTO
+/**
+ * Which notepad an entry belongs to. Serialised by name — the API registers a
+ * string enum converter globally, so the wire carries "Master", not 2.
+ */
+export type NotepadType = "Player" | "Master" | "Blog" | "User";
+
 export interface NotepadEntry {
   id: string;
   notepadType: NotepadType;
@@ -20,39 +24,19 @@ export interface NotepadEntry {
   modifiedUtc?: string | null;
 }
 
-// Notepad category DTO
-export interface NotepadCategory {
-  id: string;
-  notepadType: NotepadType;
-  containerId: string;
-  ownerId?: string | null;
-  name: string;
-  sortOrder: number;
-  createdUtc: string;
-}
-
-// Create notepad entry request
 export interface CreateNotepadEntryRequest {
   categoryId?: string | null;
   title: string;
   content: string;
 }
 
-// Update notepad entry request
+/**
+ * A PATCH, but title and content are not optional: the server binds them into
+ * non-nullable properties and rejects the request when either is missing.
+ */
 export interface UpdateNotepadEntryRequest {
   categoryId?: string | null;
-  title?: string;
-  content?: string;
-  sortOrder?: number | null;
-}
-
-// Create notepad category request
-export interface CreateNotepadCategoryRequest {
-  name: string;
-}
-
-// Update notepad category request
-export interface UpdateNotepadCategoryRequest {
-  name?: string;
+  title: string;
+  content: string;
   sortOrder?: number | null;
 }

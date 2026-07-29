@@ -699,41 +699,10 @@ export interface UpdateChatRoomInput {
 }
 
 // === Game master notepad ===
-
-/**
- * Notepad type discriminator (mirrors backend NotepadType). Game master
- * notepad entries are always of the game-master kind.
- */
-export type NotepadType = "User" | "GameMaster" | "Character" | "Blog";
-
-/** A single game-master notepad entry */
-export interface NotepadEntry {
-  id: string;
-  notepadType: NotepadType;
-  containerId: string;
-  ownerId?: string | null;
-  categoryId?: string | null;
-  title: string;
-  content: string;
-  sortOrder: number;
-  createdUtc: string;
-  modifiedUtc?: string | null;
-}
-
-/** Payload for creating a notepad entry */
-export interface CreateNotepadEntryInput {
-  categoryId?: string | null;
-  title: string;
-  content: string;
-}
-
-/** Payload for updating a notepad entry */
-export interface UpdateNotepadEntryInput {
-  categoryId?: string | null;
-  title: string;
-  content: string;
-  sortOrder?: number | null;
-}
+// The entry shape is not declared here: all three notepads (personal, game,
+// blog) are served by one API DTO and are declared once in
+// shared/api/models/notepads. A local copy is how this one drifted into a
+// notepadType union with members the server has never sent.
 
 // === Room mutations ===
 

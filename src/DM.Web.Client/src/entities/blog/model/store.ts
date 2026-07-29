@@ -8,7 +8,6 @@ import type {
 } from "@/shared/api/models/common";
 import type {
   Blog,
-  BlogNotepadEntry,
   BlogPremoderationTransition,
   BlogRef,
   BlogStatusTransition,
@@ -332,11 +331,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
   const commentsLoading = ref(false);
   const commentsError = ref<string | null>(null);
 
-  // Notepad data
-  const notepad = ref<BlogNotepadEntry[]>([]);
-  const notepadLoading = ref(false);
-  const notepadError = ref<string | null>(null);
-
   // Blacklist data
   const blacklist = ref<User[]>([]);
   const blacklistLoading = ref(false);
@@ -517,23 +511,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     }
   }
 
-  // Load notepad
-  async function loadNotepad(blogId: string): Promise<void> {
-    notepadLoading.value = true;
-    notepadError.value = null;
-
-    const { data, error } = await blogApi.getNotepad(blogId);
-
-    if (error) {
-      notepadError.value = "Не удалось загрузить заметки";
-      notepad.value = [];
-    } else if (data) {
-      notepad.value = data.resources;
-    }
-
-    notepadLoading.value = false;
-  }
-
   // Load blacklist
   async function loadBlacklist(blogId: string): Promise<void> {
     blacklistLoading.value = true;
@@ -673,10 +650,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     commentsLoading.value = false;
     commentsError.value = null;
 
-    notepad.value = [];
-    notepadLoading.value = false;
-    notepadError.value = null;
-
     blacklist.value = [];
     blacklistLoading.value = false;
     blacklistError.value = null;
@@ -703,9 +676,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     commentsPaging,
     commentsLoading,
     commentsError,
-    notepad,
-    notepadLoading,
-    notepadError,
     blacklist,
     blacklistLoading,
     blacklistError,
@@ -733,7 +703,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     deleteComment,
     likeComment,
     unlikeComment,
-    loadNotepad,
     loadBlacklist,
     loadUsers,
     loadReaders,
