@@ -33,8 +33,6 @@ internal class UserNotepadService : IUserNotepadService
 
     private Guid UserId => _identityProvider.Current.User.UserId;
 
-    #region Entries
-
     /// <inheritdoc />
     public async Task<IEnumerable<NotepadEntry>> GetEntries(CancellationToken ct = default)
     {
@@ -64,7 +62,6 @@ internal class UserNotepadService : IUserNotepadService
             ContainerId = UserId,
             OwnerId = null,
             AuthorId = UserId,
-            CategoryId = createEntry.CategoryId,
             Title = createEntry.Title,
             Content = createEntry.Content,
             SortOrder = 0,
@@ -90,7 +87,6 @@ internal class UserNotepadService : IUserNotepadService
             EntryId = entryId,
             Title = updateEntry.Title,
             Content = updateEntry.Content,
-            CategoryId = updateEntry.CategoryId,
             SortOrder = updateEntry.SortOrder,
             ModifiedUtc = _dateTimeProvider.Now
         };
@@ -111,72 +107,6 @@ internal class UserNotepadService : IUserNotepadService
         await _repository.DeleteEntryAsync(entryId, UserId, ct);
     }
 
-    #endregion
-
-    #region Categories
-
-    /// <inheritdoc />
-    public async Task<IEnumerable<NotepadCategory>> GetCategories(CancellationToken ct = default)
-    {
-        return await _repository.GetCategoriesAsync(NotepadType.User, UserId, null, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task<NotepadCategory> CreateCategory(CreateNotepadCategory createCategory, CancellationToken ct = default)
-    {
-        var internalDto = new CreateNotepadCategoryInternal
-        {
-            CategoryId = _guidFactory.Create(),
-            NotepadType = NotepadType.User,
-            ContainerId = UserId,
-            OwnerId = null,
-            AuthorId = UserId,
-            Name = createCategory.Name,
-            SortOrder = 0,
-            CreatedUtc = _dateTimeProvider.Now
-        };
-
-        return await _repository.CreateCategoryAsync(internalDto, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task<NotepadCategory> UpdateCategory(Guid categoryId, UpdateNotepadCategory updateCategory, CancellationToken ct = default)
-    {
-        var category = await _repository.GetCategoryAsync(categoryId, ct);
-        if (category == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, "Category not found");
-        }
-
-        ThrowIfNotAuthorized(category);
-
-        var internalDto = new UpdateNotepadCategoryInternal
-        {
-            CategoryId = categoryId,
-            Name = updateCategory.Name,
-            SortOrder = updateCategory.SortOrder
-        };
-
-        return await _repository.UpdateCategoryAsync(internalDto, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task DeleteCategory(Guid categoryId, CancellationToken ct = default)
-    {
-        var category = await _repository.GetCategoryAsync(categoryId, ct);
-        if (category == null)
-        {
-            return; // Already deleted
-        }
-
-        ThrowIfNotAuthorized(category);
-        await _repository.DeleteCategoryAsync(categoryId, UserId, ct);
-    }
-
-    #endregion
-
-    #region Authorization
-
     private void ThrowIfNotAuthorized(NotepadEntry entry)
     {
         if (entry.NotepadType != NotepadType.User || entry.ContainerId != UserId)
@@ -184,14 +114,4 @@ internal class UserNotepadService : IUserNotepadService
             throw new HttpException(HttpStatusCode.Forbidden, "Access denied");
         }
     }
-
-    private void ThrowIfNotAuthorized(NotepadCategory category)
-    {
-        if (category.NotepadType != NotepadType.User || category.ContainerId != UserId)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, "Access denied");
-        }
-    }
-
-    #endregion
 }

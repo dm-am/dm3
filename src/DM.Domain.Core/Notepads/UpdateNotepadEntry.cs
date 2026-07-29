@@ -1,5 +1,3 @@
-using System;
-
 namespace DM.Domain.Core.Notepads;
 
 /// <summary>
@@ -7,9 +5,6 @@ namespace DM.Domain.Core.Notepads;
 /// </summary>
 public class UpdateNotepadEntry
 {
-    /// <summary>Category ID</summary>
-    public Guid? CategoryId { get; set; }
-
     /// <summary>Entry title</summary>
     public string? Title { get; set; }
 

@@ -20,9 +20,6 @@ public class NotepadEntry
     /// <summary>Owner ID (character for player notepad)</summary>
     public Guid? OwnerId { get; set; }
 
-    /// <summary>Category ID</summary>
-    public Guid? CategoryId { get; set; }
-
     /// <summary>Entry title</summary>
     public string Title { get; set; } = null!;
 

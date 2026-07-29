@@ -16,7 +16,6 @@ export interface NotepadEntry {
   notepadType: NotepadType;
   containerId: string;
   ownerId?: string | null;
-  categoryId?: string | null;
   title: string;
   content: string;
   sortOrder: number;
@@ -25,7 +24,6 @@ export interface NotepadEntry {
 }
 
 export interface CreateNotepadEntryRequest {
-  categoryId?: string | null;
   title: string;
   content: string;
 }
@@ -35,7 +33,6 @@ export interface CreateNotepadEntryRequest {
  * non-nullable properties and rejects the request when either is missing.
  */
 export interface UpdateNotepadEntryRequest {
-  categoryId?: string | null;
   title: string;
   content: string;
   sortOrder?: number | null;

@@ -57,38 +57,4 @@ public interface IGameNotepadService
     Task DeleteEntry(Guid entryId, CancellationToken ct = default);
 
     #endregion
-
-    #region Categories
-
-    /// <summary>
-    /// Get categories for master notepad
-    /// </summary>
-    Task<IEnumerable<NotepadCategory>> GetMasterCategories(Guid gameId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Get categories for player notepad
-    /// </summary>
-    Task<IEnumerable<NotepadCategory>> GetPlayerCategories(Guid gameId, Guid characterId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Create category in master notepad
-    /// </summary>
-    Task<NotepadCategory> CreateMasterCategory(Guid gameId, CreateNotepadCategory createCategory, CancellationToken ct = default);
-
-    /// <summary>
-    /// Create category in player notepad
-    /// </summary>
-    Task<NotepadCategory> CreatePlayerCategory(Guid gameId, Guid characterId, CreateNotepadCategory createCategory, CancellationToken ct = default);
-
-    /// <summary>
-    /// Update category
-    /// </summary>
-    Task<NotepadCategory> UpdateCategory(Guid categoryId, UpdateNotepadCategory updateCategory, CancellationToken ct = default);
-
-    /// <summary>
-    /// Delete category
-    /// </summary>
-    Task DeleteCategory(Guid categoryId, CancellationToken ct = default);
-
-    #endregion
 }
