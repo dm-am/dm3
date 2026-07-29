@@ -11,6 +11,7 @@ namespace DM.Infrastructure.Persistence.Entities.Account;
 /// <summary>
 /// DAL model for authorization token
 /// </summary>
+[Table("Tokens")]
 public class Token : ISoftDeletable
 {
     /// <summary>

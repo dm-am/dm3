@@ -678,7 +678,7 @@ DmDbContext.cs:598-607 applies `HasQueryFilter(e => !e.IsRemoved)` to every IRem
 
 ### [СРЕДНЯЯ] PG-09 — DATA_STORAGE.md never says how to tell a Mongo document from a Postgres table, and the code gives no visible signal either
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Признак есть и был, но нигде не назывался и не проверялся: таблица Postgres несет [Table], коллекция Mongo - [MongoCollectionName]. Три сущности его не имели вовсе - PendingRegistration, Token и PostPendency, - то есть по объявлению хранилище было неизвестно; атрибуты проставлены. Правило записано в DATA_STORAGE.md вместе с третьим состоянием, которого в находке нет: у вложенного значения (кусок документа, колонка-объект) атрибута нет намеренно, потому что своей единицы хранения у него не существует. Держит правило тест EntityStorageMarkerShould рефлексией по сборке, со списком вложенных значений - список, а не эвристика, чтобы пополнение было решением
 
 The doc's "Организация Entities" section (DATA_STORAGE.md:34-74) prescribes the folder layout and a decision procedure for *which module* an entity belongs to, but says nothing about which physical store it lands in. In the tree the two kinds are interleaved with no separation: Entities/Account/ holds User.cs and Token.cs (Postgres) next to UserSession.cs and Settings/UserSettings.cs (Mongo); Entities/Forum/ holds Board.cs and Topic.cs (Postgres) next to Poll.cs (Mongo); Entities/Shared/ holds Upload.cs and OutboxEvent.cs (Postgres) next to UnreadCounter.cs (Mongo). The only discriminator is `[MongoCollectionName]` — and MongoCollectionNameAttribute is declared `internal` (MongoIntegration/MongoCollectionNameAttribute.cs:9), so it is not even visible from the domain assemblies that consume these types. Nothing enforces that a Mongo document is absent from DmDbContext's DbSets.
 
@@ -1146,7 +1146,7 @@ VERIFIED AS CITED:
 
 ### [НИЗКАЯ] SEC-17 — PasswordHashVersion is persisted but never read — no rehash-on-login upgrade path exists
 
-**Статус: Частично.** Закрыта та половина, которая была настоящей ловушкой: смена пароля обновляла хеш и соль, но не версию, то есть строка получала версию, которая больше не описывает ее хеш - безвредно при одной схеме и невосстановимо при двух. Версия теперь пишется вместе с хешем, а сама четверка перестала быть литералом в пяти местах и имеет одного владельца. Диспетчер версий не написан намеренно: легаси-схемы в коде нет вообще, поэтому это был бы код без единой исполняемой ветки; его место - вместе с конвертером DM2
+**Статус: Принято как исключение.** Настоящая ловушка закрыта: смена пароля обновляла хеш и соль, но не версию, то есть строка получала версию, которая больше не описывает ее хеш - безвредно при одной схеме и невосстановимо при двух. Версия теперь пишется вместе с хешем и имеет одного владельца (PasswordHashing.CurrentVersion). Диспетчер версий с перехешированием на входе не написан осознанно: легаси-схемы в коде нет вообще, поэтому это был бы код без единой исполняемой ветки, а его настоящий триггер - импорт базы DM2, где чужие хеши и появятся. Записано как отложенное с названным триггером, а не как забытое
 
 `AuthenticatedUser` carries `PasswordHashVersion` (visible in `test/DM.Web.API.IntegrationTests/CustomWebApplicationFactory.cs:286`), and the entity persists it, but `SecurityManager.ComparePasswords` (`:30-37`) and `HashProvider.ComputeHash` (`:31-43`) branch on nothing — the Argon2id parameters are compile-time constants with no version dispatch.
 
