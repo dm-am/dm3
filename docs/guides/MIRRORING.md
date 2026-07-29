@@ -14,7 +14,7 @@ Users ─────────┬────────>│  nginx → dm-a
                │         │                      ├───> MinIO (dm-uploads, source)       │
                │         │                      └───> imgproxy (transform layer)       │
                │         │                                                             │
-               │         │  Consumers: mail, search, notifications                     │
+               │         │  Consumers: mail, notifications                             │
                │         └─────────────────────────────────────────────────────────────┘
                │                                    ▲
                │                                    │ SSL connections
@@ -84,7 +84,7 @@ cp .env.example .env.mirror
 | imgproxy | `IMGPROXY_KEY`, `IMGPROXY_SALT` | Те же, что на main |
 | Криптография | `DM_CryptoConfiguration__KeyBase64` | **КРИТИЧНО: тот же, что на main!** |
 | Идентификатор | `MIRROR_ID` | Уникальный ID зеркала — ключ из `appsettings.json` → `MirrorConfiguration` → `Mirrors` |
-| Хосты main-сервера | `DB_HOST`, `MONGO_HOST`, `RABBITMQ_HOST`, `MINIO_HOST`, `SEARCH_HOST`, `SEARCH_GRPC_HOST`, `LOGS_HOST`, `TRACING_HOST` | IP/домен основного сервера |
+| Хосты main-сервера | `DB_HOST`, `MONGO_HOST`, `RABBITMQ_HOST`, `MINIO_HOST`, `LOGS_HOST`, `TRACING_HOST` | IP/домен основного сервера |
 | SSL к БД | `DB_SSL_MODE`, `MONGO_TLS` | См. шаг 3 |
 | Публичные URL зеркала | `WEB_URL`, `API_URL`, `CDN_PUBLIC_URL`, `IMGPROXY_PUBLIC_URL`, `CORS_URL_0` | Домен этого зеркала |
 | Окружение | `ASPNETCORE_ENVIRONMENT` | `Production` |

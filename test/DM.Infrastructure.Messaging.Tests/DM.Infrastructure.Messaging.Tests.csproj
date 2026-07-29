@@ -20,11 +20,7 @@
         <ProjectReference Include="..\..\src\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
         <ProjectReference Include="..\DM.Testing\DM.Testing.csproj" />
       <ProjectReference Include="..\..\src\DM.Infrastructure.Messaging\DM.Infrastructure.Messaging.csproj" />
-      <!-- SearchIndexer worker has no dedicated test project; its single
-           AutoMapper profile is covered from here (closest worker-side
-           infrastructure test project) via assembly scanning. -->
-      <ProjectReference Include="..\..\src\DM.Workers.SearchIndexer\DM.Workers.SearchIndexer.csproj" />
-      <!-- Same reasoning for the notification dispatcher: its queue binding is
+      <!-- The notification dispatcher has no dedicated test project: its queue binding is
            derived from the generator types, and that derivation is what these
            tests hold in place. -->
       <ProjectReference Include="..\..\src\DM.Workers.NotificationDispatcher\DM.Workers.NotificationDispatcher.csproj" />

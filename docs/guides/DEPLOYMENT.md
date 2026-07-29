@@ -10,7 +10,7 @@ Internet → Nginx → Frontend (Vue.js)
                        ↓
               PostgreSQL / MongoDB / RabbitMQ
                        ↓
-              Consumer Services (Email, Search, Notifications)
+              Consumer Services (Email, Notifications)
 ```
 
 ---
@@ -21,10 +21,10 @@ Internet → Nginx → Frontend (Vue.js)
 
 | Workflow | Файл | Триггеры | Действия |
 |----------|------|----------|----------|
-| Build & Test | `dotnet.yml` | push/PR в main, dev | 4 jobs: Build+Test, Frontend CI (type-check + build), Dependency Scanning (dotnet+npm audit), Publish (matrix: 4 Docker images: dm-api, consumer-mail, consumer-search, consumer-notification) |
+| Build & Test | `dotnet.yml` | push/PR в main, dev | 4 jobs: Build+Test, Frontend CI (type-check + build), Dependency Scanning (dotnet+npm audit), Publish (matrix: 3 Docker images: dm-api, consumer-mail, consumer-notification) |
 | Security | `security.yml` | push/PR + weekly | OWASP ZAP scan (full docker compose) |
 
-**Образы публикуются в:** `ghcr.io/<username>/dm3` (4 образа: dm-api, consumer-mail, consumer-search, consumer-notification)
+**Образы публикуются в:** `ghcr.io/<username>/dm3` (3 образа: dm-api, consumer-mail, consumer-notification)
 
 **Теги:** `sha-<commit>`, `main`, `dev`, `latest` (только main)
 

@@ -55,7 +55,6 @@ public static class LoggingConfiguration
             .WithTracing(builder => builder
                 .ConfigureResource(r => r.AddService(applicationName))
                 .AddAspNetCoreInstrumentation()
-                .AddGrpcClientInstrumentation()
                 .AddHttpClientInstrumentation()
                 // SQL text carries the parameter values a query was built with, so it goes
                 // into a trace only where the trace stays on the developer's machine.

@@ -18,13 +18,6 @@
         <PackageReference Include="AspNetCore.HealthChecks.UI.Client" />
         <PackageReference Include="AspNetCore.HealthChecks.Uris" />
         <PackageReference Include="Autofac.Extensions.DependencyInjection" />
-        <PackageReference Include="Grpc.AspNetCore" />
-        <PackageReference Include="Grpc.Net.Client" />
-        <PackageReference Include="Grpc.Net.ClientFactory" />
-        <PackageReference Include="Grpc.Tools">
-          <PrivateAssets>all</PrivateAssets>
-          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
         <PackageReference Include="Jamq.Client.Rabbit.DependencyInjection" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -49,10 +42,7 @@
         <ProjectReference Include="..\DM.Domain.Personal\DM.Domain.Personal.csproj" />
         <ProjectReference Include="..\DM.Infrastructure.Mail\DM.Infrastructure.Mail.csproj" />
         <ProjectReference Include="..\DM.Infrastructure.Persistence\DM.Infrastructure.Persistence.csproj" />
-        <ProjectReference Include="..\DM.Workers.SearchIndexer\DM.Workers.SearchIndexer.csproj" />
     </ItemGroup>
-    
-    <!-- Proto types are provided by DM.Workers.SearchIndexer reference -->
 
     <ItemGroup>
         <Content Update="appsettings.json">

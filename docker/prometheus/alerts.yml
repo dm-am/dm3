@@ -37,7 +37,7 @@ groups:
   - name: dm-consumers
     rules:
       - alert: ConsumerDown
-        expr: up{job=~"dm-(notification|search|mail)-worker"} == 0
+        expr: up{job=~"dm-(notification|mail)-worker"} == 0
         for: 2m
         labels:
           severity: critical
@@ -50,7 +50,6 @@ groups:
       - alert: ConsumerScrapeTargetMissing
         expr: |
           absent(up{job="dm-notification-worker"})
-          or absent(up{job="dm-search-worker"})
           or absent(up{job="dm-mail-worker"})
         for: 10m
         labels:

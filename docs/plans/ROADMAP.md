@@ -45,12 +45,10 @@
 | Задача | Описание |
 |--------|----------|
 | Mail.Sender тесты | Unit тесты с моками SMTP |
-| Search тесты | Unit тесты + OpenSearch mock |
 | Расширить E2E | Playwright для всех страниц |
 
 **Недостающие тест-проекты:**
 - `DM.Workers.Mail.Tests`
-- `DM.Workers.SearchIndexer.Tests`
 
 ### Кэширование
 

@@ -21,11 +21,6 @@ public class ConnectionStrings
     public string Cache { get; set; } = null!;
 
     /// <summary>
-    /// Search engine connection string
-    /// </summary>
-    public string SearchEngine { get; set; } = null!;
-
-    /// <summary>
     /// Message queue connection string
     /// </summary>
     public string MessageQueue { get; set; } = null!;

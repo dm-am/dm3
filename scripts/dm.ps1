@@ -268,7 +268,7 @@ function Start-Services {
         }
 
         # Infrastructure - start containers (with animation)
-        if (-not (Invoke-WithAnimation -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres mongo rabbitmq opensearch minio imgproxy mailhog jaeger prometheus grafana")) {
+        if (-not (Invoke-WithAnimation -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres mongo rabbitmq minio imgproxy mailhog jaeger prometheus grafana")) {
             Write-FailedStep -Label "Infrastructure" -Current 0 -Total 5
             exit 1
         }
@@ -302,7 +302,7 @@ function Start-Services {
         if (-not $migrationOk) { exit 1 }
 
         # Applications - start containers
-        & $script:DockerPath compose up -d dm-mail-worker dm-search-worker dm-notification-worker dmapi 2>&1 | Out-Null
+        & $script:DockerPath compose up -d dm-mail-worker dm-notification-worker dmapi 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) {
             Write-FailedStep -Label "Applications" -Current 0 -Total 4
             exit 1
@@ -311,7 +311,6 @@ function Start-Services {
         $appServices = @(
             @{ Name = "dm-api"; Label = "API" },
             @{ Name = "dm-mail-worker"; Label = "Mail" },
-            @{ Name = "dm-search-worker"; Label = "Search" },
             @{ Name = "dm-notification-worker"; Label = "Notify" }
         )
         if (-not (Wait-ServicesHealthy -Label "Applications" -Services $appServices -TimeoutSeconds 90)) {
@@ -511,8 +510,8 @@ function Show-Status {
     }
 
     # Group services
-    $infra = @("pg", "mongo", "rmq", "es", "minio", "imgproxy")
-    $apps = @("api", "mail-worker", "search-worker", "notification-worker", "migration")
+    $infra = @("pg", "mongo", "rmq", "minio", "imgproxy")
+    $apps = @("api", "mail-worker", "notification-worker", "migration")
     $tools = @("mailhog", "grafana", "prometheus", "jaeger")
 
     $all = @{}

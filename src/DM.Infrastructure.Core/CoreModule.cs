@@ -6,16 +6,13 @@ using Autofac;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Identity;
-using DM.Domain.Core.Search;
 using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Core.Authorization;
 using DM.Infrastructure.Core.Configuration;
 using DM.Infrastructure.Core.Correlation;
 using DM.Infrastructure.Core.Extensions;
-using DM.Infrastructure.Core.Search;
 using DM.Infrastructure.Core.Storage;
 using Microsoft.Extensions.Options;
-using OpenSearch.Client;
 
 namespace DM.Infrastructure.Core;
 
@@ -53,21 +50,6 @@ public class CoreModule : Module
             .As<IAmazonS3>()
             .SingleInstance();
 
-        // OpenSearch Client registration
-        builder.Register(x =>
-            {
-                var configuration = x.Resolve<IOptions<SearchEngineConfiguration>>().Value;
-                return new ConnectionSettings(new Uri(configuration.Endpoint))
-                    .BasicAuthentication(configuration.Username, configuration.Password)
-                    .DefaultMappingFor<SearchEntity>(m => m
-                        .IndexName(SearchEngineConfiguration.IndexName));
-            })
-            .SingleInstance();
-
-        builder.Register(x => new OpenSearchClient(x.Resolve<ConnectionSettings>()))
-            .AsImplementedInterfaces()
-            .InstancePerLifetimeScope();
-
         // StorageBucketInitializer is registered via AddHostedService in Startup.cs
         // (Autofac.IHostedService is not picked up by the ASP.NET Core host loop).
 
@@ -82,15 +64,6 @@ public class CoreModule : Module
         // GC of obsolete uploads (UploadGarbageCollector) lives in
         // Infrastructure.Persistence (needs DmDbContext) and is registered
         // there via PersistenceModule.
-
-        // Search services
-        builder.RegisterType<SearchService>()
-            .As<ISearchService>()
-            .InstancePerLifetimeScope();
-
-        builder.RegisterType<SearchEngineRepository>()
-            .As<ISearchEngineRepository>()
-            .InstancePerLifetimeScope();
 
         // PublicId encoding/decoding service (stateless, singleton)
         builder.RegisterType<PublicIdService>()

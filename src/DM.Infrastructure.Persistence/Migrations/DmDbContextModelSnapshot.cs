@@ -2166,6 +2166,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("LastCommentId")
                         .HasColumnType("uuid");
 
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasComputedColumnSql("setweight(to_tsvector('russian', coalesce(\"Title\", '')), 'A') || setweight(to_tsvector('russian', coalesce(\"Text\", '')), 'B')", true);
+
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasColumnType("text");
@@ -2184,6 +2189,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasIndex("DeletedByUserId");
 
                     b.HasIndex("LastCommentId");
+
+                    b.HasIndex("SearchVector")
+                        .HasDatabaseName("IX_Topics_SearchVector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
 
                     b.HasIndex("BoardId", "TopicNumber")
                         .IsUnique();
@@ -3462,6 +3472,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
 
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasComputedColumnSql("to_tsvector('russian', coalesce(\"Text\", ''))", true);
+
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasColumnType("text");
@@ -3473,6 +3488,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasIndex("DeletedByUserId");
 
                     b.HasIndex("EntityId");
+
+                    b.HasIndex("SearchVector")
+                        .HasDatabaseName("IX_Comments_SearchVector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
 
                     b.ToTable("Comments");
                 });

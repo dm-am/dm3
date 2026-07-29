@@ -16,13 +16,6 @@ scrape_configs:
       - targets: ['dm-notification-worker:5000']
     metrics_path: '/metrics'
 
-  # The search worker serves gRPC on 5000, which is HTTP/2 only and unreachable
-  # for an HTTP/1.1 scrape; its management endpoints live on a port of their own.
-  - job_name: 'dm-search-worker'
-    static_configs:
-      - targets: ['dm-search-worker:5100']
-    metrics_path: '/metrics'
-
   - job_name: 'dm-mail-worker'
     static_configs:
       - targets: ['dm-mail-worker:5000']
