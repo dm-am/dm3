@@ -47,7 +47,7 @@
 | ВЫСОКАЯ | PG-01 | OpenSearch authorization filter is structurally a no-op — restricted forum content is searchable by anonymous users | Полиглотное хранение (PG / Mongo / OpenSearch / MinIO) | **Исправлено** | Предикат стал (роль ИЛИ пользователь) И НЕ запрещен; личность искателя проброшена в воркер через proto, а не бралась из его гостевой ambient-идентичности; исправлен HasFlag по не-флаговому enum. Проверено анонимным запросом до и после (0be01dc9) |
 | ВЫСОКАЯ | PG-03 | The Outbox pattern is documented as the delivery guarantee but has zero writers — every cross-store event is a fire-and-forget dual write with no rebuild path | Полиглотное хранение (PG / Mongo / OpenSearch / MinIO) | **Частично** | То же, что P-10 (1876e028) |
 | ВЫСОКАЯ | PG-04 | Six of the twelve declared Mongo indexes reference fields that do not exist; the hottest query — session lookup on every authenticated request — is a full collection scan | Полиглотное хранение (PG / Mongo / OpenSearch / MinIO) | **Исправлено** | 6 индексов по несуществующим полям заменены; Sessions._id закрыл COLLSCAN на каждом запросе; создание перенесено в приложение (75e5c26d) |
-| ВЫСОКАЯ | PG-06 | Games are never indexed — the search index is created without its mapping, and NewGame is not routed to the indexer | Полиглотное хранение (PG / Mongo / OpenSearch / MinIO) | **Открыто** | Уточнение к находке: индексатор игр NewGameIndexer.cs в коде существует, это не 'написать индексаторы', а починить маршрутизацию. Если OpenSearch выкидывается по решению владельца (PG-10), находка исчезает вместе с ним |
+| ВЫСОКАЯ | PG-06 | Games are never indexed — the search index is created without its mapping, and NewGame is not routed to the indexer | Полиглотное хранение (PG / Mongo / OpenSearch / MinIO) | **Исправлено** | Снято вместе с движком: индексировать больше нечем и незачем. При разборе выяснилось, что находка недооценила масштаб - не индексировались не только игры. NewUserIndexer не проставлял ни AuthorizedRoles, ни AuthorizedUsers, а фильтр авторизации требует попадания хотя бы в одно из множеств, поэтому пользователи не находились никогда. Из четырех заявленных типов общий поиск в бою мог отдать только темы и комментарии - ровно те два, что переехали на tsvector |
 | ВЫСОКАЯ | API-01 | UseRateLimiter() is registered before UseRouting(), making every [EnableRateLimiting] attribute a no-op | Дизайн HTTP API | **Исправлено** | UseRateLimiter после UseRouting (304e618a) |
 | ВЫСОКАЯ | API-02 | Two controllers register the identical route GET /v1/moderation/users/{x}/profile — guaranteed AmbiguousMatchException on an endpoint the client calls | Дизайн HTTP API | **Исправлено** | Дублирующий контроллер удален, было 500 стало 401 (304e618a) |
 | ВЫСОКАЯ | API-03 | Webhook endpoint fails open when its secret is unconfigured, and carries the secret in the URL path | Дизайн HTTP API | **Частично** | Fail-open закрыт; секрет по-прежнему в пути URL (24a43d5e) |
@@ -258,7 +258,7 @@ WHAT IS TRUE (verified):
 
 ### [СРЕДНЯЯ] api-references-worker-project-for-protos — DM.Web.API takes a ProjectReference on the DM.Workers.SearchIndexer executable purely to get a generated gRPC client
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** То же: единственный .proto в репозитории удален вместе с проектом воркера, ссылка снята, пакеты Grpc.AspNetCore/Net.Client/Net.ClientFactory/Tools и AddGrpcClientInstrumentation больше не нужны
 
 `src/DM.Web.API/DM.Web.API.csproj` references `..\DM.Workers.SearchIndexer\DM.Workers.SearchIndexer.csproj`; the only consumers are `Startup.cs:33` and `Features/General/Search/SearchController.cs:7`, both `using DM.Workers.SearchIndexer.Grpc` — the namespace generated from `DM.Workers.SearchIndexer/Protos/search.proto` (declared in that csproj's `<Protobuf>` item). SearchIndexer is itself `Sdk="Microsoft.NET.Sdk.Web"` with its own Program, Startup, gRPC service implementation and RabbitMQ consumer, and it transitively pulls Domain.Account, Domain.Forum, Persistence and Messaging. The build has already noticed: `obj/Debug/net8.0/DM.Web.API.MvcApplicationPartsAssemblyInfo.cs:13` registers `DM.Workers.SearchIndexer` as an MVC ApplicationPart, meaning the API scans the worker assembly for controllers.
 
@@ -638,7 +638,7 @@ WHAT HOLDS:
 
 ### [ВЫСОКАЯ] PG-06 — Games are never indexed — the search index is created without its mapping, and NewGame is not routed to the indexer
 
-**Статус: Открыто.** Уточнение к находке: индексатор игр NewGameIndexer.cs в коде существует, это не 'написать индексаторы', а починить маршрутизацию. Если OpenSearch выкидывается по решению владельца (PG-10), находка исчезает вместе с ним
+**Статус: Исправлено.** Снято вместе с движком: индексировать больше нечем и незачем. При разборе выяснилось, что находка недооценила масштаб - не индексировались не только игры. NewUserIndexer не проставлял ни AuthorizedRoles, ни AuthorizedUsers, а фильтр авторизации требует попадания хотя бы в одно из множеств, поэтому пользователи не находились никогда. Из четырех заявленных типов общий поиск в бою мог отдать только темы и комментарии - ровно те два, что переехали на tsvector
 
 **Доказательство.** Two independent breakages in the same worker. (1) SearchIndexerConsumer.cs:54-66 subscribes to exactly seven routing keys — ActivatedUser, NewTopicComment, ChangedTopicComment, DeletedTopicComment, NewTopic, ChangedTopic, DeletedTopic. `EventType.NewGame` is absent, so NewGameIndexer.cs (a complete, registered, DI-resolved class) never fires. GameService.cs:844 does publish NewGame; NotificationDispatcherConsumer.cs:68 subscribes to it, so the event is live — it just never reaches the search indexer. SearchController.cs:18 and 39 advertise search "across users, games, and posts". (2) SearchIndexerConsumer.cs:43-51 unconditionally creates the index at worker startup with a bare `Indices.Create(IndexName)` — no mapping, no analyzer. IndexingRepository.DeclareIndex:44-67, which carries the real definition (dm_analyzer with html_strip, dm_search_analyzer, the Text field mapping), short-circu
 
@@ -688,7 +688,7 @@ The doc's "Организация Entities" section (DATA_STORAGE.md:34-74) pres
 
 ### [СРЕДНЯЯ] PG-10 — Four stores for a hobby RPG site: OpenSearch does a strictly easier job worse than the tsvector search already in the codebase
 
-**Статус: За владельцем.** Решение владельца принято: OpenSearch выкинуть, tsvector расширить на темы и комментарии. Довод, которого в находке нет: анализатор OpenSearch в коде - html_strip + standard + lowercase + stop, без русской морфологии, тогда как реляционный поиск идет через to_tsvector('russian'). То есть текущий OpenSearch ищет по русскому хуже. Работа не начата
+**Статус: Исправлено.** OpenSearch снят с поиска по решению владельца, вместе с ним ушел весь проект-воркер DM.Workers.SearchIndexer, gRPC-контракт и клиент, пакеты OpenSearch.Client и пять пакетов Grpc.*. Общий поиск переписан на Postgres tsvector: generated-колонки с GIN на Topics (Title весом A, Text весом B через setweight) и Comments, эндпоинт GET /v1/search/forum, доступ выводится из существующего предиката видимости доски на каждом запросе, а не пишется в документ при индексации. Довод владельца подтвердился на практике: анализатор OpenSearch был html_strip+standard+lowercase+stop, без русской морфологии, а tsvector идет через to_tsvector('russian') - интеграционный тест находит 'странников' по запросу 'странник'. Логи Serilog остаются на OpenSearch до отдельной правки
 
 OpenSearch indexes exactly three entity kinds — users, forum topics, forum comments (the seven routing keys at SearchIndexerConsumer.cs:57-66). Postgres already implements a harder search correctly: MessageSearchRepository does full-text over messages *and* game posts with dynamic per-caller access, private-block stripping, keyset pagination and GIN indexes (DmDbContext.cs:231-249, MessageSearchRepository.cs:53-118). Public forum content has none of those complications. The OpenSearch path costs: a whole worker service (DM.Workers.SearchIndexer), a gRPC contract and generated Protos, CompositeIndexer plus eight indexer classes, IndexingRepository, SearchEngineRepository, SearchService, an interceptor, plus opensearch + opensearch-dashboards containers reserving 1G and 512M (docker/docker-compose.yml:159, 185). It carries findings PG-01, PG-03 and PG-06 by itself. Mongo similarly holds nine collections of which only three (Dice, AttributeSchemata, Polls) are genuinely document-shaped; UserSessions, UserSettings, LoginAttempts, SecurityAuditLog and UnreadCounters are flat rows that Postgres would model with FKs, TTL partitions and real constraints.
 
@@ -1249,7 +1249,7 @@ VERIFIED AS STATED (the harmless half): `src/DM.Infrastructure.Persistence/Migra
 
 ### [СРЕДНЯЯ] CR-08 — Configuration binding is hand-copied across four hosts and has already diverged — CoreModule's OpenSearch client is unbound in three of them
 
-**Статус: Открыто.** 
+**Статус: Частично.** Названный в находке симптом снят: несвязанного клиента OpenSearch больше нет ни в одном хосте - вместе с движком ушли и регистрация в CoreModule, и секция SearchEngineConfiguration. Сама причина осталась: биндинг конфигурации по-прежнему переписывается руками в каждом хосте, теперь в трех
 
 `CoreModule.cs:57-66` registers `ConnectionSettings` from `IOptions<SearchEngineConfiguration>` and does `new Uri(configuration.Endpoint)`. `SearchEngineConfiguration.Endpoint` defaults to `string.Empty` (`DM.Domain.Core/Search/SearchEngineConfiguration.cs:16`). That section is bound in exactly one place — `DM.Workers.SearchIndexer/Startup.cs:49` — yet `CoreModule` is registered by all four hosts: `DM.Web.API/Startup.cs:376`, `DM.Workers.Mail/Startup.cs:67`, `DM.Workers.NotificationDispatcher/Startup.cs:79`, `DM.Workers.SearchIndexer/Startup.cs:75`. The API binds sixteen sections at `Startup.cs:72-87` and `SearchEngineConfiguration` is not among them, even though `docker-compose.yml:35-37` faithfully supplies `DM_SearchEngineConfiguration__*` to every workload. The same shape applies to `CdnConfiguration`, which `MinioS3ClientProvider.cs:24` needs for `CanBeUsed()` and which the Mail and NotificationDispatcher hosts never bind. There is no shared `AddDmConfiguration()` extension — each host retypes an overlapping subset by hand.
 
@@ -1473,7 +1473,7 @@ Five defects in ~70 lines. (1) The hot query `Where(e => !e.IsProcessed && (e.Ne
 
 ### [СРЕДНЯЯ] API-REFERENCES-WORKER — DM.Web.API takes a project reference on DM.Workers.SearchIndexer to borrow generated gRPC stubs
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Дубль backend-arch:api-references-worker-project-for-protos
 
 `DM.Web.API.csproj` lists `<ProjectReference Include="..\DM.Workers.SearchIndexer\DM.Workers.SearchIndexer.csproj" />` with the comment "Proto types are provided by DM.Workers.SearchIndexer reference", and Startup.cs:33 does `using DM.Workers.SearchIndexer.Grpc;` purely to reach the generated `SearchEngine.SearchEngineClient`. This drags the worker's entire closure into the API: its consumer, its indexers, its OpenSearch client, its `SearchEngineService` gRPC implementation, and its transitive `DM.Domain.Forum` reference.
 
@@ -2380,7 +2380,7 @@ There is no `.dockerignore` at the repository root; the only one is docker/app.D
 
 ### [СРЕДНЯЯ] CD-17 — The API project-references a worker project, and the Dockerfile carries an `rm -f appsettings` hack to paper over the resulting publish collision
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** ProjectReference из DM.Web.API на воркер снят вместе с воркером, а с ним и хак rm -f appsettings в app.Dockerfile, существовавший только чтобы обойти NETSDK1152 от этой ссылки. Из матрицы publish убрана четвертая запись, из compose - сервис dm-search-worker
 
 src/DM.Web.API/DM.Web.API.csproj:51 declares `<ProjectReference Include="..\DM.Workers.SearchIndexer\DM.Workers.SearchIndexer.csproj" />` with the comment "Proto types are provided by DM.Workers.SearchIndexer reference". docker/app.Dockerfile:39-43 then works around the consequence: `RUN if [ "${PROJECT_NAME}" = "DM.Web.API" ]; then rm -f src/DM.Workers.SearchIndexer/appsettings*.json; fi` — commented as "prevents NETSDK1152 error with duplicate files".
 

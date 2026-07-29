@@ -118,8 +118,6 @@ jobs:
             image_suffix: api
           - project: DM.Workers.Mail
             image_suffix: worker-mail
-          - project: DM.Workers.SearchIndexer
-            image_suffix: worker-search
           - project: DM.Workers.NotificationDispatcher
             image_suffix: worker-notification
     steps:

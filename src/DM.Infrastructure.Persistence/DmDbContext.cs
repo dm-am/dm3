@@ -231,13 +231,15 @@ public class DmDbContext : DbContext
 
         #region Full-text search (PostgreSQL tsvector)
 
-        // Generated STORED tsvector columns + GIN indexes power the unified
-        // message/post search (GET /v1/search/messages). The Post expression
+        // Generated STORED tsvector columns + GIN indexes power every full-text
+        // search in the system: messages and game posts (GET /v1/search/messages),
+        // forum topics and comments (GET /v1/search/forum). The Post expression
         // strips [private=…]…[/private] blocks BEFORE indexing, so private text
         // is never tokenized and can never be matched or previewed by anyone.
-        // regexp_replace + explicit-config to_tsvector are IMMUTABLE, so both
-        // are valid inside a generated column. Shadow "SearchVector" properties
-        // keep the tsvector off the domain-facing entity surface.
+        // regexp_replace, setweight and explicit-config to_tsvector are all
+        // IMMUTABLE, so every expression here is valid inside a generated column.
+        // Shadow "SearchVector" properties keep the tsvector off the
+        // domain-facing entity surface.
         if (isPostgres)
         {
             modelBuilder.Entity<Message>(b =>
@@ -255,6 +257,31 @@ public class DmDbContext : DbContext
                         "'\\[private(=[^\\]]*)?\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))",
                         stored: true);
                 b.HasIndex("SearchVector").HasMethod("gin").HasDatabaseName("IX_Posts_SearchVector");
+            });
+
+            // A topic is title + body, and a title match means far more than a
+            // body match — setweight is what lets ts_rank say so, instead of the
+            // caller re-weighting after the fact.
+            modelBuilder.Entity<Topic>(b =>
+            {
+                b.Property<NpgsqlTsVector>("SearchVector")
+                    .HasComputedColumnSql(
+                        "setweight(to_tsvector('russian', coalesce(\"Title\", '')), 'A') || " +
+                        "setweight(to_tsvector('russian', coalesce(\"Text\", '')), 'B')",
+                        stored: true);
+                b.HasIndex("SearchVector").HasMethod("gin").HasDatabaseName("IX_Topics_SearchVector");
+            });
+
+            // Comment.EntityId is polymorphic, so this column indexes forum, game,
+            // blog and publication comments alike: a generated column cannot look
+            // at another table, and neither can a partial index. Restricting a
+            // search to one kind of comment is therefore the query's job — the
+            // join to Topics is what makes forum search forum-only.
+            modelBuilder.Entity<Comment>(b =>
+            {
+                b.Property<NpgsqlTsVector>("SearchVector")
+                    .HasComputedColumnSql("to_tsvector('russian', coalesce(\"Text\", ''))", stored: true);
+                b.HasIndex("SearchVector").HasMethod("gin").HasDatabaseName("IX_Comments_SearchVector");
             });
         }
 

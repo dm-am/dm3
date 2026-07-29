@@ -5,9 +5,7 @@ import { Api } from "@/shared/api";
 /**
  * Message + game-post search API.
  *
- * Hits the dedicated Postgres-backed endpoint GET /v1/search/messages
- * (separate from the OpenSearch-backed GET /v1/search used for
- * users/games/topics). Auth is required and the endpoint is rate limited
+ * Hits GET /v1/search/messages. Auth is required and the endpoint is rate limited
  * (sliding window) server-side.
  */
 export default new (class MessageSearchApi {

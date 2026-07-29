@@ -379,7 +379,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     Text = table.Column<string>(type: "text", nullable: false),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "to_tsvector('russian', coalesce(\"Text\", ''))", stored: true)
                 },
                 constraints: table =>
                 {
@@ -1049,7 +1050,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     LastCommentId = table.Column<Guid>(type: "uuid", nullable: true),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "setweight(to_tsvector('russian', coalesce(\"Title\", '')), 'A') || setweight(to_tsvector('russian', coalesce(\"Text\", '')), 'B')", stored: true)
                 },
                 constraints: table =>
                 {
@@ -1928,6 +1930,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "EntityId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Comments_SearchVector",
+                table: "Comments",
+                column: "SearchVector")
+                .Annotation("Npgsql:IndexMethod", "gin");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_ContestSeries_ContestType_Number",
                 table: "ContestSeries",
                 columns: new[] { "ContestType", "Number" },
@@ -2461,6 +2469,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "IX_Topics_LastCommentId",
                 table: "Topics",
                 column: "LastCommentId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Topics_SearchVector",
+                table: "Topics",
+                column: "SearchVector")
+                .Annotation("Npgsql:IndexMethod", "gin");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Uploads_DeletedByUserId",
@@ -3484,7 +3498,6 @@ namespace DM.Infrastructure.Persistence.Migrations
             migrationBuilder.DropForeignKey(
                 name: "FK_Topics_Boards_BoardId",
                 table: "Topics");
-
 
             migrationBuilder.DropForeignKey(
                 name: "FK_Chats_Messages_LastMessageId",

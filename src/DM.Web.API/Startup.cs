@@ -6,7 +6,6 @@ using DM.Domain.Blog.Authorization;
 using DM.Domain.Community.Authorization;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Configuration;
-using DM.Domain.Core.Search;
 using DM.Domain.Forum.Authorization;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Messaging.Authorization;
@@ -29,7 +28,6 @@ using DM.Web.API.Middleware;
 using DM.Web.API.Realtime;
 using DM.Web.API.Swagger;
 using DM.Web.API.HostedServices;
-using DM.Workers.SearchIndexer.Grpc;
 using Jamq.Client.DependencyInjection;
 using Jamq.Client.Rabbit.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
@@ -74,7 +72,6 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .Configure<CdnConfiguration>(configuration.GetSection(nameof(CdnConfiguration)).Bind)
             .Configure<ImageProxyConfiguration>(configuration.GetSection(nameof(ImageProxyConfiguration)).Bind)
             .Configure<RabbitMqConfiguration>(configuration.GetSection(nameof(RabbitMqConfiguration)).Bind)
-            .Configure<SearchServiceConfiguration>(configuration.GetSection(nameof(SearchServiceConfiguration)).Bind)
             .Configure<CryptoConfiguration>(configuration.GetSection(nameof(CryptoConfiguration)).Bind)
             .Configure<AuthenticationConfiguration>(configuration.GetSection(nameof(AuthenticationConfiguration)).Bind)
             .Configure<MessagingConfiguration>(configuration.GetSection(nameof(MessagingConfiguration)).Bind)
@@ -375,14 +372,6 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                 }, ct);
             };
         });
-
-        // gRPC client for search service with connection pooling
-        var searchConfig = configuration.GetSection(nameof(SearchServiceConfiguration)).Get<SearchServiceConfiguration>();
-        if (!string.IsNullOrEmpty(searchConfig?.GrpcEndpoint))
-        {
-            services.AddGrpcClient<SearchEngine.SearchEngineClient>(o =>
-                o.Address = new Uri(searchConfig.GrpcEndpoint));
-        }
 
         _httpContextAccessor = new HttpContextAccessor();
         _bbParserProvider = new BbParserProvider();

@@ -49,7 +49,6 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 |--------|------|-------------|
 | Frontend (Vite) | 5173 | — |
 | API (Swagger) | 5000 | — |
-| Search Consumer | 5001 (gRPC), 5101 (health, метрики) | — |
 | Notification Consumer | 5002 | — |
 | Email Consumer | 5003 | — |
 | PostgreSQL | 5432 | из `docker/.env` |
@@ -208,7 +207,6 @@ dotnet ef migrations add InitialCreate -p src/DM.Infrastructure.Persistence -s s
 | Файл | Назначение |
 |------|------------|
 | [`src/DM.Workers.Mail/appsettings.json`](../../src/DM.Workers.Mail/appsettings.json) | Email: SMTP настройки |
-| [`src/DM.Workers.SearchIndexer/appsettings.json`](../../src/DM.Workers.SearchIndexer/appsettings.json) | Search: OpenSearch подключение |
 | [`src/DM.Workers.NotificationDispatcher/appsettings.json`](../../src/DM.Workers.NotificationDispatcher/appsettings.json) | Notifications: MongoDB, RabbitMQ |
 
 ### Основные секции appsettings.json

@@ -22,23 +22,10 @@ namespace DM.Infrastructure.Persistence.Repositories.Search;
 internal class MessageSearchRepository : IMessageSearchRepository
 {
     private const string SearchConfig = "russian";
-    private const int SnippetLength = 280;
 
     // Must match the [private] strip used by the Post.SearchVector generated
     // column (DmDbContext) and PostRepository — private text is never previewed.
-    private const string PrivateBlockPattern = @"\[private(=[^\]]*)?\][\s\S]*?\[/private\]";
-
-    // Snippets are built from the raw stored BBCode, which bypasses the
-    // viewer-scoped Display render pipeline (BbConverter). [private] (game
-    // posts) is hidden from readers who are not the author / an addressee /
-    // a game lead, so its content must never appear in a preview. [mod] is
-    // NOT stripped: it is public on read (everyone sees an authored mod
-    // block), so previewing it leaks nothing. Strip only [private] from every
-    // snippet before it leaves the server, matching the same pattern the
-    // Post.SearchVector generated column uses.
-    private static readonly Regex PrivateBlockRegex = new(
-        PrivateBlockPattern,
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private const string PrivateBlockPattern = SearchSnippet.PrivateBlockPattern;
 
     private readonly DmDbContext _dbContext;
     private readonly ICursorService _cursorService;
@@ -195,7 +182,7 @@ internal class MessageSearchRepository : IMessageSearchRepository
             // the viewer-scoped Display render, so raw [private] content would
             // otherwise leak to any searcher. [mod] is public on read, so it is
             // left intact. Done server-side, before truncation.
-            row.Snippet = Truncate(StripPrivateBlocks(row.Snippet));
+            row.Snippet = SearchSnippet.Truncate(SearchSnippet.StripPrivateBlocks(row.Snippet));
         }
 
         string? nextCursor = null;
@@ -250,26 +237,4 @@ internal class MessageSearchRepository : IMessageSearchRepository
         return ids;
     }
 
-    /// <summary>
-    /// Removes [private] blocks from a raw snippet. [private] is hidden from
-    /// most readers by the viewer-scoped Display render, which search previews
-    /// bypass; stripping here keeps that hidden content out of results. [mod]
-    /// is public on read and is intentionally left intact. Collapses the
-    /// whitespace the removal leaves behind so previews read cleanly.
-    /// </summary>
-    private static string StripPrivateBlocks(string? text)
-    {
-        if (string.IsNullOrEmpty(text)) return "";
-        var stripped = PrivateBlockRegex.Replace(text, " ");
-        return Regex.Replace(stripped, @"\s+", " ");
-    }
-
-    private static string Truncate(string? text)
-    {
-        if (string.IsNullOrEmpty(text)) return "";
-        var normalized = text.Trim();
-        return normalized.Length <= SnippetLength
-            ? normalized
-            : normalized[..SnippetLength] + "…";
-    }
 }

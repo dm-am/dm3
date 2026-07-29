@@ -156,6 +156,10 @@ public class PersistenceModule : Module
             .As<ITopicCommentRepository>()
             .InstancePerLifetimeScope();
 
+        builder.RegisterType<Repositories.Search.ForumSearchRepository>()
+            .As<DM.Domain.Forum.Features.Search.IForumSearchRepository>()
+            .InstancePerLifetimeScope();
+
         // Messaging repositories
         builder.RegisterType<ChatRepository>()
             .As<IChatRepository>()
