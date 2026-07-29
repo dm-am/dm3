@@ -39,6 +39,9 @@ public class AchievementController : ControllerBase
     /// <response code="200">List of categories.</response>
     [HttpGet("achievement-categories", Name = nameof(GetAchievementCategories))]
     [ProducesResponseType(typeof(ListEnvelope<AchievementCategory>), StatusCodes.Status200OK)]
+    // A catalogue: the service is called without an identity, so every caller
+    // gets the same bytes. Same policy as /v1/games/tags.
+    [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
     public async Task<IActionResult> GetAchievementCategories()
     {
         var categories = await _achievementService.GetCategoriesAsync();
@@ -50,6 +53,9 @@ public class AchievementController : ControllerBase
     /// <response code="200">List of tiers.</response>
     [HttpGet("achievement-types", Name = nameof(GetAchievementTypes))]
     [ProducesResponseType(typeof(ListEnvelope<AchievementType>), StatusCodes.Status200OK)]
+    // A catalogue: the service is called without an identity, so every caller
+    // gets the same bytes. Same policy as /v1/games/tags.
+    [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
     public async Task<IActionResult> GetAchievementTypes()
     {
         var types = await _achievementService.GetTypesAsync();

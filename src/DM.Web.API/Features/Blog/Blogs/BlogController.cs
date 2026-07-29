@@ -43,11 +43,11 @@ public class BlogController : ControllerBase
     [HttpGet(Name = nameof(GetBlogs))]
     [ProducesResponseType(typeof(ListEnvelope<Blog>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ListEnvelope<BlogRef>), StatusCodes.Status200OK)]
+    // Response carries per-caller unread counts, so it must not be cached
+    // anywhere. Declared, not assigned by hand: one mechanism for cache policy.
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> GetBlogs([FromQuery] BlogsQuery q)
     {
-        // Response contains user-specific unread counts, cannot use public cache
-        Response.Headers.CacheControl = "private, no-store";
-
         // Return lightweight refs for sidebars, full blogs for detail views
         if (string.Equals(q.Projection, "ref", StringComparison.OrdinalIgnoreCase))
         {
