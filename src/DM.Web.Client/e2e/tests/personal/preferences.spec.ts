@@ -31,7 +31,7 @@ test.describe("Preferences API", () => {
         headers: { "Content-Type": "application/json" },
         data: {
           paging: {
-            postsPerPage: 25,
+            postsPerPage: 20,
             commentsPerPage: 20,
             topicsPerPage: 30,
             messagesPerPage: 20,
@@ -43,7 +43,7 @@ test.describe("Preferences API", () => {
 
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
-    expect(data.paging).toHaveProperty("postsPerPage", 25);
+    expect(data.paging).toHaveProperty("postsPerPage", 20);
     expect(data.paging).toHaveProperty("entitiesPerPage", 20);
   });
 
@@ -54,7 +54,7 @@ test.describe("Preferences API", () => {
         headers: { "Content-Type": "application/json" },
         data: {
           paging: {
-            entitiesPerPage: 15,
+            entitiesPerPage: 50,
           },
         },
       },
@@ -62,7 +62,7 @@ test.describe("Preferences API", () => {
 
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
-    expect(data.paging).toHaveProperty("entitiesPerPage", 15);
+    expect(data.paging).toHaveProperty("entitiesPerPage", 50);
 
     // Reset to default
     await authContext.patch(`${API_URL}/v1/users/me/preferences`, {

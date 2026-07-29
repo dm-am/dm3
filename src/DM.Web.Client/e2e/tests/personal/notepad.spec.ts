@@ -40,10 +40,11 @@ test.describe("Notepad API", () => {
     });
 
     expect(response.status()).toBe(201);
-    const data = await response.json();
-    expect(data).toHaveProperty("id");
-    expect(data).toHaveProperty("title", "E2E Test Entry");
-    createdEntryId = data.id;
+    // Одиночный ресурс приходит в конверте — см. API_DESIGN.md.
+    const { resource } = await response.json();
+    expect(resource).toHaveProperty("id");
+    expect(resource).toHaveProperty("title", "E2E Test Entry");
+    createdEntryId = resource.id;
   });
 
   test("should get notepad entry by id", async () => {
@@ -54,10 +55,10 @@ test.describe("Notepad API", () => {
     );
 
     expect(response.ok()).toBeTruthy();
-    const data = await response.json();
-    expect(data).toHaveProperty("id", createdEntryId);
-    expect(data).toHaveProperty("title");
-    expect(data).toHaveProperty("content");
+    const { resource } = await response.json();
+    expect(resource).toHaveProperty("id", createdEntryId);
+    expect(resource).toHaveProperty("title");
+    expect(resource).toHaveProperty("content");
   });
 
   test("should update notepad entry", async () => {
@@ -74,8 +75,8 @@ test.describe("Notepad API", () => {
     );
 
     expect(response.ok()).toBeTruthy();
-    const data = await response.json();
-    expect(data).toHaveProperty("title", "Updated E2E Entry");
+    const { resource } = await response.json();
+    expect(resource).toHaveProperty("title", "Updated E2E Entry");
   });
 
   test("should delete notepad entry", async () => {
