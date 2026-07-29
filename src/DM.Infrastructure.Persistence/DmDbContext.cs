@@ -2176,13 +2176,10 @@ public class DmDbContext : DbContext
                 "(\"Type\" = 3 AND \"TargetPostId\" IS NOT NULL AND \"TargetUserId\" IS NULL AND \"TargetCharacterId\" IS NULL)"));
         });
 
-        // Notepad scope lookup: entries/categories are always fetched for a
-        // concrete notepad (container + type + owner for player notepads).
+        // Notepad scope lookup: entries are always fetched for a concrete
+        // notepad (container + type + owner for player notepads).
         modelBuilder.Entity<NotepadEntry>()
             .HasIndex(e => new { e.ContainerId, e.NotepadType, e.OwnerId });
-
-        modelBuilder.Entity<NotepadCategory>()
-            .HasIndex(c => new { c.ContainerId, c.NotepadType, c.OwnerId });
 
         // RoomAccess integrity: a grant targets exactly one of Character /
         // ReaderUser, and a room cannot hold duplicate grants for one target.
@@ -2504,11 +2501,6 @@ public class DmDbContext : DbContext
     /// Notepad entries
     /// </summary>
     public DbSet<NotepadEntry> NotepadEntries { get; set; }
-
-    /// <summary>
-    /// Notepad categories
-    /// </summary>
-    public DbSet<NotepadCategory> NotepadCategories { get; set; }
 
     #endregion
 

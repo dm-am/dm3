@@ -67,7 +67,6 @@ internal class GameNotepadService : IGameNotepadService
             ContainerId = gameId,
             OwnerId = null,
             AuthorId = UserId,
-            CategoryId = createEntry.CategoryId,
             Title = createEntry.Title,
             Content = createEntry.Content,
             SortOrder = 0,
@@ -100,7 +99,6 @@ internal class GameNotepadService : IGameNotepadService
             ContainerId = gameId,
             OwnerId = characterId,
             AuthorId = UserId,
-            CategoryId = createEntry.CategoryId,
             Title = createEntry.Title,
             Content = createEntry.Content,
             SortOrder = 0,
@@ -154,7 +152,6 @@ internal class GameNotepadService : IGameNotepadService
             EntryId = entryId,
             Title = updateEntry.Title,
             Content = updateEntry.Content,
-            CategoryId = updateEntry.CategoryId,
             SortOrder = updateEntry.SortOrder,
             ModifiedUtc = _dateTimeProvider.Now
         };
@@ -178,108 +175,6 @@ internal class GameNotepadService : IGameNotepadService
 
         await ThrowIfNotAuthorizedAsync(NotepadIntention.Delete, entry.NotepadType, entry.ContainerId, entry.OwnerId, ct);
         await _repository.DeleteEntryAsync(entryId, UserId, ct);
-    }
-
-    #endregion
-
-    #region Categories
-
-    /// <inheritdoc />
-    public async Task<IEnumerable<NotepadCategory>> GetMasterCategories(Guid gameId, CancellationToken ct = default)
-    {
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Read, NotepadType.Master, gameId, null, ct);
-        return await _repository.GetCategoriesAsync(NotepadType.Master, gameId, null, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task<IEnumerable<NotepadCategory>> GetPlayerCategories(Guid gameId, Guid characterId, CancellationToken ct = default)
-    {
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Read, NotepadType.Player, gameId, characterId, ct);
-        return await _repository.GetCategoriesAsync(NotepadType.Player, gameId, characterId, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task<NotepadCategory> CreateMasterCategory(Guid gameId, CreateNotepadCategory createCategory, CancellationToken ct = default)
-    {
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Create, NotepadType.Master, gameId, null, ct);
-
-        var internalDto = new CreateNotepadCategoryInternal
-        {
-            CategoryId = _guidFactory.Create(),
-            NotepadType = NotepadType.Master,
-            ContainerId = gameId,
-            OwnerId = null,
-            AuthorId = UserId,
-            Name = createCategory.Name,
-            SortOrder = 0,
-            CreatedUtc = _dateTimeProvider.Now
-        };
-
-        return await _repository.CreateCategoryAsync(internalDto, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task<NotepadCategory> CreatePlayerCategory(Guid gameId, Guid characterId, CreateNotepadCategory createCategory, CancellationToken ct = default)
-    {
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Create, NotepadType.Player, gameId, characterId, ct);
-
-        var internalDto = new CreateNotepadCategoryInternal
-        {
-            CategoryId = _guidFactory.Create(),
-            NotepadType = NotepadType.Player,
-            ContainerId = gameId,
-            OwnerId = characterId,
-            AuthorId = UserId,
-            Name = createCategory.Name,
-            SortOrder = 0,
-            CreatedUtc = _dateTimeProvider.Now
-        };
-
-        return await _repository.CreateCategoryAsync(internalDto, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task<NotepadCategory> UpdateCategory(Guid categoryId, UpdateNotepadCategory updateCategory, CancellationToken ct = default)
-    {
-        var category = await _repository.GetCategoryAsync(categoryId, ct);
-        if (category == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, "Category not found");
-        }
-
-        if (category.NotepadType != NotepadType.Master && category.NotepadType != NotepadType.Player)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, "Access denied");
-        }
-
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Edit, category.NotepadType, category.ContainerId, category.OwnerId, ct);
-
-        var internalDto = new UpdateNotepadCategoryInternal
-        {
-            CategoryId = categoryId,
-            Name = updateCategory.Name,
-            SortOrder = updateCategory.SortOrder
-        };
-
-        return await _repository.UpdateCategoryAsync(internalDto, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task DeleteCategory(Guid categoryId, CancellationToken ct = default)
-    {
-        var category = await _repository.GetCategoryAsync(categoryId, ct);
-        if (category == null)
-        {
-            return; // Already deleted
-        }
-
-        if (category.NotepadType != NotepadType.Master && category.NotepadType != NotepadType.Player)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, "Access denied");
-        }
-
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Delete, category.NotepadType, category.ContainerId, category.OwnerId, ct);
-        await _repository.DeleteCategoryAsync(categoryId, UserId, ct);
     }
 
     #endregion

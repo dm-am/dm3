@@ -43,7 +43,6 @@ internal class BlogNotepadApiService : IBlogNotepadApiService
     {
         var createEntry = new CreateNotepadEntry
         {
-            CategoryId = request.CategoryId,
             Title = request.Title,
             Content = request.Content
         };
@@ -57,7 +56,6 @@ internal class BlogNotepadApiService : IBlogNotepadApiService
     {
         var updateEntry = new UpdateNotepadEntry
         {
-            CategoryId = request.CategoryId,
             Title = request.Title,
             Content = request.Content,
             SortOrder = request.SortOrder

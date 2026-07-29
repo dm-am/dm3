@@ -638,27 +638,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "NotepadCategories",
-                columns: table => new
-                {
-                    CategoryId = table.Column<Guid>(type: "uuid", nullable: false),
-                    NotepadType = table.Column<int>(type: "integer", nullable: false),
-                    ContainerId = table.Column<Guid>(type: "uuid", nullable: false),
-                    OwnerId = table.Column<Guid>(type: "uuid", nullable: true),
-                    AuthorId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "text", nullable: false),
-                    SortOrder = table.Column<int>(type: "integer", nullable: false),
-                    CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
-                    DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_NotepadCategories", x => x.CategoryId);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "NotepadEntries",
                 columns: table => new
                 {
@@ -667,7 +646,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     ContainerId = table.Column<Guid>(type: "uuid", nullable: false),
                     OwnerId = table.Column<Guid>(type: "uuid", nullable: true),
                     AuthorId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CategoryId = table.Column<Guid>(type: "uuid", nullable: true),
                     Title = table.Column<string>(type: "text", nullable: false),
                     Content = table.Column<string>(type: "text", nullable: false),
                     SortOrder = table.Column<int>(type: "integer", nullable: false),
@@ -680,11 +658,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_NotepadEntries", x => x.EntryId);
-                    table.ForeignKey(
-                        name: "FK_NotepadEntries_NotepadCategories_CategoryId",
-                        column: x => x.CategoryId,
-                        principalTable: "NotepadCategories",
-                        principalColumn: "CategoryId");
                 });
 
             migrationBuilder.CreateTable(
@@ -2097,29 +2070,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_NotepadCategories_AuthorId",
-                table: "NotepadCategories",
-                column: "AuthorId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_NotepadCategories_ContainerId_NotepadType_OwnerId",
-                table: "NotepadCategories",
-                columns: new[] { "ContainerId", "NotepadType", "OwnerId" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_NotepadCategories_DeletedByUserId",
-                table: "NotepadCategories",
-                column: "DeletedByUserId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_NotepadEntries_AuthorId",
                 table: "NotepadEntries",
                 column: "AuthorId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_NotepadEntries_CategoryId",
-                table: "NotepadEntries",
-                column: "CategoryId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_NotepadEntries_ContainerId_NotepadType_OwnerId",
@@ -3072,21 +3025,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_NotepadCategories_Users_AuthorId",
-                table: "NotepadCategories",
-                column: "AuthorId",
-                principalTable: "Users",
-                principalColumn: "UserId",
-                onDelete: ReferentialAction.Cascade);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_NotepadCategories_Users_DeletedByUserId",
-                table: "NotepadCategories",
-                column: "DeletedByUserId",
-                principalTable: "Users",
-                principalColumn: "UserId");
-
-            migrationBuilder.AddForeignKey(
                 name: "FK_NotepadEntries_Users_AuthorId",
                 table: "NotepadEntries",
                 column: "AuthorId",
@@ -3623,9 +3561,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "Tags");
-
-            migrationBuilder.DropTable(
-                name: "NotepadCategories");
 
             migrationBuilder.DropTable(
                 name: "Rubrics");

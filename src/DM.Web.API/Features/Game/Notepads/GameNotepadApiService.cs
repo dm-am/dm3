@@ -42,7 +42,6 @@ internal class GameNotepadApiService : IGameNotepadApiService
     {
         var createEntry = new CreateNotepadEntry
         {
-            CategoryId = request.CategoryId,
             Title = request.Title,
             Content = request.Content
         };
@@ -68,7 +67,6 @@ internal class GameNotepadApiService : IGameNotepadApiService
     {
         var createEntry = new CreateNotepadEntry
         {
-            CategoryId = request.CategoryId,
             Title = request.Title,
             Content = request.Content
         };
@@ -107,7 +105,6 @@ internal class GameNotepadApiService : IGameNotepadApiService
     {
         var updateEntry = new UpdateNotepadEntry
         {
-            CategoryId = request.CategoryId,
             Title = request.Title,
             Content = request.Content,
             SortOrder = request.SortOrder

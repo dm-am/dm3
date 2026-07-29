@@ -11,8 +11,6 @@ namespace DM.Domain.Personal.Features.Notepads;
 /// </summary>
 public interface IUserNotepadService
 {
-    #region Entries
-
     /// <summary>
     /// Get personal notepad entries for current user
     /// </summary>
@@ -37,30 +35,4 @@ public interface IUserNotepadService
     /// Delete entry
     /// </summary>
     Task DeleteEntry(Guid entryId, CancellationToken ct = default);
-
-    #endregion
-
-    #region Categories
-
-    /// <summary>
-    /// Get categories for user notepad
-    /// </summary>
-    Task<IEnumerable<NotepadCategory>> GetCategories(CancellationToken ct = default);
-
-    /// <summary>
-    /// Create new category
-    /// </summary>
-    Task<NotepadCategory> CreateCategory(CreateNotepadCategory createCategory, CancellationToken ct = default);
-
-    /// <summary>
-    /// Update category
-    /// </summary>
-    Task<NotepadCategory> UpdateCategory(Guid categoryId, UpdateNotepadCategory updateCategory, CancellationToken ct = default);
-
-    /// <summary>
-    /// Delete category
-    /// </summary>
-    Task DeleteCategory(Guid categoryId, CancellationToken ct = default);
-
-    #endregion
 }

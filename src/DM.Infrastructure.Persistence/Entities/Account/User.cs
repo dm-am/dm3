@@ -402,12 +402,6 @@ public class User : IUser, IRemovable
     public virtual ICollection<NotepadEntry> NotepadEntries { get; set; } = [];
 
     /// <summary>
-    /// Notepad categories authored by user
-    /// </summary>
-    [InverseProperty(nameof(NotepadCategory.Author))]
-    public virtual ICollection<NotepadCategory> NotepadCategories { get; set; } = [];
-
-    /// <summary>
     /// User's personal blacklist (users this user has blocked)
     /// </summary>
     [InverseProperty(nameof(UserBlacklist.Owner))]
