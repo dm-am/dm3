@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useRoute } from "vue-router";
-import { useTestimonialStore } from "@/shared/stores/testimonials";
+import { useTestimonialStore } from "@/entities/testimonial";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { storeToRefs } from "pinia";
 import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";

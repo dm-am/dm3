@@ -21,7 +21,7 @@ import { Gender } from "@/shared/api/models/community";
 import { communityApi, blacklistApi, accountApi } from "@/shared/api";
 import type { BlacklistEntry } from "@/shared/api/models/personal";
 import type { UserProfileNote } from "@/shared/api/models/community";
-import { useSubscriptionsStore } from "@/shared/stores/subscriptions";
+import { useSubscriptionsStore } from "@/entities/subscription";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useExpandableSection } from "@/shared/lib/composables";

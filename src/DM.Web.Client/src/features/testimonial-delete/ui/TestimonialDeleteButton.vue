@@ -13,7 +13,7 @@ import { ref, computed } from "vue";
 import type { WebsiteTestimonial } from "@/shared/api/models/community";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { symbols } from "@/shared/lib/utils/icons";
-import { useTestimonialStore } from "@/shared/stores/testimonials";
+import { useTestimonialStore } from "@/entities/testimonial";
 import { useAuthStore, userIsAdmin } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 
