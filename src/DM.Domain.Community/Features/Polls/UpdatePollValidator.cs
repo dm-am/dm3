@@ -1,6 +1,4 @@
-using System;
 using DM.Domain.Core.Exceptions;
-using DM.Domain.Core.Abstractions;
 using FluentValidation;
 
 namespace DM.Domain.Community.Features.Polls;
@@ -9,8 +7,7 @@ namespace DM.Domain.Community.Features.Polls;
 internal class UpdatePollValidator : AbstractValidator<UpdatePoll>
 {
     /// <inheritdoc />
-    public UpdatePollValidator(
-        IDateTimeProvider dateTimeProvider)
+    public UpdatePollValidator()
     {
         RuleFor(p => p.Id)
             .NotEmpty();
@@ -20,11 +17,12 @@ internal class UpdatePollValidator : AbstractValidator<UpdatePoll>
         RuleFor(p => p.Details)
             .MaximumLength(1000).WithMessage(ValidationError.Long)
             .When(p => p.Details != null);
-        RuleFor(p => p.StartsUtc)
-            .GreaterThanOrEqualTo(dateTimeProvider.Now).WithMessage(ValidationError.Short)
-            .When(p => p.StartsUtc.HasValue);
+        // Deliberately no "must be in the future" rules here, unlike creation:
+        // the moderator edit form sends the dates of the poll being edited, so
+        // such a rule would make every running poll uneditable. What an update
+        // must still guarantee is that the poll does not end before it starts.
         RuleFor(p => p.EndsUtc)
-            .GreaterThan(dateTimeProvider.Now).WithMessage(ValidationError.Short)
-            .When(p => p.EndsUtc.HasValue);
+            .GreaterThan(p => p.StartsUtc!.Value).WithMessage(ValidationError.Invalid)
+            .When(p => p.StartsUtc.HasValue && p.EndsUtc.HasValue);
     }
 }

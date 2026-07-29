@@ -14,6 +14,27 @@ public class ChatControllerShould : IntegrationTestBase
     {
     }
 
+    /// <summary>
+    /// GET /chats/{id} accepts a readable id as well as a GUID, and the global chat
+    /// is the one chat addressable by name.
+    /// </summary>
+    /// <remarks>
+    /// The branch used to be unreachable: nothing assigned Chat.PublicId, so every
+    /// non-GUID id resolved to nothing at all.
+    /// </remarks>
+    [Fact]
+    public async Task ResolveTheGlobalChatByItsReadableId()
+    {
+        var request = CreateAuthenticatedRequest(HttpMethod.Get, "/v1/chats/global");
+        var response = await Client.SendAsync(request);
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "body was: {0}", content);
+        // The readable id resolved to the right row. It is not echoed back: the chat
+        // DTO carries no public id field, which is why the branch could stay broken
+        // unnoticed for so long - nothing on the wire ever showed it.
+        content.Should().Contain("00000000-0000-0000-0000-000000000001");
+    }
     #region GetChats Tests
 
     /// <summary>
