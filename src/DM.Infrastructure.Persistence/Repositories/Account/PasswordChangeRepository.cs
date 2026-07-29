@@ -51,7 +51,11 @@ internal class PasswordChangeRepository : IPasswordChangeRepository
             .Where(u => u.UserId == userId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(u => u.PasswordHash, passwordHash)
-                .SetProperty(u => u.Salt, salt));
+                .SetProperty(u => u.Salt, salt)
+                // The version travels with the hash. Leaving it behind produces a row
+                // whose stored version no longer describes its hash - harmless while
+                // there is only one scheme, and unrecoverable the moment there are two.
+                .SetProperty(u => u.PasswordHashVersion, PasswordHashing.CurrentVersion));
 
         if (tokenIdToInvalidate.HasValue)
         {

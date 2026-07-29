@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using AutoMapper;
 using DM.Testing;
@@ -11,6 +12,7 @@ using DM.Web.API.Shared.Dto;
 using FluentAssertions;
 using Xunit;
 using DomainCreatePost = DM.Domain.Game.Features.Posts.CreatePost;
+using DomainUpdatePost = DM.Domain.Game.Features.Posts.UpdatePost;
 
 namespace DM.Web.API.Tests.Features.Game;
 
@@ -34,6 +36,31 @@ public class PostMappingProfileShould : UnitTestBase
     [Fact]
     public void HaveValidConfiguration() => _configuration.AssertConfigurationIsValid();
 
+    /// <summary>
+    /// The PATCH path maps the read model onto the update model, where CharacterId
+    /// is an Optional&lt;Guid&gt; — a wrapper with a private constructor and no
+    /// converter registered anywhere. AssertConfigurationIsValid does not exercise
+    /// the conversion, so this pins what actually happens at runtime.
+    /// </summary>
+    [Fact]
+    public void MapPostToUpdatePostWithoutCorruptingTheCharacter()
+    {
+        var characterId = Guid.NewGuid();
+        var post = new Post
+        {
+            Character = new Character { Id = characterId },
+        };
+
+        var update = _mapper.Map<DomainUpdatePost>(post);
+
+        // Either the wrapper carries the id, or the field stays absent — both are
+        // survivable. What must not happen is a wrapper carrying no value: the
+        // service reads that as an instruction to detach the character.
+        if (update.CharacterId != null)
+        {
+            update.CharacterId.Value.Should().Be(characterId);
+        }
+    }
     [Fact]
     public void MapCreateDiceRollRequestToDomainSpec()
     {

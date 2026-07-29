@@ -368,8 +368,7 @@ internal class TopicRepository : ITopicRepository
                 CreatedUtc = now,
                 IsRemoved = false,
                 IsClosed = false,
-                IsAttached = false,
-                CommentCount = 0
+                IsAttached = false
             });
             await _dbContext.SaveChangesAsync(ct);
 

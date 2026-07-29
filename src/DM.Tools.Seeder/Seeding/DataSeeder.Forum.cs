@@ -242,7 +242,6 @@ internal sealed partial class DataSeeder
                     Text = template.Text,
                     IsAttached = i == 0 && board.Title == "Новости проекта", // Pin first topic in News
                     IsClosed = false,
-                    CommentCount = 0,
                     IsRemoved = false
                 };
 
@@ -328,7 +327,6 @@ internal sealed partial class DataSeeder
 
                     _dbContext.Set<DbComment>().Add(comment);
                     result.CommentsCreated++;
-                    topic.CommentCount++;
                     lastComment = comment;
                 }
 
@@ -342,7 +340,8 @@ internal sealed partial class DataSeeder
 
         // Now update LastCommentId references for topics that have comments
         var topicsWithComments = await _dbContext.Set<Topic>()
-            .Where(t => t.CommentCount > 0 && t.LastCommentId == null)
+            .Where(t => t.LastCommentId == null &&
+                        _dbContext.Set<DbComment>().Any(c => c.EntityId == t.TopicId))
             .ToListAsync();
 
         foreach (var topic in topicsWithComments)

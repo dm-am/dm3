@@ -54,11 +54,6 @@ public class PostPendency
     public DateTimeOffset? LastReminderUtc { get; set; }
 
     /// <summary>
-    /// Soft delete flag
-    /// </summary>
-    public bool IsRemoved { get; set; }
-
-    /// <summary>
     /// Room
     /// </summary>
     [ForeignKey(nameof(RoomId))]

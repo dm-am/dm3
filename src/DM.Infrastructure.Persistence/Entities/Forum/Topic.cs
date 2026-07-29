@@ -66,11 +66,6 @@ public class Topic : ISoftDeletable, IHasEditHistory<TopicEdit>
     public bool IsClosed { get; set; }
 
     /// <summary>
-    /// Comment count (denormalized)
-    /// </summary>
-    public int CommentCount { get; set; }
-
-    /// <summary>
     /// Last comment identifier (denormalized)
     /// </summary>
     public Guid? LastCommentId { get; set; }

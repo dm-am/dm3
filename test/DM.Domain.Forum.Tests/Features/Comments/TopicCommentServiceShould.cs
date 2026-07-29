@@ -187,7 +187,6 @@ public class TopicCommentServiceShould : UnitTestBase
         {
             Id = commentId,
             EntityId = topicId,
-            TopicCommentCount = 10,
             IsLastComment = false,
             CreatedUtc = DateTimeOffset.UtcNow
         };

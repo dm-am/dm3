@@ -1,3 +1,4 @@
+using DM.Domain.Core.Identity;
 using System;
 using System.ComponentModel.DataAnnotations;
 
@@ -45,7 +46,7 @@ public class PendingRegistration
     /// <summary>
     /// Password hash algorithm version (4 = Argon2id)
     /// </summary>
-    public int PasswordHashVersion { get; set; } = 4;
+    public int PasswordHashVersion { get; set; } = PasswordHashing.CurrentVersion;
 
     /// <summary>
     /// Original registration time (for cleanup after 7 days)

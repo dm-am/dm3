@@ -711,8 +711,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     CreatedById = table.Column<Guid>(type: "uuid", nullable: false),
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     FulfilledUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    LastReminderUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false)
+                    LastReminderUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1047,7 +1046,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     IsAttached = table.Column<bool>(type: "boolean", nullable: false),
                     AttachOrder = table.Column<int>(type: "integer", nullable: true),
                     IsClosed = table.Column<bool>(type: "boolean", nullable: false),
-                    CommentCount = table.Column<int>(type: "integer", nullable: false),
                     LastCommentId = table.Column<Guid>(type: "uuid", nullable: true),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
@@ -1757,11 +1755,11 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             migrationBuilder.InsertData(
                 table: "Topics",
-                columns: new[] { "TopicId", "AttachOrder", "AuthorId", "BoardId", "CommentCount", "CreatedUtc", "DeletedByUserId", "DeletedUtc", "IsAttached", "IsClosed", "IsRemoved", "LastCommentId", "Text", "Title", "TopicNumber" },
+                columns: new[] { "TopicId", "AttachOrder", "AuthorId", "BoardId", "CreatedUtc", "DeletedByUserId", "DeletedUtc", "IsAttached", "IsClosed", "IsRemoved", "LastCommentId", "Text", "Title", "TopicNumber" },
                 values: new object[,]
                 {
-                    { new Guid("00000000-0000-0000-0000-000000000001"), null, new Guid("00000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000001"), 0, new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, true, false, false, null, "Ваши отзывы отсюда попадают (после минимального анализа на нарушения правил) прямиком на главную.", "Отзывы о ДМ", 1 },
-                    { new Guid("00000000-0000-0000-0000-000000000100"), null, new Guid("00000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000001"), 0, new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 1, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, true, false, false, null, "Здесь можно обсудить решения модераторов и администрации. Конструктивная критика приветствуется.", "Обсуждение действий администрации", 2 }
+                    { new Guid("00000000-0000-0000-0000-000000000001"), null, new Guid("00000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000001"), new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, true, false, false, null, "Ваши отзывы отсюда попадают (после минимального анализа на нарушения правил) прямиком на главную.", "Отзывы о ДМ", 1 },
+                    { new Guid("00000000-0000-0000-0000-000000000100"), null, new Guid("00000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000001"), new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 1, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, true, false, false, null, "Здесь можно обсудить решения модераторов и администрации. Конструктивная критика приветствуется.", "Обсуждение действий администрации", 2 }
                 });
 
             migrationBuilder.CreateIndex(
