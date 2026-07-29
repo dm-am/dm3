@@ -409,7 +409,7 @@ onMounted(fetchEntries);
   text-overflow: ellipsis
 
 .entry-date
-  font-size: 0.75rem
+  font-size: $tertiary-font-size
   color: $text-muted
   margin-top: 2px
 
@@ -480,7 +480,7 @@ onMounted(fetchEntries);
     background: $input-bg
     color: $text
     font-family: inherit
-    font-size: 1rem
+    font-size: $font-size
 
     &:focus
       outline: none
