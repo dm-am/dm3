@@ -60,6 +60,17 @@ public interface IGameRepository
     Task<Game?> GetGame(Guid gameId, Guid userId, CancellationToken ct = default);
 
     /// <summary>
+    /// Identifier of the game a public id addresses, or null when it addresses
+    /// nothing the user may see.
+    /// </summary>
+    /// <remarks>
+    /// For the callers that need the id and nothing else — every route that
+    /// accepts either address form and then goes on to do something with the
+    /// game. Applies the same visibility filter as the aggregate read.
+    /// </remarks>
+    Task<Guid?> FindGameIdByPublicId(string publicId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
     /// Get game by public ID
     /// </summary>
     Task<Game?> GetGameByPublicId(string publicId, Guid userId, CancellationToken ct = default);

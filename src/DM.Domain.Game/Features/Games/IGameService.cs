@@ -47,6 +47,19 @@ public interface IGameService
     Task<Game> GetByPublicIdAsync(string publicId);
 
     /// <summary>
+    /// Identifier of the game a public id addresses.
+    /// </summary>
+    /// <remarks>
+    /// Resolving an address is not reading the game: the operation that follows
+    /// authorizes itself. Deliberately not gated on the Read intention,
+    /// which is stricter than the visibility filter — a mentor supervising a
+    /// draft game fails Read, so gating here refused them the alias form of
+    /// routes they may use by GUID. The two address forms now agree.
+    /// </remarks>
+    /// <param name="publicId">Public identifier</param>
+    Task<Guid> ResolveIdByPublicIdAsync(string publicId);
+
+    /// <summary>
     /// Get game details by identifier
     /// </summary>
     Task<GameDetails> GetDetailsAsync(Guid gameId);

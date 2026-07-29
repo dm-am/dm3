@@ -363,6 +363,16 @@ internal class GameService : IGameService
         return game;
     }
 
+    public async Task<Guid> ResolveIdByPublicIdAsync(string publicId)
+    {
+        var currentUserId = _identityProvider.Current.User.UserId;
+        var gameId = await _repository.FindGameIdByPublicId(publicId, currentUserId);
+
+        // Same answer as the aggregate read gives for an id that addresses
+        // nothing visible, so a caller cannot tell which path it took.
+        return gameId ?? throw new HttpException(HttpStatusCode.Gone, "Game not found");
+    }
+
     public async Task<Game> GetByPublicIdAsync(string publicId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;

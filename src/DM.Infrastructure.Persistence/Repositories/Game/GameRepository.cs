@@ -814,6 +814,20 @@ internal class GameRepository : IGameRepository
         return game;
     }
 
+    public Task<Guid?> FindGameIdByPublicId(string publicId, Guid userId, CancellationToken ct = default)
+    {
+        // Same visibility filter as the aggregate read, so the set of public ids
+        // that resolve is identical — but one scalar column instead of a game,
+        // its players, its readers and its unread counters, all of which the
+        // callers of this throw away.
+        return _dbContext.Games
+            .TagWith("DM.Game.FindIdByPublicId")
+            .Where(GameAccessibilityFilters.GameAvailable(userId))
+            .Where(g => g.PublicId == publicId)
+            .Select(g => (Guid?)g.GameId)
+            .FirstOrDefaultAsync(ct);
+    }
+
     public Task<GameDto?> GetGameByPublicId(string publicId, Guid userId, CancellationToken ct = default)
     {
         return _dbContext.Games

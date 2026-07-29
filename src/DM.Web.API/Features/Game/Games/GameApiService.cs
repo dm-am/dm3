@@ -80,7 +80,7 @@ internal class GameApiService : IGameApiService
     public async Task<Guid> ResolveId(string idOrPublicId) =>
         Guid.TryParse(idOrPublicId, out var guid)
             ? guid
-            : (await GetByPublicId(idOrPublicId)).Resource.Id;
+            : await _gameService.ResolveIdByPublicIdAsync(idOrPublicId);
 
     /// <inheritdoc />
     public async Task<Envelope<GameDetails>> Create(CreateGameRequest request)
