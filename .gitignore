@@ -54,3 +54,5 @@ report_html.html
 src/DM.Web.Client/test-results/
 src/DM.Web.Client/playwright-report/
 src/DM.Web.Client/blob-report/
+
+src/DM.Web.Client/e2e/.auth/

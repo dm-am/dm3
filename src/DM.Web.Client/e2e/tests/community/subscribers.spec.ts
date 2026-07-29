@@ -1,38 +1,27 @@
 import { test, expect, APIRequestContext } from "@playwright/test";
-import { loginWithCookies } from "../../fixtures/auth";
+import {
+  authenticatedContext,
+  secondaryUser,
+  PRIMARY_STORAGE_STATE,
+  SECONDARY_STORAGE_STATE,
+} from "../../fixtures/auth";
 
 const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
 
-const USER_A = {
-  username: "Alice",
-  password: "Xk9#mQz2$vL7nW",
-};
-
-const USER_B = {
-  username: "Bob",
-  password: "Xk9#mQz2$vL7nW",
-};
+const USER_B = secondaryUser;
 
 let userAContext: APIRequestContext;
 let userBContext: APIRequestContext;
 
-test.beforeAll(async ({ request }) => {
+test.beforeAll(async () => {
   try {
-    userAContext = await loginWithCookies(
-      request,
-      USER_A.username,
-      USER_A.password,
-    );
+    userAContext = await authenticatedContext(PRIMARY_STORAGE_STATE);
   } catch (e) {
     console.error("Failed to login as User A:", e);
   }
 
   try {
-    userBContext = await loginWithCookies(
-      request,
-      USER_B.username,
-      USER_B.password,
-    );
+    userBContext = await authenticatedContext(SECONDARY_STORAGE_STATE);
   } catch (e) {
     console.error("Failed to login as User B:", e);
   }

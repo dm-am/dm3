@@ -2,6 +2,10 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e/tests",
+  // Логин выполняется один раз за прогон и сохраняется в storageState:
+  // эндпоинт входа ограничен пятью запросами в минуту, а спеки логинились
+  // каждая сама из параллельных воркеров.
+  globalSetup: "./e2e/fixtures/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

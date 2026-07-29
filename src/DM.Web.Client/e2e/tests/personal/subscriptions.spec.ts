@@ -1,26 +1,13 @@
 import { test, expect, APIRequestContext } from "@playwright/test";
-import { loginWithCookies } from "../../fixtures/auth";
+import { authenticatedContext } from "../../fixtures/auth";
 
 const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
-
-const TEST_USER = {
-  username: "Alice",
-  password: "Xk9#mQz2$vL7nW",
-};
 
 let authContext: APIRequestContext;
 let testSubscriptionId: string | null = null;
 
-test.beforeAll(async ({ request }) => {
-  try {
-    authContext = await loginWithCookies(
-      request,
-      TEST_USER.username,
-      TEST_USER.password,
-    );
-  } catch (e) {
-    console.error("Failed to login:", e);
-  }
+test.beforeAll(async () => {
+  authContext = await authenticatedContext();
 });
 
 test.afterAll(async () => {
@@ -36,8 +23,6 @@ test.afterAll(async () => {
 
 test.describe("Subscriptions API", () => {
   test("should get my subscriptions list", async () => {
-    test.skip(!authContext, "Auth failed");
-
     const response = await authContext.get(
       `${API_URL}/v1/users/me/subscriptions`,
     );
@@ -49,8 +34,6 @@ test.describe("Subscriptions API", () => {
   });
 
   test("should check subscription status", async () => {
-    test.skip(!authContext, "Auth failed");
-
     // Check subscription to a game (need a valid game ID)
     // First, get a game to subscribe to
     const gamesResponse = await authContext.get(`${API_URL}/v1/games?size=1`);
@@ -79,8 +62,6 @@ test.describe("Subscriptions API", () => {
   });
 
   test("should subscribe to a game", async () => {
-    test.skip(!authContext, "Auth failed");
-
     // Get a game to subscribe to
     const gamesResponse = await authContext.get(`${API_URL}/v1/games?size=1`);
     if (!gamesResponse.ok()) {
@@ -118,7 +99,7 @@ test.describe("Subscriptions API", () => {
   });
 
   test("should unsubscribe", async () => {
-    test.skip(!authContext || !testSubscriptionId, "No subscription to delete");
+    test.skip(!testSubscriptionId, "No subscription to delete");
 
     const response = await authContext.delete(
       `${API_URL}/v1/users/me/subscriptions/${testSubscriptionId}`,
