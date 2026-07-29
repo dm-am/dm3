@@ -32,12 +32,12 @@ internal class ErrorHandlingMiddleware
     /// </summary>
     /// <param name="httpContext">HTTP context</param>
     /// <param name="logger">Logger</param>
-    /// <param name="identitySetter">Identity setter for Serilog issue fix</param>
+    /// <param name="identityProvider">Caller identity, named explicitly in the two log calls below</param>
     /// <param name="correlationTokenProvider">Correlation token for support assistance</param>
     /// <param name="problemDetailsFactory">Problem details factory</param>
     public async Task InvokeAsync(HttpContext httpContext,
         ILogger<ErrorHandlingMiddleware> logger,
-        IIdentitySetter identitySetter,
+        IIdentityProvider identityProvider,
         ICorrelationTokenProvider correlationTokenProvider,
         ProblemDetailsFactory problemDetailsFactory)
     {
@@ -47,7 +47,12 @@ internal class ErrorHandlingMiddleware
         }
         catch (Exception e)
         {
-            identitySetter.Refresh();
+            // This middleware wraps authentication, so by the time an exception
+            // reaches it the request-scoped "User" enricher pushed downstream has
+            // already been popped by the unwinding stack. The two log calls that
+            // care who the caller was therefore name them as a parameter instead
+            // of relying on ambient context.
+            var user = identityProvider.Current?.User?.Username ?? "anonymous";
             object error;
             switch (e)
             {
@@ -58,7 +63,8 @@ internal class ErrorHandlingMiddleware
                     error = problemDetailsFactory.CreateFrom(validationException, httpContext);
                     break;
                 case IntentionManagerException securityException:
-                    logger.LogWarning(securityException, "Security breach attempt: {Message}", e.Message);
+                    logger.LogWarning(securityException,
+                        "Security breach attempt by {User}: {Message}", user, e.Message);
                     error = problemDetailsFactory.CreateFrom(securityException, httpContext);
                     break;
                 case HttpException httpException:
@@ -68,7 +74,7 @@ internal class ErrorHandlingMiddleware
                     error = problemDetailsFactory.CreateFrom(validationException, httpContext);
                     break;
                 default:
-                    logger.LogCritical(e, "Unhandled server error: {Message}", e.Message);
+                    logger.LogCritical(e, "Unhandled server error for {User}: {Message}", user, e.Message);
                     error = problemDetailsFactory.CreateFrom(e, httpContext, correlationTokenProvider.Current);
                     break;
             }

@@ -3,6 +3,7 @@ using DM.Domain.Core.Identity;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Authentication.Credentials;
 using Microsoft.AspNetCore.Http;
+using Serilog.Context;
 
 namespace DM.Web.API.Middleware;
 
@@ -42,6 +43,21 @@ public class AuthenticationMiddleware
             }
         }
 
-        await next(httpContext);
+        // Tagging log events with the caller belongs to the host, not to the
+        // identity store: PushProperty returns the disposable that pops the
+        // enricher back off, and only a request-scoped frame knows when that
+        // should happen. The identity storage used to push from its own setter
+        // and drop the disposable, so every assignment left a frame behind.
+        var username = identityProvider.Current?.User?.Username;
+        if (string.IsNullOrEmpty(username))
+        {
+            await next(httpContext);
+            return;
+        }
+
+        using (LogContext.PushProperty("User", username))
+        {
+            await next(httpContext);
+        }
     }
 }

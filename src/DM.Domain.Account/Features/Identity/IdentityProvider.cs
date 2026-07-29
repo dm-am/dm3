@@ -1,6 +1,5 @@
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Identity;
-using Serilog.Context;
 
 namespace DM.Domain.Account.Features.Identity;
 
@@ -18,25 +17,9 @@ public class IdentityProvider : IIdentitySetter, IIdentityProvider, IAuthorizati
     public IIdentity Current
     {
         get => _identity;
-        set
-        {
-            _identity = value;
-            if (_identity?.User != null)
-            {
-                LogContext.PushProperty("User", _identity.User.Username);
-            }
-        }
+        set => _identity = value;
     }
 
     /// <inheritdoc />
     public IAuthorizationSubject CurrentSubject => _identity?.User ?? AuthenticatedUser.Guest;
-
-    /// <inheritdoc />
-    public void Refresh()
-    {
-        if (_identity != null)
-        {
-            Current = Current;
-        }
-    }
 }
