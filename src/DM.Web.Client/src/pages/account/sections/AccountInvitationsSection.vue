@@ -233,12 +233,12 @@ async function reject(invitationId: string) {
     color: $accent-green
 
     &:hover:not(:disabled)
-      background-color: $accent-green-muted
+      +tint($accent-green, 15%)
 
   &--reject
     border: 1px solid $border
-    color: $text-muted
+    color: $text
 
     &:hover:not(:disabled)
-      background-color: $text-muted-muted
+      +tint($text-muted, 15%)
 </style>

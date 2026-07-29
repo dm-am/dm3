@@ -156,7 +156,7 @@ const logoutFromAll = () => {
 
   &--current
     border-color: $link
-    background-color: $link-muted
+    +tint($link, 15%)
 
 .session-info
   display: flex
@@ -174,7 +174,7 @@ const logoutFromAll = () => {
   font-size: $secondary-font-size
   font-weight: normal
   color: $link
-  background-color: $link-muted
+  +tint($link, 15%)
   padding: 2px $tiny
   border-radius: 3px
 
@@ -196,7 +196,7 @@ const logoutFromAll = () => {
   font-size: $secondary-font-size
 
   &:hover:not(:disabled)
-    background-color: $accent-red-muted
+    +tint($accent-red, 15%)
 
   &:disabled
     opacity: 0.5
