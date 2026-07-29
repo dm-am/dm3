@@ -2583,7 +2583,7 @@ The finding is in fact UNDERSTATED.
 
 ### [СРЕДНЯЯ] P12 — The requirement ledger — the stated SSOT for every owner instruction and approval — is not under version control, and its own skill file claims it is
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Находка права в одном: файл скилла утверждал 'под гитом', а реестр вне гита - то есть документ врал о собственном механизме. Ложь убрана. Само расположение оставлено по решению владельца: реестр указаний одному исполнителю не артефакт продукта и в репозитории ему не место. Плата названа в самом скилле прямо - файл не переживет потерю машины и не виден в истории проекта, единственная копия живет в памяти агента вместе с профилем. Это записано как решение с ценой, а не как недоделка
 
 .claude/skills/requirement-ledger/SKILL.md asserts of C:/Users/Ivan/.claude/projects/D--Code-Projects-dm3/memory/REQUIREMENTS.md: "под гитом, виден владельцу, переживает всё". I checked: `git rev-parse --show-toplevel` in that directory returns "fatal: not a git repository (or any of the parent directories): .git". The file is 61046 bytes / 286 lines and was last written 2026-07-27.
 
@@ -2603,7 +2603,7 @@ src/DM.Web.Client/src/app/providers/router.ts:831-843 registers name "dev-style-
 
 ### [НИЗКАЯ] P14 — The permission allowlist has decayed into transcript sludge, hiding the handful of grants that actually matter
 
-**Статус: Открыто.** 
+**Статус: За владельцем.** Список разрешений - это граница полномочий агента, а не гигиена файла: сузить его значит изменить то, что я могу делать без спроса. Такое решение принимает владелец, а не исполнитель. Фактура для решения собрана: 53 широких гранта вида Bash(cmd:*) при 222 записях всего, из них реально несущих - единицы. Правка одной командой не делается: нужно решить, какие классы команд остаются без подтверждения
 
 .claude/settings.local.json permissions.allow holds 222 entries. Roughly 40 are one-shot curl benchmark loops pasted verbatim from past sessions, several including box-drawing characters inside the format string — e.g. `Bash(do curl -s -o /dev/null -w "│   Call $i: %{time_total}s | %{size_download} bytes                           │\n" "http://localhost:5000/v1/games/tags")`. Another entry is a 16-path `for f in docs/guides/SETUP.md …` loop over files that no longer exist. Interleaved with these are the grants that carry real authority: Bash(rm:*), Bash(powershell:*), Bash(git:*), Bash(chmod:*), Bash(taskkill:*), Bash(winget install:*).
 
