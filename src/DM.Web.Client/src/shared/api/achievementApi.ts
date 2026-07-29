@@ -1,6 +1,7 @@
 import type {
   AwardTypesResponse,
   UserAwardsResponse,
+  ContestSeriesAwardsResponse,
   AchievementTypesResponse,
   AchievementCategoriesResponse,
   AchievementCategoryEnvelope,
@@ -133,6 +134,12 @@ export default new (class AchievementApi {
     return Api.post<UserAwardEnvelope>(
       `moderation/users/${encodeURIComponent(username)}/awards`,
       body,
+    );
+  }
+
+  public getContestSeriesAwards(seriesId: string) {
+    return Api.get<ContestSeriesAwardsResponse>(
+      `moderation/contest-series/${seriesId}/awards`,
     );
   }
 

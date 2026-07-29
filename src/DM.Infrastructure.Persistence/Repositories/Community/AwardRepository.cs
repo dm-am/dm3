@@ -153,6 +153,17 @@ internal class AwardRepository : IAwardRepository
             .ProjectTo<UserAward>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
 
+    // Ordered by award type first: a contest reads as a podium (1st, 2nd, 3rd,
+    // then the special awards), not as a grant log.
+    public async Task<IReadOnlyCollection<UserAward>> GetSeriesAwardsAsync(Guid seriesId, CancellationToken ct = default) =>
+        await _db.UserAwards
+            .AsNoTracking()
+            .Where(a => a.ContestSeriesId == seriesId && !a.IsRemoved)
+            .OrderBy(a => a.AwardType.SortOrder)
+            .ThenBy(a => a.AwardedUtc)
+            .ProjectTo<UserAward>(_mapper.ConfigurationProvider)
+            .ToListAsync(ct);
+
     public async Task<UserAward?> GetAsync(Guid id, CancellationToken ct = default) =>
         await _db.UserAwards
             .AsNoTracking()
