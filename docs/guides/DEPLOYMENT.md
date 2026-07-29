@@ -188,7 +188,7 @@ Watchtower каждые 5 минут проверяет новые образы 
 | Endpoint | Назначение |
 |----------|-----------|
 | `/_health` | Liveness (Docker health check) |
-| `/_ready` | Readiness (PostgreSQL + MongoDB + RabbitMQ) |
+| `/_ready` | Readiness (PostgreSQL + MongoDB) |
 | `/_health/detail` | Детальная информация обо всех проверках |
 
 ---

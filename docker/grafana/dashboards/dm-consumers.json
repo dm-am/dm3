@@ -52,12 +52,12 @@
       "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
     },
     {
-      "title": "Consumer Memory Usage",
+      "title": "Consumer GC Heap",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
       "targets": [
         {
-          "expr": "process_working_set_bytes{job=~\"dm-(notification|mail)-worker\"}",
+          "expr": "process_runtime_dotnet_gc_heap_size_bytes{job=~\"dm-(notification|mail)-worker\"}",
           "legendFormat": "{{job}}",
           "refId": "A"
         }

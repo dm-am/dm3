@@ -12,9 +12,9 @@ groups:
 
       - alert: HighErrorRate
         expr: |
-          sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m]))
+          sum(rate(http_server_request_duration_seconds_count{job="dm-api",http_response_status_code=~"5.."}[5m]))
           /
-          sum(rate(http_server_request_duration_seconds_count[5m]))
+          sum(rate(http_server_request_duration_seconds_count{job="dm-api"}[5m]))
           > 0.05
         for: 5m
         labels:
@@ -25,7 +25,7 @@ groups:
 
       - alert: HighLatency
         expr: |
-          histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le))
+          histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{job="dm-api"}[5m])) by (le))
           > 2
         for: 5m
         labels:

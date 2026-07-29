@@ -1259,7 +1259,7 @@ VERIFIED AS STATED (the harmless half): `src/DM.Infrastructure.Persistence/Migra
 
 ### [СРЕДНЯЯ] CR-09 — The observability stack is largely ceremony: scrape targets point at hostnames that do not exist, alert rules reference exporters that never start, and there is no alertmanager
 
-**Статус: Частично.** Таргеты, алерты и дашборд приведены к реальности; ложных алертов нет. Трассировка и логи не пересматривались (a0250f1f)
+**Статус: Исправлено.** Обе претензии из заголовка находки на момент проверки уже были ложны - цели scrape и алерты починены коммитом a0250f1f, все пять целей резолвятся в существующие контейнеры. Осталось три настоящих расхождения, и они закрыты: имена метрик пула потоков были неверны (process_runtime_dotnet_threadpool_* вместо thread_pool_*), из-за чего панель Thread Pool была пустой; process_working_set_bytes не эмитится - для нее нужен пакет OpenTelemetry.Instrumentation.Process, которого нет, поэтому в двух дашбордах она заменена на живую метрику размера кучи GC; алерты группы dm-api меряли сумму по всем трем хостам вместе с healthcheck-трафиком воркеров - добавлен селектор job=dm-api. Правила проверены promtool: 8 rules found, SUCCESS
 
 `docker/prometheus.yml:12,17,22` scrapes `dm-notifications-consumer:5000`, `dm-search-engine-consumer:5000`, `dm-email-sender-consumer:5000` — the actual container names in `docker-compose.yml` are `dm-notification-worker` (`:495`), `dm-search-worker` (`:467`), `dm-mail-worker` (`:439`). Those three jobs can never resolve. `docker/prometheus/alerts.yml` then defines `ConsumerDown` on `up{job=~"dm-(notifications|search-engine|email-sender)-consumer"} == 0`, so it fires permanently. Conversely `PostgresDown` uses `pg_up` and `HighMemoryUsage` uses `node_memory_*`, but `postgres-exporter` and `node-exporter` are profile-gated to `monitoring`/`full` (`docker-compose.yml:390-392,412-414`) and neither `setup-server.sh:46` nor `dm3.service` passes a profile — those series never exist, so the rules are permanently silent. `prometheus.yml` has no `alerting:` block and no alertmanager service exists anywhere; `docs/guides/MONITORING.md:158` references a `docker/prometheus/alertmanager.yml` that is not in the repo. `docker/opensearch/ism-policy.json` (30-day log retention) is referenced by nothing — not mounted, not applied by any script — while `MONITORING.md:194` still lists retention as a to-do.
 
@@ -1443,7 +1443,7 @@ Five defects in ~70 lines. (1) The hot query `Where(e => !e.IsProcessed && (e.Ne
 
 ### [СРЕДНЯЯ] UNORDERED-INDEXING — `ProcessingOrder.Unmanaged` on the search and notification queues makes create/change/delete races silently corrupt the index
 
-**Статус: Открыто.** 
+**Статус: Опровергнуто.** Находка неверна по механизму и устарела по объекту. Поисковой очереди больше нет - воркер удален вместе с OpenSearch, индекса, который можно 'silently corrupt', в проекте не существует. По механизму: ProcessingOrder.Unmanaged в Jamq означает 'клиент не объявляет QoS', а не параллельную обработку - конкурентности не возникает, у RabbitMQ.Client ConsumerDispatchConcurrency = 1 и обработка идет одним циклом. Предложенное лечение (Sequential) не чинит ни один из описанных симптомов. Настоящая смежная проблема - отсутствие идемпотентности у потребителя уведомлений - учтена отдельно как часть messaging-выводов, а не как эта находка
 
 `SearchIndexerConsumer.cs:54` and `NotificationDispatcherConsumer.cs:38` both declare `ProcessingOrder.Unmanaged` (the mail and realtime consumers correctly use `Sequential`). The search queue binds NewTopic, ChangedTopic, DeletedTopic, NewTopicComment, ChangedTopicComment, DeletedTopicComment (SearchIndexerConsumer.cs:57-66) and `CompositeIndexer.Process` (CompositeIndexer.cs:30-32) additionally runs all matching indexers concurrently via `Task.WhenAll`. Nothing carries a version, sequence number, or timestamp: `InvokedEvent` is just `{Type, EntityId}`.
 
@@ -1453,7 +1453,7 @@ Five defects in ~70 lines. (1) The hot query `Where(e => !e.IsProcessed && (e.Ne
 
 ### [СРЕДНЯЯ] READINESS-COUPLING — RabbitMQ is tagged `ready`, so a broker outage removes the entire API from load-balancer rotation
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Тег снят: readiness отвечает на вопрос 'может ли этот экземпляр обслужить запрос', а запрос обслуживается без брокера - публикация события идет рядом с ответом и не в него. Из-за тега задержка уведомления выводила весь сайт из ротации. RabbitMQ остается видимым в /_health/detail, где предиката нет, и предметом алерта ConsumerDown. MinIO в ready не добавлялся по тому же критерию: загрузки деградируют, чтение нет. Документация синхронизирована в DEPLOYMENT.md и CONFIGURATION.md
 
 `Web.API/Startup.cs:187-190` registers `.AddRabbitMQ(..., tags: new[] { "messaging", "ready" })`, and Startup.cs:450-454 maps `/_ready` to `Predicate = check => check.Tags.Contains("ready")` — the endpoint DEPLOYMENT.md:180 designates for the load balancer. Nothing in the read path depends on the broker: browsing forums, blogs, games, profiles and search all resolve from Postgres/Mongo/OpenSearch.
 
@@ -1613,7 +1613,7 @@ src/DM.Infrastructure.Persistence contains 69 *Repository.cs files over 35,936 L
 
 ### [СРЕДНЯЯ] TS-10 — The frontend coverage gate is set below current coverage so it can never fail
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** История подтвердила намеренное занижение: пороги заводились как 10/10/10/10 и были опущены до 7/5/5/7 коммитом с сообщением 'fix: CI tests - coverage thresholds', то есть под факт, вместо дописывания тестов. Обещание 'can be gradually increased' не исполнялось ни разу. Пороги подняты до измеренных значений с запасом на один крупный непокрытый файл: lines и statements 16 при факте 16.85, functions 26 при 27.25, branches 66 при 68.3. Доказано, что гейт живой: при заведомо недостижимом пороге прогон возвращает код 1, при новых - 0. В комментарии записано правило храповика - поднимать после роста, никогда не опускать, чтобы CI позеленел
 
 src/DM.Web.Client/vite.config.ts:38-45 sets thresholds lines:7, functions:5, branches:5, statements:7, with the comment "Current coverage is ~7.65%, threshold set slightly below". CI runs `npm run test:coverage` (.github/workflows/dotnet.yml, frontend job), so the gate executes and passes unconditionally. The 844 tests live in 38 spec files against 325 .vue + 380 .ts source files, and are concentrated in shared/ui (BBCodeEditor 169 tests across 5 files, Filters 127 across 8) plus four Pinia stores; pages/ and widgets/ have 4 spec files between them.
 
