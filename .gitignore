@@ -49,3 +49,8 @@ zap.yaml
 report_json.json
 report_md.md
 report_html.html
+
+# Playwright: отчеты и артефакты прогонов
+src/DM.Web.Client/test-results/
+src/DM.Web.Client/playwright-report/
+src/DM.Web.Client/blob-report/
