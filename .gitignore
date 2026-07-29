@@ -27,6 +27,10 @@ docker/.env.mirror
 # Claude Code plans
 .claude/
 
+# Build artifacts: the OpenAPI contract is emitted by the integration suite
+# and uploaded by CI, not committed - a checked-in copy goes stale silently.
+artifacts/
+
 # Test artifacts
 test_*.json
 cookies*.txt
