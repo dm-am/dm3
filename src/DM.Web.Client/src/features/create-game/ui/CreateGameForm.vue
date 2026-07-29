@@ -124,9 +124,9 @@ async function handleSubmit() {
     }
 
     if (data) {
-      // The lists are cached; without dropping them the game the user just
+      // The lists are cached; without refreshing them the game the user just
       // created is missing from /games and from the sidebar until they expire.
-      gamesStore.resetAllGames();
+      await gamesStore.invalidateGameLists();
       router.push({ name: "game", params: { id: data.resource.id } });
     }
   } finally {

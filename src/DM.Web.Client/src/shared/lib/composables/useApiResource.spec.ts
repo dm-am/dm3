@@ -77,6 +77,41 @@ describe("useApiResource", () => {
     expect(resource.loading.value).toBe(false);
   });
 
+  it("keeps the old data on screen while invalidate refetches", async () => {
+    const first = deferred<string[]>();
+    const second = deferred<string[]>();
+    const fetcher = vi
+      .fn<() => Promise<ApiResult<string[]>>>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const resource = useApiResource(fetcher);
+
+    first.release(ok(["one game"]));
+    await resource.fetch();
+
+    // The sidebar blocks fetch on mount and the shell mounts once per session.
+    // reset() was being used after a mutation, and it nulls the data, so
+    // creating a game emptied "Мои игры" until a hard reload.
+    const refreshing = resource.invalidate();
+    expect(resource.data.value).toEqual(["one game"]);
+
+    second.release(ok(["one game", "the new one"]));
+    await refreshing;
+    expect(resource.data.value).toEqual(["one game", "the new one"]);
+  });
+
+  it("does not put a request on the wire for a list nobody loaded", async () => {
+    const fetcher = vi.fn(() => Promise.resolve(ok(["x"])));
+    const resource = useApiResource(fetcher);
+
+    // A mutation invalidates every list of its kind, most of which no mounted
+    // component is showing. Nothing loaded means nothing on screen to correct.
+    await resource.invalidate();
+
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(resource.data.value).toBeNull();
+  });
+
   it("raises loading synchronously, before the first await", () => {
     const never = deferred<string>();
     const resource = useApiResource(() => never.promise);

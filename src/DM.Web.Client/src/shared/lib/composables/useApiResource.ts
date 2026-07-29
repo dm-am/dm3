@@ -18,6 +18,8 @@ export interface UseApiResourceReturn<T> {
   loading: Ref<boolean>;
   /** Fetch data, optionally forcing refresh */
   fetch: (force?: boolean) => Promise<void>;
+  /** Refetch because the data changed underneath, keeping what is on screen */
+  invalidate: () => Promise<void>;
   /** Reset state (for logout) */
   reset: () => void;
 }
@@ -148,6 +150,28 @@ export function useApiResource<T>(
     return run;
   }
 
+  /**
+   * The mutation counterpart of reset(): the data on screen is now known to be
+   * out of date, so fetch it again — but do not blank it first.
+   *
+   * reset() was being used for this, and it nulls the data. The blocks that
+   * read it (the sidebar lists) fetch on mount and on a change of user, and the
+   * shell is mounted once for the whole session, so nothing ever fetched again:
+   * creating a game emptied "Мои игры" until a hard reload. Staleness became
+   * absence, which is worse than the staleness it was meant to fix.
+   */
+  function invalidate(): Promise<void> {
+    lastFetched = 0;
+
+    // Nothing loaded means nothing on screen to correct, and the next fetch
+    // will read fresh data anyway. Refetching here would put a request on the
+    // wire for every list the caller invalidates, most of which no mounted
+    // component is showing.
+    if (data.value === null) return Promise.resolve();
+
+    return fetch(true);
+  }
+
   function reset(): void {
     // Bump the guard so any answer still in flight is dropped instead of
     // repopulating the state this just cleared — logout is the caller.
@@ -160,7 +184,7 @@ export function useApiResource<T>(
     backgroundInFlight = false;
   }
 
-  return { data, error, loading, fetch, reset };
+  return { data, error, loading, fetch, invalidate, reset };
 }
 
 /**

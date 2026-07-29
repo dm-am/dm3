@@ -20,6 +20,7 @@ import { Select } from "@/shared/ui/Select";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import {
   blogApi,
+  useBlogsStore,
   DraftVisibility,
   type CreateBlogInput,
 } from "@/entities/blog";
@@ -30,6 +31,7 @@ import { useToast } from "@/shared/lib/composables/useToast";
 const router = useRouter();
 const { user } = storeToRefs(useAuthStore());
 const toast = useToast();
+const blogsStore = useBlogsStore();
 
 const visibilityOptions = [
   { value: DraftVisibility.Public, label: "Превью видно всем" },
@@ -85,6 +87,9 @@ async function handleSubmit() {
     }
 
     if (data) {
+      // Same as game creation: the lists are cached, so without refreshing
+      // them the new blog is missing from /blogs and from the sidebar.
+      await blogsStore.invalidateBlogLists();
       router.push({
         name: "blog",
         params: { id: data.resource.publicId ?? data.resource.id },

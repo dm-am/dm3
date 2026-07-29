@@ -282,6 +282,24 @@ export const useGamesStore = defineStore("games", () => {
       resetSearch();
     },
 
+    /**
+     * After a mutation changed which games exist. Distinct from resetAllGames,
+     * which blanks the lists: that is right for logout and wrong here, because
+     * the sidebar blocks fetch on mount and the shell mounts once per session,
+     * so a blanked list stays blank until a reload.
+     */
+    invalidateGameLists: async () => {
+      searchCache.clear();
+      await Promise.all([
+        participating.invalidate(),
+        moderation.invalidate(),
+        popular.invalidate(),
+        activePage.invalidate(),
+        recruitingPage.invalidate(),
+        finishedPage.invalidate(),
+      ]);
+    },
+
     // Search with filters
     searchResult,
     searchLoading,
@@ -666,9 +684,9 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     if (!game.value) return false;
     const { error } = await gameApi.deleteGame(game.value.id);
     if (error) return false;
-    // Drop the list caches: otherwise the game the user just deleted keeps
+    // Refresh the list caches: otherwise the game the user just deleted keeps
     // showing in /games and in the sidebar until the entries expire.
-    useGamesStore().resetAllGames();
+    await useGamesStore().invalidateGameLists();
     return true;
   }
 

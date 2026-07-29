@@ -9,12 +9,7 @@ import { ErrorState } from "@/shared/ui/ErrorState";
 import { LoginPrompt } from "@/features/auth";
 import { ContentText } from "@/shared/ui";
 import Paging from "@/shared/ui/Paging/Paging.vue";
-import {
-  useBoardsStore,
-  forumApi,
-  type Topic,
-  type BoardId,
-} from "@/entities/forum";
+import { useBoardsStore, type Topic } from "@/entities/forum";
 import { UserLink, userIsModerator } from "@/entities/user";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import { TopicsFilter, useTopicsFilter } from "@/features/topic-filter";
@@ -298,10 +293,10 @@ async function handleCreateTopic() {
   createErrors.value = {};
   createGeneralError.value = null;
   try {
-    const { data, error } = await forumApi.createTopic(
-      selectedBoard.value.alias as BoardId,
-      { title: newTitle.value.trim(), text: newText.value },
-    );
+    const { data, error } = await store.createTopic(selectedBoard.value.alias, {
+      title: newTitle.value.trim(),
+      text: newText.value,
+    });
 
     if (error) {
       const fieldErrors = parseApiErrors(error);

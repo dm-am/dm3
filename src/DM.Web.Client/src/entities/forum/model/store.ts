@@ -548,11 +548,35 @@ export const useBoardsStore = defineStore("boards", () => {
     return { data: closed };
   }
 
+  /**
+   * Forgets every cached board listing. A hit inside the TTL is returned
+   * without revalidation, so after a topic is created or removed the board
+   * would otherwise show the old list for up to half a minute.
+   */
+  function invalidateTopics(): void {
+    topicsCache.clear();
+  }
+
+  /**
+   * Create a topic on a board. Lives here rather than in the page because the
+   * listing cache lives here: called through the API client directly, the new
+   * topic was missing from the board it was just posted to.
+   */
+  async function createTopic(
+    boardAlias: string,
+    topic: { title: string; text: string },
+  ) {
+    const result = await forumApi.createTopic(boardAlias as BoardId, topic);
+    if (!result.error) invalidateTopics();
+    return result;
+  }
+
   /** Delete a topic (author or moderator); clears it from selection. */
   async function deleteTopic(id: string) {
     const { error } = await forumApi.deleteTopic(id as TopicId);
     if (error) return { error };
     if (selectedTopic.value?.id === id) selectedTopic.value = null;
+    invalidateTopics();
     return { data: true };
   }
 
@@ -590,6 +614,8 @@ export const useBoardsStore = defineStore("boards", () => {
     unlikeTopic,
     updateTopicContent,
     setTopicClosed,
+    createTopic,
     deleteTopic,
+    invalidateTopics,
   };
 });

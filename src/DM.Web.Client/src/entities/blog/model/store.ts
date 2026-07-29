@@ -295,6 +295,22 @@ export const useBlogsStore = defineStore("blogs", () => {
       active.reset();
       popular.reset();
       participating.reset();
+      clearSearchCache();
+    },
+
+    /**
+     * After a mutation changed which blogs exist. Distinct from resetAllBlogs,
+     * which blanks the lists: that is right for logout and wrong here, because
+     * the sidebar blocks fetch on mount and the shell mounts once per session,
+     * so a blanked list stays blank until a reload.
+     */
+    invalidateBlogLists: async () => {
+      clearSearchCache();
+      await Promise.all([
+        active.invalidate(),
+        popular.invalidate(),
+        participating.invalidate(),
+      ]);
     },
 
     // Search API
@@ -593,7 +609,7 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     const { error } = await blogApi.deleteBlog(blog.value.id);
     if (error) return false;
     // Same as games: without this the deleted blog stays in every list.
-    useBlogsStore().resetAllBlogs();
+    await useBlogsStore().invalidateBlogLists();
     return true;
   }
 
