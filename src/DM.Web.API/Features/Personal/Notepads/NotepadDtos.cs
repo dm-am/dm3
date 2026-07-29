@@ -61,12 +61,17 @@ public class CreateNotepadEntryRequest
 /// </summary>
 public class UpdateNotepadEntryRequest
 {
-    /// <summary>Entry title</summary>
-    public string Title { get; set; } = null!;
+    /// <summary>Entry title. Omit to leave unchanged.</summary>
+    /// <remarks>
+    /// Nullable because this is a PATCH: every layer below already treats null
+    /// as "leave alone", and only this DTO declared the fields required, so
+    /// changing a title alone answered 400 "The Content field is required".
+    /// </remarks>
+    public string? Title { get; set; }
 
-    /// <summary>Entry content</summary>
-    public string Content { get; set; } = null!;
+    /// <summary>Entry content. Omit to leave unchanged.</summary>
+    public string? Content { get; set; }
 
-    /// <summary>Sort order</summary>
+    /// <summary>Sort order. Omit to leave unchanged.</summary>
     public int? SortOrder { get; set; }
 }
