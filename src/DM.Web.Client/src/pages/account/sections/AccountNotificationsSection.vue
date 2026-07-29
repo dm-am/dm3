@@ -364,11 +364,11 @@ defineExpose({ loadPreferences });
 
   &--connected
     color: $accent-green
-    background-color: $accent-green-muted
+    +tint($accent-green, 15%)
 
   &--disconnected
-    color: $text-muted
-    background-color: $text-muted-muted
+    color: $text
+    +tint($text-muted, 15%)
 
 .channel-settings
   display: flex
@@ -433,12 +433,12 @@ defineExpose({ loadPreferences });
     color: $link
 
     &:hover:not(:disabled)
-      background-color: $link-muted
+      +tint($link, 15%)
 
   &--disconnect
     border: 1px solid $border
-    color: $text-muted
+    color: $text
 
     &:hover:not(:disabled)
-      background-color: $text-muted-muted
+      +tint($text-muted, 15%)
 </style>
