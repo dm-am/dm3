@@ -234,51 +234,6 @@ internal class BlogService : IBlogService
     }
 
     /// <inheritdoc />
-    public async Task<BlogDetails> GetDetailsAsync(Guid blogId, CancellationToken ct = default)
-    {
-        var blog = await GetAsync(blogId, ct);
-
-        // Sequential on purpose: both queries run on this scope's single
-        // DbContext, and EF forbids concurrent operations on one context.
-        var subscribers = await _subscriptionService.GetReadersAsync(blogId, ct);
-        var assistants = await _repository.GetAssistantsWithJoinDate(blogId, ct);
-
-        // Create extended model with full details
-        return new BlogDetails
-        {
-            // Copy all base properties
-            Id = blog.Id,
-            Author = blog.Author,
-            Mentor = blog.Mentor,
-            Title = blog.Title,
-            Description = blog.Description,
-            CreatedUtc = blog.CreatedUtc,
-            Status = blog.Status,
-            ActivatedUtc = blog.ActivatedUtc,
-            ClosedUtc = blog.ClosedUtc,
-            ClosedReason = blog.ClosedReason,
-            PremoderationStatus = blog.PremoderationStatus,
-            DraftVisibility = blog.DraftVisibility,
-            CommentsEnabled = blog.CommentsEnabled,
-            PublicationCount = blog.PublicationCount,
-            CommentCount = blog.CommentCount,
-            CommentsCount = blog.CommentsCount,
-            UnreadPublicationsCount = blog.UnreadPublicationsCount,
-            UnreadCommentsCount = blog.UnreadCommentsCount,
-            LastCommentId = blog.LastCommentId,
-            Rubrics = blog.Rubrics,
-            Assistants = blog.Assistants,
-            SubscriberIds = blog.SubscriberIds,
-            PendingInvitedUserIds = blog.PendingInvitedUserIds,
-            BlacklistedUserIds = blog.BlacklistedUserIds,
-
-            // Extended properties
-            Subscribers = subscribers,
-            FullAssistants = assistants
-        };
-    }
-
-    /// <inheritdoc />
     public async Task<Blog> GetBlogAsync(Guid blogId, CancellationToken ct = default)
     {
         var blog = await _repository.Get(blogId, ct);
