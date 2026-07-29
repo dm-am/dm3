@@ -96,7 +96,7 @@ internal class NotificationApiService : INotificationApiService
         var settings = await _settingsRepository.GetByUserId(userId);
         if (settings == null)
         {
-            settings = new DbUserSettings { UserId = userId };
+            settings = DbUserSettings.CreateDefault(userId);
         }
 
         if (request.Discord != null && settings.DiscordPreferences != null)
