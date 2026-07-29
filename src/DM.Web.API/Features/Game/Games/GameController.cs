@@ -53,11 +53,11 @@ public class GameController : ControllerBase
     [HttpGet(Name = nameof(GetGames))]
     [ProducesResponseType(typeof(ListEnvelope<Game>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    // Response carries per-caller unread counts, so it must not be cached
+    // anywhere. Declared, not assigned by hand: one mechanism for cache policy.
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> GetGames([FromQuery] GamesQuery q)
     {
-        // Response contains user-specific unread counts, cannot use public cache
-        Response.Headers.CacheControl = "private, no-store";
-
         // Return lightweight refs for sidebars, full games for table
         if (string.Equals(q.Projection, "ref", StringComparison.OrdinalIgnoreCase))
         {

@@ -36,6 +36,9 @@ public class AwardController : ControllerBase
     /// <response code="200">List of catalog records.</response>
     [HttpGet("award-types", Name = nameof(GetAwardTypes))]
     [ProducesResponseType(typeof(ListEnvelope<AwardType>), StatusCodes.Status200OK)]
+    // A catalogue: the service is called without an identity, so every caller
+    // gets the same bytes. Same policy as /v1/games/tags.
+    [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
     public async Task<IActionResult> GetAwardTypes()
     {
         var types = await _awardService.GetTypesAsync();
@@ -47,6 +50,9 @@ public class AwardController : ControllerBase
     /// <response code="200">List of series, newest first (year DESC → season).</response>
     [HttpGet("contest-series", Name = nameof(GetContestSeries))]
     [ProducesResponseType(typeof(ListEnvelope<ContestSeries>), StatusCodes.Status200OK)]
+    // A catalogue: the service is called without an identity, so every caller
+    // gets the same bytes. Same policy as /v1/games/tags.
+    [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
     public async Task<IActionResult> GetContestSeries()
     {
         var series = await _awardService.GetSeriesAsync();
