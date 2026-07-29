@@ -112,7 +112,7 @@ public class BlogCommentController : ControllerBase
     /// <response code="404">Blog not found</response>
     [HttpPost("{id}/comments", Name = nameof(PostBlogComment))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Comment), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
@@ -140,7 +140,7 @@ public class BlogCommentController : ControllerBase
     /// <response code="200">Comment details</response>
     /// <response code="404">Comment not found</response>
     [HttpGet("comments/{id}", Name = nameof(GetBlogComment))]
-    [ProducesResponseType(typeof(Comment), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogComment(Guid id) => Ok(await _commentApiService.Get(id));
 
@@ -167,7 +167,7 @@ public class BlogCommentController : ControllerBase
     /// <response code="404">Comment not found</response>
     [HttpPatch("comments/{id}", Name = nameof(PatchBlogComment))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Comment), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]

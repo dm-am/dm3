@@ -59,7 +59,7 @@ public class NotificationController : ControllerBase
         [FromQuery] int take = 20)
     {
         take = Math.Clamp(take, 1, 100);
-        return Ok(await _notificationApiService.GetNotifications(skip, take));
+        return Ok(new ListEnvelope<Notification>(await _notificationApiService.GetNotifications(skip, take)));
     }
 
     /// <summary>

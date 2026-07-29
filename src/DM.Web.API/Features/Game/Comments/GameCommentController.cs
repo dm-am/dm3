@@ -88,7 +88,7 @@ public class GameCommentController : ControllerBase
     /// <response code="404">Game not found</response>
     [HttpPost("{id}/comments", Name = nameof(PostGameComment))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Comment), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
@@ -107,7 +107,7 @@ public class GameCommentController : ControllerBase
     /// <response code="200">Returns the comment details</response>
     /// <response code="404">Comment not found</response>
     [HttpGet("comments/{id}", Name = nameof(GetGameComment))]
-    [ProducesResponseType(typeof(Comment), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameComment(Guid id) => Ok(await _commentApiService.Get(id));
 
@@ -123,7 +123,7 @@ public class GameCommentController : ControllerBase
     /// <response code="404">Comment not found</response>
     [HttpPatch("comments/{id}", Name = nameof(PatchGameComment))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Comment), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]

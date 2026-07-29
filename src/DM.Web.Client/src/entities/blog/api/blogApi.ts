@@ -350,7 +350,7 @@ export default new (class {
     entryId: string,
     input: UpdateBlogNotepadEntryInput,
   ) {
-    return Api.patch<BlogNotepadEntry>(
+    return Api.patch<Envelope<BlogNotepadEntry>>(
       `blogs/${blogId}/notepad/${entryId}`,
       input,
     );

@@ -51,9 +51,9 @@ public class SubscriptionController : ControllerBase
     {
         if (type.HasValue)
         {
-            return Ok(await _apiService.GetMySubscriptionsAsync(type.Value));
+            return Ok(new ListEnvelope<Subscription>(await _apiService.GetMySubscriptionsAsync(type.Value)));
         }
-        return Ok(await _apiService.GetMySubscriptionsAsync());
+        return Ok(new ListEnvelope<Subscription>(await _apiService.GetMySubscriptionsAsync()));
     }
 
     /// <summary>

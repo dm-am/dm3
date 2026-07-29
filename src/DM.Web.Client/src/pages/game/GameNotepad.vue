@@ -96,9 +96,11 @@ const saveEntry = async () => {
       const index = entries.value.findIndex(
         (e) => e.id === editingEntry.value!.id,
       );
-      if (index !== -1 && data) {
-        entries.value[index] = data;
-        if (selectedEntry.value?.id === data.id) selectedEntry.value = data;
+      if (index !== -1 && data?.resource) {
+        entries.value[index] = data.resource;
+        if (selectedEntry.value?.id === data.resource.id) {
+          selectedEntry.value = data.resource;
+        }
       }
       toast.success("Запись обновлена");
     } else {

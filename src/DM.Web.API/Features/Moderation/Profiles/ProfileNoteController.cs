@@ -54,7 +54,7 @@ public class ProfileNoteController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserModNotes(string username) =>
-        Ok(await _noteApiService.GetNotes(username));
+        Ok(new ListEnvelope<ModeratedProfileNote>(await _noteApiService.GetNotes(username)));
 
     /// <summary>
     /// Get a single moderator note
