@@ -45,6 +45,15 @@ internal class ErrorHandlingMiddleware
         {
             await _next(httpContext);
         }
+        catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
+        {
+            // The caller hung up — their 30-second timeout fired, or they closed the
+            // tab. There is no one to answer and nothing went wrong, so this is not
+            // an error: writing a body into a dead socket throws again, and letting
+            // it fall through to the default branch below files a LogCritical for
+            // every dropped connection.
+            logger.LogDebug("Request aborted by the client: {Path}", httpContext.Request.Path);
+        }
         catch (Exception e)
         {
             // This middleware wraps authentication, so by the time an exception

@@ -67,7 +67,6 @@ public class GlobalChatEventController : ControllerBase
     /// Create a new chat event
     /// </summary>
     /// <param name="input">Event data</param>
-    /// <param name="ct">Cancellation token</param>
     /// <response code="201">Created event</response>
     /// <response code="400">Invalid input</response>
     /// <response code="401">User must be authenticated</response>
@@ -78,9 +77,9 @@ public class GlobalChatEventController : ControllerBase
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> CreateGlobalChatEvent([FromBody] CreateGlobalChatEventInput input, CancellationToken ct)
+    public async Task<IActionResult> CreateGlobalChatEvent([FromBody] CreateGlobalChatEventInput input)
     {
-        var result = await _apiService.Create(input, ct);
+        var result = await _apiService.Create(input);
         return CreatedAtRoute(nameof(GetGlobalChatEvent), new { id = result.Resource.Id }, result);
     }
 
@@ -89,7 +88,6 @@ public class GlobalChatEventController : ControllerBase
     /// </summary>
     /// <param name="id">Event identifier</param>
     /// <param name="input">Updated event data</param>
-    /// <param name="ct">Cancellation token</param>
     /// <response code="200">Updated event</response>
     /// <response code="400">Invalid input</response>
     /// <response code="401">User must be authenticated</response>
@@ -102,14 +100,13 @@ public class GlobalChatEventController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UpdateGlobalChatEvent(Guid id, [FromBody] UpdateGlobalChatEventInput input, CancellationToken ct) =>
-        Ok(await _apiService.Update(id, input, ct));
+    public async Task<IActionResult> UpdateGlobalChatEvent(Guid id, [FromBody] UpdateGlobalChatEventInput input) =>
+        Ok(await _apiService.Update(id, input));
 
     /// <summary>
     /// Delete a chat event
     /// </summary>
     /// <param name="id">Event identifier</param>
-    /// <param name="ct">Cancellation token</param>
     /// <response code="204">Event deleted</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not an organizer of this event</response>
@@ -120,9 +117,9 @@ public class GlobalChatEventController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DeleteGlobalChatEvent(Guid id, CancellationToken ct)
+    public async Task<IActionResult> DeleteGlobalChatEvent(Guid id)
     {
-        await _apiService.Delete(id, ct);
+        await _apiService.Delete(id);
         return NoContent();
     }
 
@@ -130,7 +127,6 @@ public class GlobalChatEventController : ControllerBase
     /// Start a chat event (transition from Scheduled to Live)
     /// </summary>
     /// <param name="id">Event identifier</param>
-    /// <param name="ct">Cancellation token</param>
     /// <response code="200">Started event</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not an organizer of this event</response>
@@ -143,14 +139,13 @@ public class GlobalChatEventController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> StartGlobalChatEvent(Guid id, CancellationToken ct) =>
-        Ok(await _apiService.Start(id, ct));
+    public async Task<IActionResult> StartGlobalChatEvent(Guid id) =>
+        Ok(await _apiService.Start(id));
 
     /// <summary>
     /// End a chat event (transition from Live to Ended)
     /// </summary>
     /// <param name="id">Event identifier</param>
-    /// <param name="ct">Cancellation token</param>
     /// <response code="200">Ended event</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not an organizer of this event</response>
@@ -163,14 +158,13 @@ public class GlobalChatEventController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> EndGlobalChatEvent(Guid id, CancellationToken ct) =>
-        Ok(await _apiService.End(id, ct));
+    public async Task<IActionResult> EndGlobalChatEvent(Guid id) =>
+        Ok(await _apiService.End(id));
 
     /// <summary>
     /// Join an open chat event
     /// </summary>
     /// <param name="id">Event identifier</param>
-    /// <param name="ct">Cancellation token</param>
     /// <response code="200">Event with updated participants</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">Event is closed (not open for self-join)</response>
@@ -181,14 +175,13 @@ public class GlobalChatEventController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> JoinGlobalChatEvent(Guid id, CancellationToken ct) =>
-        Ok(await _apiService.Join(id, ct));
+    public async Task<IActionResult> JoinGlobalChatEvent(Guid id) =>
+        Ok(await _apiService.Join(id));
 
     /// <summary>
     /// Leave a chat event
     /// </summary>
     /// <param name="id">Event identifier</param>
-    /// <param name="ct">Cancellation token</param>
     /// <response code="200">Event with updated participants</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not a participant</response>
@@ -199,8 +192,8 @@ public class GlobalChatEventController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> LeaveGlobalChatEvent(Guid id, CancellationToken ct) =>
-        Ok(await _apiService.Leave(id, ct));
+    public async Task<IActionResult> LeaveGlobalChatEvent(Guid id) =>
+        Ok(await _apiService.Leave(id));
 
     /// <summary>
     /// Get participants of a chat event
@@ -220,7 +213,6 @@ public class GlobalChatEventController : ControllerBase
     /// </summary>
     /// <param name="id">Event identifier</param>
     /// <param name="input">Participant data</param>
-    /// <param name="ct">Cancellation token</param>
     /// <response code="200">Event with updated participants</response>
     /// <response code="400">Invalid input</response>
     /// <response code="401">User must be authenticated</response>
@@ -233,15 +225,14 @@ public class GlobalChatEventController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> AddGlobalChatEventParticipant(Guid id, [FromBody] AddParticipantInput input, CancellationToken ct) =>
-        Ok(await _apiService.AddParticipant(id, input, ct));
+    public async Task<IActionResult> AddGlobalChatEventParticipant(Guid id, [FromBody] AddParticipantInput input) =>
+        Ok(await _apiService.AddParticipant(id, input));
 
     /// <summary>
     /// Remove a participant from a chat event (organizer only)
     /// </summary>
     /// <param name="id">Event identifier</param>
     /// <param name="login">User login to remove</param>
-    /// <param name="ct">Cancellation token</param>
     /// <response code="204">Participant removed</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not an organizer</response>
@@ -252,9 +243,9 @@ public class GlobalChatEventController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RemoveGlobalChatEventParticipant(Guid id, string login, CancellationToken ct)
+    public async Task<IActionResult> RemoveGlobalChatEventParticipant(Guid id, string login)
     {
-        await _apiService.RemoveParticipant(id, login, ct);
+        await _apiService.RemoveParticipant(id, login);
         return NoContent();
     }
 }
