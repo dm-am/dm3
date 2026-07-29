@@ -78,20 +78,7 @@ internal class BlogApiService : IBlogApiService
                 PagingResult.Create(allBlogs.Count, skip + 1, take));
         }
 
-        return await _blogService.GetPublicBlogs(
-            query,
-            query.Search,
-            query.Status,
-            query.HostUsernames,
-            query.SortBy,
-            query.SortOrder,
-            query.CreatedFromUtc,
-            query.CreatedToUtc,
-            query.ActivatedFromUtc,
-            query.ActivatedToUtc,
-            query.ClosedFromUtc,
-            query.ClosedToUtc,
-            premoderationStatus: query.PremoderationStatus);
+        return await _blogService.GetPublicBlogs(query, _mapper.Map<BlogFilter>(query));
     }
 
     /// <inheritdoc />

@@ -48,54 +48,20 @@ internal class BlogRepository : IBlogRepository
     // ═══ READ ═══
 
     /// <inheritdoc />
-    public Task<int> CountPublicBlogs(
-        string? search = null,
-        ModuleStatus? status = null,
-        IReadOnlyCollection<Guid>? hostUserIds = null,
-        DateTimeOffset? createdFromUtc = null,
-        DateTimeOffset? createdToUtc = null,
-        DateTimeOffset? activatedFromUtc = null,
-        DateTimeOffset? activatedToUtc = null,
-        DateTimeOffset? closedFromUtc = null,
-        DateTimeOffset? closedToUtc = null,
-        IReadOnlyCollection<Guid>? excludeOwnerIds = null,
-        PremoderationStatus? premoderationStatus = null,
-        Guid currentUserId = default,
-        CancellationToken ct = default)
-    {
-        var query = GetFilteredQuery(search, status, hostUserIds, createdFromUtc, createdToUtc,
-            activatedFromUtc, activatedToUtc, closedFromUtc, closedToUtc, excludeOwnerIds,
-            premoderationStatus, currentUserId);
-        return query.CountAsync(ct);
-    }
+    public Task<int> CountPublicBlogs(BlogFilter filter, CancellationToken ct = default) =>
+        GetFilteredQuery(filter).CountAsync(ct);
 
     /// <inheritdoc />
     public async Task<IEnumerable<BlogDto>> GetPublicBlogs(
-        PagingData paging,
-        string? search = null,
-        ModuleStatus? status = null,
-        IReadOnlyCollection<Guid>? hostUserIds = null,
-        string? sortBy = null,
-        string? sortOrder = null,
-        DateTimeOffset? createdFromUtc = null,
-        DateTimeOffset? createdToUtc = null,
-        DateTimeOffset? activatedFromUtc = null,
-        DateTimeOffset? activatedToUtc = null,
-        DateTimeOffset? closedFromUtc = null,
-        DateTimeOffset? closedToUtc = null,
-        IReadOnlyCollection<Guid>? excludeOwnerIds = null,
-        PremoderationStatus? premoderationStatus = null,
-        Guid currentUserId = default,
-        CancellationToken ct = default)
+        PagingData paging, BlogFilter filter, CancellationToken ct = default)
     {
-        var query = GetFilteredQuery(search, status, hostUserIds, createdFromUtc, createdToUtc,
-            activatedFromUtc, activatedToUtc, closedFromUtc, closedToUtc, excludeOwnerIds,
-            premoderationStatus, currentUserId);
+        var query = GetFilteredQuery(filter);
 
         // Apply ordering. The BlogId tiebreaker makes the order unique so
         // split-query pagination stays deterministic (each collection subquery
         // re-runs the same ORDER BY + OFFSET/FETCH and must hit the same page).
-        var orderedQuery = ApplySorting(query, search, sortBy, sortOrder).ThenBy(b => b.BlogId);
+        var orderedQuery = ApplySorting(query, filter.Search, filter.SortBy, filter.SortOrder)
+            .ThenBy(b => b.BlogId);
 
         var blogs = await orderedQuery
             .Page(paging)
@@ -110,20 +76,12 @@ internal class BlogRepository : IBlogRepository
         return blogs;
     }
 
-    private IQueryable<DbBlog> GetFilteredQuery(
-        string? search,
-        ModuleStatus? status,
-        IReadOnlyCollection<Guid>? hostUserIds,
-        DateTimeOffset? createdFromUtc,
-        DateTimeOffset? createdToUtc,
-        DateTimeOffset? activatedFromUtc,
-        DateTimeOffset? activatedToUtc,
-        DateTimeOffset? closedFromUtc,
-        DateTimeOffset? closedToUtc,
-        IReadOnlyCollection<Guid>? excludeOwnerIds,
-        PremoderationStatus? premoderationStatus,
-        Guid currentUserId)
+    private IQueryable<DbBlog> GetFilteredQuery(BlogFilter filter)
     {
+        var excludeOwnerIds = filter.ExcludeOwnerIds;
+        var currentUserId = filter.CurrentUserId;
+        var premoderationStatus = filter.PremoderationStatus;
+
         // Show Active, Closed, and Draft blogs with public visibility (like games)
         var query = _dbContext.Blogs
             .TagWith("DM.Blog.ListPublic")
@@ -148,12 +106,14 @@ internal class BlogRepository : IBlogRepository
                      t.Type == TokenType.BlogReaderInvitation)));
 
         // Status filter
-        if (status.HasValue)
+        if (filter.Status.HasValue)
         {
-            query = query.Where(b => b.Status == status.Value);
+            var status = filter.Status.Value;
+            query = query.Where(b => b.Status == status);
         }
 
         // Host filter (owner OR assistant, OR logic)
+        var hostUserIds = filter.HostUserIds;
         if (hostUserIds?.Count > 0)
         {
             var assistantBlogIds = _dbContext.BlogAssistants
@@ -164,6 +124,7 @@ internal class BlogRepository : IBlogRepository
         }
 
         // Text search with fuzzy matching
+        var search = filter.Search;
         if (!string.IsNullOrWhiteSpace(search))
         {
             var searchPattern = "%" + search.Replace("%", "\\%").Replace("_", "\\_") + "%";
@@ -174,40 +135,43 @@ internal class BlogRepository : IBlogRepository
         }
 
         // Created date range
-        if (createdFromUtc.HasValue)
+        if (filter.CreatedFromUtc.HasValue)
         {
-            query = query.Where(b => b.CreatedUtc >= createdFromUtc.Value);
+            var createdFromUtc = filter.CreatedFromUtc.Value;
+            query = query.Where(b => b.CreatedUtc >= createdFromUtc);
         }
-        if (createdToUtc.HasValue)
+        if (filter.CreatedToUtc.HasValue)
         {
-            query = query.WhereAtOrBefore(b => b.CreatedUtc, createdToUtc.Value);
+            query = query.WhereAtOrBefore(b => b.CreatedUtc, filter.CreatedToUtc.Value);
         }
 
         // Activated date range (excludes blogs without ActivatedUtc)
-        if (activatedFromUtc.HasValue || activatedToUtc.HasValue)
+        if (filter.ActivatedFromUtc.HasValue || filter.ActivatedToUtc.HasValue)
         {
             query = query.Where(b => b.ActivatedUtc.HasValue);
-            if (activatedFromUtc.HasValue)
+            if (filter.ActivatedFromUtc.HasValue)
             {
-                query = query.Where(b => b.ActivatedUtc >= activatedFromUtc.Value);
+                var activatedFromUtc = filter.ActivatedFromUtc.Value;
+                query = query.Where(b => b.ActivatedUtc >= activatedFromUtc);
             }
-            if (activatedToUtc.HasValue)
+            if (filter.ActivatedToUtc.HasValue)
             {
-                query = query.WhereAtOrBefore(b => b.ActivatedUtc, activatedToUtc.Value);
+                query = query.WhereAtOrBefore(b => b.ActivatedUtc, filter.ActivatedToUtc.Value);
             }
         }
 
         // Closed date range (excludes blogs without ClosedUtc)
-        if (closedFromUtc.HasValue || closedToUtc.HasValue)
+        if (filter.ClosedFromUtc.HasValue || filter.ClosedToUtc.HasValue)
         {
             query = query.Where(b => b.ClosedUtc.HasValue);
-            if (closedFromUtc.HasValue)
+            if (filter.ClosedFromUtc.HasValue)
             {
-                query = query.Where(b => b.ClosedUtc >= closedFromUtc.Value);
+                var closedFromUtc = filter.ClosedFromUtc.Value;
+                query = query.Where(b => b.ClosedUtc >= closedFromUtc);
             }
-            if (closedToUtc.HasValue)
+            if (filter.ClosedToUtc.HasValue)
             {
-                query = query.WhereAtOrBefore(b => b.ClosedUtc, closedToUtc.Value);
+                query = query.WhereAtOrBefore(b => b.ClosedUtc, filter.ClosedToUtc.Value);
             }
         }
 

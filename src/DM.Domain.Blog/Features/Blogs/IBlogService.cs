@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
-using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Blog.Features.Blogs;
 
@@ -13,40 +12,15 @@ namespace DM.Domain.Blog.Features.Blogs;
 public interface IBlogService
 {
     /// <summary>
-    /// Get public blogs with paging
+    /// Get public blogs with paging. Resolves the filter's host usernames into
+    /// user ids and role-gates its premoderation status before querying, so
+    /// callers pass what the request said and nothing more.
     /// </summary>
     /// <param name="query">Paging query</param>
-    /// <param name="search">Optional text search by title (fuzzy matching)</param>
-    /// <param name="status">Optional status filter</param>
-    /// <param name="hostUsernames">Optional host usernames (owner or assistant, OR logic)</param>
-    /// <param name="sortBy">Sort field: title, status, popularity, created (default), activated, closed</param>
-    /// <param name="sortOrder">Sort direction: asc or desc (default: desc)</param>
-    /// <param name="createdFromUtc">Created date range start</param>
-    /// <param name="createdToUtc">Created date range end</param>
-    /// <param name="activatedFromUtc">Activated date range start</param>
-    /// <param name="activatedToUtc">Activated date range end</param>
-    /// <param name="closedFromUtc">Closed date range start</param>
-    /// <param name="closedToUtc">Closed date range end</param>
-    /// <param name="excludeOwnerIds">Optional owner IDs to exclude (for blacklist filtering)</param>
-    /// <param name="premoderationStatus">Optional premoderation status filter
-    /// (honored only for Mentor+ callers, silently ignored otherwise)</param>
+    /// <param name="filter">Filter and sort (an empty filter means the whole public list)</param>
     /// <param name="ct">Cancellation token</param>
     Task<(IEnumerable<Blog> blogs, PagingResult paging)> GetPublicBlogs(
-        PagingQuery query,
-        string? search = null,
-        ModuleStatus? status = null,
-        IReadOnlyCollection<string>? hostUsernames = null,
-        string? sortBy = null,
-        string? sortOrder = null,
-        DateTimeOffset? createdFromUtc = null,
-        DateTimeOffset? createdToUtc = null,
-        DateTimeOffset? activatedFromUtc = null,
-        DateTimeOffset? activatedToUtc = null,
-        DateTimeOffset? closedFromUtc = null,
-        DateTimeOffset? closedToUtc = null,
-        IReadOnlyCollection<Guid>? excludeOwnerIds = null,
-        PremoderationStatus? premoderationStatus = null,
-        CancellationToken ct = default);
+        PagingQuery query, BlogFilter filter, CancellationToken ct = default);
 
     /// <summary>
     /// Get popular blogs ordered by subscriber count

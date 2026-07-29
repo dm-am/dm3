@@ -4,6 +4,7 @@ using DM.Web.API.Features.Blog.Publications;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Shared.BbRendering;
 using SvcBlog = DM.Domain.Blog.Features.Blogs.Blog;
+using SvcBlogFilter = DM.Domain.Blog.Features.Blogs.BlogFilter;
 using SvcRubric = DM.Domain.Blog.Features.Blogs.Rubric;
 using SvcPublication = DM.Domain.Blog.Features.Blogs.Publication;
 using SvcCreateBlog = DM.Domain.Blog.Features.Blogs.CreateBlog;
@@ -56,6 +57,14 @@ internal class BlogMappingProfile : Profile
 
         CreateMap<SvcRubric, Rubric>();
         CreateMap<SvcPublication, Publication>();
+
+        // Query string to domain filter. Mapped by name rather than by hand so
+        // a filter added to both sides needs no third edit here, and so the
+        // three fields the domain fills itself have to be named to be skipped.
+        CreateMap<BlogsQuery, SvcBlogFilter>()
+            .ForMember(d => d.HostUserIds, opt => opt.Ignore())
+            .ForMember(d => d.CurrentUserId, opt => opt.Ignore())
+            .ForMember(d => d.ExcludeOwnerIds, opt => opt.Ignore());
 
         // API Request to Service DTO
         CreateMap<CreateBlogRequest, SvcCreateBlog>();

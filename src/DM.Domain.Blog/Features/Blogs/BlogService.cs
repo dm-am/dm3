@@ -80,28 +80,14 @@ internal class BlogService : IBlogService
 
     /// <inheritdoc />
     public async Task<(IEnumerable<Blog> blogs, PagingResult paging)> GetPublicBlogs(
-        PagingQuery query,
-        string? search = null,
-        ModuleStatus? status = null,
-        IReadOnlyCollection<string>? hostUsernames = null,
-        string? sortBy = null,
-        string? sortOrder = null,
-        DateTimeOffset? createdFromUtc = null,
-        DateTimeOffset? createdToUtc = null,
-        DateTimeOffset? activatedFromUtc = null,
-        DateTimeOffset? activatedToUtc = null,
-        DateTimeOffset? closedFromUtc = null,
-        DateTimeOffset? closedToUtc = null,
-        IReadOnlyCollection<Guid>? excludeOwnerIds = null,
-        PremoderationStatus? premoderationStatus = null,
-        CancellationToken ct = default)
+        PagingQuery query, BlogFilter filter, CancellationToken ct = default)
     {
         // Resolve usernames to user IDs if provided
         IReadOnlyCollection<Guid>? hostUserIds = null;
-        if (hostUsernames?.Count > 0)
+        if (filter.HostUsernames?.Count > 0)
         {
             var userIds = new List<Guid>();
-            foreach (var username in hostUsernames)
+            foreach (var username in filter.HostUsernames)
             {
                 var user = await _userLookupService.GetAsync(username);
                 if (user != null)
@@ -115,27 +101,16 @@ internal class BlogService : IBlogService
         // The premoderation filter is a mentor review-queue tool; silently
         // ignore it for regular callers instead of failing the request.
         var identity = _identityProvider.Current;
-        if (identity.User.Role < UserRole.Mentor)
+        var resolvedFilter = filter with
         {
-            premoderationStatus = null;
-        }
-        var currentUserId = identity.User.UserId;
+            HostUserIds = hostUserIds,
+            PremoderationStatus = identity.User.Role < UserRole.Mentor ? null : filter.PremoderationStatus,
+            CurrentUserId = identity.User.UserId
+        };
 
-        var totalCount = await _repository.CountPublicBlogs(
-            search, status, hostUserIds,
-            createdFromUtc, createdToUtc,
-            activatedFromUtc, activatedToUtc,
-            closedFromUtc, closedToUtc,
-            excludeOwnerIds, premoderationStatus, currentUserId, ct);
-
+        var totalCount = await _repository.CountPublicBlogs(resolvedFilter, ct);
         var pagingData = new PagingData(query, identity.Settings.Paging.EntitiesPerPage, totalCount);
-
-        var blogs = (await _repository.GetPublicBlogs(
-            pagingData, search, status, hostUserIds, sortBy, sortOrder,
-            createdFromUtc, createdToUtc,
-            activatedFromUtc, activatedToUtc,
-            closedFromUtc, closedToUtc,
-            excludeOwnerIds, premoderationStatus, currentUserId, ct)).ToArray();
+        var blogs = (await _repository.GetPublicBlogs(pagingData, resolvedFilter, ct)).ToArray();
 
         await FillBlogUnreadCounters(blogs);
         return (blogs, pagingData.Result);
