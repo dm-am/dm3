@@ -629,7 +629,10 @@ class GameApi {
     entryId: string,
     input: UpdateNotepadEntryInput,
   ) {
-    return Api.patch<NotepadEntry>(`games/${gameId}/notepad/${entryId}`, input);
+    return Api.patch<Envelope<NotepadEntry>>(
+      `games/${gameId}/notepad/${entryId}`,
+      input,
+    );
   }
 
   public deleteNote(gameId: string, entryId: string) {

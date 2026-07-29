@@ -52,7 +52,7 @@ public class BlogInvitationController : ControllerBase
     public async Task<IActionResult> GetBlogInvitations(string id)
     {
         var blogId = await ResolveBlogId(id);
-        return Ok(await _apiService.GetBlogInvitations(blogId));
+        return Ok(new ListEnvelope<BlogInvitation>(await _apiService.GetBlogInvitations(blogId)));
     }
 
     /// <summary>

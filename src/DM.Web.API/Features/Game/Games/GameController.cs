@@ -45,11 +45,13 @@ public class GameController : ControllerBase
     /// the user only has retired characters or an application under review (declined
     /// applications never match). Without `playerUsername` the parameter is ignored.
     /// </remarks>
-    /// <response code="200">Returns the paginated list of games</response>
+    /// <response code="200">Returns the paginated list of games. With `projection=ref` the
+    /// items are `GameRef` (counts instead of user arrays) rather than `Game`; one operation
+    /// cannot declare two schemas for one status, so only the default projection is
+    /// described below.</response>
     /// <response code="400">Invalid query parameters</response>
     [HttpGet(Name = nameof(GetGames))]
     [ProducesResponseType(typeof(ListEnvelope<Game>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ListEnvelope<GameRef>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetGames([FromQuery] GamesQuery q)
     {

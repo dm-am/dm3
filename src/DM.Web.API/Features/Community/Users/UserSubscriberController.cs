@@ -41,7 +41,7 @@ public class UserSubscriberController : ControllerBase
     [ProducesResponseType(typeof(ListEnvelope<User>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserSubscribers(string username) =>
-        Ok(await _userSubscriberApiService.GetSubscribersAsync(username));
+        Ok(new ListEnvelope<User>(await _userSubscriberApiService.GetSubscribersAsync(username)));
 
     /// <summary>
     /// Subscribe to a user

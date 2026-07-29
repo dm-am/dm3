@@ -83,7 +83,7 @@ public class BlogNotepadController : ControllerBase
     /// <response code="403">User must be blog owner or assistant</response>
     /// <response code="404">Entry not found</response>
     [HttpGet("{entryId:guid}", Name = nameof(GetBlogNotepadEntry))]
-    [ProducesResponseType(typeof(NotepadEntryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
@@ -101,7 +101,7 @@ public class BlogNotepadController : ControllerBase
     /// <response code="403">User must be blog owner or assistant</response>
     /// <response code="404">Entry not found</response>
     [HttpPatch("{entryId:guid}", Name = nameof(UpdateBlogNotepadEntry))]
-    [ProducesResponseType(typeof(NotepadEntryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]

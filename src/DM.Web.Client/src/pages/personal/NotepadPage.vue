@@ -83,8 +83,8 @@ const saveEntry = async () => {
       const index = entries.value.findIndex(
         (e) => e.id === editingEntry.value!.id,
       );
-      if (index !== -1 && data) {
-        entries.value[index] = data;
+      if (index !== -1 && data?.resource) {
+        entries.value[index] = data.resource;
       }
       toast.success("Запись обновлена");
     } else {
@@ -94,7 +94,7 @@ const saveEntry = async () => {
         content: editorContent.value,
       };
       const { data } = await notepadApi.createUserEntry(request);
-      if (data) entries.value.push(data);
+      if (data?.resource) entries.value.push(data.resource);
       toast.success("Запись создана");
     }
     closeEditor();
