@@ -9,7 +9,7 @@ import dayjs from "dayjs";
 
 import {
   useCommunityStore,
-  useUserStore,
+  useAuthStore,
   UserRole,
   AvatarImg,
   useModeratedProfile,
@@ -71,7 +71,7 @@ const router = useRouter();
 const toast = useToast();
 const communityStore = useCommunityStore();
 const subscriptionsStore = useSubscriptionsStore();
-const { user: currentUser } = storeToRefs(useUserStore());
+const { user: currentUser } = storeToRefs(useAuthStore());
 const { selectedUser: user, loadingProfile } = storeToRefs(communityStore);
 
 const usernameParam = computed(() => route.params.username as string);

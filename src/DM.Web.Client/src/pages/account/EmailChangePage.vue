@@ -2,7 +2,7 @@
 import { ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
-import { AccountApi } from "@/shared/api";
+import { accountApi } from "@/shared/api";
 import Button from "@/shared/ui/Button/Button.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import StatusIcon from "@/shared/ui/Icon/StatusIcon.vue";
@@ -22,7 +22,7 @@ onMounted(async () => {
   }
 
   await execute(async () => {
-    const { error: apiError } = await AccountApi.confirmEmailChange(token);
+    const { error: apiError } = await accountApi.confirmEmailChange(token);
 
     if (apiError) {
       const errors = parseApiErrors(apiError);

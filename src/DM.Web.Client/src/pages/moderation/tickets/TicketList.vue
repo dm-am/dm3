@@ -9,7 +9,7 @@
  * only splits the visible tickets between the two pages.
  */
 import { computed, onMounted, ref } from "vue";
-import ModerationApi, {
+import moderationApi, {
   type Ticket,
   type TicketStatus,
 } from "@/shared/api/moderationApi";
@@ -57,7 +57,7 @@ const statusOptions: SelectOption[] = [
 
 async function fetch() {
   loading.value = true;
-  const { data, error } = await ModerationApi.getTickets({
+  const { data, error } = await moderationApi.getTickets({
     status: statusFilter.value || undefined,
     subtype: subtypeFilter.value || undefined,
   });

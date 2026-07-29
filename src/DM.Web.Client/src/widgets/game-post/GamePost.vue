@@ -20,12 +20,7 @@ import {
 } from "@/shared/ui";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
-import {
-  UserLink,
-  AvatarImg,
-  useUserStore,
-  userIsModerator,
-} from "@/entities/user";
+import { UserLink, AvatarImg, userIsModerator } from "@/entities/user";
 import { trimHtmlWhitespace } from "@/shared/lib/utils/bbcodeInteractive";
 import { useAuthStore } from "@/shared/stores/auth";
 import {
@@ -73,7 +68,7 @@ const emit = defineEmits<{
 }>();
 
 const authStore = useAuthStore();
-const { user: currentUser } = storeToRefs(useUserStore());
+const { user: currentUser } = storeToRefs(useAuthStore());
 const toast = useToast();
 
 // 15-minute author edit window — a client-side affordance matching the

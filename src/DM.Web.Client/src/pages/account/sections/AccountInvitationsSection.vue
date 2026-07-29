@@ -66,7 +66,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { RouterLink } from "vue-router";
-import { AccountApi } from "@/shared/api";
+import { accountApi } from "@/shared/api";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { Invitation, InvitationType } from "@/entities/game";
@@ -83,7 +83,7 @@ onMounted(async () => {
 
 async function loadInvitations() {
   loading.value = true;
-  const { data, error } = await AccountApi.getMyInvitations();
+  const { data, error } = await accountApi.getMyInvitations();
   loading.value = false;
 
   if (!error && data) {
@@ -104,7 +104,7 @@ function typeLabel(type: InvitationType): string {
 
 async function accept(invitationId: string) {
   processingId.value = invitationId;
-  const { error } = await AccountApi.acceptInvitation(invitationId);
+  const { error } = await accountApi.acceptInvitation(invitationId);
   processingId.value = null;
 
   if (error) {
@@ -117,7 +117,7 @@ async function accept(invitationId: string) {
 
 async function reject(invitationId: string) {
   processingId.value = invitationId;
-  const { error } = await AccountApi.rejectInvitation(invitationId);
+  const { error } = await accountApi.rejectInvitation(invitationId);
   processingId.value = null;
 
   if (error) {

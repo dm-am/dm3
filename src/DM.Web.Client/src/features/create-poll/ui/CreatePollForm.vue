@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
-import { useUserStore, userIsSeniorModerator } from "@/entities/user";
+import { useAuthStore, userIsSeniorModerator } from "@/entities/user";
 import { useCreatePoll } from "../model";
 import TextArea from "@/shared/ui/TextArea/TextArea.vue";
 import Button from "@/shared/ui/Button/Button.vue";
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const canCreatePoll = computed(() => userIsSeniorModerator(userStore.user));
 
 const {

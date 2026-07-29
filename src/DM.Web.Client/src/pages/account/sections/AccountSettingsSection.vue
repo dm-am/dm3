@@ -82,8 +82,8 @@
 
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import { useUserStore } from "@/entities/user";
-import { PersonalApi } from "@/shared/api";
+import { useAuthStore } from "@/entities/user";
+import { personalApi } from "@/shared/api";
 import Button from "@/shared/ui/Button/Button.vue";
 import { FormField } from "@/shared/ui/Form";
 import { Select, type SelectOption } from "@/shared/ui/Select";
@@ -97,7 +97,7 @@ const props = defineProps<{
   user: User;
 }>();
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const uiStore = useUiStore();
 const toast = useToast();
 
@@ -155,7 +155,7 @@ const saveSettings = () => {
       paging: settingsForm.value.paging,
     };
 
-    const { error } = await PersonalApi.updateMyPreferences(preferences);
+    const { error } = await personalApi.updateMyPreferences(preferences);
     if (error) throw new Error("Не удалось сохранить настройки");
 
     // Apply theme immediately

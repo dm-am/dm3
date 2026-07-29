@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useScrollToElement } from "@/shared/lib/composables/useScrollToElement";
 import { gameApi, type DiceRollInput } from "@/entities/game";
@@ -19,7 +19,7 @@ import { GamePostSkeleton } from "@/shared/ui/Skeleton";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const {
   game,
   rooms,

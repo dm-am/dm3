@@ -116,7 +116,7 @@
 import { ref, computed, onMounted } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
 import { formatDate } from "@/shared/lib/utils/datetime";
-import { AccountApi } from "@/shared/api";
+import { accountApi } from "@/shared/api";
 import Button from "@/shared/ui/Button/Button.vue";
 import { FormField } from "@/shared/ui/Form";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -153,7 +153,7 @@ onMounted(async () => {
 
 async function loadExistingRequest() {
   loading.value = true;
-  const { data } = await AccountApi.getUsernameChangeRequest();
+  const { data } = await accountApi.getUsernameChangeRequest();
   loading.value = false;
 
   if (data) {
@@ -167,7 +167,7 @@ async function submitRequest() {
   submitting.value = true;
   submitError.value = null;
 
-  const { data, error } = await AccountApi.createUsernameChangeRequest({
+  const { data, error } = await accountApi.createUsernameChangeRequest({
     reason: reason.value.trim(),
   });
 

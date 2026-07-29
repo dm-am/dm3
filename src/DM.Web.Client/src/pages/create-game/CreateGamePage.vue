@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import { CreateGameForm } from "@/features/create-game";
 import { LoginPrompt } from "@/features/auth";
 
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 </script>
 
 <template>

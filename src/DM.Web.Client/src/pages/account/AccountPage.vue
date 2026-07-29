@@ -32,7 +32,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import AccountInvitationsSection from "./sections/AccountInvitationsSection.vue";
 import AccountSecuritySection from "./sections/AccountSecuritySection.vue";
 import AccountSessionsSection from "./sections/AccountSessionsSection.vue";
@@ -43,7 +43,7 @@ import AccountBlacklistSection from "./sections/AccountBlacklistSection.vue";
 import AccountNotificationsSection from "./sections/AccountNotificationsSection.vue";
 import AccountBotLinksSection from "./sections/AccountBotLinksSection.vue";
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const user = computed(() => userStore.user);
 </script>
 

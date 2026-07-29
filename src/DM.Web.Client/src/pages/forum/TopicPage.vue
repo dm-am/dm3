@@ -3,7 +3,7 @@ import { ref, computed, reactive, inject, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useModal } from "vue-final-modal";
 import { useBoardsStore } from "@/entities/forum";
-import { useUserStore, userIsModerator } from "@/entities/user";
+import { useAuthStore, userIsModerator } from "@/entities/user";
 import { storeToRefs } from "pinia";
 import { TopicView as TopicDisplay } from "@/features/topic";
 import { LoginPrompt } from "@/features/auth";
@@ -24,7 +24,7 @@ const router = useRouter();
 const boardsStore = useBoardsStore();
 const { trySelectTopicByNumber, searchComments, createComment } = boardsStore;
 const { selectedTopic: topic } = storeToRefs(boardsStore);
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 const { commentsPerPage } = usePaging();
 
 // Filter setup - get search params from URL

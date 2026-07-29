@@ -106,8 +106,8 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { useUserStore } from "@/entities/user";
-import { AccountApi } from "@/shared/api";
+import { useAuthStore } from "@/entities/user";
+import { accountApi } from "@/shared/api";
 import Button from "@/shared/ui/Button/Button.vue";
 import { FormField } from "@/shared/ui/Form";
 import { PasswordStrengthIndicator } from "@/shared/ui/PasswordInput";
@@ -120,7 +120,7 @@ defineProps<{
   user: User;
 }>();
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const toast = useToast();
 
 // Email form
@@ -162,7 +162,7 @@ const changeEmail = () => {
   changeEmailAction.execute(async () => {
     if (!emailForm.value.newEmail || !emailForm.value.password) return;
 
-    const { error } = await AccountApi.changeEmail({
+    const { error } = await accountApi.changeEmail({
       password: emailForm.value.password,
       email: emailForm.value.newEmail,
     });
@@ -181,7 +181,7 @@ const changePassword = () => {
   changePasswordAction.execute(async () => {
     if (!isPasswordFormValid.value) return;
 
-    const { error } = await AccountApi.changePassword({
+    const { error } = await accountApi.changePassword({
       oldPassword: oldPassword.value,
       newPassword: newPassword.value,
     });

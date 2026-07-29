@@ -14,14 +14,14 @@ import type { WebsiteTestimonial } from "@/shared/api/models/community";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { symbols } from "@/shared/lib/utils/icons";
 import { useTestimonialStore } from "@/shared/stores/testimonials";
-import { useUserStore, userIsAdmin } from "@/entities/user";
+import { useAuthStore, userIsAdmin } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 
 const props = defineProps<{
   testimonial: WebsiteTestimonial;
 }>();
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const testimonialStore = useTestimonialStore();
 const toast = useToast();
 

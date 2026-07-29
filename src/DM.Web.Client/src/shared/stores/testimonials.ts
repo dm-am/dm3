@@ -6,7 +6,7 @@ import type {
   WebsiteTestimonialId,
   WebsiteTestimonialsQuery,
 } from "@/shared/api/models/community";
-import { CommunityApi } from "@/shared/api";
+import { communityApi } from "@/shared/api";
 
 const CACHE_TTL = 60_000; // 60 seconds
 
@@ -53,7 +53,7 @@ export const useTestimonialStore = defineStore("testimonials", () => {
 
     loading.value = true;
     error.value = null;
-    const { data, error: apiError } = await CommunityApi.getTestimonials(query);
+    const { data, error: apiError } = await communityApi.getTestimonials(query);
     loading.value = false;
 
     if (apiError || !data) {
@@ -69,7 +69,7 @@ export const useTestimonialStore = defineStore("testimonials", () => {
   }
 
   async function removeTestimonial(id: WebsiteTestimonialId) {
-    const { error } = await CommunityApi.deleteTestimonial(id);
+    const { error } = await communityApi.deleteTestimonial(id);
     if (!error && testimonials.value) {
       testimonials.value.resources = testimonials.value.resources.filter(
         (r) => r.id !== id,
@@ -79,7 +79,7 @@ export const useTestimonialStore = defineStore("testimonials", () => {
   }
 
   async function createTestimonial(text: string) {
-    const { data, error } = await CommunityApi.createTestimonial({ text });
+    const { data, error } = await communityApi.createTestimonial({ text });
     if (!error && data && testimonials.value) {
       testimonials.value.resources.unshift(data);
     }

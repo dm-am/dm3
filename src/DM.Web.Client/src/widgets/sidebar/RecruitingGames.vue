@@ -31,12 +31,12 @@
 import SidebarEntityList from "./SidebarEntityList.vue";
 import SidebarGameLink from "./SidebarGameLink.vue";
 import { useGamesStore } from "@/entities/game";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 const store = useGamesStore();
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const route = useRoute();
 
 // The games store does not expose an error ref for this list, so detect

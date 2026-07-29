@@ -24,12 +24,12 @@
 import SidebarEntityList from "./SidebarEntityList.vue";
 import BlogLink from "./BlogLink.vue";
 import { useBlogsStore } from "@/entities/blog";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { onMounted, watch } from "vue";
 import { useRoute } from "vue-router";
 
 const store = useBlogsStore();
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const route = useRoute();
 
 onMounted(() => store.fetchActiveBlogs());

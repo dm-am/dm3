@@ -38,7 +38,7 @@ import OwnedBlogs from "./OwnedBlogs.vue";
 import RecruitingGames from "./RecruitingGames.vue";
 import ActiveGames from "./ActiveGames.vue";
 import GamePanel from "./GamePanel.vue";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 
 // Below-fold: lazy-loaded to reduce initial bundle
 const FinishedGames = defineAsyncComponent(() => import("./FinishedGames.vue"));
@@ -54,7 +54,7 @@ const ModerationPanel = defineAsyncComponent(
 );
 const MentorPanel = defineAsyncComponent(() => import("./MentorPanel.vue"));
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const route = useRoute();
 
 const isGameRoute = computed(() => route.meta.gameZone === true);

@@ -3,7 +3,7 @@ import { ref, computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
-import { useUserStore, userIsModerator } from "@/entities/user";
+import { useAuthStore, userIsModerator } from "@/entities/user";
 import { useUiStore } from "@/shared/stores/ui";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useScrollToElement } from "@/shared/lib/composables/useScrollToElement";
@@ -19,7 +19,7 @@ import { CommentariesAccessMode, GameParticipation } from "@/entities/game";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 const { isCompactLayout } = storeToRefs(useUiStore());
 const { game, comments, commentsPaging, commentsLoading, commentsError } =
   storeToRefs(gameStore);

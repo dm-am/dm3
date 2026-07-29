@@ -7,7 +7,7 @@
  * date, active ban details.
  */
 import { computed, onMounted, ref } from "vue";
-import ModerationApi, {
+import moderationApi, {
   type Violator,
   type ViolatorsFilter,
 } from "@/shared/api/moderationApi";
@@ -43,7 +43,7 @@ const columns: Column[] = [
 
 async function fetch() {
   loading.value = true;
-  const { data, error } = await ModerationApi.getViolators(filter.value);
+  const { data, error } = await moderationApi.getViolators(filter.value);
   loading.value = false;
   if (error) {
     loadError.value = "Не удалось загрузить нарушителей";

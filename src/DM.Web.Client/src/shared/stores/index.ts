@@ -6,7 +6,7 @@
  */
 
 // Auth store - user session and authentication
-export { useAuthStore, useUserStore } from "./auth";
+export { useAuthStore } from "./auth";
 
 // UI store - theme, notifications
 export { useUiStore } from "./ui";

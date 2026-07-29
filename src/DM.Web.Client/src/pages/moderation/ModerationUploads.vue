@@ -10,7 +10,7 @@
  */
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import ModerationApi from "@/shared/api/moderationApi";
+import moderationApi from "@/shared/api/moderationApi";
 import type { Upload } from "@/shared/api/models/common/upload";
 import type { Paging as PagingModel } from "@/shared/api/models/common";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
@@ -60,7 +60,7 @@ const columns: Column[] = [
 
 async function fetch() {
   loading.value = true;
-  const { data, error } = await ModerationApi.getAllUploads({
+  const { data, error } = await moderationApi.getAllUploads({
     username: usernameFilter.value || undefined,
     number: pageNumber.value,
     size: PAGE_SIZE,
@@ -89,7 +89,7 @@ const deleting = ref(false);
 async function confirmDelete() {
   if (!deleteTarget.value || deleting.value) return;
   deleting.value = true;
-  const { error } = await ModerationApi.deleteUpload(deleteTarget.value.id);
+  const { error } = await moderationApi.deleteUpload(deleteTarget.value.id);
   deleting.value = false;
   if (error) {
     toast.error("Не удалось удалить файл");

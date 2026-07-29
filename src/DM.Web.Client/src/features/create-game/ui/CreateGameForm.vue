@@ -2,7 +2,7 @@
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { useGamesStore } from "@/entities/game";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import Button from "@/shared/ui/Button/Button.vue";
@@ -23,7 +23,7 @@ import type { BadRequestError } from "@/shared/api/models/common";
 import { useToast } from "@/shared/lib/composables/useToast";
 
 const router = useRouter();
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 const gamesStore = useGamesStore();
 const toast = useToast();
 

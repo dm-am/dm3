@@ -26,7 +26,7 @@ import {
   type Character,
   type ApiCharacterStatus,
 } from "@/entities/game";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { CharacterForm } from "@/features/edit-character";
 import { createEmptySchema } from "@/entities/game";
 import { Select } from "@/shared/ui/Select";
@@ -41,7 +41,7 @@ const router = useRouter();
 const toast = useToast();
 const store = useGameDetailsStore();
 const { game, characters, isMaster, isAssistant } = storeToRefs(store);
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 
 const gameId = computed(() => route.params.id as string);
 const routeCharacterId = computed(() => route.params.characterId as string);

@@ -8,7 +8,7 @@
  */
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import ModerationApi, { type Ban } from "@/shared/api/moderationApi";
+import moderationApi, { type Ban } from "@/shared/api/moderationApi";
 import type { Paging as PagingModel } from "@/shared/api/models/common";
 import { Paging } from "@/shared/ui/Paging";
 import { ErrorState } from "@/shared/ui/ErrorState";
@@ -37,7 +37,7 @@ const pageNumber = computed(() => {
 
 async function fetch() {
   loading.value = true;
-  const { data, error } = await ModerationApi.getBanHistory({
+  const { data, error } = await moderationApi.getBanHistory({
     skip: (pageNumber.value - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
   });
@@ -67,7 +67,7 @@ const lifting = ref(false);
 async function confirmLift() {
   if (!liftTarget.value || lifting.value) return;
   lifting.value = true;
-  const { error } = await ModerationApi.liftBan(liftTarget.value.id);
+  const { error } = await moderationApi.liftBan(liftTarget.value.id);
   lifting.value = false;
   if (error) {
     toast.error("Не удалось снять бан");

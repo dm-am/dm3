@@ -22,7 +22,7 @@ import type {
 import { UserActivityFilter } from "./models/community";
 import Api from "./client";
 
-export default new (class CommunityApi {
+export default new (class communityApi {
   // Note: Poll methods moved to @/entities/poll/api/pollApi.ts
 
   /**

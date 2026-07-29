@@ -6,4 +6,4 @@
  * an explicit @x public API — this file is the single sanctioned door from
  * entities/user into entities/game.
  */
-export { UserLink, AvatarImg, useUserStore } from "..";
+export { UserLink, AvatarImg, useAuthStore } from "..";

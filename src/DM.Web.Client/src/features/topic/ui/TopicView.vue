@@ -11,7 +11,7 @@ import { computed, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { forumApi } from "@/entities/forum";
 import type { Topic } from "@/entities/forum";
-import { useUserStore, userIsModerator } from "@/entities/user";
+import { useAuthStore, userIsModerator } from "@/entities/user";
 import { unwrapResource } from "@/shared/api";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -64,7 +64,7 @@ const emit = defineEmits<{
   toggleClose: [id: string];
 }>();
 
-const { user: currentUser } = storeToRefs(useUserStore());
+const { user: currentUser } = storeToRefs(useAuthStore());
 
 const topicRoute = computed(() => ({
   name: "topic",

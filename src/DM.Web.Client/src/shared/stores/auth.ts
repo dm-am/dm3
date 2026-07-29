@@ -132,6 +132,3 @@ export const useAuthStore = defineStore("root", () => {
     updateUser,
   };
 });
-
-/** @deprecated Use useAuthStore instead */
-export const useUserStore = useAuthStore;

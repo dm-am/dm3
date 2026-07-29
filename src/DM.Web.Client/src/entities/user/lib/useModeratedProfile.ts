@@ -1,9 +1,9 @@
 import { ref, computed, watch, type Ref } from "vue";
 import { storeToRefs } from "pinia";
-import { useUserStore } from "@/shared/stores";
+import { useAuthStore } from "@/shared/stores";
 import type { Username } from "@/shared/api/models/community";
 import type { ModeratedProfile } from "@/shared/api/models/moderation";
-import { ModerationApi } from "@/shared/api";
+import { moderationApi } from "@/shared/api";
 import { userIsModerator } from "./helpers";
 
 /**
@@ -12,7 +12,7 @@ import { userIsModerator } from "./helpers";
  * Returns null if the current user is not a moderator.
  */
 export function useModeratedProfile(username: Ref<string> | (() => string)) {
-  const { user: currentUser } = storeToRefs(useUserStore());
+  const { user: currentUser } = storeToRefs(useAuthStore());
   const moderatedProfile = ref<ModeratedProfile | null>(null);
   const loading = ref(false);
 
@@ -30,7 +30,7 @@ export function useModeratedProfile(username: Ref<string> | (() => string)) {
 
     loading.value = true;
     try {
-      const { data } = await ModerationApi.getModeratedProfile(
+      const { data } = await moderationApi.getModeratedProfile(
         usernameValue.value as Username,
       );
       moderatedProfile.value = data ?? null;

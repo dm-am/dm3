@@ -4,13 +4,13 @@ import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore, CharacterCard } from "@/entities/game";
 import type { Character } from "@/entities/game";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
 const { characters, charactersError, canManage } = storeToRefs(gameStore);
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 
 const gameId = computed(() => route.params.id as string);
 
