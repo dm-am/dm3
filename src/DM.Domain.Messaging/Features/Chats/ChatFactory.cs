@@ -1,8 +1,10 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 
 namespace DM.Domain.Messaging.Features.Chats;
 
@@ -23,7 +25,8 @@ internal class ChatFactory : IChatFactory
     {
         if (userId == otherUserId)
         {
-            throw new ArgumentException("Cannot create a direct chat with yourself", nameof(otherUserId));
+            throw new HttpException(HttpStatusCode.BadRequest,
+                "Cannot create a direct chat with yourself");
         }
 
         var chatId = _guidFactory.Create();

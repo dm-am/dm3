@@ -1,3 +1,5 @@
+using DM.Domain.Core.Exceptions;
+using System.Net;
 using System;
 using System.Linq;
 using DM.Domain.Core.Abstractions;
@@ -48,8 +50,8 @@ public class ChatFactoryShould : UnitTestBase
 
         var act = () => _factory.CreateDirect(userId, userId);
 
-        act.Should().Throw<ArgumentException>()
-            .WithParameterName("otherUserId")
+        act.Should().Throw<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.BadRequest)
             .WithMessage("Cannot create a direct chat with yourself*");
     }
 

@@ -649,7 +649,8 @@ public class TicketServiceShould : UnitTestBase
         _ticketRepository.Setup(r => r.Get(_ticketId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ticket);
         _banService.Setup(s => s.CreateBan(It.IsAny<CreateBan>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException("User TargetUser is already banned until ..."));
+            .ThrowsAsync(new HttpException(HttpStatusCode.Conflict,
+                "User TargetUser is already banned until ..."));
 
         var resolveTicket = new ResolveTicket
         {
@@ -661,7 +662,8 @@ public class TicketServiceShould : UnitTestBase
         var act = () => _service.ResolveTicket(_ticketId, resolveTicket);
 
         // The conflict check inside the ban service fires and is not swallowed.
-        await act.Should().ThrowAsync<InvalidOperationException>()
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Conflict)
             .Where(e => e.Message.Contains("already banned"));
         _ticketRepository.Verify(
             r => r.Update(It.IsAny<UpdateTicketEntity>(), It.IsAny<CancellationToken>()), Times.Never);

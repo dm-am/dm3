@@ -1,8 +1,10 @@
-using System;
-using System.Threading;
+using System.Net;
 using System.Threading.Tasks;
+using System.Threading;
+using System;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Tokens;
 
@@ -102,6 +104,7 @@ internal class BotLinkService : IBotLinkService
     private static void ValidateChannelType(string channelType)
     {
         if (!Array.Exists(ValidChannelTypes, t => t.Equals(channelType, StringComparison.OrdinalIgnoreCase)))
-            throw new ArgumentException($"Invalid channel type: {channelType}. Must be 'discord' or 'telegram'.");
+            throw new HttpException(HttpStatusCode.BadRequest,
+                $"Invalid channel type: {channelType}. Must be 'discord' or 'telegram'.");
     }
 }
