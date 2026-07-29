@@ -250,10 +250,7 @@ onMounted(async () => {
     align-items: center
 
 .block
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
   h3
     margin: 0 0 $small

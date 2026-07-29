@@ -211,10 +211,7 @@ onMounted(() => fetchRequests());
   gap: $medium
 
 .request-card
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
 .request-header
   display: flex
