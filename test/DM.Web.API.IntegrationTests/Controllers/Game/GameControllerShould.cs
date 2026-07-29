@@ -371,7 +371,11 @@ public class GameControllerShould : IntegrationTestBase
     [Fact]
     public async Task GetRatedPosts_ReturnsFullGameRefOnPostRoomGame()
     {
-        var response = await Client.GetAsync("/v1/posts?take=10");
+        // Scoped to the seeded game. Unscoped, this took the first row of a
+        // global rating-ordered list and assumed it was the seed's — true only
+        // while nothing else in the database had a rated post, which is not a
+        // property of the endpoint under test.
+        var response = await Client.GetAsync($"/v1/posts?gameId={TestConstants.TestGameId}&take=10");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var json = await response.Content.ReadAsStringAsync();
