@@ -50,15 +50,19 @@ test.describe("Subscriptions API", () => {
 
     const gameId = games.resources[0].id;
 
-    // Check subscription status
+    // The query parameter is `type`, not `targetType` — the previous spelling
+    // silently bound the enum default. And "not subscribed" is a documented
+    // 404, not an error: the endpoint answers with the subscription resource
+    // or with nothing.
     const response = await authContext.get(
-      `${API_URL}/v1/users/me/subscriptions/check?targetType=1&targetId=${gameId}`,
+      `${API_URL}/v1/users/me/subscriptions/check?type=Game&targetId=${gameId}`,
     );
 
-    expect(response.ok()).toBeTruthy();
-    const data = await response.json();
-    // Response is subscription object or null indicator
-    expect(typeof data).toBe("object");
+    expect([200, 404]).toContain(response.status());
+    if (response.status() === 200) {
+      const data = await response.json();
+      expect(data).toHaveProperty("id");
+    }
   });
 
   test("should subscribe to a game", async () => {
