@@ -252,31 +252,27 @@ internal class UploadApiService : IUploadApiService
             processed = await _imageProcessingService.ProcessAsync(fileStream, file.ContentType);
         }
 
-        // 2. Generate the object key (the extension is NORMALIZED from the validated
-        //    content-type, NOT from the user filename — anti-extension-spoofing).
-        var objectKey = GenerateObjectKey(type, userId, processed.Extension);
-
-        // 3. A single S3 PUT (no batch + rollback list — one step,
-        //    either success or failure → the next block does the rollback).
-        try
-        {
-            await PutToS3Async(objectKey, processed.Bytes, processed.ContentType);
-        }
-        catch
-        {
-            // Nothing was PUT yet — just rethrow.
-            throw;
-        }
-
-        Activity.Current?.SetTag("upload.output_size_bytes", processed.Bytes.LongLength);
-
-        // 4. DB record. If the write fails — roll back the S3 PUT.
-        // Effective target: for UserAvatar, when targetId is not set explicitly,
-        // the owner uploader = self (uploading one's own avatar). For CharacterAvatar
-        // and PostAttachment, targetId is required.
+        // 2. Resolve and check the target BEFORE anything reaches the bucket.
+        // For UserAvatar an unset targetId means the uploader themselves; for
+        // CharacterAvatar and PostAttachment it is required. This check used to
+        // sit after the PUT and outside the rollback, so a valid image with a
+        // missing targetId left an object in the bucket that nothing would ever
+        // collect: the orphan sweeper walks rows, and the failed request never
+        // wrote one.
         var effectiveTarget = targetId ?? (type == UploadType.UserAvatar ? userId : (Guid?)null);
         RequireTarget(type, effectiveTarget);
 
+        // 3. Generate the object key (the extension is NORMALIZED from the validated
+        //    content-type, NOT from the user filename — anti-extension-spoofing).
+        var objectKey = GenerateObjectKey(type, userId, processed.Extension);
+
+        // 4. A single S3 PUT. Everything after it that can fail is wrapped in
+        //    the rollback below.
+        await PutToS3Async(objectKey, processed.Bytes, processed.ContentType);
+
+        Activity.Current?.SetTag("upload.output_size_bytes", processed.Bytes.LongLength);
+
+        // 5. DB record. If the write fails — roll back the S3 PUT.
         var newUpload = new NewUpload
         {
             Id = Guid.NewGuid(),
