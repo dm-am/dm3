@@ -1,23 +1,14 @@
 import { test, expect, APIRequestContext } from "@playwright/test";
-import { loginWithCookies } from "../../fixtures/auth";
+import { authenticatedContext } from "../../fixtures/auth";
 
 const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
 
 // Test credentials
-const TEST_USER = {
-  username: "Alice",
-  password: "Xk9#mQz2$vL7nW",
-};
-
 let authContext: APIRequestContext;
 
-test.beforeAll(async ({ request }) => {
+test.beforeAll(async () => {
   // Login to get authenticated context with cookies
-  authContext = await loginWithCookies(
-    request,
-    TEST_USER.username,
-    TEST_USER.password,
-  );
+  authContext = await authenticatedContext();
 });
 
 test.afterAll(async () => {

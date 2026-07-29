@@ -1,42 +1,30 @@
 import { test, expect, APIRequestContext } from "@playwright/test";
-import { loginWithCookies } from "../../fixtures/auth";
+import {
+  authenticatedContext,
+  secondaryUser,
+  PRIMARY_STORAGE_STATE,
+  SECONDARY_STORAGE_STATE,
+} from "../../fixtures/auth";
 
 const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
 
-// Test credentials - need two users for invitation tests
-const OWNER_USER = {
-  username: "Alice",
-  password: "Xk9#mQz2$vL7nW",
-};
-
-const INVITED_USER = {
-  username: "Bob",
-  password: "Xk9#mQz2$vL7nW",
-};
+const INVITED_USER = secondaryUser;
 
 let ownerContext: APIRequestContext;
 let invitedContext: APIRequestContext;
 let testBlogId: string;
 
-test.beforeAll(async ({ request }) => {
+test.beforeAll(async () => {
   // Login as blog owner
   try {
-    ownerContext = await loginWithCookies(
-      request,
-      OWNER_USER.username,
-      OWNER_USER.password,
-    );
+    ownerContext = await authenticatedContext(PRIMARY_STORAGE_STATE);
   } catch (e) {
     console.error("Failed to login as owner:", e);
   }
 
   // Login as invited user
   try {
-    invitedContext = await loginWithCookies(
-      request,
-      INVITED_USER.username,
-      INVITED_USER.password,
-    );
+    invitedContext = await authenticatedContext(SECONDARY_STORAGE_STATE);
   } catch (e) {
     console.error("Failed to login as invited user:", e);
   }
