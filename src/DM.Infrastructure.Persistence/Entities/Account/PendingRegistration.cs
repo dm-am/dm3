@@ -1,6 +1,7 @@
 using DM.Domain.Core.Identity;
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace DM.Infrastructure.Persistence.Entities.Account;
 
@@ -8,6 +9,7 @@ namespace DM.Infrastructure.Persistence.Entities.Account;
 /// Pending registration waiting for email confirmation and username selection.
 /// After confirmation, converted to User and deleted.
 /// </summary>
+[Table("PendingRegistrations")]
 public class PendingRegistration
 {
     /// <summary>

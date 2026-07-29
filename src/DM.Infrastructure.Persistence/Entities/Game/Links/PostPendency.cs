@@ -10,6 +10,7 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Links;
 /// <summary>
 /// DAL model for post pendency (when someone is expected to post in a room)
 /// </summary>
+[Table("PostPendencies")]
 public class PostPendency
 {
     /// <summary>
