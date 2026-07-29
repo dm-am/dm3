@@ -63,8 +63,8 @@ public class PostReviewController : ControllerBase
     [HttpGet("posts", Name = nameof(GetAllPostReviews))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(typeof(ListEnvelope<PostReviewDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetAllPostReviews(
         [FromQuery] PagingQuery q,
         [FromQuery] string? authorUsername = null,
@@ -105,7 +105,7 @@ public class PostReviewController : ControllerBase
     /// <response code="404">Post not found</response>
     [HttpGet("~/v1/posts/{postId:guid}/reviews", Name = nameof(GetPostReviews))]
     [ProducesResponseType(typeof(ListEnvelope<PostReviewDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPostReviews(Guid postId, [FromQuery] PagingQuery q)
     {
         var (reviews, paging) = await _ratedPostReviewService.GetListAsync(postId, q);
@@ -141,12 +141,12 @@ public class PostReviewController : ControllerBase
     [HttpPost("~/v1/posts/{postId:guid}/reviews", Name = nameof(CreatePostReview))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<PostReviewDto>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> CreatePostReview(Guid postId, [FromBody] CreatePostReviewRequest request)
     {
         var createReview = new CreatePostReview
@@ -169,7 +169,7 @@ public class PostReviewController : ControllerBase
     /// <response code="404">Review not found</response>
     [HttpGet("~/v1/posts/{postId:guid}/reviews/{reviewId:guid}", Name = nameof(GetPostReview))]
     [ProducesResponseType(typeof(Envelope<PostReviewDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPostReview(Guid postId, Guid reviewId)
     {
         var review = await _ratedPostReviewService.GetAsync(reviewId);

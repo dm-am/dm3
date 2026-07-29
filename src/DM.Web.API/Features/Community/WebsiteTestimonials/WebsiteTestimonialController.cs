@@ -66,7 +66,7 @@ public class WebsiteTestimonialController : ControllerBase
     /// <response code="404">Testimonial not found</response>
     [HttpGet("{id:guid}", Name = nameof(GetWebsiteTestimonial))]
     [ProducesResponseType(typeof(Envelope<WebsiteTestimonialDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetWebsiteTestimonial(Guid id)
     {
         var testimonial = await _testimonialService.GetAsync(id);
@@ -91,9 +91,9 @@ public class WebsiteTestimonialController : ControllerBase
     [HttpPost(Name = nameof(CreateWebsiteTestimonial))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<WebsiteTestimonialDto>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateWebsiteTestimonial([FromBody] CreateWebsiteTestimonialRequest request)
     {
         var createTestimonial = new CreateWebsiteTestimonial
@@ -122,10 +122,10 @@ public class WebsiteTestimonialController : ControllerBase
     [HttpPatch("{id:guid}", Name = nameof(UpdateWebsiteTestimonial))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<WebsiteTestimonialDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateWebsiteTestimonial(Guid id, [FromBody] UpdateWebsiteTestimonialRequest request)
     {
         var updateTestimonial = new UpdateWebsiteTestimonial
@@ -153,9 +153,9 @@ public class WebsiteTestimonialController : ControllerBase
     [HttpDelete("{id:guid}", Name = nameof(DeleteWebsiteTestimonial))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteWebsiteTestimonial(Guid id)
     {
         await _testimonialService.DeleteAsync(id);

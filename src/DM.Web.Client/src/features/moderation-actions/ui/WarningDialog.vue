@@ -111,7 +111,7 @@ async function submit() {
   if (error) {
     fieldErrors.value = parseApiErrors(error as BadRequestError);
     if (!Object.keys(fieldErrors.value).length) {
-      toast.error(error.message ?? "Не удалось отправить предупреждение");
+      toast.error(error.title ?? "Не удалось отправить предупреждение");
     }
     return;
   }

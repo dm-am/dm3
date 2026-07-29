@@ -2,6 +2,7 @@ using System;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -131,14 +132,24 @@ internal static class RateLimitingExtensions
                         ? ((int)retryAfter.TotalSeconds).ToString()
                         : ((int)Window.TotalSeconds).ToString();
 
-                context.HttpContext.Response.ContentType = "application/problem+json";
-                await context.HttpContext.Response.WriteAsJsonAsync(new
-                {
-                    type = "https://tools.ietf.org/html/rfc6585#section-4",
-                    title = "Too Many Requests",
-                    status = 429,
-                    detail = "Rate limit exceeded. Please retry after the specified time.",
-                }, ct);
+                // Built by the same factory as every other error response. Hand
+                // assembled here, this was the one body on the wire that did not
+                // match what the rest of the API answers with — no traceId, and a
+                // shape nothing else produced.
+                var factory = context.HttpContext.RequestServices
+                    .GetRequiredService<ProblemDetailsFactory>();
+                var problem = factory.CreateProblemDetails(
+                    context.HttpContext,
+                    StatusCodes.Status429TooManyRequests,
+                    "Too Many Requests",
+                    detail: "Rate limit exceeded. Please retry after the specified time.");
+
+                // The content type goes through WriteAsJsonAsync: assigning
+                // Response.ContentType before it is overwritten, which is why
+                // every 429 went out as application/json while the rest of the
+                // API answered application/problem+json.
+                await context.HttpContext.Response.WriteAsJsonAsync(
+                    problem, problem.GetType(), options: null, contentType: "application/problem+json", ct);
             };
         });
 

@@ -41,7 +41,7 @@ public class PostController : ControllerBase
     /// <response code="404">Room not found</response>
     [HttpGet("~/v1/rooms/{id}/posts", Name = nameof(GetPosts))]
     [ProducesResponseType(typeof(ListEnvelope<Post>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPosts(Guid id, [FromQuery] PagingQuery q) =>
         Ok(await _postApiService.Get(id, q));
 
@@ -58,10 +58,10 @@ public class PostController : ControllerBase
     [HttpPost("~/v1/rooms/{id}/posts", Name = nameof(PostPost))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Post>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostPost(Guid id, [FromBody] CreatePostRequest post)
     {
         var result = await _postApiService.Create(id, post);
@@ -77,7 +77,7 @@ public class PostController : ControllerBase
     /// <response code="404">Post not found</response>
     [HttpGet("{id}", Name = nameof(GetPost))]
     [ProducesResponseType(typeof(Envelope<Post>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPost(Guid id) => Ok(await _postApiService.Get(id));
 
     /// <summary>
@@ -93,10 +93,10 @@ public class PostController : ControllerBase
     [HttpPatch("{id}", Name = nameof(PatchPost))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Post>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchPost(Guid id, [FromBody] Post post) =>
         Ok(await _postApiService.Update(id, post));
 
@@ -111,9 +111,9 @@ public class PostController : ControllerBase
     [HttpDelete("{id}", Name = nameof(DeletePost))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeletePost(Guid id)
     {
         await _postApiService.Delete(id);

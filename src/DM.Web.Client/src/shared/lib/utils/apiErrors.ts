@@ -2,7 +2,7 @@ import type { BadRequestError } from "@/shared/api/models/common";
 
 /**
  * Parse API validation errors into a normalized format.
- * Handles both invalidProperties and errors formats.
+ * Reads the errors dictionary of a validation problem document.
  * Keys are lowercased for consistent access.
  */
 export function parseApiErrors(
@@ -10,7 +10,7 @@ export function parseApiErrors(
 ): Record<string, string[]> {
   if (!error) return {};
 
-  const raw = error.invalidProperties ?? error.errors ?? {};
+  const raw = error.errors ?? {};
   const result: Record<string, string[]> = {};
 
   for (const [key, value] of Object.entries(raw)) {

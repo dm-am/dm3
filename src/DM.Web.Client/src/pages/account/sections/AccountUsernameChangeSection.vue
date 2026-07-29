@@ -174,7 +174,7 @@ async function submitRequest() {
   submitting.value = false;
 
   if (error) {
-    submitError.value = error.message || "Не удалось отправить заявку";
+    submitError.value = error.title || "Не удалось отправить заявку";
     return;
   }
 

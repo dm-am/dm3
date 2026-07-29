@@ -48,7 +48,7 @@ public class WarningController : ControllerBase
     /// <response code="404">User not found</response>
     [HttpGet("~/v1/users/{username}/warnings", Name = nameof(GetUserWarnings))]
     [ProducesResponseType(typeof(UserWarningsInfo), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserWarnings(string username) =>
         Ok(await _warningApiService.GetUserWarnings(username));
 
@@ -66,8 +66,8 @@ public class WarningController : ControllerBase
     [HttpGet(Name = nameof(GetAllWarnings))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(typeof(ListEnvelope<Warning>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetAllWarnings([FromQuery] string? user = null) =>
         Ok(await _warningApiService.GetAllWarnings(user));
 
@@ -94,10 +94,10 @@ public class WarningController : ControllerBase
     [HttpPost(Name = nameof(CreateWarning))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(typeof(Envelope<Warning>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> CreateWarning([FromBody] CreateWarningRequest request)
     {
         var result = await _warningApiService.CreateWarning(request);
@@ -119,9 +119,9 @@ public class WarningController : ControllerBase
     [HttpDelete("{id}", Name = nameof(RemoveWarning))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveWarning(Guid id)
     {
         await _warningApiService.RemoveWarning(id);

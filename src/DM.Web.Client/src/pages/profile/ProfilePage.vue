@@ -219,7 +219,7 @@ async function submitUsernameChangeRequest() {
   });
   isChangeFormSubmitting.value = false;
   if (error) {
-    toast.error(error.message || "Не удалось отправить заявку");
+    toast.error(error.title || "Не удалось отправить заявку");
     return;
   }
   if (data) {

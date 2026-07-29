@@ -52,7 +52,7 @@ public class GameController : ControllerBase
     /// <response code="400">Invalid query parameters</response>
     [HttpGet(Name = nameof(GetGames))]
     [ProducesResponseType(typeof(ListEnvelope<Game>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     // Response carries per-caller unread counts, so it must not be cached
     // anywhere. Declared, not assigned by hand: one mechanism for cache policy.
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
@@ -87,7 +87,7 @@ public class GameController : ControllerBase
     /// <response code="404">Game not found</response>
     [HttpGet("{id}", Name = nameof(GetGame))]
     [ProducesResponseType(typeof(Envelope<Game>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGame(string id)
     {
         if (Guid.TryParse(id, out var guid))
@@ -107,10 +107,10 @@ public class GameController : ControllerBase
     [HttpPost(Name = nameof(PostGame))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostGame([FromBody] CreateGameRequest request)
     {
         var result = await _gameApiService.Create(request);
@@ -128,9 +128,9 @@ public class GameController : ControllerBase
     [HttpDelete("{id}", Name = nameof(DeleteGame))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteGame(string id)
     {
         var gameId = Guid.TryParse(id, out var guid)
@@ -160,10 +160,10 @@ public class GameController : ControllerBase
     [HttpPost("{id}/status", Name = nameof(PostGameStatus))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostGameStatus(string id, [FromBody] GameStatusChangeRequest request)
     {
         var gameId = Guid.TryParse(id, out var guid)
@@ -192,10 +192,10 @@ public class GameController : ControllerBase
     [HttpPost("{id}/premoderation", Name = nameof(PostGamePremoderation))]
     [RequireRole(UserRole.Mentor)]
     [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostGamePremoderation(string id, [FromBody] GamePremoderationChangeRequest request)
     {
         // Pass the raw id through: the domain resolves the public id via the
@@ -220,9 +220,9 @@ public class GameController : ControllerBase
     [HttpPost("{id}/reset-recruitment-date", Name = nameof(PostResetRecruitmentDate))]
     [RequireRole(UserRole.Admin)]
     [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostResetRecruitmentDate(string id)
     {
         var gameId = Guid.TryParse(id, out var guid)
@@ -239,7 +239,7 @@ public class GameController : ControllerBase
     /// <response code="404">Game not found</response>
     [HttpGet("{id}/details", Name = nameof(GetGameDetails))]
     [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameDetails(string id)
     {
         if (Guid.TryParse(id, out var guid))
@@ -260,10 +260,10 @@ public class GameController : ControllerBase
     [HttpPatch("{id}/details", Name = nameof(PatchGameDetails))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchGameDetails(string id, [FromBody] GameDetails game)
     {
         var gameId = Guid.TryParse(id, out var guid)

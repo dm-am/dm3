@@ -111,7 +111,7 @@ async function submit() {
     fieldErrors.value = parseApiErrors(error as BadRequestError);
     if (!Object.keys(fieldErrors.value).length) {
       // 409 = user is already banned; other errors get the generic text.
-      toast.error(error.message ?? "Не удалось оформить бан");
+      toast.error(error.title ?? "Не удалось оформить бан");
     }
     return;
   }

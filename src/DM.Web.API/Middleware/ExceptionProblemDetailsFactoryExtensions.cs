@@ -28,19 +28,6 @@ internal static class ExceptionProblemDetailsFactoryExtensions
     }
 
     public static ProblemDetails CreateFrom(this ProblemDetailsFactory factory,
-        HttpValidationException httpValidationException, HttpContext httpContext)
-    {
-        var modelStateDictionary = new ModelStateDictionary();
-        foreach (var (key, value) in httpValidationException.ValidationErrors)
-        {
-            modelStateDictionary.AddModelError(key, value);
-        }
-
-        return factory.CreateValidationProblemDetails(httpContext,
-            modelStateDictionary, (int)httpValidationException.StatusCode, httpValidationException.Message);
-    }
-
-    public static ProblemDetails CreateFrom(this ProblemDetailsFactory factory,
         ValidationException validationException, HttpContext httpContext)
     {
         var modelStateDictionary = new ModelStateDictionary();

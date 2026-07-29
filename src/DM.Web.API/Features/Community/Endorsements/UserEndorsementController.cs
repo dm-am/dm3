@@ -51,7 +51,7 @@ public class UserEndorsementController : ControllerBase
     /// <response code="404">User not found.</response>
     [HttpGet(Name = nameof(GetUserEndorsements))]
     [ProducesResponseType(typeof(ListEnvelope<UserEndorsement>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserEndorsements(string username, [FromQuery] UserEndorsementsQuery q)
     {
         var user = await _userLookupService.GetAsync(username);
@@ -82,7 +82,7 @@ public class UserEndorsementController : ControllerBase
     /// <response code="404">User not found.</response>
     [HttpGet("/v1/users/{username}/written-endorsements", Name = nameof(GetWrittenUserEndorsements))]
     [ProducesResponseType(typeof(ListEnvelope<UserEndorsement>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetWrittenUserEndorsements(string username, [FromQuery] UserEndorsementsQuery q)
     {
         var user = await _userLookupService.GetAsync(username);
@@ -118,11 +118,11 @@ public class UserEndorsementController : ControllerBase
     [HttpPost(Name = nameof(CreateUserEndorsement))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(UserEndorsement), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateUserEndorsement(string username, [FromBody] CreateUserEndorsementRequest request)
     {
         var user = await _userLookupService.GetAsync(username);
@@ -144,7 +144,7 @@ public class UserEndorsementController : ControllerBase
     /// <response code="404">Endorsement not found</response>
     [HttpGet("/v1/endorsements/{id}", Name = nameof(GetUserEndorsement))]
     [ProducesResponseType(typeof(UserEndorsement), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserEndorsement(Guid id)
     {
         var endorsement = await _endorsementService.GetAsync(id);
@@ -170,10 +170,10 @@ public class UserEndorsementController : ControllerBase
     [HttpPatch("/v1/endorsements/{id}", Name = nameof(UpdateUserEndorsement))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(UserEndorsement), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateUserEndorsement(Guid id, [FromBody] UpdateUserEndorsementRequest request)
     {
         var updateEndorsement = new UpdateUserEndorsement
@@ -201,9 +201,9 @@ public class UserEndorsementController : ControllerBase
     [HttpDelete("/v1/endorsements/{id}", Name = nameof(DeleteUserEndorsement))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteUserEndorsement(Guid id)
     {
         await _endorsementService.DeleteAsync(id);

@@ -56,10 +56,10 @@ public class AwardCatalogController : ControllerBase
     /// <response code="409">Code is already taken.</response>
     [HttpPost("award-types", Name = nameof(CreateAwardType))]
     [ProducesResponseType(typeof(Envelope<AwardType>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateAwardType([FromBody] CreateAwardTypeRequest request)
     {
         var domain = _mapper.Map<DomainCreateAwardType>(request);
@@ -76,10 +76,10 @@ public class AwardCatalogController : ControllerBase
     /// <response code="404">Type not found.</response>
     [HttpPatch("award-types/{id:guid}", Name = nameof(UpdateAwardType))]
     [ProducesResponseType(typeof(Envelope<AwardType>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateAwardType(Guid id, [FromBody] UpdateAwardTypeRequest request)
     {
         var domain = _mapper.Map<DomainUpdateAwardType>(request);
@@ -95,9 +95,9 @@ public class AwardCatalogController : ControllerBase
     /// <response code="404">Type not found.</response>
     [HttpDelete("award-types/{id:guid}", Name = nameof(DeactivateAwardType))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeactivateAwardType(Guid id)
     {
         await _awardService.DeactivateTypeAsync(id);
@@ -119,9 +119,9 @@ public class AwardCatalogController : ControllerBase
     /// <response code="404">Series not found.</response>
     [HttpGet("contest-series/{id:guid}/awards", Name = nameof(GetContestSeriesAwards))]
     [ProducesResponseType(typeof(ListEnvelope<ContestSeriesAward>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetContestSeriesAwards(Guid id)
     {
         var awards = await _awardService.GetSeriesAwardsAsync(id);
@@ -137,10 +137,10 @@ public class AwardCatalogController : ControllerBase
     /// <response code="409">A series with this (ContestType, Number) already exists.</response>
     [HttpPost("contest-series", Name = nameof(CreateContestSeries))]
     [ProducesResponseType(typeof(Envelope<ContestSeries>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateContestSeries([FromBody] CreateContestSeriesRequest request)
     {
         var domain = _mapper.Map<DomainCreateContestSeries>(request);
@@ -157,10 +157,10 @@ public class AwardCatalogController : ControllerBase
     /// <response code="404">Series not found.</response>
     [HttpPatch("contest-series/{id:guid}", Name = nameof(UpdateContestSeries))]
     [ProducesResponseType(typeof(Envelope<ContestSeries>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateContestSeries(Guid id, [FromBody] UpdateContestSeriesRequest request)
     {
         var domain = _mapper.Map<DomainUpdateContestSeries>(request);
@@ -176,9 +176,9 @@ public class AwardCatalogController : ControllerBase
     /// <response code="404">Series not found.</response>
     [HttpDelete("contest-series/{id:guid}", Name = nameof(DeactivateContestSeries))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeactivateContestSeries(Guid id)
     {
         await _awardService.DeactivateSeriesAsync(id);

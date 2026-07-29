@@ -46,8 +46,8 @@ public class BlogNotepadController : ControllerBase
     /// <response code="403">User must be blog owner or assistant</response>
     [HttpGet(Name = nameof(GetBlogNotepad))]
     [ProducesResponseType(typeof(ListEnvelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetBlogNotepad(string blogId)
     {
         var id = await ResolveBlogId(blogId);
@@ -64,8 +64,8 @@ public class BlogNotepadController : ControllerBase
     /// <response code="403">User must be blog owner or assistant</response>
     [HttpPost(Name = nameof(CreateBlogNotepadEntry))]
     [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> CreateBlogNotepadEntry(string blogId, [FromBody] CreateNotepadEntryRequest request)
     {
         var id = await ResolveBlogId(blogId);
@@ -84,9 +84,9 @@ public class BlogNotepadController : ControllerBase
     /// <response code="404">Entry not found</response>
     [HttpGet("{entryId:guid}", Name = nameof(GetBlogNotepadEntry))]
     [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogNotepadEntry(string blogId, Guid entryId) =>
         Ok(await _notepadApiService.GetEntry(entryId));
 
@@ -102,9 +102,9 @@ public class BlogNotepadController : ControllerBase
     /// <response code="404">Entry not found</response>
     [HttpPatch("{entryId:guid}", Name = nameof(UpdateBlogNotepadEntry))]
     [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateBlogNotepadEntry(string blogId, Guid entryId, [FromBody] UpdateNotepadEntryRequest request) =>
         Ok(await _notepadApiService.UpdateEntry(entryId, request));
 
@@ -119,9 +119,9 @@ public class BlogNotepadController : ControllerBase
     /// <response code="404">Entry not found</response>
     [HttpDelete("{entryId:guid}", Name = nameof(DeleteBlogNotepadEntry))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteBlogNotepadEntry(string blogId, Guid entryId)
     {
         await _notepadApiService.DeleteEntry(entryId);

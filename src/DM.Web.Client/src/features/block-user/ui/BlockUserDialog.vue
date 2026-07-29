@@ -36,7 +36,7 @@ async function submit() {
   loading.value = false;
 
   if (apiError) {
-    error.value = apiError.message || "Не удалось заблокировать пользователя";
+    error.value = apiError.title || "Не удалось заблокировать пользователя";
     return;
   }
 

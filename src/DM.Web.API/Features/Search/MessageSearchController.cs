@@ -64,9 +64,9 @@ public class MessageSearchController : ControllerBase
     [AuthenticationRequired]
     [EnableRateLimiting(RateLimitPolicies.Sliding)]
     [ProducesResponseType(typeof(CursorEnvelope<MessageSearchResult>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> SearchMessages(
         [FromQuery][Required][StringLength(500, MinimumLength = 1)] string q,
         [FromQuery(Name = "in")] string[]? @in = null,

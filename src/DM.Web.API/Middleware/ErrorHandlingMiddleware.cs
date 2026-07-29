@@ -68,9 +68,6 @@ internal class ErrorHandlingMiddleware
                 case HttpBadRequestException badRequestException:
                     error = problemDetailsFactory.CreateFrom(badRequestException, httpContext);
                     break;
-                case HttpValidationException validationException:
-                    error = problemDetailsFactory.CreateFrom(validationException, httpContext);
-                    break;
                 case IntentionManagerException securityException:
                     logger.LogWarning(securityException,
                         "Security breach attempt by {User}: {Message}", user, e.Message);

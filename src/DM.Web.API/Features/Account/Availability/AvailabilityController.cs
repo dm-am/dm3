@@ -1,5 +1,4 @@
 using System.Threading.Tasks;
-using DM.Web.API.Shared.Dto;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -56,7 +55,7 @@ public class AvailabilityController : ControllerBase
     [HttpGet("check-email", Name = nameof(CheckEmail))]
     [EnableRateLimiting(RateLimitPolicies.EmailCheck)]
     [ProducesResponseType(typeof(EmailAvailabilityResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> CheckEmail([FromQuery] string email)
     {
         var result = await _availabilityApiService.CheckEmailAvailability(email);
@@ -86,7 +85,7 @@ public class AvailabilityController : ControllerBase
     [HttpGet("check-username", Name = nameof(CheckUsername))]
     [EnableRateLimiting(RateLimitPolicies.UsernameCheck)]
     [ProducesResponseType(typeof(UsernameAvailabilityResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> CheckUsername([FromQuery] string username)
     {
         var result = await _availabilityApiService.CheckUsernameAvailability(username);

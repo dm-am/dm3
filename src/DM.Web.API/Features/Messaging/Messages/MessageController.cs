@@ -59,8 +59,8 @@ public class MessageController : ControllerBase
     [HttpGet("~/v1/chats/{id}/messages", Name = nameof(GetMessages))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(CursorEnvelope<Message>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMessages(
         string id,
         [FromQuery] string? cursor = null,
@@ -85,10 +85,10 @@ public class MessageController : ControllerBase
     [HttpPost("~/v1/chats/{id}/messages", Name = nameof(PostMessage))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Message>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostMessage(string id, [FromBody] CreateMessageInput input)
     {
         var chatId = await ResolveChatId(id);
@@ -107,8 +107,8 @@ public class MessageController : ControllerBase
     [HttpGet("{id:guid}", Name = nameof(GetMessage))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Message>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMessage(Guid id) => Ok(await _apiService.GetMessageAsync(id));
 
     /// <summary>
@@ -124,10 +124,10 @@ public class MessageController : ControllerBase
     [HttpPatch("{id:guid}", Name = nameof(PatchMessage))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Message>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchMessage(Guid id, [FromBody] UpdateMessageInput input)
     {
         var message = new Message { Text = new CommonBbText { Value = input.Text } };
@@ -144,9 +144,9 @@ public class MessageController : ControllerBase
     [HttpDelete("{id:guid}", Name = nameof(DeleteMessage))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteMessage(Guid id)
     {
         await _apiService.DeleteMessageAsync(id);
@@ -164,9 +164,9 @@ public class MessageController : ControllerBase
     [HttpPost("{id:guid}/likes", Name = nameof(PostMessageLike))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Message>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostMessageLike(Guid id) =>
         CreatedAtRoute(nameof(GetMessage), new { id }, await _apiService.LikeMessageAsync(id));
 
@@ -181,9 +181,9 @@ public class MessageController : ControllerBase
     [HttpDelete("{id:guid}/likes", Name = nameof(DeleteMessageLike))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteMessageLike(Guid id)
     {
         await _apiService.UnlikeMessageAsync(id);

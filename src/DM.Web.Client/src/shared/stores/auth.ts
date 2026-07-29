@@ -49,8 +49,7 @@ export const useAuthStore = defineStore("root", () => {
 
   async function register(credentials: RegisterCredentials) {
     const { error } = await accountApi.register(credentials);
-    if (error && ("invalidProperties" in error || "errors" in error))
-      return error as BadRequestError;
+    if (error && "errors" in error) return error as BadRequestError;
     return null;
   }
 
@@ -63,7 +62,7 @@ export const useAuthStore = defineStore("root", () => {
       return null;
     }
 
-    if (error && ("invalidProperties" in error || "errors" in error)) {
+    if (error && "errors" in error) {
       return error as BadRequestError;
     }
 

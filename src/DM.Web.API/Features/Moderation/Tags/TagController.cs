@@ -40,7 +40,7 @@ public class TagController : ControllerBase
     /// <response code="403">Insufficient permissions</response>
     [HttpGet("groups", Name = nameof(GetTagGroups))]
     [ProducesResponseType(typeof(ListEnvelope<TagGroup>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetTagGroups(CancellationToken ct)
     {
         return Ok(await _tagApiService.GetGroups(ct));
@@ -56,8 +56,8 @@ public class TagController : ControllerBase
     /// <response code="404">Tag group not found</response>
     [HttpGet("groups/{groupId}", Name = nameof(GetTagGroup))]
     [ProducesResponseType(typeof(TagGroup), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTagGroup(Guid groupId, CancellationToken ct)
     {
         return Ok(await _tagApiService.GetGroup(groupId, ct));
@@ -73,9 +73,9 @@ public class TagController : ControllerBase
     /// <response code="409">Tag group with this title already exists</response>
     [HttpPost("groups", Name = nameof(CreateTagGroup))]
     [ProducesResponseType(typeof(TagGroup), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateTagGroup([FromBody] CreateTagGroupRequest request)
     {
         var group = await _tagApiService.CreateGroup(request);
@@ -94,10 +94,10 @@ public class TagController : ControllerBase
     /// <response code="409">Tag group with this title already exists</response>
     [HttpPut("groups/{groupId}", Name = nameof(UpdateTagGroup))]
     [ProducesResponseType(typeof(TagGroup), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> UpdateTagGroup(Guid groupId, [FromBody] UpdateTagGroupRequest request)
     {
         var group = await _tagApiService.UpdateGroup(groupId, request);
@@ -117,9 +117,9 @@ public class TagController : ControllerBase
     /// <response code="409">Cannot delete group with tags</response>
     [HttpDelete("groups/{groupId}", Name = nameof(DeleteTagGroup))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> DeleteTagGroup(Guid groupId)
     {
         await _tagApiService.DeleteGroup(groupId);
@@ -137,7 +137,7 @@ public class TagController : ControllerBase
     /// <response code="403">Insufficient permissions</response>
     [HttpGet(Name = nameof(GetModerationTags))]
     [ProducesResponseType(typeof(ListEnvelope<Tag>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetModerationTags(CancellationToken ct)
     {
         return Ok(await _tagApiService.GetTags(ct));
@@ -152,7 +152,7 @@ public class TagController : ControllerBase
     /// <response code="403">Insufficient permissions</response>
     [HttpGet("groups/{groupId}/tags", Name = nameof(GetTagsByGroup))]
     [ProducesResponseType(typeof(ListEnvelope<Tag>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetTagsByGroup(Guid groupId, CancellationToken ct)
     {
         return Ok(await _tagApiService.GetTagsByGroup(groupId, ct));
@@ -168,8 +168,8 @@ public class TagController : ControllerBase
     /// <response code="404">Tag not found</response>
     [HttpGet("{tagId}", Name = nameof(GetModerationTag))]
     [ProducesResponseType(typeof(Tag), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetModerationTag(Guid tagId, CancellationToken ct)
     {
         return Ok(await _tagApiService.GetTag(tagId, ct));
@@ -186,10 +186,10 @@ public class TagController : ControllerBase
     /// <response code="409">Tag with this title already exists in the group</response>
     [HttpPost(Name = nameof(CreateModerationTag))]
     [ProducesResponseType(typeof(Tag), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateModerationTag([FromBody] CreateTagRequest request)
     {
         var tag = await _tagApiService.CreateTag(request);
@@ -208,10 +208,10 @@ public class TagController : ControllerBase
     /// <response code="409">Tag with this title already exists in the group</response>
     [HttpPut("{tagId}", Name = nameof(UpdateModerationTag))]
     [ProducesResponseType(typeof(Tag), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> UpdateModerationTag(Guid tagId, [FromBody] UpdateTagRequest request)
     {
         var tag = await _tagApiService.UpdateTag(tagId, request);
@@ -231,9 +231,9 @@ public class TagController : ControllerBase
     /// <response code="409">Cannot delete tag used by games</response>
     [HttpDelete("{tagId}", Name = nameof(DeleteModerationTag))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> DeleteModerationTag(Guid tagId)
     {
         await _tagApiService.DeleteTag(tagId);

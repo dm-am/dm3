@@ -48,7 +48,7 @@ public class BlogReaderController : ControllerBase
     /// <response code="404">Blog not found</response>
     [HttpGet(Name = nameof(GetBlogReaders))]
     [ProducesResponseType(typeof(ListEnvelope<BlogUser>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogReaders(string id)
     {
         var blogId = await ResolveBlogId(id);
@@ -71,10 +71,10 @@ public class BlogReaderController : ControllerBase
     [HttpPost(Name = nameof(SubscribeToBlog))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(BlogUser), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> SubscribeToBlog(string id)
     {
         var blogId = await ResolveBlogId(id);
@@ -92,8 +92,8 @@ public class BlogReaderController : ControllerBase
     [HttpDelete(Name = nameof(UnsubscribeFromBlog))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UnsubscribeFromBlog(string id)
     {
         var blogId = await ResolveBlogId(id);

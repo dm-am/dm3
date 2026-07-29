@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using DM.Web.API.Shared.RateLimiting;
+using DM.Domain.Core.Exceptions;
 
 namespace DM.Web.API.Features.General.Tickets;
 
@@ -48,19 +49,17 @@ public class TicketIntakeController : ControllerBase
     [HttpPost(Name = nameof(CreateTicketIntake))]
     [EnableRateLimiting(RateLimitPolicies.Auth)]
     [ProducesResponseType(typeof(CreateTicketIntakeResponse), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> CreateTicketIntake([FromBody] CreateTicketIntakeRequest request)
     {
         // Honeypot check for bot protection
         if (!string.IsNullOrWhiteSpace(request.Website))
         {
-            return BadRequest(new BadRequestError(
-                "Invalid request",
-                new Dictionary<string, IEnumerable<string>>
-                {
-                    ["subject"] = new[] { "Invalid submission attempt" }
-                }));
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                ["subject"] = "Invalid submission attempt",
+            }, "Invalid request");
         }
 
         var response = await _ticketIntakeApiService.CreateTicket(request);
@@ -83,8 +82,8 @@ public class TicketIntakeController : ControllerBase
     [HttpGet("track/{token}", Name = nameof(TrackTicketIntake))]
     [EnableRateLimiting(RateLimitPolicies.Auth)]
     [ProducesResponseType(typeof(Envelope<TrackedTicket>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> TrackTicketIntake(string token)
     {
         var ticket = await _ticketIntakeApiService.TrackTicket(token);

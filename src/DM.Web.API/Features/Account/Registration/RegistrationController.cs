@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using DM.Web.API.Shared.RateLimiting;
+using System.Net;
+using DM.Domain.Core.Exceptions;
 
 namespace DM.Web.API.Features.Account.Registration;
 
@@ -58,20 +60,18 @@ public class RegistrationController : ControllerBase
     /// <response code="429">Too many requests. Try again later.</response>
     [HttpPost("register", Name = nameof(Register))]
     [ProducesResponseType(StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Register([FromBody] RegistrationRequest registration)
     {
         // Honeypot check for bot protection
         if (!string.IsNullOrWhiteSpace(registration.Website))
         {
-            return BadRequest(new BadRequestError(
-                "Invalid request",
-                new Dictionary<string, IEnumerable<string>>
-                {
-                    ["email"] = new[] { "Invalid registration attempt" }
-                }));
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                ["email"] = "Invalid registration attempt",
+            }, "Invalid request");
         }
 
         await _registrationApiService.Register(registration);
@@ -94,13 +94,13 @@ public class RegistrationController : ControllerBase
     /// <response code="404">Token not found (already used or invalid)</response>
     [HttpGet("activation/{token:guid}", Name = nameof(GetActivationInfo))]
     [ProducesResponseType(typeof(PendingInfoResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetActivationInfo(Guid token)
     {
         var info = await _activationApiService.GetPendingInfo(token);
         if (info == null)
         {
-            return NotFound(new GeneralError("Token not found or already used"));
+            throw new HttpException(HttpStatusCode.NotFound, "Token not found or already used");
         }
 
         return Ok(info);
@@ -129,8 +129,8 @@ public class RegistrationController : ControllerBase
     /// <response code="404">Token expired or not found</response>
     [HttpPost("activation/{token:guid}", Name = nameof(Activate))]
     [ProducesResponseType(typeof(Envelope<DM.Web.API.Features.Community.Users.User>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status410Gone)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status410Gone)]
     public async Task<IActionResult> Activate(Guid token, [FromBody] ActivationRequest request) =>
         Ok(await _activationApiService.Activate(token, request, HttpContext));
 
@@ -149,7 +149,7 @@ public class RegistrationController : ControllerBase
     /// <response code="429">Too many requests. Try again later.</response>
     [HttpPost("activation/resend", Name = nameof(ResendActivation))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> ResendActivation([FromBody] ResendActivation resendActivation)
     {
         await _activationApiService.ResendActivation(resendActivation);

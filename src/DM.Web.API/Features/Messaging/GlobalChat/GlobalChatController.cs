@@ -65,9 +65,9 @@ public class GlobalChatController : ControllerBase
     [HttpPost("messages", Name = nameof(PostGlobalChatMessage))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Message>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> PostGlobalChatMessage([FromBody] CreateMessageInput input)
     {
         // Surface is GlobalChatMessage so the safe-image parser applies; the
@@ -86,7 +86,7 @@ public class GlobalChatController : ControllerBase
     [HttpDelete("messages/unread", Name = nameof(MarkGlobalChatAsRead))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> MarkGlobalChatAsRead()
     {
         await _apiService.MarkGlobalChatAsReadAsync();

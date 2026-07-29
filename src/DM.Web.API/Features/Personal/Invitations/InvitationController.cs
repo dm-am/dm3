@@ -44,7 +44,7 @@ public class InvitationController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     [HttpGet(Name = nameof(GetMyInvitations))]
     [ProducesResponseType(typeof(ListEnvelope<ReceivedInvitation>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetMyInvitations()
     {
         var invitations = await _invitationApiService.GetMyInvitations();
@@ -65,9 +65,9 @@ public class InvitationController : ControllerBase
     /// <response code="410">Invitation expired or already processed</response>
     [HttpPost("{id:guid}/accept", Name = nameof(AcceptInvitation))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status410Gone)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status410Gone)]
     public async Task<IActionResult> AcceptInvitation(Guid id)
     {
         await _invitationApiService.AcceptInvitation(id);
@@ -87,9 +87,9 @@ public class InvitationController : ControllerBase
     /// <response code="410">Invitation expired or already processed</response>
     [HttpPost("{id:guid}/reject", Name = nameof(RejectInvitation))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status410Gone)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status410Gone)]
     public async Task<IActionResult> RejectInvitation(Guid id)
     {
         await _invitationApiService.RejectInvitation(id);

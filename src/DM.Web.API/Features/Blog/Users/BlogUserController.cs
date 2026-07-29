@@ -54,7 +54,7 @@ public class BlogUserController : ControllerBase
     /// <response code="404">Blog not found</response>
     [HttpGet(Name = nameof(GetBlogUsers))]
     [ProducesResponseType(typeof(ListEnvelope<BlogUser>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogUsers(string id, [FromQuery] string? role = null)
     {
         var blogId = await ResolveBlogId(id);
@@ -78,9 +78,9 @@ public class BlogUserController : ControllerBase
     [HttpDelete("{userId:guid}", Name = nameof(RemoveBlogUser))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveBlogUser(string id, Guid userId)
     {
         var blogId = await ResolveBlogId(id);
@@ -100,7 +100,7 @@ public class BlogUserController : ControllerBase
     /// <response code="404">Blog not found</response>
     [HttpGet("assistants", Name = nameof(GetBlogAssistants))]
     [ProducesResponseType(typeof(ListEnvelope<BlogUser>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogAssistants(string id)
     {
         var blogId = await ResolveBlogId(id);
@@ -120,9 +120,9 @@ public class BlogUserController : ControllerBase
     [HttpDelete("assistants/{username}", Name = nameof(RemoveBlogAssistant))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveBlogAssistant(string id, string username)
     {
         var blogId = await ResolveBlogId(id);

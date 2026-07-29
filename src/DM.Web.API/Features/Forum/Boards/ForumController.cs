@@ -1,6 +1,5 @@
 using System.Threading.Tasks;
 using DM.Web.API.Shared.Authentication;
-using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Forum.Comments;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -46,7 +45,7 @@ public class ForumController : ControllerBase
     [HttpDelete("comments/unread", Name = nameof(ReadAllForumComments))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> ReadAllForumComments()
     {
         await _commentApiService.MarkAllAsRead();

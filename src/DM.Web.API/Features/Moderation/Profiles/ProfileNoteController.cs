@@ -50,9 +50,9 @@ public class ProfileNoteController : ControllerBase
     [HttpGet("users/{username}/notes", Name = nameof(GetUserModNotes))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(typeof(ListEnvelope<ModeratedProfileNote>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserModNotes(string username) =>
         Ok(new ListEnvelope<ModeratedProfileNote>(await _noteApiService.GetNotes(username)));
 
@@ -70,9 +70,9 @@ public class ProfileNoteController : ControllerBase
     [HttpGet("notes/{id}", Name = nameof(GetModNote))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(typeof(ModeratedProfileNote), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetModNote(Guid id) =>
         Ok(await _noteApiService.GetNote(id));
 
@@ -93,10 +93,10 @@ public class ProfileNoteController : ControllerBase
     [HttpPost("users/{username}/notes", Name = nameof(CreateModNote))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(typeof(ModeratedProfileNote), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> CreateModNote(string username, [FromBody] CreateModeratedProfileNoteRequest request)
     {
         var result = await _noteApiService.CreateNote(username, request);
@@ -123,10 +123,10 @@ public class ProfileNoteController : ControllerBase
     [HttpPut("notes/{id}", Name = nameof(UpdateModNote))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(typeof(ModeratedProfileNote), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateModNote(Guid id, [FromBody] UpdateModeratedProfileNoteRequest request) =>
         Ok(await _noteApiService.UpdateNote(id, request));
 
@@ -148,9 +148,9 @@ public class ProfileNoteController : ControllerBase
     [HttpDelete("notes/{id}", Name = nameof(DeleteModNote))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteModNote(Guid id)
     {
         await _noteApiService.DeleteNote(id);

@@ -1720,10 +1720,6 @@
     "roomViewPrivateText",
     "surface"
   ],
-  "DM.Web.API.Shared.Dto.BadRequestError": [
-    "invalidProperties",
-    "message"
-  ],
   "DM.Web.API.Shared.Dto.Comment": [
     "author",
     "createdUtc",
@@ -1937,9 +1933,6 @@
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Shared.Dto.Comment, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "metadata",
     "resource"
-  ],
-  "DM.Web.API.Shared.Dto.GeneralError": [
-    "message"
   ],
   "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Account.Authentication.Session, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
@@ -2181,5 +2174,20 @@
     "lastActivityUtc",
     "role",
     "username"
+  ],
+  "Microsoft.AspNetCore.Mvc.ProblemDetails": [
+    "detail",
+    "instance",
+    "status",
+    "title",
+    "type"
+  ],
+  "Microsoft.AspNetCore.Mvc.ValidationProblemDetails": [
+    "detail",
+    "errors",
+    "instance",
+    "status",
+    "title",
+    "type"
   ]
 }

@@ -45,7 +45,7 @@ public class GameReviewController : ControllerBase
     /// <response code="404">Game not found</response>
     [HttpGet(Name = nameof(GetGameReviews))]
     [ProducesResponseType(typeof(ListEnvelope<GameReviewDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameReviews(Guid id, [FromQuery] PagingQuery q)
     {
         var (reviews, paging) = await _gameReviewService.GetListAsync(id, q);
@@ -72,11 +72,11 @@ public class GameReviewController : ControllerBase
     [HttpPost(Name = nameof(CreateGameReview))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<GameReviewDto>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateGameReview(Guid id, [FromBody] CreateGameReviewRequest request)
     {
         var createReview = new CreateGameReview
@@ -98,7 +98,7 @@ public class GameReviewController : ControllerBase
     /// <response code="404">Review not found</response>
     [HttpGet("{reviewId:guid}", Name = nameof(GetGameReview))]
     [ProducesResponseType(typeof(Envelope<GameReviewDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameReview(Guid id, Guid reviewId)
     {
         var review = await _gameReviewService.GetAsync(reviewId);

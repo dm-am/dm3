@@ -53,10 +53,10 @@ public class AchievementCatalogController : ControllerBase
     /// <response code="404">Category not found.</response>
     [HttpPatch("achievement-categories/{id:guid}", Name = nameof(UpdateAchievementCategory))]
     [ProducesResponseType(typeof(Envelope<AchievementCategory>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateAchievementCategory(Guid id, [FromBody] UpdateAchievementCategoryRequest request)
     {
         var domain = _mapper.Map<DomainUpdateAchievementCategory>(request);
@@ -73,10 +73,10 @@ public class AchievementCatalogController : ControllerBase
     /// <response code="409">Code is already taken.</response>
     [HttpPost("achievement-types", Name = nameof(CreateAchievementType))]
     [ProducesResponseType(typeof(Envelope<AchievementType>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateAchievementType([FromBody] CreateAchievementTypeRequest request)
     {
         var domain = _mapper.Map<DomainCreateAchievementType>(request);
@@ -95,10 +95,10 @@ public class AchievementCatalogController : ControllerBase
     /// <response code="404">Tier not found.</response>
     [HttpPatch("achievement-types/{id:guid}", Name = nameof(UpdateAchievementType))]
     [ProducesResponseType(typeof(Envelope<AchievementType>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateAchievementType(Guid id, [FromBody] UpdateAchievementTypeRequest request)
     {
         var domain = _mapper.Map<DomainUpdateAchievementType>(request);
@@ -114,9 +114,9 @@ public class AchievementCatalogController : ControllerBase
     /// <response code="404">Tier not found.</response>
     [HttpDelete("achievement-types/{id:guid}", Name = nameof(DeleteAchievementType))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteAchievementType(Guid id)
     {
         await _achievementService.DeleteTypeAsync(id);

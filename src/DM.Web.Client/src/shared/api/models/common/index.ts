@@ -53,12 +53,21 @@ export type Envelope<T> = {
   resource: T;
 };
 
+/**
+ * RFC 9457 problem document. Every failure the API produces has this shape:
+ * ErrorHandlingMiddleware builds them all through ProblemDetailsFactory and
+ * answers application/problem+json.
+ *
+ * The server's message is the title. There used to be a "message" field here
+ * too, copied from a DTO that no code path ever wrote to the wire, and five
+ * dialogs read it — so every one of them always showed its fallback string
+ * instead of what the server said.
+ */
 export type GeneralError = {
   type: string;
   title: string;
   status: number;
   traceId: string;
-  message?: string;
 };
 
 export enum ValidationErrorCode {
@@ -70,9 +79,13 @@ export enum ValidationErrorCode {
   Invalid = "Invalid",
 }
 
-// API can return either invalidProperties (manual) or errors (FluentValidation)
+/**
+ * A 400 with field-level detail. "errors" is what
+ * ProblemDetailsFactory.CreateValidationProblemDetails writes, and it is the
+ * only shape on the wire; "invalidProperties" belonged to the hand-built DTO
+ * that has been removed.
+ */
 export type BadRequestError = GeneralError & {
-  invalidProperties?: { [field: string]: string[] };
   errors?: { [field: string]: string[] };
 };
 

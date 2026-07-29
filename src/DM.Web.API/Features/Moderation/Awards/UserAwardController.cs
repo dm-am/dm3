@@ -47,10 +47,10 @@ public class UserAwardController : ControllerBase
     /// <response code="404">User, type or series not found.</response>
     [HttpPost("users/{username}/awards", Name = nameof(GrantUserAward))]
     [ProducesResponseType(typeof(Envelope<UserAward>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GrantUserAward(string username, [FromBody] GrantUserAwardRequest request)
     {
         var granted = await _awardService.GrantAsync(username, request.AwardTypeId, request.ContestSeriesId, request.WorkUrl);
@@ -67,9 +67,9 @@ public class UserAwardController : ControllerBase
     /// <response code="404">Record not found.</response>
     [HttpDelete("users/{username}/awards/{awardId:guid}", Name = nameof(RevokeUserAward))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RevokeUserAward(string username, Guid awardId)
     {
         _ = username; // route param for URL consistency, validation is by awardId

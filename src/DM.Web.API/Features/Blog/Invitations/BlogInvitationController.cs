@@ -46,9 +46,9 @@ public class BlogInvitationController : ControllerBase
     [HttpGet(Name = nameof(GetBlogInvitations))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(ListEnvelope<BlogInvitation>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogInvitations(string id)
     {
         var blogId = await ResolveBlogId(id);
@@ -67,9 +67,9 @@ public class BlogInvitationController : ControllerBase
     [HttpPost("assistants", Name = nameof(InviteBlogAssistant))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(BlogInvitation), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> InviteBlogAssistant(string id, [FromBody] CreateInvitationRequest request)
     {
         var blogId = await ResolveBlogId(id);
@@ -89,9 +89,9 @@ public class BlogInvitationController : ControllerBase
     [HttpPost("readers", Name = nameof(InviteBlogReader))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(BlogInvitation), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> InviteBlogReader(string id, [FromBody] CreateInvitationRequest request)
     {
         var blogId = await ResolveBlogId(id);
@@ -111,9 +111,9 @@ public class BlogInvitationController : ControllerBase
     [HttpDelete("{invitationId:guid}", Name = nameof(CancelBlogInvitation))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> CancelBlogInvitation(string id, Guid invitationId)
     {
         await _apiService.CancelInvitation(invitationId);

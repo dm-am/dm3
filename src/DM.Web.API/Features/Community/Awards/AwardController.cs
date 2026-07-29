@@ -66,7 +66,7 @@ public class AwardController : ControllerBase
     /// <response code="404">User not found.</response>
     [HttpGet("users/{username}/awards", Name = nameof(GetUserAwards))]
     [ProducesResponseType(typeof(ListEnvelope<UserAward>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserAwards(string username)
     {
         var list = await _awardService.GetUserAwardsAsync(username);

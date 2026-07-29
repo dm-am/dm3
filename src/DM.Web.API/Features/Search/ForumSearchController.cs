@@ -53,8 +53,8 @@ public class ForumSearchController : ControllerBase
     [HttpGet("forum", Name = nameof(SearchForum))]
     [EnableRateLimiting(RateLimitPolicies.Sliding)]
     [ProducesResponseType(typeof(ListEnvelope<ForumSearchResult>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> SearchForum(
         [FromQuery][Required][StringLength(500, MinimumLength = 1)] string query,
         [FromQuery] PagingQuery q,

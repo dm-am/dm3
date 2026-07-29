@@ -146,4 +146,87 @@ public class OpenApiContractShould : IntegrationTestBase
         serialised.Should().Be(existing,
             "the API contract changed; artifacts/openapi-contract.json has just been rewritten, review the diff and commit it");
     }
+
+    /// <summary>
+    /// Every failure response is a problem document, and the contract says so.
+    /// </summary>
+    /// <remarks>
+    /// ErrorHandlingMiddleware answers with ProblemDetails and
+    /// application/problem+json, and always has. The attributes named two DTOs
+    /// that nothing ever wrote to the wire — 888 of the 890 declared failure
+    /// responses — so every generated client got the wrong type for every error
+    /// it could receive. Cleaning that up once is a tidy; this is what keeps it
+    /// true, because a new endpoint copies the attributes of its neighbour.
+    /// </remarks>
+    [Fact]
+    public async Task DescribeEveryFailureResponseAsAProblemDocument()
+    {
+        var wrong = new List<string>();
+        var checked_ = 0;
+
+        foreach (var group in SwaggerExtensions.ApiGroups)
+        {
+            var response = await Client.GetAsync($"/swagger/{group}/swagger.json");
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            foreach (var path in document.RootElement.GetProperty("paths").EnumerateObject())
+            {
+                foreach (var operation in path.Value.EnumerateObject())
+                {
+                    if (!operation.Value.TryGetProperty("responses", out var responses))
+                    {
+                        continue;
+                    }
+
+                    foreach (var status in responses.EnumerateObject())
+                    {
+                        if (!int.TryParse(status.Name, out var code) || code < 400)
+                        {
+                            continue;
+                        }
+
+                        checked_++;
+
+                        // A failure response with no body is legitimate — 401 on
+                        // an endpoint that says nothing beyond the status.
+                        var schemaRef = SchemaReferenceOf(status.Value);
+                        if (schemaRef == null)
+                        {
+                            continue;
+                        }
+
+                        if (!schemaRef.EndsWith("ProblemDetails", StringComparison.Ordinal))
+                        {
+                            wrong.Add($"{operation.Name.ToUpperInvariant()} {path.Name} {status.Name} -> {schemaRef}");
+                        }
+                    }
+                }
+            }
+        }
+
+        checked_.Should().BeGreaterThan(0, "the API declares failure responses");
+        wrong.Should().BeEmpty(
+            "the middleware answers every failure with ProblemDetails, so no endpoint may declare another type");
+    }
+
+    /// <summary>Schema id an OpenAPI response body points at, if it declares one.</summary>
+    private static string? SchemaReferenceOf(JsonElement response)
+    {
+        if (!response.TryGetProperty("content", out var content))
+        {
+            return null;
+        }
+
+        foreach (var mediaType in content.EnumerateObject())
+        {
+            if (mediaType.Value.TryGetProperty("schema", out var schema) &&
+                schema.TryGetProperty("$ref", out var reference))
+            {
+                return reference.GetString();
+            }
+        }
+
+        return null;
+    }
 }

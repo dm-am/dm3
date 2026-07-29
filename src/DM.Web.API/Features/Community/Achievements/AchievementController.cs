@@ -72,7 +72,7 @@ public class AchievementController : ControllerBase
     /// <response code="404">User not found.</response>
     [HttpGet("users/{username}/achievements", Name = nameof(GetUserAchievements))]
     [ProducesResponseType(typeof(ListEnvelope<UserAchievement>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserAchievements(string username)
     {
         var list = await _achievementService.GetUserAchievementsAsync(username);
