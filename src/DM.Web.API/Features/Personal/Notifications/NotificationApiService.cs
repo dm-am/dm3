@@ -5,10 +5,8 @@ using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Dto;
-using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Account.Settings;
 using DM.Web.API.Notifications;
-using Microsoft.EntityFrameworkCore;
 using DbUserSettings = DM.Infrastructure.Persistence.Entities.Account.Settings.UserSettings;
 
 namespace DM.Web.API.Features.Personal.Notifications;
@@ -18,7 +16,7 @@ internal class NotificationApiService : INotificationApiService
 {
     private readonly INotificationService _notificationService;
     private readonly IIdentityProvider _identityProvider;
-    private readonly DmDbContext _dbContext;
+    private readonly IBotLinkRepository _botLinkRepository;
     private readonly INotificationSettingsRepository _settingsRepository;
     private readonly IBotLinkService _botLinkService;
 
@@ -26,13 +24,13 @@ internal class NotificationApiService : INotificationApiService
     public NotificationApiService(
         INotificationService notificationService,
         IIdentityProvider identityProvider,
-        DmDbContext dbContext,
+        IBotLinkRepository botLinkRepository,
         INotificationSettingsRepository settingsRepository,
         IBotLinkService botLinkService)
     {
         _notificationService = notificationService;
         _identityProvider = identityProvider;
-        _dbContext = dbContext;
+        _botLinkRepository = botLinkRepository;
         _settingsRepository = settingsRepository;
         _botLinkService = botLinkService;
     }
@@ -72,17 +70,14 @@ internal class NotificationApiService : INotificationApiService
     {
         var userId = _identityProvider.Current.User.UserId;
 
-        var user = await _dbContext.Users
-            .Where(u => u.UserId == userId)
-            .Select(u => new { u.DiscordId, u.TelegramId })
-            .FirstOrDefaultAsync();
+        var channels = await _botLinkRepository.GetChannelIds(userId);
 
         var settings = await _settingsRepository.GetByUserId(userId);
 
         var dto = new NotificationSettings
         {
-            Discord = MapBotConnection(user?.DiscordId, settings?.DiscordPreferences),
-            Telegram = MapBotConnection(user?.TelegramId, settings?.TelegramPreferences)
+            Discord = MapBotConnection(channels.DiscordId, settings?.DiscordPreferences),
+            Telegram = MapBotConnection(channels.TelegramId, settings?.TelegramPreferences)
         };
 
         return dto;
@@ -117,15 +112,12 @@ internal class NotificationApiService : INotificationApiService
 
         await _settingsRepository.Upsert(settings);
 
-        var user = await _dbContext.Users
-            .Where(u => u.UserId == userId)
-            .Select(u => new { u.DiscordId, u.TelegramId })
-            .FirstOrDefaultAsync();
+        var channels = await _botLinkRepository.GetChannelIds(userId);
 
         var dto = new NotificationSettings
         {
-            Discord = MapBotConnection(user?.DiscordId, settings.DiscordPreferences),
-            Telegram = MapBotConnection(user?.TelegramId, settings.TelegramPreferences)
+            Discord = MapBotConnection(channels.DiscordId, settings.DiscordPreferences),
+            Telegram = MapBotConnection(channels.TelegramId, settings.TelegramPreferences)
         };
 
         return dto;

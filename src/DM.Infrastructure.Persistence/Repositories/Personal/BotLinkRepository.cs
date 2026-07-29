@@ -104,6 +104,17 @@ internal class BotLinkRepository : MongoCollectionRepository<UserSettings>, IBot
     }
 
     /// <inheritdoc />
+    public async Task<BotChannelIds> GetChannelIds(Guid userId, CancellationToken ct = default)
+    {
+        var ids = await _dbContext.Users
+            .Where(u => u.UserId == userId)
+            .Select(u => new { u.DiscordId, u.TelegramId })
+            .FirstOrDefaultAsync(ct);
+
+        return new BotChannelIds(ids?.DiscordId, ids?.TelegramId);
+    }
+
+    /// <inheritdoc />
     public async Task<string?> GetUsername(Guid userId, CancellationToken ct = default)
     {
         return await _dbContext.Users
