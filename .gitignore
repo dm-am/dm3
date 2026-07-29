@@ -24,8 +24,15 @@ docker/nginx/.htpasswd
 docker/.env
 docker/.env.mirror
 
-# Claude Code plans
-.claude/
+# Claude Code: the agent configuration is part of the project, so it is
+# versioned. Two hooks refuse the commands that lose work (git checkout, reset
+# --hard, clean -fd, stash drop) and the ones that would add a second
+# migration; both enforce rules the repository states nowhere else in an
+# executable form, and while this directory was ignored they existed on one
+# machine only. What stays out is machine- and session-local.
+.claude/settings.local.json
+.claude/*.doctor-backup
+.claude/worktrees/
 
 # Build artifacts: the OpenAPI contract is emitted by the integration suite
 # and uploaded by CI, not committed - a checked-in copy goes stale silently.

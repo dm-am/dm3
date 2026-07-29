@@ -1,0 +1,53 @@
+# DM3 — Claude Code Instructions
+
+Платформа для текстовых ролевых игр. Modular Monolith + Clean Architecture.
+
+**Язык:** документация на русском, код и комментарии на английском.
+Правила русского текста (буква "е", кавычки) — [CODE_STYLE.md](../docs/conventions/CODE_STYLE.md).
+
+<critical_rules>
+## Запрещенные команды (hooks блокируют автоматически)
+
+НИКОГДА не использовать:
+- `git checkout` — теряет незакоммиченные изменения
+- `git reset --hard` — теряет незакоммиченные изменения
+- `git clean -fd` — удаляет untracked файлы
+- `git stash drop` — теряет stash
+
+**Для отмены изменений:** `git stash` (без drop) или спросить пользователя.
+
+## Миграции
+
+Только одна миграция `InitialCreate`. Изменения схемы вносить в нее, не создавать новые.
+
+Правило держится на том, что боевой базы не существует: схема накатывается
+ресетом. Оно заканчивается в день, когда появятся данные, которые нельзя
+потерять — триггер и порядок перехода описаны в
+[DATA_STORAGE.md](../docs/conventions/DATA_STORAGE.md).
+</critical_rules>
+
+## Ключевые документы
+
+| Документ | Описание |
+|----------|----------|
+| [README.md](../README.md) | Быстрый старт, навигация |
+| [PATTERNS.md](../docs/conventions/PATTERNS.md) | **Структура кода, блюпринт (SSOT)** |
+| [CODE_STYLE.md](../docs/conventions/CODE_STYLE.md) | Стандарты кода |
+| [API_DESIGN.md](../docs/conventions/API_DESIGN.md) | Контракт HTTP API, типы ошибок |
+| [AUTHENTICATION.md](../docs/architecture/AUTHENTICATION.md) | Аутентификация |
+| [AUTHORIZATION.md](../docs/architecture/AUTHORIZATION.md) | Роли и права |
+
+## Принципы документации
+
+- **Минимум дублирования** — ссылки вместо копирования
+- **Код > документация** — паттерны смотреть в коде
+- **Только необходимое** — то, что нельзя узнать из кода
+
+Этот файл держится на том же принципе: чек-лист ревью и перечень разобранных
+ложных срабатываний живут в [code-reviewer](agents/code-reviewer.md), а не
+дублируются здесь.
+
+<reminder>
+КРИТИЧНО: git checkout, git reset --hard, git clean -fd, git stash drop — ЗАПРЕЩЕНЫ.
+Миграции: ТОЛЬКО InitialCreate — новые создавать нельзя.
+</reminder>
