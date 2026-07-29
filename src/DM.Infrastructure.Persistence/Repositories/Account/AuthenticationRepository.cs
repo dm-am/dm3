@@ -85,14 +85,22 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
         {
             Id = dbSettings.UserId,
             Theme = dbSettings.Theme,
-            Paging = new PagingSettings
-            {
-                PostsPerPage = dbSettings.Paging.PostsPerPage,
-                CommentsPerPage = dbSettings.Paging.CommentsPerPage,
-                MessagesPerPage = dbSettings.Paging.MessagesPerPage,
-                TopicsPerPage = dbSettings.Paging.TopicsPerPage,
-                EntitiesPerPage = dbSettings.Paging.EntitiesPerPage
-            }
+            // Mongo has no schema, so a settings document can exist without the
+            // Paging sub-document — an older document, or a partial write. This
+            // used to dereference it unconditionally and throw
+            // NullReferenceException inside authentication, turning every
+            // request from that user into a 500 with no way back short of
+            // deleting the document.
+            Paging = dbSettings.Paging == null
+                ? UserSettings.Default.Paging
+                : new PagingSettings
+                {
+                    PostsPerPage = dbSettings.Paging.PostsPerPage,
+                    CommentsPerPage = dbSettings.Paging.CommentsPerPage,
+                    MessagesPerPage = dbSettings.Paging.MessagesPerPage,
+                    TopicsPerPage = dbSettings.Paging.TopicsPerPage,
+                    EntitiesPerPage = dbSettings.Paging.EntitiesPerPage
+                }
         };
     }
 
