@@ -426,4 +426,60 @@ public class BlogIntentionResolverWithoutTargetShould
 
         result.Should().BeFalse();
     }
+
+    [Theory]
+    [InlineData(UserRole.Mentor)]
+    [InlineData(UserRole.Moderator)]
+    [InlineData(UserRole.SeniorModerator)]
+    [InlineData(UserRole.Admin)]
+    public void AllowMentorAndAboveToMoveABlogThroughPremoderation(UserRole role)
+    {
+        var user = CreateUser(Guid.NewGuid(), role);
+
+        var result = _resolver.IsAllowed(user, BlogIntention.SetStatusModeration);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DenyRegularUserToMoveABlogThroughPremoderation()
+    {
+        var user = CreateUser(Guid.NewGuid());
+
+        // Premoderation is what holds a newbie's blog back until somebody
+        // experienced has looked at it. A user who could release their own blog
+        // would be waving themselves through.
+        var result = _resolver.IsAllowed(user, BlogIntention.SetStatusModeration);
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DenyGuestToMoveABlogThroughPremoderation()
+    {
+        var user = CreateUser(Guid.Empty, UserRole.Guest);
+
+        var result = _resolver.IsAllowed(user, BlogIntention.SetStatusModeration);
+
+        result.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(BlogIntention.Edit)]
+    [InlineData(BlogIntention.Delete)]
+    [InlineData(BlogIntention.ViewDraft)]
+    [InlineData(BlogIntention.CreatePublication)]
+    [InlineData(BlogIntention.ApprovePublications)]
+    [InlineData(BlogIntention.SetStatusActive)]
+    [InlineData(BlogIntention.SetStatusClosed)]
+    public void DenyIntentionsThatNeedABlogWhenAskedWithoutOne(BlogIntention intention)
+    {
+        var user = CreateUser(Guid.NewGuid(), UserRole.Admin);
+
+        // Every remaining arm of BlogIntention is a question about one blog. Asked
+        // without a blog they must fall through, not answer from the role alone.
+        var result = _resolver.IsAllowed(user, intention);
+
+        result.Should().BeFalse();
+    }
 }
