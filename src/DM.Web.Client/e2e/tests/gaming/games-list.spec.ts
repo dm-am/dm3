@@ -8,7 +8,7 @@ test.describe("Games List Page", () => {
       await page.goto("/games");
 
       // Verify table exists
-      const table = page.locator("#results");
+      const table = page.locator(".games-data-table");
       await expect(table).toBeVisible();
 
       // Verify column headers
@@ -42,15 +42,14 @@ test.describe("Games List Page", () => {
       await expect(page.locator(".sort-btn")).toBeVisible();
     });
 
-    test("shows pagination above and below the table", async ({ page }) => {
+    test("shows pagination under the table", async ({ page }) => {
       await page.goto("/games");
-      await page.waitForSelector("#results");
+      await page.waitForSelector(".games-data-table");
 
-      // The seed holds more games than fit on one page, so both pagers must be
-      // there. The previous version asserted count >= 0, which is true of every
+      // The seed holds more games than fit on one page, so the pager is there.
+      // The previous version asserted count >= 0, which is true of every
       // possible outcome including a page that failed to render.
-      await expect(page.locator(".paging-top")).toBeVisible();
-      await expect(page.locator(".paging-bottom")).toBeVisible();
+      await expect(page.locator(".paging")).toBeVisible();
     });
   });
 
@@ -400,7 +399,7 @@ test.describe("Games List Page", () => {
       await page.goto("/games");
 
       // Wait for table to load
-      await page.waitForSelector("#results");
+      await page.waitForSelector(".games-data-table");
 
       // Find a tag link in the table
       const tagLink = page.locator(".tag-link").first();
@@ -598,10 +597,10 @@ test.describe("Games List Page", () => {
       await page.goto("/games");
 
       // Wait for table
-      await page.waitForSelector("#results");
+      await page.waitForSelector(".games-data-table");
 
       // Check if pagination exists
-      const nextPageLink = page.locator(".paging-bottom a").last();
+      const nextPageLink = page.locator(".paging a").last();
       if (await nextPageLink.isVisible()) {
         await nextPageLink.click();
 
@@ -614,10 +613,10 @@ test.describe("Games List Page", () => {
       await page.goto("/games?status=Active");
 
       // Wait for table
-      await page.waitForSelector("#results");
+      await page.waitForSelector(".games-data-table");
 
       // Check if pagination exists
-      const nextPageLink = page.locator(".paging-bottom a").last();
+      const nextPageLink = page.locator(".paging a").last();
       if (await nextPageLink.isVisible()) {
         await nextPageLink.click();
 
@@ -665,7 +664,7 @@ test.describe("Games List Page", () => {
       await page.goto("/games?search=xyznonexistentgame123456789");
 
       // Wait for table to load
-      await page.waitForSelector("#results");
+      await page.waitForSelector(".games-data-table");
 
       // Should show empty message
       await expect(
@@ -679,7 +678,7 @@ test.describe("Games List Page", () => {
       await page.goto("/games");
 
       // Wait for table to load
-      await page.waitForSelector("#results");
+      await page.waitForSelector(".games-data-table");
 
       // Participants column should show slots and reader count
       const participantsCell = page.locator(".participants").first();
@@ -695,7 +694,7 @@ test.describe("Games List Page", () => {
       await page.goto("/games");
 
       // Wait for table to load
-      await page.waitForSelector("#results");
+      await page.waitForSelector(".games-data-table");
 
       // Find reader count element
       const readersCount = page.locator(".readers-count").first();
@@ -719,7 +718,7 @@ test.describe("Games List Page", () => {
 
       // Table should show loading state
       // Note: exact selector depends on DataTable implementation
-      const table = page.locator("#results");
+      const table = page.locator(".games-data-table");
       await expect(table).toBeVisible();
     });
   });
