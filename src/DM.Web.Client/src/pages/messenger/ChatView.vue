@@ -25,6 +25,7 @@ import { SvgIcon } from "@/shared/ui/Icon";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { messagingApi } from "@/entities/message";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
+import { useMessageToolbar } from "@/shared/lib/composables/useMessageToolbar";
 
 const route = useRoute();
 const router = useRouter();
@@ -87,13 +88,30 @@ const editingId = ref<string | null>(null);
 const editText = ref("");
 
 // Delete confirmation state
-const confirmingDeleteId = ref<string | null>(null);
+const toolbarEl = ref<HTMLElement | null>(null);
 
 // Hover toolbar state
-const hoveredMessageId = ref<string | null>(null);
-const toolbarPosition = ref({ top: 0, right: 0 });
-const isToolbarHovered = ref(false);
-let hideToolbarTimeout: ReturnType<typeof setTimeout> | null = null;
+// Shared with the global chat. The keyboard path below arrives with it: this
+// view had hover only, so a keyboard user could reach every message action in
+// one chat and none in the other.
+const {
+  hoveredMessageId,
+  toolbarPosition,
+  isToolbarHovered,
+  confirmingDeleteId,
+  handleMessageMouseEnter,
+  handleMessageFocusIn,
+  handleMessageMouseLeave,
+  handleMessageFocusOut,
+  handleToolbarMouseEnter,
+  handleToolbarMouseLeave,
+  handleToolbarFocusIn,
+  handleToolbarFocusOut,
+  handleScrollStart,
+} = useMessageToolbar({
+  toolbar: toolbarEl,
+  isScrolling: () => isScrolling,
+});
 
 const hoveredMessage = computed(() => {
   if (!hoveredMessageId.value) return null;
@@ -209,60 +227,9 @@ function scrollToBottom() {
   });
 }
 
-function handleMessageMouseEnter(event: MouseEvent, msgId: string) {
-  if (isScrolling) return;
-  if (hideToolbarTimeout) {
-    clearTimeout(hideToolbarTimeout);
-    hideToolbarTimeout = null;
-  }
-
-  const target = event.currentTarget as HTMLElement;
-  const rect = target.getBoundingClientRect();
-
-  toolbarPosition.value = {
-    top: rect.top - 16,
-    right: window.innerWidth - rect.right + 8,
-  };
-  hoveredMessageId.value = msgId;
-}
-
-function handleMessageMouseLeave() {
-  if (hideToolbarTimeout) {
-    clearTimeout(hideToolbarTimeout);
-  }
-  hideToolbarTimeout = setTimeout(() => {
-    if (!isToolbarHovered.value) {
-      hoveredMessageId.value = null;
-      confirmingDeleteId.value = null;
-    }
-    hideToolbarTimeout = null;
-  }, 150);
-}
-
-function handleToolbarMouseEnter() {
-  if (hideToolbarTimeout) {
-    clearTimeout(hideToolbarTimeout);
-    hideToolbarTimeout = null;
-  }
-  isToolbarHovered.value = true;
-}
-
-function handleToolbarMouseLeave() {
-  isToolbarHovered.value = false;
-  hideToolbarTimeout = setTimeout(() => {
-    hoveredMessageId.value = null;
-    confirmingDeleteId.value = null;
-    hideToolbarTimeout = null;
-  }, 100);
-}
-
 function handleWheel() {
   isScrolling = true;
-  if (hoveredMessageId.value) {
-    hoveredMessageId.value = null;
-    confirmingDeleteId.value = null;
-    isToolbarHovered.value = false;
-  }
+  handleScrollStart();
   if (scrollEndTimeout) {
     clearTimeout(scrollEndTimeout);
   }
@@ -454,7 +421,6 @@ onUnmounted(() => {
   messagingStore.clearSelection();
   messagesContainer.value?.removeEventListener("wheel", handleWheel);
   messagesContainer.value?.removeEventListener("scroll", handleScroll);
-  if (hideToolbarTimeout) clearTimeout(hideToolbarTimeout);
   if (scrollEndTimeout) clearTimeout(scrollEndTimeout);
 });
 </script>
@@ -550,6 +516,7 @@ onUnmounted(() => {
                   <div
                     :id="`msg-${(messagesWithSeparators[virtualRow.index] as any).id}`"
                     class="pm-message"
+                    tabindex="0"
                     :class="{
                       removed: (messagesWithSeparators[virtualRow.index] as any)
                         .isRemoved,
@@ -567,6 +534,13 @@ onUnmounted(() => {
                       )
                     "
                     @mouseleave="handleMessageMouseLeave"
+                    @focusin="
+                      handleMessageFocusIn(
+                        $event,
+                        (messagesWithSeparators[virtualRow.index] as any).id,
+                      )
+                    "
+                    @focusout="handleMessageFocusOut"
                   >
                     <ChatMessage
                       :message="messagesWithSeparators[virtualRow.index] as any"
@@ -692,6 +666,7 @@ onUnmounted(() => {
             !hoveredMessage.isRemoved &&
             !isEditing(hoveredMessage.id)
           "
+          ref="toolbarEl"
           class="msg-toolbar-fixed"
           :style="{
             top: toolbarPosition.top + 'px',
@@ -699,6 +674,8 @@ onUnmounted(() => {
           }"
           @mouseenter="handleToolbarMouseEnter"
           @mouseleave="handleToolbarMouseLeave"
+          @focusin="handleToolbarFocusIn"
+          @focusout="handleToolbarFocusOut"
         >
           <!-- Delete confirmation mode -->
           <template v-if="confirmingDeleteId === hoveredMessage.id">
@@ -883,6 +860,19 @@ onUnmounted(() => {
   &.hovered
     background-color: $bg-element
     border-radius: 0 $border-radius $border-radius 0
+
+  &:focus-visible
+    background-color: $bg-element
+    border-radius: 0 $border-radius $border-radius 0
+
+  // tabindex="0" makes the whole row focusable so keyboard users can reach
+  // the hover-only toolbar (focusin -> handleMessageFocusIn); outline only
+  // on :focus-visible so mouse clicks don't leave a visible ring.
+  &:focus
+    outline: none
+  &:focus-visible
+    outline: 2px solid $border-focus
+    outline-offset: -2px
 
 .pm-message.highlighted
   animation: highlight-pulse 1.5s ease-out forwards

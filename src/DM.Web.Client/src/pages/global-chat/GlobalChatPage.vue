@@ -42,6 +42,7 @@ import { useToast } from "@/shared/lib/composables/useToast";
 import { useGlobalSignalR } from "@/shared/lib/composables/useSignalR";
 import { EventType } from "@/shared/api/models/notifications/signalr";
 import type { SignalRNotification } from "@/shared/api/models/notifications/signalr";
+import { useMessageToolbar } from "@/shared/lib/composables/useMessageToolbar";
 
 const router = useRouter();
 const route = useRoute();
@@ -225,14 +226,27 @@ function cleanupInfiniteScroll() {
 const editingId = ref<string | null>(null);
 const editText = ref("");
 
-// Delete confirmation state
-const confirmingDeleteId = ref<string | null>(null);
-
-// Hover toolbar state
-const hoveredMessageId = ref<string | null>(null);
-const toolbarPosition = ref({ top: 0, right: 0 });
-const isToolbarHovered = ref(false);
-let hideToolbarTimeout: ReturnType<typeof setTimeout> | null = null;
+// Hover toolbar: shared with the messenger, which is what keeps the keyboard
+// path below from existing in one chat and not the other.
+const {
+  hoveredMessageId,
+  toolbarPosition,
+  isToolbarHovered,
+  confirmingDeleteId,
+  handleMessageMouseEnter,
+  handleMessageFocusIn,
+  handleMessageMouseLeave,
+  handleMessageFocusOut,
+  handleToolbarMouseEnter,
+  handleToolbarMouseLeave,
+  handleToolbarFocusIn,
+  handleToolbarFocusOut,
+  handleScrollStart,
+} = useMessageToolbar({
+  container: globalChatContainer,
+  toolbar: toolbarEl,
+  isScrolling: () => isScrolling.value,
+});
 
 const hoveredMessage = computed(() => {
   if (!hoveredMessageId.value) return null;
@@ -244,104 +258,9 @@ const isToolbarVisible = computed(() => {
   return !!(hoveredMessage.value && globalChatContainer.value);
 });
 
-function handleMessageMouseEnter(event: MouseEvent, msgId: string) {
-  if (isScrolling.value) return;
-  showToolbarFor(event.currentTarget as HTMLElement, msgId);
-}
-
-// Keyboard-reachable counterpart to hover: messages are tabindex="0", so
-// focus-within (focusin bubbles) reveals the same toolbar hover would.
-function handleMessageFocusIn(event: FocusEvent, msgId: string) {
-  showToolbarFor(event.currentTarget as HTMLElement, msgId);
-}
-
-function showToolbarFor(target: HTMLElement, msgId: string) {
-  if (hideToolbarTimeout) {
-    clearTimeout(hideToolbarTimeout);
-    hideToolbarTimeout = null;
-  }
-
-  const rect = target.getBoundingClientRect();
-  const container = globalChatContainer.value;
-
-  if (!container) return;
-
-  const containerRect = container.getBoundingClientRect();
-
-  // Calculate position relative to globalChat-container
-  toolbarPosition.value = {
-    top: rect.top - containerRect.top - 16,
-    right: containerRect.right - rect.right + 8,
-  };
-  hoveredMessageId.value = msgId;
-}
-
-function handleMessageMouseLeave() {
-  if (hideToolbarTimeout) {
-    clearTimeout(hideToolbarTimeout);
-  }
-  hideToolbarTimeout = setTimeout(() => {
-    if (!isToolbarHovered.value) {
-      hoveredMessageId.value = null;
-      confirmingDeleteId.value = null;
-    }
-    hideToolbarTimeout = null;
-  }, 150);
-}
-
-// Focus left the message (Tab moved elsewhere) — same debounce as mouseleave
-// so moving focus into the now-visible toolbar buttons doesn't close it. The
-// toolbar is a sibling element (absolutely positioned, not a DOM descendant
-// of the message row), so focus-within alone won't keep it open when Tab
-// moves from the message into the toolbar — check relatedTarget explicitly.
-function handleMessageFocusOut(event: FocusEvent) {
-  const next = event.relatedTarget as Node | null;
-  if (next && toolbarEl.value?.contains(next)) return;
-  handleMessageMouseLeave();
-}
-
-function handleToolbarMouseEnter() {
-  if (hideToolbarTimeout) {
-    clearTimeout(hideToolbarTimeout);
-    hideToolbarTimeout = null;
-  }
-  isToolbarHovered.value = true;
-}
-
-function handleToolbarMouseLeave() {
-  isToolbarHovered.value = false;
-  hideToolbarTimeout = setTimeout(() => {
-    hoveredMessageId.value = null;
-    confirmingDeleteId.value = null;
-    hideToolbarTimeout = null;
-  }, 100);
-}
-
-// Keyboard counterpart to the toolbar's mouseenter/mouseleave pair — Tabbing
-// into a toolbar button must cancel the message's pending hide timer the
-// same way hovering it does, otherwise the 150ms timeout fires mid-Tab and
-// yanks the toolbar away before the button can be activated.
-function handleToolbarFocusIn() {
-  handleToolbarMouseEnter();
-}
-
-// Tabbing out of the toolbar entirely (not just between its own buttons)
-// should restart the hide countdown, matching mouseleave. relatedTarget is
-// null when focus leaves the document (e.g. address bar) — treat that as
-// "left the toolbar" too.
-function handleToolbarFocusOut(event: FocusEvent) {
-  const next = event.relatedTarget as Node | null;
-  if (next && toolbarEl.value?.contains(next)) return;
-  handleToolbarMouseLeave();
-}
-
 function handleWheel() {
   isScrolling.value = true;
-  if (hoveredMessageId.value) {
-    hoveredMessageId.value = null;
-    confirmingDeleteId.value = null;
-    isToolbarHovered.value = false;
-  }
+  handleScrollStart();
   if (scrollEndTimeout) {
     clearTimeout(scrollEndTimeout);
   }
@@ -750,7 +669,6 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener("keydown", handleSearchHotkey);
   cleanupInfiniteScroll();
-  if (hideToolbarTimeout) clearTimeout(hideToolbarTimeout);
   if (scrollEndTimeout) clearTimeout(scrollEndTimeout);
   stopPolling();
   unsubscribeSignalR?.();
