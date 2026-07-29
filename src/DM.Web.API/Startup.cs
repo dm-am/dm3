@@ -419,10 +419,6 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .AsImplementedInterfaces()
             .SingleInstance();
 
-        // Unified comment service (routes to domain-specific implementations)
-        builder.RegisterType<Shared.Comments.CommentService>()
-            .As<DM.Domain.Core.Comments.ICommentService>()
-            .InstancePerLifetimeScope();
     }
 
     /// <summary>
@@ -544,30 +540,10 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             builder.RegisterMapper(assembly);
         }
 
-        // Account-specific registrations (from AccountModule)
-        // Classes are internal, so we use reflection to get types
-        var identityProviderType = accountAssembly.GetType("DM.Domain.Account.Features.Identity.IdentityProvider")!;
-        var loginAttemptTrackerType = accountAssembly.GetType("DM.Domain.Account.Features.Authentication.LoginAttemptTracker")!;
-        var tokenFactoryType = accountAssembly.GetType("DM.Domain.Account.Features.Tokens.TokenFactory")!;
-
-        builder.RegisterType(identityProviderType)
-            .AsSelf()
-            .AsImplementedInterfaces()
-            .InstancePerLifetimeScope();
-
-        builder.RegisterType(loginAttemptTrackerType)
-            .AsImplementedInterfaces()
-            .InstancePerDependency();
-
-        builder.RegisterType(tokenFactoryType)
-            .AsImplementedInterfaces()
-            .InstancePerLifetimeScope();
-
-        // Moderation-specific registrations (from ModerationModule)
-        var moderationIntentionResolverType = moderationAssembly.GetType("DM.Domain.Moderation.Authorization.ModerationIntentionResolver")!;
-        builder.RegisterType(moderationIntentionResolverType)
-            .As(typeof(IIntentionResolver<ModerationIntention>))
-            .InstancePerLifetimeScope();
+        // Lifetimes that differ from the scan default are declared by the
+        // assembly that owns the types, not restated here per host.
+        builder.RegisterModuleOnce<DM.Domain.Account.AccountModule>();
+        builder.RegisterModuleOnce<DM.Domain.Moderation.ModerationModule>();
     }
 
     private static bool IsUsableEncryptionKey(CryptoConfiguration crypto)

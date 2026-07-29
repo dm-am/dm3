@@ -17,6 +17,10 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- Autofac only for the module that declares this assembly's lifetimes:
+             the alternative was the host naming internal types by namespace
+             string, which no compiler checks. -->
+        <PackageReference Include="Autofac" />
         <PackageReference Include="FluentValidation" />
         <PackageReference Include="Konscious.Security.Cryptography.Argon2" />
         <PackageReference Include="Microsoft.Extensions.Options" />
