@@ -479,7 +479,9 @@ function progressLabel(chain: Chain): string {
   border: 2px solid $bg-page
   border-radius: $minor
   font-variant-numeric: tabular-nums
-  text-shadow: 0 0 1px rgba(0, 0, 0, 0.4)
+  // Светлый ореол под темной цифрой — зеркало прежней темной обводки
+  // под белой.
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.5)
 
 // Thematic title of the earned tier, centered under the icon. Smaller than
 // the award caption ($tertiary vs $secondary) — achievements are the lighter

@@ -214,15 +214,15 @@ async function submitRequest() {
   margin-bottom: $medium
 
   &--pending
-    background-color: $link-muted
+    +tint($link, 15%)
     border: 1px solid $link
 
   &--rejected
-    background-color: $accent-red-muted
+    +tint($accent-red, 15%)
     border: 1px solid $accent-red
 
   &--approved
-    background-color: $accent-green-muted
+    +tint($accent-green, 15%)
     border: 1px solid $accent-green
 
 .status-header

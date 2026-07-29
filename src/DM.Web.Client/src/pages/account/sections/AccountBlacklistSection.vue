@@ -318,7 +318,7 @@ async function confirmUnblock() {
   flex-shrink: 0
 
   &:hover:not(:disabled)
-    background-color: $text-muted-muted
+    +tint($text-muted, 15%)
 
   &:disabled
     opacity: 0.5
