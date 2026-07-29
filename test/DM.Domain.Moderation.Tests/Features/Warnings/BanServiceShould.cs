@@ -159,7 +159,8 @@ public class BanServiceShould : UnitTestBase
         var createBan = new CreateBan { Username = "Target", DurationHours = 24 };
         var act = () => _service.CreateBan(createBan);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Conflict)
             .Where(e => e.Message.Contains("already banned"));
     }
 

@@ -1,15 +1,17 @@
-using System;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Collections.Generic;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System;
 using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace DM.Domain.Account.Features.Authentication;
 
@@ -298,7 +300,11 @@ internal class AuthenticationService : IAuthenticationService
         // Cannot terminate current session - use Logout instead
         if (identity.Session?.Id == sessionId)
         {
-            throw new InvalidOperationException("Cannot terminate current session. Use logout instead.");
+            // A plain InvalidOperationException reaches the client as 500: the error
+            // middleware maps only HttpException and its kin. Terminating one's own
+            // session is a caller mistake, not a server fault.
+            throw new HttpException(HttpStatusCode.BadRequest,
+                "Cannot terminate current session. Use logout instead.");
         }
 
         await _repository.RemoveSession(userId, sessionId);

@@ -1,3 +1,5 @@
+using DM.Domain.Core.Exceptions;
+using System.Net;
 using FluentValidation.Results;
 using FluentValidation;
 using System;
@@ -117,7 +119,8 @@ public class UserProfileNoteServiceShould : UnitTestBase
         var createNote = new CreateUserProfileNote { SubjectUsername = "Unknown", Text = "Note" };
         var act = () => _service.UpsertNote(createNote);
 
-        await act.Should().ThrowAsync<ArgumentException>()
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.NotFound)
             .Where(e => e.Message.Contains("not found"));
     }
 
@@ -130,7 +133,8 @@ public class UserProfileNoteServiceShould : UnitTestBase
         var createNote = new CreateUserProfileNote { SubjectUsername = "CurrentUser", Text = "Note" };
         var act = () => _service.UpsertNote(createNote);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.BadRequest)
             .WithMessage("Cannot create a note about yourself");
     }
 

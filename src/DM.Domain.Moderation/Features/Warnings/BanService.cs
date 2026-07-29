@@ -1,13 +1,13 @@
 using FluentValidation;
-using System;
 using System.Collections.Generic;
 using System.Net;
-using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Core.Exceptions;
-using DM.Domain.Core.Identity;
+using System.Threading;
+using System;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
+using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 
 namespace DM.Domain.Moderation.Features.Warnings;
@@ -133,7 +133,8 @@ internal class BanService : IBanService
         var existingBan = await _banRepository.GetActiveBan(targetUser.UserId, ct);
         if (existingBan != null)
         {
-            throw new InvalidOperationException($"User {createBan.Username} is already banned until {existingBan.EndedUtc}");
+            throw new HttpException(HttpStatusCode.Conflict,
+                $"User {createBan.Username} is already banned until {existingBan.EndedUtc}");
         }
 
         var now = _dateTimeProvider.Now;

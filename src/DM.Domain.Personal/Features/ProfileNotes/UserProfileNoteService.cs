@@ -1,8 +1,10 @@
 using FluentValidation;
-using System;
-using System.Threading;
+using System.Net;
 using System.Threading.Tasks;
+using System.Threading;
+using System;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.Profiles;
 
@@ -66,12 +68,14 @@ internal class UserProfileNoteService : IUserProfileNoteService
         var subjectUser = await _userRepository.GetUserAsync(createNote.SubjectUsername);
         if (subjectUser == null)
         {
-            throw new ArgumentException($"User {createNote.SubjectUsername} not found");
+            throw new HttpException(HttpStatusCode.NotFound,
+                $"User {createNote.SubjectUsername} not found");
         }
 
         if (subjectUser.UserId == currentUser.UserId)
         {
-            throw new InvalidOperationException("Cannot create a note about yourself");
+            throw new HttpException(HttpStatusCode.BadRequest,
+                "Cannot create a note about yourself");
         }
 
         var existingNote = await _repository.Get(currentUser.UserId, subjectUser.UserId, ct);
@@ -123,7 +127,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
         var subjectUser = await _userRepository.GetUserAsync(subjectUsername);
         if (subjectUser == null)
         {
-            throw new ArgumentException($"User {subjectUsername} not found");
+            throw new HttpException(HttpStatusCode.NotFound, $"User {subjectUsername} not found");
         }
 
         var note = await _repository.Get(currentUser.UserId, subjectUser.UserId, ct);
