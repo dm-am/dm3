@@ -271,11 +271,8 @@ internal class UserService : IUserService
     // ═══ IUserLookupService ═══
 
     /// <inheritdoc />
-    public async Task<bool> UsernameExistsAsync(string username, CancellationToken ct = default)
-    {
-        var user = await _repository.GetUserAsync(username);
-        return user != null;
-    }
+    public async Task<bool> UsernameExistsAsync(string username, CancellationToken ct = default) =>
+        await _repository.FindUserIdAsync(username) != null;
 
     /// <inheritdoc />
     public Task<bool> UserExistsAsync(string username, CancellationToken ct = default) =>
@@ -284,7 +281,7 @@ internal class UserService : IUserService
     /// <inheritdoc />
     public async Task<(bool Found, Guid UserId)> FindUserIdAsync(string username, CancellationToken ct = default)
     {
-        var user = await _repository.GetUserAsync(username);
-        return user != null ? (true, user.UserId) : (false, Guid.Empty);
+        var userId = await _repository.FindUserIdAsync(username);
+        return userId.HasValue ? (true, userId.Value) : (false, Guid.Empty);
     }
 }

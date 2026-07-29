@@ -191,6 +191,14 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     }
 
     /// <inheritdoc />
+    public Task<Guid?> FindUserIdAsync(string username) =>
+        _dmDbContext.Users
+            .TagWith("DM.User.FindId")
+            .Where(u => !u.IsRemoved && u.Username.ToLower() == username.ToLower())
+            .Select(u => (Guid?)u.UserId)
+            .FirstOrDefaultAsync();
+
+    /// <inheritdoc />
     public async Task<GeneralUser?> GetUserAsync(Guid userId)
     {
         var user = await _dmDbContext.Users

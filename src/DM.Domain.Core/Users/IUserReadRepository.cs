@@ -24,6 +24,17 @@ public interface IUserReadRepository
     Task<GeneralUser?> GetUserAsync(string username);
 
     /// <summary>
+    /// Identifier of a live user by username, or null when there is none.
+    /// </summary>
+    /// <remarks>
+    /// A single scalar SELECT. <see cref="GetUserAsync(string)"/> hydrates the
+    /// achievement counters, which costs twenty-one further queries, and every
+    /// caller that only needed to answer "does this user exist, and what is
+    /// their id" was paying that price.
+    /// </remarks>
+    Task<Guid?> FindUserIdAsync(string username);
+
+    /// <summary>
     /// Get user by ID
     /// </summary>
     Task<GeneralUser?> GetUserAsync(Guid userId);
