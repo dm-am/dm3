@@ -3,7 +3,8 @@
  * InputDialog - Reusable modal dialog for user input
  * Replaces browser prompt() with styled modal
  */
-import { ref, watch, nextTick } from "vue";
+import { computed, ref, watch } from "vue";
+import { useDialogShell } from "@/shared/lib/composables/useDialogShell";
 import { symbols } from "@/shared/lib/utils/icons";
 
 export interface InputField {
@@ -53,17 +54,17 @@ watch(
   { immediate: true },
 );
 
-// Focus first input when shown
-watch(
-  () => props.show,
-  (show) => {
-    if (show) {
-      nextTick(() => {
-        firstInput.value?.focus();
-      });
-    }
-  },
-);
+const container = ref<HTMLElement | null>(null);
+
+// Focus in, trapped while open, restored on close: the shared shell. This
+// dialog used to focus its first input and nothing else, so Tab walked out
+// onto the page behind the backdrop and the caret never came back.
+const shell = useDialogShell({
+  show: computed(() => props.show),
+  container,
+  initialFocus: () => firstInput.value,
+  onDismiss: () => handleCancel(),
+});
 
 function validateField(field: InputField): boolean {
   const value = values.value[field.name] || "";
@@ -129,17 +130,11 @@ function handleCancel() {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-  if (e.key === "Escape") {
-    handleCancel();
-  } else if (e.key === "Enter" && !e.shiftKey) {
+  if (shell.handleKeydown(e)) return;
+
+  if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     handleSubmit();
-  }
-}
-
-function handleBackdropClick(e: MouseEvent) {
-  if (e.target === e.currentTarget) {
-    handleCancel();
   }
 }
 </script>
@@ -150,10 +145,11 @@ function handleBackdropClick(e: MouseEvent) {
       <div
         v-if="show"
         class="dialog-backdrop"
-        @click="handleBackdropClick"
+        @click="shell.handleBackdropClick"
         @keydown="handleKeydown"
       >
         <div
+          ref="container"
           class="dialog-container"
           role="dialog"
           aria-modal="true"

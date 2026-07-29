@@ -11,8 +11,9 @@
  * A minimal focus trap keeps Tab within the dialog while it is open and
  * restores focus to the previously-focused element on close.
  */
-import { ref, watch, nextTick, onBeforeUnmount } from "vue";
+import { computed, ref } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
+import { useDialogShell } from "@/shared/lib/composables/useDialogShell";
 
 const props = withDefaults(
   defineProps<{
@@ -43,23 +44,12 @@ const emit = defineEmits<{
 
 const container = ref<HTMLElement | null>(null);
 const confirmBtn = ref<HTMLButtonElement | null>(null);
-let previouslyFocused: HTMLElement | null = null;
 
-watch(
-  () => props.show,
-  (show) => {
-    if (show) {
-      previouslyFocused = document.activeElement as HTMLElement | null;
-      nextTick(() => confirmBtn.value?.focus());
-    } else {
-      previouslyFocused?.focus?.();
-      previouslyFocused = null;
-    }
-  },
-);
-
-onBeforeUnmount(() => {
-  previouslyFocused?.focus?.();
+const shell = useDialogShell({
+  show: computed(() => props.show),
+  container,
+  initialFocus: () => confirmBtn.value,
+  onDismiss: () => handleCancel(),
 });
 
 function close() {
@@ -76,22 +66,9 @@ function handleCancel() {
   close();
 }
 
-// Focusable elements inside the dialog, in DOM order.
-function focusables(): HTMLElement[] {
-  if (!container.value) return [];
-  return Array.from(
-    container.value.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    ),
-  ).filter((el) => !el.hasAttribute("disabled"));
-}
-
 function handleKeydown(e: KeyboardEvent) {
-  if (e.key === "Escape") {
-    e.preventDefault();
-    handleCancel();
-    return;
-  }
+  if (shell.handleKeydown(e)) return;
+
   if (e.key === "Enter") {
     // Enter confirms only when focus is NOT on one of the dialog buttons —
     // otherwise a focused "Отмена"/close button would trigger the (possibly
@@ -105,28 +82,6 @@ function handleKeydown(e: KeyboardEvent) {
     }
     e.preventDefault();
     handleConfirm();
-    return;
-  }
-  if (e.key === "Tab") {
-    // Trap focus within the dialog.
-    const items = focusables();
-    if (!items.length) return;
-    const first = items[0];
-    const last = items[items.length - 1];
-    const active = document.activeElement as HTMLElement | null;
-    if (e.shiftKey && active === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && active === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  }
-}
-
-function handleBackdropClick(e: MouseEvent) {
-  if (e.target === e.currentTarget) {
-    handleCancel();
   }
 }
 </script>
@@ -137,7 +92,7 @@ function handleBackdropClick(e: MouseEvent) {
       <div
         v-if="show"
         class="dialog-backdrop"
-        @click="handleBackdropClick"
+        @click="shell.handleBackdropClick"
         @keydown="handleKeydown"
       >
         <div
