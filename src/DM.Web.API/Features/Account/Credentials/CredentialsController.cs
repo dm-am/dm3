@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Account.Credentials;
 
@@ -25,7 +26,7 @@ namespace DM.Web.API.Features.Account.Credentials;
 [ApiExplorerSettings(GroupName = "Account")]
 [Tags("Credentials")]
 [AuthenticationRequired]
-[EnableRateLimiting("auth")]
+[EnableRateLimiting(RateLimitPolicies.Auth)]
 public class CredentialsController : ControllerBase
 {
     private readonly ICredentialsApiService _credentialsService;

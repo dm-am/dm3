@@ -6,6 +6,7 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Messaging.Chats;
 
@@ -169,7 +170,7 @@ public class ChatController : ControllerBase
     /// <response code="429">Too many requests</response>
     [HttpGet("can-start/{username}", Name = nameof(CanStartChat))]
     [AuthenticationRequired]
-    [EnableRateLimiting("sliding")]
+    [EnableRateLimiting(RateLimitPolicies.Sliding)]
     [ProducesResponseType(typeof(ChatAvailability), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]

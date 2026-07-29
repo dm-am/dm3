@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Personal.Webhooks;
 
@@ -71,7 +72,7 @@ public class WebhookController : ControllerBase
     /// <response code="403">Invalid secret</response>
     /// <response code="404">Webhook secret is not configured for this type</response>
     [HttpPost("{type}")]
-    [EnableRateLimiting("sliding")]
+    [EnableRateLimiting(RateLimitPolicies.Sliding)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

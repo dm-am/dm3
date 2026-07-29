@@ -6,6 +6,7 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Search;
 
@@ -50,7 +51,7 @@ public class ForumSearchController : ControllerBase
     /// <response code="400">Invalid query (empty or too long)</response>
     /// <response code="429">Too many requests</response>
     [HttpGet("forum", Name = nameof(SearchForum))]
-    [EnableRateLimiting("sliding")]
+    [EnableRateLimiting(RateLimitPolicies.Sliding)]
     [ProducesResponseType(typeof(ListEnvelope<ForumSearchResult>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Account.Availability;
 
@@ -53,7 +54,7 @@ public class AvailabilityController : ControllerBase
     /// <response code="200">Availability status</response>
     /// <response code="429">Too many requests</response>
     [HttpGet("check-email", Name = nameof(CheckEmail))]
-    [EnableRateLimiting("email-check")]
+    [EnableRateLimiting(RateLimitPolicies.EmailCheck)]
     [ProducesResponseType(typeof(EmailAvailabilityResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> CheckEmail([FromQuery] string email)
@@ -83,7 +84,7 @@ public class AvailabilityController : ControllerBase
     /// <response code="200">Availability status</response>
     /// <response code="429">Too many requests</response>
     [HttpGet("check-username", Name = nameof(CheckUsername))]
-    [EnableRateLimiting("username-check")]
+    [EnableRateLimiting(RateLimitPolicies.UsernameCheck)]
     [ProducesResponseType(typeof(UsernameAvailabilityResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> CheckUsername([FromQuery] string username)

@@ -5,6 +5,7 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Personal.Invitations;
 
@@ -21,7 +22,7 @@ namespace DM.Web.API.Features.Personal.Invitations;
 [ApiExplorerSettings(GroupName = "Personal")]
 [Tags("Invitations")]
 [AuthenticationRequired]
-[EnableRateLimiting("default")]
+[EnableRateLimiting(RateLimitPolicies.Default)]
 public class InvitationController : ControllerBase
 {
     private readonly IPersonalInvitationApiService _invitationApiService;

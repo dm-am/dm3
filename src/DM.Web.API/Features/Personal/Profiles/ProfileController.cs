@@ -4,6 +4,7 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Personal.Profiles;
 
@@ -20,7 +21,7 @@ namespace DM.Web.API.Features.Personal.Profiles;
 [ApiExplorerSettings(GroupName = "Personal")]
 [Tags("Profiles")]
 [AuthenticationRequired]
-[EnableRateLimiting("default")]
+[EnableRateLimiting(RateLimitPolicies.Default)]
 public class ProfileController : ControllerBase
 {
     private readonly IPersonalProfileApiService _profileApiService;

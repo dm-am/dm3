@@ -4,6 +4,7 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.General.Tickets;
 
@@ -45,7 +46,7 @@ public class TicketIntakeController : ControllerBase
     /// <response code="400">Validation error</response>
     /// <response code="429">Too many requests. Try again later.</response>
     [HttpPost(Name = nameof(CreateTicketIntake))]
-    [EnableRateLimiting("auth")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     [ProducesResponseType(typeof(CreateTicketIntakeResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
@@ -80,7 +81,7 @@ public class TicketIntakeController : ControllerBase
     /// <response code="404">No ticket for this token</response>
     /// <response code="429">Too many requests. Try again later.</response>
     [HttpGet("track/{token}", Name = nameof(TrackTicketIntake))]
-    [EnableRateLimiting("auth")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     [ProducesResponseType(typeof(Envelope<TrackedTicket>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]

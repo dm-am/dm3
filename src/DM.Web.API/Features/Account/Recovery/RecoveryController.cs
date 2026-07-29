@@ -8,6 +8,7 @@ using DM.Web.API.Features.Community.Users;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Account.Recovery;
 
@@ -26,7 +27,7 @@ namespace DM.Web.API.Features.Account.Recovery;
 [Route("v1/account")]
 [ApiExplorerSettings(GroupName = "Account")]
 [Tags("Recovery")]
-[EnableRateLimiting("auth")]
+[EnableRateLimiting(RateLimitPolicies.Auth)]
 public class RecoveryController : ControllerBase
 {
     private readonly IRecoveryApiService _recoveryService;

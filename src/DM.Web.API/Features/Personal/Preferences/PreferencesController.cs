@@ -4,6 +4,7 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Personal.Preferences;
 
@@ -22,7 +23,7 @@ namespace DM.Web.API.Features.Personal.Preferences;
 [ApiExplorerSettings(GroupName = "Personal")]
 [Tags("Preferences")]
 [AuthenticationRequired]
-[EnableRateLimiting("default")]
+[EnableRateLimiting(RateLimitPolicies.Default)]
 public class PreferencesController : ControllerBase
 {
     private readonly IPreferencesApiService _preferencesApiService;

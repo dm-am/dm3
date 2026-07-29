@@ -8,6 +8,7 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Personal.Subscriptions;
 
@@ -23,7 +24,7 @@ namespace DM.Web.API.Features.Personal.Subscriptions;
 [ApiExplorerSettings(GroupName = "Personal")]
 [Tags("Subscriptions")]
 [AuthenticationRequired]
-[EnableRateLimiting("default")]
+[EnableRateLimiting(RateLimitPolicies.Default)]
 public class SubscriptionController : ControllerBase
 {
     private readonly ISubscriptionApiService _apiService;

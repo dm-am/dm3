@@ -5,6 +5,7 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Account.Registration;
 
@@ -26,7 +27,7 @@ namespace DM.Web.API.Features.Account.Registration;
 [Route("v1/account")]
 [ApiExplorerSettings(GroupName = "Account")]
 [Tags("Registration")]
-[EnableRateLimiting("auth")]
+[EnableRateLimiting(RateLimitPolicies.Auth)]
 public class RegistrationController : ControllerBase
 {
     private readonly IRegistrationApiService _registrationApiService;

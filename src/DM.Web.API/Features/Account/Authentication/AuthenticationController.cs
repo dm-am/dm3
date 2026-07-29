@@ -7,6 +7,7 @@ using DM.Web.API.Shared.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Account.Authentication;
 
@@ -22,7 +23,7 @@ namespace DM.Web.API.Features.Account.Authentication;
 [Route("v1/account")]
 [ApiExplorerSettings(GroupName = "Account")]
 [Tags("Authentication")]
-[EnableRateLimiting("auth")]
+[EnableRateLimiting(RateLimitPolicies.Auth)]
 public class AuthenticationController : ControllerBase
 {
     private readonly IAuthenticationApiService _authenticationApiService;

@@ -24,6 +24,7 @@ using DM.Infrastructure.Messaging;
 using DM.Infrastructure.Persistence;
 using DM.Web.API.Shared.Binding;
 using DM.Web.API.Shared.Configuration;
+using DM.Web.API.Shared.RateLimiting;
 using DM.Web.API.Middleware;
 using DM.Web.API.Realtime;
 using DM.Web.API.Swagger;
@@ -32,7 +33,6 @@ using Jamq.Client.DependencyInjection;
 using Jamq.Client.Rabbit.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -42,7 +42,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using System;
-using System.Threading.RateLimiting;
 
 namespace DM.Web.API;
 
@@ -166,61 +165,12 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
 
         services.AddJamqClient(config => config.UseRabbit());
 
-        // Only register hosted services when NOT in migration mode
-        // Migration mode runs migrations and exits - no need for cleanup services
         if (!_migrateOnStart)
         {
-            services.AddHostedService<RealtimeNotificationConsumer>();
-            services.AddHostedService<WarmupService>();
-
-            // Asserts the Mongo index set. docker/mongo-init.js only runs on the first start
-            // of an empty volume, so this is what keeps deployed databases indexed.
-            services.AddHostedService<DM.Infrastructure.Persistence.MongoIntegration.MongoIndexInitializer>();
-
-            // Asserts the relational indexes EF cannot express in the model. Keeping them
-            // out of the migration is what lets the migration stay entirely generated.
-            services.AddHostedService<DM.Infrastructure.Persistence.RelationalStorage.ExpressionIndexInitializer>();
-
-            services.AddHostedService<HostedServices.TokenCleanupService>();
-            services.AddHostedService<HostedServices.SessionCleanupService>();
-            services.AddHostedService<HostedServices.PendingRegistrationCleanupService>();
-            services.AddHostedService<HostedServices.PeriodDigestService>();
-            services.AddHostedService<HostedServices.UsernameChangeCleanupService>();
-            services.AddHostedService<HostedServices.PendencyReminderService>();
-            services.AddHostedService<HostedServices.GameInactivityService>();
-            services.AddHostedService<HostedServices.PopularityScoreService>();
-            services.AddHostedService<HostedServices.UploadOrphanCleanupService>();
-
-            // The bucket initializer would run in migration mode too — so we register it
-            // only in normal mode, because the migration container has no
-            // S3 access (it depends only on postgres).
-            services.AddHostedService<DM.Infrastructure.Core.Storage.StorageBucketInitializer>();
+            services.AddDmHostedServices();
         }
 
-        var connectionStrings = new ConnectionStrings();
-        configuration.GetSection(nameof(ConnectionStrings)).Bind(connectionStrings);
-        var rabbitMqConfig = new RabbitMqConfiguration();
-        configuration.GetSection(nameof(RabbitMqConfiguration)).Bind(rabbitMqConfig);
-
-        services.AddHealthChecks()
-            .AddNpgSql(
-                connectionString: connectionStrings.Rdb,
-                name: "postgresql",
-                tags: new[] { "db", "ready" })
-            .AddMongoDb(
-                mongodbConnectionString: connectionStrings.Mongo,
-                name: "mongodb",
-                tags: new[] { "db", "ready" })
-            // Not "ready": readiness answers "can this instance serve a request",
-            // and every request is served without the broker — publishing an event
-            // is fire-and-forget alongside the response. Tagging it ready pulled
-            // the whole site out of rotation over a delayed notification. The
-            // broker is an alerting subject (ConsumerDown), not a rotation gate,
-            // and it stays visible in /_health/detail, which filters nothing.
-            .AddRabbitMQ(
-                rabbitConnectionString: new Uri(rabbitMqConfig.Endpoint),
-                name: "rabbitmq",
-                tags: new[] { "messaging" });
+        services.AddDmHealthChecks(configuration);
 
         // Request size limits to prevent DoS attacks via large payloads
         // Default: 30MB for general requests, files handled separately by upload endpoints
@@ -233,151 +183,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             options.MultipartBodyLengthLimit = 30 * 1024 * 1024; // 30 MB for file uploads
         });
 
-        // Rate limiting to prevent abuse (can be disabled via configuration for tests)
-        var rateLimitingEnabled = configuration.GetValue("RateLimiting:Enabled", true);
-        services.AddRateLimiter(options =>
-        {
-            if (rateLimitingEnabled)
-            {
-                // Global rate limit: 100 requests per minute per IP
-                options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
-                    RateLimitPartition.GetFixedWindowLimiter(
-                        partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                        factory: _ => new FixedWindowRateLimiterOptions
-                        {
-                            PermitLimit = 100,
-                            Window = TimeSpan.FromMinutes(1),
-                            QueueLimit = 0
-                        }));
-
-                // Strict rate limit for authentication endpoints: 5 requests per minute
-                options.AddPolicy("auth", context =>
-                    RateLimitPartition.GetFixedWindowLimiter(
-                        partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                        factory: _ => new FixedWindowRateLimiterOptions
-                        {
-                            PermitLimit = 5,
-                            Window = TimeSpan.FromMinutes(1),
-                            QueueLimit = 0
-                        }));
-
-                // Rate limit for username availability check: 20 requests per minute
-                options.AddPolicy("username-check", context =>
-                    RateLimitPartition.GetFixedWindowLimiter(
-                        partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                        factory: _ => new FixedWindowRateLimiterOptions
-                        {
-                            PermitLimit = 20,
-                            Window = TimeSpan.FromMinutes(1),
-                            QueueLimit = 0
-                        }));
-
-                // Rate limit for email availability check: 10 requests per minute
-                options.AddPolicy("email-check", context =>
-                    RateLimitPartition.GetFixedWindowLimiter(
-                        partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                        factory: _ => new FixedWindowRateLimiterOptions
-                        {
-                            PermitLimit = 10,
-                            Window = TimeSpan.FromMinutes(1),
-                            QueueLimit = 0
-                        }));
-
-                // Upload endpoint: 10 uploads per minute per authenticated user
-                // (fallback to IP for guests; normally upload requires auth).
-                // Anti-flood protection on top of the 10 MB size limit: even if
-                // an attacker sends valid small files — no more than 10/min.
-                options.AddPolicy("uploads", context =>
-                    RateLimitPartition.GetFixedWindowLimiter(
-                        partitionKey: context.User.Identity?.Name
-                            ?? context.Connection.RemoteIpAddress?.ToString()
-                            ?? "anon",
-                        factory: _ => new FixedWindowRateLimiterOptions
-                        {
-                            PermitLimit = 10,
-                            Window = TimeSpan.FromMinutes(1),
-                            QueueLimit = 0,
-                        }));
-
-                // Sliding window for expensive read endpoints (chat availability,
-                // full-text search): 30 requests per minute per user/IP. Search
-                // runs heavy tsvector scans against the primary OLTP database, so
-                // it is a more realistic cost vector than the other read paths.
-                options.AddPolicy("sliding", context =>
-                    RateLimitPartition.GetSlidingWindowLimiter(
-                        partitionKey: context.User.Identity?.Name
-                            ?? context.Connection.RemoteIpAddress?.ToString()
-                            ?? "anon",
-                        factory: _ => new SlidingWindowRateLimiterOptions
-                        {
-                            PermitLimit = 30,
-                            Window = TimeSpan.FromMinutes(1),
-                            SegmentsPerWindow = 6,
-                            QueueLimit = 0,
-                        }));
-
-                // Ordinary authenticated CRUD (preferences, subscriptions,
-                // invitations, blacklists): 60 per minute per user, falling back
-                // to IP. Tighter than the global 100/min because these are
-                // per-account write paths, and partitioned by user so one noisy
-                // account cannot consume a shared IP's budget.
-                options.AddPolicy("default", context =>
-                    RateLimitPartition.GetFixedWindowLimiter(
-                        partitionKey: context.User.Identity?.Name
-                            ?? context.Connection.RemoteIpAddress?.ToString()
-                            ?? "anon",
-                        factory: _ => new FixedWindowRateLimiterOptions
-                        {
-                            PermitLimit = 60,
-                            Window = TimeSpan.FromMinutes(1),
-                            QueueLimit = 0,
-                        }));
-            }
-            else
-            {
-                // No-op limiters for tests (unlimited)
-                options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(_ =>
-                    RateLimitPartition.GetNoLimiter<string>("unlimited"));
-                options.AddPolicy("auth", _ =>
-                    RateLimitPartition.GetNoLimiter<string>("unlimited"));
-                options.AddPolicy("username-check", _ =>
-                    RateLimitPartition.GetNoLimiter<string>("unlimited"));
-                options.AddPolicy("email-check", _ =>
-                    RateLimitPartition.GetNoLimiter<string>("unlimited"));
-                options.AddPolicy("uploads", _ =>
-                    RateLimitPartition.GetNoLimiter<string>("unlimited"));
-                options.AddPolicy("sliding", _ =>
-                    RateLimitPartition.GetNoLimiter<string>("unlimited"));
-                options.AddPolicy("default", _ =>
-                    RateLimitPartition.GetNoLimiter<string>("unlimited"));
-            }
-
-            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-            options.OnRejected = async (context, ct) =>
-            {
-                context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-
-                if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
-                {
-                    context.HttpContext.Response.Headers.RetryAfter =
-                        ((int)retryAfter.TotalSeconds).ToString();
-                }
-                else
-                {
-                    context.HttpContext.Response.Headers.RetryAfter = "60";
-                }
-
-                context.HttpContext.Response.ContentType = "application/problem+json";
-                await context.HttpContext.Response.WriteAsJsonAsync(new
-                {
-                    type = "https://tools.ietf.org/html/rfc6585#section-4",
-                    title = "Too Many Requests",
-                    status = 429,
-                    detail = "Rate limit exceeded. Please retry after the specified time."
-                }, ct);
-            };
-        });
+        services.AddDmRateLimiting(configuration);
 
         _httpContextAccessor = new HttpContextAccessor();
         _bbParserProvider = new BbParserProvider();

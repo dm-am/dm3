@@ -7,6 +7,7 @@ using DM.Web.API.Features.Blog.Blogs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Blog.Blacklists;
 
@@ -20,7 +21,7 @@ namespace DM.Web.API.Features.Blog.Blacklists;
 [Route("v1/blogs")]
 [ApiExplorerSettings(GroupName = "Blog")]
 [Tags("Blacklist")]
-[EnableRateLimiting("default")]
+[EnableRateLimiting(RateLimitPolicies.Default)]
 public class BlogBlacklistController : ControllerBase
 {
     private readonly IBlogBlacklistApiService _blacklistApiService;

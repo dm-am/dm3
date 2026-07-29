@@ -4,6 +4,7 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Account.Deactivation;
 
@@ -20,7 +21,7 @@ namespace DM.Web.API.Features.Account.Deactivation;
 [ApiExplorerSettings(GroupName = "Account")]
 [Tags("Deactivation")]
 [AuthenticationRequired]
-[EnableRateLimiting("auth")]
+[EnableRateLimiting(RateLimitPolicies.Auth)]
 public class DeactivationController : ControllerBase
 {
     private readonly IDeactivationApiService _deactivationService;

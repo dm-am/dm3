@@ -6,6 +6,7 @@ using DM.Domain.Core.Enums;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.General.Upload;
 
@@ -124,7 +125,7 @@ public class UploadController : ControllerBase
     /// <response code="401">User not authenticated</response>
     [HttpPost(Name = nameof(DirectUpload))]
     [AuthenticationRequired]
-    [EnableRateLimiting("uploads")]
+    [EnableRateLimiting(RateLimitPolicies.Uploads)]
     [RequestSizeLimit(10 * 1024 * 1024)]
     [ProducesResponseType(typeof(Shared.Dto.Upload), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
