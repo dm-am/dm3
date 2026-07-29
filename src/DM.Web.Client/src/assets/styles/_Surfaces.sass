@@ -24,3 +24,17 @@
   border: 1px solid $border
   border-radius: $border-radius
   background: $bg-element
+
+/// A translucent wash of a theme colour: status chips, highlighted rows,
+/// accent hovers. Both themes get it for free, and normal text stays readable
+/// on top — which a solid accent fill does not allow (in the dark theme
+/// $text-on-green and $accent-green are literally the same hex).
+///
+/// This exists because `rgba($accent-green, 0.2)` DOES NOT WORK here and fails
+/// silently. Every theme colour is a `var(--…)`, so Sass passes the call
+/// through as `rgba(var(--accent-green), 0.2)`; `rgb()` does not accept a hex
+/// argument, the declaration is invalid at computed-value time, and the
+/// background renders fully transparent. Sixteen call sites shipped that way.
+/// Measured in the browser: that declaration computes to `rgba(0, 0, 0, 0)`.
+=tint($color, $alpha)
+  background-color: color-mix(in srgb, #{$color} #{$alpha}, transparent)

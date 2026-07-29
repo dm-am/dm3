@@ -232,23 +232,23 @@ onMounted(() => fetchRequests());
   font-weight: 500
 
   &.pending
-    background: rgba($accent-yellow, 0.2)
+    +tint($accent-yellow, 20%)
     color: $accent-yellow
 
   &.approved
-    background: rgba($accent-green, 0.2)
+    +tint($accent-green, 20%)
     color: $accent-green
 
   &.rejected
-    background: rgba($accent-red, 0.2)
+    +tint($accent-red, 20%)
     color: $accent-red
 
   &.completed
-    background: rgba($link, 0.2)
+    +tint($link, 20%)
     color: $link
 
   &.expired
-    background: rgba($text-muted, 0.2)
+    +tint($text-muted, 20%)
     color: $text-muted
 
 .request-date

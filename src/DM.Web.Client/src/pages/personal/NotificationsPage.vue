@@ -289,9 +289,10 @@ onMounted(() => fetchNotifications());
   cursor: pointer
   font-size: 0.85rem
 
+  // Заливка тинтом, а не сплошным акцентом: в темной теме $text-on-green и
+  // $accent-green — один и тот же hex, текст исчезал.
   &:hover
-    background: $accent-green
-    color: $text-on-green
+    +tint($accent-green, 20%)
 
 .notification-list
   list-style: none
@@ -320,19 +321,19 @@ onMounted(() => fetchNotifications());
   flex-shrink: 0
 
   &.blog
-    background: rgba($accent-green, 0.1)
+    +tint($accent-green, 10%)
     color: $accent-green
 
   &.comment
-    background: rgba($link, 0.1)
+    +tint($link, 10%)
     color: $link
 
   &.dice
-    background: rgba($accent-yellow, 0.1)
+    +tint($accent-yellow, 10%)
     color: $accent-yellow
 
   &.bell
-    background: rgba($link, 0.1)
+    +tint($link, 10%)
     color: $link
 
 .notification-content

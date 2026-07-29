@@ -526,9 +526,10 @@ onMounted(fetchEntries);
   cursor: pointer
   font-size: 0.85rem
 
+  // Тинт вместо сплошной заливки: белый текст на $link читается только в
+  // светлой теме (в темной $link светлый сам).
   &:hover
-    background: $link
-    color: white
+    +tint($link, 15%)
 
 .delete-btn
   padding: $minor $small
@@ -539,9 +540,10 @@ onMounted(fetchEntries);
   cursor: pointer
   font-size: 0.85rem
 
+  // Тинт вместо сплошной заливки: $text-on-red — текст для светлой
+  // подложки, на $accent-red его контраст 1.5.
   &:hover
-    background: $accent-red
-    color: $text-on-red
+    +tint($accent-red, 15%)
 
 .content-meta
   font-size: 0.8rem

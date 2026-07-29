@@ -200,5 +200,5 @@ function cancel() {
   font: inherit
 
   &:hover
-    background-color: rgba($accent-red, 0.1)
+    +tint($accent-red, 10%)
 </style>

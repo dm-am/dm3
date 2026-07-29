@@ -488,7 +488,7 @@ onMounted(() => {
     cursor: default
 
   &.btn-danger:hover:not(:disabled)
-    background: rgba($accent-red, 0.1)
+    +tint($accent-red, 10%)
     color: $accent-red
 
   svg
