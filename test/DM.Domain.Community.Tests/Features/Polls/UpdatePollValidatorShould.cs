@@ -21,7 +21,7 @@ public class UpdatePollValidatorShould : UnitTestBase
         now = new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
         dateTimeProvider = new Mock<IDateTimeProvider>();
         dateTimeProvider.Setup(x => x.Now).Returns(now);
-        validator = new UpdatePollValidator(dateTimeProvider.Object);
+        validator = new UpdatePollValidator();
     }
 
     [Fact]
@@ -78,8 +78,11 @@ public class UpdatePollValidatorShould : UnitTestBase
     }
 
     [Fact]
-    public void FailWhenEndDateIsInPast()
+    public void AllowAnEndDateInThePastBecauseAClosedPollIsStillEditable()
     {
+        // Creation requires future dates; an update must not, or every running or
+        // finished poll becomes uneditable - the edit form sends back the dates it
+        // was given.
         var input = new UpdatePoll
         {
             Id = Guid.NewGuid(),
@@ -87,8 +90,22 @@ public class UpdatePollValidatorShould : UnitTestBase
         };
 
         var result = validator.TestValidate(input);
+        result.ShouldNotHaveValidationErrorFor(x => x.EndsUtc);
+    }
+
+    [Fact]
+    public void FailWhenThePollWouldEndBeforeItStarts()
+    {
+        var input = new UpdatePoll
+        {
+            Id = Guid.NewGuid(),
+            StartsUtc = now,
+            EndsUtc = now.AddHours(-1)
+        };
+
+        var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.EndsUtc)
-            .WithErrorMessage(ValidationError.Short);
+            .WithErrorMessage(ValidationError.Invalid);
     }
 
     [Fact]

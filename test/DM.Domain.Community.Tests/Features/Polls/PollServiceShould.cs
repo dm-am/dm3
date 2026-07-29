@@ -54,8 +54,14 @@ public class PollServiceShould : UnitTestBase
         var identityProvider = Mock<IIdentityProvider>();
         identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
 
+        var updateValidator = Mock<IValidator<UpdatePoll>>();
+        updateValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<UpdatePoll>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ValidationResult());
+
         _service = new PollService(
             validator.Object,
+            updateValidator.Object,
             _intentionManager.Object,
             factory.Object,
             _repository.Object,

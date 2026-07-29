@@ -18,6 +18,7 @@ namespace DM.Domain.Community.Features.Polls;
 internal class PollService : IPollService
 {
     private readonly IValidator<CreatePoll> _createValidator;
+    private readonly IValidator<UpdatePoll> _updateValidator;
     private readonly IIntentionManager _intentionManager;
     private readonly IPollFactory _factory;
     private readonly IPollRepository _repository;
@@ -27,6 +28,7 @@ internal class PollService : IPollService
 
     public PollService(
         IValidator<CreatePoll> createValidator,
+        IValidator<UpdatePoll> updateValidator,
         IIntentionManager intentionManager,
         IPollFactory factory,
         IPollRepository repository,
@@ -35,6 +37,7 @@ internal class PollService : IPollService
         IIdentityProvider identityProvider)
     {
         _createValidator = createValidator;
+        _updateValidator = updateValidator;
         _intentionManager = intentionManager;
         _factory = factory;
         _repository = repository;
@@ -81,6 +84,7 @@ internal class PollService : IPollService
     /// <inheritdoc />
     public async Task<Poll> UpdateAsync(UpdatePoll updatePoll)
     {
+        await _updateValidator.ValidateAndThrowAsync(updatePoll);
         var existingPoll = await GetAsync(updatePoll.Id);
         _intentionManager.ThrowIfForbidden(PollIntention.Edit, existingPoll);
 

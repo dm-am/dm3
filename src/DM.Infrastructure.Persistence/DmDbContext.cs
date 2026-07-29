@@ -278,6 +278,14 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<Like>()
             .HasIndex(l => new { l.EntityType, l.EntityId });
 
+        // The readable chat id is resolved by equality in GET /chats/{id}. Without
+        // uniqueness a collision between an encoded serial and the reserved name of
+        // the global chat would not fail - it would silently return whichever row
+        // the plan happened to reach first.
+        modelBuilder.Entity<Chat>()
+            .HasIndex(c => c.PublicId)
+            .IsUnique();
+
         // TopicNumber is the canonical topic URL key, and it is allocated as
         // MAX+1: two creates in the same board at the same time read the same
         // maximum. Without this constraint they both commit and one of the two
@@ -1943,7 +1951,11 @@ public class DmDbContext : DbContext
             {
                 ChatId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
                 Type = ChatType.Global,
-                Title = "Глобальный чат"
+                Title = "Глобальный чат",
+                // Every other chat gets its readable id encoded from the serial the
+                // database assigns on insert; a seeded row never goes through that
+                // path, so the one chat that is addressable by name gets it here.
+                PublicId = "global"
             });
 
         modelBuilder.Entity<Topic>().HasData(

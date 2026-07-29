@@ -2933,12 +2933,16 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("LastMessageId");
 
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
                     b.ToTable("Chats");
 
                     b.HasData(
                         new
                         {
                             ChatId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            PublicId = "global",
                             SerialNumber = 0,
                             Title = "Глобальный чат",
                             Type = 2

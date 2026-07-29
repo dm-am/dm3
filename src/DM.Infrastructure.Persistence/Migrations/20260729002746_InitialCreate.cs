@@ -1582,7 +1582,7 @@ namespace DM.Infrastructure.Persistence.Migrations
             migrationBuilder.InsertData(
                 table: "Chats",
                 columns: new[] { "ChatId", "LastMessageId", "PublicId", "RoomId", "Title", "Type" },
-                values: new object[] { new Guid("00000000-0000-0000-0000-000000000001"), null, null, null, "Глобальный чат", 2 });
+                values: new object[] { new Guid("00000000-0000-0000-0000-000000000001"), null, "global", null, "Глобальный чат", 2 });
 
             migrationBuilder.InsertData(
                 table: "ContestSeries",
@@ -1895,6 +1895,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "IX_Chats_LastMessageId",
                 table: "Chats",
                 column: "LastMessageId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Chats_PublicId",
+                table: "Chats",
+                column: "PublicId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_CommentEdits_CommentId",
