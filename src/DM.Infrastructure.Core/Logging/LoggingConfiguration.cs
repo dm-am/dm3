@@ -7,7 +7,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
 using Serilog.Events;
-using Serilog.Sinks.OpenSearch;
+using Serilog.Sinks.Grafana.Loki;
 using System;
 
 namespace DM.Infrastructure.Core.Logging;
@@ -41,13 +41,18 @@ public static class LoggingConfiguration
             .Enrich.With<ActivityEnricher>()
             .Enrich.WithProperty("Application", applicationName)
             .Enrich.WithProperty("Environment", environmentName)
-            .WriteTo.OpenSearch(
-                new OpenSearchSinkOptions(new Uri(connectionStrings.Logs))
-                {
-                    IndexFormat = "dm_logstash-{0:yyyy.MM.dd}",
-                    InlineFields = true,
-                    TypeName = null,
-                })
+            // Loki indexes labels, not message text, so only the two dimensions a
+            // query actually selects on are labels; everything else stays in the
+            // log line and is filtered there. A label per correlation token or
+            // per user would multiply streams without bound, which is the one way
+            // to make Loki slow.
+            .WriteTo.GrafanaLoki(
+                connectionStrings.Logs,
+                labels: [
+                    new LokiLabel { Key = "app", Value = applicationName },
+                    new LokiLabel { Key = "env", Value = environmentName },
+                ],
+                propertiesAsLabels: [])
             .WriteTo.Console()
             .CreateLogger();
 

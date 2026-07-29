@@ -11,6 +11,7 @@ using DbDiceRoll = DM.Infrastructure.Persistence.Entities.Game.Posts.DiceRoll;
 using DbLoginAttempt = DM.Infrastructure.Persistence.Entities.Account.LoginAttempt;
 using DbNotification = DM.Infrastructure.Persistence.Entities.Personal.Notifications.Notification;
 using DbPoll = DM.Infrastructure.Persistence.Entities.Forum.Poll;
+using DbSecurityAuditEntry = DM.Infrastructure.Persistence.Entities.Account.SecurityAuditEntry;
 using DbSession = DM.Infrastructure.Persistence.Entities.Account.Session;
 using DbUnreadCounter = DM.Infrastructure.Persistence.Entities.Shared.UnreadCounter;
 using DbUserSession = DM.Infrastructure.Persistence.Entities.Account.UserSession;
@@ -178,6 +179,25 @@ public class MongoIndexInitializer : IHostedService
                 .Ascending(a => a.LastAttemptUtc),
                 expireAfter: TimeSpan.FromHours(LoginAttemptRetentionHours)),
         }, cancellationToken);
+
+        // SecurityAuditLog — SecurityAuditRepository
+        await Assert(client.GetCollection<DbSecurityAuditEntry>(), new[]
+        {
+            // Every read is "this user's events, newest first". The compound index
+            // serves the equality and hands the sort back already ordered, so the
+            // page no longer costs a collection scan plus a blocking sort.
+            Index<DbSecurityAuditEntry>("IX_SecurityAuditLog_User_Time", keys => keys
+                .Ascending(e => e.UserId)
+                .Descending(e => e.TimestampUtc)),
+
+            // The log holds addresses and user agents — personal data with no
+            // expiry was the actual finding, not the missing index. A security
+            // trail is useful for as long as an incident can still be
+            // investigated, and unbounded after that is a liability, not an asset.
+            Index<DbSecurityAuditEntry>("IX_SecurityAuditLog_Expiry", keys => keys
+                .Ascending(e => e.TimestampUtc),
+                expireAfter: TimeSpan.FromDays(SecurityAuditRetentionDays)),
+        }, cancellationToken);
     }
 
     /// <summary>
@@ -186,6 +206,12 @@ public class MongoIndexInitializer : IHostedService
     /// without dropping and recreating the index on every value change.
     /// </summary>
     private const int LoginAttemptRetentionHours = 24;
+
+    /// <summary>
+    /// Retention of the security audit trail. Same constraint as the login-attempt
+    /// TTL: the value lives in the stored index descriptor, not in configuration.
+    /// </summary>
+    private const int SecurityAuditRetentionDays = 180;
 
     /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

@@ -82,7 +82,7 @@ public class GameBlacklistController : ControllerBase
     {
         var gameId = await ResolveGameId(id);
         var result = await _blacklistApiService.Create(gameId, user);
-        return CreatedAtRoute(nameof(GetBlacklist), new {id}, result);
+        return StatusCode(StatusCodes.Status201Created, result);
     }
 
     /// <summary>

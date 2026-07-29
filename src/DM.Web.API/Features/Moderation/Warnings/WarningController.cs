@@ -101,7 +101,7 @@ public class WarningController : ControllerBase
     public async Task<IActionResult> CreateWarning([FromBody] CreateWarningRequest request)
     {
         var result = await _warningApiService.CreateWarning(request);
-        return CreatedAtRoute(nameof(GetUserWarnings), new { username = request.Username }, result);
+        return StatusCode(StatusCodes.Status201Created, result);
     }
 
     /// <summary>

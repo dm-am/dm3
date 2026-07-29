@@ -61,7 +61,7 @@ public class UserSubscriberController : ControllerBase
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SubscribeToUser(string username) =>
-        CreatedAtRoute(nameof(GetUserSubscribers), new { username }, await _userSubscriberApiService.SubscribeAsync(username));
+        CreatedAtRoute(nameof(GetMySubscriptionStatus), new { username }, await _userSubscriberApiService.SubscribeAsync(username));
 
     /// <summary>
     /// Unsubscribe from a user

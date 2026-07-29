@@ -10,6 +10,21 @@ datasources:
 
   - name: Jaeger
     type: jaeger
+    uid: jaeger
     access: proxy
     url: http://dm-jaeger:16686
     editable: false
+
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://dm-loki:3100
+    editable: false
+    jsonData:
+      # Every log line carries the trace id (ActivityEnricher), so a log opens
+      # the trace it belongs to without a copy-paste.
+      derivedFields:
+        - name: TraceId
+          matcherRegex: '"TraceId":"(\w+)"'
+          url: '$${__value.raw}'
+          datasourceUid: jaeger
