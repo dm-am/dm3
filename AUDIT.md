@@ -874,7 +874,7 @@ RFC 9110 requires the 201 Location to identify the created resource. 15 CreatedA
 
 ### [СРЕДНЯЯ] API-12 — Dev-only endpoints use ASPNETCORE_ENVIRONMENT as their only security boundary, including an unauthenticated role-escalation path
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Проверено на текущем коде: четыре dev-эндпоинта (самоназначение роли, дамп всех юзеров, два сида) в API отсутствуют — удалены вместе с выносом сида в DM.Tools.Seeder (7887c089). Единственный оставшийся IsDevelopment() в Startup.cs скрывает Swagger, что и задумано и границей безопасности не является
 
 ModerationController.cs:63-78 exposes POST /v1/moderation/users/me/role/{role} guarded solely by a runtime `if (!_environment.IsDevelopment()) return NotFound();` at line 71 — any authenticated user can assign themselves UserRole.Admin. ModerationController.cs:96-109 (GET /v1/moderation/users, dumps every user and role) and :152-165 / :189-202 (POST /v1/moderation/seed, /seed/comprehensive) carry no [AuthenticationRequired] or [RequireRole] at all — only the same environment check. These are not compiled out; the code ships in the production binary. The seed endpoints also write substantial data (ModerationApiService.cs is 4000+ lines of seeding) and return 200 rather than 201/202.
 
