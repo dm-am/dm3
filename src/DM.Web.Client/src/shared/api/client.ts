@@ -6,7 +6,7 @@ import type {
   AxiosResponse,
   AxiosProgressEvent,
 } from "axios";
-import { HubConnection, HubConnectionBuilder } from "@microsoft/signalr";
+import type { HubConnection } from "@microsoft/signalr";
 import type { ApiResult } from "./models/common";
 import {
   RENDER_AUDIENCE,
@@ -220,10 +220,17 @@ class Api {
   }
 
   /**
-   * Establish SignalR hub connection
-   * Cookies are sent automatically with withCredentials
+   * Establish SignalR hub connection.
+   * Cookies are sent automatically with withCredentials.
+   *
+   * The client is imported here rather than at the top of the file so it stays
+   * out of the entry bundle: a static import put 56 kB raw on the critical path
+   * of every visit, including the guest ones that never open a socket. The
+   * connection is negotiated asynchronously in any case, so the extra request
+   * costs nothing that was not already being awaited.
    */
-  public establishHubConnection(path: string): HubConnection {
+  public async establishHubConnection(path: string): Promise<HubConnection> {
+    const { HubConnectionBuilder } = await import("@microsoft/signalr");
     return new HubConnectionBuilder()
       .withAutomaticReconnect()
       .withUrl(`${apiHost}/${path}`, {

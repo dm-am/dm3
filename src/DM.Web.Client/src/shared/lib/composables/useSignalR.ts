@@ -1,6 +1,5 @@
 import { ref, readonly } from "vue";
 import type { HubConnection } from "@microsoft/signalr";
-import { HubConnectionState } from "@microsoft/signalr";
 import api from "@/shared/api";
 import type {
   SignalRNotification,
@@ -45,7 +44,7 @@ async function startGlobalSocket(): Promise<boolean> {
     // cookie (withCredentials), guests simply negotiate without it and the
     // hub accepts them as receive-only broadcast listeners.
     negotiatedAsAuthenticated = api.isAuthenticated();
-    globalConnection = api.establishHubConnection("whatsup");
+    globalConnection = await api.establishHubConnection("whatsup");
 
     globalConnection.onclose(() => {
       globalIsConnected.value = false;
@@ -96,6 +95,12 @@ export function useGlobalSignalR(owner = "app") {
   async function connect(): Promise<boolean> {
     return enqueueGlobalTransition(async () => {
       globalLeases.add(owner);
+
+      // Imported here rather than at the top of the file: a static import of
+      // the SignalR client puts it back on the critical path of every page
+      // load. This block is already async, and by the time a connection exists
+      // to compare against, the module is in the loader's cache.
+      const { HubConnectionState } = await import("@microsoft/signalr");
 
       if (globalConnection?.state === HubConnectionState.Connected) {
         if (negotiatedAsAuthenticated === api.isAuthenticated()) {
