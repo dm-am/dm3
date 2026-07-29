@@ -21,6 +21,9 @@
 
 # Frontend (отдельно)
 cd src/DM.Web.Client && npm install && npm run dev
+
+# Гейты CI перед пушем — один раз на клон
+git config core.hooksPath scripts/hooks
 ```
 
 | Сервис | URL |

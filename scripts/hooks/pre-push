@@ -1,0 +1,47 @@
+#!/bin/sh
+#
+# Гоняет те же гейты, что и CI, до того как коммиты уедут в origin.
+#
+# Зачем: CI — это уведомление постфактум, а не условие. Пока ветка лежит
+# локально, оба воркфлоу (.NET и Security Scanning) не запускались ни разу,
+# и первым, кто узнает о красном, будет уже запушенный dev. Правило "перед
+# пушем прогонять все гейты локально" в проекте действует и так — хук просто
+# перестает полагаться на память.
+#
+# Установка (один раз на клон):
+#   git config core.hooksPath scripts/hooks
+# Отключение:
+#   git config --unset core.hooksPath
+# Разовый обход, когда он осознан:
+#   git push --no-verify
+#
+# Порядок гейтов — от самого дешевого к самому дорогому, чтобы падать раньше.
+
+set -e
+
+ROOT=$(git rev-parse --show-toplevel)
+CLIENT="$ROOT/src/DM.Web.Client"
+
+say() { printf '\n\033[36m==> %s\033[0m\n' "$1"; }
+
+say "Фронтенд: линт"
+(cd "$CLIENT" && npm run lint:ci)
+
+say "Фронтенд: типы"
+(cd "$CLIENT" && npm run type-check)
+
+say "Фронтенд: юнит-тесты"
+(cd "$CLIENT" && npx vitest run)
+
+say "Фронтенд: сборка"
+(cd "$CLIENT" && npm run build)
+
+say "Бэкенд: сборка Release"
+dotnet build "$ROOT/DM.sln" -c Release --nologo -v q
+
+# Интеграционные тесты поднимают Testcontainers: нужен docker. Если демон не
+# отвечает, это не повод пропустить гейт молча.
+say "Бэкенд: тесты"
+dotnet test "$ROOT/DM.sln" -c Debug --nologo
+
+say "Все гейты зеленые"
