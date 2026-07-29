@@ -101,9 +101,9 @@
 | СРЕДНЯЯ | CD-11 | The API's gRPC search endpoint defaults to a hostname no container answers to | Сборка, CI/CD, деплой, эксплуатация | **Исправлено** | SEARCH_GRPC_HOST=dm-search-worker; канал подключается, поиск отдает 200 вместо 503 (a0250f1f) |
 | СРЕДНЯЯ | P1 | The git guardrail does not apply to the PowerShell tool — CLAUDE.md's critical_rules are unenforced on the harness's Windows-native path | Процесс разработки (человек + агент) | **Исправлено** | matcher хуков расширен на PowerShell, block-new-migrations принимает его tool_name; проверено: git reset --hard и создание второй миграции через PowerShell блокируются, штатные команды проходят. Локально: .claude не в гите |
 | СРЕДНЯЯ | P5 | CI's publish stage has been failing on every push to dev for ~4.5 months and nobody noticed | Процесс разработки (человек + агент) | **Исправлено** | Publish зеленый впервые, проверено прогоном CI (bb5d8d2d) |
-| СРЕДНЯЯ | P6 | Work lands in 300–1300-file commits with no PR and no branch — nothing is reviewable, bisectable, or revertible | Процесс разработки (человек + агент) | **Открыто** |  |
+| СРЕДНЯЯ | P6 | Work lands in 300–1300-file commits with no PR and no branch — nothing is reviewable, bisectable, or revertible | Процесс разработки (человек + агент) | **Частично** | Претензия про размер коммитов устарела: замерено по последним 25 коммитам — максимум 30 файлов, медиана 4, у каждого одна тема и ID находки в заголовке. Гигантские коммиты из находки все до 27.07. Остается настоящая часть: 115 коммитов лежат локально, оба воркфлоу CI не запускались ни разу. Pre-push хук гоняет те же гейты локально (b76e7cdd); сам пуш — за владельцем, это действие наружу |
 | СРЕДНЯЯ | P8 | Agent definitions describe a frontend architecture that no longer exists and cite four documentation files that were deleted | Процесс разработки (человек + агент) | **Исправлено** | Все три определения агентов проверены и приведены к реальности. frontend-developer описывал структуру api/components/composables/pages/stores/styles/utils, которой нет (в проекте FSD), требовал SCSS при 292 файлах на lang="sass" и перечислял три несуществующих ключевых файла - переписан на реальные слои и, что важнее, перестал содержать инвентарь файлов: он устаревает при первом же переносе и подсовывает свежему контексту ложные факты. Все четыре битые ссылки на удаленные документы перенацелены на существующие (проверено обходом ссылок: 0 битых). У debugger исправлены имена контейнеров dm-postgres и dm-rabbitmq на реальные dm-pg и dm-rmq и добавлен запрет создавать миграции |
-| СРЕДНЯЯ | P9 | No automated gate exists for any of the bug classes the owner keeps finding by hand | Процесс разработки (человек + агент) | **Открыто** |  |
+| СРЕДНЯЯ | P9 | No automated gate exists for any of the bug classes the owner keeps finding by hand | Процесс разработки (человек + агент) | **Частично** | Три механизма добавлены за этот заход: lint:ci в CI (было), PostToolUse-хук локального линта после каждой правки, pre-push хук с полным набором гейтов CI (b76e7cdd). Скриншотные тесты не добавлял: они требуют стабильного окружения рендеринга в CI, которого нет |
 | СРЕДНЯЯ | HYG-03 | ~118 user-facing Russian string literals destroyed by the same encoding loss — every email subject and bot notification label is question marks | Гигиена кода и техдолг | **Исправлено** | ~80 строк писем и бота написаны заново (304e618a) |
 | СРЕДНЯЯ | HYG-05 | Four background services exist as duplicate files; the dead WarmupService copy is the *richer* one and the copies have already drifted | Гигиена кода и техдолг | **Исправлено** | То же, что CR-04 (c91d8d4d) |
 | СРЕДНЯЯ | HYG-06 | Well-known seed GUIDs are duplicated across four files, one copy is wrong, and the canonical constant class is used by nobody | Гигиена кода и техдолг | **Исправлено** | SystemUser перенесен в Domain.Core.Identity, литерал в GameInactivityProcessor заменен ссылкой (c91d8d4d) |
@@ -218,7 +218,7 @@ WHAT IS TRUE (verified):
 
 ### [СРЕДНЯЯ] core-is-a-shared-enum-dump — DM.Domain.Core is a shared-enum dumping ground rather than a coherent kernel — 37 of 52 enums are used by at most one module, three by none
 
-**Статус: Открыто.** 
+**Статус: Частично.** Пересчитано: 52 енума в Enums/, из них 36 используются максимум одним модулем, 11 — ни одним. Три полностью мертвых удалены (PollType, RubricAccessPolicy, SubscriptionSource) — ноль ссылок во всем src и test (fac16626). Перенос 11 свободных енумов в свои модули не делал: правка механическая, но затрагивает сотни using-ов и ничего не чинит
 
 `src/DM.Domain.Core/Enums/` holds 52 enum files out of Core's 155 files. Measured: 37 of the 52 are referenced by at most one `DM.Domain.*` module — e.g. `AttributeSpecificationType`, `RoomAccessTargetType`, `CharacterStatus`, `SchemaType` (Game only); `GlobalChatEventStatus`, `ChatType` (Messaging only); `TicketSubtype`, `TicketStatus` (Moderation only); `ContestType`, `PollType` (Community only); `BlogRole`, `DraftVisibility` (Blog only). Three are referenced nowhere outside their own declaration: `PollType`, `RubricAccessPolicy`, `SubscriptionSource`. They sit in Core because `DM.Infrastructure.Persistence` and `DM.Web.API` need them — but both already ProjectReference all nine domain modules, so the hoist buys nothing.
 
@@ -268,7 +268,7 @@ WHAT IS TRUE (verified):
 
 ### [СРЕДНЯЯ] double-service-layer-inconsistent-and-leaky — The Controller→ApiService→Service layer is applied inconsistently (12 of 77 controllers skip it) and the ApiServices that exist carry duplicated business logic
 
-**Статус: Открыто.** 
+**Статус: Частично.** Два подтвержденных конкретных дефекта закрыты (8cbd23f4): ветка BlogDetails удалена целиком как мертвая (18 упоминаний, ноль вызывающих; при этом делала двойную гидрацию блога), дубль GetBlogs/GetBlogRefs сведен в один QueryBlogs. Общая часть находки — правило о том, когда ApiService обязателен — остается: механического гейта нет, архитектурных тестов в test/ ноль
 
 134 `*ApiService.cs` files exist and docs/conventions/PATTERNS.md:88-94 mandates one per feature, but 12 controllers inject domain services directly and do the mapping inline — e.g. `Features/Community/Awards/AwardController.cs:25-42`, `Features/Game/Posts/PostController.cs`, `Features/Forum/Comments/TopicCommentController.cs`. Where ApiServices do exist, most methods are pure ceremony (`BlogApiService.cs:134-138, 182-199, 240` are one-line `_mapper.Map` wrappers requiring three files per operation), while the methods that carry real logic duplicate it: `BlogApiService.cs:41-65` and `:91-112` are the same 24-line block — fetch *all* owned blogs, fetch *all* subscriptions, fetch *all* subscribed blogs, concat, then `Skip(skip).Take(take)` in memory — copy-pasted so one returns `Blog` and the other `BlogRef`. `GetDetailsByPublicId` (:155-162) and `GetDetailsByOwnerLogin` (:172-179) each make two sequential domain round-trips to work around a missing repository method.
 
@@ -552,7 +552,7 @@ All 27 AsNoTracking calls live in just 6 files (DeactivationRepository, Achievem
 
 ### [НИЗКАЯ] P-18 — The API layer writes to DmDbContext directly, and one 5000-line API service is the sole writer of several schema columns
 
-**Статус: Открыто.** 
+**Статус: Опровергнуто.** Обе несущие улики мертвы: ModerationApiService на 5406 строк вынесен в DM.Tools.Seeder (7887c089), денормализованные колонки Board пишутся только из Persistence. Остаток — две записи в UploadApiService — полностью перекрывается backend-arch:api-layer-bypasses-domain-layer, отдельной работы не требует
 
 Ten files under src/DM.Web.API reference DmDbContext directly, bypassing the repository layer entirely: ModerationApiService.cs, TopicApiService.cs, UploadApiService.cs, CommunityStatsApiService.cs, NotificationApiService.cs and five HostedServices. ModerationApiService.cs alone carries 20 SaveChangesAsync calls and is the only writer of Board.LastCommentId/LastCommentTopicId/LastCommentUtc/CommentsCount (lines 2305, 2326-2336) — see P-07.
 
@@ -914,7 +914,7 @@ WarningController.cs:24 declares [Route("v1")] and then scatters one resource ac
 
 ### [НИЗКАЯ] API-16 — No conditional-request support anywhere: zero ETag/Last-Modified across 152 GET endpoints, and cache headers applied through two mechanisms on only 5 of them
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Проверено заново: 148 GET-эндпоинтов (не 152), директив кеша было 5 и ставились они двумя разными способами. Ручные присвоения Response.Headers.CacheControl заменены на [ResponseCache(NoStore)], четыре справочника (типы и категории достижений, типы наград, серии конкурсов) получили ту же политику, что уже стояла на /v1/games/tags. Замерено на живом API: справочники public,max-age=300, персонализированные списки no-store,no-cache. ETag не добавляю: окупается на редко меняющихся объемных ответах, а справочники малы и закрыты max-age, остальные списки персонализированы и кешироваться не должны (1c1f6c9a)
 
 A repo-wide grep for ETag, If-None-Match and Last-Modified finds no occurrence in src/. Of 152 GET actions only five carry any cache directive, split across two mechanisms: the [ResponseCache] attribute at BoardController.cs:69, GameController.cs:74 and PostController.cs:149, versus manual header assignment at BlogController.cs:49, ForumController.cs:60 and GameController.cs:57. The remaining ~147 GETs emit no cache policy at all, so hot reads (topic lists, post feeds, game lists, chat history) revalidate in full every time.
 
@@ -1643,7 +1643,7 @@ test/DM.Testing (the shared test library) contains exactly one 14-line file. Mea
 
 ### [СРЕДНЯЯ] TS-13 — E2E assertions are frequently vacuous: tautologies and assertions hidden behind visibility guards
 
-**Статус: Открыто.** 
+**Статус: Частично.** Подтверждено на текущем коде: 32 spec-файла, 239 тестов. Четыре ассерта, которые не могли упасть, исправлены (fac16626): два вида count >= 0 и два ассерта, спрятанных за if, дословно повторяющим сам ассерт. Остаток — подключение яруса к CI, оно требует поднятия стека в пайплайне
 
 src/DM.Web.Client/e2e/tests/gaming/games-list.spec.ts:52 asserts `expect(count).toBeGreaterThanOrEqual(0)` on a locator count — mathematically incapable of failing, with the comment admitting it ("Just verify paging components are rendered (may be empty…)"). 43 assertions across the e2e suite sit inside `if (await …isVisible())` guards, several with `.catch(() => false)` so a locator error also silently skips the assertion (tooltip.spec.ts:134, 257; polls.spec.ts:16,28,32; comments.spec.ts:13,28; forum-index.spec.ts:30; characters.spec.ts:10). 49 assertions are bare `toBeTruthy()`/`toBe(true)`.
 
@@ -1805,7 +1805,7 @@ pages/global-chat/GlobalChatPage.vue is 1 739 lines with a 1 099-line `<script s
 
 ### [СРЕДНЯЯ] FE-11 — Error handling has four competing idioms, and one page issues a second network request to recover a status code the store discarded
 
-**Статус: Открыто.** 
+**Статус: Частично.** Главный конкретный дефект закрыт (fac16626): страница профиля делала второй запрос того же профиля только ради error.status, потому что стор схлопывал ошибку в boolean. Стор возвращает GeneralError | null. Замерено в браузере: один запрос вместо двух. Остаток — сведение пяти идиом обработки ошибок к одной (110 ad-hoc тостов в 51 файле)
 
 pages/profile/ProfilePage.vue:86-95: after `communityStore.trySelectProfile(name)` returns false, the page calls `communityApi.getUserProfile(name)` a second time purely to read `error?.status` — the in-code comment says "The store collapses every failure to a boolean". The four idioms: (a) global toasts in the axios interceptor for 401/403/429/5xx (shared/api/client.ts:52-96); (b) ad-hoc toasts at ~113 call sites in pages/widgets/features; (c) per-resource `xError` string refs in stores rendered via ErrorState (40 files); (d) useAsyncAction (5 files), which catches thrown Errors even though Api never throws — so call sites must convert `{error}` into `throw new Error("Не удалось изменить пароль")` (pages/account/sections/AccountSecuritySection.vue:186), discarding the server's title and invalidProperties.
 
@@ -2506,7 +2506,7 @@ But the impact analysis is self-refuting. It cites commit 0ed49eff ("...and rege
 
 ### [СРЕДНЯЯ] P6 — Work lands in 300–1300-file commits with no PR and no branch — nothing is reviewable, bisectable, or revertible
 
-**Статус: Открыто.** 
+**Статус: Частично.** Претензия про размер коммитов устарела: замерено по последним 25 коммитам — максимум 30 файлов, медиана 4, у каждого одна тема и ID находки в заголовке. Гигантские коммиты из находки все до 27.07. Остается настоящая часть: 115 коммитов лежат локально, оба воркфлоу CI не запускались ни разу. Pre-push хук гоняет те же гейты локально (b76e7cdd); сам пуш — за владельцем, это действие наружу
 
 **Доказательство.** Measured with git show --stat over the last 25 commits: c9977c46 = 1341 files / +82655 / −25313; 9fa0535c = 3352 files / +109334 / −106695; 0ed49eff = 551 files / +28778 / −10722; 91b5e571 = 328 files; f217a249 = 297 files. All 25 commits authored in 2026 are by a single author (git shortlog --since=2026-01-01) landing directly on dev; `git log --merges` shows the newest merge commit predates the fork. Branch dev is the working branch.
 
@@ -2551,7 +2551,7 @@ The finding is in fact UNDERSTATED.
 
 ### [СРЕДНЯЯ] P9 — No automated gate exists for any of the bug classes the owner keeps finding by hand
 
-**Статус: Открыто.** 
+**Статус: Частично.** Три механизма добавлены за этот заход: lint:ci в CI (было), PostToolUse-хук локального линта после каждой правки, pre-push хук с полным набором гейтов CI (b76e7cdd). Скриншотные тесты не добавлял: они требуют стабильного окружения рендеринга в CI, которого нет
 
 **Доказательство.** Visual regressions: grep for toHaveScreenshot|toMatchSnapshot|percy|chromatic across src/DM.Web.Client returns zero hits, despite playwright.config.ts and 20+ specs under e2e/tests/. The e2e suite is not in CI — grep for 'lint|e2e|playwright' across .github/workflows/*.yml returns nothing, and the frontend job runs only type-check, build and test:coverage. ESLint is absent from CI, and package.json's lint script hardcodes --fix, so it mutates rather than reports and cannot serve as a gate. Frontend coverage thresholds in vite.config.ts:38-45 are lines 7 / functions 5 / branches 5, with a stale comment at line 40 ("Current coverage is ~7.65%") against a suite that now has 844 tests. .claude/settings.json declares only PreToolUse — there is no PostToolUse or Stop hook, so nothing runs after an edit locally either.
 

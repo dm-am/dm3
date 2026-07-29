@@ -3,7 +3,7 @@
 
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import type { ListEnvelope } from "@/shared/api/models/common";
+import type { GeneralError, ListEnvelope } from "@/shared/api/models/common";
 import type { User, Username } from "./types";
 import { UserActivityFilter } from "./types";
 import { communityApi, unwrapResource } from "@/shared/api";
@@ -233,7 +233,14 @@ export const useCommunityStore = defineStore("community", () => {
   const selectedUser = ref<User | null>(null);
   const loadingProfile = ref(false);
 
-  async function trySelectProfile(username: Username) {
+  /**
+   * Loads the profile. Returns the error instead of a boolean: the caller
+   * needs the status to tell "no such user" from "server is down", and a
+   * boolean forced the profile page into a second request for exactly that.
+   */
+  async function trySelectProfile(
+    username: Username,
+  ): Promise<GeneralError | null> {
     loadingProfile.value = true;
     selectedUser.value = null;
 
@@ -243,7 +250,7 @@ export const useCommunityStore = defineStore("community", () => {
     const { data, error } = await communityApi.getUserProfile(username);
     loadingProfile.value = false;
 
-    if (error) return false;
+    if (error) return error;
 
     // Backend returns a `{ resource: UserProfile }` envelope. The API client
     // doesn't unwrap automatically (typed lie), so we extract here. Fall
@@ -252,7 +259,7 @@ export const useCommunityStore = defineStore("community", () => {
     // structural superset of User, so the User read is safe even when
     // /profile returns the richer DTO.
     selectedUser.value = unwrapResource<User>(data);
-    return true;
+    return null;
   }
 
   return {
