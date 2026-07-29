@@ -4,9 +4,11 @@ import type { Envelope } from "@/shared/api/models/common";
 /**
  * Moderation actions API — warning and ban creation dialogs.
  *
- * Deliberately self-contained: shared/api/moderationApi.ts is owned by the
- * moderation-pages work stream, so this feature talks to the shared Api
- * client directly (same pattern as features/message-search/api).
+ * This is the only client for POST v1/warnings and POST v1/bans.
+ * shared/api/moderationApi.ts used to declare the same two calls, typed as
+ * bare `Warning`/`Ban` where the server returns `Envelope<...>`; nothing
+ * called them and they have been removed. Do not add a second copy —
+ * ownership of a file is not an architectural reason to duplicate a contract.
  *
  * Endpoint contracts mirror:
  * - POST v1/warnings   (WarningController.CreateWarning, Moderator+)

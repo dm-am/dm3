@@ -16,7 +16,7 @@
  */
 import { computed, nextTick, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
-import { useSubscriptionsStore } from "@/shared/stores/subscriptions";
+import { useSubscriptionsStore } from "@/entities/subscription";
 import {
   SubscriptionSettings,
   SubscriptionTargetType,

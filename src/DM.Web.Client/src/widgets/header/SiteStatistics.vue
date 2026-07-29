@@ -58,7 +58,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from "vue";
 import { storeToRefs } from "pinia";
-import { useStatisticsStore } from "@/shared/stores/statistics";
+import { useStatisticsStore } from "@/entities/statistics";
 
 const store = useStatisticsStore();
 const {

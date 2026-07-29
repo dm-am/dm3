@@ -40,7 +40,7 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { communityApi } from "@/shared/api";
 import type { WebsiteTestimonial } from "@/shared/api/models/community";
-import { useTestimonialStore } from "@/shared/stores/testimonials";
+import { useTestimonialStore } from "@/entities/testimonial";
 import { TestimonialCard, TestimonialSkeleton } from "@/entities/testimonial";
 import { ErrorState } from "@/shared/ui/ErrorState";
 
