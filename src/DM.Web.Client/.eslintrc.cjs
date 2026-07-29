@@ -76,6 +76,33 @@ module.exports = {
     // primitives (Button, Tooltip, Tabs, Form, Paging, Header, Footer, ...).
     "vue/multi-word-component-names": "off",
 
+    // The design system has one confirmation dialog (shared/ui/ConfirmDialog)
+    // and one prompt (BBCodeEditor/InputDialog). Native modals ignore the
+    // theme, cannot be styled, block the event loop and are untestable — seven
+    // destructive actions had drifted back onto them, including two halves of
+    // one copy-pasted screen. Both spellings are banned: the bare global and
+    // the window property.
+    "no-restricted-globals": [
+      "error",
+      { name: "confirm", message: "Use shared/ui/ConfirmDialog." },
+      { name: "alert", message: "Use useToast()." },
+      { name: "prompt", message: "Use a dialog with a form field." },
+    ],
+    "no-restricted-properties": [
+      "error",
+      {
+        object: "window",
+        property: "confirm",
+        message: "Use shared/ui/ConfirmDialog.",
+      },
+      { object: "window", property: "alert", message: "Use useToast()." },
+      {
+        object: "window",
+        property: "prompt",
+        message: "Use a dialog with a form field.",
+      },
+    ],
+
     // Files outside src/ (config, cypress) are simply not FSD elements.
     "boundaries/no-unknown-files": "off",
     "boundaries/no-unknown": "off",
