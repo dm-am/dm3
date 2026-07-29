@@ -1,4 +1,4 @@
-import type { Envelope, ListEnvelope } from "../common";
+import type { Envelope, ListEnvelope, UserRef } from "../common";
 
 /**
  * Progress metric for achievements. SSOT: the server enum
@@ -100,6 +100,19 @@ export interface UserAward {
   awardedUtc: string;
 }
 
+/**
+ * An award granted within a contest series, recipient included. UserAward has
+ * no recipient — it is only ever returned inside one user's list; a series
+ * listing is the opposite case, where the recipient is the point.
+ */
+export interface ContestSeriesAward {
+  id: string;
+  user: UserRef;
+  type: AwardType;
+  workUrl: string | null;
+  awardedUtc: string;
+}
+
 // ---- Admin request DTOs ----
 
 export interface UpdateAchievementCategoryRequest {
@@ -167,6 +180,7 @@ export interface GrantUserAwardRequest {
 
 export type AwardTypesResponse = ListEnvelope<AwardType>;
 export type UserAwardsResponse = ListEnvelope<UserAward>;
+export type ContestSeriesAwardsResponse = ListEnvelope<ContestSeriesAward>;
 export type AchievementTypesResponse = ListEnvelope<AchievementType>;
 export type AchievementCategoriesResponse = ListEnvelope<AchievementCategory>;
 export type ContestSeriesResponse = ListEnvelope<ContestSeries>;

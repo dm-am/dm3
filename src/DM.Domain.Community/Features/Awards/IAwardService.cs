@@ -39,6 +39,8 @@ public interface IAwardService
 
     /// <summary>List of a user's awards.</summary>
     Task<IReadOnlyCollection<UserAward>> GetUserAwardsAsync(string username, CancellationToken ct = default);
+    /// <summary>Everyone awarded within a contest series — the moderator view of "who won this contest".</summary>
+    Task<IReadOnlyCollection<UserAward>> GetSeriesAwardsAsync(Guid seriesId, CancellationToken ct = default);
     /// <summary>Grant an award to a user. ContestSeriesId is optional (null = outside a contest). WorkUrl is a link to the topic with the work (optional).</summary>
     Task<UserAward> GrantAsync(string username, Guid awardTypeId, Guid? contestSeriesId, string? workUrl, CancellationToken ct = default);
     /// <summary>Revoke a previously granted award (soft-delete).</summary>

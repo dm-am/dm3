@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Core.Enums;
@@ -104,6 +105,29 @@ public class AwardCatalogController : ControllerBase
     }
 
     // ---- ContestSeries ----
+
+    /// <summary>Everyone awarded within a contest series.</summary>
+    /// <remarks>
+    /// The moderator view of a finished contest: who took which place, with a
+    /// link to the work. Ordered as a podium (award type order), not by grant
+    /// time.
+    /// </remarks>
+    /// <param name="id">Series identifier.</param>
+    /// <response code="200">The list, possibly empty.</response>
+    /// <response code="401">Not authenticated.</response>
+    /// <response code="403">Insufficient permissions.</response>
+    /// <response code="404">Series not found.</response>
+    [HttpGet("contest-series/{id:guid}/awards", Name = nameof(GetContestSeriesAwards))]
+    [ProducesResponseType(typeof(ListEnvelope<ContestSeriesAward>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetContestSeriesAwards(Guid id)
+    {
+        var awards = await _awardService.GetSeriesAwardsAsync(id);
+        return Ok(new ListEnvelope<ContestSeriesAward>(
+            _mapper.Map<IEnumerable<ContestSeriesAward>>(awards)));
+    }
 
     /// <summary>Create a new contest series.</summary>
     /// <response code="201">Created.</response>
