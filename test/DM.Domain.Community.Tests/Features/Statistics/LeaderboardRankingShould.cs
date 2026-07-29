@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
-using DM.Web.API.Features.Community.Statistics;
+using DM.Domain.Community.Features.Statistics;
 using FluentAssertions;
 using Xunit;
 
-namespace DM.Web.API.Tests.Features.Community;
+namespace DM.Domain.Community.Tests.Features.Statistics;
 
 /// <summary>
 /// Covers the leaderboard display ordering: score DESC with a deterministic
@@ -24,7 +24,7 @@ public class LeaderboardRankingShould
             Entry("c", 5), Entry("a", 12), Entry("b", 7),
         };
 
-        CommunityStatsApiService.AssignCompetitionRanks(entries);
+        CommunityStatsService.AssignCompetitionRanks(entries);
 
         entries.Select(e => e.Name).Should().Equal("a", "b", "c");
         entries.Select(e => e.Rank).Should().Equal(1, 2, 3);
@@ -38,7 +38,7 @@ public class LeaderboardRankingShould
             Entry("a", 9), Entry("b", 5), Entry("c", 5), Entry("d", 3),
         };
 
-        CommunityStatsApiService.AssignCompetitionRanks(entries);
+        CommunityStatsService.AssignCompetitionRanks(entries);
 
         // Plain 1..N, never 1, 2, 2, 4.
         entries.Select(e => e.Rank).Should().Equal(1, 2, 3, 4);
@@ -52,7 +52,7 @@ public class LeaderboardRankingShould
             Entry("Витя", 5), Entry("Аня", 5), Entry("Боря", 5),
         };
 
-        CommunityStatsApiService.AssignCompetitionRanks(entries);
+        CommunityStatsService.AssignCompetitionRanks(entries);
 
         entries.Select(e => e.Name).Should().Equal("Аня", "Боря", "Витя");
         entries.Select(e => e.Rank).Should().Equal(1, 2, 3);
@@ -63,7 +63,7 @@ public class LeaderboardRankingShould
     {
         var entries = new List<LeaderboardEntry>();
 
-        CommunityStatsApiService.AssignCompetitionRanks(entries);
+        CommunityStatsService.AssignCompetitionRanks(entries);
 
         entries.Should().BeEmpty();
     }

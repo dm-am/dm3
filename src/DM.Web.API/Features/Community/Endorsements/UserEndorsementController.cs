@@ -1,10 +1,5 @@
 using System;
-using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using DM.Domain.Community.Features.UserEndorsements;
-using DM.Domain.Core.Dto;
-using DM.Domain.Core.Users;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
@@ -21,19 +16,12 @@ namespace DM.Web.API.Features.Community.Endorsements;
 [Tags("User Endorsements")]
 public class UserEndorsementController : ControllerBase
 {
-    private readonly IUserEndorsementService _endorsementService;
-    private readonly IUserLookupService _userLookupService;
-    private readonly IMapper _mapper;
+    private readonly IUserEndorsementApiService _endorsementApiService;
 
     /// <inheritdoc />
-    public UserEndorsementController(
-        IUserEndorsementService endorsementService,
-        IUserLookupService userLookupService,
-        IMapper mapper)
+    public UserEndorsementController(IUserEndorsementApiService endorsementApiService)
     {
-        _endorsementService = endorsementService;
-        _userLookupService = userLookupService;
-        _mapper = mapper;
+        _endorsementApiService = endorsementApiService;
     }
 
     /// <summary>
@@ -52,20 +40,8 @@ public class UserEndorsementController : ControllerBase
     [HttpGet(Name = nameof(GetUserEndorsements))]
     [ProducesResponseType(typeof(ListEnvelope<UserEndorsement>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetUserEndorsements(string username, [FromQuery] UserEndorsementsQuery q)
-    {
-        var user = await _userLookupService.GetAsync(username);
-        var filter = new DM.Domain.Community.Features.UserEndorsements.UserEndorsementFilter
-        {
-            RecipientId = user.UserId,
-            Search = q.Search,
-            SortBy = q.SortBy,
-            SortOrder = q.SortOrder,
-        };
-        var (endorsements, paging) = await _endorsementService.GetAllAsync(q, filter);
-        var apiEndorsements = endorsements.Select(_mapper.Map<UserEndorsement>);
-        return Ok(new ListEnvelope<UserEndorsement>(apiEndorsements, new PagingInfo(paging)));
-    }
+    public async Task<IActionResult> GetUserEndorsements(string username, [FromQuery] UserEndorsementsQuery q) =>
+        Ok(await _endorsementApiService.GetReceived(username, q));
 
     /// <summary>
     /// Get endorsements written by a user
@@ -83,20 +59,8 @@ public class UserEndorsementController : ControllerBase
     [HttpGet("/v1/users/{username}/written-endorsements", Name = nameof(GetWrittenUserEndorsements))]
     [ProducesResponseType(typeof(ListEnvelope<UserEndorsement>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetWrittenUserEndorsements(string username, [FromQuery] UserEndorsementsQuery q)
-    {
-        var user = await _userLookupService.GetAsync(username);
-        var filter = new DM.Domain.Community.Features.UserEndorsements.UserEndorsementFilter
-        {
-            AuthorId = user.UserId,
-            Search = q.Search,
-            SortBy = q.SortBy,
-            SortOrder = q.SortOrder,
-        };
-        var (endorsements, paging) = await _endorsementService.GetAllAsync(q, filter);
-        var apiEndorsements = endorsements.Select(_mapper.Map<UserEndorsement>);
-        return Ok(new ListEnvelope<UserEndorsement>(apiEndorsements, new PagingInfo(paging)));
-    }
+    public async Task<IActionResult> GetWrittenUserEndorsements(string username, [FromQuery] UserEndorsementsQuery q) =>
+        Ok(await _endorsementApiService.GetWritten(username, q));
 
     /// <summary>
     /// Create user endorsement
@@ -123,17 +87,11 @@ public class UserEndorsementController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> CreateUserEndorsement(string username, [FromBody] CreateUserEndorsementRequest request)
+    public async Task<IActionResult> CreateUserEndorsement(
+        string username, [FromBody] CreateUserEndorsementRequest request)
     {
-        var user = await _userLookupService.GetAsync(username);
-        var createEndorsement = new CreateUserEndorsement
-        {
-            TargetUserId = user.UserId,
-            Text = request.Text
-        };
-        var endorsement = await _endorsementService.CreateAsync(createEndorsement);
-        var apiEndorsement = _mapper.Map<UserEndorsement>(endorsement);
-        return CreatedAtRoute(nameof(GetUserEndorsement), new { id = endorsement.Id }, apiEndorsement);
+        var endorsement = await _endorsementApiService.Create(username, request);
+        return CreatedAtRoute(nameof(GetUserEndorsement), new { id = endorsement.Id }, endorsement);
     }
 
     /// <summary>
@@ -145,12 +103,8 @@ public class UserEndorsementController : ControllerBase
     [HttpGet("/v1/endorsements/{id}", Name = nameof(GetUserEndorsement))]
     [ProducesResponseType(typeof(UserEndorsement), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetUserEndorsement(Guid id)
-    {
-        var endorsement = await _endorsementService.GetAsync(id);
-        var apiEndorsement = _mapper.Map<UserEndorsement>(endorsement);
-        return Ok(apiEndorsement);
-    }
+    public async Task<IActionResult> GetUserEndorsement(Guid id) =>
+        Ok(await _endorsementApiService.Get(id));
 
     /// <summary>
     /// Update user endorsement
@@ -174,17 +128,9 @@ public class UserEndorsementController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UpdateUserEndorsement(Guid id, [FromBody] UpdateUserEndorsementRequest request)
-    {
-        var updateEndorsement = new UpdateUserEndorsement
-        {
-            EndorsementId = id,
-            Text = request.Text
-        };
-        var endorsement = await _endorsementService.UpdateAsync(updateEndorsement);
-        var apiEndorsement = _mapper.Map<UserEndorsement>(endorsement);
-        return Ok(apiEndorsement);
-    }
+    public async Task<IActionResult> UpdateUserEndorsement(
+        Guid id, [FromBody] UpdateUserEndorsementRequest request) =>
+        Ok(await _endorsementApiService.Update(id, request));
 
     /// <summary>
     /// Delete user endorsement
@@ -206,7 +152,7 @@ public class UserEndorsementController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteUserEndorsement(Guid id)
     {
-        await _endorsementService.DeleteAsync(id);
+        await _endorsementApiService.Delete(id);
         return NoContent();
     }
 }

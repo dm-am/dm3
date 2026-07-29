@@ -221,6 +221,23 @@ internal class TopicRepository : ITopicRepository
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyDictionary<Guid, PeriodDigest>> GetPeriodDigests(
+        IReadOnlyCollection<Guid> topicIds, CancellationToken ct = default)
+    {
+        if (topicIds.Count == 0) return new Dictionary<Guid, PeriodDigest>();
+
+        var markers = await _dbContext.PeriodDigestTopics
+            .TagWith("DM.Forum.TopicPeriodDigests")
+            .Where(d => topicIds.Contains(d.TopicId))
+            .Select(d => new { d.TopicId, d.Year, d.Month })
+            .ToListAsync(ct);
+
+        return markers.ToDictionary(
+            m => m.TopicId,
+            m => new PeriodDigest { Year = m.Year, Month = m.Month });
+    }
+
+    /// <inheritdoc />
     /// <inheritdoc />
     // IgnoreQueryFilters is the whole point of these two probes: the soft-delete
     // filter is global, so without it they can only ever see rows that are NOT

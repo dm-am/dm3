@@ -1,7 +1,4 @@
-using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using DM.Domain.Community.Features.Achievements;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -24,14 +21,12 @@ namespace DM.Web.API.Features.Community.Achievements;
 [Tags("Achievements")]
 public class AchievementController : ControllerBase
 {
-    private readonly IAchievementService _achievementService;
-    private readonly IMapper _mapper;
+    private readonly IAchievementApiService _achievementApiService;
 
     /// <inheritdoc />
-    public AchievementController(IAchievementService achievementService, IMapper mapper)
+    public AchievementController(IAchievementApiService achievementApiService)
     {
-        _achievementService = achievementService;
-        _mapper = mapper;
+        _achievementApiService = achievementApiService;
     }
 
     /// <summary>List of achievement categories (single-metric chains).</summary>
@@ -42,12 +37,8 @@ public class AchievementController : ControllerBase
     // A catalogue: the service is called without an identity, so every caller
     // gets the same bytes. Same policy as /v1/games/tags.
     [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
-    public async Task<IActionResult> GetAchievementCategories()
-    {
-        var categories = await _achievementService.GetCategoriesAsync();
-        var items = categories.Select(_mapper.Map<AchievementCategory>);
-        return Ok(new ListEnvelope<AchievementCategory>(items, null));
-    }
+    public async Task<IActionResult> GetAchievementCategories() =>
+        Ok(await _achievementApiService.GetCategories());
 
     /// <summary>List of achievement tiers (active only, with the parent category).</summary>
     /// <response code="200">List of tiers.</response>
@@ -56,12 +47,8 @@ public class AchievementController : ControllerBase
     // A catalogue: the service is called without an identity, so every caller
     // gets the same bytes. Same policy as /v1/games/tags.
     [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
-    public async Task<IActionResult> GetAchievementTypes()
-    {
-        var types = await _achievementService.GetTypesAsync();
-        var items = types.Select(_mapper.Map<AchievementType>);
-        return Ok(new ListEnvelope<AchievementType>(items, null));
-    }
+    public async Task<IActionResult> GetAchievementTypes() =>
+        Ok(await _achievementApiService.GetTypes());
 
     /// <summary>
     /// A user's achievements. Lazy-eval: on every request, not-yet-earned
@@ -73,10 +60,6 @@ public class AchievementController : ControllerBase
     [HttpGet("users/{username}/achievements", Name = nameof(GetUserAchievements))]
     [ProducesResponseType(typeof(ListEnvelope<UserAchievement>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetUserAchievements(string username)
-    {
-        var list = await _achievementService.GetUserAchievementsAsync(username);
-        var items = list.Select(_mapper.Map<UserAchievement>);
-        return Ok(new ListEnvelope<UserAchievement>(items, null));
-    }
+    public async Task<IActionResult> GetUserAchievements(string username) =>
+        Ok(await _achievementApiService.GetUserAchievements(username));
 }

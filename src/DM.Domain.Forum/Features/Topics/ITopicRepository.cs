@@ -54,6 +54,15 @@ public interface ITopicRepository
     Task<Topic?> GetByBoardAndNumber(Guid boardId, int topicNumber, BoardAccessPolicy accessPolicy, CancellationToken ct = default);
 
     /// <summary>
+    /// Get the period markers of the given topics in one lookup. Topics
+    /// without a marker are absent from the result.
+    /// </summary>
+    /// <param name="topicIds">Topic identifiers to look up</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<IReadOnlyDictionary<Guid, PeriodDigest>> GetPeriodDigests(
+        IReadOnlyCollection<Guid> topicIds, CancellationToken ct = default);
+
+    /// <summary>
     /// Whether a topic row exists at all, INCLUDING removed ones — lets the
     /// service tell a deleted topic (410 Gone) from one that never existed
     /// (404 Not Found).

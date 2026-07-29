@@ -1,16 +1,11 @@
 using System;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Features.Community.Achievements;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using IAchievementService = DM.Domain.Community.Features.Achievements.IAchievementService;
-using DomainCreateAchievementType = DM.Domain.Community.Features.Achievements.CreateAchievementType;
-using DomainUpdateAchievementCategory = DM.Domain.Community.Features.Achievements.UpdateAchievementCategory;
-using DomainUpdateAchievementType = DM.Domain.Community.Features.Achievements.UpdateAchievementType;
 
 namespace DM.Web.API.Features.Moderation.Achievements;
 
@@ -31,14 +26,12 @@ namespace DM.Web.API.Features.Moderation.Achievements;
 [RequireRole(UserRole.SeniorModerator)]
 public class AchievementCatalogController : ControllerBase
 {
-    private readonly IAchievementService _achievementService;
-    private readonly IMapper _mapper;
+    private readonly IAchievementCatalogApiService _achievementCatalogApiService;
 
     /// <inheritdoc />
-    public AchievementCatalogController(IAchievementService achievementService, IMapper mapper)
+    public AchievementCatalogController(IAchievementCatalogApiService achievementCatalogApiService)
     {
-        _achievementService = achievementService;
-        _mapper = mapper;
+        _achievementCatalogApiService = achievementCatalogApiService;
     }
 
     /// <summary>
@@ -57,13 +50,9 @@ public class AchievementCatalogController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UpdateAchievementCategory(Guid id, [FromBody] UpdateAchievementCategoryRequest request)
-    {
-        var domain = _mapper.Map<DomainUpdateAchievementCategory>(request);
-        domain.Id = id;
-        var updated = await _achievementService.UpdateCategoryAsync(domain);
-        return Ok(new Envelope<AchievementCategory>(_mapper.Map<AchievementCategory>(updated)));
-    }
+    public async Task<IActionResult> UpdateAchievementCategory(
+        Guid id, [FromBody] UpdateAchievementCategoryRequest request) =>
+        Ok(await _achievementCatalogApiService.UpdateCategory(id, request));
 
     /// <summary>Create a new tier in an existing category.</summary>
     /// <response code="201">Created.</response>
@@ -77,13 +66,8 @@ public class AchievementCatalogController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> CreateAchievementType([FromBody] CreateAchievementTypeRequest request)
-    {
-        var domain = _mapper.Map<DomainCreateAchievementType>(request);
-        var created = await _achievementService.CreateTypeAsync(domain);
-        var api = _mapper.Map<AchievementType>(created);
-        return StatusCode(StatusCodes.Status201Created, new Envelope<AchievementType>(api));
-    }
+    public async Task<IActionResult> CreateAchievementType([FromBody] CreateAchievementTypeRequest request) =>
+        StatusCode(StatusCodes.Status201Created, await _achievementCatalogApiService.CreateType(request));
 
     /// <summary>Partially update a tier (Title / Threshold / Tier).</summary>
     /// <param name="id">Tier identifier.</param>
@@ -99,13 +83,9 @@ public class AchievementCatalogController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UpdateAchievementType(Guid id, [FromBody] UpdateAchievementTypeRequest request)
-    {
-        var domain = _mapper.Map<DomainUpdateAchievementType>(request);
-        domain.Id = id;
-        var updated = await _achievementService.UpdateTypeAsync(domain);
-        return Ok(new Envelope<AchievementType>(_mapper.Map<AchievementType>(updated)));
-    }
+    public async Task<IActionResult> UpdateAchievementType(
+        Guid id, [FromBody] UpdateAchievementTypeRequest request) =>
+        Ok(await _achievementCatalogApiService.UpdateType(id, request));
 
     /// <summary>Delete a tier from the catalog. Already earned UserAchievement records remain as history.</summary>
     /// <response code="204">Deleted.</response>
@@ -119,7 +99,7 @@ public class AchievementCatalogController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteAchievementType(Guid id)
     {
-        await _achievementService.DeleteTypeAsync(id);
+        await _achievementCatalogApiService.DeleteType(id);
         return NoContent();
     }
 }

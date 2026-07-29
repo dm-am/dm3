@@ -1,9 +1,9 @@
 using System;
-using DM.Web.API.Features.Community.Statistics;
+using DM.Domain.Community.Features.Statistics;
 using FluentAssertions;
 using Xunit;
 
-namespace DM.Web.API.Tests.Features.Community;
+namespace DM.Domain.Community.Tests.Features.Statistics;
 
 /// <summary>
 /// Covers the stats period-window resolution: the new "all-time" period and
@@ -15,7 +15,7 @@ public class CommunityStatsPeriodBoundsShould
     public void ReturnWidestWindowForAllTimePeriod()
     {
         // year == 0 is the all-time period: no row should be excluded by date.
-        var (start, end) = CommunityStatsApiService.ResolvePeriodBounds(0, null);
+        var (start, end) = CommunityStatsService.ResolvePeriodBounds(0, null);
 
         start.Should().Be(DateTimeOffset.MinValue);
         end.Should().Be(DateTimeOffset.MaxValue);
@@ -25,7 +25,7 @@ public class CommunityStatsPeriodBoundsShould
     public void ReturnWidestWindowForAllTimeEvenWithMonth()
     {
         // A month alongside year 0 is still all-time (month is ignored).
-        var (start, end) = CommunityStatsApiService.ResolvePeriodBounds(0, 6);
+        var (start, end) = CommunityStatsService.ResolvePeriodBounds(0, 6);
 
         start.Should().Be(DateTimeOffset.MinValue);
         end.Should().Be(DateTimeOffset.MaxValue);
@@ -34,7 +34,7 @@ public class CommunityStatsPeriodBoundsShould
     [Fact]
     public void ReturnCalendarYearWindow()
     {
-        var (start, end) = CommunityStatsApiService.ResolvePeriodBounds(2024, null);
+        var (start, end) = CommunityStatsService.ResolvePeriodBounds(2024, null);
 
         start.Should().Be(new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero));
         end.Should().Be(new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero));
@@ -44,7 +44,7 @@ public class CommunityStatsPeriodBoundsShould
     public void ReturnRequestedMonthWindow()
     {
         // "month" must mean exactly the requested calendar month.
-        var (start, end) = CommunityStatsApiService.ResolvePeriodBounds(2024, 3);
+        var (start, end) = CommunityStatsService.ResolvePeriodBounds(2024, 3);
 
         start.Should().Be(new DateTimeOffset(2024, 3, 1, 0, 0, 0, TimeSpan.Zero));
         end.Should().Be(new DateTimeOffset(2024, 4, 1, 0, 0, 0, TimeSpan.Zero));
@@ -53,7 +53,7 @@ public class CommunityStatsPeriodBoundsShould
     [Fact]
     public void RollRequestedDecemberIntoNextYear()
     {
-        var (start, end) = CommunityStatsApiService.ResolvePeriodBounds(2024, 12);
+        var (start, end) = CommunityStatsService.ResolvePeriodBounds(2024, 12);
 
         start.Should().Be(new DateTimeOffset(2024, 12, 1, 0, 0, 0, TimeSpan.Zero));
         end.Should().Be(new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero));

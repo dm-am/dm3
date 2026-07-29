@@ -36,6 +36,7 @@ using DM.Domain.Core.Likes;
 using DM.Domain.Core.Notepads;
 using DM.Domain.Community.Features.Fundraising;
 using DM.Domain.Community.Features.Polls;
+using DM.Domain.Community.Features.Statistics;
 using DM.Domain.Community.Features.UserEndorsements;
 using DM.Domain.Community.Features.WebsiteTestimonials;
 using DM.Domain.Messaging.Features.Chats;
@@ -141,6 +142,10 @@ public class PersistenceModule : Module
 
         builder.RegisterType<FundraisingGoalRepository>()
             .As<IFundraisingGoalRepository>()
+            .InstancePerLifetimeScope();
+
+        builder.RegisterType<CommunityStatsRepository>()
+            .As<ICommunityStatsRepository>()
             .InstancePerLifetimeScope();
 
         // Forum repositories

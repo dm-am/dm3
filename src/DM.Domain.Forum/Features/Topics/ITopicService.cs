@@ -67,6 +67,15 @@ public interface ITopicService
     Task<Topic?> GetBestUserTopicAsync(string username, CancellationToken ct = default);
 
     /// <summary>
+    /// Get the period markers of already-fetched topics in one lookup. Topics
+    /// without a marker are absent from the result.
+    /// </summary>
+    /// <param name="topicIds">Topic identifiers to look up</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<IReadOnlyDictionary<Guid, PeriodDigest>> GetPeriodDigestsAsync(
+        IReadOnlyCollection<Guid> topicIds, CancellationToken ct = default);
+
+    /// <summary>
     /// Update existing topic
     /// </summary>
     /// <param name="updateTopic">Update topic model</param>
