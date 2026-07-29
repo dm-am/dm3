@@ -211,10 +211,16 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                 mongodbConnectionString: connectionStrings.Mongo,
                 name: "mongodb",
                 tags: new[] { "db", "ready" })
+            // Not "ready": readiness answers "can this instance serve a request",
+            // and every request is served without the broker — publishing an event
+            // is fire-and-forget alongside the response. Tagging it ready pulled
+            // the whole site out of rotation over a delayed notification. The
+            // broker is an alerting subject (ConsumerDown), not a rotation gate,
+            // and it stays visible in /_health/detail, which filters nothing.
             .AddRabbitMQ(
                 rabbitConnectionString: new Uri(rabbitMqConfig.Endpoint),
                 name: "rabbitmq",
-                tags: new[] { "messaging", "ready" });
+                tags: new[] { "messaging" });
 
         // Request size limits to prevent DoS attacks via large payloads
         // Default: 30MB for general requests, files handled separately by upload endpoints
