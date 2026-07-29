@@ -238,7 +238,7 @@ WHAT IS TRUE (verified):
 
 ### [СРЕДНЯЯ] background-services-block-horizontal-scale — The API host owns ten stateful background jobs with no leader election, so the web tier cannot be scaled out
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Дубль cross-cutting:CR-11: ограничение закреплено инструментом (container_name не совместим с репликами) и записано в DEPLOYMENT.md вместе с триггером пересмотра
 
 `src/DM.Web.API/Startup.cs:155-170` registers eleven hosted services in the API process: RealtimeNotificationConsumer, WarmupService, TokenCleanup, SessionCleanup, PendingRegistrationCleanup, PeriodDigest, UsernameChangeCleanup, PendencyReminder, GameInactivity, PopularityScore, UploadOrphanCleanup, plus the OutboxProcessor at :372. A repo-wide grep for `DistributedLock|LeaderElection|pg_advisory` returns nothing — the only lock in the codebase is an in-process `SemaphoreSlim` in `RenderedBbCache.cs:87`. Several of these write: `PopularityScoreService.cs:130-155` recomputes and persists scores for every game; `PeriodDigestService` and `PendencyReminderService` send user-visible notifications.
 
@@ -298,7 +298,7 @@ WHAT IS TRUE (verified):
 
 ### [НИЗКАЯ] http-vocabulary-in-domain-kernel — The domain layer's error vocabulary is HTTP status codes, including in modules consumed by non-HTTP worker processes
 
-**Статус: Открыто.** 
+**Статус: Принято как исключение.** Находка сама рекомендует оставить как есть, пока платформа HTTP-only, и это верно: единственный потребитель домена, отвечающий кому-то снаружи, - HTTP-хост, а перевод статуса в тело ответа собран в одном месте. Вторая таксономия и таблица соответствия окупаются ровно тогда, когда у домена появится второй транспорт. Решение и его триггер записаны в PATTERNS.md, чтобы не выглядеть недосмотром
 
 `src/DM.Domain.Core/Exceptions/HttpException.cs:15` exposes `HttpStatusCode StatusCode`, and domain services throw it 273 times across 55 files (e.g. `PostReviewService.cs:69, 75, 81, 88, 94` — five different status codes in one method). `DM.Workers.NotificationDispatcher` references Domain.Account, Domain.Community and Domain.Personal, and `DM.Workers.SearchIndexer` references Domain.Account and Domain.Forum — neither has an HTTP request to map a status onto.
 
@@ -1279,7 +1279,7 @@ VERIFIED AS STATED (the harmless half): `src/DM.Infrastructure.Persistence/Migra
 
 ### [СРЕДНЯЯ] CR-11 — No leader election or locking on eleven hosted services, and the deployment is pinned to a single instance by container_name — the scaling ceiling is structural
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Механизм, оказывается, уже был - врала документация. Compose отказывается поднимать реплики у сервиса с container_name, то есть единственность экземпляра API закреплена инструментом, а не соглашением. При этом DEPLOYMENT.md обещал deploy.replicas: 3, чего обеспечить нечем: внутри процесса API живут десять периодических заданий без выбора лидера, и второй экземпляр выполнил бы ту же работу второй раз. Обещание снято, ограничение записано как ограничение с двумя названными способами его снять - вынести задания в собственный процесс, как уже сделано с почтой и уведомлениями, либо завести распределенную блокировку
 
 `Startup.cs:155-170` registers eleven hosted services plus `OutboxProcessor` via `MessageQueuingModule.cs:51-53`. Of these, only `PeriodDigestService` is written for concurrent instances (marker + unique index + compensation, `:135-197`). `PendencyReminderService.cs:94-118` reads stale pendencies, stamps `LastReminderUtc` and emits events with no locking — two instances double-send every reminder. `UploadOrphanCleanupService.cs:88-141` takes a 200-row batch and deletes S3 objects with no claim. `OutboxProcessor.cs:70-92` selects and marks with no `FOR UPDATE SKIP LOCKED` — two instances publish every event twice. There is no `IDistributedLock`, no advisory-lock helper, no leader election anywhere in the solution. Meanwhile every compose service pins `container_name` (`docker-compose.yml:526` `'dm-api'`), which makes `docker compose up --scale` impossible, and `RealtimeNotificationConsumer.cs:39` declares an exclusive fixed-name queue (see CR-07).
 
