@@ -130,6 +130,13 @@ internal class AwardService : IAwardService
         return await _repository.GetUserAwardsAsync(user.UserId, ct);
     }
 
+    public async Task<IReadOnlyCollection<UserAward>> GetSeriesAwardsAsync(Guid seriesId, CancellationToken ct = default)
+    {
+        _ = await _repository.GetSeriesAsync(seriesId, ct)
+            ?? throw new HttpException(HttpStatusCode.NotFound, "Contest series not found");
+        return await _repository.GetSeriesAwardsAsync(seriesId, ct);
+    }
+
     public async Task<UserAward> GrantAsync(string username, Guid awardTypeId, Guid? contestSeriesId, string? workUrl, CancellationToken ct = default)
     {
         var user = await _userLookup.GetAsync(username);
