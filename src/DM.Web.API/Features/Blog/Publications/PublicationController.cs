@@ -32,9 +32,6 @@ public class PublicationController : ControllerBase
         _likeApiService = likeApiService;
     }
 
-    private async Task<Guid> ResolveBlogId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _apiService.GetByPublicId(id)).Resource.Id;
-
     /// <summary>
     /// Get publications for a blog
     /// </summary>
@@ -48,7 +45,7 @@ public class PublicationController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublications(string blogId, [FromQuery] Guid? rubricId, [FromQuery] PagingQuery q)
     {
-        var id = await ResolveBlogId(blogId);
+        var id = await _apiService.ResolveId(blogId);
         return Ok(await _apiService.GetPublications(id, rubricId, q));
     }
 
@@ -103,7 +100,7 @@ public class PublicationController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostPublication(string blogId, [FromBody] CreatePublicationRequest request)
     {
-        var id = await ResolveBlogId(blogId);
+        var id = await _apiService.ResolveId(blogId);
         var result = await _apiService.CreatePublication(id, request);
         return CreatedAtRoute(nameof(GetPublication), new { id = result.Resource.Id }, result);
     }

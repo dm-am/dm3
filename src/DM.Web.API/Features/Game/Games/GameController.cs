@@ -133,9 +133,7 @@ public class GameController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteGame(string id)
     {
-        var gameId = Guid.TryParse(id, out var guid)
-            ? guid
-            : (await _gameApiService.GetByPublicId(id)).Resource.Id;
+        var gameId = await _gameApiService.ResolveId(id);
         await _gameApiService.Delete(gameId);
         return NoContent();
     }
@@ -166,9 +164,7 @@ public class GameController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostGameStatus(string id, [FromBody] GameStatusChangeRequest request)
     {
-        var gameId = Guid.TryParse(id, out var guid)
-            ? guid
-            : (await _gameApiService.GetByPublicId(id)).Resource.Id;
+        var gameId = await _gameApiService.ResolveId(id);
         return Ok(await _gameApiService.ChangeStatus(gameId, request));
     }
 
@@ -225,9 +221,7 @@ public class GameController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostResetRecruitmentDate(string id)
     {
-        var gameId = Guid.TryParse(id, out var guid)
-            ? guid
-            : (await _gameApiService.GetByPublicId(id)).Resource.Id;
+        var gameId = await _gameApiService.ResolveId(id);
         return Ok(await _gameApiService.ResetRecruitmentDate(gameId));
     }
 
@@ -266,9 +260,7 @@ public class GameController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchGameDetails(string id, [FromBody] GameDetails game)
     {
-        var gameId = Guid.TryParse(id, out var guid)
-            ? guid
-            : (await _gameApiService.GetByPublicId(id)).Resource.Id;
+        var gameId = await _gameApiService.ResolveId(id);
         return Ok(await _gameApiService.Update(gameId, game));
     }
 }

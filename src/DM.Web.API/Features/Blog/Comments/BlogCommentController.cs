@@ -56,9 +56,6 @@ public class BlogCommentController : ControllerBase
         _blogApiService = blogApiService;
     }
 
-    private async Task<Guid> ResolveBlogId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _blogApiService.GetByPublicId(id)).Resource.Id;
-
     /// <summary>
     /// Get list of comments on blog
     /// </summary>
@@ -85,7 +82,7 @@ public class BlogCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogComments(string id, [FromQuery] BlogCommentsQuery q)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         var (comments, paging) = await _commentApiService.Get(blogId, q);
         return Ok(new ListEnvelope<Comment>(comments, paging));
     }
@@ -119,7 +116,7 @@ public class BlogCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostBlogComment(string id, [FromBody] CreateCommentRequest request)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         var result = await _commentApiService.Create(blogId, request);
         return CreatedAtRoute(nameof(GetBlogComment), new { id = result.Resource.Id }, result);
     }
@@ -283,7 +280,7 @@ public class BlogCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkBlogCommentsAsRead(string id)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         await _commentApiService.MarkAsRead(blogId);
         return NoContent();
     }

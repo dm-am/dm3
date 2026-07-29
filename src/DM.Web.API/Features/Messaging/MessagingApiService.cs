@@ -170,6 +170,12 @@ internal class MessagingApiService : IMessagingApiService
     }
 
     /// <inheritdoc />
+    public async Task<Guid> ResolveChatIdAsync(string idOrPublicId) =>
+        Guid.TryParse(idOrPublicId, out var guid)
+            ? guid
+            : (await GetChatByPublicIdAsync(idOrPublicId)).Id;
+
+    /// <inheritdoc />
     public async Task<ApiChat> CreateChatAsync(ApiCreateChat createChat)
     {
         var serviceCreateChat = _mapper.Map<ServiceCreateChat>(createChat);

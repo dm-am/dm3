@@ -33,9 +33,6 @@ public class GameUserController : ControllerBase
         _gameApiService = gameApiService;
     }
 
-    private async Task<Guid> ResolveGameId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _gameApiService.GetByPublicId(id)).Resource.Id;
-
     #region Users
 
     /// <summary>
@@ -58,7 +55,7 @@ public class GameUserController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameUsers(string id, [FromQuery] string? role = null)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         var users = await _userApiService.GetUsers(gameId, role);
         return Ok(new ListEnvelope<GameUser>(users));
     }
@@ -84,7 +81,7 @@ public class GameUserController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveGameUser(string id, Guid userId)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         await _userApiService.RemoveUser(gameId, userId);
         return NoContent();
     }
@@ -104,7 +101,7 @@ public class GameUserController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameAssistants(string id)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         var assistants = await _userApiService.GetAssistants(gameId);
         return Ok(new ListEnvelope<GameUser>(assistants));
     }
@@ -126,7 +123,7 @@ public class GameUserController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveGameAssistant(string id, string username)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         await _userApiService.RemoveAssistantByUsername(gameId, username);
         return NoContent();
     }

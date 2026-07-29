@@ -33,9 +33,6 @@ public class BlogUserController : ControllerBase
         _blogApiService = blogApiService;
     }
 
-    private async Task<Guid> ResolveBlogId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _blogApiService.GetByPublicId(id)).Resource.Id;
-
     #region Users
 
     /// <summary>
@@ -57,7 +54,7 @@ public class BlogUserController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogUsers(string id, [FromQuery] string? role = null)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         var users = await _userApiService.GetUsers(blogId, role);
         return Ok(new ListEnvelope<BlogUser>(users));
     }
@@ -83,7 +80,7 @@ public class BlogUserController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveBlogUser(string id, Guid userId)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         await _userApiService.RemoveUser(blogId, userId);
         return NoContent();
     }
@@ -103,7 +100,7 @@ public class BlogUserController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogAssistants(string id)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         var assistants = await _userApiService.GetAssistants(blogId);
         return Ok(new ListEnvelope<BlogUser>(assistants));
     }
@@ -125,7 +122,7 @@ public class BlogUserController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveBlogAssistant(string id, string username)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         await _userApiService.RemoveAssistantByUsername(blogId, username);
         return NoContent();
     }

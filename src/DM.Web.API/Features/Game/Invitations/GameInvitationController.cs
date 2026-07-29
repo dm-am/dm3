@@ -33,9 +33,6 @@ public class GameInvitationController : ControllerBase
         _gameApiService = gameApiService;
     }
 
-    private async Task<Guid> ResolveGameId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _gameApiService.GetByPublicId(id)).Resource.Id;
-
     /// <summary>
     /// Get all pending invitations for a game
     /// </summary>
@@ -52,7 +49,7 @@ public class GameInvitationController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameInvitations(string id)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         var invitations = await _invitationApiService.GetGameInvitations(gameId);
         return Ok(new ListEnvelope<GameInvitation>(invitations));
     }
@@ -74,7 +71,7 @@ public class GameInvitationController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> InvitePlayer(string id, [FromBody] CreateInvitationRequest request)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         var invitation = await _invitationApiService.InvitePlayer(gameId, request.Username);
         return StatusCode(StatusCodes.Status201Created, invitation);
     }
@@ -96,7 +93,7 @@ public class GameInvitationController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> InviteReader(string id, [FromBody] CreateInvitationRequest request)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         var invitation = await _invitationApiService.InviteReader(gameId, request.Username);
         return StatusCode(StatusCodes.Status201Created, invitation);
     }
@@ -118,7 +115,7 @@ public class GameInvitationController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> InviteAssistant(string id, [FromBody] CreateInvitationRequest request)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         var invitation = await _invitationApiService.InviteAssistant(gameId, request.Username);
         return StatusCode(StatusCodes.Status201Created, invitation);
     }

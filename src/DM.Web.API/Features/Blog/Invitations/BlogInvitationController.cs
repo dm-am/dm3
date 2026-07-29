@@ -32,9 +32,6 @@ public class BlogInvitationController : ControllerBase
         _blogApiService = blogApiService;
     }
 
-    private async Task<Guid> ResolveBlogId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _blogApiService.GetByPublicId(id)).Resource.Id;
-
     /// <summary>
     /// Get pending invitations for a blog
     /// </summary>
@@ -51,7 +48,7 @@ public class BlogInvitationController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogInvitations(string id)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         return Ok(new ListEnvelope<BlogInvitation>(await _apiService.GetBlogInvitations(blogId)));
     }
 
@@ -72,7 +69,7 @@ public class BlogInvitationController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> InviteBlogAssistant(string id, [FromBody] CreateInvitationRequest request)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         var result = await _apiService.CreateAssistantInvitation(blogId, request.Username);
         return StatusCode(StatusCodes.Status201Created, result);
     }
@@ -94,7 +91,7 @@ public class BlogInvitationController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> InviteBlogReader(string id, [FromBody] CreateInvitationRequest request)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         var result = await _apiService.CreateReaderInvitation(blogId, request.Username);
         return StatusCode(StatusCodes.Status201Created, result);
     }

@@ -45,9 +45,6 @@ public class RoomController : ControllerBase
         _gameApiService = gameApiService;
     }
 
-    private async Task<Guid> ResolveGameId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _gameApiService.GetByPublicId(id)).Resource.Id;
-
     /// <summary>
     /// Get list of rooms in game
     /// </summary>
@@ -59,7 +56,7 @@ public class RoomController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetRooms(string id)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         return Ok(await _roomApiService.GetAll(gameId));
     }
 
@@ -82,7 +79,7 @@ public class RoomController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostRoom(string id, [FromBody] CreateRoomRequest room)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         var result = await _roomApiService.Create(gameId, room);
         return CreatedAtRoute(nameof(GetRoom),
             new {id = result.Resource.Id}, result);

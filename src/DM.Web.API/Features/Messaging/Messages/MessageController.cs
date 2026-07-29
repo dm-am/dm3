@@ -33,9 +33,6 @@ public class MessageController : ControllerBase
         _apiService = apiService;
     }
 
-    private async Task<Guid> ResolveChatId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _apiService.GetChatByPublicIdAsync(id)).Id;
-
     /// <summary>
     /// Get list of messages in chat with cursor-based pagination
     /// </summary>
@@ -68,7 +65,7 @@ public class MessageController : ControllerBase
         [FromQuery] DateTimeOffset? nearTimestampUtc = null,
         [FromQuery] int limit = 50)
     {
-        var chatId = await ResolveChatId(id);
+        var chatId = await _apiService.ResolveChatIdAsync(id);
         return Ok(await _apiService.GetMessagesWithCursorAsync(chatId, cursor, aroundMessageId, nearTimestampUtc, limit));
     }
 
@@ -91,7 +88,7 @@ public class MessageController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostMessage(string id, [FromBody] CreateMessageInput input)
     {
-        var chatId = await ResolveChatId(id);
+        var chatId = await _apiService.ResolveChatIdAsync(id);
         var message = new Message { Text = new CommonBbText { Value = input.Text } };
         var result = await _apiService.CreateMessageAsync(chatId, message);
         return CreatedAtRoute(nameof(GetMessage), new { id = result.Resource.Id }, result);

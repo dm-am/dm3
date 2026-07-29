@@ -36,9 +36,6 @@ public class GameBlacklistController : ControllerBase
         _gameApiService = gameApiService;
     }
 
-    private async Task<Guid> ResolveGameId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _gameApiService.GetByPublicId(id)).Resource.Id;
-
     /// <summary>
     /// Get list of blacklisted users in game
     /// </summary>
@@ -55,7 +52,7 @@ public class GameBlacklistController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlacklist(string id)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         return Ok(await _blacklistApiService.Get(gameId));
     }
 
@@ -80,7 +77,7 @@ public class GameBlacklistController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostBlacklist(string id, [FromBody] User user)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         var result = await _blacklistApiService.Create(gameId, user);
         return StatusCode(StatusCodes.Status201Created, result);
     }
@@ -104,7 +101,7 @@ public class GameBlacklistController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteBlacklist(string id, string login)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         await _blacklistApiService.Delete(gameId, login);
         return NoContent();
     }

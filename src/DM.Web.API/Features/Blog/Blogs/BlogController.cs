@@ -122,9 +122,7 @@ public class BlogController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchBlog(string id, [FromBody] UpdateBlogRequest request)
     {
-        var blogId = Guid.TryParse(id, out var guid)
-            ? guid
-            : (await _apiService.GetByPublicId(id)).Resource.Id;
+        var blogId = await _apiService.ResolveId(id);
         return Ok(await _apiService.Update(blogId, request));
     }
 
@@ -144,9 +142,7 @@ public class BlogController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteBlog(string id)
     {
-        var blogId = Guid.TryParse(id, out var guid)
-            ? guid
-            : (await _apiService.GetByPublicId(id)).Resource.Id;
+        var blogId = await _apiService.ResolveId(id);
         await _apiService.Delete(blogId);
         return NoContent();
     }
@@ -236,9 +232,7 @@ public class BlogController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostRubric(string id, [FromBody] CreateRubricRequest request)
     {
-        var blogId = Guid.TryParse(id, out var guid)
-            ? guid
-            : (await _apiService.GetByPublicId(id)).Resource.Id;
+        var blogId = await _apiService.ResolveId(id);
         var result = await _apiService.CreateRubric(blogId, request);
         return Created("", result);
     }
@@ -292,9 +286,7 @@ public class BlogController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PutRubricsOrder(string id, [FromBody] ReorderRubricsRequest request)
     {
-        var blogId = Guid.TryParse(id, out var guid)
-            ? guid
-            : (await _apiService.GetByPublicId(id)).Resource.Id;
+        var blogId = await _apiService.ResolveId(id);
         return Ok(await _apiService.ReorderRubrics(blogId, request));
     }
 

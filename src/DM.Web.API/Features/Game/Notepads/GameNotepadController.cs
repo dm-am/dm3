@@ -35,9 +35,6 @@ public class GameNotepadController : ControllerBase
         _gameApiService = gameApiService;
     }
 
-    private async Task<Guid> ResolveGameId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _gameApiService.GetByPublicId(id)).Resource.Id;
-
     /// <summary>
     /// Get game master notepad entries
     /// </summary>
@@ -51,7 +48,7 @@ public class GameNotepadController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetGameMasterNotepad(string gameId)
     {
-        var resolvedId = await ResolveGameId(gameId);
+        var resolvedId = await _gameApiService.ResolveId(gameId);
         return Ok(await _notepadApiService.GetMasterEntries(resolvedId));
     }
 
@@ -69,7 +66,7 @@ public class GameNotepadController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> CreateGameMasterNotepadEntry(string gameId, [FromBody] CreateNotepadEntryRequest request)
     {
-        var resolvedId = await ResolveGameId(gameId);
+        var resolvedId = await _gameApiService.ResolveId(gameId);
         var result = await _notepadApiService.CreateMasterEntry(resolvedId, request);
         return CreatedAtRoute(nameof(GetGameMasterNotepadEntry), new { gameId, entryId = result.Resource.Id }, result);
     }

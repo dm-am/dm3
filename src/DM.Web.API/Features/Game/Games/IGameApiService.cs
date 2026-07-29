@@ -52,6 +52,17 @@ public interface IGameApiService
     Task<Envelope<GameDetails>> GetDetailsByPublicId(string publicId);
 
     /// <summary>
+    /// Resolve a route identifier of a game, given either form
+    /// </summary>
+    /// <remarks>
+    /// Every game-scoped route accepts both forms, so without a shared
+    /// resolver each controller carries its own copy of the branch.
+    /// </remarks>
+    /// <param name="idOrPublicId">Game public id (5 letters) or GUID</param>
+    /// <returns>Game identifier</returns>
+    Task<Guid> ResolveId(string idOrPublicId);
+
+    /// <summary>
     /// Create new game
     /// </summary>
     /// <param name="request">Game creation request</param>

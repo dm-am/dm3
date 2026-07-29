@@ -34,9 +34,6 @@ public class ChatController : ControllerBase
         _apiService = apiService;
     }
 
-    private async Task<Guid> ResolveChatId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _apiService.GetChatByPublicIdAsync(id)).Id;
-
     /// <summary>
     /// Get list of chats of current user
     /// </summary>
@@ -105,7 +102,7 @@ public class ChatController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkChatAsRead(string id)
     {
-        var chatId = await ResolveChatId(id);
+        var chatId = await _apiService.ResolveChatIdAsync(id);
         await _apiService.MarkAsReadAsync(chatId);
         return NoContent();
     }
@@ -147,7 +144,7 @@ public class ChatController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateChat(string id, [FromBody] UpdateChat updateChat)
     {
-        var chatId = await ResolveChatId(id);
+        var chatId = await _apiService.ResolveChatIdAsync(id);
         return Ok(await _apiService.UpdateChatAsync(chatId, updateChat));
     }
 

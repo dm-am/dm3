@@ -116,6 +116,12 @@ internal class BlogApiService : IBlogApiService
     }
 
     /// <inheritdoc />
+    public async Task<Guid> ResolveId(string idOrPublicId) =>
+        Guid.TryParse(idOrPublicId, out var guid)
+            ? guid
+            : (await GetByPublicId(idOrPublicId)).Resource.Id;
+
+    /// <inheritdoc />
     public async Task<Envelope<Blog>> Create(CreateBlogRequest request)
     {
         var createBlog = _mapper.Map<CreateBlog>(request);

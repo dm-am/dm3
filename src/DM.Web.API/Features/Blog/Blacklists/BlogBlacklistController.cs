@@ -36,9 +36,6 @@ public class BlogBlacklistController : ControllerBase
         _blogApiService = blogApiService;
     }
 
-    private async Task<Guid> ResolveBlogId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _blogApiService.GetByPublicId(id)).Resource.Id;
-
     /// <summary>
     /// Get list of blacklisted users in blog
     /// </summary>
@@ -55,7 +52,7 @@ public class BlogBlacklistController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogBlacklist(string id)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         return Ok(new ListEnvelope<User>(await _blacklistApiService.Get(blogId)));
     }
 
@@ -80,7 +77,7 @@ public class BlogBlacklistController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AddToBlogBlacklist(string id, [FromBody] BlockUserRequest request)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         var result = await _blacklistApiService.Create(blogId, request.Username);
         return StatusCode(StatusCodes.Status201Created, result);
     }
@@ -104,7 +101,7 @@ public class BlogBlacklistController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> RemoveFromBlogBlacklist(string id, string username)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         await _blacklistApiService.Delete(blogId, username);
         return NoContent();
     }

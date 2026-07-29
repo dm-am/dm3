@@ -34,9 +34,6 @@ public class BlogReaderController : ControllerBase
         _blogApiService = blogApiService;
     }
 
-    private async Task<Guid> ResolveBlogId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _blogApiService.GetByPublicId(id)).Resource.Id;
-
     /// <summary>
     /// Get list of blog readers
     /// </summary>
@@ -51,7 +48,7 @@ public class BlogReaderController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogReaders(string id)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         var readers = await _userApiService.GetReaders(blogId);
         return Ok(new ListEnvelope<BlogUser>(readers));
     }
@@ -77,7 +74,7 @@ public class BlogReaderController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> SubscribeToBlog(string id)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         var reader = await _userApiService.Subscribe(blogId);
         return StatusCode(StatusCodes.Status201Created, reader);
     }
@@ -96,7 +93,7 @@ public class BlogReaderController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UnsubscribeFromBlog(string id)
     {
-        var blogId = await ResolveBlogId(id);
+        var blogId = await _blogApiService.ResolveId(id);
         await _userApiService.Unsubscribe(blogId);
         return NoContent();
     }

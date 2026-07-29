@@ -77,6 +77,12 @@ internal class GameApiService : IGameApiService
     }
 
     /// <inheritdoc />
+    public async Task<Guid> ResolveId(string idOrPublicId) =>
+        Guid.TryParse(idOrPublicId, out var guid)
+            ? guid
+            : (await GetByPublicId(idOrPublicId)).Resource.Id;
+
+    /// <inheritdoc />
     public async Task<Envelope<GameDetails>> Create(CreateGameRequest request)
     {
         var createGame = _mapper.Map<CreateGame>(request);

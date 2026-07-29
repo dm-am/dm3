@@ -42,9 +42,6 @@ public class GameCommentController : ControllerBase
         _gameApiService = gameApiService;
     }
 
-    private async Task<Guid> ResolveGameId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _gameApiService.GetByPublicId(id)).Resource.Id;
-
     /// <summary>
     /// Get list of comments in game
     /// </summary>
@@ -71,7 +68,7 @@ public class GameCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameComments(string id, [FromQuery] GameCommentsQuery q)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         var (comments, paging) = await _commentApiService.Get(gameId, q);
         return Ok(new ListEnvelope<Comment>(comments, paging));
     }
@@ -95,7 +92,7 @@ public class GameCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostGameComment(string id, [FromBody] CreateCommentRequest request)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         var result = await _commentApiService.Create(gameId, request);
         return CreatedAtRoute(nameof(GetGameComment), new {id = result.Resource.Id}, result);
     }
@@ -209,7 +206,7 @@ public class GameCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkGameCommentsAsRead(string id)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         await _commentApiService.MarkAsRead(gameId);
         return NoContent();
     }

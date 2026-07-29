@@ -34,9 +34,6 @@ public class BlogNotepadController : ControllerBase
         _blogApiService = blogApiService;
     }
 
-    private async Task<Guid> ResolveBlogId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _blogApiService.GetByPublicId(id)).Resource.Id;
-
     /// <summary>
     /// Get blog notepad entries
     /// </summary>
@@ -50,7 +47,7 @@ public class BlogNotepadController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetBlogNotepad(string blogId)
     {
-        var id = await ResolveBlogId(blogId);
+        var id = await _blogApiService.ResolveId(blogId);
         return Ok(await _notepadApiService.GetEntries(id));
     }
 
@@ -68,7 +65,7 @@ public class BlogNotepadController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> CreateBlogNotepadEntry(string blogId, [FromBody] CreateNotepadEntryRequest request)
     {
-        var id = await ResolveBlogId(blogId);
+        var id = await _blogApiService.ResolveId(blogId);
         var result = await _notepadApiService.CreateEntry(id, request);
         return CreatedAtRoute(nameof(GetBlogNotepadEntry), new { blogId, entryId = result.Resource.Id }, result);
     }
