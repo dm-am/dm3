@@ -53,6 +53,16 @@ jobs:
         name: coverage-reports
         path: TestResults/**/coverage.cobertura.xml
         if-no-files-found: error
+    # The contract only existed inside a running Development container: Swagger
+    # is not served in production. The integration suite writes it out so it can
+    # be diffed between builds and consumed outside the process.
+    - name: Upload OpenAPI contract
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: openapi-contract
+        path: artifacts/openapi/*.json
+        if-no-files-found: error
 
   frontend:
     runs-on: ubuntu-latest
