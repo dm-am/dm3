@@ -62,17 +62,26 @@ internal class LoginRecordRepository : ILoginRecordRepository
     {
         var cutoff = _dateTimeProvider.Now.AddDays(-days);
 
-        return await _dbContext.UserLoginRecords
+        // Aggregates go into an anonymous type, not straight into UserIpInfo:
+        // a constructor call inside a GroupBy projection has no translation,
+        // and the whole query threw — the moderated profile answered 500.
+        var grouped = await _dbContext.UserLoginRecords
             .TagWith("DM.LoginRecord.GetUserIps")
             .Where(r => r.UserId == userId && r.IsSuccessful && r.LoginUtc >= cutoff)
             .GroupBy(r => r.IpAddress)
-            .Select(g => new UserIpInfo(
-                g.Key,
-                g.Min(r => r.LoginUtc),
-                g.Max(r => r.LoginUtc),
-                g.Count()))
-            .OrderByDescending(ip => ip.LastSeenUtc)
+            .Select(g => new
+            {
+                IpAddress = g.Key,
+                FirstSeenUtc = g.Min(r => r.LoginUtc),
+                LastSeenUtc = g.Max(r => r.LoginUtc),
+                LoginsCount = g.Count()
+            })
+            .OrderByDescending(x => x.LastSeenUtc)
             .ToListAsync();
+
+        return grouped
+            .Select(x => new UserIpInfo(x.IpAddress, x.FirstSeenUtc, x.LastSeenUtc, x.LoginsCount))
+            .ToList();
     }
 
     /// <inheritdoc />
@@ -86,20 +95,40 @@ internal class LoginRecordRepository : ILoginRecordRepository
             .Select(r => r.IpAddress)
             .Distinct();
 
-        // Find other users who logged in from the same IPs
-        return await _dbContext.UserLoginRecords
+        // Other users who logged in from the same IPs, collapsed to one row per
+        // (user, ip) first. Counting distinct IPs inside the group projection —
+        // g.Select(r => r.IpAddress).Distinct().Count() — is what EF cannot
+        // translate: the whole query threw and the moderated profile answered
+        // 500. Grouping twice says the same thing in SQL the provider knows.
+        var perUserAndIp = await _dbContext.UserLoginRecords
             .TagWith("DM.LoginRecord.GetLinkedProfiles")
             .Where(r => r.UserId != userId && r.IsSuccessful && r.LoginUtc >= cutoff)
             .Where(r => userIps.Contains(r.IpAddress))
-            .GroupBy(r => new { r.UserId, r.User.Username })
+            .GroupBy(r => new { r.UserId, r.User.Username, r.IpAddress })
+            .Select(g => new
+            {
+                g.Key.UserId,
+                g.Key.Username,
+                LastLoginUtc = g.Max(r => r.LoginUtc)
+            })
+            .ToListAsync();
+
+        // The regroup is in memory on purpose. Counting distinct IPs inside a
+        // group projection has no translation, and grouping a second time over
+        // an already-grouped subquery has none either — both threw, and the
+        // moderated profile answered 500. One row per (linked user, shared IP)
+        // is a handful even for a busy address, so the set materialised above
+        // is small by construction.
+        return perUserAndIp
+            .GroupBy(x => new { x.UserId, x.Username })
             .Select(g => new LinkedProfile(
                 g.Key.UserId,
                 g.Key.Username,
-                g.Select(r => r.IpAddress).Distinct().Count(),
-                g.Max(r => r.LoginUtc)))
+                g.Count(),
+                g.Max(x => x.LastLoginUtc)))
             .OrderByDescending(lp => lp.SharedIpsCount)
             .ThenByDescending(lp => lp.LastSharedLoginUtc)
-            .ToListAsync();
+            .ToList();
     }
 
     /// <inheritdoc />
