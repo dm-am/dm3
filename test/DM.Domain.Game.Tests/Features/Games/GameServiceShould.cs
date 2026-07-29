@@ -169,7 +169,7 @@ public class GameServiceShould : UnitTestBase
     }
 
     [Fact]
-    public async Task AuthorizeReadGameAction()
+    public async Task AuthorizeAndReturnTheGameOnRead()
     {
         var gameId = Guid.NewGuid();
         var game = new GameDto
@@ -179,13 +179,14 @@ public class GameServiceShould : UnitTestBase
         };
         _repository.Setup(r => r.GetGame(gameId, _currentUserId, It.IsAny<CancellationToken>())).ReturnsAsync(game);
 
-        await _service.GetAsync(gameId);
+        var result = await _service.GetAsync(gameId);
 
+        result.Should().BeSameAs(game);
         _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Read, game), Times.Once);
     }
 
     [Fact]
-    public async Task AuthorizeUpdateGameAction()
+    public async Task AuthorizeUpdateAndAnnounceTheChange()
     {
         var gameId = Guid.NewGuid();
         var updateGame = new UpdateGame { GameId = gameId, Title = "Updated Game" };
@@ -193,27 +194,17 @@ public class GameServiceShould : UnitTestBase
         _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<CancellationToken>())).ReturnsAsync(game);
         _repository.Setup(r => r.Update(It.IsAny<UpdateGameEntity>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
 
-        await _service.UpdateAsync(updateGame);
+        var result = await _service.UpdateAsync(updateGame);
 
+        result.Should().BeSameAs(game);
         _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Edit, game), Times.Once);
+        // An edit that changes no status announces exactly the one event
+        _producer.Verify(p => p.SendAsync(
+            It.Is<IEnumerable<EventType>>(e => e.SequenceEqual(new[] { EventType.ChangedGame })), gameId), Times.Once);
     }
 
     [Fact]
-    public async Task PublishEventWhenUpdatingGame()
-    {
-        var gameId = Guid.NewGuid();
-        var updateGame = new UpdateGame { GameId = gameId, Title = "Updated Game" };
-        var game = new GameDetails { Id = gameId, Recruitment = new GameRecruitment() };
-        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<CancellationToken>())).ReturnsAsync(game);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateGameEntity>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
-
-        await _service.UpdateAsync(updateGame);
-
-        _producer.Verify(p => p.SendAsync(It.IsAny<IEnumerable<EventType>>(), gameId), Times.Once);
-    }
-
-    [Fact]
-    public async Task AuthorizeDeleteGameAction()
+    public async Task AuthorizeDeleteAndAnnounceIt()
     {
         var gameId = Guid.NewGuid();
         var game = new GameDetails
@@ -228,23 +219,7 @@ public class GameServiceShould : UnitTestBase
         await _service.DeleteAsync(gameId);
 
         _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Delete, game), Times.Once);
-    }
-
-    [Fact]
-    public async Task PublishEventWhenDeletingGame()
-    {
-        var gameId = Guid.NewGuid();
-        var game = new GameDetails
-        {
-            Id = gameId,
-            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
-            Recruitment = new GameRecruitment()
-        };
-        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<CancellationToken>())).ReturnsAsync(game);
-        _repository.Setup(r => r.Delete(gameId, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-
-        await _service.DeleteAsync(gameId);
-
+        _repository.Verify(r => r.Delete(gameId, It.IsAny<CancellationToken>()), Times.Once);
         _producer.Verify(p => p.SendAsync(EventType.DeletedGame, gameId), Times.Once);
     }
 }
