@@ -348,8 +348,12 @@ public partial class BbParserWrapper : IBbParser
                         altAttr = $" alt=\"{encodedAlt}\" data-alt=\"{encodedAlt}\"";
                     }
 
+                    // loading/decoding: a page carries up to twenty posts, and images below
+                    // the fold cost first paint for nothing. Both attributes are inert
+                    // for anything already on screen.
                     var imgTag = $"<img src=\"{encodedUrl}\" class=\"bb-image\" " +
-                                 $"data-bb-tag=\"img\" referrerpolicy=\"no-referrer\"{altAttr} />";
+                                 $"data-bb-tag=\"img\" loading=\"lazy\" decoding=\"async\" " +
+                                 $"referrerpolicy=\"no-referrer\"{altAttr} />";
 
                     if (!width.HasValue && !height.HasValue)
                     {
