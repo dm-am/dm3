@@ -8,7 +8,7 @@ test.describe("Browse Games", () => {
 
   test("should display games table with data", async ({ page }) => {
     await page.goto("/games");
-    await expect(page.locator("#results")).toBeVisible();
+    await expect(page.locator(".games-data-table")).toBeVisible();
   });
 
   test("should show game status badge in list", async ({ page }) => {
