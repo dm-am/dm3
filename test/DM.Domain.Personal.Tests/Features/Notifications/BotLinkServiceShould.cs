@@ -1,3 +1,5 @@
+using DM.Domain.Core.Exceptions;
+using System.Net;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -49,7 +51,8 @@ public class BotLinkServiceShould : UnitTestBase
     {
         var act = () => _service.GenerateLinkCode("invalid");
 
-        await act.Should().ThrowAsync<ArgumentException>()
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.BadRequest)
             .Where(e => e.Message.Contains("Invalid channel type"));
     }
 
@@ -151,7 +154,8 @@ public class BotLinkServiceShould : UnitTestBase
     {
         var act = () => _service.Disconnect("invalid");
 
-        await act.Should().ThrowAsync<ArgumentException>()
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.BadRequest)
             .Where(e => e.Message.Contains("Invalid channel type"));
     }
 
