@@ -59,7 +59,7 @@ public class ErrorHandlingMiddlewareShould : UnitTestBase
         var middleware = new ErrorHandlingMiddleware(_ => throw exception);
         await middleware.InvokeAsync(httpContext,
             NullLogger<ErrorHandlingMiddleware>.Instance,
-            Mock<IIdentitySetter>().Object,
+            Mock<IIdentityProvider>().Object,
             correlationTokenProvider.Object,
             ProblemDetailsFactory);
 

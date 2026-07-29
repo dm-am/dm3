@@ -56,11 +56,6 @@ internal class TestIdentityProvider : IIdentityProvider, IIdentitySetter
         get => _identity;
         set => _identity = value;
     }
-
-    public void Refresh()
-    {
-        // No-op for tests
-    }
 }
 
 /// <summary>

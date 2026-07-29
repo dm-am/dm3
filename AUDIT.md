@@ -308,7 +308,7 @@ WHAT IS TRUE (verified):
 
 ### [НИЗКАЯ] serilog-aspnetcore-in-domain-account — DM.Domain.Account pulls in Serilog.AspNetCore for a single LogContext.PushProperty whose IDisposable is discarded
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Пакет Serilog.AspNetCore снят с DM.Domain.Account: обогащение лога именем вызывающего переехало в AuthenticationMiddleware, где PushProperty обернут в using и фрейм снимается. Заодно ушел workaround IIdentitySetter.Refresh - он существовал только чтобы перетолкнуть потерянное свойство: ErrorHandlingMiddleware стоит выше аутентификации, поэтому две его записи о нарушении доступа и необработанной ошибке теперь называют пользователя параметром, а не берут из ambient-контекста
 
 `src/DM.Domain.Account/DM.Domain.Account.csproj` references `Serilog.AspNetCore` — the only domain project to do so — and the sole usage is `Features/Identity/IdentityProvider.cs:3` `using Serilog.Context;` with `:23` `LogContext.PushProperty("User", _identity.User.Username);` inside the `Current` property setter. `PushProperty` returns an `IDisposable` that pops the enricher off the ambient AsyncLocal stack; the return value is discarded, so nothing is ever popped.
 
@@ -1136,7 +1136,7 @@ VERIFIED AS CITED:
 
 ### [НИЗКАЯ] SEC-16 — Duplicated client-IP extraction and two parallel moderation-profile services
 
-**Статус: Частично.** Дубль извлечения IP снят одним GetClientAddress; две службы модераторского профиля остались (2107db2b)
+**Статус: Исправлено.** Обе половины. Дубль извлечения IP снят одним GetClientAddress (2107db2b); вторая служба модераторского профиля ModerationProfileApiService удалена вместе с сидером, в Features/Moderation/Profiles осталась одна реализация
 
 `WebAuthenticationService.cs:63-76` and `AuthenticationApiService.cs:156-169` are byte-identical `ExtractClientIp` implementations, comment included. Separately, `Features/Moderation/Profiles/` contains both `ModeratedProfileApiService.cs` and `ModerationProfileApiService.cs`, each independently deciding PII visibility (`ModeratedProfileApiService.cs:78-92,122-124` vs `ModerationProfileApiService.cs:84,104,121,134`).
 
@@ -2847,7 +2847,7 @@ src/DM.Infrastructure.Mail/IMailSender.cs:9-11 documents itself as `DEPRECATED: 
 
 ### [НИЗКАЯ] HYG-19 — Four unreferenced public types in Domain.Core / Infrastructure.Core
 
-**Статус: Частично.** Два неиспользуемых интерфейса удалены (49799476). OptionalExtensions в находке назван мертвым ошибочно — используется через синтаксис расширений; SystemUser перенесен в Domain.Core и имеет потребителей
+**Статус: Исправлено.** Оба неиспользуемых интерфейса удалены (49799476). Остальные два пункта находки оказались ложными и проверены поименно: OptionalExtensions живой - вызывается через синтаксис расширений в PostService.cs:224, SystemUser перенесен в Domain.Core и имеет двух потребителей (GameInactivityProcessor, PeriodDigestService)
 
 A per-type reference sweep over src/DM.Domain.Core found three types with zero consumers anywhere in src/ or test/: src/DM.Domain.Core/Dto/IReferencesContent.cs:10, src/DM.Domain.Core/Dto/IReferencesUser.cs:9, src/DM.Domain.Core/Dto/OptionalExtensions.cs:6. Add src/DM.Infrastructure.Core/SystemUser.cs:9 (see HYG-06) — the whole class is unused, its GUID/username/email are instead re-typed as literals in the migration and in two hosted services. (Note: ReadableGuidHelper looks dead to a name grep but is not — it is reached via extension-method syntax at ReadableGuidBinder.cs:48; it has a different problem, see HYG-01.)
 
