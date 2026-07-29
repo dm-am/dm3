@@ -4,8 +4,16 @@ export * from "./types";
 // Use @/shared/stores directly for new code
 export { useAuthStore, useUserStore } from "./store";
 
-// Community-specific store (stays in entities)
-export { useCommunityStore, UserActivityFilter } from "./communityStore";
+// Community-specific store (stays in entities). createCacheKey and the query
+// shape are part of its contract: the users table and the user filter build
+// cache keys and params for it, and reaching into the module for them was a
+// deep import past this barrel.
+export {
+  useCommunityStore,
+  UserActivityFilter,
+  createCacheKey,
+  type UsersSearchParams,
+} from "./communityStore";
 
 // Display composable for user formatting
 export { useUserDisplay } from "./useUserDisplay";

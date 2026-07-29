@@ -12,7 +12,7 @@ import {
   useCommunityStore,
   useUserDisplay,
 } from "@/entities/user";
-import { createCacheKey } from "@/entities/user/model/communityStore";
+import { createCacheKey } from "@/entities/user";
 import { UsersFilter, useUsersFilter } from "@/features/user-filter";
 import { buildStatusLines } from "@/shared/lib/utils/tooltipBuilders";
 

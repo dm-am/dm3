@@ -4,6 +4,10 @@ import Api from "./client";
 export { Api };
 export default Api;
 
+// Installed by the app layer: the client reports an expired session, the app
+// decides where that takes the user.
+export { setSessionExpiredHandler } from "./client";
+
 // BBCode render audience — semantic intent for server-rendered content
 export {
   RENDER_AUDIENCE,

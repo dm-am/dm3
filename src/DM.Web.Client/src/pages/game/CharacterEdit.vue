@@ -28,7 +28,7 @@ import {
 } from "@/entities/game";
 import { useUserStore } from "@/entities/user";
 import { CharacterForm } from "@/features/edit-character";
-import { createEmptySchema } from "@/features/attribute-schema-editor/model";
+import { createEmptySchema } from "@/entities/game";
 import { Select } from "@/shared/ui/Select";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";

@@ -1,9 +1,7 @@
 <script setup lang="ts" generic="T extends { id: string | number }">
-import { computed, ref } from "vue";
 import type { Column, SortState } from "./types";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import DataTableSkeleton from "./DataTableSkeleton.vue";
-
 
 const props = withDefaults(
   defineProps<{
@@ -52,12 +50,6 @@ defineSlots<{
   /** Footer slot (for pagination) */
   footer: () => void;
 }>();
-
-
-// Get row by index
-function getRow(index: number): T {
-  return props.data[index];
-}
 
 // Default cell renderer value. Lives in script because generic casts with
 // angle brackets inside template expressions break prettier's Vue parser.
@@ -251,5 +243,4 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
 @media (max-width: 768px)
   .hide-mobile
     display: none
-
 </style>

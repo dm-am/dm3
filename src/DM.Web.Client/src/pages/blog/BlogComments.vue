@@ -80,7 +80,6 @@ const newComment = ref("");
 const sending = ref(false);
 const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 
-
 const isModerator = computed(() => userIsModerator(user.value));
 
 // Blogs expose one switch: commentsEnabled. Blacklist and bans are enforced
@@ -88,9 +87,7 @@ const isModerator = computed(() => userIsModerator(user.value));
 // own blog, which a blanket client-side gate could not express.
 const commentsEnabled = computed(() => blog.value?.commentsEnabled !== false);
 
-const canComment = computed(
-  () => !!user.value && commentsEnabled.value,
-);
+const canComment = computed(() => !!user.value && commentsEnabled.value);
 
 // Scroll to target element when comments are loaded
 const commentsLoaded = computed(

@@ -517,7 +517,10 @@ describe("useGameDetailsStore", () => {
     // the site-level GameRole names the client used to mirror. Only Player and
     // Reader overlapped between the two, so a master matched nothing at all.
     it.each([
-      [["Owner", "Authority"], { isMaster: true, isAssistant: false, isPlayer: true }],
+      [
+        ["Owner", "Authority"],
+        { isMaster: true, isAssistant: false, isPlayer: true },
+      ],
       [["Authority"], { isMaster: false, isAssistant: true, isPlayer: false }],
       [["Moderator"], { isMaster: false, isAssistant: false, isPlayer: true }],
       [["Player"], { isMaster: false, isAssistant: false, isPlayer: true }],

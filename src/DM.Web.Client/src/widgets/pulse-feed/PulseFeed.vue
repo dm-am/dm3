@@ -4,7 +4,7 @@ import { storeToRefs } from "pinia";
 import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ErrorState } from "@/shared/ui/ErrorState";
-import { GamePost } from "@/widgets/game-post";
+import { GamePost } from "@/widgets/game-post/@x/pulse-feed";
 import { usePulseStore } from "@/entities/game";
 import { PulseFilter, usePulseFilter } from "@/features/pulse-filter";
 import { GamePostSkeleton } from "@/shared/ui/Skeleton";

@@ -1,7 +1,7 @@
 import { reactive, ref } from "vue";
 import { useRoute } from "vue-router";
 import { useModal } from "vue-final-modal";
-import { WarningDialog } from "@/features/moderation-actions";
+import { WarningDialog } from "@/features/moderation-actions/@x/comment";
 import type { Comment } from "@/shared/api/models/common/comment";
 
 /**
