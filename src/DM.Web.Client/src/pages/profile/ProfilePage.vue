@@ -57,6 +57,7 @@ import ModerationNotes from "./moderation/ModerationNotes.vue";
 import ModerationViolations from "./moderation/ModerationViolations.vue";
 import { BlockUserDialog } from "@/features/block-user";
 import { ErrorPage } from "@/shared/ui/ErrorPage";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 
 // Tab vocabulary. Each content tab (games / blogs / topics) is the
 // home for THREE pieces: the canonical listing, the user's best-of for
@@ -335,10 +336,12 @@ async function checkIfBlocked() {
   }
 }
 
+// Unblock is ConfirmDialog-gated; `confirmingUnblock` doubles as the dialog
+// open flag.
+const confirmingUnblock = ref(false);
+
 async function unblockUser() {
-  if (!user.value) return;
-  const confirmed = window.confirm(`Разблокировать ${user.value.username}?`);
-  if (!confirmed) return;
+  if (!user.value || isBlockLoading.value) return;
   isBlockLoading.value = true;
   const { error } = await blacklistApi.unblockUser(user.value.username);
   isBlockLoading.value = false;
@@ -346,6 +349,7 @@ async function unblockUser() {
     toast.error("Не удалось разблокировать пользователя");
   } else {
     isBlocked.value = false;
+    confirmingUnblock.value = false;
     toast.success(`${user.value.username} разблокирован`);
   }
 }
@@ -505,8 +509,13 @@ watch(tabs, (next) => {
   if (current?.hidden) onTabChange(DEFAULT_TAB);
 });
 
+// The profile itself loads asynchronously, so at mount `user` is still null
+// and the check would return having done nothing — the block state has to
+// follow the loaded profile, not the mount. Watching the username also covers
+// navigation from one profile to another.
+watch(() => user.value?.username, checkIfBlocked, { immediate: true });
+
 onMounted(async () => {
-  await checkIfBlocked();
   await fetchNote();
   await checkPendingUsernameChange();
   if (currentUser.value && !isOwnProfile.value) {
@@ -518,7 +527,6 @@ watch(usernameParam, async () => {
   // Another profile is a fresh page — the tab choice does not carry over.
   activeTab.value = DEFAULT_TAB;
   await fetchNote();
-  await checkIfBlocked();
 });
 </script>
 
@@ -730,7 +738,7 @@ watch(usernameParam, async () => {
             <Button
               v-if="isBlocked"
               :disabled="isBlockLoading"
-              @click="unblockUser"
+              @click="confirmingUnblock = true"
             >
               {{ isBlockLoading ? "…" : "Разблокировать" }}
             </Button>
@@ -934,6 +942,15 @@ watch(usernameParam, async () => {
         </Button>
       </div>
     </Transition>
+
+    <ConfirmDialog
+      v-model:show="confirmingUnblock"
+      title="Разблокировка пользователя"
+      :message="`Разблокировать ${user?.username ?? ''}?`"
+      confirm-label="Разблокировать"
+      :loading="isBlockLoading"
+      @confirm="unblockUser"
+    />
   </div>
 </template>
 

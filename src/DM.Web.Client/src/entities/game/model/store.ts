@@ -11,7 +11,6 @@ import type {
   Post,
   Tag,
   ChatRoom,
-  NotepadEntry,
   GameUser,
   CreateRoomInput,
   GameStatusTransition,
@@ -331,11 +330,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   const chatRoomsLoading = ref(false);
   const chatRoomsError = ref<string | null>(null);
 
-  // Master notepad data
-  const notepad = ref<NotepadEntry[]>([]);
-  const notepadLoading = ref(false);
-  const notepadError = ref<string | null>(null);
-
   // Blacklist data
   const blacklist = ref<User[]>([]);
   const blacklistLoading = ref(false);
@@ -597,23 +591,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     chatRoomsLoading.value = false;
   }
 
-  // Load master notepad
-  async function loadNotepad(gameId: string): Promise<void> {
-    notepadLoading.value = true;
-    notepadError.value = null;
-
-    const { data, error } = await gameApi.getNotepad(gameId);
-
-    if (error) {
-      notepadError.value = "Не удалось загрузить блокнот";
-      notepad.value = [];
-    } else if (data) {
-      notepad.value = data.resources;
-    }
-
-    notepadLoading.value = false;
-  }
-
   // Load blacklist
   async function loadBlacklist(gameId: string): Promise<void> {
     blacklistLoading.value = true;
@@ -752,10 +729,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     chatRoomsLoading.value = false;
     chatRoomsError.value = null;
 
-    notepad.value = [];
-    notepadLoading.value = false;
-    notepadError.value = null;
-
     blacklist.value = [];
     blacklistLoading.value = false;
     blacklistError.value = null;
@@ -814,9 +787,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     chatRooms,
     chatRoomsLoading,
     chatRoomsError,
-    notepad,
-    notepadLoading,
-    notepadError,
     blacklist,
     blacklistLoading,
     blacklistError,
@@ -848,7 +818,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     likeComment,
     unlikeComment,
     loadChatRooms,
-    loadNotepad,
     loadBlacklist,
     loadUsers,
     transitionStatus,

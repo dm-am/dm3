@@ -96,11 +96,12 @@ export function useAvatarUpload(user: Ref<User | null | undefined>) {
     }
   }
 
+  /**
+   * Removes the avatar. Asking first is the caller's job — confirmation is a
+   * UI concern and this composable owns no template.
+   */
   async function resetAvatar() {
     if (!hasAvatar.value || busy.value) return;
-    if (!window.confirm("Сбросить аватар? Текущий аватар будет удален.")) {
-      return;
-    }
     resetting.value = true;
     try {
       const { error } = await personalApi.removeMyAvatar();
