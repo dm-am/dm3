@@ -93,7 +93,7 @@
             <button
               class="unblock-btn"
               :disabled="unblockingUsername === entry.username"
-              @click="unblock(entry.username)"
+              @click="pendingUnblock = entry.username"
             >
               {{
                 unblockingUsername === entry.username ? "..." : "Разблокировать"
@@ -105,6 +105,16 @@
         <button class="add-btn" @click="openBlockModal">+ Заблокировать</button>
       </div>
     </div>
+
+    <ConfirmDialog
+      :show="pendingUnblock !== null"
+      title="Разблокировка пользователя"
+      :message="`Разблокировать ${pendingUnblock ?? ''}?`"
+      confirm-label="Разблокировать"
+      :loading="unblockingUsername !== null"
+      @update:show="(v) => !v && (pendingUnblock = null)"
+      @confirm="confirmUnblock"
+    />
   </section>
 </template>
 
@@ -115,6 +125,7 @@ import { useModal } from "vue-final-modal";
 import { blacklistApi } from "@/shared/api";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { EmptyState } from "@/shared/ui";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { BlockUserDialog } from "@/features/block-user";
 import type {
@@ -190,9 +201,13 @@ async function loadBlockedUsers() {
   }
 }
 
-async function unblock(username: string) {
-  const confirmed = window.confirm(`Разблокировать ${username}?`);
-  if (!confirmed) return;
+// Unblock is ConfirmDialog-gated: `pendingUnblock` holds the username the
+// dialog is asking about.
+const pendingUnblock = ref<string | null>(null);
+
+async function confirmUnblock() {
+  const username = pendingUnblock.value;
+  if (!username || unblockingUsername.value) return;
 
   unblockingUsername.value = username;
   const { error } = await blacklistApi.unblockUser(username);
@@ -201,6 +216,7 @@ async function unblock(username: string) {
   if (error) {
     toast.error("Не удалось разблокировать пользователя");
   } else {
+    pendingUnblock.value = null;
     blockedUsers.value = blockedUsers.value.filter(
       (u) => u.username !== username,
     );

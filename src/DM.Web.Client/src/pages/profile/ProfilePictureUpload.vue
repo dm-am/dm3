@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import {
   useCommunityStore,
   useAvatarUpload,
   AVATAR_ACCEPT,
 } from "@/entities/user";
 import { UploadInput } from "@/features/upload";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 
 /**
  * Overlay for editing the avatar on the profile page.
@@ -37,6 +38,14 @@ const handleUploaded = async (formData: FormData) => {
   const file = formData.get("file") as File | null;
   if (file) await avatar.uploadFile(file);
 };
+
+// --- Reset avatar (ConfirmDialog-gated) ---
+const confirmingReset = ref(false);
+
+const confirmReset = async () => {
+  await avatar.resetAvatar();
+  confirmingReset.value = false;
+};
 </script>
 
 <template>
@@ -63,7 +72,7 @@ const handleUploaded = async (formData: FormData) => {
         type="button"
         class="reset-btn"
         :disabled="avatar.resetting.value"
-        @click.stop="avatar.resetAvatar"
+        @click.stop="confirmingReset = true"
       >
         Сбросить
       </button>
@@ -73,6 +82,16 @@ const handleUploaded = async (formData: FormData) => {
       class="upload-progress"
       :style="{ width: `${avatar.progress.value}%` }"
       aria-hidden="true"
+    />
+
+    <ConfirmDialog
+      v-model:show="confirmingReset"
+      title="Сброс аватара"
+      message="Сбросить аватар? Текущий аватар будет удален."
+      confirm-label="Сбросить"
+      danger
+      :loading="avatar.resetting.value"
+      @confirm="confirmReset"
     />
   </div>
 </template>
