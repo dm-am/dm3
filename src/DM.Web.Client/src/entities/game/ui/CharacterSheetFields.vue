@@ -23,10 +23,21 @@ import {
   type AttributeSpecification,
   type AttributeValueSpecification,
 } from "../model/types";
+import { defineAsyncComponent } from "vue";
 import { FormField } from "@/shared/ui/Form";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import { SvgIcon } from "@/shared/ui/Icon";
-import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+
+/**
+ * Loaded on demand: BBCodeEditor pulls TipTap (360 KB), and this component is
+ * exported from the entities/game barrel, which the left sidebar imports on
+ * every page. A static import here put the whole editor on the entry chunk —
+ * every visitor, including guests on the home page, downloaded it. Only sheets
+ * with a BbCode specification ever render it.
+ */
+const BBCodeEditor = defineAsyncComponent(() =>
+  import("@/shared/ui/BBCodeEditor").then((m) => m.BBCodeEditor),
+);
 
 withDefaults(
   defineProps<{

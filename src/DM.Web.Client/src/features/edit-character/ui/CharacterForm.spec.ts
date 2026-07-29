@@ -198,10 +198,14 @@ describe("CharacterForm", () => {
       }
     });
 
-    it("renders the BBCodeEditor for a BbCode specification with the spec max length", () => {
+    it("renders the BBCodeEditor for a BbCode specification with the spec max length", async () => {
       const wrapper = mount(CharacterForm, {
         props: { schema: makeSchema(), gameId: "game-1" },
       });
+
+      // The editor is a defineAsyncComponent (it carries TipTap, which must
+      // stay off the entry chunk), so it appears a microtask after mount.
+      await flushPromises();
 
       const editor = wrapper.findComponent({ name: "BBCodeEditor" });
       expect(editor.exists()).toBe(true);
