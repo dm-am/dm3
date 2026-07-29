@@ -133,19 +133,7 @@ internal class BotLinkRepository : MongoCollectionRepository<UserSettings>, IBot
 
         if (existingSettings == null)
         {
-            var newSettings = new UserSettings
-            {
-                UserId = userId,
-                Paging = new PagingSettings
-                {
-                    TopicsPerPage = 10,
-                    CommentsPerPage = 10,
-                    PostsPerPage = 10,
-                    MessagesPerPage = 10,
-                    EntitiesPerPage = 10
-                },
-                Theme = Theme.Light
-            };
+            var newSettings = UserSettings.CreateDefault(userId);
 
             switch (channelType.ToLowerInvariant())
             {
