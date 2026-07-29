@@ -1,26 +1,13 @@
 import { test, expect, APIRequestContext } from "@playwright/test";
-import { loginWithCookies } from "../../fixtures/auth";
+import { authenticatedContext, seededUser } from "../../fixtures/auth";
 
 const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
-
-const TEST_USER = {
-  username: "Alice",
-  password: "Xk9#mQz2$vL7nW",
-};
 
 let authContext: APIRequestContext;
 let createdNoteId: string | null = null;
 
-test.beforeAll(async ({ request }) => {
-  try {
-    authContext = await loginWithCookies(
-      request,
-      TEST_USER.username,
-      TEST_USER.password,
-    );
-  } catch (e) {
-    console.error("Failed to login:", e);
-  }
+test.beforeAll(async () => {
+  authContext = await authenticatedContext();
 });
 
 test.afterAll(async () => {
@@ -33,8 +20,6 @@ test.afterAll(async () => {
 
 test.describe("Profile Notes API", () => {
   test("should create a note about another user", async () => {
-    test.skip(!authContext, "Auth failed");
-
     // Find another user to create a note about
     const usersResponse = await authContext.get(`${API_URL}/v1/users?size=5`);
     if (!usersResponse.ok()) {
@@ -44,7 +29,7 @@ test.describe("Profile Notes API", () => {
 
     const users = await usersResponse.json();
     const otherUser = users.resources?.find(
-      (u: { username: string }) => u.username !== TEST_USER.username,
+      (u: { username: string }) => u.username !== seededUser.username,
     );
     if (!otherUser) {
       test.skip(true, "No other users available");
@@ -67,8 +52,6 @@ test.describe("Profile Notes API", () => {
   });
 
   test("should get my notes", async () => {
-    test.skip(!authContext, "Auth failed");
-
     const response = await authContext.get(`${API_URL}/v1/users/me/notes`);
 
     expect(response.ok()).toBeTruthy();
@@ -78,7 +61,7 @@ test.describe("Profile Notes API", () => {
   });
 
   test("should get note by username", async () => {
-    test.skip(!authContext || !createdNoteId, "No note to get");
+    test.skip(!createdNoteId, "No note to get");
 
     // Get the note we created
     const notesResponse = await authContext.get(`${API_URL}/v1/users/me/notes`);

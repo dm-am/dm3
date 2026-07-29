@@ -1,25 +1,12 @@
 import { test, expect, APIRequestContext } from "@playwright/test";
-import { loginWithCookies } from "../../fixtures/auth";
+import { authenticatedContext } from "../../fixtures/auth";
 
 const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
 
-const TEST_USER = {
-  username: "Alice",
-  password: "Xk9#mQz2$vL7nW",
-};
-
 let authContext: APIRequestContext;
 
-test.beforeAll(async ({ request }) => {
-  try {
-    authContext = await loginWithCookies(
-      request,
-      TEST_USER.username,
-      TEST_USER.password,
-    );
-  } catch (e) {
-    console.error("Failed to login:", e);
-  }
+test.beforeAll(async () => {
+  authContext = await authenticatedContext();
 });
 
 test.afterAll(async () => {
@@ -28,8 +15,6 @@ test.afterAll(async () => {
 
 test.describe("Notifications API", () => {
   test("should get notifications list", async () => {
-    test.skip(!authContext, "Auth failed");
-
     const response = await authContext.get(
       `${API_URL}/v1/users/me/notifications`,
     );
@@ -41,8 +26,6 @@ test.describe("Notifications API", () => {
   });
 
   test("should get unread count", async () => {
-    test.skip(!authContext, "Auth failed");
-
     const response = await authContext.get(
       `${API_URL}/v1/users/me/notifications/unread`,
     );
@@ -54,8 +37,6 @@ test.describe("Notifications API", () => {
   });
 
   test("should mark all as read", async () => {
-    test.skip(!authContext, "Auth failed");
-
     const response = await authContext.delete(
       `${API_URL}/v1/users/me/notifications/unread`,
     );
@@ -64,8 +45,6 @@ test.describe("Notifications API", () => {
   });
 
   test("should get notification settings", async () => {
-    test.skip(!authContext, "Auth failed");
-
     const response = await authContext.get(
       `${API_URL}/v1/users/me/notifications/settings`,
     );
@@ -77,8 +56,6 @@ test.describe("Notifications API", () => {
   });
 
   test("should update notification settings", async () => {
-    test.skip(!authContext, "Auth failed");
-
     const response = await authContext.patch(
       `${API_URL}/v1/users/me/notifications/settings`,
       {
