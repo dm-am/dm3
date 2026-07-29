@@ -8,24 +8,18 @@ using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Personal.Features.Blacklists;
 using DM.Infrastructure.Persistence.Entities.Account;
-using DM.Infrastructure.Persistence.Entities.Account.Settings;
-using DM.Infrastructure.Persistence.MongoIntegration;
 using Microsoft.EntityFrameworkCore;
-using MongoDB.Driver;
 
 namespace DM.Infrastructure.Persistence.Repositories.Personal;
 
 /// <inheritdoc />
-internal class UserBlacklistRepository : MongoCollectionRepository<UserSettings>, IUserBlacklistRepository
+internal class UserBlacklistRepository : IUserBlacklistRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
 
     /// <inheritdoc />
-    public UserBlacklistRepository(
-        DmDbContext dbContext,
-        DmMongoClient mongoClient,
-        IMapper mapper) : base(mongoClient)
+    public UserBlacklistRepository(DmDbContext dbContext, IMapper mapper)
     {
         _dbContext = dbContext;
         _mapper = mapper;
@@ -113,16 +107,17 @@ internal class UserBlacklistRepository : MongoCollectionRepository<UserSettings>
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// One statement, because the switch and the entries it governs now live in
+    /// the same store. This used to be a Mongo read followed by a Postgres read,
+    /// with nothing keeping the two consistent.
+    /// </remarks>
     public async Task<IReadOnlySet<Guid>> GetBlockedUserIdsIfFlagEnabledAsync(Guid ownerId, UserBlacklistSettings flag, CancellationToken ct = default)
     {
-        var settings = await GetSettings(ownerId, ct);
-        if (!settings.HasFlag(flag))
-        {
-            return new HashSet<Guid>();
-        }
-
         var blockedIds = await _dbContext.UserBlacklists
-            .Where(b => b.OwnerId == ownerId)
+            .Where(b => b.OwnerId == ownerId &&
+                        _dbContext.Users.Any(u => u.UserId == ownerId &&
+                                                  (u.BlacklistSettings & flag) == flag))
             .Select(b => b.BlockedUserId)
             .ToListAsync(ct);
 
@@ -132,45 +127,20 @@ internal class UserBlacklistRepository : MongoCollectionRepository<UserSettings>
     /// <inheritdoc />
     public async Task<UserBlacklistSettings> GetSettings(Guid userId, CancellationToken ct = default)
     {
-        var userSettings = await Collection
-            .Find(Filter.Eq(u => u.UserId, userId))
+        var settings = await _dbContext.Users
+            .Where(u => u.UserId == userId)
+            .Select(u => (UserBlacklistSettings?)u.BlacklistSettings)
             .FirstOrDefaultAsync(ct);
 
-        return userSettings?.BlacklistSettings ?? UserBlacklistSettings.Default;
+        return settings ?? UserBlacklistSettings.Default;
     }
 
     /// <inheritdoc />
     public async Task<UserBlacklistSettings> UpdateSettings(Guid userId, UserBlacklistSettings settings, CancellationToken ct = default)
     {
-        var existingSettings = await Collection
-            .Find(Filter.Eq(u => u.UserId, userId))
-            .FirstOrDefaultAsync(ct);
-
-        if (existingSettings == null)
-        {
-            // Create new settings document with sensible defaults
-            var newSettings = new UserSettings
-            {
-                UserId = userId,
-                BlacklistSettings = settings,
-                Paging = new PagingSettings
-                {
-                    TopicsPerPage = 10,
-                    CommentsPerPage = 10,
-                    PostsPerPage = 10,
-                    MessagesPerPage = 10,
-                    EntitiesPerPage = 10
-                },
-                Theme = Theme.Light
-            };
-            await Collection.InsertOneAsync(newSettings, cancellationToken: ct);
-        }
-        else
-        {
-            // Update existing settings
-            var update = Builders<UserSettings>.Update.Set(s => s.BlacklistSettings, settings);
-            await Collection.UpdateOneAsync(Filter.Eq(u => u.UserId, userId), update, cancellationToken: ct);
-        }
+        await _dbContext.Users
+            .Where(u => u.UserId == userId)
+            .ExecuteUpdateAsync(u => u.SetProperty(x => x.BlacklistSettings, settings), ct);
 
         return settings;
     }
