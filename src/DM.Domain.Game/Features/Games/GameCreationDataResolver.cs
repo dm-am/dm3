@@ -47,10 +47,17 @@ internal class GameCreationDataResolver : IGameCreationDataResolver
     public async Task<Guid?> GetAllowedSchemaId(Guid schemaId)
     {
         var schema = await _schemaRepository.GetSchema(schemaId);
-        if (_intentionManager.IsAllowed(AttributeSchemaIntention.Use, schema))
+
+        // An id that resolves to nothing is dropped without asking the resolver:
+        // Use is answered from the schema's own type and author, and there is
+        // neither one to read here.
+        if (schema == null)
         {
-            return schemaId;
+            return null;
         }
-        return null;
+
+        return _intentionManager.IsAllowed(AttributeSchemaIntention.Use, schema)
+            ? schemaId
+            : null;
     }
 }
