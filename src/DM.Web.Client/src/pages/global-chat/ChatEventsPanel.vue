@@ -33,6 +33,7 @@ import { storeToRefs } from "pinia";
 import { useGlobalChatStore } from "@/entities/global-chat";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { CalendarGrid } from "@/shared/ui/DatePicker";
+import { ContentText } from "@/shared/ui";
 
 const props = withDefaults(
   defineProps<{
@@ -343,10 +344,10 @@ onUnmounted(() => {
               ></span
             >
           </div>
-          <div
+          <content-text
             v-if="overlayDetails?.description"
-            class="overlay-description bbcode-content"
-            v-html="overlayDetails.description"
+            class="overlay-description"
+            :html="overlayDetails.description"
           />
           <secondary-text v-else-if="!overlayDetails" class="overlay-loading"
             >Описание загружается…</secondary-text
@@ -377,7 +378,6 @@ onUnmounted(() => {
 @import "@/assets/styles/Inputs"
 @import "@/assets/styles/ZIndex"
 @import "@/assets/styles/Animations"
-@import "@/assets/styles/BbcodeContent"
 
 // One thin surface pinned to the top of the chat frame. The dashed bottom
 // border hands over to the feed below. No rounding — this is an informational

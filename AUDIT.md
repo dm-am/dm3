@@ -1745,7 +1745,7 @@ The FSD skeleton is unusually well-disciplined for 700+ files (only ~10 real imp
 
 ### [СРЕДНЯЯ] FE-05 — useApiResource's stale-while-revalidate and in-flight guard are both incorrect
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Обе половины подтвердились и обе починены. Ин-флайт гейт отдавал уже разрешенный промис вместо присоединения к летящему запросу, поэтому await fetch() возвращался до появления данных - три сайдбарных блока читают состояние сразу после await и решают по нему 'запрос упал', то есть рисовали ошибку с кнопкой Повторить на полностью исправном запросе. Теперь второй вызов присоединяется к тому же промису. SWR-ветка и блокирующий путь писали результат без проверки актуальности: медленный первый ответ затирал свежий форсированный, а ответ, пришедший после reset(), воскрешал данные предыдущего пользователя при выходе. Обе ветки закрыты существующим SSOT createRequestGuard, reset() двигает счетчик. loading поднимается синхронно до первого await - на это опирается существующий тест хранилища опросов. Публичный контракт композабла не менялся. Четыре теста на все три сценария
 
 shared/lib/composables/useApiResource.ts:105-109 — on the awaited path, an error sets `error.value` AND `data.value = null`, discarding the cached data the SWR contract promised to keep (contrast entities/game/model/store.ts:143-148, which explicitly keeps stale data on error). Line 68: `if (fetchInProgress && !force) return;` — forced fetches bypass the guard entirely, so two concurrent `fetch(true)` calls both run with no request id and last-writer-wins. Line 73-95: the background-revalidate branch swallows failures into `console.warn` and never surfaces them. This composable backs the games, blogs, forum, poll and subscription stores.
 
@@ -1815,7 +1815,7 @@ pages/profile/ProfilePage.vue:86-95: after `communityStore.trySelectProfile(name
 
 ### [СРЕДНЯЯ] FE-12 — useFetchData fires at most one callback per change batch and compares array-valued query params by reference
 
-**Статус: Открыто.** 
+**Статус: Не проблема.** Проверка развела половины. Первая (break, один коллбэк на пачку изменений) - факт, но это намеренный контракт, а не дефект: мест, где в одном watch больше одной стратегии, ровно два (BlogFeed и TopicPage), в обоих коллбэки идентичны и перечитывают состояние из маршрута целиком. Снятие break, как предлагала находка, дало бы два одинаковых запроса и гонку устаревших ответов при переходе по ссылке на другую рубрику со страницы 3. Вторая половина (сравнение массивов по ссылке) не воспроизводится: ни один геттер во всем клиенте не возвращает массив, все восемь построителей query возвращают Record<string,string>, повторяющихся ключей в URL приложение не пишет. Контракт записан в докблоке композабла
 
 shared/lib/composables/useFetchData.ts:36-41 and :52-57 — both watchers loop over the strategy list and `break` after the first index whose value differs. Values come from `route.params`/`route.query`, so `LocationQueryValue[]` entries (multi-value query params, which this app uses — client.ts:39-42 configures the serializer for repeated keys) are compared with `!==` on a freshly built array and therefore always look changed.
 
@@ -1948,7 +1948,7 @@ entities/user/model/useAvatarUpload.ts:101, pages/game/GameNotepad.vue:121, page
 
 ### [СРЕДНЯЯ] FE-07 — BBCode display has an SSOT component that most call sites bypass — and one of them forgot the interactive init entirely
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Забытое место найдено и починено: ChatEventsPanel рисовал описание события руками собранным div с v-html и не звал initBbcodeInteractive вовсе - панель отрисована соседом контейнера сообщений, поэтому контейнерный init до нее не доставал, и спойлеры внутри описания не раскрывались. Переведено на SSOT-компонент ContentText, у него watch на html покрывает ленивую загрузку описания. Заодно закрыта вторая дыра того же класса: тело раскрытого удаленного сообщения в ChatMessage появляется по клику, много позже контейнерного init. Снят мертвый импорт BbcodeContent из ChatEventsPanel. Проверено сравнением множеств правил двух сборок: CSS не изменился ни на одно правило. Унификация остальных пяти мест на ContentText не делалась - там init проброшен вручную и работает, это вопрос стиля, а не дефект
 
 shared/ui/Content/ContentText.vue is the intended SSOT: it renders `.bbcode-content` and runs `initBbcodeInteractive` + search highlighting on mount and on content change. It has 8 consumers. Seven other sites hand-wire the same thing themselves: features/comment/ui/CommentItem.vue:245, features/topic/ui/TopicCard.vue:164, widgets/chat-message/ChatMessage.vue:136, pages/profile/ProfileAbout.vue:34-38, pages/game/GameChatRoom.vue:131, pages/global-chat/GlobalChatPage.vue:568, pages/messenger/ChatView.vue:442. And pages/global-chat/ChatEventsPanel.vue:347-350 renders `<div class="overlay-description bbcode-content" v-html="overlayDetails.description">` with **zero** calls to initBbcodeInteractive anywhere in the file.
 
@@ -1958,7 +1958,7 @@ shared/ui/Content/ContentText.vue is the intended SSOT: it renders `.bbcode-cont
 
 ### [СРЕДНЯЯ] FE-08 — createFilterDispatcher keeps mutable state at module scope with no teardown, so a filter click can rewrite the next page's URL
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Механика подтверждена построчно. Диспетчер живет всю вкладку, таймер читает маршрут в момент срабатывания, а не в момент клика, и replace({name, query}) в vue-router наследует недостающие параметры из НОВОГО маршрута - то есть клик по фильтру за 50 мс до перехода штампует query одной страницы на другую и сносит ей номер страницы. Исправлено фиксацией пути на момент dispatch и выходом при расхождении; путь, а не имя, потому что имя forum одинаково у всех досок. Заодно снято застревание: ранний выход при isNavigating бросал pendingState осиротевшим и терял изменение фильтра - теперь перепланирование. Teardown в восьми композаблах не добавлялся: после проверки пути он избыточен
 
 shared/lib/composables/createFilterDispatcher.ts:46-50 declares `debounceTimer`, `pendingState`, `isNavigating` and `routerInstance` at module scope (the doc comment at :16-18 mandates this). The 50 ms timer at :88-137 builds `query` from the stale `pendingState` but reads the route *at fire time* — `routerInstance.currentRoute.value` (:98) — and then calls `router.replace({ name: currentRoute.name, query })` (:122-125). No `onScopeDispose`/`onUnmounted` cancels the timer; none of the eight filter modules (useGamesFilter, useUsersFilter, useBlogsFilter, useTopicsFilter, useCommentsFilter, usePollsFilter, usePulseFilter, useTestimonialsFilter) registers cleanup either.
 

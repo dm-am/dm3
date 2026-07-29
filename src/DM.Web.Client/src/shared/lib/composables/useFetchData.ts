@@ -19,6 +19,20 @@ type QueryStrategy = {
   callback: (value: QueryValue) => void;
 };
 
+/**
+ * Runs `mountHook` on mount and re-runs a strategy's callback when the piece of
+ * the route it watches changes.
+ *
+ * **Contract: one route change fires at most one callback per watcher.** A
+ * navigation that changes several watched values (a link to another rubric from
+ * page 3 changes both `rubric` and `number`) must produce one reload, not one
+ * per changed value — hence the `break`. The consequence is a rule on callers:
+ * every callback within the same watcher has to be interchangeable and must
+ * re-read what it needs from the route itself, never from the argument it was
+ * handed. All current call sites already do exactly that.
+ *
+ * Param and query watchers are independent, so a change to both fires both.
+ */
 export function useFetchData(
   mountHook: () => any,
   paramStrategies: ParamStrategy[] = [],

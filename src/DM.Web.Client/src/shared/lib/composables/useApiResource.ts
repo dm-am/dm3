@@ -1,5 +1,6 @@
 import { ref, type Ref } from "vue";
 import type { ApiResult, GeneralError } from "@/shared/api/models/common";
+import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 
 export interface UseApiResourceOptions {
   /** Cache duration in milliseconds. Default: 60000 (60 seconds) */
@@ -52,7 +53,22 @@ export function useApiResource<T>(
   const loading = ref(false);
 
   let lastFetched = 0;
-  let fetchInProgress = false;
+
+  // Discards the answer to a request that a newer one has superseded. Without it
+  // a slow first response overwrites a fresh forced one, and a response that
+  // arrives after reset() resurrects the data reset() cleared.
+  const guard = createRequestGuard();
+
+  // The promise a caller can join. A second fetch() while one is in flight used
+  // to get an already-resolved promise back, so `await fetch()` returned before
+  // any data existed — and callers that read the store right after the await
+  // (the sidebar blocks decide "failed" that way) drew an error on a healthy
+  // request.
+  let blockingInFlight: Promise<void> | null = null;
+
+  // Background refreshes are deduplicated but never joined: joining one would
+  // make stale-while-revalidate block, which is the one thing it exists not to do.
+  let backgroundInFlight = false;
 
   async function fetch(force = false): Promise<void> {
     const now = Date.now();
@@ -64,17 +80,22 @@ export function useApiResource<T>(
       return;
     }
 
-    // Prevent parallel fetches
-    if (fetchInProgress && !force) {
+    if (blockingInFlight && !force) {
+      return blockingInFlight;
+    }
+
+    if (backgroundInFlight && !force) {
       return;
     }
 
     // Stale-while-revalidate: return stale data, refresh in background
     if (staleWhileRevalidate && data.value !== null && isStale && !force) {
-      fetchInProgress = true;
+      const requestId = guard.next();
+      backgroundInFlight = true;
       fetcher()
         .then(({ data: newData, error: fetchError }) => {
-          fetchInProgress = false;
+          if (!guard.isCurrent(requestId)) return;
+          backgroundInFlight = false;
           if (fetchError) {
             console.warn(
               "[useApiResource] Background refresh failed:",
@@ -89,39 +110,54 @@ export function useApiResource<T>(
           }
         })
         .catch(() => {
-          fetchInProgress = false;
+          if (!guard.isCurrent(requestId)) return;
+          backgroundInFlight = false;
         });
       return;
     }
 
-    // No data or force — wait for load
-    fetchInProgress = true;
+    // No data or force — wait for load. loading and error are set synchronously,
+    // before the first await, so a caller that renders right after calling
+    // fetch() already sees the spinner.
+    const requestId = guard.next();
     loading.value = true;
     error.value = null;
 
-    try {
-      const { data: newData, error: fetchError } = await fetcher();
+    const run = (async () => {
+      try {
+        const { data: newData, error: fetchError } = await fetcher();
+        if (!guard.isCurrent(requestId)) return;
 
-      if (fetchError) {
-        error.value = fetchError;
-        data.value = null;
-        return;
+        if (fetchError) {
+          error.value = fetchError;
+          data.value = null;
+          return;
+        }
+
+        data.value = newData ?? null;
+        lastFetched = Date.now();
+      } finally {
+        if (guard.isCurrent(requestId)) {
+          loading.value = false;
+          blockingInFlight = null;
+        }
       }
+    })();
 
-      data.value = newData ?? null;
-      lastFetched = Date.now();
-    } finally {
-      fetchInProgress = false;
-      loading.value = false;
-    }
+    blockingInFlight = run;
+    return run;
   }
 
   function reset(): void {
+    // Bump the guard so any answer still in flight is dropped instead of
+    // repopulating the state this just cleared — logout is the caller.
+    guard.next();
     data.value = null;
     error.value = null;
     loading.value = false;
     lastFetched = 0;
-    fetchInProgress = false;
+    blockingInFlight = null;
+    backgroundInFlight = false;
   }
 
   return { data, error, loading, fetch, reset };
