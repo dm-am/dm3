@@ -13,7 +13,7 @@ using NpgsqlTypes;
 namespace DM.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(DmDbContext))]
-    [Migration("20260729022509_InitialCreate")]
+    [Migration("20260729122733_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -3347,54 +3347,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.ToTable("Warnings");
                 });
 
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Personal.Notepads.NotepadCategory", b =>
-                {
-                    b.Property<Guid>("CategoryId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AuthorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ContainerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("DeletedUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsRemoved")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("NotepadType")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid?>("OwnerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer");
-
-                    b.HasKey("CategoryId");
-
-                    b.HasIndex("AuthorId");
-
-                    b.HasIndex("DeletedByUserId");
-
-                    b.HasIndex("ContainerId", "NotepadType", "OwnerId");
-
-                    b.ToTable("NotepadCategories");
-                });
-
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Personal.Notepads.NotepadEntry", b =>
                 {
                     b.Property<Guid>("EntryId")
@@ -3402,9 +3354,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("AuthorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("CategoryId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("ContainerId")
@@ -3445,8 +3394,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasKey("EntryId");
 
                     b.HasIndex("AuthorId");
-
-                    b.HasIndex("CategoryId");
 
                     b.HasIndex("DeletedByUserId");
 
@@ -5472,23 +5419,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Navigation("TargetUser");
                 });
 
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Personal.Notepads.NotepadCategory", b =>
-                {
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Author")
-                        .WithMany("NotepadCategories")
-                        .HasForeignKey("AuthorId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
-                        .WithMany()
-                        .HasForeignKey("DeletedByUserId");
-
-                    b.Navigation("Author");
-
-                    b.Navigation("DeletedBy");
-                });
-
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Personal.Notepads.NotepadEntry", b =>
                 {
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Author")
@@ -5497,17 +5427,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Personal.Notepads.NotepadCategory", "Category")
-                        .WithMany("Entries")
-                        .HasForeignKey("CategoryId");
-
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
                         .WithMany()
                         .HasForeignKey("DeletedByUserId");
 
                     b.Navigation("Author");
-
-                    b.Navigation("Category");
 
                     b.Navigation("DeletedBy");
                 });
@@ -5664,8 +5588,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Navigation("Messages");
 
-                    b.Navigation("NotepadCategories");
-
                     b.Navigation("NotepadEntries");
 
                     b.Navigation("PostPendenciesCreated");
@@ -5813,11 +5735,6 @@ namespace DM.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Moderation.Ticket", b =>
                 {
                     b.Navigation("Responses");
-                });
-
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Personal.Notepads.NotepadCategory", b =>
-                {
-                    b.Navigation("Entries");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Comment", b =>

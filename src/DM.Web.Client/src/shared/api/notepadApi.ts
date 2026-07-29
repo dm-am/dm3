@@ -10,8 +10,7 @@ import Api from "./client";
  * Personal notepad (`/v1/users/me/notepad`).
  *
  * Blog and game notepads are not here: they live on blogApi and gameApi, next to
- * the rest of their container's surface. Notepad categories are not here either
- * — the server exposes no route for them.
+ * the rest of their container's surface.
  */
 export default new (class NotepadApi {
   private userPath = "users/me/notepad";

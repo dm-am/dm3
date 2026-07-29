@@ -11,8 +11,6 @@ namespace DM.Domain.Blog.Features.Notepads;
 /// </summary>
 public interface IBlogNotepadService
 {
-    #region Entries
-
     /// <summary>
     /// Get notepad entries for a blog
     /// </summary>
@@ -37,30 +35,4 @@ public interface IBlogNotepadService
     /// Delete entry
     /// </summary>
     Task DeleteEntry(Guid entryId, CancellationToken ct = default);
-
-    #endregion
-
-    #region Categories
-
-    /// <summary>
-    /// Get categories for blog notepad
-    /// </summary>
-    Task<IEnumerable<NotepadCategory>> GetCategories(Guid blogId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Create new category
-    /// </summary>
-    Task<NotepadCategory> CreateCategory(Guid blogId, CreateNotepadCategory createCategory, CancellationToken ct = default);
-
-    /// <summary>
-    /// Update category
-    /// </summary>
-    Task<NotepadCategory> UpdateCategory(Guid categoryId, UpdateNotepadCategory updateCategory, CancellationToken ct = default);
-
-    /// <summary>
-    /// Delete category
-    /// </summary>
-    Task DeleteCategory(Guid categoryId, CancellationToken ct = default);
-
-    #endregion
 }

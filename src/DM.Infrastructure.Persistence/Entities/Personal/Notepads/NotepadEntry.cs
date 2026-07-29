@@ -41,11 +41,6 @@ public class NotepadEntry : ISoftDeletable
     public Guid AuthorId { get; set; }
 
     /// <summary>
-    /// Category identifier for organization
-    /// </summary>
-    public Guid? CategoryId { get; set; }
-
-    /// <summary>
     /// Entry title
     /// </summary>
     public string Title { get; set; } = null!;
@@ -98,12 +93,6 @@ public class NotepadEntry : ISoftDeletable
     /// </summary>
     [ForeignKey(nameof(DeletedByUserId))]
     public virtual User? DeletedBy { get; set; }
-
-    /// <summary>
-    /// Category navigation property
-    /// </summary>
-    [ForeignKey(nameof(CategoryId))]
-    public virtual NotepadCategory? Category { get; set; }
 
     #endregion
 }

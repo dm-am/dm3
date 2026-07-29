@@ -42,7 +42,6 @@ internal class UserNotepadApiService : IUserNotepadApiService
     {
         var createEntry = new CreateNotepadEntry
         {
-            CategoryId = request.CategoryId,
             Title = request.Title,
             Content = request.Content
         };
@@ -56,7 +55,6 @@ internal class UserNotepadApiService : IUserNotepadApiService
     {
         var updateEntry = new UpdateNotepadEntry
         {
-            CategoryId = request.CategoryId,
             Title = request.Title,
             Content = request.Content,
             SortOrder = request.SortOrder
