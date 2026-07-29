@@ -21,7 +21,7 @@ namespace DM.Web.API.Features.Moderation.Warnings;
 /// - Points are recalculated when warnings are removed
 /// </remarks>
 [ApiController]
-[Route("v1")]
+[Route("v1/moderation/warnings")]
 [ApiExplorerSettings(GroupName = "Moderation")]
 [Tags("Warnings")]
 public class WarningController : ControllerBase
@@ -46,7 +46,7 @@ public class WarningController : ControllerBase
     /// <param name="username">Username</param>
     /// <response code="200">User warnings info</response>
     /// <response code="404">User not found</response>
-    [HttpGet("users/{username}/warnings", Name = nameof(GetUserWarnings))]
+    [HttpGet("~/v1/users/{username}/warnings", Name = nameof(GetUserWarnings))]
     [ProducesResponseType(typeof(UserWarningsInfo), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserWarnings(string username) =>
@@ -63,7 +63,7 @@ public class WarningController : ControllerBase
     /// <response code="200">List of warnings</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">Moderator role required</response>
-    [HttpGet("moderation/warnings", Name = nameof(GetAllWarnings))]
+    [HttpGet(Name = nameof(GetAllWarnings))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(typeof(ListEnvelope<Warning>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
@@ -91,7 +91,7 @@ public class WarningController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">Moderator role required</response>
     /// <response code="404">Target user not found</response>
-    [HttpPost("warnings", Name = nameof(CreateWarning))]
+    [HttpPost(Name = nameof(CreateWarning))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(typeof(Envelope<Warning>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
@@ -116,7 +116,7 @@ public class WarningController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">Moderator role required</response>
     /// <response code="404">Warning not found</response>
-    [HttpDelete("warnings/{id}", Name = nameof(RemoveWarning))]
+    [HttpDelete("{id}", Name = nameof(RemoveWarning))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]

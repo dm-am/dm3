@@ -390,7 +390,7 @@ export default new (class moderationApi {
   }
 
   public removeWarning(warningId: string) {
-    return Api.delete(`warnings/${warningId}`);
+    return Api.delete(`moderation/warnings/${warningId}`);
   }
 
   /**

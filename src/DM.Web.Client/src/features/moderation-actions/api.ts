@@ -4,14 +4,14 @@ import type { Envelope } from "@/shared/api/models/common";
 /**
  * Moderation actions API — warning and ban creation dialogs.
  *
- * This is the only client for POST v1/warnings and POST v1/bans.
+ * This is the only client for POST v1/moderation/warnings and POST v1/bans.
  * shared/api/moderationApi.ts used to declare the same two calls, typed as
  * bare `Warning`/`Ban` where the server returns `Envelope<...>`; nothing
  * called them and they have been removed. Do not add a second copy —
  * ownership of a file is not an architectural reason to duplicate a contract.
  *
  * Endpoint contracts mirror:
- * - POST v1/warnings   (WarningController.CreateWarning, Moderator+)
+ * - POST v1/moderation/warnings (WarningController.CreateWarning, Moderator+)
  * - POST v1/bans       (BanController.CreateBan, SeniorModerator+)
  * - GET  v1/users/{username}/warnings (public points summary for the
  *   "Баллы: N/6" context line)
@@ -31,7 +31,7 @@ export interface WarningResult {
 }
 
 /**
- * POST v1/warnings payload (CreateWarningRequest).
+ * POST v1/moderation/warnings payload (CreateWarningRequest).
  * Backend validation (CreateWarningValidator): username required,
  * points 0-6 inclusive (0 = verbal), reason required + max 2000,
  * entityType max 100.
@@ -111,7 +111,7 @@ export default new (class ModerationActionsApi {
 
   /** Issue a warning (Moderator+). */
   public createWarning(payload: CreateWarningPayload) {
-    return Api.post<Envelope<WarningResult>>("warnings", payload);
+    return Api.post<Envelope<WarningResult>>("moderation/warnings", payload);
   }
 
   /** Issue a ban (SeniorModerator+). */
