@@ -36,6 +36,18 @@ public interface IBotLinkRepository
     Task SetChannelId(Guid userId, string channelType, string? externalId, CancellationToken ct = default);
 
     /// <summary>
+    /// External channel IDs of the user: Discord and Telegram, either of which
+    /// may be null when the channel is not connected.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart of <see cref="SetChannelId"/>. Without it the API layer
+    /// read these two columns straight from the DbContext while the repository
+    /// owned every write to them — an asymmetry with nothing holding it in
+    /// place.
+    /// </remarks>
+    Task<BotChannelIds> GetChannelIds(Guid userId, CancellationToken ct = default);
+
+    /// <summary>
     /// Get username by user ID
     /// </summary>
     Task<string?> GetUsername(Guid userId, CancellationToken ct = default);
@@ -50,3 +62,10 @@ public interface IBotLinkRepository
     /// </summary>
     Task ClearChannelPreferences(Guid userId, string channelType, CancellationToken ct = default);
 }
+
+/// <summary>
+/// External bot channel identifiers of a user.
+/// </summary>
+/// <param name="DiscordId">Discord identifier, null when not connected.</param>
+/// <param name="TelegramId">Telegram identifier, null when not connected.</param>
+public record BotChannelIds(string? DiscordId, string? TelegramId);
