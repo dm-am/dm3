@@ -23,6 +23,30 @@ public class BbParserWrapperShould
         result.Should().Contain("[link]https://example.com[/link]");
     }
 
+    /// <summary>
+    /// Image markup is emitted from three places — this renderer, the client
+    /// renderer and the TipTap node — and they have drifted before: one grew a
+    /// data-alt the others never had. This is the server half of the guard; the
+    /// client half lives in bbcode.spec.ts. The attribute SET is frozen, not the
+    /// byte order: the three legitimately order attributes differently, so a byte
+    /// comparison would fail for the wrong reason.
+    /// </summary>
+    [Theory]
+    [InlineData("class=\"bb-image\"")]
+    [InlineData("data-bb-tag=\"img\"")]
+    [InlineData("loading=\"lazy\"")]
+    [InlineData("decoding=\"async\"")]
+    [InlineData("referrerpolicy=\"no-referrer\"")]
+    public void EmitEveryAgreedImageAttribute(string attribute)
+    {
+        var tree = _parserProvider.CurrentCommon
+            .Parse("[img]https://example.com/image.png[/img]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().Contain(attribute);
+    }
+
     [Fact]
     public void PreserveImgAndLinkTags_ToHtml()
     {
