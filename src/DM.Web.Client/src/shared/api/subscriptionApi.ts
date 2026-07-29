@@ -7,7 +7,7 @@ import type {
 } from "./models/subscriptions";
 import Api from "./client";
 
-export default new (class SubscriptionApi {
+export default new (class subscriptionApi {
   private basePath = "users/me/subscriptions";
 
   /**

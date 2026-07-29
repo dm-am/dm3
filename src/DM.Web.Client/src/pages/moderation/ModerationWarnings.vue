@@ -7,7 +7,7 @@
  * "от {Имя}, dd.MM.yyyy HH:mm", delete button (Moderator+).
  */
 import { computed, onMounted, ref } from "vue";
-import ModerationApi, { type Warning } from "@/shared/api/moderationApi";
+import moderationApi, { type Warning } from "@/shared/api/moderationApi";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
@@ -26,7 +26,7 @@ const loadError = ref<string | null>(null);
 
 async function fetch() {
   loading.value = true;
-  const { data, error } = await ModerationApi.getAllWarnings();
+  const { data, error } = await moderationApi.getAllWarnings();
   loading.value = false;
   if (error) {
     loadError.value = "Не удалось загрузить предупреждения";
@@ -49,7 +49,7 @@ const removing = ref(false);
 async function confirmRemove() {
   if (!removeTarget.value || removing.value) return;
   removing.value = true;
-  const { error } = await ModerationApi.removeWarning(removeTarget.value.id);
+  const { error } = await moderationApi.removeWarning(removeTarget.value.id);
   removing.value = false;
   if (error) {
     toast.error("Не удалось удалить предупреждение");

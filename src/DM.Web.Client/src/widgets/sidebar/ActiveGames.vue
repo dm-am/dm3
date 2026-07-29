@@ -32,12 +32,12 @@
 import SidebarEntityList from "./SidebarEntityList.vue";
 import SidebarGameLink from "./SidebarGameLink.vue";
 import { useGamesStore } from "@/entities/game";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { onMounted, watch } from "vue";
 import { useRoute } from "vue-router";
 
 const store = useGamesStore();
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const route = useRoute();
 
 onMounted(() => {

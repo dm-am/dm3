@@ -1,5 +1,5 @@
 import { ref, computed, onMounted } from "vue";
-import { AccountApi } from "@/shared/api";
+import { accountApi } from "@/shared/api";
 
 export interface RegionConfig {
   id: string;
@@ -16,7 +16,7 @@ export function useRegion() {
 
   async function fetchMirrors() {
     try {
-      const { data } = await AccountApi.getMirrors();
+      const { data } = await accountApi.getMirrors();
       if (data?.mirrors) {
         mirrors.value = data.mirrors;
       }

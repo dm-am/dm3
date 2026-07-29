@@ -10,7 +10,7 @@ import type { AxiosProgressEvent } from "axios";
  * processing → confirmed Upload. Used for avatars, portraits,
  * post attachments. No presigned URLs.
  */
-export default new (class UploadApi {
+export default new (class uploadApi {
   public directUpload(
     file: File,
     type: string,

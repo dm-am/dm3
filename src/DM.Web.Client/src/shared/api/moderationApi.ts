@@ -194,7 +194,7 @@ export type TicketStats = {
   spam: number;
 };
 
-export default new (class ModerationApi {
+export default new (class moderationApi {
   public getModeratedProfile(username: Username) {
     return Api.get<ModeratedProfile>(`moderation/users/${username}/profile`);
   }

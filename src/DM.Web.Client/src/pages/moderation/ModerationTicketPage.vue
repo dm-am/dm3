@@ -8,7 +8,7 @@
  */
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import ModerationApi, {
+import moderationApi, {
   type ResolveTicketRequest,
   type Ticket,
   type TicketStatus,
@@ -39,7 +39,7 @@ const loadError = ref<string | null>(null);
 async function fetch() {
   if (!ticketId.value) return;
   loading.value = true;
-  const { data, error } = await ModerationApi.getTicket(ticketId.value);
+  const { data, error } = await moderationApi.getTicket(ticketId.value);
   loading.value = false;
   if (error) {
     loadError.value = "Не удалось загрузить обращение";
@@ -64,7 +64,7 @@ const assigning = ref(false);
 async function assignToMe() {
   if (!ticket.value || assigning.value) return;
   assigning.value = true;
-  const { data, error } = await ModerationApi.assignTicketToMe(ticket.value.id);
+  const { data, error } = await moderationApi.assignTicketToMe(ticket.value.id);
   assigning.value = false;
   if (error) {
     toast.error("Не удалось взять обращение в работу");
@@ -152,7 +152,7 @@ async function resolve() {
     request.banComment = banComment.value.trim();
   }
 
-  const { data, error } = await ModerationApi.resolveTicket(
+  const { data, error } = await moderationApi.resolveTicket(
     ticket.value.id,
     request,
   );

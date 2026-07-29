@@ -8,11 +8,11 @@ import { Tooltip } from "@/shared/ui/Tooltip";
 import { computed, ref } from "vue";
 import dayjs from "dayjs";
 import { storeToRefs } from "pinia";
-import { useUserStore, userIsSeniorModerator } from "@/entities/user";
+import { useAuthStore, userIsSeniorModerator } from "@/entities/user";
 import { usePollVote, PollEditForm } from "@/features/poll-vote";
 import { buildSubscribersTooltip } from "@/shared/lib/utils/tooltipBuilders";
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const { user } = storeToRefs(userStore);
 const { voteForOption, cancelVote } = usePollVote();
 

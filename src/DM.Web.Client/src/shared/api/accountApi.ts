@@ -20,7 +20,7 @@ import type {
 import type { Invitation } from "./models/game";
 import Api from "./client";
 
-export default new (class AccountApi {
+export default new (class accountApi {
   /**
    * Register new user (Step 1 of email-first flow)
    * Creates pending registration and sends activation email.

@@ -29,7 +29,7 @@ import {
   GamePremoderationTransition,
 } from "@/entities/game";
 import { GameStatusButtons, GameJoinActions } from "@/features/game-actions";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { UserRole } from "@/shared/api/models/common";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useExpandableSection } from "@/shared/lib/composables";
@@ -67,7 +67,7 @@ const canEdit = computed(() => isMaster.value || isAssistant.value);
 // MasterNotepad) — hidden from players and readers.
 const canUseNotepad = computed(() => canManage.value);
 
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 const router = useRouter();
 const toast = useToast();
 

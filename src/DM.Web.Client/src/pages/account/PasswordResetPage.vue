@@ -2,7 +2,7 @@
 import { ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useNewPasswordField } from "@/shared/lib/composables/useNewPasswordField";
-import { AccountApi } from "@/shared/api";
+import { accountApi } from "@/shared/api";
 import Button from "@/shared/ui/Button/Button.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import {
@@ -32,7 +32,7 @@ const {
 // Check token on mount
 onMounted(async () => {
   const token = route.params.token as string;
-  const { data, error } = await AccountApi.getPasswordResetTokenInfo(token);
+  const { data, error } = await accountApi.getPasswordResetTokenInfo(token);
 
   if (error || !data) {
     pageState.value = "invalid";
@@ -55,7 +55,7 @@ const submit = async () => {
   passwordError.value = "";
 
   const token = route.params.token as string;
-  const { data, error } = await AccountApi.completePasswordReset(
+  const { data, error } = await accountApi.completePasswordReset(
     token,
     newPassword.value,
   );

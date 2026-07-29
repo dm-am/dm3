@@ -1,7 +1,7 @@
 import { computed, onMounted, onUnmounted, ref, type Ref } from "vue";
 import type { AxiosProgressEvent } from "axios";
-import { PersonalApi, UploadApi } from "@/shared/api";
-import { useUserStore } from "@/entities/user";
+import { personalApi, uploadApi } from "@/shared/api";
+import { useAuthStore } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { compressImage } from "@/shared/lib/utils/imageCompression";
 import type { User } from "@/shared/api/models/community/users";
@@ -23,7 +23,7 @@ const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
  * - Client-side resize to 1024×1024 (Canvas, no deps) — saves bandwidth.
  * - Drag-drop via handleDrop / clipboard paste via a document-level listener.
  * - Progress via axios onUploadProgress.
- * - Idempotency via `crypto.randomUUID()` in UploadApi (under the hood).
+ * - Idempotency via `crypto.randomUUID()` in uploadApi (under the hood).
  * - After a successful upload/reset — userStore.fetchUser(), plus a SignalR
  *   `UserAvatarChanged` broadcast to open tabs.
  *
@@ -31,7 +31,7 @@ const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
  *   determine "is there anything to reset").
  */
 export function useAvatarUpload(user: Ref<User | null | undefined>) {
-  const userStore = useUserStore();
+  const userStore = useAuthStore();
   const toast = useToast();
 
   const uploading = ref(false);
@@ -69,7 +69,7 @@ export function useAvatarUpload(user: Ref<User | null | undefined>) {
       };
 
       const { data: uploadData, error: uploadError } =
-        await UploadApi.directUpload(file, "UserAvatar", {
+        await uploadApi.directUpload(file, "UserAvatar", {
           targetId: user.value.id,
           onProgress,
         });
@@ -78,7 +78,7 @@ export function useAvatarUpload(user: Ref<User | null | undefined>) {
         return;
       }
 
-      const { error: profileError } = await PersonalApi.updateMyProfile({
+      const { error: profileError } = await personalApi.updateMyProfile({
         avatarUploadId: uploadData.id,
       });
       if (profileError) {
@@ -103,7 +103,7 @@ export function useAvatarUpload(user: Ref<User | null | undefined>) {
     }
     resetting.value = true;
     try {
-      const { error } = await PersonalApi.removeMyAvatar();
+      const { error } = await personalApi.removeMyAvatar();
       if (error) {
         toast.error("Не удалось сбросить аватар");
         return;

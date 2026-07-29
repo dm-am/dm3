@@ -6,7 +6,7 @@ import type {
 } from "./models/personal";
 import Api from "./client";
 
-export default new (class BlacklistApi {
+export default new (class blacklistApi {
   /**
    * Get current user's blacklist
    * @param skip Number of items to skip (default 0)

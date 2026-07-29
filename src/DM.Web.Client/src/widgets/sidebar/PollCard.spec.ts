@@ -58,7 +58,7 @@ vi.mock("dayjs", () => {
 
 // Mock stores
 vi.mock("@/entities/user", () => ({
-  useUserStore: () => ({
+  useAuthStore: () => ({
     user: null,
   }),
   userIsSeniorModerator: vi.fn(() => false),

@@ -30,7 +30,7 @@ import {
   BlogStatusBadge,
 } from "@/entities/blog";
 import { BlogStatusButtons, BlogJoinActions } from "@/features/blog-actions";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { UserRole } from "@/shared/api/models/common";
 import { useToast } from "@/shared/lib/composables/useToast";
 import SidebarBlock from "./SidebarBlock.vue";
@@ -55,7 +55,7 @@ const {
 // Owner/assistant may edit the blog (settings, publications, status).
 const canEdit = computed(() => canManage.value);
 
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 const router = useRouter();
 const toast = useToast();
 

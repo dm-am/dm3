@@ -13,7 +13,7 @@ import { computed, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useRouter } from "vue-router";
 import { useGameDetailsStore } from "@/entities/game";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 
 withDefaults(defineProps<{ variant?: "strip" | "button" }>(), {
@@ -22,7 +22,7 @@ withDefaults(defineProps<{ variant?: "strip" | "button" }>(), {
 
 const store = useGameDetailsStore();
 const { game, isSubscribed, characters } = storeToRefs(store);
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 const router = useRouter();
 const toast = useToast();
 

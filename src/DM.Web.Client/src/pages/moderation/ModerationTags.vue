@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from "vue";
 import { useModal } from "vue-final-modal";
-import ModerationApi, {
+import moderationApi, {
   type ModerationTagGroup,
   type ModerationTag,
 } from "@/shared/api/moderationApi";
@@ -42,8 +42,8 @@ async function loadData() {
   error.value = null;
   try {
     const [groupsRes, tagsRes] = await Promise.all([
-      ModerationApi.getTagGroups(),
-      ModerationApi.getTags(),
+      moderationApi.getTagGroups(),
+      moderationApi.getTags(),
     ]);
     groups.value = groupsRes.data?.resources ?? [];
     tags.value = tagsRes.data?.resources ?? [];
@@ -101,7 +101,7 @@ async function confirmDeleteGroup() {
   if (!deleteGroupTarget.value || deletingGroup.value) return;
   deletingGroup.value = true;
   try {
-    await ModerationApi.deleteTagGroup(deleteGroupTarget.value.id);
+    await moderationApi.deleteTagGroup(deleteGroupTarget.value.id);
     if (selectedGroupId.value === deleteGroupTarget.value.id) {
       selectedGroupId.value = null;
     }
@@ -163,7 +163,7 @@ async function confirmDeleteTag() {
   if (!deleteTagTarget.value || deletingTag.value) return;
   deletingTag.value = true;
   try {
-    await ModerationApi.deleteTag(deleteTagTarget.value.id);
+    await moderationApi.deleteTag(deleteTagTarget.value.id);
     deleteTagTarget.value = null;
     await loadData();
   } catch (e) {

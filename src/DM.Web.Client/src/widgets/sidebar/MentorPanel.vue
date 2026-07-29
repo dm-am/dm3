@@ -40,7 +40,7 @@ import {
 } from "@/entities/game";
 import { useBlogsStore, type BlogRef } from "@/entities/blog";
 import { GameParticipation } from "@/entities/game";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { UserRole } from "@/shared/api/models/common";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { Api } from "@/shared/api";
@@ -55,7 +55,7 @@ const STAR = "★";
 const MAX_PENDENCY_GAMES = 10;
 const MAX_BLOG_CANDIDATES = 20;
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const { user } = storeToRefs(userStore);
 
 const gamesStore = useGamesStore();

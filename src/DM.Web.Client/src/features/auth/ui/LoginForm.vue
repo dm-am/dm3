@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { ref, computed, onMounted } from "vue";
 import type { LoginCredentials } from "@/shared/api/models/account";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
@@ -47,7 +47,7 @@ onMounted(() => {
   formLoadTime.value = Date.now();
 });
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const { signIn } = userStore;
 
 const submit = async () => {

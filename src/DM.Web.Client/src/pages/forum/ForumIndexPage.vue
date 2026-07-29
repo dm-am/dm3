@@ -5,13 +5,13 @@ import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { useBoardsStore, forumApi } from "@/entities/forum";
-import { useUserStore, UserLink } from "@/entities/user";
+import { useAuthStore, UserLink } from "@/entities/user";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 
 const store = useBoardsStore();
 const { boards, boardsLoading, boardsError } = storeToRefs(store);
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 
 const markingAllAsRead = ref(false);
 const markAllError = ref(false);

@@ -15,7 +15,7 @@ import {
   useGlobalChatStore,
   type GlobalChatMessage,
 } from "@/entities/global-chat";
-import { useUserStore, useMessagePermissions } from "@/entities/user";
+import { useAuthStore, useMessagePermissions } from "@/entities/user";
 import { useUiStore } from "@/shared/stores/ui";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import dayjs from "dayjs";
@@ -46,7 +46,7 @@ import type { SignalRNotification } from "@/shared/api/models/notifications/sign
 const router = useRouter();
 const route = useRoute();
 const globalChatStore = useGlobalChatStore();
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const toast = useToast();
 const {
   messages,

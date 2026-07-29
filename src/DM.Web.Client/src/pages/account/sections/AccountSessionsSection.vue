@@ -68,7 +68,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { AccountApi } from "@/shared/api";
+import { accountApi } from "@/shared/api";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import Button from "@/shared/ui/Button/Button.vue";
 import { EmptyState } from "@/shared/ui";
@@ -92,7 +92,7 @@ onMounted(async () => {
 
 async function loadSessions() {
   loading.value = true;
-  const { data, error } = await AccountApi.getSessions();
+  const { data, error } = await accountApi.getSessions();
   loading.value = false;
 
   if (!error && data) {
@@ -102,7 +102,7 @@ async function loadSessions() {
 
 async function terminateSession(sessionId: string) {
   terminatingId.value = sessionId;
-  const { error } = await AccountApi.terminateSession(sessionId);
+  const { error } = await accountApi.terminateSession(sessionId);
   terminatingId.value = null;
 
   if (error) {
@@ -118,7 +118,7 @@ const logoutAllAction = useAsyncAction();
 
 const logoutFromAll = () => {
   logoutAllAction.execute(async () => {
-    const { error } = await AccountApi.logoutAll();
+    const { error } = await accountApi.logoutAll();
     if (error) throw new Error("Не удалось завершить сессии");
     // Keep only current session
     sessions.value = sessions.value.filter((s) => s.isCurrent);

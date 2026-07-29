@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import type { LiveStats } from "@/shared/api/models/community";
-import { CommunityApi } from "@/shared/api";
+import { communityApi } from "@/shared/api";
 
 /**
  * Default polling interval: 60 seconds.
@@ -49,7 +49,7 @@ export const useStatisticsStore = defineStore("statistics", () => {
     loading.value = true;
     error.value = null;
 
-    const response = await CommunityApi.getLiveStats();
+    const response = await communityApi.getLiveStats();
     if (response.error) {
       // Keep previously loaded stats (if any) — the next poll may recover.
       error.value = "Не удалось загрузить статистику";

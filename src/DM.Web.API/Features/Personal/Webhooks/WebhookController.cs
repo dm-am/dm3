@@ -8,6 +8,7 @@ using DM.Infrastructure.Core.Configuration;
 using DM.Web.API.Features.Personal.Notifications;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -18,13 +19,20 @@ namespace DM.Web.API.Features.Personal.Webhooks;
 /// </summary>
 /// <remarks>
 /// Handles incoming webhooks from Telegram and Discord bots.
-/// Each webhook URL includes a secret for validation.
+///
+/// The shared secret travels in a header, never in the path: a path is written
+/// verbatim into every reverse-proxy access log, request log and trace, so a
+/// secret placed there is disclosed by design and rotating it means purging
+/// logs rather than changing a variable.
 ///
 /// ## Telegram Setup
-/// Set webhook URL to: POST /v1/webhooks/telegram/{TelegramWebhookSecret}
+/// POST /v1/webhooks/telegram, secret in `X-Telegram-Bot-Api-Secret-Token`.
+/// That is Telegram's own mechanism: register with
+/// `setWebhook?url=…&amp;secret_token=&lt;TelegramWebhookSecret&gt;` and it sends the
+/// header on every call.
 ///
 /// ## Discord Setup
-/// Set webhook URL to: POST /v1/webhooks/discord/{DiscordWebhookSecret}
+/// POST /v1/webhooks/discord, secret in `X-Dm-Webhook-Secret`.
 ///
 /// The bot parses /connect {code} commands and links user accounts.
 /// </remarks>
@@ -33,6 +41,12 @@ namespace DM.Web.API.Features.Personal.Webhooks;
 [ApiExplorerSettings(IgnoreApi = true)]
 public class WebhookController : ControllerBase
 {
+    /// <summary>Telegram's own secret header, sent when the webhook is registered with secret_token.</summary>
+    private const string TelegramSecretHeader = "X-Telegram-Bot-Api-Secret-Token";
+
+    /// <summary>Project header for integrations with no convention of their own.</summary>
+    private const string WebhookSecretHeader = "X-Dm-Webhook-Secret";
+
     private readonly IReadOnlyDictionary<string, IWebhookHandler> _handlers;
     private readonly BotConfiguration _botConfig;
     private readonly ILogger<WebhookController> _logger;
@@ -52,16 +66,16 @@ public class WebhookController : ControllerBase
     /// Handle webhook from Telegram or Discord bot
     /// </summary>
     /// <param name="type">Bot type: telegram or discord</param>
-    /// <param name="secret">Webhook secret for validation</param>
     /// <param name="payload">Raw webhook payload</param>
     /// <response code="200">Webhook processed</response>
     /// <response code="403">Invalid secret</response>
     /// <response code="404">Webhook secret is not configured for this type</response>
-    [HttpPost("{type}/{secret}")]
+    [HttpPost("{type}")]
+    [EnableRateLimiting("sliding")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> HandleWebhook(string type, string secret, [FromBody] JsonElement payload)
+    public async Task<IActionResult> HandleWebhook(string type, [FromBody] JsonElement payload)
     {
         var normalizedType = type.ToLowerInvariant();
 
@@ -72,6 +86,12 @@ public class WebhookController : ControllerBase
             "discord" => _botConfig.DiscordWebhookSecret,
             _ => null
         };
+
+        // Telegram sends its own header and nothing else; Discord has no such
+        // convention, so the project header carries it there.
+        var secret = normalizedType == "telegram"
+            ? Request.Headers[TelegramSecretHeader].ToString()
+            : Request.Headers[WebhookSecretHeader].ToString();
 
         // Fail closed. An unconfigured secret used to mean "accept anything",
         // and an unconfigured secret is the shipped default — so the endpoint
@@ -86,7 +106,7 @@ public class WebhookController : ControllerBase
 
         // Fixed-time comparison: a plain != leaks the shared secret one byte at
         // a time to anyone who can measure the response.
-        var provided = Encoding.UTF8.GetBytes(secret ?? string.Empty);
+        var provided = Encoding.UTF8.GetBytes(secret);
         var expected = Encoding.UTF8.GetBytes(expectedSecret);
         if (!CryptographicOperations.FixedTimeEquals(provided, expected))
         {
@@ -107,8 +127,11 @@ public class WebhookController : ControllerBase
         }
         catch (System.Exception ex)
         {
-            _logger.LogWarning(ex, "Error processing {Type} webhook", type);
-            return Ok(); // Always return 200 to prevent retries
+            // 200 keeps the provider from retrying a payload we already failed
+            // on, but the failure itself is an error: swallowed at Warning it
+            // was indistinguishable from routine noise.
+            _logger.LogError(ex, "Error processing {Type} webhook", type);
+            return Ok();
         }
     }
 }

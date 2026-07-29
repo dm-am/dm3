@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { useMessagingStore } from "@/entities/message";
 import { LoginPrompt } from "@/features/auth";
 
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 const messagingStore = useMessagingStore();
 const { totalUnreadCount } = storeToRefs(messagingStore);
 </script>

@@ -130,7 +130,7 @@
 
 <script setup lang="ts">
 import { useUiStore } from "@/shared/stores/ui";
-import { useUserStore, userIsModerator } from "@/entities/user";
+import { useAuthStore, userIsModerator } from "@/entities/user";
 import { useMessagingStore } from "@/entities/message";
 import { useNotificationStore } from "@/entities/notification";
 import { setScrollContainer } from "@/shared/lib/scroll";
@@ -148,7 +148,7 @@ import { EventType } from "@/shared/api/models/notifications/signalr";
 import type { SignalRNotification } from "@/shared/api/models/notifications/signalr";
 
 const uiStore = useUiStore();
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const messagingStore = useMessagingStore();
 const notificationStore = useNotificationStore();
 const route = useRoute();

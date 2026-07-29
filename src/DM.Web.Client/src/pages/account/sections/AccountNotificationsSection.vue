@@ -146,7 +146,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from "vue";
-import { AccountApi } from "@/shared/api";
+import { accountApi } from "@/shared/api";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type {
   NotificationPreferences,
@@ -191,7 +191,7 @@ onMounted(async () => {
 
 async function loadPreferences() {
   loading.value = true;
-  const { data, error } = await AccountApi.getNotificationPreferences();
+  const { data, error } = await accountApi.getNotificationPreferences();
   loading.value = false;
 
   if (!error && data) {
@@ -208,7 +208,7 @@ async function loadPreferences() {
 
 async function updateTelegramEnabled() {
   saving.value = true;
-  const { error } = await AccountApi.updateNotificationPreferences({
+  const { error } = await accountApi.updateNotificationPreferences({
     telegram: { enabled: telegramEnabled.value },
   });
   saving.value = false;
@@ -228,7 +228,7 @@ async function toggleTelegramCategory(category: NotificationCategory) {
   }
 
   saving.value = true;
-  const { error } = await AccountApi.updateNotificationPreferences({
+  const { error } = await accountApi.updateNotificationPreferences({
     telegram: { enabledCategories: [...telegramCategories.value] },
   });
   saving.value = false;
@@ -249,7 +249,7 @@ async function toggleTelegramCategory(category: NotificationCategory) {
 
 async function updateDiscordEnabled() {
   saving.value = true;
-  const { error } = await AccountApi.updateNotificationPreferences({
+  const { error } = await accountApi.updateNotificationPreferences({
     discord: { enabled: discordEnabled.value },
   });
   saving.value = false;
@@ -269,7 +269,7 @@ async function toggleDiscordCategory(category: NotificationCategory) {
   }
 
   saving.value = true;
-  const { error } = await AccountApi.updateNotificationPreferences({
+  const { error } = await accountApi.updateNotificationPreferences({
     discord: { enabledCategories: [...discordCategories.value] },
   });
   saving.value = false;
@@ -290,7 +290,7 @@ async function toggleDiscordCategory(category: NotificationCategory) {
 
 async function disconnectTelegram() {
   disconnecting.value = "telegram";
-  const { error } = await AccountApi.disconnectBot("telegram");
+  const { error } = await accountApi.disconnectBot("telegram");
   disconnecting.value = null;
 
   if (error) {
@@ -303,7 +303,7 @@ async function disconnectTelegram() {
 
 async function disconnectDiscord() {
   disconnecting.value = "discord";
-  const { error } = await AccountApi.disconnectBot("discord");
+  const { error } = await accountApi.disconnectBot("discord");
   disconnecting.value = null;
 
   if (error) {

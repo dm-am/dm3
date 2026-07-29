@@ -115,7 +115,7 @@ import SidebarBlock from "./SidebarBlock.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import SidebarGameLink from "./SidebarGameLink.vue";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import {
   useGamesStore,
   GameParticipation,
@@ -125,7 +125,7 @@ import { computed, watch } from "vue";
 
 import { onMounted } from "vue";
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const store = useGamesStore();
 
 // Owner participation (without the mentor flag - handled separately).

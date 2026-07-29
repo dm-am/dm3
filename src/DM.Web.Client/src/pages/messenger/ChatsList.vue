@@ -3,7 +3,7 @@ import { ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useRoute, useRouter } from "vue-router";
 import { useMessagingStore } from "@/entities/message";
-import { useUserStore, AvatarImg } from "@/entities/user";
+import { useAuthStore, AvatarImg } from "@/entities/user";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import ChatPreview from "./ChatPreview.vue";
 import Paging from "@/shared/ui/Paging/Paging.vue";
@@ -18,7 +18,7 @@ const route = useRoute();
 const router = useRouter();
 const messagingStore = useMessagingStore();
 const { chats } = storeToRefs(messagingStore);
-const { user: currentUser } = storeToRefs(useUserStore());
+const { user: currentUser } = storeToRefs(useAuthStore());
 
 const searchQuery = ref("");
 const searchResults = ref<User[]>([]);

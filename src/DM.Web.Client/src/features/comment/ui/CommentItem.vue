@@ -5,7 +5,7 @@ import { storeToRefs } from "pinia";
 import type { ApiResult, Envelope } from "@/shared/api/models/common";
 import type { Comment } from "@/shared/api/models/common/comment";
 import { unwrapResource } from "@/shared/api";
-import { useUserStore, AvatarImg, userIsModerator } from "@/entities/user";
+import { useAuthStore, AvatarImg, userIsModerator } from "@/entities/user";
 import { getRoleBadge } from "@/shared/config/roles";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { TruncatedContent } from "@/shared/ui/TruncatedContent";
@@ -55,7 +55,7 @@ const EDIT_TIME_LIMIT_MINUTES = 15;
 
 const route = useRoute();
 const { success: toastSuccess, error: toastError } = useToast();
-const { user: currentUser } = storeToRefs(useUserStore());
+const { user: currentUser } = storeToRefs(useAuthStore());
 
 // State
 const isEditing = ref(false);

@@ -10,7 +10,7 @@
  */
 import { computed, ref } from "vue";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
-import { SupportApi } from "@/shared/api";
+import { supportApi } from "@/shared/api";
 import type { TicketSubtype } from "@/shared/api";
 import type { BadRequestError } from "@/shared/api/models/common";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
@@ -169,7 +169,7 @@ const submit = async () => {
   if (loading.value || !validate()) return;
 
   loading.value = true;
-  const { data, error } = await SupportApi.createTicket({
+  const { data, error } = await supportApi.createTicket({
     subtype: subtype.value as TicketSubtype,
     subject: subject.value.trim(),
     text: text.value.trim(),

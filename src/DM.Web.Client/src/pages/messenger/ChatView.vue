@@ -4,7 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useMessagingStore } from "@/entities/message";
 import {
-  useUserStore,
+  useAuthStore,
   useMessagePermissions,
   AvatarImg,
 } from "@/entities/user";
@@ -29,7 +29,7 @@ import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
 const route = useRoute();
 const router = useRouter();
 const messagingStore = useMessagingStore();
-const { user: currentUser } = storeToRefs(useUserStore());
+const { user: currentUser } = storeToRefs(useAuthStore());
 const { isCompactLayout } = storeToRefs(useUiStore());
 const {
   selectedChat,

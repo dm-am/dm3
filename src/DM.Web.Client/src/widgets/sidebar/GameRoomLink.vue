@@ -15,7 +15,7 @@
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import { RoomType, RoomAccessType, type Room } from "@/entities/game";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { Tooltip } from "@/shared/ui/Tooltip";
 
@@ -29,7 +29,7 @@ const props = withDefaults(
   { prefix: "- " },
 );
 
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 
 const to = computed(() => ({
   name: props.room.type === RoomType.Chat ? "game-chat-room" : "game-room",

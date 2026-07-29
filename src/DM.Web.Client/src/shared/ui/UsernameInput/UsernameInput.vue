@@ -40,7 +40,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
-import { AccountApi } from "@/shared/api";
+import { accountApi } from "@/shared/api";
 
 const props = withDefaults(
   defineProps<{
@@ -147,7 +147,7 @@ function onInput(event: Event) {
 
 async function checkAvailability(username: string) {
   try {
-    const { data, error } = await AccountApi.checkUsername(username);
+    const { data, error } = await accountApi.checkUsername(username);
 
     // Ignore if value changed during request
     if (username !== props.modelValue) return;

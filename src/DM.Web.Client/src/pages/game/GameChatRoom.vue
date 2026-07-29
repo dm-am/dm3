@@ -9,7 +9,7 @@ import { computed, ref, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { useUiStore } from "@/shared/stores/ui";
 import { gameApi } from "@/entities/game";
 import type { Message, CursorPaging } from "@/shared/api/models/common";
@@ -35,7 +35,7 @@ const MAX_MESSAGE_HEIGHT = 300;
 const route = useRoute();
 const gameStore = useGameDetailsStore();
 const { rooms } = storeToRefs(gameStore);
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 const { isCompactLayout } = storeToRefs(useUiStore());
 
 const gameId = computed(() => route.params.id as string);

@@ -2,12 +2,12 @@ import { defineStore } from "pinia";
 import { computed } from "vue";
 import type { Subscription } from "@/shared/api/models/subscriptions";
 import { SubscriptionTargetType } from "@/shared/api/models/subscriptions";
-import { SubscriptionApi } from "@/shared/api";
+import { subscriptionApi } from "@/shared/api";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
 
 export const useSubscriptionsStore = defineStore("subscriptions", () => {
   const all = useApiList<Subscription>(() =>
-    SubscriptionApi.getMySubscriptions(),
+    subscriptionApi.getMySubscriptions(),
   );
 
   // Filtered subscriptions by type
@@ -74,19 +74,19 @@ export const useSubscriptionsStore = defineStore("subscriptions", () => {
     targetId: string,
     settings?: number,
   ) => {
-    await SubscriptionApi.subscribe({ targetType, targetId, settings });
+    await subscriptionApi.subscribe({ targetType, targetId, settings });
     await all.fetch();
   };
 
   // Unsubscribe
   const unsubscribe = async (subscriptionId: string) => {
-    await SubscriptionApi.unsubscribe(subscriptionId);
+    await subscriptionApi.unsubscribe(subscriptionId);
     await all.fetch();
   };
 
   // Update settings on an existing subscription
   const updateSettings = async (subscriptionId: string, settings: number) => {
-    await SubscriptionApi.updateSettings(subscriptionId, { settings });
+    await subscriptionApi.updateSettings(subscriptionId, { settings });
     await all.fetch();
   };
 

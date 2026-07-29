@@ -8,7 +8,7 @@ import { ref, computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useBlogDetailsStore, blogApi } from "@/entities/blog";
-import { useUserStore, userIsModerator } from "@/entities/user";
+import { useAuthStore, userIsModerator } from "@/entities/user";
 import { useUiStore } from "@/shared/stores/ui";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useScrollToElement } from "@/shared/lib/composables/useScrollToElement";
@@ -23,7 +23,7 @@ import Button from "@/shared/ui/Button/Button.vue";
 
 const route = useRoute();
 const blogStore = useBlogDetailsStore();
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 const { isCompactLayout } = storeToRefs(useUiStore());
 const { blog, comments, commentsPaging, commentsLoading, commentsError } =
   storeToRefs(blogStore);

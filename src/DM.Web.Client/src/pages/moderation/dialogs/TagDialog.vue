@@ -5,7 +5,7 @@
  * ModerationTags.vue.
  */
 import { ref, computed } from "vue";
-import ModerationApi, {
+import moderationApi, {
   type ModerationTag,
   type ModerationTagGroup,
 } from "@/shared/api/moderationApi";
@@ -53,14 +53,14 @@ async function submit() {
   error.value = null;
   try {
     if (props.tag) {
-      await ModerationApi.updateTag(props.tag.id, {
+      await moderationApi.updateTag(props.tag.id, {
         groupId: groupId.value,
         title: title.value,
         description: description.value || undefined,
         sortOrder: sortOrder.value,
       });
     } else {
-      await ModerationApi.createTag({
+      await moderationApi.createTag({
         groupId: groupId.value,
         title: title.value,
         description: description.value || undefined,

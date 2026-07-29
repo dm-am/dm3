@@ -112,7 +112,7 @@
 import { ref, reactive, onMounted } from "vue";
 import { RouterLink } from "vue-router";
 import { useModal } from "vue-final-modal";
-import { BlacklistApi } from "@/shared/api";
+import { blacklistApi } from "@/shared/api";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { EmptyState } from "@/shared/ui";
 import { formatDate } from "@/shared/lib/utils/datetime";
@@ -160,7 +160,7 @@ onMounted(async () => {
 
 async function loadSettings() {
   settingsLoading.value = true;
-  const { data, error } = await BlacklistApi.getSettings();
+  const { data, error } = await blacklistApi.getSettings();
   settingsLoading.value = false;
 
   if (!error && data) {
@@ -170,7 +170,7 @@ async function loadSettings() {
 
 async function saveSettings() {
   settingsSaving.value = true;
-  const { error } = await BlacklistApi.updateSettings({ ...settings });
+  const { error } = await blacklistApi.updateSettings({ ...settings });
   settingsSaving.value = false;
 
   if (error) {
@@ -182,7 +182,7 @@ async function saveSettings() {
 
 async function loadBlockedUsers() {
   listLoading.value = true;
-  const { data, error } = await BlacklistApi.getBlacklist();
+  const { data, error } = await blacklistApi.getBlacklist();
   listLoading.value = false;
 
   if (!error && data) {
@@ -195,7 +195,7 @@ async function unblock(username: string) {
   if (!confirmed) return;
 
   unblockingUsername.value = username;
-  const { error } = await BlacklistApi.unblockUser(username);
+  const { error } = await blacklistApi.unblockUser(username);
   unblockingUsername.value = null;
 
   if (error) {

@@ -41,10 +41,10 @@ import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import fundraisingApi, { type Fundraising } from "@/shared/api/fundraisingApi";
 import { useApiResource } from "@/shared/lib/composables/useApiResource";
-import { useUserStore, userIsAdmin } from "@/entities/user";
+import { useAuthStore, userIsAdmin } from "@/entities/user";
 import type { Envelope } from "@/shared/api/models/common";
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 
 // Admin-only edit affordance: guests and regular users never see it,
 // so the guest visual stays unchanged.

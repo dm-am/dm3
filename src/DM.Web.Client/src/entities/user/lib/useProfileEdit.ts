@@ -1,14 +1,14 @@
 import { ref, computed, type Ref } from "vue";
 import { storeToRefs } from "pinia";
-import { useUserStore } from "@/shared/stores";
-import { PersonalApi, type UpdateProfilePayload } from "@/shared/api";
+import { useAuthStore } from "@/shared/stores";
+import { personalApi, type UpdateProfilePayload } from "@/shared/api";
 
 /**
  * Composable for managing profile edit mode with centralized pending changes.
  * Provides edit toggle, field tracking, and save/cancel functionality.
  */
 export function useProfileEdit(targetUsername: Ref<string>) {
-  const { user: currentUser } = storeToRefs(useUserStore());
+  const { user: currentUser } = storeToRefs(useAuthStore());
 
   const isEditMode = ref(false);
   const pendingChanges = ref<UpdateProfilePayload>({});
@@ -50,7 +50,7 @@ export function useProfileEdit(targetUsername: Ref<string>) {
     isSaving.value = true;
     saveError.value = null;
 
-    const { error } = await PersonalApi.updateMyProfile(pendingChanges.value);
+    const { error } = await personalApi.updateMyProfile(pendingChanges.value);
 
     isSaving.value = false;
 
