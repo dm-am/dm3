@@ -3,84 +3,103 @@ import { authenticatedContext, seededUser } from "../../fixtures/auth";
 
 const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
 
+/**
+ * Personal notes about other users: `/v1/users/me/notes/{username}`, an upsert
+ * keyed by the subject. There is no collection: no POST to create, no GET to
+ * list. The previous version of this file tested exactly those two, got 404
+ * from a route that has never existed, and did not notice because the whole
+ * suite was skipping itself.
+ */
+
 let authContext: APIRequestContext;
-let createdNoteId: string | null = null;
+let subjectUsername: string | null = null;
 
 test.beforeAll(async () => {
   authContext = await authenticatedContext();
+
+  const usersResponse = await authContext.get(`${API_URL}/v1/users?size=5`);
+  const users = await usersResponse.json();
+  subjectUsername =
+    users.resources?.find(
+      (u: { username: string }) => u.username !== seededUser.username,
+    )?.username ?? null;
 });
 
 test.afterAll(async () => {
-  // Cleanup
-  if (createdNoteId && authContext) {
-    await authContext.delete(`${API_URL}/v1/users/me/notes/${createdNoteId}`);
+  if (subjectUsername) {
+    await authContext.delete(`${API_URL}/v1/users/me/notes/${subjectUsername}`);
   }
-  if (authContext) await authContext.dispose();
+  await authContext.dispose();
 });
 
 test.describe("Profile Notes API", () => {
-  test("should create a note about another user", async () => {
-    // Find another user to create a note about
-    const usersResponse = await authContext.get(`${API_URL}/v1/users?size=5`);
-    if (!usersResponse.ok()) {
-      test.skip(true, "Cannot get users");
-      return;
-    }
+  test("upserts a note about another user", async () => {
+    expect(subjectUsername, "seed must contain a second user").not.toBeNull();
 
-    const users = await usersResponse.json();
-    const otherUser = users.resources?.find(
-      (u: { username: string }) => u.username !== seededUser.username,
-    );
-    if (!otherUser) {
-      test.skip(true, "No other users available");
-      return;
-    }
-
-    const response = await authContext.post(`${API_URL}/v1/users/me/notes`, {
-      headers: { "Content-Type": "application/json" },
-      data: {
-        username: otherUser.username,
-        text: "Test note from E2E",
+    const response = await authContext.put(
+      `${API_URL}/v1/users/me/notes/${subjectUsername}`,
+      {
+        headers: { "Content-Type": "application/json" },
+        data: { text: "Заметка из e2e" },
       },
-    });
+    );
 
-    expect([200, 201]).toContain(response.status());
+    expect(response.status()).toBe(200);
     const data = await response.json();
-    if (data?.id) {
-      createdNoteId = data.id;
-    }
+    expect(data).toHaveProperty("text", "Заметка из e2e");
   });
 
-  test("should get my notes", async () => {
-    const response = await authContext.get(`${API_URL}/v1/users/me/notes`);
+  test("reads the note back by username", async () => {
+    const response = await authContext.get(
+      `${API_URL}/v1/users/me/notes/${subjectUsername}`,
+    );
 
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
-    expect(data).toHaveProperty("resources");
-    expect(Array.isArray(data.resources)).toBeTruthy();
+    expect(data).toHaveProperty("text");
   });
 
-  test("should get note by username", async () => {
-    test.skip(!createdNoteId, "No note to get");
+  test("deletes a note by writing an empty text", async () => {
+    const response = await authContext.put(
+      `${API_URL}/v1/users/me/notes/${subjectUsername}`,
+      {
+        headers: { "Content-Type": "application/json" },
+        data: { text: "" },
+      },
+    );
 
-    // Get the note we created
-    const notesResponse = await authContext.get(`${API_URL}/v1/users/me/notes`);
-    const notes = await notesResponse.json();
-
-    if (notes.resources && notes.resources.length > 0) {
-      const note = notes.resources[0];
-      const response = await authContext.get(
-        `${API_URL}/v1/users/me/notes/${note.username}`,
-      );
-
-      expect(response.ok()).toBeTruthy();
-      const data = await response.json();
-      expect(data).toHaveProperty("text");
-    }
+    expect(response.status()).toBe(204);
   });
 
-  test("should require authentication", async ({ request }) => {
-    const response = await request.get(`${API_URL}/v1/users/me/notes`);
+  test("refuses a note about oneself", async () => {
+    const response = await authContext.put(
+      `${API_URL}/v1/users/me/notes/${seededUser.username}`,
+      {
+        headers: { "Content-Type": "application/json" },
+        data: { text: "Заметка о себе" },
+      },
+    );
+
+    expect(response.status()).toBe(400);
+  });
+
+  test("reports an unknown subject as not found", async () => {
+    const response = await authContext.put(
+      `${API_URL}/v1/users/me/notes/nobody-by-that-name`,
+      {
+        headers: { "Content-Type": "application/json" },
+        data: { text: "Заметка о призраке" },
+      },
+    );
+
+    expect(response.status()).toBe(404);
+  });
+
+  test("requires authentication", async ({ request }) => {
+    const response = await request.get(
+      `${API_URL}/v1/users/me/notes/${seededUser.username}`,
+    );
+
     expect(response.status()).toBe(401);
   });
 });
