@@ -1,0 +1,18 @@
+// The base look of every form control, applied once for the whole document.
+//
+// It lives apart from Inputs.sass on purpose: 85 components import that file to
+// reach its mixins, and a file that also emits rules emits them again inside
+// every one of those scoped stylesheets. That cost 84 byte-identical copies of
+// this block — 99 708 bytes, a fifth of all shipped CSS, and 54 of the copies
+// were in components with no form control at all. Inputs.sass is now mixins
+// only; anything that outputs rules globally belongs here and is imported once
+// from main.ts.
+@import "Inputs"
+
+input,
+textarea,
+select
+  +input()
+
+input[type="checkbox"]
+  +checkbox()

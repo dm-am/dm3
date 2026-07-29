@@ -16,7 +16,7 @@ setupDayjs();
 import "@/assets/styles/ThemeVariables.css";
 import "@/assets/styles/Reset.sass";
 import "@/assets/styles/Fonts.sass";
-import "@/assets/styles/Inputs.sass";
+import "@/assets/styles/InputsGlobal.sass";
 import "@/assets/styles/BbcodeGlobal.sass";
 
 // Create app
