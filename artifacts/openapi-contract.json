@@ -1,0 +1,2185 @@
+{
+  "DM.Domain.Core.Dto.Optional`1[[System.Guid, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]": [
+    "value"
+  ],
+  "DM.Web.API.Features.Account.Authentication.LoginRequest": [
+    "email",
+    "password",
+    "rememberMe",
+    "website"
+  ],
+  "DM.Web.API.Features.Account.Authentication.LoginResponse": [
+    "preferences",
+    "user"
+  ],
+  "DM.Web.API.Features.Account.Authentication.Session": [
+    "createdUtc",
+    "deviceInfo",
+    "expirationUtc",
+    "id",
+    "ipAddress",
+    "isCurrent",
+    "persistent"
+  ],
+  "DM.Web.API.Features.Account.Availability.EmailAvailabilityResponse": [
+    "isAvailable",
+    "reason"
+  ],
+  "DM.Web.API.Features.Account.Availability.UsernameAvailabilityResponse": [
+    "isAvailable",
+    "reason"
+  ],
+  "DM.Web.API.Features.Account.Credentials.EmailChangeRequest": [
+    "email",
+    "password"
+  ],
+  "DM.Web.API.Features.Account.Credentials.PasswordChangeRequest": [
+    "newPassword",
+    "oldPassword"
+  ],
+  "DM.Web.API.Features.Account.Credentials.UsernameChangeCompletionRequest": [
+    "username"
+  ],
+  "DM.Web.API.Features.Account.Credentials.UsernameChangeCreateRequest": [
+    "reason"
+  ],
+  "DM.Web.API.Features.Account.Credentials.UsernameChangeResponse": [
+    "approvalTokenExpiresUtc",
+    "createdUtc",
+    "currentUsername",
+    "id",
+    "reason",
+    "requestedUsername",
+    "resolvedByUsername",
+    "resolvedUtc",
+    "resolverComment",
+    "status"
+  ],
+  "DM.Web.API.Features.Account.Deactivation.DeactivationRequest": [
+    "password"
+  ],
+  "DM.Web.API.Features.Account.Recovery.PasswordResetCompletion": [
+    "newPassword"
+  ],
+  "DM.Web.API.Features.Account.Recovery.PasswordResetTokenInfo": [
+    "status"
+  ],
+  "DM.Web.API.Features.Account.Recovery.RecoveryRequest": [
+    "email"
+  ],
+  "DM.Web.API.Features.Account.Recovery.RecoveryResponse": [
+    "email",
+    "status"
+  ],
+  "DM.Web.API.Features.Account.Registration.ActivationRequest": [
+    "retryEmail",
+    "username"
+  ],
+  "DM.Web.API.Features.Account.Registration.PendingInfoResponse": [
+    "email",
+    "status"
+  ],
+  "DM.Web.API.Features.Account.Registration.RegistrationRequest": [
+    "acceptedRules",
+    "email",
+    "password",
+    "website"
+  ],
+  "DM.Web.API.Features.Account.Registration.ResendActivation": [
+    "email"
+  ],
+  "DM.Web.API.Features.Account.Security.SecurityEvent": [
+    "description",
+    "details",
+    "deviceInfo",
+    "eventType",
+    "id",
+    "ipAddress",
+    "timestampUtc"
+  ],
+  "DM.Web.API.Features.Blog.Blacklists.BlockUserRequest": [
+    "username"
+  ],
+  "DM.Web.API.Features.Blog.Blogs.Blog": [
+    "activatedUtc",
+    "activeSubscribersCount",
+    "assistants",
+    "author",
+    "closedReason",
+    "closedUtc",
+    "commentsCount",
+    "commentsEnabled",
+    "createdUtc",
+    "description",
+    "draftVisibility",
+    "id",
+    "mentor",
+    "premoderationStatus",
+    "publicId",
+    "publicationCount",
+    "rubrics",
+    "status",
+    "subscriberUsernames",
+    "subscribersCount",
+    "title",
+    "unreadCommentsCount",
+    "unreadPublicationsCount"
+  ],
+  "DM.Web.API.Features.Blog.Blogs.BlogPremoderationChangeRequest": [
+    "transition"
+  ],
+  "DM.Web.API.Features.Blog.Blogs.BlogRef": [
+    "activatedUtc",
+    "activeSubscribersCount",
+    "assistants",
+    "author",
+    "closedReason",
+    "closedUtc",
+    "createdUtc",
+    "id",
+    "publicId",
+    "status",
+    "subscriberUsernames",
+    "subscribersCount",
+    "title",
+    "unreadCommentsCount",
+    "unreadPublicationsCount"
+  ],
+  "DM.Web.API.Features.Blog.Blogs.BlogStatusChangeRequest": [
+    "transition"
+  ],
+  "DM.Web.API.Features.Blog.Blogs.CreateBlogRequest": [
+    "commentsEnabled",
+    "copyBlacklist",
+    "description",
+    "draftVisibility",
+    "title"
+  ],
+  "DM.Web.API.Features.Blog.Blogs.CreateRubricRequest": [
+    "sortOrder",
+    "title"
+  ],
+  "DM.Web.API.Features.Blog.Blogs.ReorderRubricsRequest": [
+    "rubricIds"
+  ],
+  "DM.Web.API.Features.Blog.Blogs.Rubric": [
+    "id",
+    "publicationCount",
+    "sortOrder",
+    "title",
+    "unreadCommentsCount",
+    "unreadPublicationsCount"
+  ],
+  "DM.Web.API.Features.Blog.Blogs.UpdateBlogRequest": [
+    "commentsEnabled",
+    "description",
+    "draftVisibility",
+    "title"
+  ],
+  "DM.Web.API.Features.Blog.Blogs.UpdateRubricRequest": [
+    "title"
+  ],
+  "DM.Web.API.Features.Blog.Invitations.BlogInvitation": [
+    "blogId",
+    "blogTitle",
+    "createdUtc",
+    "expiresUtc",
+    "id",
+    "invitedUser",
+    "inviterUsername",
+    "type"
+  ],
+  "DM.Web.API.Features.Blog.Invitations.CreateInvitationRequest": [
+    "username"
+  ],
+  "DM.Web.API.Features.Blog.Publications.CreatePublicationRequest": [
+    "commentsEnabled",
+    "content",
+    "preview",
+    "publishImmediately",
+    "rubricId",
+    "title"
+  ],
+  "DM.Web.API.Features.Blog.Publications.Publication": [
+    "author",
+    "blogId",
+    "blogTitle",
+    "commentCount",
+    "commentsEnabled",
+    "content",
+    "createdUtc",
+    "id",
+    "isPublished",
+    "likes",
+    "modifiedUtc",
+    "preview",
+    "publishedUtc",
+    "rubric",
+    "title",
+    "viewCount"
+  ],
+  "DM.Web.API.Features.Blog.Publications.UpdatePublicationRequest": [
+    "clearRubric",
+    "commentsEnabled",
+    "content",
+    "isPublished",
+    "preview",
+    "rubricId",
+    "title"
+  ],
+  "DM.Web.API.Features.Blog.Users.BlogUser": [
+    "joinedUtc",
+    "role",
+    "user"
+  ],
+  "DM.Web.API.Features.Community.Achievements.AchievementCategory": [
+    "code",
+    "description",
+    "iconName",
+    "id",
+    "isActive",
+    "metric",
+    "sortOrder",
+    "title"
+  ],
+  "DM.Web.API.Features.Community.Achievements.AchievementType": [
+    "category",
+    "code",
+    "id",
+    "threshold",
+    "tier",
+    "title"
+  ],
+  "DM.Web.API.Features.Community.Achievements.CreateAchievementTypeRequest": [
+    "achievementCategoryId",
+    "code",
+    "threshold",
+    "tier",
+    "title"
+  ],
+  "DM.Web.API.Features.Community.Achievements.UpdateAchievementCategoryRequest": [
+    "description",
+    "iconName",
+    "isActive",
+    "sortOrder",
+    "title"
+  ],
+  "DM.Web.API.Features.Community.Achievements.UpdateAchievementTypeRequest": [
+    "threshold",
+    "tier",
+    "title"
+  ],
+  "DM.Web.API.Features.Community.Achievements.UserAchievement": [
+    "earnedUtc",
+    "id",
+    "type"
+  ],
+  "DM.Web.API.Features.Community.Awards.AwardType": [
+    "code",
+    "description",
+    "iconName",
+    "id",
+    "isActive",
+    "sortOrder",
+    "tier",
+    "title"
+  ],
+  "DM.Web.API.Features.Community.Awards.ContestSeries": [
+    "contestType",
+    "id",
+    "isActive",
+    "number",
+    "topicUrl",
+    "year"
+  ],
+  "DM.Web.API.Features.Community.Awards.CreateAwardTypeRequest": [
+    "code",
+    "description",
+    "iconName",
+    "sortOrder",
+    "tier",
+    "title"
+  ],
+  "DM.Web.API.Features.Community.Awards.CreateContestSeriesRequest": [
+    "contestType",
+    "number",
+    "topicUrl",
+    "year"
+  ],
+  "DM.Web.API.Features.Community.Awards.GrantUserAwardRequest": [
+    "awardTypeId",
+    "contestSeriesId",
+    "workUrl"
+  ],
+  "DM.Web.API.Features.Community.Awards.UpdateAwardTypeRequest": [
+    "description",
+    "iconName",
+    "isActive",
+    "sortOrder",
+    "tier",
+    "title"
+  ],
+  "DM.Web.API.Features.Community.Awards.UpdateContestSeriesRequest": [
+    "contestType",
+    "isActive",
+    "number",
+    "topicUrl",
+    "year"
+  ],
+  "DM.Web.API.Features.Community.Awards.UserAward": [
+    "awardedUtc",
+    "contestSeries",
+    "id",
+    "type",
+    "workUrl"
+  ],
+  "DM.Web.API.Features.Community.Endorsements.CreateUserEndorsementRequest": [
+    "text"
+  ],
+  "DM.Web.API.Features.Community.Endorsements.UpdateUserEndorsementRequest": [
+    "text"
+  ],
+  "DM.Web.API.Features.Community.Endorsements.UserEndorsement": [
+    "author",
+    "createdUtc",
+    "id",
+    "modifiedUtc",
+    "targetUser",
+    "text"
+  ],
+  "DM.Web.API.Features.Community.Fundraising.Fundraising": [
+    "collectedAmount",
+    "goalAmount",
+    "modifiedUtc"
+  ],
+  "DM.Web.API.Features.Community.Fundraising.UpdateFundraisingRequest": [
+    "collectedAmount",
+    "goalAmount"
+  ],
+  "DM.Web.API.Features.Community.Polls.CreatePollRequest": [
+    "details",
+    "endsUtc",
+    "isAnonymous",
+    "options",
+    "startsUtc",
+    "title"
+  ],
+  "DM.Web.API.Features.Community.Polls.Poll": [
+    "details",
+    "endsUtc",
+    "id",
+    "isAnonymous",
+    "options",
+    "startsUtc",
+    "status",
+    "title"
+  ],
+  "DM.Web.API.Features.Community.Polls.PollOption": [
+    "id",
+    "text",
+    "totalVoters",
+    "voted",
+    "voters",
+    "votesCount"
+  ],
+  "DM.Web.API.Features.Community.Polls.UpdatePollRequest": [
+    "details",
+    "endsUtc",
+    "isAnonymous",
+    "startsUtc",
+    "title"
+  ],
+  "DM.Web.API.Features.Community.Statistics.LeaderboardEntry": [
+    "entityId",
+    "name",
+    "publicId",
+    "rank",
+    "score"
+  ],
+  "DM.Web.API.Features.Community.Statistics.Leaderboards": [
+    "period",
+    "topBlogAuthorsByVolume",
+    "topBlogsByPosts",
+    "topBlogsByRating",
+    "topGamesByPosts",
+    "topGamesByRating",
+    "topPlayersByPosts",
+    "topPlayersByRating",
+    "topPlayersByVolume"
+  ],
+  "DM.Web.API.Features.Community.Statistics.LiveStats": [
+    "lastReviewedPost",
+    "online",
+    "totals",
+    "weeklyBestPost"
+  ],
+  "DM.Web.API.Features.Community.Statistics.Period": [
+    "month",
+    "year"
+  ],
+  "DM.Web.API.Features.Community.Statistics.PostHighlight": [
+    "authorUsername",
+    "gameId",
+    "gameTitle",
+    "postId",
+    "ratingSum"
+  ],
+  "DM.Web.API.Features.Community.Statistics.StatValue": [
+    "todayDelta",
+    "value"
+  ],
+  "DM.Web.API.Features.Community.Statistics.TotalsWithDelta": [
+    "blogs",
+    "characters",
+    "gamePosts",
+    "games",
+    "publications",
+    "users"
+  ],
+  "DM.Web.API.Features.Community.Users.Birthday": [
+    "day",
+    "month",
+    "year"
+  ],
+  "DM.Web.API.Features.Community.Users.Contact": [
+    "contactType",
+    "value"
+  ],
+  "DM.Web.API.Features.Community.Users.LoginHistoryDto": [
+    "ipAddress",
+    "loginTimestampUtc",
+    "userAgent"
+  ],
+  "DM.Web.API.Features.Community.Users.ModuleStatusCounts": [
+    "active",
+    "closed",
+    "draft"
+  ],
+  "DM.Web.API.Features.Community.Users.PersonalNote": [
+    "createdUtc",
+    "id",
+    "modifiedUtc",
+    "text"
+  ],
+  "DM.Web.API.Features.Community.Users.Rating": [
+    "postReviewScoreSum",
+    "totalPosts"
+  ],
+  "DM.Web.API.Features.Community.Users.SubscriberRef": [
+    "lastActivityUtc",
+    "settings",
+    "username"
+  ],
+  "DM.Web.API.Features.Community.Users.User": [
+    "bansReceived",
+    "blogsHosting",
+    "blogsHostingByStatus",
+    "commentsAuthored",
+    "endorsementsGiven",
+    "endorsementsReceived",
+    "gameDrops",
+    "gamesHosting",
+    "gamesHostingByStatus",
+    "gamesPlaying",
+    "gamesPlayingByStatus",
+    "globalChatMessages",
+    "id",
+    "isNewbie",
+    "lastActivityUtc",
+    "likesReceived",
+    "picture",
+    "publicationsAuthored",
+    "rating",
+    "registeredUtc",
+    "reviewsGiven",
+    "reviewsReceived",
+    "role",
+    "subscriberUsernames",
+    "subscribers",
+    "subscribersCount",
+    "topicsAuthored",
+    "username",
+    "usernameHistory"
+  ],
+  "DM.Web.API.Features.Community.Users.UserPicture": [
+    "id",
+    "mediumUrl",
+    "originalUrl",
+    "smallUrl"
+  ],
+  "DM.Web.API.Features.Community.Users.UserProfile": [
+    "bansReceived",
+    "birthday",
+    "blogsHosting",
+    "blogsHostingByStatus",
+    "commentsAuthored",
+    "contacts",
+    "endorsementsGiven",
+    "endorsementsReceived",
+    "gameDrops",
+    "gamesHosting",
+    "gamesHostingByStatus",
+    "gamesPlaying",
+    "gamesPlayingByStatus",
+    "gender",
+    "globalChatMessages",
+    "id",
+    "info",
+    "isNewbie",
+    "lastActivityUtc",
+    "likesReceived",
+    "location",
+    "name",
+    "personalNote",
+    "picture",
+    "postReviewsGiven",
+    "postReviewsReceived",
+    "publicationsAuthored",
+    "rating",
+    "registeredUtc",
+    "reviewsGiven",
+    "reviewsReceived",
+    "role",
+    "status",
+    "subscriberUsernames",
+    "subscribers",
+    "subscribersCount",
+    "topicsAuthored",
+    "username",
+    "usernameHistory"
+  ],
+  "DM.Web.API.Features.Community.Users.UsernameHistoryEntry": [
+    "changedUtc",
+    "oldUsername"
+  ],
+  "DM.Web.API.Features.Community.WebsiteTestimonials.CreateWebsiteTestimonialRequest": [
+    "text"
+  ],
+  "DM.Web.API.Features.Community.WebsiteTestimonials.UpdateWebsiteTestimonialRequest": [
+    "text"
+  ],
+  "DM.Web.API.Features.Community.WebsiteTestimonials.WebsiteTestimonialDto": [
+    "author",
+    "createdUtc",
+    "id",
+    "modifiedUtc",
+    "text"
+  ],
+  "DM.Web.API.Features.Forum.Boards.Board": [
+    "alias",
+    "commentsCount",
+    "description",
+    "id",
+    "lastComment",
+    "lastTopic",
+    "moderators",
+    "title",
+    "topicsCount",
+    "unreadCommentsCount",
+    "unreadTopicsCount"
+  ],
+  "DM.Web.API.Features.Forum.Boards.BoardLastComment": [
+    "author",
+    "createdUtc",
+    "id",
+    "topicId",
+    "topicNumber",
+    "topicTitle"
+  ],
+  "DM.Web.API.Features.Forum.Boards.BoardLastTopic": [
+    "author",
+    "createdUtc",
+    "id",
+    "title",
+    "topicNumber"
+  ],
+  "DM.Web.API.Features.Forum.Topics.CreateTopicRequest": [
+    "text",
+    "title"
+  ],
+  "DM.Web.API.Features.Forum.Topics.LastTopicComment": [
+    "author",
+    "createdUtc",
+    "id"
+  ],
+  "DM.Web.API.Features.Forum.Topics.PeriodDigestRef": [
+    "month",
+    "year"
+  ],
+  "DM.Web.API.Features.Forum.Topics.ReorderPinnedRequest": [
+    "topicIds"
+  ],
+  "DM.Web.API.Features.Forum.Topics.Topic": [
+    "attachOrder",
+    "author",
+    "board",
+    "commentsCount",
+    "createdUtc",
+    "description",
+    "id",
+    "isAttached",
+    "isClosed",
+    "lastActivityUtc",
+    "lastComment",
+    "likes",
+    "likesCount",
+    "modifiedUtc",
+    "periodDigest",
+    "title",
+    "topicNumber",
+    "unreadCommentsCount"
+  ],
+  "DM.Web.API.Features.Forum.Topics.UpdateTopicRequest": [
+    "board",
+    "description",
+    "isAttached",
+    "isClosed",
+    "title"
+  ],
+  "DM.Web.API.Features.Game.AttributeSchemas.AttributeSchema": [
+    "author",
+    "id",
+    "specifications",
+    "title",
+    "type"
+  ],
+  "DM.Web.API.Features.Game.AttributeSchemas.AttributeSpecification": [
+    "id",
+    "isDescriptor",
+    "isHidden",
+    "maxLength",
+    "order",
+    "required",
+    "title",
+    "type",
+    "values"
+  ],
+  "DM.Web.API.Features.Game.AttributeSchemas.AttributeValueSpecification": [
+    "modifier",
+    "value"
+  ],
+  "DM.Web.API.Features.Game.AttributeSchemas.UpdateAttributeSchemaRequest": [
+    "specifications",
+    "title",
+    "type"
+  ],
+  "DM.Web.API.Features.Game.Characters.Character": [
+    "author",
+    "authorRating",
+    "descriptor",
+    "id",
+    "isDead",
+    "isNpc",
+    "isPlayerExiled",
+    "isPlayerLeft",
+    "lastPostUtc",
+    "name",
+    "picture",
+    "status",
+    "totalPostsCount"
+  ],
+  "DM.Web.API.Features.Game.Characters.CharacterAttribute": [
+    "id",
+    "inconsistent",
+    "modifier",
+    "title",
+    "value",
+    "valueBbText"
+  ],
+  "DM.Web.API.Features.Game.Characters.CharacterDetails": [
+    "attributes",
+    "author",
+    "authorRating",
+    "descriptor",
+    "id",
+    "isDead",
+    "isNpc",
+    "isPlayerExiled",
+    "isPlayerLeft",
+    "lastPostUtc",
+    "name",
+    "picture",
+    "privacy",
+    "status",
+    "totalPostsCount"
+  ],
+  "DM.Web.API.Features.Game.Characters.CharacterPrivacySettings": [
+    "editByMaster",
+    "editPostByMaster",
+    "isNpc"
+  ],
+  "DM.Web.API.Features.Game.ChatRooms.ChatRoom": [
+    "accesses",
+    "chatId",
+    "gameId",
+    "id",
+    "orderNumber",
+    "title",
+    "unreadCount"
+  ],
+  "DM.Web.API.Features.Game.ChatRooms.ChatRoomAccess": [
+    "character",
+    "id",
+    "user"
+  ],
+  "DM.Web.API.Features.Game.ChatRooms.CreateChatRoom": [
+    "title"
+  ],
+  "DM.Web.API.Features.Game.ChatRooms.UpdateChatRoom": [
+    "previousRoomId",
+    "title"
+  ],
+  "DM.Web.API.Features.Game.Games.ActiveCharacterInfo": [
+    "name",
+    "ownerUsername"
+  ],
+  "DM.Web.API.Features.Game.Games.CharacterShortInfo": [
+    "author",
+    "id",
+    "name",
+    "status"
+  ],
+  "DM.Web.API.Features.Game.Games.CreateGamePrivacySettings": [
+    "commentariesAccess",
+    "viewDice",
+    "viewPostStats",
+    "viewPrivates"
+  ],
+  "DM.Web.API.Features.Game.Games.CreateGameRequest": [
+    "assistantUsername",
+    "draft",
+    "info",
+    "privacySettings",
+    "schemaId",
+    "setting",
+    "system",
+    "tags",
+    "title"
+  ],
+  "DM.Web.API.Features.Game.Games.Game": [
+    "activatedUtc",
+    "activeCharacters",
+    "assistants",
+    "closedReason",
+    "closedUtc",
+    "createdUtc",
+    "gameReviewsCount",
+    "id",
+    "master",
+    "mentor",
+    "participation",
+    "pendingAssistant",
+    "playerCharacters",
+    "players",
+    "postReviewsCount",
+    "publicId",
+    "recruitment",
+    "schemaId",
+    "setting",
+    "status",
+    "subscriberUsernames",
+    "subscribersCount",
+    "system",
+    "tagIds",
+    "tags",
+    "title",
+    "unreadCharactersCount",
+    "unreadCommentsCount",
+    "unreadPostsCount"
+  ],
+  "DM.Web.API.Features.Game.Games.GameDetails": [
+    "activatedUtc",
+    "activeCharacters",
+    "assistants",
+    "characters",
+    "closedReason",
+    "closedUtc",
+    "createdUtc",
+    "diceSupported",
+    "fullAssistants",
+    "gameReviewsCount",
+    "id",
+    "info",
+    "lastMasterPostUtc",
+    "master",
+    "masterPostsCount",
+    "mentor",
+    "participation",
+    "pendingAssistant",
+    "playerCharacters",
+    "players",
+    "postReviewsCount",
+    "privacySettings",
+    "publicId",
+    "readers",
+    "recruitment",
+    "schema",
+    "schemaId",
+    "setting",
+    "status",
+    "subscriberUsernames",
+    "subscribers",
+    "subscribersCount",
+    "system",
+    "tagIds",
+    "tags",
+    "title",
+    "totalPostsCount",
+    "unreadCharactersCount",
+    "unreadCommentsCount",
+    "unreadPostsCount"
+  ],
+  "DM.Web.API.Features.Game.Games.GamePremoderationChangeRequest": [
+    "transition"
+  ],
+  "DM.Web.API.Features.Game.Games.GamePrivacySettings": [
+    "commentariesAccess",
+    "viewDice",
+    "viewPostStats",
+    "viewPrivates"
+  ],
+  "DM.Web.API.Features.Game.Games.GameRecruitment": [
+    "isOpen",
+    "isSubsequent",
+    "pcCount",
+    "pcLimit",
+    "startedUtc"
+  ],
+  "DM.Web.API.Features.Game.Games.GameRef": [
+    "activatedUtc",
+    "activeCharacters",
+    "assistants",
+    "closedReason",
+    "gameReviewsCount",
+    "id",
+    "master",
+    "participation",
+    "postReviewsCount",
+    "publicId",
+    "recruitment",
+    "status",
+    "subscriberUsernames",
+    "subscribersCount",
+    "title",
+    "unreadCommentsCount",
+    "unreadPostsCount"
+  ],
+  "DM.Web.API.Features.Game.Games.GameStatusChangeRequest": [
+    "transition"
+  ],
+  "DM.Web.API.Features.Game.Games.PlayerCharacterInfo": [
+    "isDead",
+    "isPlayerExiled",
+    "isPlayerLeft",
+    "name",
+    "status"
+  ],
+  "DM.Web.API.Features.Game.Games.Tag": [
+    "description",
+    "gamesCount",
+    "groupDescription",
+    "groupSortOrder",
+    "groupTitle",
+    "id",
+    "sortOrder",
+    "title"
+  ],
+  "DM.Web.API.Features.Game.Invitations.GameInvitation": [
+    "createdUtc",
+    "expiresUtc",
+    "gameId",
+    "gameTitle",
+    "id",
+    "invitedUser",
+    "inviterUsername",
+    "type"
+  ],
+  "DM.Web.API.Features.Game.Posts.CreatePostDiceRoll": [
+    "bonus",
+    "comment",
+    "count",
+    "dice",
+    "explosion",
+    "public"
+  ],
+  "DM.Web.API.Features.Game.Posts.CreatePostRequest": [
+    "characterId",
+    "diceRolls",
+    "gameText",
+    "metagameText"
+  ],
+  "DM.Web.API.Features.Game.Posts.DiceResult": [
+    "critical",
+    "exploded",
+    "value"
+  ],
+  "DM.Web.API.Features.Game.Posts.DiceRoll": [
+    "bonus",
+    "comment",
+    "edges",
+    "explosion",
+    "results",
+    "rolls"
+  ],
+  "DM.Web.API.Features.Game.Posts.Post": [
+    "author",
+    "authorGameRole",
+    "character",
+    "createdUtc",
+    "diceRolls",
+    "edits",
+    "gameText",
+    "id",
+    "metagameText",
+    "rating",
+    "reviewCount",
+    "room"
+  ],
+  "DM.Web.API.Features.Game.Posts.PostEditInfo": [
+    "editor",
+    "id",
+    "modifiedUtc"
+  ],
+  "DM.Web.API.Features.Game.Reviews.CreateGameReviewRequest": [
+    "text"
+  ],
+  "DM.Web.API.Features.Game.Reviews.CreatePostReviewRequest": [
+    "sign",
+    "text"
+  ],
+  "DM.Web.API.Features.Game.Reviews.GameReviewDto": [
+    "author",
+    "createdUtc",
+    "gameId",
+    "id",
+    "modifiedUtc",
+    "text"
+  ],
+  "DM.Web.API.Features.Game.Reviews.PostReviewDto": [
+    "author",
+    "createdUtc",
+    "gameId",
+    "id",
+    "likes",
+    "modifiedUtc",
+    "postAuthor",
+    "postId",
+    "sign",
+    "text"
+  ],
+  "DM.Web.API.Features.Game.Rooms.CreateRoomRequest": [
+    "accessType",
+    "diceEnabled",
+    "title",
+    "type",
+    "viewDiceResults",
+    "viewPrivateText"
+  ],
+  "DM.Web.API.Features.Game.Rooms.PostPendency": [
+    "characterId",
+    "createdBy",
+    "createdUtc",
+    "fulfilledUtc",
+    "id",
+    "roomId",
+    "waitingFor"
+  ],
+  "DM.Web.API.Features.Game.Rooms.Room": [
+    "access",
+    "accesses",
+    "game",
+    "id",
+    "isArchived",
+    "pendencies",
+    "previousRoomId",
+    "roomNumber",
+    "settings",
+    "title",
+    "type",
+    "unreadPostsCount"
+  ],
+  "DM.Web.API.Features.Game.Rooms.RoomAccess": [
+    "character",
+    "id",
+    "policy",
+    "user"
+  ],
+  "DM.Web.API.Features.Game.Rooms.RoomSettings": [
+    "diceEnabled",
+    "viewDiceResults",
+    "viewPrivateText"
+  ],
+  "DM.Web.API.Features.Game.Unread.FirstUnreadCommentResult": [
+    "commentId",
+    "commentNumber",
+    "hasUnread",
+    "totalUnreadCount"
+  ],
+  "DM.Web.API.Features.Game.Unread.FirstUnreadPostResult": [
+    "hasUnread",
+    "postId",
+    "postNumber",
+    "roomId",
+    "totalUnreadCount"
+  ],
+  "DM.Web.API.Features.Game.Users.GameUser": [
+    "characterId",
+    "characterName",
+    "characterStatus",
+    "joinedUtc",
+    "role",
+    "user"
+  ],
+  "DM.Web.API.Features.General.Mirror.MirrorDto": [
+    "id",
+    "isCurrent",
+    "name",
+    "webUrl"
+  ],
+  "DM.Web.API.Features.General.Mirror.MirrorsResponse": [
+    "currentMirrorId",
+    "mirrors"
+  ],
+  "DM.Web.API.Features.General.Tickets.CreateTicketIntakeRequest": [
+    "contact",
+    "subject",
+    "subtype",
+    "targetUsername",
+    "text",
+    "violationUrl",
+    "website"
+  ],
+  "DM.Web.API.Features.General.Tickets.CreateTicketIntakeResponse": [
+    "trackingToken"
+  ],
+  "DM.Web.API.Features.General.Tickets.TrackedTicket": [
+    "answer",
+    "createdUtc",
+    "description",
+    "resolvedUtc",
+    "responses",
+    "status",
+    "subject",
+    "subtype"
+  ],
+  "DM.Web.API.Features.General.Tickets.TrackedTicketResponse": [
+    "createdUtc",
+    "isFromModerator",
+    "text"
+  ],
+  "DM.Web.API.Features.Messaging.Chats.Chat": [
+    "id",
+    "lastMessage",
+    "participants",
+    "title",
+    "type",
+    "unreadMessagesCount"
+  ],
+  "DM.Web.API.Features.Messaging.Chats.ChatAvailability": [
+    "canStart",
+    "reason"
+  ],
+  "DM.Web.API.Features.Messaging.Chats.CreateChat": [
+    "participantIds",
+    "title"
+  ],
+  "DM.Web.API.Features.Messaging.Chats.UpdateChat": [
+    "addParticipants",
+    "removeParticipants",
+    "title"
+  ],
+  "DM.Web.API.Features.Messaging.GlobalChatEvents.AddParticipantInput": [
+    "isOrganizer",
+    "username"
+  ],
+  "DM.Web.API.Features.Messaging.GlobalChatEvents.CreateGlobalChatEventInput": [
+    "description",
+    "duration",
+    "isOpen",
+    "startsUtc",
+    "title"
+  ],
+  "DM.Web.API.Features.Messaging.GlobalChatEvents.GlobalChatEvent": [
+    "createdBy",
+    "createdUtc",
+    "description",
+    "duration",
+    "id",
+    "isOpen",
+    "participants",
+    "startsUtc",
+    "status",
+    "title"
+  ],
+  "DM.Web.API.Features.Messaging.GlobalChatEvents.GlobalChatEventParticipant": [
+    "id",
+    "isOrganizer",
+    "joinedUtc",
+    "user"
+  ],
+  "DM.Web.API.Features.Messaging.GlobalChatEvents.GlobalChatEventSummary": [
+    "id",
+    "isOpen",
+    "participantCount",
+    "startsUtc",
+    "status",
+    "title"
+  ],
+  "DM.Web.API.Features.Messaging.GlobalChatEvents.UpdateGlobalChatEventInput": [
+    "description",
+    "duration",
+    "isOpen",
+    "startsUtc",
+    "title"
+  ],
+  "DM.Web.API.Features.Messaging.Messages.CreateMessageInput": [
+    "text"
+  ],
+  "DM.Web.API.Features.Messaging.Messages.Message": [
+    "author",
+    "createdUtc",
+    "deletedBy",
+    "deletedUtc",
+    "edits",
+    "globalChatEventId",
+    "id",
+    "isRemoved",
+    "likes",
+    "modifiedUtc",
+    "text"
+  ],
+  "DM.Web.API.Features.Messaging.Messages.MessageEdit": [
+    "editor",
+    "id",
+    "modifiedUtc"
+  ],
+  "DM.Web.API.Features.Messaging.Messages.UpdateMessageInput": [
+    "text"
+  ],
+  "DM.Web.API.Features.Moderation.Awards.ContestSeriesAward": [
+    "awardedUtc",
+    "id",
+    "type",
+    "user",
+    "workUrl"
+  ],
+  "DM.Web.API.Features.Moderation.Bans.Ban": [
+    "comment",
+    "expiresUtc",
+    "id",
+    "isActive",
+    "isLifted",
+    "isVoluntary",
+    "liftedBy",
+    "liftedUtc",
+    "moderator",
+    "startedUtc",
+    "type",
+    "user"
+  ],
+  "DM.Web.API.Features.Moderation.Bans.CreateBanRequest": [
+    "accessPolicy",
+    "comment",
+    "durationHours",
+    "expiresUtc",
+    "type",
+    "username"
+  ],
+  "DM.Web.API.Features.Moderation.Bans.LiftBanRequest": [
+    "reason"
+  ],
+  "DM.Web.API.Features.Moderation.Bans.PublicBan": [
+    "expiresUtc",
+    "isActive",
+    "startedUtc",
+    "type"
+  ],
+  "DM.Web.API.Features.Moderation.Bans.PublicUserBanStatus": [
+    "activeBan",
+    "history",
+    "isBanned",
+    "username"
+  ],
+  "DM.Web.API.Features.Moderation.Moderators.ModerationZone": [
+    "id",
+    "title"
+  ],
+  "DM.Web.API.Features.Moderation.Moderators.ModeratorOverview": [
+    "boards",
+    "curatedBlogs",
+    "curatedGames",
+    "user"
+  ],
+  "DM.Web.API.Features.Moderation.Profiles.CreateModeratedProfileNoteRequest": [
+    "text"
+  ],
+  "DM.Web.API.Features.Moderation.Profiles.LinkedProfile": [
+    "lastSharedLoginUtc",
+    "sharedIpsCount",
+    "userId",
+    "username"
+  ],
+  "DM.Web.API.Features.Moderation.Profiles.LoginRecord": [
+    "ipAddress",
+    "isSuccessful",
+    "loginUtc",
+    "userAgent"
+  ],
+  "DM.Web.API.Features.Moderation.Profiles.ModNote": [
+    "authorId",
+    "authorUsername",
+    "canDelete",
+    "canEdit",
+    "createdUtc",
+    "id",
+    "modifiedUtc",
+    "text"
+  ],
+  "DM.Web.API.Features.Moderation.Profiles.ModerateProfile": [
+    "info"
+  ],
+  "DM.Web.API.Features.Moderation.Profiles.ModeratedProfile": [
+    "bansReceived",
+    "birthday",
+    "blogsHosting",
+    "blogsHostingByStatus",
+    "commentsAuthored",
+    "contacts",
+    "email",
+    "endorsementsGiven",
+    "endorsementsReceived",
+    "gameDrops",
+    "gamesHosting",
+    "gamesHostingByStatus",
+    "gamesPlaying",
+    "gamesPlayingByStatus",
+    "gender",
+    "globalChatMessages",
+    "id",
+    "info",
+    "ipAddresses",
+    "isNewbie",
+    "lastActivityUtc",
+    "likesReceived",
+    "linkedProfiles",
+    "location",
+    "loginHistory",
+    "moderatorNotes",
+    "name",
+    "permissions",
+    "personalNote",
+    "picture",
+    "postReviewsGiven",
+    "postReviewsReceived",
+    "publicationsAuthored",
+    "rating",
+    "registeredUtc",
+    "reviewsGiven",
+    "reviewsReceived",
+    "role",
+    "status",
+    "subscriberUsernames",
+    "subscribers",
+    "subscribersCount",
+    "topicsAuthored",
+    "username",
+    "usernameHistory",
+    "violations"
+  ],
+  "DM.Web.API.Features.Moderation.Profiles.ModeratedProfileNote": [
+    "author",
+    "createdUtc",
+    "id",
+    "modifiedUtc",
+    "text",
+    "user"
+  ],
+  "DM.Web.API.Features.Moderation.Profiles.ModerationPermissions": [
+    "canCreateModNote",
+    "canIssueBan",
+    "canIssueWarning",
+    "canLiftBan",
+    "canViewEmail",
+    "canViewIpAddresses",
+    "canViewLinkedProfiles",
+    "canViewLoginHistory",
+    "canViewModNotes"
+  ],
+  "DM.Web.API.Features.Moderation.Profiles.UpdateModeratedProfileNoteRequest": [
+    "text"
+  ],
+  "DM.Web.API.Features.Moderation.Profiles.UserIpInfo": [
+    "firstSeenUtc",
+    "ipAddress",
+    "lastSeenUtc",
+    "loginsCount"
+  ],
+  "DM.Web.API.Features.Moderation.Profiles.ViolationSummary": [
+    "activeWarningPoints",
+    "currentBanEndUtc",
+    "currentBanReason",
+    "isCurrentlyBanned",
+    "totalBans",
+    "totalWarnings"
+  ],
+  "DM.Web.API.Features.Moderation.Tags.CreateTagGroupRequest": [
+    "description",
+    "sortOrder",
+    "title"
+  ],
+  "DM.Web.API.Features.Moderation.Tags.CreateTagRequest": [
+    "description",
+    "groupId",
+    "sortOrder",
+    "title"
+  ],
+  "DM.Web.API.Features.Moderation.Tags.Tag": [
+    "description",
+    "gamesCount",
+    "groupId",
+    "groupTitle",
+    "id",
+    "shortId",
+    "sortOrder",
+    "title"
+  ],
+  "DM.Web.API.Features.Moderation.Tags.TagGroup": [
+    "description",
+    "id",
+    "sortOrder",
+    "tagsCount",
+    "title"
+  ],
+  "DM.Web.API.Features.Moderation.Tags.UpdateTagGroupRequest": [
+    "description",
+    "sortOrder",
+    "title"
+  ],
+  "DM.Web.API.Features.Moderation.Tags.UpdateTagRequest": [
+    "description",
+    "groupId",
+    "sortOrder",
+    "title"
+  ],
+  "DM.Web.API.Features.Moderation.Tickets.CreateTicketRequest": [
+    "comment",
+    "description",
+    "entityId",
+    "entityType",
+    "targetUsername"
+  ],
+  "DM.Web.API.Features.Moderation.Tickets.ResolveTicketRequest": [
+    "answer",
+    "banComment",
+    "banDurationHours",
+    "issueBan",
+    "issueWarning",
+    "status",
+    "warningPoints",
+    "warningText"
+  ],
+  "DM.Web.API.Features.Moderation.Tickets.Ticket": [
+    "answer",
+    "assignedModeratorUsername",
+    "comment",
+    "createdUtc",
+    "description",
+    "entityId",
+    "entityType",
+    "guestEmail",
+    "hasBan",
+    "hasWarning",
+    "id",
+    "reporterUsername",
+    "resolvedUtc",
+    "status",
+    "subtype",
+    "targetUsername"
+  ],
+  "DM.Web.API.Features.Moderation.Tickets.TicketDetails": [
+    "answer",
+    "assignedModeratorUsername",
+    "comment",
+    "createdUtc",
+    "description",
+    "entityId",
+    "entityType",
+    "guestEmail",
+    "hasBan",
+    "hasWarning",
+    "id",
+    "reporterUsername",
+    "resolvedUtc",
+    "responses",
+    "status",
+    "subtype",
+    "targetUsername"
+  ],
+  "DM.Web.API.Features.Moderation.Tickets.TicketResponse": [
+    "author",
+    "createdUtc",
+    "isFromModerator",
+    "text"
+  ],
+  "DM.Web.API.Features.Moderation.Tickets.TicketStats": [
+    "closed",
+    "spam",
+    "waitingForModeration",
+    "waitingForUser"
+  ],
+  "DM.Web.API.Features.Moderation.UsernameChanges.ResolveUsernameChangeRequest": [
+    "comment",
+    "status"
+  ],
+  "DM.Web.API.Features.Moderation.UsernameChanges.UsernameChangeRequest": [
+    "approvalExpiresUtc",
+    "comment",
+    "createdUtc",
+    "currentUsername",
+    "id",
+    "reason",
+    "requestedUsername",
+    "resolvedBy",
+    "resolvedUtc",
+    "status",
+    "userId"
+  ],
+  "DM.Web.API.Features.Moderation.Warnings.CreateWarningRequest": [
+    "entityId",
+    "entityType",
+    "points",
+    "reason",
+    "username"
+  ],
+  "DM.Web.API.Features.Moderation.Warnings.PublicWarning": [
+    "createdUtc",
+    "isActive",
+    "points"
+  ],
+  "DM.Web.API.Features.Moderation.Warnings.UserWarningsInfo": [
+    "activeCount",
+    "totalPoints",
+    "username",
+    "warnings"
+  ],
+  "DM.Web.API.Features.Moderation.Warnings.Violator": [
+    "activeBan",
+    "lastWarningUtc",
+    "points",
+    "pointsThreshold",
+    "user"
+  ],
+  "DM.Web.API.Features.Moderation.Warnings.Warning": [
+    "createdUtc",
+    "entityId",
+    "entityType",
+    "id",
+    "isActive",
+    "moderator",
+    "points",
+    "reason",
+    "user"
+  ],
+  "DM.Web.API.Features.Personal.Blacklists.BlacklistEntry": [
+    "createdUtc",
+    "id",
+    "username"
+  ],
+  "DM.Web.API.Features.Personal.Blacklists.BlacklistSettings": [
+    "autoPopulateContentBlacklist",
+    "blockDirectMessages",
+    "hideBlogs",
+    "hideComments",
+    "hideGames",
+    "hideMessages"
+  ],
+  "DM.Web.API.Features.Personal.Blacklists.BlockUserRequest": [
+    "username"
+  ],
+  "DM.Web.API.Features.Personal.Blacklists.UpdateBlacklistSettingsRequest": [
+    "autoPopulateContentBlacklist",
+    "blockDirectMessages",
+    "hideBlogs",
+    "hideComments",
+    "hideGames",
+    "hideMessages"
+  ],
+  "DM.Web.API.Features.Personal.Invitations.ReceivedInvitation": [
+    "createdUtc",
+    "entityId",
+    "entityTitle",
+    "entityType",
+    "expiresUtc",
+    "id",
+    "inviterUsername",
+    "type"
+  ],
+  "DM.Web.API.Features.Personal.Notepads.CreateNotepadEntryRequest": [
+    "content",
+    "title"
+  ],
+  "DM.Web.API.Features.Personal.Notepads.NotepadEntryResponse": [
+    "containerId",
+    "content",
+    "createdUtc",
+    "id",
+    "modifiedUtc",
+    "notepadType",
+    "ownerId",
+    "sortOrder",
+    "title"
+  ],
+  "DM.Web.API.Features.Personal.Notepads.UpdateNotepadEntryRequest": [
+    "content",
+    "sortOrder",
+    "title"
+  ],
+  "DM.Web.API.Features.Personal.Notifications.BotConnection": [
+    "connected",
+    "enabled",
+    "enabledCategories"
+  ],
+  "DM.Web.API.Features.Personal.Notifications.BotLinkResult": [
+    "code",
+    "expiresUtc"
+  ],
+  "DM.Web.API.Features.Personal.Notifications.Notification": [
+    "eventType",
+    "id",
+    "payload"
+  ],
+  "DM.Web.API.Features.Personal.Notifications.NotificationCount": [
+    "count"
+  ],
+  "DM.Web.API.Features.Personal.Notifications.NotificationSettings": [
+    "discord",
+    "telegram"
+  ],
+  "DM.Web.API.Features.Personal.Notifications.UpdateBotConnection": [
+    "enabled",
+    "enabledCategories"
+  ],
+  "DM.Web.API.Features.Personal.Notifications.UpdateNotificationSettingsRequest": [
+    "discord",
+    "telegram"
+  ],
+  "DM.Web.API.Features.Personal.Preferences.Paging": [
+    "commentsPerPage",
+    "entitiesPerPage",
+    "messagesPerPage",
+    "postsPerPage",
+    "topicsPerPage"
+  ],
+  "DM.Web.API.Features.Personal.Preferences.Preferences": [
+    "paging",
+    "theme"
+  ],
+  "DM.Web.API.Features.Personal.Preferences.UpdatePagingRequest": [
+    "commentsPerPage",
+    "entitiesPerPage",
+    "messagesPerPage",
+    "postsPerPage",
+    "topicsPerPage"
+  ],
+  "DM.Web.API.Features.Personal.Preferences.UpdatePreferencesRequest": [
+    "paging",
+    "theme"
+  ],
+  "DM.Web.API.Features.Personal.ProfileNotes.UserProfileNote": [
+    "createdUtc",
+    "id",
+    "modifiedUtc",
+    "text",
+    "username"
+  ],
+  "DM.Web.API.Features.Personal.ProfileNotes.UserProfileNoteRequest": [
+    "text"
+  ],
+  "DM.Web.API.Features.Personal.Profiles.PersonalProfile": [
+    "bansReceived",
+    "birthday",
+    "blogsHosting",
+    "blogsHostingByStatus",
+    "commentsAuthored",
+    "contacts",
+    "email",
+    "endorsementsGiven",
+    "endorsementsReceived",
+    "gameDrops",
+    "gamesHosting",
+    "gamesHostingByStatus",
+    "gamesPlaying",
+    "gamesPlayingByStatus",
+    "gender",
+    "globalChatMessages",
+    "id",
+    "info",
+    "isNewbie",
+    "lastActivityUtc",
+    "likesReceived",
+    "location",
+    "name",
+    "personalNote",
+    "picture",
+    "postReviewsGiven",
+    "postReviewsReceived",
+    "publicationsAuthored",
+    "rating",
+    "registeredUtc",
+    "reviewsGiven",
+    "reviewsReceived",
+    "role",
+    "status",
+    "subscriberUsernames",
+    "subscribers",
+    "subscribersCount",
+    "topicsAuthored",
+    "username",
+    "usernameHistory",
+    "visibility"
+  ],
+  "DM.Web.API.Features.Personal.Profiles.UpdateProfile": [
+    "avatarUploadId",
+    "birthday",
+    "contacts",
+    "gender",
+    "info",
+    "location",
+    "name",
+    "status",
+    "visibility"
+  ],
+  "DM.Web.API.Features.Personal.Profiles.UpdateVisibilitySettings": [
+    "showBirthday",
+    "showRating"
+  ],
+  "DM.Web.API.Features.Personal.Profiles.VisibilitySettings": [
+    "showBirthday",
+    "showRating"
+  ],
+  "DM.Web.API.Features.Personal.Subscriptions.SubscribeRequest": [
+    "settings",
+    "targetId",
+    "targetType"
+  ],
+  "DM.Web.API.Features.Personal.Subscriptions.Subscription": [
+    "createdUtc",
+    "id",
+    "settings",
+    "targetId",
+    "targetType"
+  ],
+  "DM.Web.API.Features.Personal.Subscriptions.UpdateSubscriptionRequest": [
+    "settings"
+  ],
+  "DM.Web.API.Features.Search.ForumSearchResult": [
+    "boardId",
+    "boardTitle",
+    "createdUtc",
+    "entityType",
+    "id",
+    "snippet",
+    "topicId",
+    "topicNumber",
+    "topicTitle"
+  ],
+  "DM.Web.API.Features.Search.MessageSearchResult": [
+    "createdUtc",
+    "id",
+    "snippet",
+    "sourceId",
+    "sourceTitle",
+    "sourceType"
+  ],
+  "DM.Web.API.Shared.BbRendering.CommonBbText": [
+    "context",
+    "parseMode",
+    "surface",
+    "value"
+  ],
+  "DM.Web.API.Shared.BbRendering.InfoBbText": [
+    "context",
+    "parseMode",
+    "surface",
+    "value"
+  ],
+  "DM.Web.API.Shared.BbRendering.PostBbText": [
+    "context",
+    "parseMode",
+    "surface",
+    "value"
+  ],
+  "DM.Web.API.Shared.BbRendering.RenderContextEnvelope": [
+    "gameId",
+    "gameLeadUserIds",
+    "postAuthorUserId",
+    "postId",
+    "postSharePrivateWithAll",
+    "privateAddresseeOwnerUserIdsByAttribute",
+    "roomId",
+    "roomViewPrivateText",
+    "surface"
+  ],
+  "DM.Web.API.Shared.Dto.BadRequestError": [
+    "invalidProperties",
+    "message"
+  ],
+  "DM.Web.API.Shared.Dto.Comment": [
+    "author",
+    "createdUtc",
+    "id",
+    "likes",
+    "modifiedUtc",
+    "text"
+  ],
+  "DM.Web.API.Shared.Dto.CreateCommentRequest": [
+    "text"
+  ],
+  "DM.Web.API.Shared.Dto.CreateInvitationRequest": [
+    "username"
+  ],
+  "DM.Web.API.Shared.Dto.CursorEnvelope`1[[DM.Web.API.Features.Messaging.Messages.Message, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.CursorEnvelope`1[[DM.Web.API.Features.Search.MessageSearchResult, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.CursorPaging": [
+    "hasNext",
+    "hasPrev",
+    "nextCursor",
+    "prevCursor"
+  ],
+  "DM.Web.API.Shared.Dto.DiscussionComment": [
+    "author",
+    "canDelete",
+    "canEdit",
+    "canLike",
+    "createdUtc",
+    "id",
+    "isLikedByMe",
+    "likesCount",
+    "modifiedUtc",
+    "text"
+  ],
+  "DM.Web.API.Shared.Dto.DiscussionResponse": [
+    "canComment",
+    "comments",
+    "paging",
+    "totalLikes"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Blog.Blogs.Blog, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Blog.Blogs.Rubric, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Blog.Publications.Publication, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Community.Achievements.AchievementCategory, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Community.Achievements.AchievementType, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Community.Awards.AwardType, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Community.Awards.ContestSeries, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Community.Awards.UserAward, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Community.Fundraising.Fundraising, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Community.Polls.Poll, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Community.Statistics.Leaderboards, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Community.Statistics.LiveStats, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Community.Users.User, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Community.Users.UserProfile, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Community.WebsiteTestimonials.WebsiteTestimonialDto, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Forum.Boards.Board, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Forum.Topics.Topic, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.AttributeSchemas.AttributeSchema, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Characters.CharacterDetails, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.ChatRooms.ChatRoom, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Games.Game, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Games.GameDetails, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Posts.Post, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Reviews.GameReviewDto, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Reviews.PostReviewDto, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Rooms.PostPendency, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Rooms.Room, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Rooms.RoomAccess, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Unread.FirstUnreadCommentResult, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Unread.FirstUnreadPostResult, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.General.Tickets.TrackedTicket, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Messaging.GlobalChatEvents.GlobalChatEvent, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Messaging.GlobalChatEvents.GlobalChatEventSummary, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Messaging.Messages.Message, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Moderation.Bans.Ban, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Moderation.Bans.PublicBan, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Moderation.Tickets.Ticket, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Moderation.Tickets.TicketDetails, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Moderation.UsernameChanges.UsernameChangeRequest, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Moderation.Warnings.Warning, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Personal.Notepads.NotepadEntryResponse, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Shared.Dto.Comment, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.GeneralError": [
+    "message"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Account.Authentication.Session, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Account.Security.SecurityEvent, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Blog.Blogs.BlogRef, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Blog.Blogs.Rubric, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Blog.Invitations.BlogInvitation, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Blog.Publications.Publication, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Blog.Users.BlogUser, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Community.Achievements.AchievementCategory, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Community.Achievements.AchievementType, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Community.Achievements.UserAchievement, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Community.Awards.AwardType, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Community.Awards.ContestSeries, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Community.Awards.UserAward, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Community.Endorsements.UserEndorsement, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Community.Polls.Poll, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Community.Users.LoginHistoryDto, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Community.Users.User, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Community.WebsiteTestimonials.WebsiteTestimonialDto, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Forum.Boards.Board, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Forum.Topics.Topic, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Game.AttributeSchemas.AttributeSchema, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Game.Characters.Character, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Game.ChatRooms.ChatRoom, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Game.Games.Game, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Game.Games.Tag, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Game.Invitations.GameInvitation, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Game.Posts.Post, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Game.Reviews.GameReviewDto, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Game.Reviews.PostReviewDto, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Game.Rooms.Room, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Game.Users.GameUser, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Messaging.Chats.Chat, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Messaging.GlobalChatEvents.GlobalChatEventSummary, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.Awards.ContestSeriesAward, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.Bans.Ban, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.Moderators.ModeratorOverview, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.Profiles.ModeratedProfileNote, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.Tags.Tag, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.Tags.TagGroup, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.Tickets.Ticket, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.UsernameChanges.UsernameChangeRequest, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.Warnings.Violator, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.Warnings.Warning, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Personal.Blacklists.BlacklistEntry, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Personal.Invitations.ReceivedInvitation, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Personal.Notepads.NotepadEntryResponse, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Personal.Notifications.Notification, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Personal.Subscriptions.Subscription, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Search.ForumSearchResult, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Shared.Dto.Comment, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Shared.Dto.Upload, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.Paging": [
+    "current",
+    "number",
+    "pages",
+    "size",
+    "total"
+  ],
+  "DM.Web.API.Shared.Dto.PagingInfo": [
+    "current",
+    "number",
+    "pages",
+    "size",
+    "skip",
+    "take",
+    "total"
+  ],
+  "DM.Web.API.Shared.Dto.Upload": [
+    "confirmedUtc",
+    "contentType",
+    "createdUtc",
+    "id",
+    "originalFileName",
+    "sizeBytes",
+    "status",
+    "targetId",
+    "type",
+    "uploaderUsername",
+    "url",
+    "userId"
+  ],
+  "DM.Web.API.Shared.Dto.UserRef": [
+    "id",
+    "isNewbie",
+    "lastActivityUtc",
+    "role",
+    "username"
+  ]
+}

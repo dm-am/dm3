@@ -78,9 +78,6 @@ export interface Blog extends BlogRef {
   publicationCount: number;
   commentsCount: number;
   rubrics?: Rubric[];
-
-  // Used only at creation time
-  copyBlacklist?: boolean;
 }
 
 export interface Rubric {

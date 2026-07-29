@@ -181,7 +181,6 @@ export interface PlayerCharacterInfo {
 export interface Game extends GameRef {
   system: string;
   setting: string;
-  draftVisibility?: DraftVisibility;
   closedUtc?: string;
   createdUtc: string;
 
@@ -189,7 +188,6 @@ export interface Game extends GameRef {
   fullAssistants?: Served<User[]>;
   pendingAssistant: Served<UserRef | null>;
   mentor: Served<UserRef | null>;
-  notes: string;
   info: string;
 
   /** Full tags (only for single game details, null for lists) */
@@ -237,9 +235,6 @@ export interface Game extends GameRef {
   playerCharacters?: PlayerCharacterInfo[];
 
   unreadCharactersCount: Served<number>;
-
-  // Used only at creation time
-  copyBlacklist?: boolean;
 }
 
 export interface GamesQuery extends PagingQuery {

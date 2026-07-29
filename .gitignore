@@ -29,7 +29,10 @@ docker/.env.mirror
 
 # Build artifacts: the OpenAPI contract is emitted by the integration suite
 # and uploaded by CI, not committed - a checked-in copy goes stale silently.
-artifacts/
+artifacts/*
+# Слепок контракта API коммитится: по нему фронтовый тест сверяет свои модели,
+# и изменение схемы видно в ревью одной строкой.
+!artifacts/openapi-contract.json
 
 # Test artifacts
 test_*.json

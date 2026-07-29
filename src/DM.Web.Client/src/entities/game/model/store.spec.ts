@@ -128,7 +128,6 @@ const createMockGame = (id: string, title: string): Game => ({
   createdUtc: "2024-01-01T00:00:00Z",
   pendingAssistant: asServed(null),
   mentor: asServed(null),
-  notes: "",
   info: "",
   tagIds: [],
   privacySettings: createMockPrivacySettings(),
