@@ -1785,7 +1785,7 @@ shared/api/client.ts:56-62 — inside the 401 interceptor: `// Lazy import to av
 
 ### [СРЕДНЯЯ] FE-09 — Router repeats the shell in 57 route records instead of using one layout route; omission is silent
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** 56 верхнеуровневых записей дословно повторяли пару left/right сайдбаров, и забыть ее было нечему поймать - ровно так осталась без шелла запись auth-callback. Таблица обернута в одну запись-родитель с ShellPage в слоте page, дети объявляют component вместо components и сохраняют абсолютные пути, home стал индексным. Отказ от шелла теперь структурный: быть соседом родителя, а не ребенком, и у auth-callback это подписано причиной. Доказательство отсутствия регрессии построено до правки: тест router.spec.ts разрешает двенадцать путей по всем зонам и проверяет наличие обоих сайдбаров, страницы и слитой meta, отдельно - что callback остается без шелла и что имена уникальны; 14 проверок прошли до и после без изменений. Сборка: чанков столько же, CSS не изменился ни на одно правило, входной чанк на 1228 байт меньше
 
 app/providers/router.ts contains `left: LeftSidebar, right: RightSidebar` 57 times across ~830 lines of route table — roughly 230 lines of pure repetition. LeftSidebar/RightSidebar are statically imported (router.ts:4) so they are in the initial chunk, while every page is lazy. One record omits the pair — `auth-callback` at router.ts:690-696 declares only `page` — and nothing distinguishes that deliberate choice from a mistake.
 
