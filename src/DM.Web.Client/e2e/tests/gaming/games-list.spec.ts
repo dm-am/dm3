@@ -42,17 +42,15 @@ test.describe("Games List Page", () => {
       await expect(page.locator(".sort-btn")).toBeVisible();
     });
 
-    test("should display pagination when games exist", async ({ page }) => {
+    test("shows pagination above and below the table", async ({ page }) => {
       await page.goto("/games");
-
-      // Wait for table to load
       await page.waitForSelector("#results");
 
-      // Check if paging exists (may not if few games)
-      const paging = page.locator(".paging-top, .paging-bottom");
-      const count = await paging.count();
-      // Just verify paging components are rendered (may be empty if no pagination needed)
-      expect(count).toBeGreaterThanOrEqual(0);
+      // The seed holds more games than fit on one page, so both pagers must be
+      // there. The previous version asserted count >= 0, which is true of every
+      // possible outcome including a page that failed to render.
+      await expect(page.locator(".paging-top")).toBeVisible();
+      await expect(page.locator(".paging-bottom")).toBeVisible();
     });
   });
 

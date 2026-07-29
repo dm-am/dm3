@@ -77,11 +77,10 @@ const { selectedUser: user, loadingProfile } = storeToRefs(communityStore);
 
 const usernameParam = computed(() => route.params.username as string);
 
-// HTTP status of the last profile load failure, mapped to an ErrorPage
-// code. The store collapses every failure to a boolean, so on a miss we
-// do one cheap follow-up call to learn whether it was a true 404 (user
-// doesn't exist) or a server/network error — those must look different
-// (404 "не найден" vs 500 "попробуйте позже"), never a fake "not found".
+// HTTP status of the last profile load failure, mapped to an ErrorPage code.
+// A true 404 (no such user) and a server error must look different — "не
+// найден" against "попробуйте позже" — and the store hands the error over, so
+// the status is read from it directly.
 const errorCode = ref<number | null>(null);
 
 function mapErrorStatus(status: number | undefined): number {
@@ -92,11 +91,8 @@ function mapErrorStatus(status: number | undefined): number {
 
 async function loadProfile(name: Username) {
   errorCode.value = null;
-  const success = await communityStore.trySelectProfile(name);
-  if (!success) {
-    const { error } = await communityApi.getUserProfile(name);
-    errorCode.value = mapErrorStatus(error?.status);
-  }
+  const error = await communityStore.trySelectProfile(name);
+  if (error) errorCode.value = mapErrorStatus(error.status);
 }
 
 useFetchData(
