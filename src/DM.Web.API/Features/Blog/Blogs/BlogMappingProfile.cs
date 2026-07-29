@@ -4,7 +4,6 @@ using DM.Web.API.Features.Blog.Publications;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Shared.BbRendering;
 using SvcBlog = DM.Domain.Blog.Features.Blogs.Blog;
-using SvcBlogDetails = DM.Domain.Blog.Features.Blogs.BlogDetails;
 using SvcRubric = DM.Domain.Blog.Features.Blogs.Rubric;
 using SvcPublication = DM.Domain.Blog.Features.Blogs.Publication;
 using SvcCreateBlog = DM.Domain.Blog.Features.Blogs.CreateBlog;
@@ -54,12 +53,6 @@ internal class BlogMappingProfile : Profile
                     };
                 }
             });
-
-        // BlogDetails mapping (extends Blog with subscribers and full assistants)
-        CreateMap<SvcBlogDetails, BlogDetails>()
-            .IncludeBase<SvcBlog, Blog>()
-            .ForMember(d => d.Subscribers, s => s.MapFrom(b => b.Subscribers))
-            .ForMember(d => d.FullAssistants, s => s.MapFrom(b => b.FullAssistants.Select(a => a.User)));
 
         CreateMap<SvcRubric, Rubric>();
         CreateMap<SvcPublication, Publication>();

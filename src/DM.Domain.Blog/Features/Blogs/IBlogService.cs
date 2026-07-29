@@ -73,11 +73,6 @@ public interface IBlogService
     Task<Blog> GetByPublicIdAsync(string publicId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get blog details by ID (with full subscribers and assistants)
-    /// </summary>
-    Task<BlogDetails> GetDetailsAsync(Guid blogId, CancellationToken ct = default);
-
-    /// <summary>
     /// Get blog by ID (for authorization checks, skips draft visibility)
     /// </summary>
     Task<Blog> GetBlogAsync(Guid blogId, CancellationToken ct = default);

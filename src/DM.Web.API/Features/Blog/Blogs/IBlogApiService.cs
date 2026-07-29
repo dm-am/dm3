@@ -32,24 +32,9 @@ public interface IBlogApiService
     Task<Envelope<Blog>> GetByPublicId(string publicId);
 
     /// <summary>
-    /// Get blog details by ID (full, with subscribers and assistants)
-    /// </summary>
-    Task<Envelope<BlogDetails>> GetDetails(Guid id);
-
-    /// <summary>
-    /// Get blog details by public ID (5 letters)
-    /// </summary>
-    Task<Envelope<BlogDetails>> GetDetailsByPublicId(string publicId);
-
-    /// <summary>
     /// Get blog by owner login (lightweight)
     /// </summary>
     Task<Envelope<Blog>> GetByOwnerLogin(string login);
-
-    /// <summary>
-    /// Get blog details by owner login (full)
-    /// </summary>
-    Task<Envelope<BlogDetails>> GetDetailsByOwnerLogin(string login);
 
     /// <summary>
     /// Create a new blog

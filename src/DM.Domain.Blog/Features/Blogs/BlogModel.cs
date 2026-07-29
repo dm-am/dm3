@@ -183,22 +183,6 @@ public class BlogAssistantInfo
 }
 
 /// <summary>
-/// Extended DTO model for blog (full details, for detail pages)
-/// </summary>
-public class BlogDetails : Blog
-{
-    /// <summary>
-    /// Blog subscribers (full user information)
-    /// </summary>
-    public IEnumerable<GeneralUser> Subscribers { get; set; } = [];
-
-    /// <summary>
-    /// Blog assistants with role information (full user details)
-    /// </summary>
-    public IEnumerable<BlogUser> FullAssistants { get; set; } = [];
-}
-
-/// <summary>
 /// DTO for rubric
 /// </summary>
 public class Rubric
