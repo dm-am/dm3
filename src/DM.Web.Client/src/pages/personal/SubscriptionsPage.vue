@@ -198,7 +198,8 @@ const handleUnsubscribe = async (subscription: Subscription) => {
   cursor: pointer
   font-size: 0.85rem
 
+  // Тинт вместо сплошной заливки: $text-on-red рассчитан на светлую
+  // подложку, на $accent-red его контраст 1.5.
   &:hover
-    background: $accent-red
-    color: $text-on-red
+    +tint($accent-red, 15%)
 </style>
