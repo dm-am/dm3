@@ -133,7 +133,7 @@ test.describe("Users Search", () => {
       await page.waitForTimeout(500);
 
       // Find pagination link
-      const nextPage = page.locator(".paging-bottom a, [data-page]").last();
+      const nextPage = page.locator(".paging a, [data-page]").last();
       if (await nextPage.isVisible()) {
         await nextPage.click();
 
