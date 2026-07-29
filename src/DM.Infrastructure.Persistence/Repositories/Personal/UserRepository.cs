@@ -338,22 +338,32 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         var filter = Builders<UserSettings>.Filter.Eq(s => s.UserId, settingsUpdate.UserId);
         var existingSettings = await Collection.Find(filter).FirstOrDefaultAsync();
 
+        // A document written before Paging was mandatory, or by a caller that
+        // left it out, has Paging: null — and Mongo cannot create a field
+        // inside a null element, so the per-field $set below fails the whole
+        // update with a 500. Such a document is repaired to defaults first and
+        // then updated normally.
+        if (existingSettings is { Paging: null })
+        {
+            await Collection.UpdateOneAsync(filter,
+                Builders<UserSettings>.Update.Set(s => s.Paging,
+                    UserSettings.CreateDefault(settingsUpdate.UserId).Paging));
+        }
+
         if (existingSettings == null)
         {
-            // Create new settings document if it doesn't exist
-            var newSettings = new UserSettings
-            {
-                UserId = settingsUpdate.UserId,
-                Theme = settingsUpdate.Theme?.Value ?? DM.Domain.Core.Enums.Theme.Light,
-                Paging = new PagingSettings
-                {
-                    CommentsPerPage = settingsUpdate.CommentsPerPage?.Value ?? 20,
-                    TopicsPerPage = settingsUpdate.TopicsPerPage?.Value ?? 20,
-                    MessagesPerPage = settingsUpdate.MessagesPerPage?.Value ?? 20,
-                    PostsPerPage = settingsUpdate.PostsPerPage?.Value ?? 20,
-                    EntitiesPerPage = settingsUpdate.EntitiesPerPage?.Value ?? 10
-                }
-            };
+            var newSettings = UserSettings.CreateDefault(settingsUpdate.UserId);
+            newSettings.Theme = settingsUpdate.Theme?.Value ?? newSettings.Theme;
+            newSettings.Paging.CommentsPerPage =
+                settingsUpdate.CommentsPerPage?.Value ?? newSettings.Paging.CommentsPerPage;
+            newSettings.Paging.TopicsPerPage =
+                settingsUpdate.TopicsPerPage?.Value ?? newSettings.Paging.TopicsPerPage;
+            newSettings.Paging.MessagesPerPage =
+                settingsUpdate.MessagesPerPage?.Value ?? newSettings.Paging.MessagesPerPage;
+            newSettings.Paging.PostsPerPage =
+                settingsUpdate.PostsPerPage?.Value ?? newSettings.Paging.PostsPerPage;
+            newSettings.Paging.EntitiesPerPage =
+                settingsUpdate.EntitiesPerPage?.Value ?? newSettings.Paging.EntitiesPerPage;
             await Collection.InsertOneAsync(newSettings);
         }
         else
