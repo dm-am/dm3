@@ -23,6 +23,7 @@ import type {
   Comment,
   User,
 } from "@/shared/api/models/common";
+import { markRemoved } from "@/shared/api/models/common";
 import gameApi, { type GamesSearchParams } from "../api/gameApi";
 import {
   useApiList,
@@ -554,10 +555,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     await gameApi.deleteGameComment(id);
     const index = comments.value.findIndex((c) => c.id === id);
     if (index !== -1) {
-      comments.value[index] = {
-        ...comments.value[index],
-        isRemoved: true as unknown as Comment["isRemoved"],
-      };
+      comments.value[index] = markRemoved(comments.value[index]);
     }
   }
 

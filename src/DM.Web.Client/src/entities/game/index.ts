@@ -56,7 +56,6 @@ export {
   CommentariesAccessMode,
   AttributeSchemaType,
   AttributeSpecificationType,
-  Alignment,
   RoomType,
   RoomAccessType,
   RoomAccessPolicy,

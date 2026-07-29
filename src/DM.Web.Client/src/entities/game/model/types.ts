@@ -359,18 +359,6 @@ export interface AttributeSchema {
 
 // === Characters ===
 
-export enum Alignment {
-  LawfulGood = "LawfulGood",
-  NeutralGood = "NeutralGood",
-  ChaoticGood = "ChaoticGood",
-  LawfulNeutral = "LawfulNeutral",
-  TrueNeutral = "TrueNeutral",
-  ChaoticNeutral = "ChaoticNeutral",
-  LawfulEvil = "LawfulEvil",
-  NeutralEvil = "NeutralEvil",
-  ChaoticEvil = "ChaoticEvil",
-}
-
 export type CharacterPrivacySettings = {
   isNpc: boolean;
   editByMaster: boolean;

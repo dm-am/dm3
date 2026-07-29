@@ -598,7 +598,7 @@ internal sealed partial class DataSeeder
                 AddLegacyCharacterAttributes(character.CharacterId,
                     race: isDiopsideChar ? "Кристаллическая сущность" : races[ci % races.Length],
                     @class: isDiopsideChar ? "Аберрация" : classes[ci % classes.Length],
-                    alignment: template.System != "Cyberpunk RED" ? (Alignment?)(ci % 9) : null,
+                    alignmentIndex: template.System != "Cyberpunk RED" ? ci % AlignmentNames.Length : null,
                     appearance: isDiopsideChar
                         ? "Полупрозрачное существо из живого кристалла. Отростки вдоль позвоночника мерцают приглушенным светом. Тело переливается оттенками зеленого и голубого."
                         : "Высокий, крепкого телосложения, с проницательным взглядом.",
@@ -678,7 +678,7 @@ internal sealed partial class DataSeeder
                 AddLegacyCharacterAttributes(character.CharacterId,
                     race: races[ci % races.Length],
                     @class: classes[ci % classes.Length],
-                    alignment: template.System != "Cyberpunk RED" ? (Alignment?)(ci % 9) : null,
+                    alignmentIndex: template.System != "Cyberpunk RED" ? ci % AlignmentNames.Length : null,
                     appearance: "Среднего роста, ничем не примечательный.",
                     temper: "Спокойный и рассудительный.",
                     story: "История еще пишется...",

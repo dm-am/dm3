@@ -71,9 +71,9 @@ internal sealed partial class DataSeeder
     private static readonly Guid SpecInventoryId = new("b1a5c0de-0000-4000-8000-000000000108");
 
     /// <summary>
-    /// The nine D&amp;D alignments, indexed by <see cref="Alignment"/> value,
-    /// used both as the Мировоззрение list options and as the stored value of a
-    /// character's alignment attribute.
+    /// The nine D&amp;D alignments, used both as the Мировоззрение list options
+    /// and as the stored value of a character's alignment attribute. Order is
+    /// the classic law/chaos by good/evil grid, and callers index into it.
     /// </summary>
     private static readonly string[] AlignmentNames =
     {
@@ -147,7 +147,7 @@ internal sealed partial class DataSeeder
         Guid characterId,
         string? race = null,
         string? @class = null,
-        Alignment? alignment = null,
+        int? alignmentIndex = null,
         string? appearance = null,
         string? temper = null,
         string? story = null,
@@ -172,7 +172,7 @@ internal sealed partial class DataSeeder
 
         Add(SpecRaceId, race);
         Add(SpecClassId, @class);
-        Add(SpecAlignmentId, alignment.HasValue ? AlignmentNames[(int)alignment.Value] : null);
+        Add(SpecAlignmentId, alignmentIndex.HasValue ? AlignmentNames[alignmentIndex.Value] : null);
         Add(SpecAppearanceId, appearance);
         Add(SpecTemperId, temper);
         Add(SpecStoryId, story);
@@ -251,7 +251,7 @@ internal sealed partial class DataSeeder
                 AddLegacyCharacterAttributes(character.CharacterId,
                     race: races[ci % races.Length],
                     @class: classes[ci % classes.Length],
-                    alignment: (Alignment?)(ci % 9),
+                    alignmentIndex: ci % AlignmentNames.Length,
                     appearance: "Высокий, крепкого телосложения.",
                     temper: "Решительный и отважный.",
                     story: "Родился в маленькой деревне...",
