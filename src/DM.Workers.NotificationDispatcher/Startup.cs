@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using DM.Domain.Account;
 
 namespace DM.Workers.NotificationDispatcher;
 
@@ -44,12 +45,16 @@ public class Startup
     /// <param name="services"></param>
     public void ConfigureServices(IServiceCollection services)
     {
+        // AddDmAccountConfiguration is here because ConfigureContainer registers
+        // the whole account domain below. Its types read four option sections
+        // that this host bound none of, and IOptions of an unbound type hands
+        // out a default instead of throwing.
         services
             .AddOptions()
-            .Configure<ConnectionStrings>(_configuration.GetSection(nameof(ConnectionStrings)).Bind)
-            .Configure<RabbitMqConfiguration>(_configuration.GetSection(nameof(RabbitMqConfiguration)).Bind)
-            .Configure<BotConfiguration>(_configuration.GetSection(nameof(BotConfiguration)).Bind)
-            .Configure<EmailConfiguration>(_configuration.GetSection(nameof(EmailConfiguration)).Bind)
+            .AddDmCoreConfiguration(_configuration)
+            .AddDmMessageQueuing(_configuration)
+            .AddDmMailConfiguration(_configuration)
+            .AddDmAccountConfiguration(_configuration)
             .AddDmLogging("DM.Notifications.Consumer", _configuration);
 
         services.AddJamqClient(
@@ -57,7 +62,7 @@ public class Startup
             consumerBuilderDefaults: builder => builder.WithMiddleware<NotificationConsumerRetryMiddleware>());
         services.AddHostedService<NotificationDispatcherConsumer>();
 
-        services.AddHealthChecks();
+        services.AddDmBrokerHealthCheck(_configuration);
 
         services
             .AddDbContext<DmDbContext>(options => options

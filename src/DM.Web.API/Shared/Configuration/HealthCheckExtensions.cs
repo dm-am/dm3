@@ -33,12 +33,12 @@ internal static class HealthCheckExtensions
                 mongodbConnectionString: connectionStrings.Mongo,
                 name: "mongodb",
                 tags: new[] { "db", "ready" })
-            // Not "ready": readiness answers "can this instance serve a request",
-            // and every request is served without the broker — publishing an event
-            // is fire-and-forget alongside the response. Tagging it ready pulled
-            // the whole site out of rotation over a delayed notification. The
-            // broker is an alerting subject (ConsumerDown), not a rotation gate,
-            // and it stays visible in /_health/detail, which filters nothing.
+            // Not "ready" here, unlike in the consumer workers: readiness answers
+            // "can this instance serve a request", and every request is served
+            // without the broker — publishing an event is fire-and-forget
+            // alongside the response. Tagging it ready pulled the whole site out
+            // of rotation over a delayed notification. A worker has the opposite
+            // answer: taking messages off a queue is all it does.
             .AddRabbitMQ(
                 rabbitConnectionString: new Uri(rabbitMq.Endpoint),
                 name: "rabbitmq",

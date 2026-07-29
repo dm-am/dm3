@@ -63,49 +63,25 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
     {
         _migrateOnStart = configuration.GetValue<bool>("MigrateOnStart");
 
+        // Each module binds and validates the options it reads. Restated here
+        // per host, four of these types were bound twice and two of them three
+        // times, and the workers bound a subset — which is how a worker came to
+        // start with no broker endpoint and report itself healthy.
         services
             .AddOptions()
-            .Configure<ConnectionStrings>(configuration.GetSection(nameof(ConnectionStrings)).Bind)
-            .Configure<IntegrationSettings>(configuration.GetSection(nameof(IntegrationSettings)).Bind)
-            .Configure<EmailConfiguration>(configuration.GetSection(nameof(EmailConfiguration)).Bind)
-            .Configure<CdnConfiguration>(configuration.GetSection(nameof(CdnConfiguration)).Bind)
-            .Configure<ImageProxyConfiguration>(configuration.GetSection(nameof(ImageProxyConfiguration)).Bind)
-            .Configure<RabbitMqConfiguration>(configuration.GetSection(nameof(RabbitMqConfiguration)).Bind)
-            .Configure<CryptoConfiguration>(configuration.GetSection(nameof(CryptoConfiguration)).Bind)
-            .Configure<AuthenticationConfiguration>(configuration.GetSection(nameof(AuthenticationConfiguration)).Bind)
+            .AddDmCoreConfiguration(configuration)
+            .AddDmMessageQueuing(configuration)
+            .AddDmMailConfiguration(configuration)
+            .AddDmAccountConfiguration(configuration)
             .Configure<MessagingConfiguration>(configuration.GetSection(nameof(MessagingConfiguration)).Bind)
-            .Configure<PasswordPolicyConfiguration>(configuration.GetSection(nameof(PasswordPolicyConfiguration)).Bind)
-            .Configure<TokenConfiguration>(configuration.GetSection(nameof(TokenConfiguration)).Bind)
-            .Configure<BotConfiguration>(configuration.GetSection(nameof(BotConfiguration)).Bind)
             .Configure<ProbationConfiguration>(configuration.GetSection(nameof(ProbationConfiguration)).Bind)
-            .Configure<MirrorConfiguration>(configuration.GetSection(nameof(MirrorConfiguration)).Bind)
             .AddDmLogging("DM.API", configuration);
 
-        // Validate critical configuration on startup: fail fast if misconfigured
-        services.AddOptions<ConnectionStrings>()
-            .Bind(configuration.GetSection(nameof(ConnectionStrings)))
-            .Validate(cs => !string.IsNullOrEmpty(cs.Rdb) && !string.IsNullOrEmpty(cs.Mongo),
-                "ConnectionStrings:Rdb and ConnectionStrings:Mongo are required")
-            .ValidateOnStart();
+        // CORS is an API concern and no other host has an opinion on it, so this
+        // one stays with the host rather than moving into the core extension.
         services.AddOptions<IntegrationSettings>()
             .Bind(configuration.GetSection(nameof(IntegrationSettings)))
             .Validate(s => s.CorsUrls?.Length > 0, "IntegrationSettings:CorsUrls is required")
-            .ValidateOnStart();
-        services.AddOptions<RabbitMqConfiguration>()
-            .Bind(configuration.GetSection(nameof(RabbitMqConfiguration)))
-            .Validate(r => !string.IsNullOrEmpty(r.Endpoint), "RabbitMqConfiguration:Endpoint is required")
-            .ValidateOnStart();
-        // The session and token encryption key has no in-repo default on purpose:
-        // a deployment that silently inherits a key from the repository has no
-        // secret at all, and every session token becomes forgeable by anyone who
-        // can read the source. Missing key must stop the host, not surface on the
-        // first authenticated request.
-        services.AddOptions<CryptoConfiguration>()
-            .Bind(configuration.GetSection(nameof(CryptoConfiguration)))
-            .Validate(IsUsableEncryptionKey,
-                "CryptoConfiguration:KeyBase64 must be a base64-encoded 32-byte key. " +
-                "Generate one with `openssl rand -base64 32` and supply it as " +
-                "DM_CryptoConfiguration__KeyBase64. All mirrors must share the same value.")
             .ValidateOnStart();
 
         // X-Forwarded-* is honoured for the configured proxy networks only.
@@ -358,16 +334,4 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         builder.RegisterModuleOnce<DM.Domain.Moderation.ModerationModule>();
     }
 
-    private static bool IsUsableEncryptionKey(CryptoConfiguration crypto)
-    {
-        if (string.IsNullOrWhiteSpace(crypto.KeyBase64))
-        {
-            return false;
-        }
-
-        // AES-256 takes exactly 32 bytes. A shorter value would be rejected later
-        // by the crypto service, on the first request instead of at startup.
-        Span<byte> key = stackalloc byte[64];
-        return Convert.TryFromBase64String(crypto.KeyBase64, key, out var written) && written == 32;
-    }
 }

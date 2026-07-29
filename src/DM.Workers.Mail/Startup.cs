@@ -13,6 +13,7 @@ using Jamq.Client.Rabbit.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using DM.Infrastructure.Mail;
 
 namespace DM.Workers.Mail;
 
@@ -40,9 +41,9 @@ public class Startup
     {
         services
             .AddOptions()
-            .Configure<EmailConfiguration>(_configuration.GetSection(nameof(EmailConfiguration)).Bind)
-            .Configure<ConnectionStrings>(_configuration.GetSection(nameof(ConnectionStrings)).Bind)
-            .Configure<RabbitMqConfiguration>(_configuration.GetSection(nameof(RabbitMqConfiguration)).Bind)
+            .AddDmCoreConfiguration(_configuration)
+            .AddDmMessageQueuing(_configuration)
+            .AddDmMailConfiguration(_configuration)
             .AddDmLogging("DM.MailSender.Consumer", _configuration);
 
         services.AddJamqClient(
@@ -51,7 +52,10 @@ public class Startup
 
         services.AddHostedService<MailConsumer>();
 
-        services.AddHealthChecks();
+        // This worker exists to consume from the broker, so a broker it cannot
+        // reach is exactly the condition its health has to report. A bare
+        // AddHealthChecks() answered Healthy no matter what.
+        services.AddDmBrokerHealthCheck(_configuration);
 
         services.AddMvc();
     }

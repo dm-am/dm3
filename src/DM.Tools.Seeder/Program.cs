@@ -81,8 +81,7 @@ internal static class Program
         .WithDmConfiguration()
         .ConfigureServices((context, services) => services
             .AddOptions()
-            .Configure<ConnectionStrings>(context.Configuration.GetSection(nameof(ConnectionStrings)).Bind)
-            .Configure<CdnConfiguration>(context.Configuration.GetSection(nameof(CdnConfiguration)).Bind)
+            .AddDmCoreConfiguration(context.Configuration)
             .AddDbContext<DmDbContext>(options => options.UseNpgsql(
                 context.Configuration.GetConnectionString(nameof(ConnectionStrings.Rdb)),
                 npgsql => npgsql.CommandTimeout(120))))

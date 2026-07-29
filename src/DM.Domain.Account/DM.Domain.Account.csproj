@@ -20,6 +20,10 @@
         <!-- Autofac only for the module that declares this assembly's lifetimes:
              the alternative was the host naming internal types by namespace
              string, which no compiler checks. -->
+        <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+        <PackageReference Include="Microsoft.Extensions.Configuration" />
         <PackageReference Include="Autofac" />
         <PackageReference Include="FluentValidation" />
         <PackageReference Include="Konscious.Security.Cryptography.Argon2" />
