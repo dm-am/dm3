@@ -74,8 +74,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # The example file ships the encryption key empty, and compose declares
+      # it with ${...:?} — which rejects an empty value, not just a missing
+      # one. Copying the example alone left every step below dead. A throwaway
+      # key is generated here because this stack is torn down with the job.
       - name: Create .env for Docker Compose
-        run: cp docker/.env.example docker/.env
+        run: |
+          cp docker/.env.example docker/.env
+          sed -i "s|^DM_CryptoConfiguration__KeyBase64=$|DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)|" docker/.env
+          cd docker && docker compose config --quiet
 
       - name: Start infrastructure with Docker Compose
         run: |

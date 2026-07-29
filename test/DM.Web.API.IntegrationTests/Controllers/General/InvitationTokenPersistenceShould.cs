@@ -19,11 +19,11 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// invitation of any kind could be inserted. Both constraints are therefore
 /// removed by hand from the migration.
 ///
-/// This runs against a database built by that migration rather than by the
-/// shared fixture: the fixture uses EnsureCreated, which derives the schema from
-/// the model and so cannot see hand-edits to the migration at all. That gap is
-/// the reason this defect survived — the schema the tests ran on was never the
-/// schema production gets.
+/// This runs against its own throwaway database rather than the shared one so
+/// that the insert is checked against a schema no seed has touched. The gap
+/// that let the defect survive was different and is now closed: the fixture
+/// used to call EnsureCreated, which derives the schema from the model and so
+/// could not see hand-edits to the migration at all.
 /// </summary>
 public class InvitationTokenPersistenceShould : IntegrationTestBase
 {
