@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { useSubscriptionsStore } from "@/shared/stores/subscriptions";
+import { useSubscriptionsStore } from "@/entities/subscription";
 import {
   SubscriptionTargetType,
   type Subscription,

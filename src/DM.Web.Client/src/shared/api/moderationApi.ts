@@ -275,26 +275,6 @@ export default new (class moderationApi {
     });
   }
 
-  /** Change game premoderation state (Mentor+). POST v1/games/{id}/premoderation */
-  public changeGamePremoderation(
-    id: string,
-    transition: PremoderationTransition,
-  ) {
-    return Api.post<Envelope<unknown>>(`games/${id}/premoderation`, {
-      transition,
-    });
-  }
-
-  /** Change blog premoderation state (Mentor+). POST v1/blogs/{id}/premoderation */
-  public changeBlogPremoderation(
-    id: string,
-    transition: PremoderationTransition,
-  ) {
-    return Api.post<Envelope<unknown>>(`blogs/${id}/premoderation`, {
-      transition,
-    });
-  }
-
   // ==================== Tickets (role-scoped moderation view) ====================
 
   /**
@@ -309,11 +289,6 @@ export default new (class moderationApi {
       status: params?.status,
       subtype: params?.subtype,
     });
-  }
-
-  /** Get ticket counts grouped by status (Moderator+). */
-  public getTicketStats() {
-    return Api.get<TicketStats>("moderation/tickets/stats");
   }
 
   /** Get a single ticket (moderators see full details). */
@@ -376,15 +351,6 @@ export default new (class moderationApi {
   }
 
   /**
-   * Get a specific username change request
-   */
-  public getUsernameChangeRequest(id: string) {
-    return Api.get<Envelope<UsernameChangeRequest>>(
-      `moderation/username-changes/${id}`,
-    );
-  }
-
-  /**
    * Resolve (approve/reject) a username change request
    */
   public resolveUsernameChangeRequest(
@@ -423,10 +389,6 @@ export default new (class moderationApi {
     return Api.get<UserWarningsInfo>(`users/${username}/warnings`);
   }
 
-  public createWarning(warning: CreateWarning) {
-    return Api.post<Warning>("warnings", warning);
-  }
-
   public removeWarning(warningId: string) {
     return Api.delete(`warnings/${warningId}`);
   }
@@ -438,10 +400,6 @@ export default new (class moderationApi {
    */
   public getBans(username: Username) {
     return Api.get<PublicUserBanStatus>(`users/${username}/bans`);
-  }
-
-  public createBan(ban: CreateBan) {
-    return Api.post<Ban>("bans", ban);
   }
 
   public liftBan(banId: string) {
@@ -493,15 +451,6 @@ export default new (class moderationApi {
    */
   public getTags() {
     return Api.get<ListEnvelope<ModerationTag>>("moderation/tags");
-  }
-
-  /**
-   * Get tags by group ID
-   */
-  public getTagsByGroup(groupId: string) {
-    return Api.get<ListEnvelope<ModerationTag>>(
-      `moderation/tags/groups/${groupId}/tags`,
-    );
   }
 
   /**
