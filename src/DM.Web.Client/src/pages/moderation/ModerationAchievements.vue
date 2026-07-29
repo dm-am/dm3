@@ -224,10 +224,7 @@ async function confirmDeleteTier() {
   gap: $medium
 
 .cat-row
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
   &.is-inactive
     opacity: 0.55

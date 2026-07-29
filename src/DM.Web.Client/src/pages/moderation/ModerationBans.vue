@@ -185,10 +185,7 @@ const isEmpty = computed(() => !loading.value && bans.value.length === 0);
   margin-bottom: $medium
 
 .ban-card
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
 .ban-header
   display: flex

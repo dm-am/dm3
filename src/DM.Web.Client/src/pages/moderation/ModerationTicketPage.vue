@@ -350,10 +350,7 @@ async function resolve() {
 
 // --- Answer block (doc 4.2.2.24) ---
 .ticket-answer
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
 .answer-meta
   display: flex
@@ -393,10 +390,7 @@ async function resolve() {
 
 // --- Skeleton (mirrors the full TicketCard: $medium padding, 5 lines) ---
 .skeleton-card
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
 .skeleton-line
   height: 1em

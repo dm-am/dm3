@@ -153,10 +153,7 @@ const isEmpty = computed(() => !loading.value && warnings.value.length === 0);
   gap: $medium
 
 .warning-card
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
   &.is-inactive
     opacity: 0.6

@@ -61,6 +61,7 @@ export default defineConfig({
           @import "@/assets/styles/Breakpoints"
           @import "@/assets/styles/Layout"
           @import "@/assets/styles/Themes"
+          @import "@/assets/styles/Surfaces"
         `,
       },
     },

@@ -163,10 +163,7 @@ const isEmpty = computed(() => !loading.value && tickets.value.length === 0);
 
 // --- Skeleton (mirrors TicketCard: $medium padding, four text lines) ---
 .skeleton-card
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
 .skeleton-line
   height: 1em

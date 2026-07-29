@@ -103,10 +103,7 @@ const subtypeLabel = computed(
 
 <style scoped lang="sass">
 .ticket-card
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
 .ticket-header
   display: flex

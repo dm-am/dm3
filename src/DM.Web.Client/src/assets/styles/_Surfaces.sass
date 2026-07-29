@@ -1,0 +1,26 @@
+// The card surface — the recipe every list row, panel and skeleton card in the
+// project spells out by hand.
+//
+// Mixins only, no rules: a file that also emits is emitted again into every
+// scoped stylesheet that imports it, which is how 84 copies of the input base
+// block ended up in the bundle (see InputsGlobal.sass).
+//
+// The declaration order is load-bearing. It matches the order in the blocks
+// being replaced, so the compiled output is byte-identical and no cascade tie
+// resolves differently.
+
+@import "Themes"
+@import "Variables"
+
+/// A framed surface with padding: list rows, cards, answer blocks.
+=card($padding: $medium)
+  border: 1px solid $border
+  border-radius: $border-radius
+  padding: $padding
+  background: $bg-element
+
+/// The same surface without padding, for containers whose children own it.
+=panel
+  border: 1px solid $border
+  border-radius: $border-radius
+  background: $bg-element
