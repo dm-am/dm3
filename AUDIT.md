@@ -2018,7 +2018,7 @@ app/providers/router.ts:831-842 registers `/dev/style-variants` → pages/dev/St
 
 ### [НИЗКАЯ] FE-14 — User-content BBCode images render without lazy-loading or intrinsic dimensions, and the two emitters have already diverged
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Аппрув владельца получен. loading=lazy и decoding=async добавлены во все три эмиттера - находка недосчитала третий (нода TipTap). Значимый из них один: серверный, через который идет реальный показ, до двадцати постов на странице. Атрибуты width/height НЕ добавлялись сознательно, вопреки формулировке находки: под текущим CSS (width:auto/height:auto на .bb-image) они инертны, а чтобы заработали, пришлось бы снять width:auto - и тогда [img=800] из 'не шире 800' превратилось бы в 'ровно 800' с апскейлом мелких картинок, то есть находка предлагала переиначить семантику тега ради метрики. Настоящий резерв места требует хранить размеры аплоадов в базе и отдавать aspect-ratio - это отдельная задача. Расхождение эмиттеров заморожено тестом по НАБОРУ атрибутов, а не по байтам: три эмиттера законно расходятся порядком, и байтовое сравнение падало бы не по той причине
 
 The server emits `<img src=… class="bb-image" data-bb-tag="img" referrerpolicy="no-referrer" alt=… data-alt=… />` (DM.Infrastructure.Core/Parsing/BbParserWrapper.cs:351-352) and the client-side editor emitter produces `<img src=… alt=… class="bb-image" data-bb-tag="img" referrerpolicy="no-referrer" />` (DM.Web.Client/src/shared/lib/utils/bbcode.ts:585-587). Neither sets `loading`, `decoding`, `width` or `height`. The client copy is already missing the `data-alt` attribute the server adds. This contrasts sharply with AvatarImg, which gets all of this right.
 

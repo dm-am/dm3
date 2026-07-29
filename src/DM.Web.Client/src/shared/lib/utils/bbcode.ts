@@ -584,7 +584,8 @@ export function renderBbImage(
   const escapedAlt = escapeAttr(alt);
   const imgTag =
     `<img src="${escapedSrc}" alt="${escapedAlt}" class="bb-image" ` +
-    `data-bb-tag="img" referrerpolicy="no-referrer" />`;
+    `data-bb-tag="img" loading="lazy" decoding="async" ` +
+    `referrerpolicy="no-referrer" />`;
 
   const { width, height } = size;
   if (width == null && height == null) {
