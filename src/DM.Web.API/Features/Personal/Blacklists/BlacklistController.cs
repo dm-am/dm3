@@ -96,7 +96,7 @@ public class BlacklistController : ControllerBase
     public async Task<IActionResult> BlockUser([FromBody] BlockUserRequest request)
     {
         var result = await _apiService.BlockUser(request);
-        return CreatedAtRoute(nameof(GetMyBlacklist), result);
+        return StatusCode(StatusCodes.Status201Created, result);
     }
 
     /// <summary>

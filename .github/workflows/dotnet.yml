@@ -224,7 +224,6 @@ jobs:
         RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
         MINIO_ROOT_PASSWORD: ci-validation-placeholder
         GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
-        OPENSEARCH_PASSWORD: ci-validation-placeholder
         IMGPROXY_KEY: ci-validation-placeholder
         IMGPROXY_SALT: ci-validation-placeholder
       run: |
@@ -241,7 +240,6 @@ jobs:
         RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
         MINIO_ROOT_PASSWORD: ci-validation-placeholder
         GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
-        OPENSEARCH_PASSWORD: ci-validation-placeholder
         IMGPROXY_KEY: ci-validation-placeholder
         IMGPROXY_SALT: ci-validation-placeholder
       run: |

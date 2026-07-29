@@ -79,7 +79,7 @@ public class BlogReaderController : ControllerBase
     {
         var blogId = await ResolveBlogId(id);
         var reader = await _userApiService.Subscribe(blogId);
-        return CreatedAtRoute(nameof(GetBlogReaders), new { id }, reader);
+        return StatusCode(StatusCodes.Status201Created, reader);
     }
 
     /// <summary>

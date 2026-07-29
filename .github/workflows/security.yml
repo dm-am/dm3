@@ -80,7 +80,7 @@ jobs:
       - name: Start infrastructure with Docker Compose
         run: |
           cd docker
-          docker compose up -d postgres mongo rabbitmq minio mailhog opensearch jaeger
+          docker compose up -d postgres mongo rabbitmq minio mailhog jaeger
           docker compose up -d --wait migration
 
       - name: Build and start API

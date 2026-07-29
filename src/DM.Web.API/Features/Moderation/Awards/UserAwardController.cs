@@ -55,10 +55,7 @@ public class UserAwardController : ControllerBase
     {
         var granted = await _awardService.GrantAsync(username, request.AwardTypeId, request.ContestSeriesId, request.WorkUrl);
         var api = _mapper.Map<UserAward>(granted);
-        return CreatedAtRoute(
-            nameof(AwardController.GetUserAwards),
-            new { username },
-            new Envelope<UserAward>(api));
+        return StatusCode(StatusCodes.Status201Created, new Envelope<UserAward>(api));
     }
 
     /// <summary>Revoke a previously granted award (soft-delete).</summary>

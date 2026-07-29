@@ -57,7 +57,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 | MinIO | 9000, 9001 | из `docker/.env` |
 | imgproxy | 8080 | HMAC key/salt из `docker/.env` |
 | MailHog | 1025, 8025 | — |
-| OpenSearch | 9200, 5601 | — |
+| Loki | 3100 | — |
 | Jaeger | 16686 | — |
 | Prometheus | 9090 | — |
 | Grafana | 3000 | из `docker/.env` |

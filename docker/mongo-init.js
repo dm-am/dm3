@@ -183,6 +183,24 @@ db.LoginAttempts.createIndex(
 print('LoginAttempts indexes created');
 
 // ============================================================================
+// SecurityAuditLog Collection (profile security trail)
+// Every read is "this user's events, newest first"; TTL bounds the retention of
+// addresses and user agents
+// ============================================================================
+
+db.SecurityAuditLog.createIndex(
+    { UserId: 1, TimestampUtc: -1 },
+    { name: "IX_SecurityAuditLog_User_Time", background: true }
+);
+
+db.SecurityAuditLog.createIndex(
+    { TimestampUtc: 1 },
+    { name: "IX_SecurityAuditLog_Expiry", background: true, expireAfterSeconds: 15552000 }
+);
+
+print('SecurityAuditLog indexes created');
+
+// ============================================================================
 // Summary
 // ============================================================================
 
@@ -193,10 +211,11 @@ print('  - UnreadCounters (4 indexes) - CRITICAL for sidebar performance');
 print('  - UserSessions (1 index) - CRITICAL for every authenticated request');
 print('  - UserSettings (1 index)');
 print('  - LoginAttempts (2 indexes, one TTL)');
+print('  - SecurityAuditLog (2 indexes, one TTL)');
 print('  - RealtimeNotifications (2 indexes)');
 print('  - Polls (2 indexes)');
 print('  - AttributeSchemata (1 index)');
 print('  - Dice (1 index)');
 print('');
-print('Total: 12 indexes');
+print('Total: 14 indexes');
 print('==========================================');

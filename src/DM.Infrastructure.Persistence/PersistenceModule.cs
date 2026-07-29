@@ -112,7 +112,11 @@ public class PersistenceModule : Module
                 return new DmMongoClient(settings, connectionString);
             })
             .AsSelf()
-            .AsImplementedInterfaces();
+            .AsImplementedInterfaces()
+            // MongoClient owns the connection pool and the cluster monitor and is
+            // built to be shared; per-dependency construction handed every consumer
+            // its own, which is the one way to defeat pooling.
+            .SingleInstance();
 
         builder.RegisterType<UpdateBuilderFactory>()
             .AsSelf()

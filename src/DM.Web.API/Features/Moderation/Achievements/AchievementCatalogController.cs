@@ -82,10 +82,7 @@ public class AchievementCatalogController : ControllerBase
         var domain = _mapper.Map<DomainCreateAchievementType>(request);
         var created = await _achievementService.CreateTypeAsync(domain);
         var api = _mapper.Map<AchievementType>(created);
-        return CreatedAtRoute(
-            nameof(AchievementController.GetAchievementTypes),
-            null,
-            new Envelope<AchievementType>(api));
+        return StatusCode(StatusCodes.Status201Created, new Envelope<AchievementType>(api));
     }
 
     /// <summary>Partially update a tier (Title / Threshold / Tier).</summary>

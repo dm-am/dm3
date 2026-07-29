@@ -76,7 +76,7 @@ public class GameInvitationController : ControllerBase
     {
         var gameId = await ResolveGameId(id);
         var invitation = await _invitationApiService.InvitePlayer(gameId, request.Username);
-        return CreatedAtRoute(nameof(GetGameInvitations), new { id }, invitation);
+        return StatusCode(StatusCodes.Status201Created, invitation);
     }
 
     /// <summary>
@@ -98,7 +98,7 @@ public class GameInvitationController : ControllerBase
     {
         var gameId = await ResolveGameId(id);
         var invitation = await _invitationApiService.InviteReader(gameId, request.Username);
-        return CreatedAtRoute(nameof(GetGameInvitations), new { id }, invitation);
+        return StatusCode(StatusCodes.Status201Created, invitation);
     }
 
     /// <summary>
@@ -120,7 +120,7 @@ public class GameInvitationController : ControllerBase
     {
         var gameId = await ResolveGameId(id);
         var invitation = await _invitationApiService.InviteAssistant(gameId, request.Username);
-        return CreatedAtRoute(nameof(GetGameInvitations), new { id }, invitation);
+        return StatusCode(StatusCodes.Status201Created, invitation);
     }
 
     /// <summary>

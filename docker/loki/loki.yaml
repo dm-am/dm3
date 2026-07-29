@@ -1,0 +1,57 @@
+# Single-binary Loki for one host: no clustering, no object store, filesystem
+# chunks. The whole point of the store is answering "what did the API say around
+# the time of this correlation token", so it is sized for that and nothing more.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # Serilog batches, and a batch that crosses the window would otherwise be
+  # rejected wholesale. Both bounds are generous on purpose: a rejected log line
+  # is lost, and there is no second copy.
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  max_query_lookback: 720h
+  # Retention: 30 days.
+  retention_period: 720h
+
+compactor:
+  working_directory: /loki/compactor
+  delete_request_store: filesystem
+  retention_enabled: true
+
+# The single-binary target has no use for a ruler backend; alerting lives in
+# Prometheus, which already owns the metric side.
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+
+analytics:
+  reporting_enabled: false

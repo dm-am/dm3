@@ -36,7 +36,7 @@
         <PackageReference Include="Serilog.AspNetCore" />
         <PackageReference Include="Serilog.Settings.Configuration" />
         <PackageReference Include="Serilog.Sinks.Console" />
-        <PackageReference Include="Serilog.Sinks.OpenSearch" />
+        <PackageReference Include="Serilog.Sinks.Grafana.Loki" />
         <PackageReference Include="FluentValidation" />
         <PackageReference Include="SixLabors.ImageSharp" />
     </ItemGroup>

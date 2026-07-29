@@ -148,7 +148,7 @@ public class BanController : ControllerBase
     public async Task<IActionResult> CreateBan([FromBody] CreateBanRequest request)
     {
         var result = await _banApiService.CreateBan(request);
-        return CreatedAtRoute(nameof(GetUserBans), new { username = request.Username }, result);
+        return CreatedAtRoute(nameof(GetActiveBan), new { username = request.Username }, result);
     }
 
     /// <summary>

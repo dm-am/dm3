@@ -64,10 +64,7 @@ public class AwardCatalogController : ControllerBase
         var domain = _mapper.Map<DomainCreateAwardType>(request);
         var created = await _awardService.CreateTypeAsync(domain);
         var api = _mapper.Map<AwardType>(created);
-        return CreatedAtRoute(
-            nameof(AwardController.GetAwardTypes),
-            null,
-            new Envelope<AwardType>(api));
+        return StatusCode(StatusCodes.Status201Created, new Envelope<AwardType>(api));
     }
 
     /// <summary>Partial award type update.</summary>
@@ -125,10 +122,7 @@ public class AwardCatalogController : ControllerBase
         var domain = _mapper.Map<DomainCreateContestSeries>(request);
         var created = await _awardService.CreateSeriesAsync(domain);
         var api = _mapper.Map<ContestSeries>(created);
-        return CreatedAtRoute(
-            nameof(AwardController.GetContestSeries),
-            null,
-            new Envelope<ContestSeries>(api));
+        return StatusCode(StatusCodes.Status201Created, new Envelope<ContestSeries>(api));
     }
 
     /// <summary>Partial contest series update.</summary>

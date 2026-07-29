@@ -74,7 +74,7 @@ public class BlogInvitationController : ControllerBase
     {
         var blogId = await ResolveBlogId(id);
         var result = await _apiService.CreateAssistantInvitation(blogId, request.Username);
-        return CreatedAtRoute(nameof(GetBlogInvitations), new { id }, result);
+        return StatusCode(StatusCodes.Status201Created, result);
     }
 
     /// <summary>
@@ -96,7 +96,7 @@ public class BlogInvitationController : ControllerBase
     {
         var blogId = await ResolveBlogId(id);
         var result = await _apiService.CreateReaderInvitation(blogId, request.Username);
-        return CreatedAtRoute(nameof(GetBlogInvitations), new { id }, result);
+        return StatusCode(StatusCodes.Status201Created, result);
     }
 
     /// <summary>

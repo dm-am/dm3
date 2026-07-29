@@ -81,7 +81,7 @@ public class BlogBlacklistController : ControllerBase
     {
         var blogId = await ResolveBlogId(id);
         var result = await _blacklistApiService.Create(blogId, request.Username);
-        return CreatedAtRoute(nameof(GetBlogBlacklist), new { id }, result);
+        return StatusCode(StatusCodes.Status201Created, result);
     }
 
     /// <summary>

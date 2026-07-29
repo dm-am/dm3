@@ -668,7 +668,7 @@ DATA_STORAGE.md:23-30 gives four justifications for Mongo (nested arrays, high w
 
 ### [СРЕДНЯЯ] PG-08 — The soft-delete contract is silently enforced only in Postgres; Mongo repositories must hand-write it and half of them forget
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Разобрано по частям, а не мини-ORM над Mongo ради трех коллекций. Настоящий дефект один и он починен: FlushAsync и FlushAllAsync искали счетчик без условия IsRemoved, поэтому 'отметить прочитанным' у удаленной сущности находило ее надгробие и upsert-ом воскрешал живую строку - сущность возвращалась в сайдбар. Заодно снят ложный контракт: UnreadCounter объявлял ISoftDeletable, но DeletedByUserId и DeletedUtc не писал никто; переведен на IRemovable, мертвые поля удалены
 
 DmDbContext.cs:598-607 applies `HasQueryFilter(e => !e.IsRemoved)` to every IRemovable entity — invisible, automatic, correct. Mongo documents declare the same interfaces (AttributeSchema : IRemovable, Entities/.../AttributeSchema.cs:13; UnreadCounter : ISoftDeletable, Entities/Shared/UnreadCounter.cs:14; Poll : IRemovable, Entities/Forum/Poll.cs:13) but get no such enforcement — MongoCollectionRepository (MongoIntegration/MongoCollectionRepository.cs:20-40) exposes raw Filter/Update builders with no base predicate. The result is inconsistent by repository: PollRepository remembers (`Filter.Eq(p => p.IsRemoved, false)` at lines 100 and 182), UnreadCountersRepository remembers in the aggregations (lines 105, 134, 163) but forgets in FlushAsync:178-181 and FlushAllAsync:203-206 and ChangeParentAsync:229-232, and AttributeSchemaRepository never filters it at all (GetSchemata:54-56, GetSchema:86-88) while hard-deleting instead.
 
@@ -698,7 +698,7 @@ OpenSearch indexes exactly three entity kinds — users, forum topics, forum com
 
 ### [СРЕДНЯЯ] PG-11 — DmMongoClient is registered per-dependency, and the security audit log in Mongo has no index, no TTL and no retention
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Обе половины. DmMongoClient переведен в SingleInstance - клиент владеет пулом соединений и монитором кластера, регистрация per-dependency выдавала каждому потребителю свой и обессмысливала пул. Коллекция SecurityAuditLog получила составной индекс (UserId, TimestampUtc desc) под единственную форму чтения и TTL на 180 дней; журнал хранит адреса и user-agent, то есть персональные данные, и бессрочность тут не польза, а обязательство. Индексы отзеркалены в mongo-init.js, счетчик 12 -> 14
 
 PersistenceModule.cs:102-115 registers DmMongoClient with `builder.Register(...).AsSelf().AsImplementedInterfaces()` and no lifetime — Autofac's default is InstancePerDependency, so a new MongoClient is constructed on every resolution. Neighbouring registrations in the same file are explicit about it (UpdateBuilderFactory `.SingleInstance()` at line 120, CursorService `.SingleInstance()` at CoreModule.cs:41), so the omission reads as an oversight rather than a decision. Driver 2.28.0 (Directory.Packages.props:47) does share the underlying cluster via ClusterRegistry keyed on settings, and the ClusterConfigurator lambda at line 110 captures nothing so Roslyn caches it — which is the only reason this is not already a connection-pool explosion. Separately, SecurityAuditRepository writes to the SecurityAuditLog collection (line 51-52) and queries it by (UserId, TimestampUtc) at lines 60-63, 85-89, 110-114, 135-139; docker/mongo-init.js declares no index on that collection or on LoginAttempts, and nothing ever prunes either.
 
@@ -864,7 +864,7 @@ Every controller hardcodes its version into the route prefix ([Route("v1/games")
 
 ### [СРЕДНЯЯ] API-11 — Location header on 201 points at the parent collection rather than the created resource in 15 endpoints
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Проверка нашла в находке одно ложное срабатывание и три недосчитанных места. GameController:115 не дефект - GetGameDetails это элементный ресурс созданной игры, и тело ответа объявлено ровно той же формой. Недосчитаны AwardCatalogController:67 и :128 и UserAwardController:58. Итого правок 17: два Location переведены на существующие элементные маршруты (подписка на пользователя -> GET .../subscribers/me, создание бана -> GET .../bans/active), пятнадцать отдают 201 без Location, потому что у подресурса нет собственного адреса и заводить его только ради заголовка незачем. Правило записано в API_DESIGN.md - его там не было вовсе
 
 RFC 9110 requires the 201 Location to identify the created resource. 15 CreatedAtRoute calls name a collection route instead: BlogInvitationController.cs:77,:99 -> GetBlogInvitations; GameInvitationController.cs:79,:101,:123 -> GetGameInvitations; BlogReaderController.cs:82 -> GetBlogReaders; GameReaderController.cs:79 -> GetGameReaders; BlogBlacklistController.cs:84 -> GetBlogBlacklist; GameBlacklistController.cs:85 -> GetBlacklist; UserSubscriberController.cs:64 -> GetUserSubscribers; BoardController.cs:156 -> GetBoardModerators; BanController.cs:151 -> GetUserBans; WarningController.cs:104 -> GetUserWarnings; BlacklistController.cs:99 -> GetMyBlacklist; AchievementCatalogController.cs:85 -> AchievementController.GetAchievementTypes. GameController.cs:115 is a near miss in the other direction — it points POST /v1/games at GetGameDetails (/v1/games/{id}/details) rather than GetGame (/v1/games/{id}).
 

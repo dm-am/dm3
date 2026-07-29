@@ -153,7 +153,7 @@ public class BoardController : ControllerBase
     public async Task<IActionResult> AddBoardModerator(string id, string username)
     {
         var result = await _moderatorsApiService.AddModerator(id, username);
-        return CreatedAtRoute(nameof(GetBoardModerators), new { id }, result);
+        return StatusCode(StatusCodes.Status201Created, result);
     }
 
     /// <summary>

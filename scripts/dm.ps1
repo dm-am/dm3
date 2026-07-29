@@ -268,7 +268,7 @@ function Start-Services {
         }
 
         # Infrastructure - start containers (with animation)
-        if (-not (Invoke-WithAnimation -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres mongo rabbitmq minio imgproxy mailhog jaeger prometheus grafana")) {
+        if (-not (Invoke-WithAnimation -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres mongo rabbitmq minio imgproxy mailhog jaeger loki prometheus grafana")) {
             Write-FailedStep -Label "Infrastructure" -Current 0 -Total 5
             exit 1
         }
@@ -278,7 +278,7 @@ function Start-Services {
             @{ Name = "dm-mongo"; Label = "Mongo" },
             @{ Name = "dm-minio"; Label = "MinIO" },
             @{ Name = "dm-imgproxy"; Label = "imgproxy" },
-            @{ Name = "dm-es"; Label = "OpenSearch" },
+            @{ Name = "dm-loki"; Label = "Loki" },
             @{ Name = "dm-rmq"; Label = "RabbitMQ" }
         )
         if (-not (Wait-ServicesHealthy -Label "Infrastructure" -Services $infraServices -TimeoutSeconds 120)) {

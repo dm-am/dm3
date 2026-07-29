@@ -76,7 +76,7 @@ public class GameReaderController : ControllerBase
     {
         var gameId = await ResolveGameId(id);
         var reader = await _userApiService.Subscribe(gameId);
-        return CreatedAtRoute(nameof(GetGameReaders), new { id }, reader);
+        return StatusCode(StatusCodes.Status201Created, reader);
     }
 
     /// <summary>
