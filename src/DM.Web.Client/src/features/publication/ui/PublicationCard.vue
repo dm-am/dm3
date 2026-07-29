@@ -17,7 +17,7 @@
  * tooltip indicator, and like/warn actions are not rendered.
  */
 import type { Publication } from "@/entities/blog";
-import { TopicCard } from "@/features/topic";
+import { TopicCard } from "@/features/topic/@x/publication";
 
 withDefaults(
   defineProps<{

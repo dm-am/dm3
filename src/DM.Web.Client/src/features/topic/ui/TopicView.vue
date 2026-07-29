@@ -15,7 +15,7 @@ import { useUserStore, userIsModerator } from "@/entities/user";
 import { unwrapResource } from "@/shared/api";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { useToast } from "@/shared/lib/composables/useToast";
-import { PeriodDigestBoards } from "@/features/leaderboard";
+import { PeriodDigestBoards } from "@/features/leaderboard/@x/topic";
 import TopicCard from "./TopicCard.vue";
 
 const props = withDefaults(

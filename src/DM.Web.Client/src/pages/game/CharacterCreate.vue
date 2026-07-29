@@ -14,7 +14,7 @@ import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
 import { CharacterForm } from "@/features/edit-character";
-import { createEmptySchema } from "@/features/attribute-schema-editor/model";
+import { createEmptySchema } from "@/entities/game";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useToast } from "@/shared/lib/composables/useToast";

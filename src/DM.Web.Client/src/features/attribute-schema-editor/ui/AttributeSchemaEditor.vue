@@ -33,7 +33,7 @@ import {
   cloneSchema,
   cloneSpecsWithNewIds,
   isBbCode,
-} from "../model";
+} from "@/entities/game";
 
 const props = withDefaults(
   defineProps<{

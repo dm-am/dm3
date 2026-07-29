@@ -1825,7 +1825,7 @@ shared/lib/composables/useFetchData.ts:36-41 and :52-57 — both watchers loop o
 
 ### [НИЗКАЯ] FE-13 — No automated enforcement of the layer rules the codebase actually follows
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Поставлен eslint-plugin-boundaries, правило boundaries/dependencies в .eslintrc.cjs - исполняемая копия раздела PATTERNS.md про слои: направление импортов, запрет deep-import мимо barrel и адресность двери @x (брать из features/topic/@x/publication вправе только features/publication). Динамический import учитывается наравне со статическим - именно за ним пряталось единственное нарушение направления. Резолвер выбран eslint-import-resolver-alias, а не typescript: последний в актуальных версиях требует @typescript-eslint/utils 8, а проект на 7, и установка проходила только с --legacy-peer-deps, что сломало бы npm ci. Гейт включен как error без baseline: все 12 нарушений закрыты в FE-14. Заодно вычищены 18 предупреждений, из-за которых шаг lint:ci в CI был красным - в том числе три мертвых символа в DataTable, оставшихся от снятия виртуализации
 
 .eslintrc.cjs extends only `plugin:vue/vue3-essential` (the weakest Vue preset), eslint:recommended, @vue/eslint-config-typescript and prettier. There is no steiger, no eslint-plugin-boundaries, no `import/no-restricted-paths`, and no FSD config file anywhere in src/DM.Web.Client. The 10 violations found in this review (shared->app, 4 feature->feature, 1 widget->widget, 6 deep imports past index.ts) were all introduced without any signal.
 
@@ -1835,7 +1835,7 @@ shared/lib/composables/useFetchData.ts:36-41 and :52-57 — both watchers loop o
 
 ### [НИЗКАЯ] FE-14 — Deep imports and feature->feature imports bypass the public APIs the project otherwise maintains
 
-**Статус: Открыто.** 
+**Статус: Исправлено.** Все 11 нарушений закрыты, плюс двенадцатое, которого в находке не было: shared/api/client.ts тянул роутер из app динамическим импортом - и апвард через слой, и deep-import, спрятанный за формой вызова. Разбор по группам: один deep-import чинился одним путем (символ уже был на баррели), два потребовали реэкспорта createCacheKey и UsersSearchParams из entities/user, три страницы тянули чистую функцию createEmptySchema через баррель фичи - хелперы схемы перенесены в entities/game, где им место, и импорт стал направленным вниз. Пять same-layer ребер получили адресные двери @x по правилу самого проекта. Апвард-импорт развязан: клиент сообщает об истекшей сессии через устанавливаемый обработчик, навигацию назначает app
 
 Bypassing a slice's index.ts: widgets/sidebar/GameTagCloud.vue -> @/entities/game/model/store; features/user-filter/model/types.ts and widgets/users-table/UsersDataTable.vue -> @/entities/user/model/communityStore; pages/game/CharacterCreate.vue, CharacterEdit.vue and GameSettings.vue -> @/features/attribute-schema-editor/model. Same-layer imports without an @x door: features/comment/model/useCommentWarnDialog.ts -> @/features/moderation-actions; features/create-game/ui/CreateGameForm.vue -> @/features/attribute-schema-editor; features/publication/ui/PublicationCard.vue -> @/features/topic; features/topic/ui/TopicView.vue -> @/features/leaderboard; widgets/pulse-feed/PulseFeed.vue -> @/widgets/game-post.
 

@@ -17,7 +17,7 @@ import {
   usesValues,
   usesModifier,
   normalizeSpecForType,
-} from "../model";
+} from "@/entities/game";
 
 const spec = defineModel<AttributeSpecification>({ required: true });
 

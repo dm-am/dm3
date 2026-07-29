@@ -78,6 +78,23 @@ export type { PulseSearchParams } from "./model/pulseStore";
 // Composables
 export { useGameDisplay } from "./model/useGameDisplay";
 
+// Attribute-schema helpers: pure functions over the schema shape declared
+// above, framework-free and shared by every embed site of the editor.
+export {
+  SPEC_TYPE_LABELS,
+  SPEC_TYPE_OPTIONS,
+  usesMaxLength,
+  usesValues,
+  usesModifier,
+  isBbCode,
+  newSpecId,
+  createEmptySchema,
+  createEmptySpec,
+  cloneSpecsWithNewIds,
+  cloneSchema,
+  normalizeSpecForType,
+} from "./model/schemaHelpers";
+
 // API
 export { gameApi } from "./api";
 

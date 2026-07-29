@@ -3,7 +3,7 @@ import { UserRole } from "@/entities/user";
 // Single source of truth for the API search param shape lives in the entity
 // layer (FSD: feature imports from entity). Re-exported here so existing
 // `@/features/user-filter` consumers keep working.
-export type { UsersSearchParams } from "@/entities/user/model/communityStore";
+export type { UsersSearchParams } from "@/entities/user";
 
 /**
  * Activity filter values

@@ -65,6 +65,8 @@ describe("route table", () => {
       .map((record) => record.name as string);
 
     expect(named.length).toBeGreaterThan(50);
-    expect(new Set(named).size, "route names must be unique").toBe(named.length);
+    expect(new Set(named).size, "route names must be unique").toBe(
+      named.length,
+    );
   });
 });

@@ -28,6 +28,22 @@ const defaultHeaders: { [key: string]: string } = {
   [X_DM_AUDIENCE]: RENDER_AUDIENCE.Display,
 };
 
+/**
+ * Where to send the user when the server says their session is gone.
+ *
+ * The HTTP client is a `shared` module and must not know the router, which
+ * lives in `app` — the layer above. It used to reach for it with a dynamic
+ * import, which hid the inverted dependency rather than removing it. The app
+ * installs its own handler at startup; until it does, an expired session only
+ * clears local state and shows the toast.
+ */
+let onSessionExpired: (() => void) | null = null;
+
+/** Installed once by the app layer, which owns navigation. */
+export function setSessionExpiredHandler(handler: () => void): void {
+  onSessionExpired = handler;
+}
+
 const apiHost = import.meta.env.VITE_API_HOST ?? "http://localhost:5000"; // Config - use ?? to allow empty string
 
 const configuration: AxiosRequestConfig = {
@@ -57,9 +73,7 @@ class Api {
           localStorage.removeItem("user");
           const { warning } = useToast();
           warning("Сессия истекла. Пожалуйста, войдите снова.");
-          // Lazy import to avoid circular dependency
-          const router = (await import("@/app/providers/router")).default;
-          router.push({ name: "home" });
+          onSessionExpired?.();
         }
 
         // Handle 403 Forbidden

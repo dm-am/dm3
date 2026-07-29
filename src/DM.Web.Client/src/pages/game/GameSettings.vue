@@ -16,7 +16,7 @@ import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
 import { gameApi, type AttributeSchema } from "@/entities/game";
 import { AttributeSchemaEditor } from "@/features/attribute-schema-editor";
-import { createEmptySchema } from "@/features/attribute-schema-editor/model";
+import { createEmptySchema } from "@/entities/game";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";

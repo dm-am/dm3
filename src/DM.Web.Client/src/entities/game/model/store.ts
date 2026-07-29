@@ -363,7 +363,8 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   );
   const isAssistant = computed(
     () =>
-      participation.value.includes(GameParticipation.Authority) && !isMaster.value,
+      participation.value.includes(GameParticipation.Authority) &&
+      !isMaster.value,
   );
   const isMentor = computed(() =>
     participation.value.includes(GameParticipation.Moderator),

@@ -75,7 +75,6 @@ const newComment = ref("");
 const sending = ref(false);
 const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 
-
 const isModerator = computed(() => userIsModerator(user.value));
 
 const isParticipant = computed(() => {

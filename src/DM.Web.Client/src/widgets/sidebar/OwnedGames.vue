@@ -116,7 +116,11 @@ import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import SidebarGameLink from "./SidebarGameLink.vue";
 import { useUserStore } from "@/entities/user";
-import { useGamesStore, GameParticipation, type GameRef } from "@/entities/game";
+import {
+  useGamesStore,
+  GameParticipation,
+  type GameRef,
+} from "@/entities/game";
 import { computed, watch } from "vue";
 
 import { onMounted } from "vue";
@@ -141,7 +145,8 @@ const hasAnyOwnerRole = (game: GameRef) =>
 const mentorGames = computed(
   () =>
     store.participatingGames?.filter(
-      (game) => hasRole(game, GameParticipation.Moderator) && !hasAnyOwnerRole(game),
+      (game) =>
+        hasRole(game, GameParticipation.Moderator) && !hasAnyOwnerRole(game),
     ) ?? [],
 );
 
@@ -154,7 +159,8 @@ const ownedGames = computed(
 const playingGames = computed(
   () =>
     store.participatingGames?.filter(
-      (game) => hasRole(game, GameParticipation.Player) && !hasAnyOwnerRole(game),
+      (game) =>
+        hasRole(game, GameParticipation.Player) && !hasAnyOwnerRole(game),
     ) ?? [],
 );
 

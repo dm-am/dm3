@@ -75,7 +75,6 @@ const {
   canLike: canLikeMsg,
 } = useMessagePermissions(user);
 
-
 // isModerator provided by useMessagePermissions above
 
 const canSendMessages = computed(() => Boolean(user.value));
@@ -1729,6 +1728,4 @@ async function confirmDelete() {
 .globalChat-send-button
   align-self: flex-start
   +button
-
-
 </style>
