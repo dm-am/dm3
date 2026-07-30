@@ -1,0 +1,50 @@
+@*
+    Уведомление о входе с незнакомого устройства.
+
+    Адрес и устройство приходят необязательными: детектор мог их не определить.
+    Пустую строку показывать нельзя — вместо нее строка таблицы не печатается вовсе,
+    иначе письмо утверждает "устройство: " и выглядит сломанным.
+*@
+<EmailLayout Title="Вход с незнакомого устройства">
+    <p style="@EmailConstants.ParagraphStyles">
+        Здравствуйте, @Model.Username!
+    </p>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        В вашу учетную запись вошли с устройства, которое мы раньше не видели.
+    </p>
+
+    <table style="@EmailConstants.ParagraphStyles">
+        <tr>
+            <td style="@EmailConstants.FactLabelStyles">Когда</td>
+            <td style="@EmailConstants.FactValueStyles">@Model.Timestamp</td>
+        </tr>
+        @if (!string.IsNullOrWhiteSpace(Model.IpAddress))
+        {
+            <tr>
+                <td style="@EmailConstants.FactLabelStyles">Адрес</td>
+                <td style="@EmailConstants.FactValueStyles">@Model.IpAddress</td>
+            </tr>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.DeviceInfo))
+        {
+            <tr>
+                <td style="@EmailConstants.FactLabelStyles">Устройство</td>
+                <td style="@EmailConstants.FactValueStyles">@Model.DeviceInfo</td>
+            </tr>
+        }
+    </table>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Если это были вы, ничего делать не нужно. Если нет — смените пароль: это
+        завершит чужую сессию.
+    </p>
+</EmailLayout>
+
+@code {
+
+    /// <summary>Данные письма</summary>
+    [Parameter]
+    public SuspiciousLoginViewModel Model { get; set; } = null!;
+
+}

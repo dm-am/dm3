@@ -1,0 +1,30 @@
+@*
+    Письмо подтверждения регистрации.
+
+    Без обращения по имени: на этом шаге имени еще нет — модель несет только ссылку.
+*@
+<EmailLayout Title="Подтвердите почту">
+    <p style="@EmailConstants.ParagraphStyles">
+        Вы зарегистрировались на Dungeon Master. Осталось подтвердить, что почта ваша.
+    </p>
+
+    <a href="@Model.ConfirmationLinkUrl" style="@EmailConstants.ButtonStyles">Подтвердить почту</a>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Если кнопка не работает, откройте ссылку вручную:<br/>
+        <a href="@Model.ConfirmationLinkUrl">@Model.ConfirmationLinkUrl</a>
+    </p>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Если регистрировались не вы, просто удалите это письмо. Без подтверждения
+        учетная запись не заработает.
+    </p>
+</EmailLayout>
+
+@code {
+
+    /// <summary>Данные письма</summary>
+    [Parameter]
+    public RegistrationConfirmationViewModel Model { get; set; } = null!;
+
+}
