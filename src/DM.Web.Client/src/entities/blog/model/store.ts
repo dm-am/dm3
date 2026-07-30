@@ -331,6 +331,25 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
   const readersLoading = ref(false);
   const readersError = ref<string | null>(null);
 
+  // One monotonic token per independent slice — same reason as in the game
+  // details store: this store is a single bag for "the current blog", and a
+  // slower reply for the blog (or rubric, or page) the reader already left
+  // would otherwise win simply by landing last.
+  const blogGuard = createRequestGuard();
+  const publicationsGuard = createRequestGuard();
+  const commentsGuard = createRequestGuard();
+  const blacklistGuard = createRequestGuard();
+  const usersGuard = createRequestGuard();
+  const readersGuard = createRequestGuard();
+  const detailGuards = [
+    blogGuard,
+    publicationsGuard,
+    commentsGuard,
+    blacklistGuard,
+    usersGuard,
+    readersGuard,
+  ];
+
   // Rubrics sorted for display (panel list, feed filter, settings)
   const rubrics = computed(() =>
     [...(blog.value?.rubrics ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
@@ -379,10 +398,14 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
 
   // Load blog
   async function loadBlog(id: string): Promise<void> {
+    const requestId = blogGuard.next();
     blogLoading.value = true;
     blogError.value = null;
 
     const { data, error } = await blogApi.getBlog(id);
+
+    // A newer load owns the visible state — see the guards above.
+    if (!blogGuard.isCurrent(requestId)) return;
 
     if (error) {
       blogError.value = "Не удалось загрузить блог";
@@ -400,6 +423,7 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     blogId: string,
     options?: { rubricId?: string; page?: number },
   ): Promise<void> {
+    const requestId = publicationsGuard.next();
     publicationsLoading.value = true;
     publicationsError.value = null;
 
@@ -407,6 +431,9 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
       rubricId: options?.rubricId,
       paging: { number: options?.page ?? 1 },
     });
+
+    // Stale continuation — the newer request owns the visible state.
+    if (!publicationsGuard.isCurrent(requestId)) return;
 
     if (error) {
       publicationsError.value = "Не удалось загрузить публикации";
@@ -422,12 +449,16 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
 
   // Load discussion comments
   async function loadComments(blogId: string, page: number = 1): Promise<void> {
+    const requestId = commentsGuard.next();
     commentsLoading.value = true;
     commentsError.value = null;
 
     const { data, error } = await blogApi.getBlogComments(blogId, {
       number: page,
     });
+
+    // Stale continuation — the newer request owns the visible state.
+    if (!commentsGuard.isCurrent(requestId)) return;
 
     if (error) {
       commentsError.value = "Не удалось загрузить комментарии";
@@ -494,10 +525,14 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
 
   // Load blacklist
   async function loadBlacklist(blogId: string): Promise<void> {
+    const requestId = blacklistGuard.next();
     blacklistLoading.value = true;
     blacklistError.value = null;
 
     const { data, error } = await blogApi.getBlacklist(blogId);
+
+    // Stale continuation — the newer request owns the visible state.
+    if (!blacklistGuard.isCurrent(requestId)) return;
 
     if (error) {
       blacklistError.value = "Не удалось загрузить черный список";
@@ -511,10 +546,14 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
 
   // Load blog users
   async function loadUsers(blogId: string): Promise<void> {
+    const requestId = usersGuard.next();
     usersLoading.value = true;
     usersError.value = null;
 
     const { data, error } = await blogApi.getUsers(blogId);
+
+    // Stale continuation — the newer request owns the visible state.
+    if (!usersGuard.isCurrent(requestId)) return;
 
     if (error) {
       usersError.value = "Не удалось загрузить участников";
@@ -528,10 +567,16 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
 
   // Load readers (drives isSubscribed)
   async function loadReaders(blogId: string): Promise<void> {
+    const requestId = readersGuard.next();
     readersLoading.value = true;
     readersError.value = null;
 
     const { data, error } = await blogApi.getReaders(blogId);
+
+    // Stale continuation — the newer request owns the visible state. This slice
+    // decides isSubscribed, so a reply for another blog flips the subscribe
+    // button rather than only the list under it.
+    if (!readersGuard.isCurrent(requestId)) return;
 
     if (error) {
       readersError.value = "Не удалось загрузить читателей";
@@ -621,6 +666,10 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
 
   // Reset all data (when leaving the blog zone)
   function reset(): void {
+    // Replies still on the wire belong to the blog being left — bump every
+    // token so none of them repopulates the store after the wipe.
+    detailGuards.forEach((guard) => guard.next());
+
     blog.value = null;
     blogLoading.value = false;
     blogError.value = null;

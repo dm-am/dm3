@@ -51,8 +51,13 @@ x-workload-env: &workload-env
   DM_CdnConfiguration__PublicUrl: ${CDN_PUBLIC_URL:-http://localhost:9000}
   DM_CdnConfiguration__Region: us-east-1
   DM_CdnConfiguration__BucketName: dm-uploads
-  DM_CdnConfiguration__AccessKey: minio
-  DM_CdnConfiguration__SecretKey: ${MINIO_ROOT_PASSWORD}
+  # Service account scoped to one bucket, not root. Object storage holds the
+  # only data nothing else can rebuild, and any leak of a workload's
+  # configuration used to hand over administration of the store: dropping the
+  # bucket, rewriting its policy, minting further accounts. Created by
+  # minio-init, the way mongo-init.js creates the Mongo application user.
+  DM_CdnConfiguration__AccessKey: ${MINIO_APP_USER:-dm-app}
+  DM_CdnConfiguration__SecretKey: ${MINIO_APP_PASSWORD:?MINIO_APP_PASSWORD is required}
   DM_CdnConfiguration__Folder:
   DM_CdnConfiguration__Provider: Minio
 
@@ -244,6 +249,36 @@ services:
           memory: 256M
           cpus: '0.5'
 
+  # Bootstrap of the object store: root creates the bucket and the two scoped
+  # accounts here and is then out of the picture. Runs before anything that
+  # touches a bucket, and the workloads wait for it to succeed.
+  minio-init:
+    container_name: 'dm-minio-init'
+    # Unpinned like the image backup-minio.sh runs: mc talks to the server over
+    # its admin API, and the two are released together.
+    image: 'minio/mc'
+    entrypoint: ["/bin/sh", "/minio-init.sh"]
+    environment:
+      MINIO_ENDPOINT: http://${MINIO_HOST:-dm-minio}:9000
+      BUCKET_NAME: dm-uploads
+      MINIO_ROOT_USER: 'minio'
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_APP_USER: ${MINIO_APP_USER:-dm-app}
+      MINIO_APP_PASSWORD: ${MINIO_APP_PASSWORD:?MINIO_APP_PASSWORD is required}
+      MINIO_IMGPROXY_USER: ${MINIO_IMGPROXY_USER:-dm-imgproxy}
+      MINIO_IMGPROXY_PASSWORD: ${MINIO_IMGPROXY_PASSWORD:?MINIO_IMGPROXY_PASSWORD is required}
+    volumes:
+      - ./minio-init.sh:/minio-init.sh:ro
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+
   # --- Infrastructure: Image transforms (imgproxy) ---
   # On-the-fly resize + format negotiation (AVIF/WebP/JPEG via Accept header).
   # Reads from MinIO via S3 protocol, серверу аватаров достаточно хранить
@@ -261,8 +296,10 @@ services:
       IMGPROXY_S3_ENDPOINT: 'http://dm-minio:9000'
       IMGPROXY_S3_REGION: 'us-east-1'
       IMGPROXY_S3_BUCKET_LOOKUP_TYPE: 'force-path-style'
-      AWS_ACCESS_KEY_ID: 'minio'
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      # Read-only service account: imgproxy never writes to the bucket, and it
+      # is the container that parses untrusted image data.
+      AWS_ACCESS_KEY_ID: ${MINIO_IMGPROXY_USER:-dm-imgproxy}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_IMGPROXY_PASSWORD:?MINIO_IMGPROXY_PASSWORD is required}
       # Format negotiation via Accept header.
       IMGPROXY_AUTO_WEBP: 'true'
       IMGPROXY_AUTO_AVIF: 'true'
@@ -278,8 +315,8 @@ services:
       retries: 5
       start_period: 5s
     depends_on:
-      minio:
-        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     deploy:
       resources:
@@ -495,8 +532,8 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/_health || exit 1"]
       interval: 15s
@@ -532,8 +569,8 @@ services:
         condition: service_healthy
       mongo:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     restart: "no"
     profiles:
       - tools

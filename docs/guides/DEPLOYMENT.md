@@ -186,7 +186,7 @@ compose — поднять реплики нельзя даже случайно
 
 **Jaeger:** http://localhost:16686 — distributed tracing (OTLP gRPC)
 
-**Alerting:** `docker/prometheus/alerts.yml` — 7 правил (ApiDown, HighErrorRate, HighLatency, ConsumerDown, PostgresDown, HighMemoryUsage, DiskSpaceLow)
+**Alerting:** `docker/prometheus/alerts.yml` — правила вычисляет Prometheus; получатель уведомлений не подключен, см. [MONITORING.md](MONITORING.md#alerting)
 
 ---
 

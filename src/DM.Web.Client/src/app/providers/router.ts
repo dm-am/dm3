@@ -8,6 +8,7 @@ import {
   formatDocumentTitle,
 } from "@/shared/lib/composables";
 import { scrollContentToTop } from "@/shared/lib/scroll";
+import { useAuthStore } from "@/shared/stores";
 
 declare module "vue-router" {
   interface RouteMeta {
@@ -677,8 +678,11 @@ const router = createRouter({
 });
 
 router.beforeEach((to) => {
-  // Guests are sent home with the login modal opened instead of a silent redirect
-  if (to.meta.requiresAuth && !localStorage.getItem("user")) {
+  // Guests are sent home with the login modal opened instead of a silent
+  // redirect. Read the store, not the persisted copy: the two answered
+  // differently between a 401 and the next reload, so the guard bounced a
+  // viewer the rest of the interface was still drawing as signed in.
+  if (to.meta.requiresAuth && !useAuthStore().isAuthenticated) {
     return { name: "home", query: { action: "login" } };
   }
 });

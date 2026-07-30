@@ -185,26 +185,35 @@ CI выкладывает их как `openapi-contract`. В репозитор�
 
 ```
 GET /v1/games?statuses=Active,Draft&authorUsernames=ivan&requiredTags=42
-GET /v1/posts?roomId=abc&authorId=xyz
+GET /v1/posts?gameId=abc&authorUsernames=ivan
 GET /v1/users?role=moderator&isOnline=true
 ```
 
 **Паттерны:**
 - Enum фильтры: `?statuses=Active,Draft` (массив через запятую или повтор параметра)
 - Boolean: `?isOpen=true`
-- ID reference: `?authorId=abc`
+- ID reference: `?gameId=abc`
 - Числовые: `?minRating=5&maxPlayers=10`
 
 ### Sorting
 
 ```
-GET /v1/games?sort=subscribersCount:desc     # Popular = по подписчикам
-GET /v1/games?sort=lastPostUtc:desc          # Active = по последнему посту
-GET /v1/games?sort=createdUtc:desc           # Newest
-GET /v1/posts?sort=rating:desc&take=1        # Best post
+GET /v1/games?sortBy=popularity&sortOrder=desc      # Popular = по подписчикам
+GET /v1/games?sortBy=activated&sortOrder=desc       # Active = по дате активации
+GET /v1/games?sortBy=created&sortOrder=desc         # Newest
+GET /v1/posts?sortBy=rating&sortOrder=desc&take=1   # Best post
 ```
 
-**Формат:** `?sort=field:asc|desc` (default: `desc`)
+**Формат:** `?sortBy=<поле>&sortOrder=asc|desc` (default: `desc`).
+
+**Допустимые поля** свои у каждого списочного эндпоинта, и перечислены они не здесь,
+а рядом с самим эндпоинтом — в объявлении его параметра. Список в документе устаревает
+молча; объявление рядом с кодом расходится с ним только через ревью.
+
+**Неизвестное значение** — ошибка валидации, а не молча дефолтный порядок. Клиент,
+попросивший сортировку, которой нет, должен узнать об этом, а не получить произвольный
+порядок под видом запрошенного. То же и с направлением: все, что не `asc` и не `desc`,
+отвергается, а не трактуется как `desc`.
 
 ### Примеры замены специальных endpoints
 

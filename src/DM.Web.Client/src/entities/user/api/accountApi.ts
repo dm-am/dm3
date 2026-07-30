@@ -93,10 +93,11 @@ export default new (class AccountApi {
     return Api.post<User>("account/login", credentials);
   }
 
+  // Dropping the viewer is the session module's job: updateUser(null) owns the
+  // persisted copy, and clearing it here as well made the transport a second
+  // writer of the same key.
   public async signOut() {
-    const result = await Api.delete("account/login");
-    Api.logout();
-    return result;
+    return Api.delete("account/login");
   }
 
   // Invitations

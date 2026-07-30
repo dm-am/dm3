@@ -105,6 +105,18 @@ internal class AttributeSchemaService : IAttributeSchemaService
     {
         var schema = await GetAsync(schemaId);
         _intentionManager.ThrowIfForbidden(AttributeSchemaIntention.Delete, schema);
+
+        // Nothing below enforces this reference: the schema is a Mongo document
+        // and the game row pointing at it is in Postgres. Reads of a game resolve
+        // the reference and turn a schema that is gone into a 404 for the whole
+        // game, so deleting a public schema closes every game built on it - other
+        // people's games, whose masters can repair nothing.
+        if (await _repository.IsUsedByAnyGame(schemaId))
+        {
+            throw new HttpException(HttpStatusCode.Conflict,
+                "Schema is used by a game and cannot be deleted");
+        }
+
         await _repository.Delete(schemaId);
     }
 

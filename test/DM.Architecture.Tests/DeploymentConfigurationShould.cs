@@ -188,6 +188,54 @@ public class DeploymentConfigurationShould
             "cron gives the job no environment, and these scripts need credentials");
     }
 
+    /// <summary>
+    /// Object storage is the one store whose contents nothing can rebuild:
+    /// Postgres and Mongo hold references to uploaded files, the files are the
+    /// data. So the account a workload holds decides what a leaked configuration
+    /// costs.
+    /// </summary>
+    /// <remarks>
+    /// Mongo already draws this line — mongo-init.js creates an application user
+    /// with readWrite on one database and refuses to start without it — while the
+    /// application, every worker and imgproxy were handed the MinIO root account,
+    /// which can drop the bucket, rewrite its policy and mint further accounts.
+    /// </remarks>
+    [Fact]
+    public void GiveNoWorkloadTheObjectStoreRootAccount()
+    {
+        var compose = Read(BaseCompose);
+
+        FindValue(compose, "DM_CdnConfiguration__AccessKey:").Should().NotBe("minio",
+            "the application gets a service account scoped to its bucket, not the root user");
+        FindValue(compose, "DM_CdnConfiguration__SecretKey:").Should().NotContain("MINIO_ROOT_PASSWORD",
+            "the root password must not be readable from the application at all");
+        FindValue(compose, "AWS_ACCESS_KEY_ID:").Should().NotBe("minio",
+            "imgproxy only ever reads objects, so it gets the read-only account");
+        FindValue(compose, "AWS_SECRET_ACCESS_KEY:").Should().NotContain("MINIO_ROOT_PASSWORD",
+            "nor from the container that parses untrusted image data");
+    }
+
+    /// <summary>
+    /// The scoped accounts have to exist before the first upload, and only root
+    /// can create them — which is the whole of what root is still for.
+    /// </summary>
+    [Fact]
+    public void CreateTheScopedObjectStoreAccountsFromABootstrapContainer()
+    {
+        var compose = Read(BaseCompose);
+        var scriptPath = Path.Combine(DockerDirectory, "minio-init.sh");
+
+        compose.Should().Contain("minio-init:",
+            "the accounts the workloads are configured with have to be created by something");
+        File.Exists(scriptPath).Should().BeTrue("the bootstrap container mounts it");
+
+        var script = File.ReadAllText(scriptPath);
+        script.Should().Contain("arn:aws:s3:::",
+            "a policy that names no resource grants the account the whole store");
+        script.Should().NotContain("consoleAdmin",
+            "attaching a built-in administrative policy puts the root privileges back");
+    }
+
     /// <summary>Published ports of every service, as written.</summary>
     private static string[] PublishedPorts(string compose)
     {

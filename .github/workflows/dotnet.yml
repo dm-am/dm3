@@ -343,6 +343,8 @@ jobs:
         POSTGRES_PASSWORD: ci-validation-placeholder
         RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
         MINIO_ROOT_PASSWORD: ci-validation-placeholder
+        MINIO_APP_PASSWORD: ci-validation-placeholder
+        MINIO_IMGPROXY_PASSWORD: ci-validation-placeholder
         GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
         IMGPROXY_KEY: ci-validation-placeholder
         IMGPROXY_SALT: ci-validation-placeholder
@@ -359,6 +361,8 @@ jobs:
         POSTGRES_PASSWORD: ci-validation-placeholder
         RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
         MINIO_ROOT_PASSWORD: ci-validation-placeholder
+        MINIO_APP_PASSWORD: ci-validation-placeholder
+        MINIO_IMGPROXY_PASSWORD: ci-validation-placeholder
         GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
         IMGPROXY_KEY: ci-validation-placeholder
         IMGPROXY_SALT: ci-validation-placeholder

@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
-import type { Blog, BlogRef, BlogId } from "./types";
+import type { Blog, BlogRef, BlogId, Publication } from "./types";
 
 // Use vi.hoisted to ensure mocks are created before vi.mock hoisting
 const {
@@ -12,12 +12,16 @@ const {
   mockGetActiveBlogs,
   mockGetPopularBlogs,
   mockGetParticipatingBlogs,
+  mockGetBlog,
+  mockGetPublications,
   mockApiGet,
 } = vi.hoisted(() => ({
   mockGetPublicBlogs: vi.fn(),
   mockGetActiveBlogs: vi.fn(),
   mockGetPopularBlogs: vi.fn(),
   mockGetParticipatingBlogs: vi.fn(),
+  mockGetBlog: vi.fn(),
+  mockGetPublications: vi.fn(),
   mockApiGet: vi.fn(),
 }));
 
@@ -27,6 +31,8 @@ vi.mock("../api/blogApi", () => ({
     getActiveBlogs: mockGetActiveBlogs,
     getPopularBlogs: mockGetPopularBlogs,
     getParticipatingBlogs: mockGetParticipatingBlogs,
+    getBlog: mockGetBlog,
+    getPublications: mockGetPublications,
   },
 }));
 
@@ -36,7 +42,7 @@ vi.mock("@/shared/api", () => ({
   },
 }));
 
-import { useBlogsStore } from "./store";
+import { useBlogsStore, useBlogDetailsStore } from "./store";
 
 const createMockBlogRef = (id: string, title: string): BlogRef =>
   ({
@@ -468,5 +474,112 @@ describe("useBlogsStore", () => {
       expect(store.participatingBlogs).toBeNull();
       expect(store.activeBlogs).not.toBeNull(); // Should remain
     });
+  });
+});
+
+// ============================================================================
+// BLOG DETAILS STORE — OUT-OF-ORDER RESPONSES
+// ============================================================================
+
+/**
+ * Mirrors the game details store: one bag for "the current blog", two replies
+ * in flight after two clicks inside a round trip, and whichever landed last
+ * used to win — silently, with the spinner already hidden.
+ */
+describe("useBlogDetailsStore", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((settle) => {
+      resolve = settle;
+    });
+    return { promise, resolve };
+  }
+
+  it("keeps the newer blog when the older reply lands last", async () => {
+    const older = deferred<unknown>();
+    const newer = deferred<unknown>();
+    mockGetBlog
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise);
+
+    const store = useBlogDetailsStore();
+    const loadA = store.loadBlog("blog-a");
+    const loadB = store.loadBlog("blog-b");
+
+    newer.resolve({ data: createMockBlog("blog-b", "Blog B"), error: null });
+    await loadB;
+    older.resolve({ data: createMockBlog("blog-a", "Blog A"), error: null });
+    await loadA;
+
+    expect(store.blog?.title).toBe("Blog B");
+  });
+
+  it("lets the newer request own the spinner", async () => {
+    const older = deferred<unknown>();
+    const newer = deferred<unknown>();
+    mockGetBlog
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise);
+
+    const store = useBlogDetailsStore();
+    const loadA = store.loadBlog("blog-a");
+    const loadB = store.loadBlog("blog-b");
+
+    older.resolve({ data: createMockBlog("blog-a", "Blog A"), error: null });
+    await loadA;
+
+    expect(store.blogLoading).toBe(true);
+    expect(store.blog).toBeNull();
+
+    newer.resolve({ data: createMockBlog("blog-b", "Blog B"), error: null });
+    await loadB;
+
+    expect(store.blogLoading).toBe(false);
+    expect(store.blog?.title).toBe("Blog B");
+  });
+
+  it("shows the publications of the rubric chosen last", async () => {
+    const ofFirst = [{ id: "pub-1", title: "One" }] as unknown as Publication[];
+    const ofSecond = [{ id: "pub-2", title: "Two" }] as unknown as Publication[];
+
+    const older = deferred<unknown>();
+    const newer = deferred<unknown>();
+    mockGetPublications
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise);
+
+    const store = useBlogDetailsStore();
+    const loadFirst = store.loadPublications("blog-a", { rubricId: "r-1" });
+    const loadSecond = store.loadPublications("blog-a", { rubricId: "r-2" });
+
+    newer.resolve({
+      data: { resources: ofSecond, paging: null },
+      error: null,
+    });
+    await loadSecond;
+    older.resolve({ data: { resources: ofFirst, paging: null }, error: null });
+    await loadFirst;
+
+    expect(store.publications).toEqual(ofSecond);
+  });
+
+  it("drops a reply that arrives after the store was reset", async () => {
+    const pending = deferred<unknown>();
+    mockGetBlog.mockReturnValueOnce(pending.promise);
+
+    const store = useBlogDetailsStore();
+    const load = store.loadBlog("blog-a");
+
+    store.reset();
+
+    pending.resolve({ data: createMockBlog("blog-a", "Blog A"), error: null });
+    await load;
+
+    expect(store.blog).toBeNull();
   });
 });

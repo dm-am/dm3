@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using DM.Domain.Core.Identity;
 
 namespace DM.Web.API.Realtime;
 
@@ -8,19 +9,23 @@ namespace DM.Web.API.Realtime;
 /// SignalR connected users service
 /// </summary>
 /// <remarks>
-/// Tracks authenticated connections only: registration requires a valid
-/// auth token, so anonymous (guest) connections never appear here and can
-/// never be targeted by per-user events.
+/// Tracks authenticated connections only: registration requires an authenticated
+/// identity, so anonymous (guest) connections never appear here and can never be
+/// targeted by per-user events.
 /// </remarks>
 public interface IUserConnectionService
 {
     /// <summary>
-    /// Authenticate user and save its connection.
-    /// No-op when the token does not resolve to an authenticated identity.
+    /// Save the connection of an already authenticated identity.
+    /// No-op when the identity is not authenticated.
     /// </summary>
-    /// <param name="authToken"></param>
-    /// <param name="connectionId"></param>
-    Task Add(string authToken, string connectionId);
+    /// <remarks>
+    /// The identity is resolved by the caller and not here on purpose: this service
+    /// is a process-wide singleton, and authentication is database-backed.
+    /// </remarks>
+    /// <param name="identity">Identity resolved by the caller in its own scope</param>
+    /// <param name="connectionId">Connection identifier</param>
+    void Add(IIdentity identity, string connectionId);
 
     /// <summary>
     /// Remove a connection by its id.

@@ -12,7 +12,7 @@ namespace DM.Workers.NotificationDispatcher.Implementation.Notifiers.Game;
 
 /// <summary>
 /// Notification generator when a game becomes active.
-/// Notifies: Subscribers of Master, Subscribers of Assistants, Readers
+/// Notifies: Subscribers of Master, Subscribers of Assistants
 /// </summary>
 internal class GameActivatedNotificationGenerator : BaseNotificationGenerator
 {
@@ -70,12 +70,13 @@ internal class GameActivatedNotificationGenerator : BaseNotificationGenerator
             usersInterested.UnionWith(assistantSubscriptions.Select(s => s.SubscriberId));
         }
 
-        // Get game readers (subscribers to this specific game)
-        var readerSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
-            SubscriptionTargetType.Game,
-            gameData.GameId,
-            SubscriptionSettings.StatusChanges);
-        usersInterested.UnionWith(readerSubscriptions.Select(s => s.SubscriberId));
+        // Readers of this game are deliberately absent. They are subscribed to the
+        // game itself, so GameStatusChangedNotificationGenerator answers the same
+        // event and already tells them it went active under the event type of the
+        // activation. This notification renames the event to
+        // NewGameFromSubscribedAuthor, which is only true for the audience that
+        // could not see the game while it was a draft; delivered to a reader it was
+        // a second copy of one activation calling a game they already follow new.
 
         // Exclude game team members (they get notified via GameStatusChangedNotificationGenerator)
         usersInterested.Remove(gameData.MasterId);

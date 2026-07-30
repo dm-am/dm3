@@ -1,4 +1,3 @@
-import { Api } from "@/shared/api";
 import type { BadRequestError } from "@/shared/api/models/common";
 import type {
   LoginCredentials,
@@ -62,8 +61,9 @@ export async function signOutAll() {
  * localStorage when it is created, so this only reconciles it with the server.
  */
 export async function fetchUser() {
-  if (!Api.isAuthenticated()) return;
+  const auth = useAuthStore();
+  if (!auth.isAuthenticated) return;
 
   const { data } = await personalApi.getMyProfile();
-  useAuthStore().updateUser(data ?? null);
+  auth.updateUser(data ?? null);
 }

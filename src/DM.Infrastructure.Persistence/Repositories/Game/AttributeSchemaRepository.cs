@@ -202,6 +202,14 @@ internal class AttributeSchemaRepository :
                             g.Assistants.Any(a => a.UserId == userId) ||
                             g.Characters.Any(c => c.AuthorId == userId)));
 
+    // Deliberately not narrowed to a user: the reference that breaks belongs to
+    // somebody else's game, and the schema author is exactly the person the
+    // caller-narrowed query answers "no" for.
+    public async Task<bool> IsUsedByAnyGame(Guid schemaId) =>
+        await _dbContext.Games
+            .TagWith("DM.AttributeSchema.IsUsedByAnyGame")
+            .AnyAsync(g => g.AttributeSchemaId == schemaId && !g.IsRemoved);
+
     // --- HELPERS ---
 
     /// <summary>

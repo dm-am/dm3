@@ -63,7 +63,7 @@ public class TopicCommentController : ControllerBase
     /// - **skip**: Number of items to skip (pagination)
     /// - **take**: Number of items to return (max 100, default 20)
     /// - **search**: Text search in comment content (case-insensitive)
-    /// - **authors**: Filter by author usernames (comma-separated, OR logic)
+    /// - **authors**: Filter by author usernames, repeated per author (`authors=alice&amp;authors=bob`), OR logic
     /// - **createdFromUtc**: Filter by creation date start (ISO 8601)
     /// - **createdToUtc**: Filter by creation date end (ISO 8601)
     /// - **sortBy**: Sort field - "created" (default) or "likes"

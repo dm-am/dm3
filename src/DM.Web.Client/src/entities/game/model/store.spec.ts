@@ -714,4 +714,145 @@ describe("useGameDetailsStore", () => {
       expect(store.hasError).toBeTruthy();
     });
   });
+
+  // ============================================================================
+  // OUT-OF-ORDER RESPONSES
+  // ============================================================================
+
+  /**
+   * The store is a single bag for "the current game", and two clicks inside one
+   * round trip put two replies in flight. Whichever landed last used to win, so
+   * a slower reply for the game the user had already left redrew the page under
+   * the new title: no error, no spinner, wrong data.
+   */
+  describe("out-of-order responses", () => {
+    function deferred<T>() {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>((settle) => {
+        resolve = settle;
+      });
+      return { promise, resolve };
+    }
+
+    it("keeps the newer game when the older reply lands last", async () => {
+      const older = deferred<unknown>();
+      const newer = deferred<unknown>();
+      mockGetGame
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise);
+
+      const store = useGameDetailsStore();
+      const loadA = store.loadGame("game-a");
+      const loadB = store.loadGame("game-b");
+
+      newer.resolve({ data: createMockGame("game-b", "Game B"), error: null });
+      await loadB;
+      older.resolve({ data: createMockGame("game-a", "Game A"), error: null });
+      await loadA;
+
+      expect(store.game?.title).toBe("Game B");
+    });
+
+    it("lets the newer request own the spinner", async () => {
+      const older = deferred<unknown>();
+      const newer = deferred<unknown>();
+      mockGetGame
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise);
+
+      const store = useGameDetailsStore();
+      const loadA = store.loadGame("game-a");
+      const loadB = store.loadGame("game-b");
+
+      older.resolve({ data: createMockGame("game-a", "Game A"), error: null });
+      await loadA;
+
+      // Game B is still on the wire: hiding the spinner here presents an
+      // unfinished load as finished, with the wrong game underneath it.
+      expect(store.gameLoading).toBe(true);
+      expect(store.game).toBeNull();
+
+      newer.resolve({ data: createMockGame("game-b", "Game B"), error: null });
+      await loadB;
+
+      expect(store.gameLoading).toBe(false);
+      expect(store.game?.title).toBe("Game B");
+    });
+
+    it("does not let a stale failure blank the game that loaded", async () => {
+      const older = deferred<unknown>();
+      const newer = deferred<unknown>();
+      mockGetGame
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise);
+
+      const store = useGameDetailsStore();
+      const loadA = store.loadGame("game-a");
+      const loadB = store.loadGame("game-b");
+
+      newer.resolve({ data: createMockGame("game-b", "Game B"), error: null });
+      await loadB;
+      older.resolve({ data: null, error: { status: 404, title: "Not found" } });
+      await loadA;
+
+      expect(store.game?.title).toBe("Game B");
+      expect(store.gameError).toBeNull();
+    });
+
+    it("keeps the room header and its posts in step", async () => {
+      const store = useGameDetailsStore();
+      store.rooms = [
+        { id: "room-2", title: "Room 2", roomNumber: 2 },
+        { id: "room-3", title: "Room 3", roomNumber: 3 },
+      ] as unknown as Room[];
+
+      const postsOfTwo = [
+        { id: "post-2", gameText: "Room 2", createdUtc: "2024-01-01T00:00:00Z" },
+      ] as unknown as Post[];
+      const postsOfThree = [
+        { id: "post-3", gameText: "Room 3", createdUtc: "2024-01-01T00:00:00Z" },
+      ] as unknown as Post[];
+
+      const older = deferred<unknown>();
+      const newer = deferred<unknown>();
+      mockGetPosts
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise);
+
+      const loadTwo = store.loadPosts("room-2");
+      const loadThree = store.loadPosts("room-3");
+
+      newer.resolve({
+        data: { resources: postsOfThree, paging: null },
+        error: null,
+      });
+      await loadThree;
+      older.resolve({
+        data: { resources: postsOfTwo, paging: null },
+        error: null,
+      });
+      await loadTwo;
+
+      // currentRoom is assigned synchronously, the posts arrive later: the two
+      // must not come from different requests.
+      expect(store.currentRoom?.id).toBe("room-3");
+      expect(store.posts).toEqual(postsOfThree);
+    });
+
+    it("drops a reply that arrives after the store was reset", async () => {
+      const pending = deferred<unknown>();
+      mockGetGame.mockReturnValueOnce(pending.promise);
+
+      const store = useGameDetailsStore();
+      const load = store.loadGame("game-a");
+
+      // What GamePage does when the id in the URL changes, and on unmount.
+      store.reset();
+
+      pending.resolve({ data: createMockGame("game-a", "Game A"), error: null });
+      await load;
+
+      expect(store.game).toBeNull();
+    });
+  });
 });

@@ -20,6 +20,21 @@ public interface IMessageService
     /// <returns>Created message</returns>
     Task<Message> CreateAsync(CreateMessage createMessage, CancellationToken ct = default);
 
+    /// <summary>
+    /// Create new message in a game room chat
+    /// </summary>
+    /// <remarks>
+    /// Separate from the general create on purpose. A game room chat has no
+    /// participants of its own, so the participation rule the general create
+    /// applies refuses everyone; the game module authorizes the room instead and
+    /// then calls this. Keeping it a distinct entry point is what stops the chat
+    /// endpoints from reaching a game room chat without that room check.
+    /// </remarks>
+    /// <param name="createMessage">DTO model</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Created message</returns>
+    Task<Message> CreateInGameRoomAsync(CreateMessage createMessage, CancellationToken ct = default);
+
     // ═══ READ ═══
 
     /// <summary>
@@ -38,6 +53,19 @@ public interface IMessageService
     /// <param name="ct">Cancellation token</param>
     /// <returns>Cursor result with messages and pagination info</returns>
     Task<CursorResult<Message>> GetWithCursorAsync(Guid chatId, CursorQuery query, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get list of game room chat messages with cursor-based pagination
+    /// </summary>
+    /// <remarks>
+    /// The room decides who reads these messages, not the chat participants, and
+    /// the game module has already checked it by the time this is called.
+    /// </remarks>
+    /// <param name="chatId">Chat identifier</param>
+    /// <param name="query">Cursor query parameters</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Cursor result with messages and pagination info</returns>
+    Task<CursorResult<Message>> GetGameRoomWithCursorAsync(Guid chatId, CursorQuery query, CancellationToken ct = default);
 
     // ═══ UPDATE ═══
 

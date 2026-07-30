@@ -142,8 +142,8 @@ internal class ChatRoomApiService : IChatRoomApiService
         var room = await GetChatRoomForUpdateAsync(chatRoomId);
         _intentionManager.ThrowIfForbidden(RoomIntention.ViewMessages, room);
 
-        return await _messagingService.GetMessagesWithCursorAsync(
-            room.ChatId!.Value, cursor, null, null, limit);
+        return await _messagingService.GetGameRoomMessagesWithCursorAsync(
+            room.ChatId!.Value, cursor, limit);
     }
 
     /// <inheritdoc />
@@ -153,7 +153,7 @@ internal class ChatRoomApiService : IChatRoomApiService
         _intentionManager.ThrowIfForbidden(RoomIntention.SendMessage, room);
 
         var message = new Message { Text = new CommonBbText { Value = input.Text } };
-        return await _messagingService.CreateMessageAsync(room.ChatId!.Value, message);
+        return await _messagingService.CreateGameRoomMessageAsync(room.ChatId!.Value, message);
     }
 
     /// <inheritdoc />

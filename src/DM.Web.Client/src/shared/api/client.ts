@@ -37,8 +37,8 @@ const defaultHeaders: { [key: string]: string } = {
  * The HTTP client is a `shared` module and must not know the router, which
  * lives in `app` — the layer above. It used to reach for it with a dynamic
  * import, which hid the inverted dependency rather than removing it. The app
- * installs its own handler at startup; until it does, an expired session only
- * clears local state and shows the toast.
+ * installs its own handler at startup — it drops the viewer from the auth store
+ * and navigates; until it does, an expired session only shows the toast.
  */
 let onSessionExpired: (() => void) | null = null;
 
@@ -101,9 +101,12 @@ class Api {
     this.axios.interceptors.response.use(
       (response) => response,
       async (error) => {
-        // Handle 401 Unauthorized — session expired or invalid
+        // Handle 401 Unauthorized — session expired or invalid.
+        // Who the viewer is belongs to the auth store, which owns the persisted
+        // copy. Clearing that copy from here left the store still holding the
+        // user, so the header, the sidebar blocks and every action button kept
+        // rendering as signed in while the route guard bounced the same viewer.
         if (error.response?.status === 401) {
-          localStorage.removeItem("user");
           const { warning } = useToast();
           warning("Сессия истекла. Пожалуйста, войдите снова.");
           onSessionExpired?.();
@@ -141,12 +144,6 @@ class Api {
         return Promise.reject(error);
       },
     );
-  }
-
-  public isAuthenticated(): boolean {
-    // With cookie-based auth, we check if user is stored locally
-    // The actual auth state is determined by the HttpOnly cookie
-    return localStorage.getItem("user") !== null;
   }
 
   public get<T>(
@@ -249,12 +246,6 @@ class Api {
         },
       };
     }
-  }
-
-  public logout() {
-    // With cookie-based auth, just clear local state
-    // The server will invalidate the session on DELETE /v1/account/login
-    localStorage.removeItem("user");
   }
 
   /**

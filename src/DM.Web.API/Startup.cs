@@ -42,6 +42,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using System;
+using System.Threading.Tasks;
 
 namespace DM.Web.API;
 
@@ -54,6 +55,23 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
     private IHttpContextAccessor _httpContextAccessor = null!;
     private IBbParserProvider _bbParserProvider = null!;
     private bool _migrateOnStart;
+
+    /// <summary>
+    /// Response writer of every health endpoint. One field and not three literals:
+    /// the choice is a security one and must not be made per endpoint.
+    /// </summary>
+    /// <remarks>
+    /// The plain writer copies the message of every failed check into the body, and
+    /// those messages belong to the drivers: Npgsql spells out host, port, database
+    /// and user, MongoDB and RabbitMQ do the same. These endpoints carry no
+    /// authentication of their own, so whoever reaches the port reads the report; it
+    /// has to say what is broken without saying where it lives. The response keeps
+    /// its shape either way - the exception field stays, only its text is replaced.
+    /// Internal so a test can hold the writer to that.
+    /// </remarks>
+    internal static readonly Func<HttpContext, Microsoft.Extensions.Diagnostics.HealthChecks.HealthReport, Task>
+        HealthReportWriter =
+            HealthChecks.UI.Client.UIResponseWriter.WriteHealthCheckUIResponseNoExceptionDetails;
 
     /// <summary>
     /// Configure application services
@@ -201,7 +219,10 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
 
         RegisterDomainServices(builder);
 
-        // Singleton for SignalR user connection tracking
+        // Singleton for SignalR user connection tracking. Safe only while the type
+        // takes no dependencies: a single instance is activated in the root scope,
+        // and every scoped service it took would be captured there for the life of
+        // the process — down to the pooled DbContext behind authentication.
         builder.RegisterType<UserConnectionService>()
             .AsImplementedInterfaces()
             .SingleInstance();
@@ -284,20 +305,20 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                 c.MapHealthChecks("/_health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
                 {
                     Predicate = _ => false,
-                    ResponseWriter = HealthChecks.UI.Client.UIResponseWriter.WriteHealthCheckUIResponse
+                    ResponseWriter = HealthReportWriter
                 });
 
                 // Readiness � all "ready" dependencies (for load balancer)
                 c.MapHealthChecks("/_ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
                 {
                     Predicate = check => check.Tags.Contains("ready"),
-                    ResponseWriter = HealthChecks.UI.Client.UIResponseWriter.WriteHealthCheckUIResponse
+                    ResponseWriter = HealthReportWriter
                 });
 
                 // Detail � all checks (for monitoring dashboard)
                 c.MapHealthChecks("/_health/detail", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
                 {
-                    ResponseWriter = HealthChecks.UI.Client.UIResponseWriter.WriteHealthCheckUIResponse
+                    ResponseWriter = HealthReportWriter
                 });
             });
     }

@@ -1,6 +1,7 @@
 import { ref, readonly } from "vue";
 import type { HubConnection } from "@microsoft/signalr";
 import api from "@/shared/api";
+import { useAuthStore } from "@/shared/stores";
 import type {
   SignalRNotification,
   NotificationHandler,
@@ -43,7 +44,7 @@ async function startGlobalSocket(): Promise<boolean> {
     // Anonymous connect is supported: auth travels in the HttpOnly session
     // cookie (withCredentials), guests simply negotiate without it and the
     // hub accepts them as receive-only broadcast listeners.
-    negotiatedAsAuthenticated = api.isAuthenticated();
+    negotiatedAsAuthenticated = useAuthStore().isAuthenticated;
     globalConnection = await api.establishHubConnection("whatsup");
 
     globalConnection.onclose(() => {
@@ -103,7 +104,7 @@ export function useGlobalSignalR(owner = "app") {
       const { HubConnectionState } = await import("@microsoft/signalr");
 
       if (globalConnection?.state === HubConnectionState.Connected) {
-        if (negotiatedAsAuthenticated === api.isAuthenticated()) {
+        if (negotiatedAsAuthenticated === useAuthStore().isAuthenticated) {
           return true;
         }
         // Auth context changed since negotiation — bounce to re-negotiate
@@ -134,7 +135,7 @@ export function useGlobalSignalR(owner = "app") {
       // chat page holds its lease), re-negotiate anonymously instead of
       // keeping a connection the server still associates with the previous
       // user; otherwise leave the shared socket untouched.
-      if (negotiatedAsAuthenticated !== api.isAuthenticated()) {
+      if (negotiatedAsAuthenticated !== useAuthStore().isAuthenticated) {
         await stopGlobalSocket();
         await startGlobalSocket();
       }

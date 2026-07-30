@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using DM.Domain.Account.Features.Authentication;
 using DM.Web.API.Realtime;
 using DM.Web.API.Shared.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -27,12 +28,15 @@ namespace DM.Web.API.Notifications;
 [AllowAnonymous]
 public class NotificationHub : Hub<INotificationHub>
 {
+    private readonly IAuthenticationService _authenticationService;
     private readonly IUserConnectionService _connectionService;
 
     /// <inheritdoc />
     public NotificationHub(
+        IAuthenticationService authenticationService,
         IUserConnectionService connectionService)
     {
+        _authenticationService = authenticationService;
         _connectionService = connectionService;
     }
 
@@ -42,10 +46,17 @@ public class NotificationHub : Hub<INotificationHub>
         var (hasToken, token) = TryExtractAuthToken();
         if (hasToken)
         {
-            // Registration is gated on authenticated identity inside the
+            // Authentication belongs here rather than in the connection service:
+            // a hub is created per invocation from its own scope, while the
+            // connection map is a process-wide singleton, and a database-backed
+            // service injected into a singleton is resolved once in the root
+            // scope and then shared by every connection at once.
+            var identity = await _authenticationService.Authenticate(token);
+
+            // Registration is still gated on authenticated identity inside the
             // connection service — a forged or expired token leaves the
             // connection in the same receive-only state as a guest
-            await _connectionService.Add(token, Context.ConnectionId);
+            _connectionService.Add(identity, Context.ConnectionId);
         }
 
         await base.OnConnectedAsync();

@@ -27,6 +27,11 @@ public interface IAttributeSchemaRepository
     /// </summary>
     Task<bool> IsUsedByUserGame(Guid schemaId, Guid userId);
 
+    /// <summary>
+    /// Whether any live game references this schema, whoever leads it
+    /// </summary>
+    Task<bool> IsUsedByAnyGame(Guid schemaId);
+
     #endregion
 
     #region Write

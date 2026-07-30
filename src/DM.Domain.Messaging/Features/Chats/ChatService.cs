@@ -109,6 +109,24 @@ internal class ChatService : IChatService
     }
 
     /// <inheritdoc />
+    public async Task<Chat> GetGameRoomAsync(Guid chatId)
+    {
+        // Deliberately the unfiltered read: the participation predicate returns
+        // null for a game room chat, which has no participant rows by design.
+        var chat = await _repository.GetForUpdate(chatId);
+        if (chat == null || chat.Type != ChatType.GameRoom)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, "Chat not found");
+        }
+
+        var currentUserId = _identityProvider.Current.User.UserId;
+        await _unreadCountersRepository.FillEntityCounters(new[] { chat }, currentUserId,
+            c => c.Id, c => c.UnreadMessagesCount);
+
+        return chat;
+    }
+
+    /// <inheritdoc />
     public async Task<Chat> GetByPublicIdAsync(string publicId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;

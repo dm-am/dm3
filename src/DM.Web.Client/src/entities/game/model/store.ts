@@ -319,6 +319,31 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   const usersLoading = ref(false);
   const usersError = ref<string | null>(null);
 
+  // One monotonic token per independent slice. This store is a single bag for
+  // "the current game", so a reply for the game (or room, or page) the user has
+  // already left would otherwise land on top of the newer one — no error, no
+  // spinner, wrong data. Per slice rather than one shared counter because the
+  // slices load in parallel and a shared counter would let every new request
+  // cancel its siblings.
+  const gameGuard = createRequestGuard();
+  const roomsGuard = createRequestGuard();
+  const postsGuard = createRequestGuard();
+  const charactersGuard = createRequestGuard();
+  const commentsGuard = createRequestGuard();
+  const chatRoomsGuard = createRequestGuard();
+  const blacklistGuard = createRequestGuard();
+  const usersGuard = createRequestGuard();
+  const detailGuards = [
+    gameGuard,
+    roomsGuard,
+    postsGuard,
+    charactersGuard,
+    commentsGuard,
+    chatRoomsGuard,
+    blacklistGuard,
+    usersGuard,
+  ];
+
   // Active vs archived post rooms — a room is archived when isArchived is true.
   const activeRooms = computed(() => rooms.value.filter((r) => !r.isArchived));
   const archivedRooms = computed(() => rooms.value.filter((r) => r.isArchived));
@@ -375,10 +400,16 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
 
   // Load game
   async function loadGame(id: string): Promise<void> {
+    const requestId = gameGuard.next();
     gameLoading.value = true;
     gameError.value = null;
 
     const { data, error } = await gameApi.getGame(id);
+
+    // A newer load owns the visible state: committing here would draw the game
+    // the user just left under the new title, and clearing the spinner would
+    // present the request still on the wire as finished.
+    if (!gameGuard.isCurrent(requestId)) return;
 
     if (error) {
       gameError.value = "Не удалось загрузить игру";
@@ -395,10 +426,14 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
 
   // Load rooms
   async function loadRooms(gameId: string): Promise<void> {
+    const requestId = roomsGuard.next();
     roomsLoading.value = true;
     roomsError.value = null;
 
     const { data, error } = await gameApi.getRooms(gameId);
+
+    // Stale continuation — the newer request owns the visible state.
+    if (!roomsGuard.isCurrent(requestId)) return;
 
     if (error) {
       roomsError.value = "Не удалось загрузить комнаты";
@@ -412,6 +447,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
 
   // Load posts for a room by room ID
   async function loadPosts(roomId: string, page: number = 1): Promise<void> {
+    const requestId = postsGuard.next();
     postsLoading.value = true;
     postsError.value = null;
 
@@ -422,6 +458,11 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     }
 
     const { data, error } = await gameApi.getPosts(roomId, { number: page });
+
+    // Stale continuation. currentRoom is assigned synchronously above, so
+    // without this the header names the room the newer call selected while the
+    // list under it holds the posts of the older one.
+    if (!postsGuard.isCurrent(requestId)) return;
 
     if (error) {
       postsError.value = "Не удалось загрузить посты";
@@ -441,11 +482,17 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     roomNumber: number,
     page: number = 1,
   ): Promise<void> {
+    const requestId = postsGuard.next();
+
     // Deep links (first-unread redirects, direct URLs) land here before the
     // rooms list is in the store - resolve it first
     if (!rooms.value.length) {
       await loadRooms(gameId);
     }
+
+    // The room in the URL changed while the rooms list was on the wire: the
+    // newer call resolves against its own room number, not this one.
+    if (!postsGuard.isCurrent(requestId)) return;
 
     // Find the room by number
     const room = rooms.value.find((r) => r.roomNumber === roomNumber);
@@ -462,10 +509,14 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
 
   // Load characters
   async function loadCharacters(gameId: string): Promise<void> {
+    const requestId = charactersGuard.next();
     charactersLoading.value = true;
     charactersError.value = null;
 
     const { data, error } = await gameApi.getCharacters(gameId);
+
+    // Stale continuation — the newer request owns the visible state.
+    if (!charactersGuard.isCurrent(requestId)) return;
 
     if (error) {
       charactersError.value = "Не удалось загрузить персонажей";
@@ -479,12 +530,16 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
 
   // Load comments
   async function loadComments(gameId: string, page: number = 1): Promise<void> {
+    const requestId = commentsGuard.next();
     commentsLoading.value = true;
     commentsError.value = null;
 
     const { data, error } = await gameApi.getGameComments(gameId, {
       number: page,
     });
+
+    // Stale continuation — the newer request owns the visible state.
+    if (!commentsGuard.isCurrent(requestId)) return;
 
     if (error) {
       commentsError.value = "Не удалось загрузить комментарии";
@@ -552,10 +607,14 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
 
   // Load chat rooms (discussion)
   async function loadChatRooms(gameId: string): Promise<void> {
+    const requestId = chatRoomsGuard.next();
     chatRoomsLoading.value = true;
     chatRoomsError.value = null;
 
     const { data, error } = await gameApi.getChatRooms(gameId);
+
+    // Stale continuation — the newer request owns the visible state.
+    if (!chatRoomsGuard.isCurrent(requestId)) return;
 
     if (error) {
       chatRoomsError.value = "Не удалось загрузить обсуждения";
@@ -569,10 +628,14 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
 
   // Load blacklist
   async function loadBlacklist(gameId: string): Promise<void> {
+    const requestId = blacklistGuard.next();
     blacklistLoading.value = true;
     blacklistError.value = null;
 
     const { data, error } = await gameApi.getBlacklist(gameId);
+
+    // Stale continuation — the newer request owns the visible state.
+    if (!blacklistGuard.isCurrent(requestId)) return;
 
     if (error) {
       blacklistError.value = "Не удалось загрузить черный список";
@@ -586,10 +649,14 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
 
   // Load game users
   async function loadUsers(gameId: string): Promise<void> {
+    const requestId = usersGuard.next();
     usersLoading.value = true;
     usersError.value = null;
 
     const { data, error } = await gameApi.getUsers(gameId);
+
+    // Stale continuation — the newer request owns the visible state.
+    if (!usersGuard.isCurrent(requestId)) return;
 
     if (error) {
       usersError.value = "Не удалось загрузить участников";
@@ -669,6 +736,11 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
 
   // Reset all data (when leaving game page)
   function reset(): void {
+    // Replies still on the wire belong to the game being left. GamePage wipes
+    // the store on an id change and on unmount, so without bumping every token
+    // the late reply repopulates what was just cleared.
+    detailGuards.forEach((guard) => guard.next());
+
     game.value = null;
     gameLoading.value = false;
     gameError.value = null;

@@ -3,11 +3,19 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using DM.Domain.Account.Features.Authentication;
+using DM.Domain.Core.Identity;
 
 namespace DM.Web.API.Realtime;
 
-internal class UserConnectionService(IAuthenticationService authenticationService) : IUserConnectionService
+// Deliberately without constructor dependencies: the registration is a single
+// instance, so anything taken here is activated once in the root scope and kept
+// for the life of the process. Authentication is database-backed, and the pooled
+// DbContext at the end of that chain would then be shared by every connection at
+// once: two clients connecting at the same moment are two operations on one
+// context, and its change tracker would hold every user that ever connected.
+// The caller authenticates in its own per-invocation scope and hands the result
+// over already resolved.
+internal class UserConnectionService : IUserConnectionService
 {
     // Instance state, not static: the process-wide lifetime comes from the
     // single-instance registration. A static map would additionally survive
@@ -18,9 +26,8 @@ internal class UserConnectionService(IAuthenticationService authenticationServic
     // still being valid (it may already be invalidated by logout)
     private readonly ConcurrentDictionary<string, Guid> _connectionOwners = new();
 
-    public async Task Add(string authToken, string connectionId)
+    public void Add(IIdentity identity, string connectionId)
     {
-        var identity = await authenticationService.Authenticate(authToken);
         if (!identity.User.IsAuthenticated)
         {
             // Guests keep an open connection for public broadcasts, but are

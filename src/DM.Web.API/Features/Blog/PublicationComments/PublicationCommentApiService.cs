@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Core.Identity;
+using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Comments;
 using DM.Domain.Blog.Features.PublicationComments;
 using DM.Domain.Core.Enums;
@@ -18,25 +20,41 @@ internal class PublicationCommentApiService : IPublicationCommentApiService
 {
     private readonly IPublicationCommentService _commentService;
     private readonly IIdentityProvider _identityProvider;
+    private readonly IUserBlacklistChecker _blacklistChecker;
     private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public PublicationCommentApiService(
         IPublicationCommentService commentService,
         IIdentityProvider identityProvider,
+        IUserBlacklistChecker blacklistChecker,
         IMapper mapper)
     {
         _commentService = commentService;
         _identityProvider = identityProvider;
+        _blacklistChecker = blacklistChecker;
         _mapper = mapper;
     }
 
     /// <inheritdoc />
     public async Task<DiscussionResponse> GetDiscussion(Guid publicationId, PublicationCommentsQuery query)
     {
-        var (comments, paging) = await _commentService.GetAsync(publicationId, query);
         var identity = _identityProvider.Current;
         var currentUserId = identity.User?.UserId ?? Guid.Empty;
+
+        // Get blocked user IDs if HideComments setting is enabled
+        IReadOnlyCollection<Guid>? excludeUserIds = null;
+        if (identity.User?.IsAuthenticated == true)
+        {
+            var blockedIds = await _blacklistChecker.GetBlockedUserIdsIfFlagEnabledAsync(
+                currentUserId, UserBlacklistSettings.HideComments);
+            if (blockedIds.Count > 0)
+            {
+                excludeUserIds = blockedIds;
+            }
+        }
+
+        var (comments, paging) = await _commentService.GetAsync(publicationId, query, excludeUserIds);
         var isAuthenticated = identity.User?.IsAuthenticated ?? false;
         var isModerator = (identity.User?.Role ?? UserRole.Guest) >= UserRole.Moderator;
 
@@ -63,7 +81,19 @@ internal class PublicationCommentApiService : IPublicationCommentApiService
     /// <inheritdoc />
     public async Task<ListEnvelope<Comment>> Get(Guid publicationId, PublicationCommentsQuery query)
     {
-        var (comments, paging) = await _commentService.GetAsync(publicationId, query);
+        var identity = _identityProvider.Current;
+        IReadOnlyCollection<Guid>? excludeUserIds = null;
+        if (identity.User?.IsAuthenticated == true)
+        {
+            var blockedIds = await _blacklistChecker.GetBlockedUserIdsIfFlagEnabledAsync(
+                identity.User.UserId, UserBlacklistSettings.HideComments);
+            if (blockedIds.Count > 0)
+            {
+                excludeUserIds = blockedIds;
+            }
+        }
+
+        var (comments, paging) = await _commentService.GetAsync(publicationId, query, excludeUserIds);
         return new ListEnvelope<Comment>(comments.Select(_mapper.Map<Comment>), new PagingInfo(paging));
     }
 

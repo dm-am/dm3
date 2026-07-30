@@ -81,6 +81,8 @@ describe("Api.send", () => {
     const { AxiosError } = await import("axios");
     const axios = (await import("axios")).default;
 
+    // (the 401 interceptor is covered in its own describe below)
+
     vi.spyOn(axios, "create").mockReturnValue({
       interceptors: { response: { use: vi.fn() } },
       // No `response` at all: the request never reached the API, or the browser
@@ -96,5 +98,51 @@ describe("Api.send", () => {
     expect(Boolean(error)).toBe(true);
     expect(error?.status).toBe(0);
     expect(error?.title).toBe("");
+  });
+});
+
+/**
+ * A 401 means the session is gone, and exactly one module owns "who the viewer
+ * is": the auth store. The interceptor used to clear the persisted copy behind
+ * the store's back, so the store went on reporting an authenticated user — the
+ * header, the sidebar blocks and every action button rendered as signed in
+ * while the route guard bounced the same viewer to the login modal.
+ */
+describe("Api on 401", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    localStorage.clear();
+  });
+
+  async function loadClientWithInterceptor() {
+    const axios = (await import("axios")).default;
+    const use = vi.fn();
+
+    vi.spyOn(axios, "create").mockReturnValue({
+      interceptors: { response: { use } },
+    } as never);
+
+    const module = await import("./client");
+    const onRejected = use.mock.calls[0][1] as (
+      error: unknown,
+    ) => Promise<unknown>;
+
+    return { module, onRejected };
+  }
+
+  it("hands the expired session to the app instead of clearing storage", async () => {
+    const { module, onRejected } = await loadClientWithInterceptor();
+    const handler = vi.fn();
+    module.setSessionExpiredHandler(handler);
+    localStorage.setItem("user", JSON.stringify({ username: "SolohinLex" }));
+
+    await expect(
+      onRejected({ response: { status: 401, headers: {} } }),
+    ).rejects.toBeDefined();
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    // The persisted copy has exactly one writer, the auth store. A second one
+    // here is how the store and localStorage drifted apart in the first place.
+    expect(localStorage.getItem("user")).not.toBeNull();
   });
 });

@@ -251,12 +251,18 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     /// <inheritdoc />
     public async Task<DateTime?> GetLastReadTimeAsync(Guid userId, Guid entityId, UnreadEntryType entryType)
     {
+        // Sorted, and not "whichever document comes back first": no unique index
+        // backs the (UserId, EntityId, EntryType) triple the upserts above treat as
+        // a key, so two flushes racing each other leave two markers for one entity
+        // and natural order answers with the stale one. The latest read is the
+        // answer - the same one the aggregate reads reach through Min(Counter).
         var counter = await Collection
             .Find(
                 Filter.Eq(c => c.UserId, userId) &
                 Filter.Eq(c => c.EntityId, entityId) &
                 Filter.Eq(c => c.EntryType, entryType) &
                 Filter.Eq(c => c.IsRemoved, false))
+            .SortByDescending(c => c.LastReadUtc)
             .FirstOrDefaultAsync();
 
         return counter?.LastReadUtc;
@@ -273,6 +279,11 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
                 Filter.Eq(c => c.IsRemoved, false))
             .ToListAsync();
 
-        return counters.ToDictionary(c => c.EntityId, c => c.LastReadUtc);
+        // Grouped for the same reason: a plain ToDictionary throws on a duplicated
+        // entity, and the caller is the jump to the first unread post, so the whole
+        // request fails on data the store is free to hold.
+        return counters
+            .GroupBy(c => c.EntityId)
+            .ToDictionary(g => g.Key, g => g.Max(c => c.LastReadUtc));
     }
 }
