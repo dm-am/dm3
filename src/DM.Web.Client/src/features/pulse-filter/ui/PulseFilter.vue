@@ -131,26 +131,14 @@ const sortOptions = [
   },
 ];
 
-// Track pending sortBy to avoid race condition:
-// SortButton emits update:sortBy THEN update:sortOrder in same tick,
-// but filterState hasn't updated yet when sortOrder handler runs
-let pendingSortBy: PulseSortBy | null = null;
-
-function handleSortByChange(value: string) {
-  const option = sortOptions.find((o) => o.value === value);
-  pendingSortBy = value as PulseSortBy;
-  setSort(value as PulseSortBy, option?.defaultDirection);
+function handleSortSelect(value: string, direction?: "asc" | "desc") {
+  setSort(value as PulseSortBy, direction);
 }
 
+// This filter has no toggle action of its own, so the flip is expressed as a
+// re-sort on the field already in effect.
 function handleSortOrderChange(order: "asc" | "desc") {
-  const sortBy = pendingSortBy ?? filterState.value.sortBy;
-  pendingSortBy = null;
-  if (
-    order !== filterState.value.sortOrder ||
-    sortBy !== filterState.value.sortBy
-  ) {
-    setSort(sortBy, order);
-  }
+  setSort(filterState.value.sortBy, order);
 }
 
 // ── Bubbles ──
@@ -330,7 +318,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
         :options="sortOptions"
         :sort-by="filterState.sortBy"
         :sort-order="filterState.sortOrder"
-        @update:sort-by="handleSortByChange"
+        @sort-select="handleSortSelect"
         @update:sort-order="handleSortOrderChange"
       />
     </div>

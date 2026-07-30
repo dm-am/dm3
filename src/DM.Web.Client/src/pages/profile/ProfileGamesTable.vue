@@ -217,10 +217,9 @@ const sortOptions = [
   { value: "title", label: "Название", defaultDirection: "asc" as const },
 ];
 
-function handleSortBy(value: string) {
+function handleSortSelect(value: string, direction?: "asc" | "desc") {
   sortBy.value = value === "title" ? "title" : "created";
-  const option = sortOptions.find((o) => o.value === value);
-  sortOrder.value = option?.defaultDirection ?? "desc";
+  sortOrder.value = direction ?? "desc";
 }
 
 function handleSortOrder(order: "asc" | "desc") {
@@ -309,7 +308,7 @@ function pagingAnchor(): HTMLElement | null {
         :options="sortOptions"
         :sort-by="sortBy"
         :sort-order="sortOrder"
-        @update:sort-by="handleSortBy"
+        @sort-select="handleSortSelect"
         @update:sort-order="handleSortOrder"
       />
 

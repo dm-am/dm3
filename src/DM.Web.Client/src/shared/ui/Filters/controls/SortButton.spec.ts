@@ -134,7 +134,7 @@ describe("SortButton", () => {
       expect(selectedOption.text()).toContain("Дата");
     });
 
-    it("emits update:sortBy when option clicked", async () => {
+    it("reports the field and its default direction in one event", async () => {
       const wrapper = mountComponent();
       await wrapper.find(".sort-btn").trigger("click");
 
@@ -143,11 +143,14 @@ describe("SortButton", () => {
       )[1];
       await nameOption.trigger("click");
 
-      expect(wrapper.emitted("update:sortBy")).toBeTruthy();
-      expect(wrapper.emitted("update:sortBy")![0]).toEqual(["name"]);
+      expect(wrapper.emitted("sort-select")).toBeTruthy();
+      expect(wrapper.emitted("sort-select")!.length).toBe(1);
+      expect(wrapper.emitted("sort-select")![0]).toEqual(["name", "asc"]);
     });
 
-    it("emits default direction when option has one", async () => {
+    // A second, separate direction event is what let consumers read their own
+    // pre-click direction and flip the one they had just been handed.
+    it("does not report the direction separately when an option is picked", async () => {
       const wrapper = mountComponent();
       await wrapper.find(".sort-btn").trigger("click");
 
@@ -156,8 +159,21 @@ describe("SortButton", () => {
       )[1];
       await nameOption.trigger("click");
 
-      expect(wrapper.emitted("update:sortOrder")).toBeTruthy();
-      expect(wrapper.emitted("update:sortOrder")![0]).toEqual(["asc"]);
+      expect(wrapper.emitted("update:sortOrder")).toBeUndefined();
+    });
+
+    it("leaves the direction undefined when the option declares none", async () => {
+      const wrapper = mountComponent({
+        options: [{ value: "relevance", label: "Релевантность" }],
+      });
+      await wrapper.find(".sort-btn").trigger("click");
+
+      await wrapper.find(".sort-option:not(.sort-direction)").trigger("click");
+
+      expect(wrapper.emitted("sort-select")![0]).toEqual([
+        "relevance",
+        undefined,
+      ]);
     });
 
     it("closes dropdown after selection", async () => {
@@ -199,13 +215,14 @@ describe("SortButton", () => {
       );
     });
 
-    it("emits toggled direction on click", async () => {
+    it("reports only the direction on click", async () => {
       const wrapper = mountComponent({ sortOrder: "desc" });
       await wrapper.find(".sort-btn").trigger("click");
       await wrapper.find(".sort-direction").trigger("click");
 
       expect(wrapper.emitted("update:sortOrder")).toBeTruthy();
       expect(wrapper.emitted("update:sortOrder")![0]).toEqual(["asc"]);
+      expect(wrapper.emitted("sort-select")).toBeUndefined();
     });
   });
 });

@@ -108,17 +108,6 @@ const sortOptions = SORT_OPTIONS.map((o) => ({
   defaultDirection: o.defaultDirection,
 }));
 
-function handleSortByChange(value: string) {
-  const option = SORT_OPTIONS.find((o) => o.value === value);
-  setSort(value as any, option?.defaultDirection);
-}
-
-function handleSortOrderChange(order: "asc" | "desc") {
-  if (order !== filterState.value.sortOrder) {
-    toggleSortOrder();
-  }
-}
-
 // =============================================================================
 // BUBBLES & DISPLAY
 // =============================================================================
@@ -245,8 +234,8 @@ function handleSearchKeydown(event: KeyboardEvent) {
         :options="sortOptions"
         :sort-by="filterState.sortBy"
         :sort-order="filterState.sortOrder"
-        @update:sort-by="handleSortByChange"
-        @update:sort-order="handleSortOrderChange"
+        @sort-select="setSort"
+        @update:sort-order="toggleSortOrder"
       />
     </div>
 

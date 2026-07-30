@@ -39,15 +39,10 @@ const sortOptions = computed<SortOption[]>(
     })),
 );
 
-function handleSortByChange(value: string) {
-  const option = SORT_OPTIONS.find((o) => o.value === value);
-  setSort(value as "created" | "author", option?.defaultDirection);
-}
-
-function handleSortOrderChange(order: "asc" | "desc") {
-  if (order !== filterState.value.sortOrder) {
-    toggleSortOrder();
-  }
+// The direction rides along with the clicked option, so an overridden option
+// list no longer has to keep its directions in step with SORT_OPTIONS.
+function handleSortSelect(value: string, direction?: "asc" | "desc") {
+  setSort(value as "created" | "author", direction);
 }
 </script>
 
@@ -68,8 +63,8 @@ function handleSortOrderChange(order: "asc" | "desc") {
         :options="sortOptions"
         :sort-by="filterState.sortBy"
         :sort-order="filterState.sortOrder"
-        @update:sort-by="handleSortByChange"
-        @update:sort-order="handleSortOrderChange"
+        @sort-select="handleSortSelect"
+        @update:sort-order="toggleSortOrder"
       />
     </div>
   </div>

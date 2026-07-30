@@ -89,15 +89,9 @@ const sortOptions = SORT_OPTIONS.map((o) => ({
   defaultDirection: o.defaultDirection,
 }));
 
-function handleSortByChange(value: string) {
-  const option = SORT_OPTIONS.find((o) => o.value === value);
-  setSort(value as "starts" | "ends" | "status", option?.defaultDirection);
-}
-
-function handleSortOrderChange(order: "asc" | "desc") {
-  if (order !== filterState.value.sortOrder) {
-    toggleSortOrder();
-  }
+// The cast is safe: SortButton only ever reports back a value it was given.
+function handleSortSelect(value: string, direction?: "asc" | "desc") {
+  setSort(value as "starts" | "ends" | "status", direction);
 }
 
 // Status handling
@@ -338,8 +332,8 @@ function handleSearchKeydown(event: KeyboardEvent) {
         :options="sortOptions"
         :sort-by="filterState.sortBy"
         :sort-order="filterState.sortOrder"
-        @update:sort-by="handleSortByChange"
-        @update:sort-order="handleSortOrderChange"
+        @sort-select="handleSortSelect"
+        @update:sort-order="toggleSortOrder"
       />
     </div>
 
