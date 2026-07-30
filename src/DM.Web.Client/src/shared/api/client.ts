@@ -7,7 +7,7 @@ import type {
   AxiosProgressEvent,
 } from "axios";
 import type { HubConnection } from "@microsoft/signalr";
-import type { ApiResult } from "./models/common";
+import type { ApiResult, GeneralError } from "./models/common";
 import {
   RENDER_AUDIENCE,
   X_DM_AUDIENCE,
@@ -45,6 +45,36 @@ export function setSessionExpiredHandler(handler: () => void): void {
 }
 
 const apiHost = import.meta.env.VITE_API_HOST ?? "http://localhost:5000"; // Config - use ?? to allow empty string
+
+/**
+ * A failed response as a problem document, whatever the server actually sent.
+ *
+ * The middleware answers every error it handles with one, but not every error
+ * reaches the middleware: an unrouted path and a wrong method are answered by
+ * the framework with a zero-length body. Axios then sets `response.data` to the
+ * empty string, and returning that as `error` handed every call site a falsy
+ * value — so `if (error)` read a 404 as success with no data, and a store that
+ * checks it went down its "there is nothing more" branch instead of reporting
+ * the failure.
+ *
+ * The title is left empty for a synthesised one on purpose: call sites read
+ * `error.title || "не удалось ..."`, and the page knows what it was doing
+ * better than a generic sentence here would.
+ */
+function asProblem(response: AxiosResponse): GeneralError {
+  const body = response.data;
+
+  if (body && typeof body === "object") {
+    return body as GeneralError;
+  }
+
+  return {
+    type: "",
+    title: "",
+    status: response.status,
+    traceId: "",
+  };
+}
 
 const configuration: AxiosRequestConfig = {
   baseURL: `${apiHost}/v1`,
@@ -199,13 +229,18 @@ class Api {
       };
     } catch (err: unknown) {
       if (err instanceof AxiosError && err.response) {
-        return { data: null, error: err.response.data };
+        return { data: null, error: asProblem(err.response) };
       }
+      // No response at all: the request never reached the API, or the browser
+      // cut it. The title is left empty on purpose — call sites read
+      // `error.title || "не удалось ..."`, and any English placeholder here is
+      // truthy, so it won that fallback and shipped "Unknown error" to the
+      // reader instead of the message the page wrote for exactly this case.
       return {
         data: null,
         error: {
           type: "Unknown",
-          title: "Unknown error",
+          title: "",
           status: 0,
           traceId: "",
         },
