@@ -16,6 +16,7 @@ import { useToast } from "@/shared/lib/composables/useToast";
 import { UserLink } from "@/entities/user";
 import { useRoleGate } from "./lib/useRoleGate";
 import { warningTypeLabel } from "./lib/labels";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const toast = useToast();
 const { hasAccess } = useRoleGate("Moderator");
@@ -52,7 +53,7 @@ async function confirmRemove() {
   const { error } = await moderationApi.removeWarning(removeTarget.value.id);
   removing.value = false;
   if (error) {
-    toast.error("Не удалось удалить предупреждение");
+    notifyFailure(error, "Не удалось удалить предупреждение");
     return;
   }
   toast.success("Предупреждение удалено");

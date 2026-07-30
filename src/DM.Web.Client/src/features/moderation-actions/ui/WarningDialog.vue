@@ -29,6 +29,7 @@ import { useToast } from "@/shared/lib/composables/useToast";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 import type { BadRequestError } from "@/shared/api/models/common";
 import moderationActionsApi, { type WarningResult } from "../api";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{
   /** Target user (violator) username. */
@@ -111,7 +112,7 @@ async function submit() {
   if (error) {
     fieldErrors.value = parseApiErrors(error as BadRequestError);
     if (!Object.keys(fieldErrors.value).length) {
-      toast.error(error.title ?? "Не удалось отправить предупреждение");
+      notifyFailure(error, "Не удалось отправить предупреждение");
     }
     return;
   }

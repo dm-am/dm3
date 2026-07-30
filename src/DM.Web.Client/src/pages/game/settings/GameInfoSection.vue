@@ -21,6 +21,7 @@ import { Form, FormField } from "@/shared/ui/Form";
 import { Select } from "@/shared/ui/Select";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const store = useGameDetailsStore();
 const { game } = storeToRefs(store);
@@ -88,7 +89,7 @@ async function save() {
   const { error } = await gameApi.updateGame(game.value.id, patch);
   saving.value = false;
   if (error) {
-    toast.error("Не удалось сохранить информацию игры");
+    notifyFailure(error, "Не удалось сохранить информацию игры");
     return;
   }
   toast.success("Информация игры сохранена");

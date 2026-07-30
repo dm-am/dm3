@@ -14,9 +14,9 @@ import type { Topic } from "@/entities/forum";
 import { useAuthStore, userIsModerator } from "@/entities/user";
 import { unwrapResource } from "@/shared/api";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
-import { useToast } from "@/shared/lib/composables/useToast";
 import { PeriodDigestBoards } from "@/features/leaderboard/@x/topic";
 import TopicCard from "./TopicCard.vue";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const props = withDefaults(
   defineProps<{
@@ -138,7 +138,6 @@ const editTitle = ref("");
 const editText = ref("");
 const editLoading = ref(false);
 const saving = ref(false);
-const toast = useToast();
 
 async function startEdit() {
   if (editLoading.value || isEditing.value) return;
@@ -149,7 +148,7 @@ async function startEdit() {
   const { data, error } = await forumApi.getTopicForUpdate(props.topic.id);
   editLoading.value = false;
   if (error) {
-    toast.error("Не удалось загрузить текст темы");
+    notifyFailure(error, "Не удалось загрузить текст темы");
     return;
   }
   editTitle.value = props.topic.title;

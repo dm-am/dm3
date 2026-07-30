@@ -6,6 +6,7 @@ import {
   type Subscription,
 } from "@/shared/api/models/subscriptions";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const store = useSubscriptionsStore();
 const activeTab = ref<"all" | "games" | "blogs" | "topics" | "users">("all");
@@ -59,7 +60,8 @@ const getTargetLink = (subscription: Subscription): string => {
 };
 
 const handleUnsubscribe = async (subscription: Subscription) => {
-  await store.unsubscribe(subscription.id);
+  const error = await store.unsubscribe(subscription.id);
+  if (error) notifyFailure(error, "Не удалось отписаться");
 };
 </script>
 

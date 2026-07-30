@@ -28,6 +28,7 @@ import {
 } from "@/shared/lib/utils/upload";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useRoleGate } from "./lib/useRoleGate";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const PAGE_SIZE = 25;
 
@@ -92,7 +93,7 @@ async function confirmDelete() {
   const { error } = await moderationApi.deleteUpload(deleteTarget.value.id);
   deleting.value = false;
   if (error) {
-    toast.error("Не удалось удалить файл");
+    notifyFailure(error, "Не удалось удалить файл");
     return;
   }
   toast.success("Файл удален");

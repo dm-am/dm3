@@ -16,6 +16,7 @@ import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const store = useBlogDetailsStore();
 const { rubrics } = storeToRefs(store);
@@ -28,10 +29,10 @@ const pendingDelete = ref<Rubric | null>(null);
 async function create() {
   if (!newTitle.value.trim()) return;
   creating.value = true;
-  const ok = await store.createRubric({ title: newTitle.value.trim() });
+  const error = await store.createRubric({ title: newTitle.value.trim() });
   creating.value = false;
-  if (!ok) {
-    toast.error("Не удалось создать рубрику");
+  if (error) {
+    notifyFailure(error, "Не удалось создать рубрику");
     return;
   }
   toast.success("Рубрика создана");
@@ -42,9 +43,9 @@ async function confirmDelete() {
   const rubric = pendingDelete.value;
   pendingDelete.value = null;
   if (!rubric) return;
-  const ok = await store.deleteRubric(rubric.id);
-  if (!ok) {
-    toast.error("Не удалось удалить рубрику");
+  const error = await store.deleteRubric(rubric.id);
+  if (error) {
+    notifyFailure(error, "Не удалось удалить рубрику");
     return;
   }
   toast.success("Рубрика удалена");

@@ -21,6 +21,8 @@ import { useApiList } from "@/shared/lib/composables/useApiResource";
 import { Api, unwrapResource } from "@/shared/api";
 import { useAuthStore } from "@/shared/stores";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import type { GeneralError } from "@/shared/api/models/common";
+import { requestNotSent } from "@/shared/lib/errors";
 
 /**
  * Search parameters for blogs query (frontend model)
@@ -577,75 +579,79 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
   }
 
   // === Mutations ===
-  // Each mutation calls the API and re-syncs the affected slices, returning
-  // a boolean success flag so callers surface errors via toasts.
+  // Each mutation calls the API, re-syncs the affected slices on success, and
+  // returns the problem document on failure — null when it worked. A boolean
+  // here threw away what the server said, so every rejection reached the reader
+  // as the caller's own generic sentence.
 
   async function transitionStatus(
     transition: BlogStatusTransition,
-  ): Promise<boolean> {
-    if (!blog.value) return false;
+  ): Promise<GeneralError | null> {
+    if (!blog.value) return requestNotSent;
     const id = blog.value.id;
     const { error } = await blogApi.transitionStatus(id, transition);
-    if (error) return false;
+    if (error) return error;
     await loadBlog(id);
-    return true;
+    return null;
   }
 
   async function changePremoderation(
     transition: BlogPremoderationTransition,
-  ): Promise<boolean> {
-    if (!blog.value) return false;
+  ): Promise<GeneralError | null> {
+    if (!blog.value) return requestNotSent;
     const id = blog.value.id;
     const { error } = await blogApi.changePremoderation(id, transition);
-    if (error) return false;
+    if (error) return error;
     await loadBlog(id);
-    return true;
+    return null;
   }
 
-  async function deleteBlog(): Promise<boolean> {
-    if (!blog.value) return false;
+  async function deleteBlog(): Promise<GeneralError | null> {
+    if (!blog.value) return requestNotSent;
     const { error } = await blogApi.deleteBlog(blog.value.id);
-    if (error) return false;
+    if (error) return error;
     // Same as games: without this the deleted blog stays in every list.
     await useBlogsStore().invalidateBlogLists();
-    return true;
+    return null;
   }
 
-  async function createRubric(input: CreateRubricInput): Promise<boolean> {
-    if (!blog.value) return false;
+  async function createRubric(
+    input: CreateRubricInput,
+  ): Promise<GeneralError | null> {
+    if (!blog.value) return requestNotSent;
     const id = blog.value.id;
     const { error } = await blogApi.createRubric(id, input);
-    if (error) return false;
+    if (error) return error;
     await loadBlog(id);
-    return true;
+    return null;
   }
 
-  async function deleteRubric(rubricId: string): Promise<boolean> {
-    if (!blog.value) return false;
+  async function deleteRubric(rubricId: string): Promise<GeneralError | null> {
+    if (!blog.value) return requestNotSent;
     const { error } = await blogApi.deleteRubric(rubricId);
-    if (error) return false;
+    if (error) return error;
     await loadBlog(blog.value.id);
-    return true;
+    return null;
   }
 
   // Subscribe to blog (become a reader)
-  async function subscribe(): Promise<boolean> {
-    if (!blog.value) return false;
+  async function subscribe(): Promise<GeneralError | null> {
+    if (!blog.value) return requestNotSent;
     const id = blog.value.id;
     const { error } = await blogApi.subscribe(id);
-    if (error) return false;
+    if (error) return error;
     await loadReaders(id);
-    return true;
+    return null;
   }
 
   // Unsubscribe from blog
-  async function unsubscribe(): Promise<boolean> {
-    if (!blog.value) return false;
+  async function unsubscribe(): Promise<GeneralError | null> {
+    if (!blog.value) return requestNotSent;
     const id = blog.value.id;
     const { error } = await blogApi.unsubscribe(id);
-    if (error) return false;
+    if (error) return error;
     await loadReaders(id);
-    return true;
+    return null;
   }
 
   // Reset all data (when leaving the blog zone)

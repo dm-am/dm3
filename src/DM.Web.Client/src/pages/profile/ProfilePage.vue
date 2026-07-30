@@ -60,6 +60,7 @@ import ModerationViolations from "./moderation/ModerationViolations.vue";
 import { BlockUserDialog } from "@/features/block-user";
 import { ErrorPage } from "@/shared/ui/ErrorPage";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import { notifyFailure } from "@/shared/lib/errors";
 
 // Tab vocabulary. Each content tab (games / blogs / topics) is the
 // home for THREE pieces: the canonical listing, the user's best-of for
@@ -221,7 +222,7 @@ async function submitUsernameChangeRequest() {
   });
   isChangeFormSubmitting.value = false;
   if (error) {
-    toast.error(error.title || "Не удалось отправить заявку");
+    notifyFailure(error, "Не удалось отправить заявку");
     return;
   }
   if (data) {
@@ -344,7 +345,7 @@ async function unblockUser() {
   const { error } = await blacklistApi.unblockUser(user.value.username);
   isBlockLoading.value = false;
   if (error) {
-    toast.error("Не удалось разблокировать пользователя");
+    notifyFailure(error, "Не удалось разблокировать пользователя");
   } else {
     isBlocked.value = false;
     confirmingUnblock.value = false;

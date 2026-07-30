@@ -126,6 +126,7 @@ import { ref, onUnmounted } from "vue";
 import { accountApi } from "@/entities/user";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 // Bot configuration (should match backend config)
 const telegramBotUsername = "DM3NotifyBot";
@@ -156,7 +157,7 @@ async function startTelegramLinking() {
   generatingCode.value = null;
 
   if (error) {
-    toast.error("Не удалось сгенерировать код");
+    notifyFailure(error, "Не удалось сгенерировать код");
     return;
   }
 
@@ -196,7 +197,7 @@ async function startDiscordLinking() {
   generatingCode.value = null;
 
   if (error) {
-    toast.error("Не удалось сгенерировать код");
+    notifyFailure(error, "Не удалось сгенерировать код");
     return;
   }
 

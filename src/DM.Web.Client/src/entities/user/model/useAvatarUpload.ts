@@ -6,6 +6,7 @@ import { fetchUser } from "../lib/session";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { compressImage } from "@/shared/lib/utils/imageCompression";
 import type { User } from "@/shared/api/models/community/users";
+import { notifyFailure } from "@/shared/lib/errors";
 
 /**
  * Supported formats: must match the server whitelist
@@ -73,7 +74,11 @@ export function useAvatarUpload(user: Ref<User | null | undefined>) {
           targetId: user.value.id,
           onProgress,
         });
-      if (uploadError || !uploadData) {
+      if (uploadError) {
+        notifyFailure(uploadError, "Не удалось загрузить аватар");
+        return;
+      }
+      if (!uploadData) {
         toast.error("Не удалось загрузить аватар");
         return;
       }
@@ -82,7 +87,7 @@ export function useAvatarUpload(user: Ref<User | null | undefined>) {
         avatarUploadId: uploadData.id,
       });
       if (profileError) {
-        toast.error("Не удалось обновить профиль");
+        notifyFailure(profileError, "Не удалось обновить профиль");
         return;
       }
 
@@ -106,12 +111,14 @@ export function useAvatarUpload(user: Ref<User | null | undefined>) {
     try {
       const { error } = await personalApi.removeMyAvatar();
       if (error) {
-        toast.error("Не удалось сбросить аватар");
+        notifyFailure(error, "Не удалось сбросить аватар");
         return;
       }
       await fetchUser();
       toast.success("Аватар сброшен");
     } catch {
+      // A throw means the request never produced a problem document, so there
+      // is nothing to defer to the interceptor and nothing more specific to say.
       toast.error("Не удалось сбросить аватар");
     } finally {
       resetting.value = false;

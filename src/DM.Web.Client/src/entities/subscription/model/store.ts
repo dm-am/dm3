@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { computed } from "vue";
+import type { GeneralError } from "@/shared/api/models/common";
 import type { Subscription } from "@/shared/api/models/subscriptions";
 import { SubscriptionTargetType } from "@/shared/api/models/subscriptions";
 import { subscriptionApi } from "../api";
@@ -68,37 +69,53 @@ export const useSubscriptionsStore = defineStore("subscriptions", () => {
     );
   };
 
-  // Subscribe to a target
+  // The three mutators return the problem document instead of swallowing it.
+  // They used to return void, so a rejected subscribe — already subscribed,
+  // blacklisted by the author — was indistinguishable from a successful one and
+  // the caller announced "Вы подписались" either way. The list is only refetched
+  // when something actually changed.
   const subscribe = async (
     targetType: SubscriptionTargetType,
     targetId: string,
     settings?: number,
-  ) => {
-    await subscriptionApi.subscribe({ targetType, targetId, settings });
+  ): Promise<GeneralError | null> => {
+    const { error } = await subscriptionApi.subscribe({
+      targetType,
+      targetId,
+      settings,
+    });
+    if (error) return error;
     await all.fetch();
+    return null;
   };
 
-  // Unsubscribe
-  const unsubscribe = async (subscriptionId: string) => {
-    await subscriptionApi.unsubscribe(subscriptionId);
+  const unsubscribe = async (
+    subscriptionId: string,
+  ): Promise<GeneralError | null> => {
+    const { error } = await subscriptionApi.unsubscribe(subscriptionId);
+    if (error) return error;
     await all.fetch();
+    return null;
   };
 
-  // Update settings on an existing subscription
-  const updateSettings = async (subscriptionId: string, settings: number) => {
-    await subscriptionApi.updateSettings(subscriptionId, { settings });
+  const updateSettings = async (
+    subscriptionId: string,
+    settings: number,
+  ): Promise<GeneralError | null> => {
+    const { error } = await subscriptionApi.updateSettings(subscriptionId, {
+      settings,
+    });
+    if (error) return error;
     await all.fetch();
+    return null;
   };
 
-  // Unsubscribe by target
   const unsubscribeByTarget = async (
     targetType: SubscriptionTargetType,
     targetId: string,
-  ) => {
+  ): Promise<GeneralError | null> => {
     const subscription = getSubscription(targetType, targetId);
-    if (subscription) {
-      await unsubscribe(subscription.id);
-    }
+    return subscription ? await unsubscribe(subscription.id) : null;
   };
 
   return {

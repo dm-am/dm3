@@ -649,14 +649,34 @@ describe("useGameDetailsStore", () => {
       const result = await store.subscribe();
 
       expect(mockSubscribe).toHaveBeenCalledWith("game-1");
-      expect(result).toBe(true);
+      // Null is success: the mutators return the problem document on failure.
+      expect(result).toBeNull();
     });
 
-    it("returns false if no game loaded", async () => {
+    it("reports a failure when there is no game to subscribe to", async () => {
       const store = useGameDetailsStore();
       const result = await store.subscribe();
 
-      expect(result).toBe(false);
+      // Not null, so the caller shows its message instead of silently
+      // reporting success.
+      expect(result).not.toBeNull();
+      expect(mockSubscribe).not.toHaveBeenCalled();
+    });
+
+    it("hands back what the server said", async () => {
+      const refused = {
+        type: "",
+        title: "Вы в черном списке",
+        status: 403,
+        traceId: "t",
+      };
+      const mockGame = createMockGame("game-1", "Game");
+      mockSubscribe.mockResolvedValue({ error: refused });
+
+      const store = useGameDetailsStore();
+      store.game = mockGame;
+
+      expect(await store.subscribe()).toBe(refused);
     });
   });
 
@@ -672,7 +692,7 @@ describe("useGameDetailsStore", () => {
       const result = await store.unsubscribe();
 
       expect(mockUnsubscribe).toHaveBeenCalledWith("game-1");
-      expect(result).toBe(true);
+      expect(result).toBeNull();
     });
   });
 

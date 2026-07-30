@@ -30,6 +30,7 @@ import {
 import { symbols } from "@/shared/lib/utils/icons";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const props = withDefaults(
   defineProps<{
@@ -382,7 +383,7 @@ async function saveEditPost() {
   });
   savingPost.value = false;
   if (error) {
-    toast.error("Не удалось сохранить пост");
+    notifyFailure(error, "Не удалось сохранить пост");
     return;
   }
   // Reflect the server-rendered result in place.
@@ -408,7 +409,7 @@ async function confirmDeletePost() {
   deletingPost.value = false;
   showDeleteConfirm.value = false;
   if (error) {
-    toast.error("Не удалось удалить пост");
+    notifyFailure(error, "Не удалось удалить пост");
     return;
   }
   isDeleted.value = true;
@@ -474,7 +475,7 @@ async function submitReview() {
       // for the cases it does not cover.
       const status = (error as { status?: number }).status;
       if (status === 409) {
-        toast.error("Вы уже оценили этот пост");
+        notifyFailure(error, "Вы уже оценили этот пост");
       } else if (status !== 403 && status !== 429) {
         toast.error("Не удалось отправить отзыв");
       }

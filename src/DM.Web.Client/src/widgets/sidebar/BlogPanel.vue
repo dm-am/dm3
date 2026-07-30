@@ -32,12 +32,12 @@ import {
 import { BlogStatusButtons, BlogJoinActions } from "@/features/blog-actions";
 import { useAuthStore } from "@/entities/user";
 import { UserRole } from "@/shared/api/models/common";
-import { useToast } from "@/shared/lib/composables/useToast";
 import SidebarBlock from "./SidebarBlock.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
 import BlogRubricLink from "./BlogRubricLink.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{ blogId: string }>();
 
@@ -57,7 +57,6 @@ const canEdit = computed(() => canManage.value);
 
 const { user } = storeToRefs(useAuthStore());
 const router = useRouter();
-const toast = useToast();
 
 // Blog links use the short public id; fall back to the raw route param until
 // the blog resolves (the blog endpoints are publicId-tolerant: 5-letter
@@ -114,8 +113,8 @@ function askPremod(t: BlogPremoderationTransition) {
       : "Снять блог с премодерации?",
     confirmLabel: send ? "Отправить" : "Снять",
     run: async () => {
-      const ok = await store.changePremoderation(t);
-      if (!ok) toast.error("Не удалось изменить премодерацию");
+      const error = await store.changePremoderation(t);
+      if (error) notifyFailure(error, "Не удалось изменить премодерацию");
     },
   };
 }
@@ -127,9 +126,9 @@ function askDelete() {
     confirmLabel: "Удалить блог",
     danger: true,
     run: async () => {
-      const ok = await store.deleteBlog();
-      if (ok) router.push({ name: "blogs" });
-      else toast.error("Не удалось удалить блог");
+      const error = await store.deleteBlog();
+      if (error) notifyFailure(error, "Не удалось удалить блог");
+      else router.push({ name: "blogs" });
     },
   };
 }

@@ -37,6 +37,7 @@ import { SecondaryText } from "@/shared/ui/Layout";
 import { ErrorPage } from "@/shared/ui/ErrorPage";
 import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
 import { useProfileSubpageUser } from "./useProfileSubpageUser";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const PAGE_SIZE = 20;
 
@@ -114,7 +115,7 @@ async function confirmDelete() {
   const { error } = await uploadApi.deleteUpload(deleteTarget.value.id);
   deleting.value = false;
   if (error) {
-    toast.error("Не удалось удалить файл");
+    notifyFailure(error, "Не удалось удалить файл");
     return;
   }
   toast.success("Файл удален");

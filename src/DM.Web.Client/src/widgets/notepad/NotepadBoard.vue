@@ -21,6 +21,7 @@ import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { NotepadAdapter } from "./types";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const props = withDefaults(
   defineProps<{
@@ -74,7 +75,7 @@ async function fetchEntries() {
   const { data, error } = await props.adapter.list();
   loading.value = false;
   if (error) {
-    toast.error(props.loadErrorText);
+    notifyFailure(error, props.loadErrorText);
     return;
   }
   entries.value = data?.resources ?? [];
@@ -143,7 +144,7 @@ async function confirmDelete() {
   const { error } = await props.adapter.remove(entry.id);
   deleting.value = false;
   if (error) {
-    toast.error("Не удалось удалить запись");
+    notifyFailure(error, "Не удалось удалить запись");
     return;
   }
 

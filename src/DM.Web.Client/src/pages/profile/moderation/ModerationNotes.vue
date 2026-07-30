@@ -24,8 +24,8 @@ import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import Button from "@/shared/ui/Button/Button.vue";
-import { useToast } from "@/shared/lib/composables/useToast";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{
   notes: ModNote[];
@@ -36,8 +36,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "updated"): void;
 }>();
-
-const toast = useToast();
 
 const newNoteText = ref("");
 const creating = ref(false);
@@ -54,7 +52,7 @@ async function createNote() {
   );
   creating.value = false;
   if (error) {
-    toast.error("Не удалось создать заметку");
+    notifyFailure(error, "Не удалось создать заметку");
     return;
   }
   newNoteText.value = "";
@@ -78,7 +76,7 @@ async function saveEdit(noteId: string) {
     editText.value.trim(),
   );
   if (error) {
-    toast.error("Не удалось сохранить заметку");
+    notifyFailure(error, "Не удалось сохранить заметку");
     return;
   }
   cancelEdit();
@@ -95,7 +93,7 @@ async function confirmDelete() {
   const { error } = await moderationApi.deleteModNote(deleteTarget.value.id);
   deleting.value = false;
   if (error) {
-    toast.error("Не удалось удалить заметку");
+    notifyFailure(error, "Не удалось удалить заметку");
     return;
   }
   deleteTarget.value = null;

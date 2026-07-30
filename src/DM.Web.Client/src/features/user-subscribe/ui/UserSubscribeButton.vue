@@ -22,6 +22,7 @@ import {
   SubscriptionTargetType,
 } from "@/shared/api/models/subscriptions";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 import { vClickOutside } from "@/shared/directives/clickOutside";
 import Button from "@/shared/ui/Button/Button.vue";
 
@@ -120,20 +121,24 @@ async function confirm() {
   submitting.value = true;
   try {
     const settings = draftToSettings(draft.value);
-    if (existing.value) {
-      await store.updateSettings(existing.value.id, settings);
-      toast.success(`Подписка на ${props.username} обновлена`);
-    } else {
-      await store.subscribe(
-        SubscriptionTargetType.User,
-        props.userId,
-        settings,
-      );
-      toast.success(`Вы подписались на ${props.username}`);
+    const updating = existing.value;
+    const error = updating
+      ? await store.updateSettings(updating.id, settings)
+      : await store.subscribe(
+          SubscriptionTargetType.User,
+          props.userId,
+          settings,
+        );
+    if (error) {
+      notifyFailure(error, "Не удалось сохранить подписку");
+      return;
     }
+    toast.success(
+      updating
+        ? `Подписка на ${props.username} обновлена`
+        : `Вы подписались на ${props.username}`,
+    );
     closePopover();
-  } catch {
-    toast.error("Не удалось сохранить подписку");
   } finally {
     submitting.value = false;
   }
@@ -143,11 +148,13 @@ async function unsubscribe() {
   if (!existing.value) return;
   submitting.value = true;
   try {
-    await store.unsubscribe(existing.value.id);
+    const error = await store.unsubscribe(existing.value.id);
+    if (error) {
+      notifyFailure(error, "Не удалось отписаться");
+      return;
+    }
     toast.success(`Вы отписались от ${props.username}`);
     closePopover();
-  } catch {
-    toast.error("Не удалось отписаться");
   } finally {
     submitting.value = false;
   }

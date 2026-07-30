@@ -16,6 +16,7 @@ import { SettingsSection } from "@/shared/ui/SettingsSection";
 import { RemoveButton } from "@/shared/ui/RemoveButton";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const store = useGameDetailsStore();
 const { game } = storeToRefs(store);
@@ -62,7 +63,7 @@ async function invite() {
       : await gameApi.inviteReader(gameGuid.value, username.value.trim());
   inviting.value = false;
   if (error) {
-    toast.error("Не удалось отправить приглашение");
+    notifyFailure(error, "Не удалось отправить приглашение");
     return;
   }
   toast.success("Приглашение отправлено");
@@ -77,7 +78,7 @@ async function cancel(invitation: Invitation) {
     invitation.id,
   );
   if (error) {
-    toast.error("Не удалось отменить приглашение");
+    notifyFailure(error, "Не удалось отменить приглашение");
     return;
   }
   toast.success("Приглашение отменено");

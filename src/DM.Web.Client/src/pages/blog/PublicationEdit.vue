@@ -25,6 +25,7 @@ import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const router = useRouter();
@@ -97,7 +98,7 @@ async function save() {
   const { error } = await blogApi.updatePublication(pubId.value, patch);
   saving.value = false;
   if (error) {
-    toast.error("Не удалось сохранить публикацию");
+    notifyFailure(error, "Не удалось сохранить публикацию");
     return;
   }
   toast.success("Публикация сохранена");
@@ -112,7 +113,7 @@ async function confirmDelete() {
   if (!publication.value) return;
   const { error } = await blogApi.deletePublication(pubId.value);
   if (error) {
-    toast.error("Не удалось удалить публикацию");
+    notifyFailure(error, "Не удалось удалить публикацию");
     return;
   }
   toast.success("Публикация удалена");

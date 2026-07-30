@@ -27,6 +27,7 @@ import RoomsSection from "./settings/RoomsSection.vue";
 import RolesSection from "./settings/RolesSection.vue";
 import BlacklistSection from "./settings/BlacklistSection.vue";
 import InvitationsSection from "./settings/InvitationsSection.vue";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const router = useRouter();
@@ -67,7 +68,7 @@ async function saveSchema(schema: AttributeSchema) {
   savingSchema.value = false;
 
   if (error) {
-    toast.error("Не удалось сохранить систему атрибутов");
+    notifyFailure(error, "Не удалось сохранить систему атрибутов");
     return;
   }
   toast.success("Система атрибутов сохранена");
@@ -85,13 +86,13 @@ const confirmDelete = ref(false);
 
 async function deleteGame() {
   confirmDelete.value = false;
-  const ok = await gameStore.deleteGame();
-  if (ok) {
-    toast.success("Игра удалена");
-    router.push({ name: "games" });
-  } else {
-    toast.error("Не удалось удалить игру");
+  const error = await gameStore.deleteGame();
+  if (error) {
+    notifyFailure(error, "Не удалось удалить игру");
+    return;
   }
+  toast.success("Игра удалена");
+  router.push({ name: "games" });
 }
 </script>
 

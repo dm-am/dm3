@@ -152,6 +152,7 @@ import type {
   NotificationPreferences,
   NotificationCategory,
 } from "@/shared/api/models/account";
+import { notifyFailure } from "@/shared/lib/errors";
 
 defineEmits<{
   (e: "connectTelegram"): void;
@@ -214,7 +215,7 @@ async function updateTelegramEnabled() {
   saving.value = false;
 
   if (error) {
-    toast.error("Не удалось сохранить настройки");
+    notifyFailure(error, "Не удалось сохранить настройки");
     telegramEnabled.value = !telegramEnabled.value;
   }
 }
@@ -234,7 +235,7 @@ async function toggleTelegramCategory(category: NotificationCategory) {
   saving.value = false;
 
   if (error) {
-    toast.error("Не удалось сохранить настройки");
+    notifyFailure(error, "Не удалось сохранить настройки");
     // Revert
     if (idx >= 0) {
       telegramCategories.value.push(category);
@@ -255,7 +256,7 @@ async function updateDiscordEnabled() {
   saving.value = false;
 
   if (error) {
-    toast.error("Не удалось сохранить настройки");
+    notifyFailure(error, "Не удалось сохранить настройки");
     discordEnabled.value = !discordEnabled.value;
   }
 }
@@ -275,7 +276,7 @@ async function toggleDiscordCategory(category: NotificationCategory) {
   saving.value = false;
 
   if (error) {
-    toast.error("Не удалось сохранить настройки");
+    notifyFailure(error, "Не удалось сохранить настройки");
     // Revert
     if (idx >= 0) {
       discordCategories.value.push(category);
@@ -294,7 +295,7 @@ async function disconnectTelegram() {
   disconnecting.value = null;
 
   if (error) {
-    toast.error("Не удалось отключить Telegram");
+    notifyFailure(error, "Не удалось отключить Telegram");
   } else {
     preferences.telegram = undefined;
     toast.success("Telegram отключен");
@@ -307,7 +308,7 @@ async function disconnectDiscord() {
   disconnecting.value = null;
 
   if (error) {
-    toast.error("Не удалось отключить Discord");
+    notifyFailure(error, "Не удалось отключить Discord");
   } else {
     preferences.discord = undefined;
     toast.success("Discord отключен");

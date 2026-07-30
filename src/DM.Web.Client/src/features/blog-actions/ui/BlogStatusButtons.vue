@@ -16,9 +16,9 @@
 import { computed, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useBlogDetailsStore, BlogStatusTransition } from "@/entities/blog";
-import { useToast } from "@/shared/lib/composables/useToast";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { availableStatusTransitions } from "../model/transitions";
+import { notifyFailure } from "@/shared/lib/errors";
 
 withDefaults(defineProps<{ variant?: "strip" | "button" }>(), {
   variant: "strip",
@@ -26,7 +26,6 @@ withDefaults(defineProps<{ variant?: "strip" | "button" }>(), {
 
 const store = useBlogDetailsStore();
 const { blog } = storeToRefs(store);
-const toast = useToast();
 
 const transitions = computed(() =>
   availableStatusTransitions(blog.value?.status),
@@ -46,9 +45,9 @@ const confirmMessage = computed(() =>
 
 async function run(t: BlogStatusTransition) {
   pending.value = t;
-  const ok = await store.transitionStatus(t);
+  const error = await store.transitionStatus(t);
   pending.value = null;
-  if (!ok) toast.error("Не удалось изменить статус блога");
+  if (error) notifyFailure(error, "Не удалось изменить статус блога");
 }
 
 function onClick(t: {

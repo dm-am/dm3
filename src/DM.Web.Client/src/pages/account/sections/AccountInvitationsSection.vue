@@ -70,6 +70,7 @@ import { accountApi } from "@/entities/user";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { Invitation, InvitationType } from "@/entities/game";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const toast = useToast();
 
@@ -108,7 +109,7 @@ async function accept(invitationId: string) {
   processingId.value = null;
 
   if (error) {
-    toast.error("Не удалось принять приглашение");
+    notifyFailure(error, "Не удалось принять приглашение");
   } else {
     invitations.value = invitations.value.filter((i) => i.id !== invitationId);
     toast.success("Приглашение принято");
@@ -121,7 +122,7 @@ async function reject(invitationId: string) {
   processingId.value = null;
 
   if (error) {
-    toast.error("Не удалось отклонить приглашение");
+    notifyFailure(error, "Не удалось отклонить приглашение");
   } else {
     invitations.value = invitations.value.filter((i) => i.id !== invitationId);
     toast.success("Приглашение отклонено");

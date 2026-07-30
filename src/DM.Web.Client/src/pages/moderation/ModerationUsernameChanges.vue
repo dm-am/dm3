@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, reactive, type Ref } from "vue";
 import { useModal } from "vue-final-modal";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 import {
   moderationApi,
   UsernameChangeRequestStatus,
@@ -61,10 +62,13 @@ const pendingRequests = computed(() =>
 const fetchRequests = async () => {
   loading.value = true;
   try {
-    const { data } = await moderationApi.getPendingUsernameChangeRequests();
+    const { data, error } =
+      await moderationApi.getPendingUsernameChangeRequests();
+    if (error) {
+      notifyFailure(error, "Не удалось загрузить запросы");
+      return;
+    }
     requests.value = data?.resources || [];
-  } catch (error) {
-    toast.error("Не удалось загрузить запросы");
   } finally {
     loading.value = false;
   }
@@ -82,15 +86,17 @@ const confirmApprove = async () => {
     const resolve: ResolveUsernameChangeRequest = {
       status: UsernameChangeRequestStatus.Approved,
     };
-    await moderationApi.resolveUsernameChangeRequest(
+    const { error } = await moderationApi.resolveUsernameChangeRequest(
       approveTarget.value.id,
       resolve,
     );
+    if (error) {
+      notifyFailure(error, "Не удалось одобрить запрос");
+      return;
+    }
     toast.success(`Запрос от ${approveTarget.value.currentUsername} одобрен`);
     approveTarget.value = null;
     await fetchRequests();
-  } catch (error) {
-    toast.error("Не удалось одобрить запрос");
   } finally {
     approving.value = false;
     processing.value = null;

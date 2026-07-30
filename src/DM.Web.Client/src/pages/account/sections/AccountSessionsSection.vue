@@ -75,7 +75,7 @@ import { EmptyState } from "@/shared/ui";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { SessionInfo } from "@/shared/api/models/account";
-import { describeFailure } from "@/shared/lib/errors";
+import { describeFailure, notifyFailure } from "@/shared/lib/errors";
 
 const toast = useToast();
 
@@ -107,7 +107,7 @@ async function terminateSession(sessionId: string) {
   terminatingId.value = null;
 
   if (error) {
-    toast.error("Не удалось завершить сессию");
+    notifyFailure(error, "Не удалось завершить сессию");
   } else {
     sessions.value = sessions.value.filter((s) => s.id !== sessionId);
     toast.success("Сессия завершена");

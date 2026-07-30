@@ -31,13 +31,13 @@ import {
 import { GameStatusButtons, GameJoinActions } from "@/features/game-actions";
 import { useAuthStore } from "@/entities/user";
 import { UserRole } from "@/shared/api/models/common";
-import { useToast } from "@/shared/lib/composables/useToast";
 import { useExpandableSection } from "@/shared/lib/composables";
 import SidebarBlock from "./SidebarBlock.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
 import GameRoomLink from "./GameRoomLink.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{ gameId: string }>();
 
@@ -69,7 +69,6 @@ const canUseNotepad = computed(() => canManage.value);
 
 const { user } = storeToRefs(useAuthStore());
 const router = useRouter();
-const toast = useToast();
 
 // Routes use the game's public id (URL_STRUCTURE). Fall back to the raw
 // route param before the game has resolved.
@@ -166,8 +165,8 @@ function askPremod(t: GamePremoderationTransition) {
       : "Выпустить игру из премодерации?",
     confirmLabel: send ? "Отправить" : "Выпустить",
     run: async () => {
-      const ok = await store.changePremoderation(t);
-      if (!ok) toast.error("Не удалось изменить премодерацию");
+      const error = await store.changePremoderation(t);
+      if (error) notifyFailure(error, "Не удалось изменить премодерацию");
     },
   };
 }
@@ -179,9 +178,9 @@ function askDelete() {
     confirmLabel: "Удалить игру",
     danger: true,
     run: async () => {
-      const ok = await store.deleteGame();
-      if (ok) router.push({ name: "games" });
-      else toast.error("Не удалось удалить игру");
+      const error = await store.deleteGame();
+      if (error) notifyFailure(error, "Не удалось удалить игру");
+      else router.push({ name: "games" });
     },
   };
 }
@@ -192,8 +191,8 @@ function askResetRecruitment() {
     message: "Сбросить дату начала набора?",
     confirmLabel: "Сбросить",
     run: async () => {
-      const ok = await store.resetRecruitment();
-      if (!ok) toast.error("Не удалось сбросить дату набора");
+      const error = await store.resetRecruitment();
+      if (error) notifyFailure(error, "Не удалось сбросить дату набора");
     },
   };
 }

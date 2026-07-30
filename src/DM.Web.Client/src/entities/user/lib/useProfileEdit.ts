@@ -2,6 +2,7 @@ import { ref, computed, type Ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useAuthStore } from "@/shared/stores";
 import { personalApi, type UpdateProfilePayload } from "../api";
+import { describeFailure } from "@/shared/lib/errors";
 
 /**
  * Composable for managing profile edit mode with centralized pending changes.
@@ -55,7 +56,13 @@ export function useProfileEdit(targetUsername: Ref<string>) {
     isSaving.value = false;
 
     if (error) {
-      saveError.value = "Не удалось сохранить изменения";
+      // Shown next to the form rather than as a toast, so the reader keeps the
+      // fields in view. The server's own sentence wins: it names the field and
+      // the rule, where the fallback only says that something went wrong.
+      saveError.value = describeFailure(
+        error,
+        "Не удалось сохранить изменения",
+      );
       return false;
     }
 

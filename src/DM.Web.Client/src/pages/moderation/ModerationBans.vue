@@ -18,6 +18,7 @@ import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useRoleGate } from "./lib/useRoleGate";
 import { BAN_TYPE_LABELS, banTermLabel } from "./lib/labels";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const PAGE_SIZE = 20;
 
@@ -70,7 +71,7 @@ async function confirmLift() {
   const { error } = await moderationApi.liftBan(liftTarget.value.id);
   lifting.value = false;
   if (error) {
-    toast.error("Не удалось снять бан");
+    notifyFailure(error, "Не удалось снять бан");
     return;
   }
   toast.success("Бан снят");

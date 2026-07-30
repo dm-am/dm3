@@ -18,6 +18,7 @@ import { CommentsFilter, useCommentsFilter } from "@/features/comment-filter";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { reportForumShellError } from "./forumShell";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const router = useRouter();
@@ -199,13 +200,13 @@ async function handleSaveEdit(
   patch: { title: string; description: string },
 ) {
   const { error } = await boardsStore.updateTopicContent(id, patch);
-  if (error) toast.error("Не удалось сохранить тему");
+  if (error) notifyFailure(error, "Не удалось сохранить тему");
 }
 
 async function handleToggleClose(id: string) {
   const closing = !topic.value?.isClosed;
   const { error } = await boardsStore.setTopicClosed(id, closing);
-  if (error) toast.error("Не удалось изменить статус темы");
+  if (error) notifyFailure(error, "Не удалось изменить статус темы");
 }
 
 const showDeleteConfirm = ref(false);
@@ -223,7 +224,7 @@ async function confirmDeleteTopic() {
   deletingTopic.value = false;
   showDeleteConfirm.value = false;
   if (error) {
-    toast.error("Не удалось удалить тему");
+    notifyFailure(error, "Не удалось удалить тему");
     return;
   }
   toast.success("Тема удалена");

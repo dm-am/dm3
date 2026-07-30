@@ -14,6 +14,7 @@ import { PublicationForm } from "@/features/publication";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const router = useRouter();
@@ -51,7 +52,7 @@ async function publish() {
   });
   saving.value = false;
   if (error) {
-    toast.error("Не удалось создать публикацию");
+    notifyFailure(error, "Не удалось создать публикацию");
     return;
   }
   toast.success("Публикация создана");

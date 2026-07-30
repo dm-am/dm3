@@ -26,6 +26,7 @@ import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
 import TicketCard from "./tickets/TicketCard.vue";
 import { useRoleGate } from "./lib/useRoleGate";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const toast = useToast();
@@ -68,7 +69,7 @@ async function assignToMe() {
   const { data, error } = await ticketApi.assignTicketToMe(ticket.value.id);
   assigning.value = false;
   if (error) {
-    toast.error("Не удалось взять обращение в работу");
+    notifyFailure(error, "Не удалось взять обращение в работу");
     return;
   }
   ticket.value = data?.resource ?? ticket.value;
@@ -159,7 +160,7 @@ async function resolve() {
   );
   resolving.value = false;
   if (error) {
-    toast.error("Не удалось разрешить обращение");
+    notifyFailure(error, "Не удалось разрешить обращение");
     return;
   }
   ticket.value = data?.resource ?? ticket.value;

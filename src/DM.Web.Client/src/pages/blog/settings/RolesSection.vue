@@ -16,6 +16,7 @@ import { RemoveButton } from "@/shared/ui/RemoveButton";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const store = useBlogDetailsStore();
 const { blog, isOwner } = storeToRefs(store);
@@ -36,7 +37,7 @@ async function invite() {
   );
   inviting.value = false;
   if (error) {
-    toast.error("Не удалось пригласить ассистента");
+    notifyFailure(error, "Не удалось пригласить ассистента");
     return;
   }
   toast.success("Приглашение ассистенту отправлено");
@@ -53,7 +54,7 @@ async function confirmRemove() {
     target.username,
   );
   if (error) {
-    toast.error("Не удалось удалить ассистента");
+    notifyFailure(error, "Не удалось удалить ассистента");
     return;
   }
   toast.success("Ассистент удален");

@@ -1,6 +1,6 @@
 import { usePollsStore } from "@/entities/poll";
 import type { PollId, PollOptionId } from "@/entities/poll";
-import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 /**
  * Poll voting actions. Wraps the entity store's vote / unvote with the
@@ -8,11 +8,10 @@ import { useToast } from "@/shared/lib/composables/useToast";
  */
 export function usePollVote() {
   const { vote, unvote } = usePollsStore();
-  const toast = useToast();
 
   async function voteForOption(pollId: PollId, optionId: PollOptionId) {
     const { error } = await vote(pollId, optionId);
-    if (error) toast.error("Не удалось проголосовать");
+    if (error) notifyFailure(error, "Не удалось проголосовать");
   }
 
   async function cancelVote(pollId: PollId) {

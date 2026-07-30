@@ -15,7 +15,7 @@ import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { symbols } from "@/shared/lib/utils/icons";
 import { useTestimonialStore } from "@/entities/testimonial";
 import { useAuthStore, userIsAdmin } from "@/entities/user";
-import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{
   testimonial: WebsiteTestimonial;
@@ -23,7 +23,6 @@ const props = defineProps<{
 
 const userStore = useAuthStore();
 const testimonialStore = useTestimonialStore();
-const toast = useToast();
 
 const canAdministrate = computed(() => userIsAdmin(userStore.user));
 const loading = ref(false);
@@ -38,7 +37,7 @@ async function confirmRemove() {
   if (error) {
     // Keep the entry in place (the store only drops it on success) and
     // surface the failure so the delete stays available for a retry.
-    toast.error("Не удалось удалить отзыв");
+    notifyFailure(error, "Не удалось удалить отзыв");
   } else {
     showConfirm.value = false;
   }

@@ -16,9 +16,9 @@
 import { computed, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore, GameStatusTransition } from "@/entities/game";
-import { useToast } from "@/shared/lib/composables/useToast";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { availableStatusTransitions } from "../model/transitions";
+import { notifyFailure } from "@/shared/lib/errors";
 
 withDefaults(defineProps<{ variant?: "strip" | "button" }>(), {
   variant: "strip",
@@ -26,7 +26,6 @@ withDefaults(defineProps<{ variant?: "strip" | "button" }>(), {
 
 const store = useGameDetailsStore();
 const { game } = storeToRefs(store);
-const toast = useToast();
 
 const transitions = computed(() =>
   availableStatusTransitions(game.value?.status, game.value?.closedReason),
@@ -46,9 +45,9 @@ const confirmMessage = computed(() =>
 
 async function run(t: GameStatusTransition) {
   pending.value = t;
-  const ok = await store.transitionStatus(t);
+  const error = await store.transitionStatus(t);
   pending.value = null;
-  if (!ok) toast.error("Не удалось изменить статус игры");
+  if (error) notifyFailure(error, "Не удалось изменить статус игры");
 }
 
 function onClick(t: {

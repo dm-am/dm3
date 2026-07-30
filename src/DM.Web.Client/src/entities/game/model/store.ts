@@ -32,6 +32,8 @@ import {
 import { unwrapResource } from "@/shared/api";
 import { useAuthStore } from "@/shared/stores";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import type { GeneralError } from "@/shared/api/models/common";
+import { requestNotSent } from "@/shared/lib/errors";
 
 /**
  * Store for game lists (menu/sidebar, pagination)
@@ -649,71 +651,62 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
 
   async function transitionStatus(
     transition: GameStatusTransition,
-  ): Promise<boolean> {
-    if (!game.value) return false;
+  ): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
     const id = game.value.id;
     const { error } = await gameApi.transitionStatus(id, transition);
-    if (error) return false;
+    if (error) return error;
     await loadGame(id);
-    return true;
+    return null;
   }
 
   async function changePremoderation(
     transition: GamePremoderationTransition,
-  ): Promise<boolean> {
-    if (!game.value) return false;
+  ): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
     const id = game.value.id;
     const { error } = await gameApi.changePremoderation(id, transition);
-    if (error) return false;
+    if (error) return error;
     await loadGame(id);
-    return true;
+    return null;
   }
 
-  async function resetRecruitment(): Promise<boolean> {
-    if (!game.value) return false;
+  async function resetRecruitment(): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
     const id = game.value.id;
     const { error } = await gameApi.resetRecruitment(id);
-    if (error) return false;
+    if (error) return error;
     await loadGame(id);
-    return true;
+    return null;
   }
 
-  async function deleteGame(): Promise<boolean> {
-    if (!game.value) return false;
+  async function deleteGame(): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
     const { error } = await gameApi.deleteGame(game.value.id);
-    if (error) return false;
+    if (error) return error;
     // Refresh the list caches: otherwise the game the user just deleted keeps
     // showing in /games and in the sidebar until the entries expire.
     await useGamesStore().invalidateGameLists();
-    return true;
+    return null;
   }
 
-  async function createRoom(room: CreateRoomInput): Promise<boolean> {
-    if (!game.value) return false;
+  async function createRoom(
+    room: CreateRoomInput,
+  ): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
     const id = game.value.id;
     const { error } = await gameApi.createRoom(id, room);
-    if (error) return false;
+    if (error) return error;
     await loadRooms(id);
-    return true;
+    return null;
   }
 
-  async function updateRoom(
-    roomId: string,
-    patch: Partial<Room>,
-  ): Promise<boolean> {
-    if (!game.value) return false;
-    const { error } = await gameApi.updateRoom(roomId, patch);
-    if (error) return false;
-    await loadRooms(game.value.id);
-    return true;
-  }
-
-  async function archiveRoom(roomId: string): Promise<boolean> {
-    if (!game.value) return false;
+  async function archiveRoom(roomId: string): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
     const { error } = await gameApi.archiveRoom(roomId);
-    if (error) return false;
+    if (error) return error;
     await loadRooms(game.value.id);
-    return true;
+    return null;
   }
 
   // Reset all data (when leaving game page)
@@ -755,29 +748,29 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   }
 
   // Subscribe to game
-  async function subscribe(): Promise<boolean> {
-    if (!game.value) return false;
+  async function subscribe(): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
 
     const { error } = await gameApi.subscribe(game.value.id);
     if (error) {
-      return false;
+      return error;
     }
     // Reload game to update roles
     await loadGame(game.value.id);
-    return true;
+    return null;
   }
 
   // Unsubscribe from game
-  async function unsubscribe(): Promise<boolean> {
-    if (!game.value) return false;
+  async function unsubscribe(): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
 
     const { error } = await gameApi.unsubscribe(game.value.id);
     if (error) {
-      return false;
+      return error;
     }
     // Reload game to update roles
     await loadGame(game.value.id);
-    return true;
+    return null;
   }
 
   return {
@@ -841,7 +834,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     resetRecruitment,
     deleteGame,
     createRoom,
-    updateRoom,
     archiveRoom,
     reset,
     subscribe,

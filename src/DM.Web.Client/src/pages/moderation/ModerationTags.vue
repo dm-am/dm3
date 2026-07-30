@@ -11,6 +11,7 @@ import { SvgIcon } from "@/shared/ui/Icon";
 import { EmptyState } from "@/shared/ui";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { describeFailure, notifyFailure } from "@/shared/lib/errors";
 import TagGroupDialog from "./dialogs/TagGroupDialog.vue";
 import TagDialog from "./dialogs/TagDialog.vue";
 
@@ -46,11 +47,15 @@ async function loadData() {
       gameTagApi.getTagGroups(),
       gameTagApi.getTags(),
     ]);
+    // A failed load is the page's own state, not a toast: there is nothing on
+    // screen to go back to, so the message belongs where the table would be.
+    const failure = groupsRes.error ?? tagsRes.error;
+    if (failure) {
+      error.value = describeFailure(failure, "Не удалось загрузить данные");
+      return;
+    }
     groups.value = groupsRes.data?.resources ?? [];
     tags.value = tagsRes.data?.resources ?? [];
-  } catch (e) {
-    error.value = "Не удалось загрузить данные";
-    console.error(e);
   } finally {
     loading.value = false;
   }
@@ -102,15 +107,18 @@ async function confirmDeleteGroup() {
   if (!deleteGroupTarget.value || deletingGroup.value) return;
   deletingGroup.value = true;
   try {
-    await gameTagApi.deleteTagGroup(deleteGroupTarget.value.id);
+    const { error } = await gameTagApi.deleteTagGroup(
+      deleteGroupTarget.value.id,
+    );
+    if (error) {
+      notifyFailure(error, "Не удалось удалить группу тегов");
+      return;
+    }
     if (selectedGroupId.value === deleteGroupTarget.value.id) {
       selectedGroupId.value = null;
     }
     deleteGroupTarget.value = null;
     await loadData();
-  } catch (e) {
-    console.error(e);
-    toast.error("Ошибка при удалении группы");
   } finally {
     deletingGroup.value = false;
   }
@@ -164,12 +172,13 @@ async function confirmDeleteTag() {
   if (!deleteTagTarget.value || deletingTag.value) return;
   deletingTag.value = true;
   try {
-    await gameTagApi.deleteTag(deleteTagTarget.value.id);
+    const { error } = await gameTagApi.deleteTag(deleteTagTarget.value.id);
+    if (error) {
+      notifyFailure(error, "Не удалось удалить тег");
+      return;
+    }
     deleteTagTarget.value = null;
     await loadData();
-  } catch (e) {
-    console.error(e);
-    toast.error("Ошибка при удалении тега");
   } finally {
     deletingTag.value = false;
   }

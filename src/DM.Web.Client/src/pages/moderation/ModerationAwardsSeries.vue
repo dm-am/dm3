@@ -24,6 +24,7 @@ import { GameIcon } from "@/shared/ui/Icon";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { UserLink } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const router = useRouter();
@@ -113,7 +114,7 @@ async function loadGrants() {
   );
   grantsLoading.value = false;
   if (error) {
-    toast.error("Не удалось загрузить выданные награды");
+    notifyFailure(error, "Не удалось загрузить выданные награды");
     return;
   }
   grants.value = data?.resources ?? [];
@@ -133,7 +134,7 @@ async function confirmRevoke() {
   );
   revoking.value = false;
   if (error) {
-    toast.error("Не удалось отозвать награду");
+    notifyFailure(error, "Не удалось отозвать награду");
     return;
   }
 

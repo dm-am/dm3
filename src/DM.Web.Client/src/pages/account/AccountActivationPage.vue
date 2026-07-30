@@ -9,6 +9,7 @@ import Button from "@/shared/ui/Button/Button.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import StatusIcon from "@/shared/ui/Icon/StatusIcon.vue";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
+import { notifyFailure } from "@/shared/lib/errors";
 
 // State machine for activation flow
 type ActivationPhase =
@@ -184,10 +185,12 @@ async function resend() {
   resendLoading.value = true;
 
   try {
-    await accountApi.recover(resendEmail.value);
+    const { error } = await accountApi.recover(resendEmail.value);
+    if (error) {
+      notifyFailure(error, "Не удалось отправить письмо");
+      return;
+    }
     resendSuccess.value = true;
-  } catch {
-    toast.error("Не удалось отправить письмо");
   } finally {
     resendLoading.value = false;
   }

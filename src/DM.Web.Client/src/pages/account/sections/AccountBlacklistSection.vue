@@ -132,6 +132,7 @@ import type {
   BlacklistEntry,
   BlacklistSettings,
 } from "@/shared/api/models/personal";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const toast = useToast();
 
@@ -185,7 +186,7 @@ async function saveSettings() {
   settingsSaving.value = false;
 
   if (error) {
-    toast.error("Не удалось сохранить настройки");
+    notifyFailure(error, "Не удалось сохранить настройки");
     // Reload to restore correct state
     await loadSettings();
   }
@@ -214,7 +215,7 @@ async function confirmUnblock() {
   unblockingUsername.value = null;
 
   if (error) {
-    toast.error("Не удалось разблокировать пользователя");
+    notifyFailure(error, "Не удалось разблокировать пользователя");
   } else {
     pendingUnblock.value = null;
     blockedUsers.value = blockedUsers.value.filter(

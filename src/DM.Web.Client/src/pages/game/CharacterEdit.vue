@@ -35,6 +35,7 @@ import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const router = useRouter();
@@ -182,7 +183,7 @@ async function applyStatus(
   );
   busy.value = false;
   if (error) {
-    toast.error("Не удалось изменить статус персонажа");
+    notifyFailure(error, "Не удалось изменить статус персонажа");
     return;
   }
   toast.success("Статус персонажа изменен");
@@ -196,7 +197,7 @@ async function doDelete() {
   const { error } = await gameApi.deleteCharacter(c.id as unknown as string);
   busy.value = false;
   if (error) {
-    toast.error("Не удалось удалить персонажа");
+    notifyFailure(error, "Не удалось удалить персонажа");
     return;
   }
   toast.success(c.isNpc ? "NPC удален" : "Персонаж удален");
