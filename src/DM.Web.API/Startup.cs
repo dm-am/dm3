@@ -199,7 +199,6 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         builder.RegisterModuleOnce<MailModule>();
         builder.RegisterModuleOnce<CoreModule>();
 
-        // Register all Domain services centrally (replaces individual Module.cs files)
         RegisterDomainServices(builder);
 
         // Singleton for SignalR user connection tracking
@@ -300,12 +299,12 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
 
     /// <summary>
     /// Register all Domain layer services centrally.
-    /// This replaces individual Module.cs files in Domain.* projects.
     /// </summary>
     private static void RegisterDomainServices(ContainerBuilder builder)
     {
         // Domain assemblies to scan for services and AutoMapper profiles
-        // Using Module classes as assembly markers (they are public)
+        // Any public type works as an assembly marker; the Intention enums are
+        // the one every Domain.* project is guaranteed to have.
         var accountAssembly = typeof(DM.Domain.Account.Authorization.AccountIntention).Assembly;
         var personalAssembly = typeof(UserIntention).Assembly;
         var communityAssembly = typeof(PollIntention).Assembly;

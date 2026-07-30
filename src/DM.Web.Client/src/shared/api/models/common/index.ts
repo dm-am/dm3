@@ -1,6 +1,4 @@
 export * from "./module-status";
-// Note: Single resources are returned directly without wrapper (per API_STANDARDS.md)
-// Only collections use ListEnvelope or CursorEnvelope
 
 // Re-export branded types from parent index
 export { type Id, type Served, type Post, type Patch } from "../index";

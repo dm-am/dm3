@@ -1,6 +1,5 @@
 /**
  * Personal API models
- * @see src/DM.Web.API/Dto/Personal/
  */
 
 // Re-export blacklist types

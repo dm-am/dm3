@@ -52,9 +52,8 @@ internal class GameRoleResolver : IGameRoleResolver
         if (subscription != null)
             return GameRole.Reader;
 
-        // Note: Applicant role (pending character) requires character status check
-        // which is not currently available in the Game DTO
-        // For now, we don't return Applicant - can be enhanced later
+        // TODO(applicant-role): GameRole.Applicant is never returned — the Game
+        // DTO carries no pending character status to detect it from.
 
         return GameRole.None;
     }
@@ -84,8 +83,8 @@ internal class GameRoleResolver : IGameRoleResolver
         if (game.IsViewerSubscriber)
             return GameRole.Reader;
 
-        // Note: Applicant role detection would require pending character data
-        // which is not in the Game DTO
+        // TODO(applicant-role): same gap as in GetRoleAsync — the Game DTO
+        // carries no pending character data.
 
         return GameRole.None;
     }

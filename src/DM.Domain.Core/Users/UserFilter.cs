@@ -4,16 +4,10 @@ using DM.Domain.Core.Enums;
 namespace DM.Domain.Core.Users;
 
 /// <summary>
-/// Filter and sort for the public user list. The list and its total count take
-/// this one object instead of the eighteen and fifteen positional arguments they
-/// used to: eight of those were consecutive <see cref="int" />? bounds in min/max
-/// pairs, so a misplaced argument shifted every following number and compiled.
+/// Filter and sort for the public user list, passed as one object rather than a
+/// run of positional arguments: the bounds below are interchangeable
+/// <see cref="int" />? min/max pairs, so a misplaced argument would still compile.
 /// </summary>
-/// <remarks>
-/// The two signatures were also misaligned by three slots — the list takes
-/// paging, and inserts sort and direction ahead of the run of bounds — so copying
-/// an argument list from one to the other moved every bound by three positions.
-/// </remarks>
 public record UserFilter
 {
     /// <summary>

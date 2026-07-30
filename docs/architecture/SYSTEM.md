@@ -147,16 +147,7 @@ await _notificationService.CreateAsync(...); // ЗАПРЕЩЕНО
 HTTP Request → Middleware Pipeline → Controller → Service → Repository → DB
 ```
 
-**Middleware pipeline:**
-1. SecurityHeadersMiddleware (X-Frame-Options, CSP, HSTS)
-2. CorrelationMiddleware (X-Dm-Correlation-Token)
-3. ErrorHandlingMiddleware (exceptions → ProblemDetails)
-4. CORS
-5. CsrfProtectionMiddleware (Origin/Referer validation)
-6. RateLimiter (100 req/min global, 5 req/min auth)
-7. AuthenticationMiddleware (Cookie → Identity)
-8. Authorization
-9. Routing → Controllers + SignalR Hub
+**Middleware pipeline:** порядок регистрации задается в `Startup.cs` веб-хоста и здесь не дублируется — копия списка в документе расходится с кодом молча. Два ограничения в этом порядке обязательны: заголовки безопасности регистрируются первыми, иначе не попадают на ответы, отданные более ранними обработчиками; все, что читает метаданные эндпоинта (лимитер запросов, авторизация), стоит после маршрутизации, иначе работает вхолостую. Обоснование — в [PATTERNS.md](../conventions/PATTERNS.md).
 
 ---
 

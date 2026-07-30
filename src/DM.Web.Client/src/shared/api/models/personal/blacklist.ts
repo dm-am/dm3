@@ -1,6 +1,6 @@
 /**
  * Personal blacklist API models
- * @see src/DM.Web.API/Dto/Personal/
+ * @see src/DM.Web.API/Features/Personal/Blacklists/BlacklistEntry.cs
  */
 
 /**

@@ -189,7 +189,7 @@ const searchPlaceholder = computed(() =>
  * UserEndorsement and WebsiteTestimonial are structurally compatible
  * (id / author / text / createdUtc / modifiedUtc). `<TestimonialCard>`
  * reads only these fields — we project at the boundary instead of duplicating
- * the visuals. The existing ProfileEndorsements.vue does the same coercion.
+ * the visuals.
  */
 function asTestimonial(e: UserEndorsement): WebsiteTestimonial {
   return e as unknown as WebsiteTestimonial;

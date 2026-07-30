@@ -13,8 +13,7 @@ namespace DM.Web.API.Features.Moderation.Awards;
 /// CRUD for the award catalog and contest series.
 /// </summary>
 /// <remarks>
-/// Award types (`AwardType`) — a timeless catalog (6 rows by default):
-/// 1st/2nd/3rd place, popular vote, best critic, guesser. Each type
+/// Award types (`AwardType`) — a timeless catalog. Each type
 /// is semantically immutable: it can be renamed but not deleted
 /// (only deactivated via PATCH IsActive=false), because
 /// historical UserAward records reference the type via FK.

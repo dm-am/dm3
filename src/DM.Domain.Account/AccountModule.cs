@@ -9,11 +9,11 @@ namespace DM.Domain.Account;
 /// </summary>
 /// <remarks>
 /// The scan registers everything per dependency; the two types below must be one
-/// instance per scope, and that requirement belongs next to them. It used to live
-/// in the API host, which named them by namespace string because they are
-/// internal — a rename would have returned null and taken the host down on start,
-/// with nothing at compile time to catch it. Every host that needs the account
-/// domain registers this module instead of restating the contract.
+/// instance per scope, and that requirement belongs next to them rather than in a
+/// host: the types are internal, so a host can only name them by namespace string,
+/// and a rename then fails at start-up instead of at compile time. Every host that
+/// needs the account domain registers this module instead of restating the
+/// contract.
 /// </remarks>
 public class AccountModule : Module
 {

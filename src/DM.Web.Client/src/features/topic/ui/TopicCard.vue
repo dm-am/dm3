@@ -424,7 +424,7 @@ function initCardBbcode(el: HTMLElement) {
     color: $accent-red
 
 // Non-interactive like indicator (own content / guest / preview): shows the
-// count without a clickable affordance, matching Comment.vue's .like-static.
+// count without a clickable affordance, matching CommentItem.vue's .like-static.
 .like-static
   display: inline-flex
   align-items: center

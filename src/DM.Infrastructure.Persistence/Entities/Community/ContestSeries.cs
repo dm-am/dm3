@@ -11,7 +11,7 @@ namespace DM.Infrastructure.Persistence.Entities.Community;
 /// DAL for a contest series. Each contest is a separate record
 /// with a global sequential number within its type (Literary 1..N, Art 1..M).
 /// Awards (UserAward) reference the series rather than a per-year AwardType,
-/// which keeps the type catalog timeless (6 rows).
+/// which keeps the type catalog timeless.
 /// </summary>
 [Table("ContestSeries")]
 public class ContestSeries

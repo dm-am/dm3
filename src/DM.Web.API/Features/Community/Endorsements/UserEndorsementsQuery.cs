@@ -4,9 +4,7 @@ namespace DM.Web.API.Features.Community.Endorsements;
 
 /// <summary>
 /// Search / sort / paging for the endorsement GET endpoints
-/// (both received and given). The contract mirrors the
-/// FE composable <c>useReviewsFilter</c>: default sort =
-/// date desc, search optional.
+/// (both received and given).
 /// </summary>
 public class UserEndorsementsQuery : PagingQuery
 {

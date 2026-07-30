@@ -11,7 +11,7 @@ import type { Served } from "@/shared/api/models";
 import type { UserRef } from "@/shared/api/models/common";
 
 // Pinia must be active so `useGameDisplay` — which touches Pinia-backed
-// state via `useUnmounted` — can resolve its dependencies. Re-created
+// state via `useAuthStore` — can resolve its dependencies. Re-created
 // fresh between tests to isolate store state.
 beforeEach(() => {
   setActivePinia(createPinia());

@@ -1,8 +1,7 @@
 <script setup lang="ts">
 /**
  * AwardTypeEditDialog — edit an award-type catalog entry (title /
- * description / icon / tier / sortOrder). Dialog twin of the former
- * hand-rolled modal in ModerationAwardTypes.vue.
+ * description / icon / tier / sortOrder).
  */
 import { ref, computed } from "vue";
 import { achievementApi } from "@/entities/achievement";

@@ -78,8 +78,7 @@ public static class PermissionFilteringVisitor
         if (!IsPrivacySensitiveTag(tagName)) return true;
 
         // PlainText / EmbedSafe: strip the privacy-sensitive tag. Only [private]
-        // reaches this point — [mod] is public on read and returns visible above,
-        // so it is never stripped here despite what this comment used to claim.
+        // reaches this point — [mod] is public on read and returns visible above.
         if (ctx.Audience is RenderAudience.PlainText or RenderAudience.EmbedSafe)
             return false;
 

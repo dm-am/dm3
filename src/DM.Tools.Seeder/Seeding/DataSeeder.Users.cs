@@ -62,7 +62,7 @@ internal sealed partial class DataSeeder
         // All users start with 0 posts (QuantityRating=0), so all are "newbie" status
         // Note: All records in Users table are fully activated. For pending activation testing, use PendingRegistration.
         //
-        // Username policy (see docs/architecture/USERNAME_POLICY.md):
+        // Username policy (see docs/conventions/USERNAME_POLICY.md):
         // - Length: 2-20 characters
         // - Allowed: a-z A-Z а-я А-Я еЕ 0-9 _ - . space
         var testAccounts = new[]

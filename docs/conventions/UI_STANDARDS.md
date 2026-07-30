@@ -14,7 +14,6 @@
 | Sticky | 200 | Headers, sidebars |
 | Drawer scrim | 900 | Мобильный off-canvas drawer — backdrop |
 | Drawer | 950 | Мобильный off-canvas drawer — панель |
-| Dialog backdrop | 900 | Dialog overlay |
 | Dialog | 1000 | Dialog, InputDialog |
 | Popover | 1100 | Popovers over dialogs |
 | Tooltip | 9000 | Tooltips |
@@ -28,7 +27,7 @@ Drawer держится чуть ниже уровня диалога: диал�
 
 ## Брейкпоинты
 
-Централизованная шкала breakpoint-токенов для layout-медиазапросов.
+Шкала breakpoint-токенов для layout-медиазапросов. Обязательна для нового кода: новый медиазапрос берет токен, а не литеральное значение; оставшиеся в старом коде литералы заменяются токеном при правке файла.
 
 | Токен | Значение | Назначение |
 |-------|----------|------------|

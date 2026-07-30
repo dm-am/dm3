@@ -18,8 +18,6 @@
 > **Почему не PBKDF2?** PBKDF2 рекомендуется только для FIPS-140 compliance.
 > Argon2id устойчивее к GPU/ASIC атакам благодаря memory-hardness.
 
-**Файл:** `src/DM.Domain.Account/Features/Security/SecurityManager.cs`
-
 ---
 
 ## Требования к токенам

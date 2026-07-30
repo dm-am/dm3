@@ -3,7 +3,7 @@ using System;
 namespace DM.Domain.Community.Features.Awards;
 
 /// <summary>
-/// Award type catalog — timeless (6 rows). A specific contest series
+/// Award type catalog — timeless. A specific contest series
 /// is stored in <see cref="ContestSeries"/>, a grant in <see cref="UserAward"/>
 /// with FKs to both. The icon comes from the game-icons sprite (validated on creation).
 /// </summary>

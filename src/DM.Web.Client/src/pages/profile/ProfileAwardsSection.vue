@@ -4,7 +4,7 @@ import { formatDate } from "@/shared/lib/utils/datetime";
  * ProfileAwardsSection — the "Награды" block inside the "Достижения" tab.
  *
  * Curated awards: granted by Admin/SeniorModerator via the admin pages.
- * The award catalog (`AwardType`) is timeless (6 rows forever); a specific
+ * The award catalog (`AwardType`) is timeless; a specific
  * contest is stored in `ContestSeries` and linked via an FK on UserAward.
  *
  * Tile:

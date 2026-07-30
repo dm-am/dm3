@@ -2817,7 +2817,9 @@ namespace DM.Infrastructure.Persistence.Migrations
             // FK_Comments_Topics_EntityId is deliberately absent, for the same reason as the
             // two token constraints above: Comment.EntityId is polymorphic and points at a
             // topic, a game, a blog or a publication. The constraint would reject every
-            // comment that is not on a topic. Guarded by the same integration test.
+            // comment that is not on a topic. Unlike the token constraints, no schema test
+            // covers this one: it surfaces only in seeding, which inserts comments on games
+            // and publications.
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Comments_Users_AuthorId",

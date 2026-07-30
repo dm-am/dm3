@@ -1,5 +1,4 @@
 // Game store
-// Migrated from stores/games.ts and stores/gameDetails.ts
 
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";

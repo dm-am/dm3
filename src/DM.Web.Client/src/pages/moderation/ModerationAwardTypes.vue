@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * ModerationAwardTypes — the award-type catalog (timeless, 6 rows).
+ * ModerationAwardTypes — the award-type catalog (timeless).
  * Edit title / description / icon / tier / sortOrder. Deactivate (soft).
  * Admin only — the route is gated in the router meta.
  */

@@ -1,5 +1,4 @@
 // Community store
-// Migrated from shared/stores/community.ts
 
 import { defineStore } from "pinia";
 import { ref } from "vue";

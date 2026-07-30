@@ -2042,7 +2042,7 @@ public class DmDbContext : DbContext
         // `FK_Comments_Topics_EntityId`. This constraint is FALSE: comments on Game/Blog/
         // Publication have an EntityId not from Topics, and INSERT fails on its check.
         // In the generated migration file this `migrationBuilder.AddForeignKey`
-        // block must be removed manually (see the NOTE comment in InitialCreate.cs).
+        // block must be removed manually (a comment marks the spot in InitialCreate.cs).
         // Referential integrity is maintained by application logic.
         modelBuilder.Entity<Topic>()
             .HasMany(t => t.Comments)
@@ -2579,7 +2579,7 @@ public class DmDbContext : DbContext
     public DbSet<FundraisingGoal> FundraisingGoals { get; set; }
 
     /// <summary>
-    /// Award type catalog (timeless, 6 rows in seed). Grant context (year, season,
+    /// Award type catalog (timeless). Grant context (year, season,
     /// topic) lives on <see cref="ContestSeries"/>; per-grant on <see cref="UserAward"/>.
     /// </summary>
     public DbSet<AwardType> AwardTypes { get; set; }

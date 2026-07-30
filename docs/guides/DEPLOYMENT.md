@@ -21,10 +21,10 @@ Internet → Nginx → Frontend (Vue.js)
 
 | Workflow | Файл | Триггеры | Действия |
 |----------|------|----------|----------|
-| Build & Test | `dotnet.yml` | push/PR в main, dev | 4 jobs: Build+Test, Frontend CI (type-check + build), Dependency Scanning (dotnet+npm audit), Publish (matrix: 3 Docker images: dm-api, consumer-mail, consumer-notification) |
+| Build & Test | `dotnet.yml` | push/PR в main, dev | Сборка, тесты, проверки качества и публикация образов; перечень job и их зависимости — в самом файле |
 | Security | `security.yml` | push/PR + weekly | OWASP ZAP scan (full docker compose) |
 
-**Образы публикуются в:** `ghcr.io/<username>/dm3` (3 образа: dm-api, consumer-mail, consumer-notification)
+**Образы публикуются в:** GHCR, под префиксом `IMAGE_PREFIX` из `dotnet.yml`. Имя каждого публикуемого образа обязано совпадать с тем, что тянет `docker/docker-compose.yml`, иначе CI публикует артефакт, который никто не потребляет.
 
 **Теги:** `sha-<commit>`, `main`, `dev`, `latest` (только main)
 
@@ -174,7 +174,7 @@ compose — поднять реплики нельзя даже случайно
 Пока ни того ни другого нет, `deploy.replicas` для API — заявка, которую нечем
 обеспечить.
 
-**БД:** Connection pooling (`MaxPoolSize=200`).
+**БД:** Connection pooling; размер пула задается строкой подключения в `x-workload-env` (`docker/docker-compose.yml`) и здесь не дублируется.
 
 ---
 

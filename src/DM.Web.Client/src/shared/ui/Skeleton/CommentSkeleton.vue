@@ -2,7 +2,7 @@
 /**
  * Skeleton for Comment placeholders (forum and game comments).
  *
- * Layout contract — matches Comment.vue:
+ * Layout contract — matches CommentItem.vue:
  *   - Full layout: flex row — avatar 72×72 left + body right
  *   - Compact layout: block — no avatar, just body
  *   - Body: author name + date header, 3 content lines, footer meta
@@ -57,7 +57,7 @@ withDefaults(
   flex-direction: column
   gap: $small
 
-// Matches Comment.vue: flex row, $medium padding/gap, dashed border
+// Matches CommentItem.vue: flex row, $medium padding/gap, dashed border
 .skeleton-comment
   display: flex
   gap: $medium
@@ -82,7 +82,7 @@ withDefaults(
   gap: $small
 
 // Full-header geometry: author name (16px) stacked ABOVE the meta line
-// (12px), matching Comment.vue's author block — a row would push the body
+// (12px), matching CommentItem.vue's author block — a row would push the body
 // text down when the real header replaces it.
 .skeleton-header
   display: flex

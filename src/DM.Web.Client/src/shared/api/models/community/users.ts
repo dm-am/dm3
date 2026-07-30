@@ -33,7 +33,7 @@ export enum UserActivityFilter {
 
 /**
  * Birthday information
- * @see src/DM.Web.API/Dto/Personal/Birthday.cs
+ * @see src/DM.Web.API/Features/Community/Users/UserDtos.cs
  */
 export type Birthday = {
   day: number;
@@ -43,7 +43,7 @@ export type Birthday = {
 
 /**
  * User visibility settings
- * @see src/DM.Web.API/Dto/Users/VisibilitySettings.cs
+ * @see src/DM.Web.API/Features/Personal/Profiles/ProfileDtos.cs
  */
 export type VisibilitySettings = {
   showBirthday: boolean;
@@ -52,7 +52,7 @@ export type VisibilitySettings = {
 
 /**
  * Contact information
- * @see src/DM.Web.API/Dto/Personal/Contact.cs
+ * @see src/DM.Web.API/Features/Community/Users/UserDtos.cs
  */
 export type Contact = {
   contactType: string;
@@ -68,7 +68,7 @@ export type BbText = {
 
 /**
  * Public user profile DTO for profile pages
- * @see src/DM.Web.API/Dto/Users/UserProfile.cs
+ * @see src/DM.Web.API/Features/Community/Users/UserDtos.cs
  */
 export type UserProfile = BaseUser & {
   status?: string;
@@ -87,7 +87,7 @@ export type UserProfile = BaseUser & {
 
 /**
  * Own profile DTO for account owner
- * @see src/DM.Web.API/Dto/Users/PersonalProfile.cs
+ * @see src/DM.Web.API/Features/Personal/Profiles/ProfileDtos.cs
  */
 export type PersonalProfile = Omit<UserProfile, "birthday"> & {
   email: string;

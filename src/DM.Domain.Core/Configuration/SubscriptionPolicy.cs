@@ -4,11 +4,8 @@ namespace DM.Domain.Core.Configuration;
 /// Product rules for the subscriber previews that games, blogs and profiles show.
 /// </summary>
 /// <remarks>
-/// The cap used to be a literal 20 written out in three repositories, with the
-/// XML docs of eight DTO properties restating it in prose — one of them as five,
-/// which it had not been for some time. Held here so that a screen can never
-/// quietly show a different number of names than its neighbour, and so the
-/// ordering rule below has one place to be stated.
+/// Held here so that a screen can never quietly show a different number of names
+/// than its neighbour, and so the ordering rule below has one place to be stated.
 /// </remarks>
 public static class SubscriptionPolicy
 {

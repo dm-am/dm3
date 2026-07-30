@@ -18,7 +18,7 @@ internal partial class AvailabilityService : IAvailabilityService
 
     // Forbidden: control chars, HTML/URL unsafe, quotes, brackets, special chars, zero-width
     // Whitespace: not at start/end, not consecutive
-    // See: docs/architecture/USERNAME_POLICY.md
+    // See: docs/conventions/USERNAME_POLICY.md
     [GeneratedRegex(@"^(?!\s)(?!.*\s$)(?!.*\s{2})[^\p{Cc}<>""'`\\/@?#%&\[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]{2,20}$")]
     private static partial Regex UsernameValidationRegex();
 

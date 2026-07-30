@@ -56,7 +56,7 @@ Task(
 ```
 Task(
   subagent_type: "code-reviewer",
-  prompt: "API review: verify TopicController.cs follows standards from docs/reference/standards.md"
+  prompt: "API review: verify TopicController.cs follows standards from docs/conventions/API_DESIGN.md"
 )
 ```
 
@@ -303,105 +303,6 @@ Task(
 )
 ```
 
-### Пример вывода
-
-```
-## Frontend Task: Create TopicList.vue
-
-### Files Created
-
-**src/components/forum/TopicList.vue**
-```vue
-<script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useTopics } from '@/composables/useTopics';
-import TopicCard from './TopicCard.vue';
-import LoadingSpinner from '@/components/common/LoadingSpinner.vue';
-
-const props = defineProps<{
-  boardId: string;
-}>();
-
-const { topics, loading, error, loadMore, hasMore } = useTopics(props.boardId);
-
-onMounted(() => loadMore());
-</script>
-
-<template>
-  <div class="topic-list">
-    <LoadingSpinner v-if="loading && !topics.length" />
-
-    <div v-else-if="error" class="error">
-      {{ error }}
-    </div>
-
-    <template v-else>
-      <TopicCard
-        v-for="topic in topics"
-        :key="topic.id"
-        :topic="topic"
-      />
-
-      <button
-        v-if="hasMore"
-        @click="loadMore"
-        :disabled="loading"
-        class="load-more"
-      >
-        {{ loading ? 'Загрузка...' : 'Загрузить еще' }}
-      </button>
-
-      <div v-if="!topics.length" class="empty">
-        Нет тем
-      </div>
-    </template>
-  </div>
-</template>
-```
-
-**src/composables/useTopics.ts**
-```typescript
-import { ref, Ref } from 'vue';
-import { api } from '@/api/client';
-import type { Topic } from '@/api/models/forum';
-
-export function useTopics(boardId: string) {
-  const topics: Ref<Topic[]> = ref([]);
-  const loading = ref(false);
-  const error = ref<string | null>(null);
-  const hasMore = ref(true);
-  const skip = ref(0);
-  const take = 20;
-
-  async function loadMore() {
-    if (loading.value || !hasMore.value) return;
-
-    loading.value = true;
-    error.value = null;
-
-    try {
-      const response = await api.get(`/v1/boards/${boardId}/topics`, {
-        params: { skip: skip.value, take }
-      });
-
-      topics.value.push(...response.data.resources);
-      skip.value += take;
-      hasMore.value = response.data.resources.length === take;
-    } catch (e) {
-      error.value = 'Не удалось загрузить темы';
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  return { topics, loading, error, hasMore, loadMore };
-}
-```
-
-### Summary
-Created TopicList component with pagination, loading states, and useTopics composable.
-```
-
 ### В разговоре
 
 ```
@@ -474,7 +375,7 @@ Claude: Запускаю frontend-developer...
 
 Hooks срабатывают **автоматически**. Не нужно вызывать вручную.
 
-### block-dangerous-git.sh
+### block-dangerous-git.js
 
 **Что блокирует:**
 ```bash
@@ -494,12 +395,13 @@ git diff             # OK
 git add/commit/push  # OK
 ```
 
-### block-new-migrations.sh
+### block-new-migrations.js
 
 **Что блокирует:**
 ```bash
 # Создание новых миграций
 Write → src/DM.Infrastructure.Persistence/Migrations/20250309_AddSomething.cs  # BLOCKED
+dotnet ef migrations add AddSomething                                          # BLOCKED (Bash, PowerShell)
 ```
 
 **Что разрешено:**
@@ -507,3 +409,8 @@ Write → src/DM.Infrastructure.Persistence/Migrations/20250309_AddSomething.cs 
 # Редактирование существующей
 Edit → src/DM.Infrastructure.Persistence/Migrations/InitialCreate.cs  # OK
 ```
+
+### lint-edited-file.js
+
+Единственный хук на `PostToolUse` (`Write|Edit`): каждый записанный файл сразу
+прогоняется линтером своего стека. Замечания линтера приходят отсюда, а не из ревью.

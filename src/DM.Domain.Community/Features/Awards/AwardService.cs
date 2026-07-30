@@ -74,8 +74,6 @@ internal class AwardService : IAwardService
 
     public async Task DeactivateTypeAsync(Guid id, CancellationToken ct = default)
     {
-        // The repository materializes with FirstAsync, which throws on an absent
-        // row — an unknown id answered 500 where the endpoint declares 404.
         _ = await _repository.GetTypeAsync(id, ct)
             ?? throw new HttpException(HttpStatusCode.NotFound, "Award type not found");
         await _repository.UpdateTypeAsync(new UpdateAwardType { Id = id, IsActive = false }, ct);
@@ -116,7 +114,6 @@ internal class AwardService : IAwardService
 
     public async Task DeactivateSeriesAsync(Guid id, CancellationToken ct = default)
     {
-        // Same as DeactivateTypeAsync: FirstAsync on an absent row is a 500.
         _ = await _repository.GetSeriesAsync(id, ct)
             ?? throw new HttpException(HttpStatusCode.NotFound, "Contest series not found");
         await _repository.UpdateSeriesAsync(new UpdateContestSeries { Id = id, IsActive = false }, ct);

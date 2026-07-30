@@ -13,7 +13,7 @@ Backend: `dotnet build DM.sln` 0/0; `dotnet test` — **14 проектов, 169
 |------|--------|---------|
 | Аутентификация (вход/регистрация/восстановление/сброс/подтверждение) | ✅ | honeypot+тайминг антибот; имя меняемо через модерацию |
 | Профиль + подстраницы (отзывы/рекомендации/оцененные/загруженное/редактирование) | ✅ | H1 "Профиль:"; вкладки about/games/blogs/topics/achievements в странице; отзывы/загруженное — отдельные страницы (по доку) |
-| Награды/Достижения | ✅ | 6 наград timeless + серии; достижения — цепочки по метрикам; "Лит #22" бейдж |
+| Награды/Достижения | ✅ | награды timeless + серии; достижения — цепочки по метрикам; "Лит #22" бейдж |
 | Сообщество / Опросы / Статистика сайта | ✅ | статистика: 8 топ-десяток (игроки/игры/блоги × оценки/активность/объем), период в URL (?year&month / ?period=all), пикер месяца/года с 2007 (12-летние блоки), серверные positive-only ранги с делеными местами при ничьих, кэш периодов (закрытые — сессия/24ч) |
 | Игровая зона (инфо/комнаты/чат-комнаты/персонажи/схема атрибутов/посты/отзывы/заметки/настройки/премодерация/статусы) | ✅ | схема 6 типов; персонаж 4 статуса+3 флага; комнаты 2 типа + архив; статусы Draft/Active/Closed+ClosedReason |
 | Блог-зона (инфо/рубрики/публикации/обсуждение/заметки/настройки/премодерация/статусы) | ✅ | зеркало игровой; publicId, счетчики+реордер рубрик, инлайн-редактирование, ментор-гейт — закрыты |
@@ -51,4 +51,4 @@ Backend: `dotnet build DM.sln` 0/0; `dotnet test` — **14 проектов, 169
 **Форум:** [/forum](http://localhost:5174/forum) · [/forum/general](http://localhost:5174/forum/general) · [/forum/general/4](http://localhost:5174/forum/general/4)
 **Чат/сообщения:** [/global-chat](http://localhost:5174/global-chat) · /messenger · /messenger/c/:id · /messenger/user/:username
 **Модерация (Moderator+):** /moderation · /moderation/moderators · /moderation/games · /moderation/blogs · /moderation/bans · /moderation/warnings · /moderation/rated-posts · /moderation/new-users · /moderation/violators · /moderation/support · /moderation/complaints · /moderation/tickets/:id · /moderation/uploads · /moderation/username-changes · /moderation/tags · /moderation/awards · /moderation/award-types · /moderation/achievements · /moderation/fundraising
-**Auth/служебные:** /auth/callback · /auth/transfer · /activate/:token · /confirm-email/:token · /reset-password/:token · /error/:code
+**Auth/служебные:** /auth/callback · /activate/:token · /confirm-email/:token · /reset-password/:token · /error/:code

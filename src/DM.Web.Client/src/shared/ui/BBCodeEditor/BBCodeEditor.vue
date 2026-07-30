@@ -427,7 +427,7 @@ function autoResizeTextarea() {
 // Design decision: These toggle functions intentionally follow a similar pattern
 // but are NOT abstracted into a configuration-driven helper. Reasons:
 //
-// 1. EXCEPTIONS: 5 functions (link, image, private, cut, tab) have significantly
+// 1. EXCEPTIONS: 4 functions (link, image, private, tab) have significantly
 //    different behavior (dialogs, self-closing tags, parameters) that would
 //    create a leaky abstraction if forced into a common pattern.
 //
@@ -439,8 +439,6 @@ function autoResizeTextarea() {
 //
 // 4. LOW CHANGE FREQUENCY: Tags rarely change after initial implementation.
 //    The maintenance burden of duplication is minimal.
-//
-// See BBCODE_PIPELINE.md "Why Toolbar Functions Are Not Fully Abstracted" for details.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function toggleBold() {

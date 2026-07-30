@@ -320,7 +320,6 @@ public partial class BbParserWrapper : IBbParser
     /// 2. Regex pattern (\d+) guarantees only digits are captured
     /// 3. Parse() provides fail-fast behavior if internal contracts are violated
     /// 4. TryParse() would mask bugs in placeholder generation logic
-    /// See BBCODE_PIPELINE.md "Why int.Parse() Instead of int.TryParse()" for details.
     /// </summary>
     public class WrappedNodeTree : NodeTree
     {
