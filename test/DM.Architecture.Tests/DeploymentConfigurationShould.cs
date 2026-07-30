@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using FluentAssertions;
@@ -84,6 +85,79 @@ public class DeploymentConfigurationShould
         FindTrustedNetwork(preview).Should().Be(subnet,
             "trusting a network other than the one the proxy runs on trusts nobody, " +
             "and trusting a wider one trusts more than our own containers");
+    }
+
+    /// <summary>
+    /// A published port that names no address listens on every interface, and a
+    /// port docker publishes reaches the container through the nat and DOCKER
+    /// chains — past the INPUT rules the install script writes. So the firewall
+    /// does not cover it and the perimeter does not either.
+    /// </summary>
+    /// <remarks>
+    /// Seventeen of the eighteen publications in the base file bound to loopback.
+    /// The eighteenth was the API, which put the whole of /v1, /metrics and
+    /// /_health/detail on the public interface of the preview stand: nginx and its
+    /// basic auth sit on port 80, so they covered the SPA and nothing behind it.
+    ///
+    /// The overlay is where a port is meant to face the world, and it publishes
+    /// exactly one.
+    /// </remarks>
+    [Fact]
+    public void PublishNoPortToTheWorldFromTheBaseStack()
+    {
+        var published = PublishedPorts(Read(BaseCompose));
+
+        published.Should().NotBeEmpty("the parser must find the port lines");
+        published.Should().OnlyContain(p => p.StartsWith("127.0.0.1:", StringComparison.Ordinal),
+            "a publication with no address is reachable from outside and skips the firewall");
+    }
+
+    /// <summary>
+    /// The vulnerability gate has to be able to run. It reads the assets file, so
+    /// it needs a restore; the workflow checks out clean and had none, so the job
+    /// failed every run — and publish declares needs: dependency-scan, which is why
+    /// no image was ever published. It passed by hand only because a developer
+    /// machine has obj/ left over from an ordinary build.
+    /// </summary>
+    [Fact]
+    public void RestoreBeforeListingVulnerablePackages()
+    {
+        // Commands only. The header comment names both of them, so a search over
+        // the whole text finds the prose rather than the script.
+        var commands = File.ReadAllLines(
+                Path.Combine(DockerDirectory, "..", "scripts", "check-vulnerable-packages.sh"))
+            .Select(l => l.Trim())
+            .Where(l => l.Length > 0 && !l.StartsWith('#'))
+            .ToList();
+
+        var restore = commands.FindIndex(l => l.Contains("dotnet restore", StringComparison.Ordinal));
+        var list = commands.FindIndex(l => l.Contains("dotnet list", StringComparison.Ordinal));
+
+        restore.Should().BeGreaterThan(-1, "dotnet list package reads the assets file");
+        list.Should().BeGreaterThan(-1, "the script must still be the one running the check");
+        restore.Should().BeLessThan(list, "restoring after the check helps nobody");
+    }
+
+    /// <summary>Published ports of every service, as written.</summary>
+    private static string[] PublishedPorts(string compose)
+    {
+        var ports = new List<string>();
+        var inPorts = false;
+        foreach (var raw in compose.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.StartsWith('#')) continue;
+            if (line == "ports:") { inPorts = true; continue; }
+            if (inPorts && line.StartsWith("- ", StringComparison.Ordinal))
+            {
+                ports.Add(line[2..].Trim().Trim('\'', '"'));
+                continue;
+            }
+
+            if (line.Length > 0) inPorts = false;
+        }
+
+        return ports.ToArray();
     }
 
     /// <summary>The first <c>subnet:</c> value, quoted or bare.</summary>

@@ -484,7 +484,14 @@ services:
       args:
         PROJECT_NAME: DM.Web.API
     ports:
-      - '5000:5000'
+      # Привязка к loopback, как у всех остальных семнадцати публикаций в этом
+      # файле. Без нее порт слушал 0.0.0.0, а опубликованный docker-ом порт идет
+      # через цепочки nat/DOCKER мимо INPUT, то есть мимо iptables из
+      # setup-server.sh. На preview-стенде это открывало весь /v1/**, /metrics и
+      # /_health/detail в интернет в обход basic auth: nginx закрывал только
+      # порт 80, то есть SPA, а не данные. Локальной разработке loopback-а
+      # достаточно, а nginx ходит к API по имени сервиса внутри сети.
+      - '127.0.0.1:5000:5000'
     environment: *workload-env
     depends_on:
       migration:
