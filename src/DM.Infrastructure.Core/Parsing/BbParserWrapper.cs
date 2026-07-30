@@ -155,6 +155,57 @@ public partial class BbParserWrapper : IBbParser
     [GeneratedRegex(@"<a href=""#"" class=""spoiler-head""></a>", RegexOptions.IgnoreCase)]
     private static partial Regex EmptySpoilerHeadRegex();
 
+    /// <summary>Match an opening [private] tag in any casing, with or without an attribute</summary>
+    [GeneratedRegex(@"\[private(?:=(?<value>""[^""]*""|[^\]]*))?\]", RegexOptions.IgnoreCase)]
+    private static partial Regex PrivateOpenRegex();
+
+    /// <summary>Match a closing [/private] tag in any casing</summary>
+    [GeneratedRegex(@"\[/private\]", RegexOptions.IgnoreCase)]
+    private static partial Regex PrivateCloseRegex();
+
+    /// <summary>
+    /// Bring every spelling of [private] to the one the tag set recognises.
+    /// </summary>
+    /// <remarks>
+    /// The underlying parser matches this tag's name case-sensitively and its
+    /// attribute only when the value is quoted, so of the four spellings a user
+    /// can produce only <c>[private="Name"]</c> was ever parsed as a tag. The
+    /// other three — including <c>[private=Name]</c>, which is the only form the
+    /// editor writes and the only one its help text teaches — were left as plain
+    /// text, which means the visitor never saw a node to filter and the private
+    /// line was served to every reader of the room.
+    ///
+    /// Normalising here rather than at the editor, or on save, is deliberate: a
+    /// privacy filter has to hold for whatever reaches it. Any client, any
+    /// hand-typed source and anything already stored is covered by one pass, and
+    /// nothing downstream has to be trusted to spell the tag a particular way.
+    ///
+    /// Known cosmetic effect: inside [noparse] the tag is displayed literally, and
+    /// there it will now be displayed with quotes the author did not type. Nothing
+    /// leaks — noparse content is text by the author's own instruction — and the
+    /// alternative is teaching this pass to parse block structure, which is the
+    /// job of the parser it runs before.
+    /// </remarks>
+    private static string NormalisePrivateTags(string input)
+    {
+        if (input.IndexOf("private", StringComparison.OrdinalIgnoreCase) < 0)
+            return input;
+
+        var normalised = PrivateOpenRegex().Replace(input, match =>
+        {
+            var value = match.Groups["value"];
+            if (!value.Success) return "[private]";
+            if (value.Value.StartsWith('"')) return $"[private={value.Value}]";
+
+            // A quote inside an unquoted value would close the attribute early and
+            // produce a tag the parser rejects again, so it is dropped rather than
+            // escaped: an addressee name never legitimately contains one.
+            return $"[private=\"{value.Value.Replace("\"", string.Empty)}\"]";
+        });
+
+        return PrivateCloseRegex().Replace(normalised, "[/private]");
+    }
+
     /// <summary>
     /// Create wrapper around existing parser
     /// </summary>
@@ -175,7 +226,10 @@ public partial class BbParserWrapper : IBbParser
         var linkList = new List<(string? text, string url)>();
         var mentionList = new List<string>();
 
-        var processed = input;
+        // Before anything else: the privacy tag has to be spelled the way the tag
+        // set recognises, or the visitor gets no node to filter and private text
+        // is served to everyone. See NormalisePrivateTags.
+        var processed = NormalisePrivateTags(input);
 
         // Extract [img=WxH alt="text"]URL[/img] or [img=W alt="text"]URL[/img] (MUST be first)
         processed = ImgWithSizeAndAltRegex().Replace(processed, match =>
