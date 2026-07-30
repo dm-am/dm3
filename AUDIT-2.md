@@ -41,7 +41,8 @@ exit 0. Оценки срезов — следствие: срез достиг�
 
 - **Исправлено** — дефекта нет, и его возврат ловит гейт: тест, правило линтера, ограничение
   схемы, архитектурный тест. Гейт засчитывается только после того, как исправление сняли и
-  увидели красное. Не «написан тест», а «проверено снятием».
+  увидели красное. Не «написан тест», а «проверено снятием». Где гейта быть не может — так и
+  написано в колонке «Чем закрыто», вместе с причиной.
 - **Принято** — владелец решил не чинить, и обоснование лежит рядом с кодом, а не здесь.
 - **Опровергнуто** — находки не существует.
 
@@ -63,15 +64,15 @@ exit 0. Оценки срезов — следствие: срез достиг�
 
 ## Прогресс
 
-Всего строк в индексе: **401**. Закрыто (исправлено, принято решением или опровергнуто): **21**.
+Всего строк в индексе: **401**. Закрыто (исправлено, принято решением или опровергнуто): **22**.
 
 | Severity | Всего | Открыто | Исправлено | Принято | Опровергнуто | Не проверялось |
 |----------|-------|---------|------------|---------|--------------|----------------|
 | КРИТИЧНО | 11 | 5 | 6 | 0 | 0 | 0 |
 | ВЫСОКАЯ | 72 | 72 | 0 | 0 | 0 | 0 |
-| СРЕДНЯЯ | 124 | 120 | 0 | 0 | 4 | 35 |
+| СРЕДНЯЯ | 124 | 119 | 1 | 0 | 4 | 35 |
 | НИЗКАЯ | 192 | 183 | 0 | 2 | 7 | 1 |
-| **Итого** | **401** | **380** | **6** | **2** | **13** | **36** |
+| **Итого** | **401** | **379** | **7** | **2** | **13** | **36** |
 
 Опровержение прошли не все: **36** находок никто
 не пытался сломать. В проверенной части доля завышенных или неточных — 38% среди критичных и
@@ -115,7 +116,8 @@ exit 0. Оценки срезов — следствие: срез достиг�
 
 ## Индекс находок
 
-Единственное место, где ведется статус. Открытое сверху, внутри — по серьезности.
+Единственное место, где ведется статус: ни в секциях ниже, ни где-либо еще его нет.
+Открытое сверху, внутри — по серьезности.
 
 Severity — после опровержения; в заголовке секции может стоять исходная, там же видно,
 что опровержение сняло. Вердикт «не проверялась» значит именно это: находку никто не
@@ -295,7 +297,6 @@ Severity — после опровержения; в заголовке секц
 | Открыто | СРЕДНЯЯ | `publicid-two-phase-write` | читаемый адрес пишется вторым SaveChanges без транзакции | Реляционное хранилище и EF Core | partly-wrong |  |
 | Открыто | СРЕДНЯЯ | `ratelimit-account-partition-dead` | партиция по аккаунту не может сработать | Безопасность | не проверялась |  |
 | Открыто | СРЕДНЯЯ | `reconnect-gives-up` | после четырех неудачных попыток realtime не восстанавливается до перезагрузки страницы | Асинхронный обмен сообщениями и realtime | confirmed |  |
-| Открыто | СРЕДНЯЯ | `register-in-three-hand-synced-copies` | генератор реестра есть и обходится | Процесс разработки: человек и Claude | confirmed |  |
 | Открыто | СРЕДНЯЯ | `safe-image-never-applies` | spoiler-гейт для картинок недостижим | Безопасность | не проверялась |  |
 | Открыто | СРЕДНЯЯ | `schema-helpers-embed-count` | "три места встраивания", их два, и одно из названных не существует | Комментарии: правда, польза, объем | partly-wrong |  |
 | Открыто | СРЕДНЯЯ | `security-auth-duplicate-tables` | одно правило в двух документах, наборы строк уже разошлись | Документация | confirmed |  |
@@ -506,11 +507,12 @@ Severity — после опровержения; в заголовке секц
 | Принято | НИЗКАЯ | `bundled-commits-against-own-diagnosis` | 13 коммитов делают три и больше несвязанных дела | Процесс разработки: человек и Claude | partly-wrong | Отклонено. Оба заявленных вреда — гранулярность revert и bisect по цепочке из 156 коммитов, которой больше нет: владелец сжал ее в один коммит |
 | Принято | НИЗКАЯ | `game-post-error-generic` | при отказе публикации поста теряется причина | Пользовательские сценарии | partly-wrong | Отклонено. Правка как предложена вредна: 403 уже подменяется русским текстом, а на 404 она вытащила бы в композер английское Room not found. Названных причин в домене нет |
 | Исправлено | КРИТИЧНО | `channel-leak-per-publish` | каждая публикация открывает AMQP-канал, который никто не закрывает | Асинхронный обмен сообщениями и realtime | подтверждено | Три места, не два. IDisposable и InstancePerLifetimeScope; продюсер вынесен из NotificationProcessor. Гейт — правило ArchUnit на всех владельцев IProducerBuilder (7e0c1405, aef762e7) |
-| Исправлено | КРИТИЧНО | `forwarded-headers-never-trusted` | в единственном разворачиваемом стеке лимитер и аудит видят адрес nginx, а не клиента | Композиционный корень, конфигурация, hosted-сервисы, наблюдаемость | подтверждено | Сеть dm-full-app получила заданную подсеть, preview-overlay доверяет ровно ей. Гейт на согласованность compose-файлов (9cc636db) |
-| Исправлено | КРИТИЧНО | `intention-403-serializes-target` | ответ 403 отдает целевой объект целиком | Безопасность | подтверждено | Сообщение исключения больше не сериализует цель, фабрика ProblemDetails не кладет его в ответ. Интеграционный тест на отсутствие почты, логина, заголовка и описания в теле 403 (88983857) |
-| Исправлено | КРИТИЧНО | `post-projection-untranslatable` | проекция DbPost не транслируется: любое чтение поста отвечало 500 | Найдено вне срезов | найдено вне аудита, при написании гейта | GameLeadUserIds собирается моделью из двух проецируемых членов. Гейт с ассистентом, иначе сломанная и исправленная формы совпадают (4972763a) |
+| Исправлено | КРИТИЧНО | `forwarded-headers-never-trusted` | в единственном разворачиваемом стеке лимитер и аудит видят адрес nginx, а не клиента | Композиционный корень, конфигурация, hosted-сервисы, наблюдаемость | подтверждено | Сеть dm-full-app получила заданную подсеть, preview-overlay доверяет ровно ей (9cc636db) |
+| Исправлено | КРИТИЧНО | `intention-403-serializes-target` | ответ 403 отдает целевой объект целиком | Безопасность | подтверждено | Сообщение исключения больше не сериализует цель, фабрика ProblemDetails не кладет его в ответ (88983857) |
+| Исправлено | КРИТИЧНО | `post-projection-untranslatable` | проекция DbPost не транслируется: любое чтение поста отвечало 500 | Найдено вне срезов | найдено вне аудита, при написании гейта | GameLeadUserIds собирается моделью из двух проецируемых членов (4972763a) |
 | Исправлено | КРИТИЧНО | `rabbit-producer-channel-leak` | каждая публикация события утекает AMQP-канал, после ~4096 отправка умирает до перезапуска | Композиционный корень, конфигурация, hosted-сервисы, наблюдаемость | подтверждено | Дубль channel-leak-per-publish, закрыт тем же (7e0c1405, aef762e7) |
 | Исправлено | КРИТИЧНО | `upload-target-not-owned` | `targetId` не проверяется на владение, а чтение портретов падает на двух записях | Полиглотное хранение (PG / Mongo / MinIO); Безопасность | подтверждено | IUploadTargetAuthorizer: правило на тип загрузки в модуле, который владеет сущностью; авторизация до обработки картинки; устаревший портрет снимается; чтение берет новейшую запись. Fails closed (3596d746, 4972763a) |
+| Исправлено | СРЕДНЯЯ | `register-in-three-hand-synced-copies` | генератор реестра есть и обходится | Процесс разработки: человек и Claude | confirmed | Копии в памяти агента удалены, статус второго аудита ведется только индексом этого файла, а внутри файла — только им: в секциях остался гейт, не статус. Автоматического гейта нет и быть не может — файлы лежали вне репозитория, тест их не видит; вместо него запись в памяти агента, запрещающая заводить параллельные реестры. В AUDIT.md первого аудита двойная запись осталась: документ закрыт и не правится, расходиться нечему |
 | Опровергнуто | СРЕДНЯЯ | `domain-in-shared` | доменные знания живут в shared, и комментарии это признают | Архитектура фронтенда (FSD) | matter-of-taste | Находки не существует |
 | Опровергнуто | СРЕДНЯЯ | `dropdown-header-contrast` | заголовок группы в фильтрах: 3.94 при пороге 4.5 | Качество фронтенда: дизайн-система, a11y, производительность | refuted | Находки не существует |
 | Опровергнуто | СРЕДНЯЯ | `worker-retry-treats-domain-4xx-as-transient` | политика повторов ловит любое исключение, включая доменный HttpException | Архитектура бэкенда и границы модулей | refuted | Находки не существует |
@@ -1033,8 +1035,6 @@ Domain project added later" — и поэтому в тесте использо
 
 ### [СРЕДНЯЯ] worker-retry-treats-domain-4xx-as-transient — политика повторов ловит любое исключение, включая доменный HttpException
 
-> **Статус: опровергнуто.** Находки не существует.
-
 `src/DM.Workers.NotificationDispatcher/NotificationConsumerRetryMiddleware.cs:18-20`
 ```csharp
 _retryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(5,
@@ -1182,8 +1182,6 @@ API-слое для 25 действий.
 разложить пять корневых файлов `Infrastructure.Core` по `{Concern}/`.
 
 ### [НИЗКАЯ] patterns-names-concrete-types — SSOT по структуре ссылается на конкретные имена и пути
-
-> **Статус: опровергнуто.** Находки не существует.
 
 PATTERNS.md называет текущие имена и пути: `ErrorHandlingMiddleware` (строка 486), `DmDbContext`
 и `IMapper` (строка 41), `IBbParserProvider` (строка 525), `shared/ui/Layout/Dialog.vue`
@@ -2391,8 +2389,6 @@ Seed борда "Общий" ставит `TopicsCount = 1` (DmDbContext.cs:1091
 
 ### [СРЕДНЯЯ] character-attributes-n-plus-1 — по запросу на каждый атрибут при сохранении персонажа
 
-> **Статус: опровергнуто.** Находки не существует.
-
 ```csharp
 var existingAttributeIds = await GetAttributeIds(updateCharacter.CharacterId);
 foreach (var attr in updateCharacter.Attributes)
@@ -2664,9 +2660,7 @@ in-app уведомлений при этом не работает, и тест
 
 ### [КРИТИЧНО] upload-target-not-owned — `targetId` не проверяется на владение, а чтение портретов падает на двух записях
 
-> **Статус: исправлено.** IUploadTargetAuthorizer: правило на тип загрузки в модуле, который владеет сущностью. Авторизация до обработки изображения. Устаревший портрет персонажа снимается при загрузке. Чтение берет новейшую запись, а не полагается на единственность.
->
-> Гейт: test/DM.Web.API.Tests/Features/General/UploadTargetAuthorizationShould.cs (отказ, его место до пайплайна и бакета, fail-closed, покрытие всех значений enum, сбор устаревшего) + test/DM.Web.API.IntegrationTests/Repositories/PostRepositoryShould.cs::TakeTheNewestPortraitWhenACharacterHasTwoLiveUploads. Проверено снятием.
+> **Гейт:** test/DM.Web.API.Tests/Features/General/UploadTargetAuthorizationShould.cs — отказ, его место до пайплайна и до бакета, fail-closed, покрытие всех значений enum, сбор устаревшего портрета. Плюс PostRepositoryShould::TakeTheNewestPortraitWhenACharacterHasTwoLiveUploads. Проверено снятием.
 
 > **Опровержение: подтверждено.**
 
@@ -3297,8 +3291,6 @@ period), `UploadGarbageCollector.cs:68` (`DeletedUtc`), `UserRepository.cs:478`
   `$group` после `$match`, и покрывается ли сортировка индексом, видно только на данных.
 
 ### [ОПРОВЕРГНУТО] notification-metadata-anonymous-type — `Notification.Metadata` хранит анонимный тип, который драйвер отказывается сериализовать
-
-> **Статус: опровергнуто.** Находки не существует.
 
 > **Опровержение: ОПРОВЕРГНУТО.**
 >
@@ -4301,9 +4293,7 @@ requests` (`client.ts:27`) — сервер этот заголовок не п�
 
 ### [КРИТИЧНО] intention-403-serializes-target — ответ 403 отдает целевой объект целиком
 
-> **Статус: исправлено.** 88983857
->
-> Гейт: RefusalsShould.NotCarryTheTargetTheyRefusedAccessTo — краснеет, если сообщение исключения вернуть в ответ (проверено снятием)
+> **Гейт:** test/DM.Web.API.IntegrationTests/Controllers/General/RefusalsShould.cs — в теле 403 нет ни почты, ни логина, ни заголовка, ни описания. Проверено красно-зелено.
 
 > **Опровержение: подтверждено.**
 
@@ -4328,9 +4318,7 @@ result.Append($" on {JsonSerializer.Serialize(target)}");
 
 ### [КРИТИЧНО] upload-target-not-owned — targetId загрузки никем не проверяется
 
-> **Статус: исправлено.** IUploadTargetAuthorizer: правило на тип загрузки в модуле, который владеет сущностью. Авторизация до обработки изображения. Устаревший портрет персонажа снимается при загрузке. Чтение берет новейшую запись, а не полагается на единственность.
->
-> Гейт: test/DM.Web.API.Tests/Features/General/UploadTargetAuthorizationShould.cs (отказ, его место до пайплайна и бакета, fail-closed, покрытие всех значений enum, сбор устаревшего) + test/DM.Web.API.IntegrationTests/Repositories/PostRepositoryShould.cs::TakeTheNewestPortraitWhenACharacterHasTwoLiveUploads. Проверено снятием.
+> **Гейт:** test/DM.Web.API.Tests/Features/General/UploadTargetAuthorizationShould.cs — отказ, его место до пайплайна и до бакета, fail-closed, покрытие всех значений enum, сбор устаревшего портрета. Плюс PostRepositoryShould::TakeTheNewestPortraitWhenACharacterHasTwoLiveUploads. Проверено снятием.
 
 > **Опровержение: подтверждено.**
 
@@ -4625,8 +4613,6 @@ OUT: <img src="https://example.com/a.png" ...>
 
 ### [ОПРОВЕРГНУТО] private-tag-unquoted-not-parsed — приватный текст в формате редактора виден всем
 
-> **Статус: опровергнуто.** Находки не существует.
-
 > **Опровержение: ОПРОВЕРГНУТО.**
 >
 > Already fixed in HEAD. BbParserWrapper.cs:189-207 `NormalisePrivateTags` rewrites `[private=Ivan]` → `[private="Ivan"]` and lowercases both tags case-insensitively, and Parse calls it at :232 before any extraction — so it covers every surface and every stored string. Test coverage exists too: PermissionFilteringVisitorShould.cs:148-169 is a 4-row theory over `[private=B]`, `[private="B"]`, `[PRIVATE="B"]`, `[Private=B]` asserting NotContain("secret"); `dotnet test --filter PermissionFilteringVisitorShould` → 29/29 pass. Landed in 4b4336da (2026-07-30 11:40, ancestor of HEAD). The report was written pre-fix: its cites into this file are shifted ~54 lines (extraction "180-220" is now 234-302, restore "333-381" is now 387-435) — exactly the size of the inserted block — while everything before line 155 matches byte-for-byte. Also stale: "все 17 тестов" is now 29.
@@ -4766,9 +4752,7 @@ OUT: public  tail                              <- вырезано коррек�
 
 ### [КРИТИЧНО] rabbit-producer-channel-leak — каждая публикация события утекает AMQP-канал, после ~4096 отправка умирает до перезапуска
 
-> **Статус: исправлено.** Три места: InvokedEventProducer, MailSender, RealtimeNotificationProducer (вынесен из NotificationProcessor). Все IDisposable, зарегистрированы InstancePerLifetimeScope.
->
-> Гейт: test/DM.Architecture.Tests/MessageProducerOwnershipShould.cs (правило на IDisposable для всех владельцев продюсера, проверено снятием на каждом из трех) + test/DM.Web.API.Tests/Features/General/ProducerScopeResolutionShould.cs (время жизни регистраций)
+> **Гейт:** Тот же, что у channel-leak-per-publish.
 
 > **Опровержение: подтверждено.**
 
@@ -4823,9 +4807,7 @@ producer = producerBuilder.BuildRabbit<EmailLetter>(new RabbitProducerParameters
 
 ### [КРИТИЧНО] forwarded-headers-never-trusted — в единственном разворачиваемом стеке лимитер и аудит видят адрес nginx, а не клиента
 
-> **Статус: исправлено.** Сеть dm-full-app получила заданную подсеть 172.28.0.0/16, preview-overlay доверяет ровно ей и задает ProxyCount=1 на dmapi. В overlay, а не в x-workload-env: в базовом стеке прокси нет и заголовок игнорировать правильно.
->
-> Гейт: test/DM.Architecture.Tests/DeploymentConfigurationShould.cs — подсеть задана явно и overlay доверяет именно ей. Проверено снятием: и подмена сети, и удаление переменных краснеют. Плюс docker compose config подтверждает разрешение обоих файлов.
+> **Гейт:** test/DM.Architecture.Tests/DeploymentConfigurationShould.cs — подсеть задана явно и overlay доверяет именно ей. Проверено снятием: и подмена сети, и удаление переменных краснеют.
 
 > **Опровержение: подтверждено.**
 
@@ -5475,8 +5457,6 @@ var isDevelopment = environmentName == "Development";
 
 ### [НИЗКАЯ] popularity-log-lies — строка лога сообщает о начальном расчете, которого никто не делает
 
-> **Статус: опровергнуто.** Находки не существует.
-
 ```csharp
 // src/DM.Web.API/HostedServices/PopularityScoreService.cs:41
 _logger.LogInformation("[Popularity Score] Service started. Will run every {Interval} hour(s). Initial calculation done by WarmupService.", ...);
@@ -5645,9 +5625,7 @@ public static readonly Histogram<double> DurationMs =
 
 ### [КРИТИЧНО] channel-leak-per-publish — каждая публикация открывает AMQP-канал, который никто не закрывает
 
-> **Статус: исправлено.** Три места: InvokedEventProducer, MailSender, RealtimeNotificationProducer (вынесен из NotificationProcessor). Все IDisposable, зарегистрированы InstancePerLifetimeScope.
->
-> Гейт: test/DM.Architecture.Tests/MessageProducerOwnershipShould.cs (правило на IDisposable для всех владельцев продюсера, проверено снятием на каждом из трех) + test/DM.Web.API.Tests/Features/General/ProducerScopeResolutionShould.cs (время жизни регистраций)
+> **Гейт:** test/DM.Architecture.Tests/MessageProducerOwnershipShould.cs — всякий класс, зависящий от IProducerBuilder, обязан быть IDisposable; проверено снятием на каждом из трех. Плюс test/DM.Web.API.Tests/Features/General/ProducerScopeResolutionShould.cs на время жизни регистраций.
 
 > **Опровержение: подтверждено.**
 
@@ -7030,8 +7008,6 @@ can render it the moment the API starts returning it". Спекулятивно�
 
 ### [СРЕДНЯЯ] domain-in-shared — доменные знания живут в shared, и комментарии это признают
 
-> **Статус: опровергнуто.** Находки не существует.
-
 `shared/api/models` содержит 179 экспортируемых типов, разложенных по доменным папкам
 `game`, `moderation`, `notepads`, `notifications`, `subscriptions`, `community`,
 `achievements`, `personal`. Комментарии в `shared/api/models/common/index.ts:8,11,14,17`
@@ -7794,8 +7770,6 @@ const orderedTabs = computed(() => {
 без обводки — ровно та же идиома, что уже применена к кнопкам (`Inputs.sass:79-82`).
 
 ### [СРЕДНЯЯ] dropdown-header-contrast — заголовок группы в фильтрах: 3.94 при пороге 4.5
-
-> **Статус: опровергнуто.** Находки не существует.
 
 `assets/styles/_Filters.sass:205-212`:
 
@@ -9084,8 +9058,6 @@ if (apiError) {
 
 ### [НИЗКАЯ] password-reset-success-no-login-link — после смены пароля нет кнопки войти
 
-> **Статус: опровергнуто.** Находки не существует.
-
 `pages/account/PasswordResetPage.vue:100-109`: успех дает текст «Теперь вы можете
 войти с новым паролем» и кнопку «На главную». Ветка недействительного токена в
 той же странице (строка 133) уже умеет открывать диалог входа ссылкой
@@ -9097,8 +9069,6 @@ if (apiError) {
 Исправление: заменить кнопку на переход `{ path: "/", query: { action: "login" } }`.
 
 ### [НИЗКАЯ] game-post-error-generic — при отказе публикации поста теряется причина
-
-> **Статус: принято решением.** Чинить не будем, обоснование в индексе выше.
 
 `pages/game/GameRoom.vue:236-239`:
 
@@ -9803,8 +9773,6 @@ API_DESIGN.md:139, DATA_STORAGE.md:49, PATTERNS.md:479.
 
 ### [НИЗКАЯ] yo-in-claude-docs — 15 вхождений буквы "е с двумя точками" в трех файлах .claude
 
-> **Статус: опровергнуто.** Находки не существует.
-
 `.claude/README.md` (6 вхождений, включая строку интерфейса в примере кода на
 :351 — там "Загрузить еще" набрано запрещенной буквой),
 `.claude/skills/requirement-ledger/SKILL.md` (5),
@@ -9868,8 +9836,6 @@ API_DESIGN.md:139, DATA_STORAGE.md:49, PATTERNS.md:479.
 
 ### [НИЗКАЯ] greeting-register — приветствие в трех регистрах
 
-> **Статус: опровергнуто.** Находки не существует.
-
 - "Здравствуй," — шапка сайта (Header.vue:119) и мобильный ящик (App.vue:41),
   форма на "ты";
 - "Здравствуйте, {username}!" — письма (UsernameChangeMailSender.cs:27, :57,
@@ -9889,8 +9855,6 @@ API_DESIGN.md:139, DATA_STORAGE.md:49, PATTERNS.md:479.
 эту правку не входят по отдельному указанию их не трогать.
 
 ### [НИЗКАЯ] required-validator-no-message — обязательность поля не объясняется словами
-
-> **Статус: опровергнуто.** Находки не существует.
 
 `useValidatedField.ts:196-200`:
 
@@ -11355,8 +11319,6 @@ git или назначить дату удаления в самом файле
 
 ### [СРЕДНЯЯ] bundled-commits-against-own-diagnosis — 13 коммитов делают три и больше несвязанных дела
 
-> **Статус: принято решением.** Чинить не будем, обоснование в индексе выше.
-
 Распределение находок на коммит по 156 сообщениям: 78 без тега, 46 с одним, 19 с двумя,
 8 с тремя, 4 с четырьмя, 1 с шестью. То есть 32 коммита (21%) закрывают две и более находки,
 13 — три и более. Экстремумы:
@@ -12593,8 +12555,6 @@ builder.RegisterModuleOnce<DM.Domain.Moderation.ModerationModule>();
 
 ### [СРЕДНЯЯ] xmldoc-ceremony — гейт требует наличия дока, поэтому больше половины XML-дока это синтаксис
 
-> **Статус: опровергнуто.** Находки не существует.
-
 `Directory.Build.props` включает `GenerateDocumentationFile` (строка 3) вместе с `TreatWarningsAsErrors` (строка 4), то есть CS1591 "Missing XML comment for publicly visible type or member" останавливает сборку. Единственное правило про комментарии в документации проекта — один пункт чеклиста "XML documentation" для нового endpoint-а (`docs/conventions/CODE_STYLE.md:137`). Правила о содержании нет ни в `CODE_STYLE.md`, ни в `PATTERNS.md`.
 
 Что из этого вышло, посчитано:
@@ -12803,8 +12763,6 @@ builder.RegisterModuleOnce<DM.Domain.Moderation.ModerationModule>();
 
 ### [КРИТИЧНО] post-projection-untranslatable — проекция DbPost не транслируется: любое чтение поста отвечало 500
 
-> **Статус: исправлено.** GameLeadUserIds собирается моделью из двух проецируемых членов вместо new[]{master}.Concat(assistants) внутри проекции
->
-> Гейт: test/DM.Web.API.IntegrationTests/Repositories/PostRepositoryShould.cs::ProjectTheGameLeadsOfEveryPostInARoom — с ассистентом, иначе сломанная и исправленная формы совпадают. Проверено снятием.
+> **Гейт:** test/DM.Web.API.IntegrationTests/Repositories/PostRepositoryShould.cs::ProjectTheGameLeadsOfEveryPostInARoom — с ассистентом, иначе сломанная и исправленная формы совпадают. Проверено снятием.
 
 Пришло с f217a249 (2026-04-13). Ни один тест не выполнял этот запрос против Postgres. Аудит его не нашел: восемнадцать срезов читали код, но не исполняли эти два пути.
