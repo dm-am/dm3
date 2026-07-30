@@ -184,7 +184,16 @@ internal class BanService : IBanService
         // Nothing else tells the target they were banned: the ban surfaces only
         // as a refusal at the next action they try. Sent after the write, so the
         // generator that reads the ban back by id finds it.
-        await _eventProducer.SendAsync(EventType.BanIssued, ban.BanId);
+        //
+        // A voluntary self-ban is the exception. The generator addresses exactly
+        // one recipient - the target - and for a self-ban that is the person who
+        // just requested it: the notification tells him nothing he does not know
+        // and reads as a sanction imposed from outside.
+        if (!createBan.IsVoluntary)
+        {
+            await _eventProducer.SendAsync(EventType.BanIssued, ban.BanId);
+        }
+
         return ban;
     }
 

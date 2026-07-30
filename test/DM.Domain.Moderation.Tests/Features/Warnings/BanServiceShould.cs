@@ -222,6 +222,29 @@ public class BanServiceShould : UnitTestBase
     }
 
     [Fact]
+    public async Task NotAnnounceAVoluntarySelfBan()
+    {
+        // The ban notification exists to tell a person about something he did not
+        // do. Its only recipient is the target, who here is the author as well.
+        var targetUser = new GeneralUser { UserId = _moderatorUserId, Username = "Moderator" };
+        _userLookupService.Setup(s => s.GetAsync("Moderator")).ReturnsAsync(targetUser);
+        _banRepository.Setup(r => r.GetActiveBan(_moderatorUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Ban?)null);
+        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Ban { BanId = _banId });
+
+        await _service.CreateBan(new CreateBan
+        {
+            Username = "Moderator",
+            DurationHours = 48,
+            Comment = "Перерыв",
+            IsVoluntary = true
+        });
+
+        _eventProducer.Verify(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
     public async Task PersistDemocraticBanScopeWhenRequested()
     {
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };

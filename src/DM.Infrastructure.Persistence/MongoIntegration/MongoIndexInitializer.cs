@@ -60,6 +60,20 @@ public class MongoIndexInitializer : IHostedService
         // UnreadCounters — UnreadCountersRepository
         await Assert(client.GetCollection<DbUnreadCounter>(), new[]
         {
+            // The key the repository writes by: every upsert addresses a marker as
+            // (UserId, EntityId, EntryType), so one document per triple is the
+            // invariant the writes assume. Without the index two upserts racing
+            // each other — two tabs, a double click on "mark as read" — leave two
+            // markers, and every read has to defend itself against a state that
+            // should not exist.
+            // A database that already holds duplicates fails this assertion, and
+            // the failure is logged rather than thrown; the way out is a reset,
+            // not a repair.
+            Index<DbUnreadCounter>("IX_UnreadCounters_User_Entity_Type", keys => keys
+                .Ascending(c => c.UserId)
+                .Ascending(c => c.EntityId)
+                .Ascending(c => c.EntryType), unique: true),
+
             // SelectByEntitiesAsync: UserId IN, EntityId IN, EntryType =, IsRemoved =
             Index<DbUnreadCounter>("IX_UnreadCounters_SelectByEntities", keys => keys
                 .Ascending(c => c.UserId)

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
-import { notificationApi } from "@/entities/notification";
 import {
-  NotificationType,
-  type UserNotification,
-} from "@/shared/api/models/notifications";
+  notificationApi,
+  notificationLink,
+  notificationTitle,
+} from "@/entities/notification";
+import type { UserNotification } from "@/shared/api/models/notifications";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -21,102 +22,6 @@ const take = 20;
 const filteredNotifications = computed(() => {
   return notifications.value;
 });
-
-const getNotificationTypeLabel = (type: NotificationType): string => {
-  switch (type) {
-    case NotificationType.NewPublication:
-      return "Новая публикация";
-    case NotificationType.LikedPublication:
-      return "Лайк публикации";
-    case NotificationType.NewBlogComment:
-      return "Комментарий в блоге";
-    case NotificationType.LikedBlogComment:
-      return "Лайк комментария";
-    case NotificationType.BlogInvitationCreated:
-      return "Приглашение в блог";
-    case NotificationType.BlogInvitationAccepted:
-      return "Приглашение принято";
-    case NotificationType.BlogInvitationRejected:
-      return "Приглашение отклонено";
-    case NotificationType.NewTopicInSubscribedBoard:
-      return "Новый топик в разделе";
-    case NotificationType.NewCommentInSubscribedTopic:
-      return "Комментарий в топике";
-    case NotificationType.NewGameFromSubscribedAuthor:
-      return "Новая игра автора";
-    case NotificationType.NewPostInSubscribedGame:
-      return "Новый пост в игре";
-    case NotificationType.UserMentioned:
-      return "Упоминание";
-    case NotificationType.NewBlogFromSubscribedAuthor:
-      return "Новый блог автора";
-    case NotificationType.NewTopicFromSubscribedAuthor:
-      return "Топик от автора";
-    case NotificationType.NewForumTopic:
-      return "Новый топик форума";
-    case NotificationType.LikedTopic:
-      return "Лайк топика";
-    case NotificationType.NewForumComment:
-      return "Комментарий форума";
-    case NotificationType.LikedForumComment:
-      return "Лайк комментария";
-    case NotificationType.NewGame:
-      return "Новая игра";
-    case NotificationType.NewCharacter:
-      return "Новый персонаж";
-    default:
-      return "Уведомление";
-  }
-};
-
-const getNotificationLink = (notification: UserNotification): string | null => {
-  const payload = notification.payload;
-  if (!payload) return null;
-
-  switch (notification.eventType) {
-    case NotificationType.NewPublication:
-    case NotificationType.LikedPublication:
-    case NotificationType.NewBlogFromSubscribedAuthor:
-      return payload.blogId ? `/blogs/${payload.blogId}` : null;
-
-    case NotificationType.NewBlogComment:
-    case NotificationType.LikedBlogComment:
-      return payload.blogId ? `/blogs/${payload.blogId}` : null;
-
-    case NotificationType.BlogInvitationCreated:
-    case NotificationType.BlogInvitationAccepted:
-    case NotificationType.BlogInvitationRejected:
-      return payload.blogId ? `/blogs/${payload.blogId}` : null;
-
-    case NotificationType.NewTopicInSubscribedBoard:
-    case NotificationType.NewTopicFromSubscribedAuthor:
-      return payload.topicId ? `/forum-topic/${payload.topicId}` : null;
-
-    case NotificationType.NewCommentInSubscribedTopic:
-      return payload.topicId ? `/forum-topic/${payload.topicId}` : null;
-
-    case NotificationType.NewGameFromSubscribedAuthor:
-    case NotificationType.NewGame:
-      return payload.gameId ? `/game/${payload.gameId}` : null;
-
-    case NotificationType.NewPostInSubscribedGame:
-      return payload.gameId ? `/game/${payload.gameId}` : null;
-
-    case NotificationType.NewCharacter:
-      return payload.gameId ? `/game/${payload.gameId}/characters` : null;
-
-    case NotificationType.LikedTopic:
-    case NotificationType.NewForumTopic:
-      return payload.topicId ? `/forum-topic/${payload.topicId}` : null;
-
-    case NotificationType.NewForumComment:
-    case NotificationType.LikedForumComment:
-      return payload.topicId ? `/forum-topic/${payload.topicId}` : null;
-
-    default:
-      return null;
-  }
-};
 
 const getNotificationDescription = (notification: UserNotification): string => {
   const payload = notification.payload;
@@ -233,7 +138,7 @@ onMounted(() => fetchNotifications());
       >
         <div class="notification-content">
           <span class="notification-type">
-            {{ getNotificationTypeLabel(notification.eventType) }}
+            {{ notificationTitle(notification.eventType) }}
           </span>
           <p class="notification-description">
             {{ getNotificationDescription(notification) }}
@@ -242,8 +147,8 @@ onMounted(() => fetchNotifications());
 
         <div class="notification-actions">
           <router-link
-            v-if="getNotificationLink(notification)"
-            :to="getNotificationLink(notification)!"
+            v-if="notificationLink(notification)"
+            :to="notificationLink(notification)!"
             class="view-link"
           >
             Перейти

@@ -35,6 +35,14 @@ print('Creating indexes for DM3...');
 // Used by: GameReadingService, ForumReadingService, ConversationReadingService
 // ============================================================================
 
+// The key every write addresses a marker by: FlushAsync, FlushAllAsync and the
+// create paths all upsert on (UserId, EntityId, EntryType), so one document per
+// triple is the invariant they assume
+db.UnreadCounters.createIndex(
+    { UserId: 1, EntityId: 1, EntryType: 1 },
+    { name: "IX_UnreadCounters_User_Entity_Type", unique: true, background: true }
+);
+
 // Index for SelectByEntities - MOST CRITICAL for game sidebar performance
 // Query: UserId IN [...], EntityId IN [...], EntryType = X, IsRemoved = false
 db.UnreadCounters.createIndex(
@@ -207,7 +215,7 @@ print('SecurityAuditLog indexes created');
 print('');
 print('=== MongoDB Indexes Created Successfully ===');
 print('Collections indexed:');
-print('  - UnreadCounters (4 indexes) - CRITICAL for sidebar performance');
+print('  - UnreadCounters (5 indexes, one unique) - CRITICAL for sidebar performance');
 print('  - UserSessions (1 index) - CRITICAL for every authenticated request');
 print('  - UserSettings (1 index)');
 print('  - LoginAttempts (2 indexes, one TTL)');
@@ -217,5 +225,5 @@ print('  - Polls (2 indexes)');
 print('  - AttributeSchemata (1 index)');
 print('  - Dice (1 index)');
 print('');
-print('Total: 14 indexes');
+print('Total: 15 indexes');
 print('==========================================');

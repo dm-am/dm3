@@ -5,79 +5,103 @@ using DM.Domain.Core.UnreadCounters;
 using DM.Infrastructure.Persistence.MongoIntegration;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using MongoDB.Driver;
 using Xunit;
 using DbUnreadCounter = DM.Infrastructure.Persistence.Entities.Shared.UnreadCounter;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// Nothing in the store keeps one marker per (UserId, EntityId, EntryType): the
-/// writes upsert on that triple and no unique index backs it, so two flushes
-/// racing each other leave two documents. The aggregate reads survive that by
-/// grouping; these two read the documents directly and have to stay defined.
-/// Runs against the container Mongo because the duplicate exists nowhere else.
+/// One marker per (UserId, EntityId, EntryType) is the invariant every write
+/// assumes: they all upsert on that triple. The unique index is what makes it
+/// true, and the write paths are upserts so that the index refuses a duplicate
+/// instead of turning an ordinary request into an error. Neither fact exists
+/// anywhere but in a live store, hence the container Mongo — the application
+/// host asserts the index on startup, the same way it does in a deployment.
 /// </summary>
 public class UnreadCountersRepositoryShould : IntegrationTestBase
 {
-    private static readonly DateTime EarlierRead = new(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
-    private static readonly DateTime LaterRead = new(2026, 1, 1, 11, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime MarkerRead = new(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
 
     public UnreadCountersRepositoryShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
     [Fact]
-    public async Task ReportTheLatestOfTwoMarkersLeftForOneEntity()
+    public async Task RefuseASecondMarkerForTheSameKey()
     {
         var userId = Guid.NewGuid();
         var entityId = Guid.NewGuid();
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        await WriteTwoMarkers(scope, userId, entityId);
+        var collection = Collection(scope);
+        await collection.InsertOneAsync(Marker(userId, entityId));
 
-        var lastRead = await scope.ServiceProvider.GetRequiredService<IUnreadCountersRepository>()
-            .GetLastReadTimeAsync(userId, entityId, UnreadEntryType.Message);
+        var act = async () => await collection.InsertOneAsync(Marker(userId, entityId));
 
-        lastRead.Should().Be(LaterRead,
-            "the later marker is the read the user actually made last");
+        await act.Should().ThrowAsync<MongoWriteException>()
+            .Where(e => e.WriteError.Category == ServerErrorCategory.DuplicateKey);
+        var stored = await collection.CountDocumentsAsync(Key(userId, entityId));
+        stored.Should().Be(1, "the store, not the caller, is what keeps the triple single");
     }
 
     [Fact]
-    public async Task AnswerForAnEntityThatCarriesTwoMarkers()
+    public async Task KeepOneMarkerWhenTheUserIsCountedInAgain()
     {
         var userId = Guid.NewGuid();
         var entityId = Guid.NewGuid();
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        await WriteTwoMarkers(scope, userId, entityId);
+        var repository = scope.ServiceProvider.GetRequiredService<IUnreadCountersRepository>();
+        await repository.CreateAsync(entityId, UnreadEntryType.Message, new[] {userId});
+        await repository.IncrementAsync(entityId, UnreadEntryType.Message);
+        (await repository.SelectByEntitiesAsync(userId, UnreadEntryType.Message, entityId))[entityId]
+            .Should().Be(1, "one entry went unread before the user was counted in again");
 
-        var lastReadTimes = await scope.ServiceProvider.GetRequiredService<IUnreadCountersRepository>()
-            .GetLastReadTimesAsync(userId, UnreadEntryType.Message, entityId);
+        // A participant removed from a group chat and added back: the second
+        // create meets the marker the first one left.
+        await repository.CreateAsync(entityId, UnreadEntryType.Message, new[] {userId});
 
-        lastReadTimes.Should().ContainKey(entityId,
-            "the caller is the jump to the first unread post, and it fails whole on an exception");
-        lastReadTimes[entityId].Should().Be(LaterRead);
+        var stored = await Collection(scope).CountDocumentsAsync(Key(userId, entityId));
+        stored.Should().Be(1);
+        var unread = await repository.SelectByEntitiesAsync(userId, UnreadEntryType.Message, entityId);
+        unread[entityId].Should().Be(0, "the count starts over for a user counted in again");
     }
 
-    /// <summary>
-    /// Written straight to the collection: the pair takes two upserts racing each
-    /// other, which no test can arrange on demand, while the store permits the
-    /// result. The earlier marker goes in first, so natural order answers wrong.
-    /// </summary>
-    private static Task WriteTwoMarkers(IServiceScope scope, Guid userId, Guid entityId) =>
-        scope.ServiceProvider.GetRequiredService<DmMongoClient>()
-            .GetCollection<DbUnreadCounter>()
-            .InsertManyAsync(new[]
-            {
-                Marker(userId, entityId, EarlierRead),
-                Marker(userId, entityId, LaterRead)
-            });
+    [Fact]
+    public async Task KeepOneMarkerWhenTheSameEntityIsFlushedTwice()
+    {
+        var userId = Guid.NewGuid();
+        var entityId = Guid.NewGuid();
+        var parentId = Guid.NewGuid();
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IUnreadCountersRepository>();
+        await repository.CreateAsync(entityId, parentId, UnreadEntryType.Message);
+        await repository.IncrementAsync(entityId, UnreadEntryType.Message);
 
-    private static DbUnreadCounter Marker(Guid userId, Guid entityId, DateTime lastReadUtc) => new()
+        // Two tabs, or a double click on "mark as read".
+        await repository.FlushAsync(userId, UnreadEntryType.Message, entityId);
+        await repository.FlushAsync(userId, UnreadEntryType.Message, entityId);
+
+        var stored = await Collection(scope).CountDocumentsAsync(Key(userId, entityId));
+        stored.Should().Be(1);
+        var unread = await repository.SelectByEntitiesAsync(userId, UnreadEntryType.Message, entityId);
+        unread[entityId].Should().Be(0, "the entity was marked as read, twice");
+    }
+
+    private static IMongoCollection<DbUnreadCounter> Collection(IServiceScope scope) =>
+        scope.ServiceProvider.GetRequiredService<DmMongoClient>().GetCollection<DbUnreadCounter>();
+
+    private static FilterDefinition<DbUnreadCounter> Key(Guid userId, Guid entityId) =>
+        Builders<DbUnreadCounter>.Filter.Eq(c => c.UserId, userId) &
+        Builders<DbUnreadCounter>.Filter.Eq(c => c.EntityId, entityId) &
+        Builders<DbUnreadCounter>.Filter.Eq(c => c.EntryType, UnreadEntryType.Message);
+
+    private static DbUnreadCounter Marker(Guid userId, Guid entityId) => new()
     {
         UserId = userId,
         EntityId = entityId,
         ParentId = entityId,
         EntryType = UnreadEntryType.Message,
-        LastReadUtc = lastReadUtc,
+        LastReadUtc = MarkerRead,
         Counter = 0
     };
 }

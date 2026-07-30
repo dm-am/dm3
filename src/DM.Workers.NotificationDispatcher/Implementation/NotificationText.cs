@@ -66,16 +66,17 @@ internal static class NotificationText
         [EventType.StatusBlogClosed] = "Блог закрыт",
         [EventType.StatusBlogFrozen] = "Блог заморожен",
         [EventType.StatusBlogFinished] = "Блог завершен",
+        [EventType.BlogInvitationCreated] = "Приглашение в блог",
 
         // Messages
         [EventType.NewMessage] = "Новое сообщение",
         [EventType.LikedMessage] = "Лайк на сообщение",
 
         // Subscriptions
-        [EventType.NewCommentInSubscribedTopic] = "Новый комментарий в подписанной теме",
+        [EventType.NewCommentInSubscribedTopic] = "Новый комментарий в подписанном топике",
         [EventType.NewGameFromSubscribedAuthor] = "Новая игра от подписанного автора",
         [EventType.NewBlogFromSubscribedAuthor] = "Новый блог от подписанного автора",
-        [EventType.NewTopicFromSubscribedAuthor] = "Новая тема от подписанного автора",
+        [EventType.NewTopicFromSubscribedAuthor] = "Новый топик от подписанного автора",
         [EventType.NewPostInSubscribedGame] = "Новый пост в подписанной игре",
 
         // Security

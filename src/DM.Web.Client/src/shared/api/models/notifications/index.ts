@@ -31,11 +31,13 @@ export enum NotificationType {
   NewTopicFromSubscribedAuthor = 77,
   NewBlogFromSubscribedAuthor = 78,
 
-  // Forum notifications (101-114)
-  NewForumTopic = 101,
+  // Forum notifications (101-114). Spelled the way the server spells them:
+  // the two halves of the title table are paired by member name, and an event
+  // that is a "forum topic" here and a "topic" there cannot be paired at all.
+  NewTopic = 101,
   LikedTopic = 104,
-  NewForumComment = 111,
-  LikedForumComment = 114,
+  NewTopicComment = 111,
+  LikedTopicComment = 114,
 
   // Game notifications (301+)
   NewGame = 301,
