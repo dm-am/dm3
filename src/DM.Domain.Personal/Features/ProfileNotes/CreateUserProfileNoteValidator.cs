@@ -12,8 +12,10 @@ internal class CreateUserProfileNoteValidator : AbstractValidator<CreateUserProf
         RuleFor(x => x.SubjectUsername)
             .NotEmpty().WithMessage(ValidationError.Empty);
 
+        // Deliberately no NotEmpty: an empty text is how the caller deletes the
+        // note (see IUserProfileNoteService.UpsertNote), and that is covered by a
+        // test. 2000 = UserProfileNote.Text column width.
         RuleFor(x => x.Text)
-            .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(5000).WithMessage(ValidationError.Long);
+            .MaximumLength(2000).WithMessage(ValidationError.Long);
     }
 }

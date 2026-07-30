@@ -6,21 +6,23 @@ import type {
   User,
 } from "@/shared/api/models/common";
 import type {
+  NotepadEntry,
+  CreateNotepadEntryRequest,
+  UpdateNotepadEntryRequest,
+} from "@/shared/api/models/notepads";
+import type {
   Blog,
   BlogInvitation,
-  BlogNotepadEntry,
   BlogPremoderationTransition,
   BlogRef,
   BlogStatusTransition,
   BlogUser,
   CreateBlogInput,
-  CreateBlogNotepadEntryInput,
   CreatePublicationInput,
   CreateRubricInput,
   Publication,
   Rubric,
   UpdateBlogInput,
-  UpdateBlogNotepadEntryInput,
   UpdatePublicationInput,
 } from "../model/types";
 import { Api } from "@/shared/api";
@@ -335,22 +337,19 @@ export default new (class {
   // === Blog notepad (BlogNotepadController) ===
 
   public getNotepad(blogId: string) {
-    return Api.get<ListEnvelope<BlogNotepadEntry>>(`blogs/${blogId}/notepad`);
+    return Api.get<ListEnvelope<NotepadEntry>>(`blogs/${blogId}/notepad`);
   }
 
-  public createNote(blogId: string, input: CreateBlogNotepadEntryInput) {
-    return Api.post<Envelope<BlogNotepadEntry>>(
-      `blogs/${blogId}/notepad`,
-      input,
-    );
+  public createNote(blogId: string, input: CreateNotepadEntryRequest) {
+    return Api.post<Envelope<NotepadEntry>>(`blogs/${blogId}/notepad`, input);
   }
 
   public updateNote(
     blogId: string,
     entryId: string,
-    input: UpdateBlogNotepadEntryInput,
+    input: UpdateNotepadEntryRequest,
   ) {
-    return Api.patch<BlogNotepadEntry>(
+    return Api.patch<Envelope<NotepadEntry>>(
       `blogs/${blogId}/notepad/${entryId}`,
       input,
     );

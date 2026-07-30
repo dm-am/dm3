@@ -38,6 +38,8 @@ public interface IAwardRepository
 
     /// <summary>All awards of a user, sorted by series and type. Non-revoked only.</summary>
     Task<IReadOnlyCollection<UserAward>> GetUserAwardsAsync(Guid userId, CancellationToken ct = default);
+    /// <summary>All awards granted within a contest series, recipients included. Non-revoked only.</summary>
+    Task<IReadOnlyCollection<UserAward>> GetSeriesAwardsAsync(Guid seriesId, CancellationToken ct = default);
     /// <summary>Grant record by ID, or null.</summary>
     Task<UserAward?> GetAsync(Guid id, CancellationToken ct = default);
     /// <summary>Create a grant record.</summary>

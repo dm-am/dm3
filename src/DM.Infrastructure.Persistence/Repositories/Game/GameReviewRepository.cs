@@ -1,3 +1,5 @@
+using Npgsql;
+using DM.Domain.Core.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -110,7 +112,18 @@ internal class GameReviewRepository : IGameReviewRepository
         };
 
         _dbContext.GameReviews.Add(dbReview);
-        await _dbContext.SaveChangesAsync();
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        {
+            // The caller pre-checks for an existing game review; this is the race
+            // where two concurrent requests both pass that check. Translated here
+            // so the domain does not have to know the storage engine's error codes.
+            _dbContext.ChangeTracker.Clear();
+            throw new DuplicateEntityException("Duplicate game review", ex);
+        }
 
         return await _dbContext.GameReviews
             .TagWith("DM.GameReview.Created")
@@ -154,7 +167,6 @@ internal class GameReviewRepository : IGameReviewRepository
         // User can review a game if they have at least one post in it
         return await _dbContext.Posts
             .TagWith("DM.GameReview.CanReview")
-            .Include(p => p.Room)
             .AnyAsync(p => p.AuthorId == userId && p.Room.GameId == gameId);
     }
 

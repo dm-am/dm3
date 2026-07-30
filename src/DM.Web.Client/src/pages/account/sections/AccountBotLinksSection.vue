@@ -123,9 +123,10 @@
 
 <script setup lang="ts">
 import { ref, onUnmounted } from "vue";
-import { AccountApi } from "@/shared/api";
+import { accountApi } from "@/entities/user";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 // Bot configuration (should match backend config)
 const telegramBotUsername = "DM3NotifyBot";
@@ -152,11 +153,11 @@ const copied = ref<"telegram" | "discord" | null>(null);
 
 async function startTelegramLinking() {
   generatingCode.value = "telegram";
-  const { data, error } = await AccountApi.generateBotCode("telegram");
+  const { data, error } = await accountApi.generateBotCode("telegram");
   generatingCode.value = null;
 
   if (error) {
-    toast.error("Не удалось сгенерировать код");
+    notifyFailure(error, "Не удалось сгенерировать код");
     return;
   }
 
@@ -192,11 +193,11 @@ function cancelTelegramLinking() {
 
 async function startDiscordLinking() {
   generatingCode.value = "discord";
-  const { data, error } = await AccountApi.generateBotCode("discord");
+  const { data, error } = await accountApi.generateBotCode("discord");
   generatingCode.value = null;
 
   if (error) {
-    toast.error("Не удалось сгенерировать код");
+    notifyFailure(error, "Не удалось сгенерировать код");
     return;
   }
 
@@ -260,7 +261,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 @import "../AccountPage.styles"
 
 .bot-links-content

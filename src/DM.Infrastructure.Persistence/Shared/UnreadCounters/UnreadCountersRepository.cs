@@ -175,10 +175,23 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     /// <inheritdoc />
     public async Task FlushAsync(Guid userId, UnreadEntryType entryType, Guid entityId)
     {
+        // Any user's counter for this entity carries the ParentId this one needs.
+        // When there is none, the entity was never counted for anyone: there is
+        // nothing to mark as read, and writing a marker with an invented ParentId
+        // would hide it from FlushAllAsync, which filters by exactly that field.
+        // Mongo has no global soft-delete filter of its own, so IsRemoved has to be
+        // spelled out. Without it a deleted entity still finds its own tombstoned
+        // counter here, and the upsert below writes a live row back — the entity
+        // returns to the sidebar with a fresh marker.
         var counter = await Collection.Find(
                 Filter.Eq(c => c.EntityId, entityId) &
-                Filter.Eq(c => c.EntryType, entryType))
+                Filter.Eq(c => c.EntryType, entryType) &
+                Filter.Eq(c => c.IsRemoved, false))
             .FirstOrDefaultAsync();
+        if (counter == null)
+        {
+            return;
+        }
 
         await Collection
             .ReplaceOneAsync(
@@ -200,9 +213,12 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     /// <inheritdoc />
     public async Task FlushAllAsync(Guid userId, UnreadEntryType entryType, Guid parentId)
     {
+        // Same reason as FlushAsync: a deleted entity must not come back through
+        // "mark everything as read".
         var entityIds = await Collection.Distinct(c => c.EntityId,
                 Filter.Eq(c => c.ParentId, parentId) &
-                Filter.Eq(c => c.EntryType, entryType))
+                Filter.Eq(c => c.EntryType, entryType) &
+                Filter.Eq(c => c.IsRemoved, false))
             .ToListAsync();
         var rightNow = _dateTimeProvider.Now.UtcDateTime;
 

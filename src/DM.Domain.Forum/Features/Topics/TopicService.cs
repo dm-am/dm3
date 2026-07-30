@@ -324,6 +324,14 @@ internal class TopicService : ITopicService
         query.Take is > 0 and <= 20;
 
     /// <inheritdoc />
+    // No access check: the caller passes ids of topics it has already read
+    // through an access-filtered path, and a marker carries nothing beyond the
+    // period the topic summarizes.
+    public Task<IReadOnlyDictionary<Guid, PeriodDigest>> GetPeriodDigestsAsync(
+        IReadOnlyCollection<Guid> topicIds, CancellationToken ct = default) =>
+        _repository.GetPeriodDigests(topicIds, ct);
+
+    /// <inheritdoc />
     public async Task<Topic> UpdateAsync(UpdateTopic updateTopic, CancellationToken ct = default)
     {
         await _updateValidator.ValidateAndThrowAsync(updateTopic, ct);

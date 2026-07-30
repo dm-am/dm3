@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from "@/shared/lib/utils/datetime";
 /**
  * ProfileAwardsSection — the "Награды" block inside the "Достижения" tab.
  *
@@ -21,15 +22,14 @@
  * The rich popover shows type.description + a link to the results topic.
  */
 import { computed, onMounted, ref, watch } from "vue";
-import { achievementApi } from "@/shared/api";
+import { achievementApi } from "@/entities/achievement";
 import { ContestType, type UserAward } from "@/shared/api/models/achievements";
 import { GameIcon } from "@/shared/ui/Icon";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { Tooltip } from "@/shared/ui/Tooltip";
-import { formatContestSeriesTitle } from "@/shared/lib/achievements/formatThreshold";
+import { formatContestSeriesTitle } from "@/entities/achievement";
 import { toInternalPath } from "@/shared/lib/utils/internalUrl";
-import dayjs from "dayjs";
 
 const props = defineProps<{ username: string }>();
 
@@ -242,7 +242,7 @@ const hasAwards = computed(() => awards.value.length > 0);
             </div>
 
             <div class="award-popover__footer">
-              Получена {{ dayjs(a.awardedUtc).format("DD.MM.YYYY") }}
+              Получена {{ formatDate(a.awardedUtc) }}
             </div>
           </div>
         </template>

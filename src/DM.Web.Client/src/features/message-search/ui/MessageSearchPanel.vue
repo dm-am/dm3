@@ -489,9 +489,9 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/ZIndex"
-@import "src/assets/styles/Animations"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/ZIndex"
+@import "@/assets/styles/Animations"
 
 // Overlay filling the chat frame, layered over the live feed which stays
 // mounted underneath. Fades/settles in on the site's one reveal idiom.

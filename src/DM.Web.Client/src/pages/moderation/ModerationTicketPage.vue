@@ -8,11 +8,12 @@
  */
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import ModerationApi, {
+import {
+  ticketApi,
   type ResolveTicketRequest,
   type Ticket,
   type TicketStatus,
-} from "@/shared/api/moderationApi";
+} from "@/entities/ticket";
 import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { Select, type SelectOption } from "@/shared/ui/Select";
@@ -25,6 +26,7 @@ import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
 import TicketCard from "./tickets/TicketCard.vue";
 import { useRoleGate } from "./lib/useRoleGate";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const toast = useToast();
@@ -39,7 +41,7 @@ const loadError = ref<string | null>(null);
 async function fetch() {
   if (!ticketId.value) return;
   loading.value = true;
-  const { data, error } = await ModerationApi.getTicket(ticketId.value);
+  const { data, error } = await ticketApi.getTicket(ticketId.value);
   loading.value = false;
   if (error) {
     loadError.value = "Не удалось загрузить обращение";
@@ -64,10 +66,10 @@ const assigning = ref(false);
 async function assignToMe() {
   if (!ticket.value || assigning.value) return;
   assigning.value = true;
-  const { data, error } = await ModerationApi.assignTicketToMe(ticket.value.id);
+  const { data, error } = await ticketApi.assignTicketToMe(ticket.value.id);
   assigning.value = false;
   if (error) {
-    toast.error("Не удалось взять обращение в работу");
+    notifyFailure(error, "Не удалось взять обращение в работу");
     return;
   }
   ticket.value = data?.resource ?? ticket.value;
@@ -152,13 +154,13 @@ async function resolve() {
     request.banComment = banComment.value.trim();
   }
 
-  const { data, error } = await ModerationApi.resolveTicket(
+  const { data, error } = await ticketApi.resolveTicket(
     ticket.value.id,
     request,
   );
   resolving.value = false;
   if (error) {
-    toast.error("Не удалось разрешить обращение");
+    notifyFailure(error, "Не удалось разрешить обращение");
     return;
   }
   ticket.value = data?.resource ?? ticket.value;
@@ -341,7 +343,7 @@ async function resolve() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Skeleton"
 
 .moderation-ticket
   display: flex
@@ -350,10 +352,7 @@ async function resolve() {
 
 // --- Answer block (doc 4.2.2.24) ---
 .ticket-answer
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
 .answer-meta
   display: flex
@@ -393,10 +392,7 @@ async function resolve() {
 
 // --- Skeleton (mirrors the full TicketCard: $medium padding, 5 lines) ---
 .skeleton-card
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
 .skeleton-line
   height: 1em

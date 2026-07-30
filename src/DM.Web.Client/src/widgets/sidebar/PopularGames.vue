@@ -44,12 +44,12 @@ import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import SidebarGameLink from "./SidebarGameLink.vue";
 import { useGamesStore } from "@/entities/game";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { onMounted, ref } from "vue";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
 
 const store = useGamesStore();
-const userStore = useUserStore();
+const userStore = useAuthStore();
 
 // The games store does not expose an error ref for this list, so detect
 // failure locally: when the fetch settles and the list is still null,
@@ -65,7 +65,7 @@ onMounted(() => fetchPopularGames());
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .muted
   color: $text-muted

@@ -7,13 +7,15 @@
  */
 import { computed, onMounted, reactive, ref, type Ref } from "vue";
 import { useModal } from "vue-final-modal";
-import { achievementApi } from "@/shared/api";
+import {
+  achievementApi,
+  useAchievementCatalog,
+  formatThreshold,
+} from "@/entities/achievement";
 import type {
   AchievementCategory,
   AchievementType,
 } from "@/shared/api/models/achievements";
-import { useAchievementCatalog } from "@/shared/lib/achievements/useAchievementCatalog";
-import { formatThreshold } from "@/shared/lib/achievements/formatThreshold";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { GameIcon } from "@/shared/ui/Icon";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
@@ -207,8 +209,8 @@ async function confirmDeleteTier() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/Tables"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/Tables"
 
 .achievements-admin
   display: flex
@@ -224,10 +226,7 @@ async function confirmDeleteTier() {
   gap: $medium
 
 .cat-row
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
   &.is-inactive
     opacity: 0.55

@@ -28,7 +28,6 @@ internal class UserProfileNoteRepository : IUserProfileNoteRepository
     {
         return _dbContext.UserProfileNotes
             .Where(n => n.OwnerId == ownerId && n.SubjectUserId == subjectUserId)
-            .Include(n => n.SubjectUser)
             .ProjectTo<UserProfileNote>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
     }
@@ -38,7 +37,6 @@ internal class UserProfileNoteRepository : IUserProfileNoteRepository
     {
         return _dbContext.UserProfileNotes
             .Where(n => n.UserProfileNoteId == noteId)
-            .Include(n => n.SubjectUser)
             .ProjectTo<UserProfileNote>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
     }

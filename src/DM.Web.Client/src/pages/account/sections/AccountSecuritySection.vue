@@ -106,8 +106,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { useUserStore } from "@/entities/user";
-import { AccountApi } from "@/shared/api";
+import { accountApi, fetchUser } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
 import { FormField } from "@/shared/ui/Form";
 import { PasswordStrengthIndicator } from "@/shared/ui/PasswordInput";
@@ -115,12 +114,12 @@ import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useNewPasswordField } from "@/shared/lib/composables/useNewPasswordField";
 import type { User } from "@/shared/api/models/community/users";
+import { describeFailure } from "@/shared/lib/errors";
 
 defineProps<{
   user: User;
 }>();
 
-const userStore = useUserStore();
 const toast = useToast();
 
 // Email form
@@ -162,14 +161,19 @@ const changeEmail = () => {
   changeEmailAction.execute(async () => {
     if (!emailForm.value.newEmail || !emailForm.value.password) return;
 
-    const { error } = await AccountApi.changeEmail({
+    const { error } = await accountApi.changeEmail({
       password: emailForm.value.password,
       email: emailForm.value.newEmail,
     });
-    if (error) throw new Error("Не удалось изменить почту");
+    // The server answers a 400 with per-field codes — a wrong password is
+    // "Invalid" on password, a taken address is "Taken" on email. Collapsing
+    // that into one sentence told the reader something was wrong and nothing
+    // about what.
+    if (error)
+      throw new Error(describeFailure(error, "Не удалось изменить почту"));
 
     emailForm.value = { newEmail: "", password: "" };
-    await userStore.fetchUser();
+    await fetchUser();
     toast.success("На новую почту отправлено письмо с подтверждением.");
   });
 };
@@ -181,11 +185,15 @@ const changePassword = () => {
   changePasswordAction.execute(async () => {
     if (!isPasswordFormValid.value) return;
 
-    const { error } = await AccountApi.changePassword({
+    const { error } = await accountApi.changePassword({
       oldPassword: oldPassword.value,
       newPassword: newPassword.value,
     });
-    if (error) throw new Error("Не удалось изменить пароль");
+    // Same here, and it matters more: "Не удалось изменить пароль" reads
+    // identically whether the current password was wrong or the new one broke
+    // the policy, and those call for opposite corrections.
+    if (error)
+      throw new Error(describeFailure(error, "Не удалось изменить пароль"));
 
     oldPassword.value = "";
     newPassword.value = "";
@@ -196,7 +204,7 @@ const changePassword = () => {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 @import "../AccountPage.styles"
 
 .security-content

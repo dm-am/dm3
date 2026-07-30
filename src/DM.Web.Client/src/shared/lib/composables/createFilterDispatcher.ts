@@ -81,21 +81,43 @@ export function createFilterDispatcher<State, Action>(
 
     pendingState = newState;
 
+    // The page this filter change belongs to. The dispatcher lives for the whole
+    // tab, so by the time the timer fires the user may already be somewhere else
+    // — and `replace({ name, query })` inherits the missing params from the NEW
+    // route, which would stamp this page's query onto that one and drop its page
+    // number. Only the path distinguishes them: the route name is shared by every
+    // board.
+    const scheduledPath = routerInstance?.currentRoute.value.path ?? null;
+
     // Clear existing debounce timer
     if (debounceTimer) clearTimeout(debounceTimer);
 
     // Schedule URL update
-    debounceTimer = setTimeout(async () => {
+    const applyPendingState = async () => {
       debounceTimer = null;
 
       if (!pendingState || !routerInstance) return;
-      if (isNavigating) return;
+      // A navigation of our own is in flight. Re-arm rather than drop: an early
+      // return here left pendingState orphaned, and the filter change with it.
+      if (isNavigating) {
+        debounceTimer = setTimeout(applyPendingState, DEBOUNCE_MS);
+        return;
+      }
+
+      // Use synchronous access to current route (avoid stale closure)
+      const currentRoute = routerInstance.currentRoute.value;
+
+      // Left the page the change was made on: the change no longer has a target.
+      // Our own replace only ever changes the query, so this never fires on a
+      // legitimate sequence.
+      if (scheduledPath !== null && currentRoute.path !== scheduledPath) {
+        pendingState = null;
+        return;
+      }
 
       const query = config.buildQuery(pendingState);
       pendingState = null;
 
-      // Use synchronous access to current route (avoid stale closure)
-      const currentRoute = routerInstance.currentRoute.value;
       const currentQuery = currentRoute.query;
 
       // Skip if query unchanged
@@ -134,7 +156,9 @@ export function createFilterDispatcher<State, Action>(
       } finally {
         isNavigating = false;
       }
-    }, DEBOUNCE_MS);
+    };
+
+    debounceTimer = setTimeout(applyPendingState, DEBOUNCE_MS);
   }
 
   return {

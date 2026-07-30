@@ -80,28 +80,14 @@ internal class BlogService : IBlogService
 
     /// <inheritdoc />
     public async Task<(IEnumerable<Blog> blogs, PagingResult paging)> GetPublicBlogs(
-        PagingQuery query,
-        string? search = null,
-        ModuleStatus? status = null,
-        IReadOnlyCollection<string>? hostUsernames = null,
-        string? sortBy = null,
-        string? sortOrder = null,
-        DateTimeOffset? createdFromUtc = null,
-        DateTimeOffset? createdToUtc = null,
-        DateTimeOffset? activatedFromUtc = null,
-        DateTimeOffset? activatedToUtc = null,
-        DateTimeOffset? closedFromUtc = null,
-        DateTimeOffset? closedToUtc = null,
-        IReadOnlyCollection<Guid>? excludeOwnerIds = null,
-        PremoderationStatus? premoderationStatus = null,
-        CancellationToken ct = default)
+        PagingQuery query, BlogFilter filter, CancellationToken ct = default)
     {
         // Resolve usernames to user IDs if provided
         IReadOnlyCollection<Guid>? hostUserIds = null;
-        if (hostUsernames?.Count > 0)
+        if (filter.HostUsernames?.Count > 0)
         {
             var userIds = new List<Guid>();
-            foreach (var username in hostUsernames)
+            foreach (var username in filter.HostUsernames)
             {
                 var user = await _userLookupService.GetAsync(username);
                 if (user != null)
@@ -115,27 +101,16 @@ internal class BlogService : IBlogService
         // The premoderation filter is a mentor review-queue tool; silently
         // ignore it for regular callers instead of failing the request.
         var identity = _identityProvider.Current;
-        if (identity.User.Role < UserRole.Mentor)
+        var resolvedFilter = filter with
         {
-            premoderationStatus = null;
-        }
-        var currentUserId = identity.User.UserId;
+            HostUserIds = hostUserIds,
+            PremoderationStatus = identity.User.Role < UserRole.Mentor ? null : filter.PremoderationStatus,
+            CurrentUserId = identity.User.UserId
+        };
 
-        var totalCount = await _repository.CountPublicBlogs(
-            search, status, hostUserIds,
-            createdFromUtc, createdToUtc,
-            activatedFromUtc, activatedToUtc,
-            closedFromUtc, closedToUtc,
-            excludeOwnerIds, premoderationStatus, currentUserId, ct);
-
+        var totalCount = await _repository.CountPublicBlogs(resolvedFilter, ct);
         var pagingData = new PagingData(query, identity.Settings.Paging.EntitiesPerPage, totalCount);
-
-        var blogs = (await _repository.GetPublicBlogs(
-            pagingData, search, status, hostUserIds, sortBy, sortOrder,
-            createdFromUtc, createdToUtc,
-            activatedFromUtc, activatedToUtc,
-            closedFromUtc, closedToUtc,
-            excludeOwnerIds, premoderationStatus, currentUserId, ct)).ToArray();
+        var blogs = (await _repository.GetPublicBlogs(pagingData, resolvedFilter, ct)).ToArray();
 
         await FillBlogUnreadCounters(blogs);
         return (blogs, pagingData.Result);
@@ -145,7 +120,8 @@ internal class BlogService : IBlogService
     public async Task<IEnumerable<Blog>> GetPopularBlogs(
         int count = 5, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default)
     {
-        var blogs = (await _repository.GetPopularBlogs(count, excludeOwnerIds, ct)).ToArray();
+        var blogs = (await _repository.GetPopularBlogs(
+            count, _identityProvider.Current.User.UserId, excludeOwnerIds, ct)).ToArray();
         await FillBlogUnreadCounters(blogs);
         return blogs;
     }
@@ -162,7 +138,7 @@ internal class BlogService : IBlogService
         // Premoderation-pending blogs are hidden from other viewers just like
         // games; the owner, assistants, the curator, and senior moderation
         // still see them in the profile list
-        var blogs = (await _repository.GetUserBlogs(user.UserId, ct))
+        var blogs = (await _repository.GetUserBlogs(user.UserId, _identityProvider.Current.User.UserId, ct))
             .Where(b => b.PremoderationStatus == PremoderationStatus.Approved ||
                         _intentionManager.IsAllowed(BlogIntention.ViewPremoderationPending, b))
             .ToArray();
@@ -231,51 +207,6 @@ internal class BlogService : IBlogService
         await FillBlogUnreadCounters(new[] { blog });
         await FillBlogRubricCounters(blog);
         return blog;
-    }
-
-    /// <inheritdoc />
-    public async Task<BlogDetails> GetDetailsAsync(Guid blogId, CancellationToken ct = default)
-    {
-        var blog = await GetAsync(blogId, ct);
-
-        // Sequential on purpose: both queries run on this scope's single
-        // DbContext, and EF forbids concurrent operations on one context.
-        var subscribers = await _subscriptionService.GetReadersAsync(blogId, ct);
-        var assistants = await _repository.GetAssistantsWithJoinDate(blogId, ct);
-
-        // Create extended model with full details
-        return new BlogDetails
-        {
-            // Copy all base properties
-            Id = blog.Id,
-            Author = blog.Author,
-            Mentor = blog.Mentor,
-            Title = blog.Title,
-            Description = blog.Description,
-            CreatedUtc = blog.CreatedUtc,
-            Status = blog.Status,
-            ActivatedUtc = blog.ActivatedUtc,
-            ClosedUtc = blog.ClosedUtc,
-            ClosedReason = blog.ClosedReason,
-            PremoderationStatus = blog.PremoderationStatus,
-            DraftVisibility = blog.DraftVisibility,
-            CommentsEnabled = blog.CommentsEnabled,
-            PublicationCount = blog.PublicationCount,
-            CommentCount = blog.CommentCount,
-            CommentsCount = blog.CommentsCount,
-            UnreadPublicationsCount = blog.UnreadPublicationsCount,
-            UnreadCommentsCount = blog.UnreadCommentsCount,
-            LastCommentId = blog.LastCommentId,
-            Rubrics = blog.Rubrics,
-            Assistants = blog.Assistants,
-            SubscriberIds = blog.SubscriberIds,
-            PendingInvitedUserIds = blog.PendingInvitedUserIds,
-            BlacklistedUserIds = blog.BlacklistedUserIds,
-
-            // Extended properties
-            Subscribers = subscribers,
-            FullAssistants = assistants
-        };
     }
 
     /// <inheritdoc />
@@ -679,7 +610,7 @@ internal class BlogService : IBlogService
     /// <inheritdoc />
     public async Task<IEnumerable<Blog>> GetSubscribedBlogs(IEnumerable<Guid> blogIds, CancellationToken ct = default)
     {
-        var blogs = (await _repository.GetByIds(blogIds, ct)).ToArray();
+        var blogs = (await _repository.GetByIds(blogIds, _identityProvider.Current.User.UserId, ct)).ToArray();
         await FillBlogUnreadCounters(blogs);
         return blogs;
     }

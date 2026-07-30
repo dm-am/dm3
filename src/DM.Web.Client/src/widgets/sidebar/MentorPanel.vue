@@ -39,7 +39,8 @@ import {
   type GameRef,
 } from "@/entities/game";
 import { useBlogsStore, type BlogRef } from "@/entities/blog";
-import { useUserStore } from "@/entities/user";
+import { GameParticipation } from "@/entities/game";
+import { useAuthStore } from "@/entities/user";
 import { UserRole } from "@/shared/api/models/common";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { Api } from "@/shared/api";
@@ -54,7 +55,7 @@ const STAR = "★";
 const MAX_PENDENCY_GAMES = 10;
 const MAX_BLOG_CANDIDATES = 20;
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const { user } = storeToRefs(userStore);
 
 const gamesStore = useGamesStore();
@@ -79,11 +80,8 @@ const isMentorRole = computed(() => {
 const isDraftOrActive = (status: GameStatus | BlogRef["status"]) =>
   status === GameStatus.Draft || status === GameStatus.Active;
 
-// Wire flag of the game mentor. participation is typed GameRole[] but the
-// API actually serializes GameParticipation names — same cast the game
-// details store uses (entities/game/model/store.ts).
 const isGameMentor = (g: GameRef) =>
-  ((g.participation as unknown as string[]) ?? []).includes("Moderator");
+  g.participation?.includes(GameParticipation.Moderator) ?? false;
 
 const mentorGames = computed<GameRef[]>(
   () =>

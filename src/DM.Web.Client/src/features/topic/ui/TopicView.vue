@@ -11,12 +11,12 @@ import { computed, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { forumApi } from "@/entities/forum";
 import type { Topic } from "@/entities/forum";
-import { useUserStore, userIsModerator } from "@/entities/user";
+import { useAuthStore, userIsModerator } from "@/entities/user";
 import { unwrapResource } from "@/shared/api";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
-import { useToast } from "@/shared/lib/composables/useToast";
-import { PeriodDigestBoards } from "@/features/leaderboard";
+import { PeriodDigestBoards } from "@/features/leaderboard/@x/topic";
 import TopicCard from "./TopicCard.vue";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const props = withDefaults(
   defineProps<{
@@ -64,7 +64,7 @@ const emit = defineEmits<{
   toggleClose: [id: string];
 }>();
 
-const { user: currentUser } = storeToRefs(useUserStore());
+const { user: currentUser } = storeToRefs(useAuthStore());
 
 const topicRoute = computed(() => ({
   name: "topic",
@@ -138,7 +138,6 @@ const editTitle = ref("");
 const editText = ref("");
 const editLoading = ref(false);
 const saving = ref(false);
-const toast = useToast();
 
 async function startEdit() {
   if (editLoading.value || isEditing.value) return;
@@ -149,7 +148,7 @@ async function startEdit() {
   const { data, error } = await forumApi.getTopicForUpdate(props.topic.id);
   editLoading.value = false;
   if (error) {
-    toast.error("Не удалось загрузить текст темы");
+    notifyFailure(error, "Не удалось загрузить текст темы");
     return;
   }
   editTitle.value = props.topic.title;
@@ -254,7 +253,7 @@ function saveEdit() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .topic-edit
   display: flex

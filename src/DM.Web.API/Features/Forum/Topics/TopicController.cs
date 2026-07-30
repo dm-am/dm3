@@ -69,8 +69,8 @@ public class TopicController : ControllerBase
     /// <response code="404">Board not found</response>
     [HttpGet("~/v1/boards/{id}/topics", Name = nameof(GetBoardTopics))]
     [ProducesResponseType(typeof(ListEnvelope<Topic>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBoardTopics(string id, [FromQuery] TopicsQuery q) =>
         Ok(await _topicApiService.Get(id, q));
 
@@ -95,7 +95,7 @@ public class TopicController : ControllerBase
     /// <response code="400">Invalid query parameters</response>
     [HttpGet("", Name = nameof(GetTopics))]
     [ProducesResponseType(typeof(ListEnvelope<Topic>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetTopics([FromQuery] TopicsQuery q) =>
         Ok(await _topicApiService.GetAcrossBoards(q));
 
@@ -117,7 +117,7 @@ public class TopicController : ControllerBase
     /// <response code="404">User not found</response>
     [HttpGet("~/v1/users/{username}/best-topic", Name = nameof(GetUserBestTopic))]
     [ProducesResponseType(typeof(Envelope<Topic>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserBestTopic(string username) =>
         Ok(await _topicApiService.GetUserBestTopic(username));
 
@@ -138,10 +138,10 @@ public class TopicController : ControllerBase
     [HttpPost("~/v1/boards/{id}/topics", Name = nameof(PostBoardTopic))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Topic>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostBoardTopic(string id, [FromBody] CreateTopicRequest request)
     {
         var result = await _topicApiService.Create(id, request);
@@ -163,7 +163,7 @@ public class TopicController : ControllerBase
     /// <response code="404">Topic not found</response>
     [HttpGet("{id}", Name = nameof(GetTopic))]
     [ProducesResponseType(typeof(Envelope<Topic>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTopic(Guid id) => Ok(await _topicApiService.Get(id));
 
     /// <summary>
@@ -179,7 +179,7 @@ public class TopicController : ControllerBase
     /// <response code="404">Board or topic not found</response>
     [HttpGet("~/v1/forum/{alias}/{num:int}", Name = nameof(GetTopicByNumber))]
     [ProducesResponseType(typeof(Envelope<Topic>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTopicByNumber(string alias, int num) =>
         Ok(await _topicApiService.GetByBoardAndNumber(alias, num));
 
@@ -199,7 +199,7 @@ public class TopicController : ControllerBase
     /// <response code="404">Topic not found</response>
     [HttpGet("{id}/discussion", Name = nameof(GetTopicDiscussion))]
     [ProducesResponseType(typeof(DiscussionResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTopicDiscussion(Guid id, [FromQuery] PagingQuery q) =>
         Ok(await _commentApiService.GetDiscussion(id, q));
 
@@ -216,7 +216,7 @@ public class TopicController : ControllerBase
     /// - Attached: Pin/unpin topic (moderator only)
     /// </remarks>
     /// <param name="id">Topic identifier (GUID)</param>
-    /// <param name="topic">Fields to update</param>
+    /// <param name="request">Fields to change</param>
     /// <response code="200">Updated topic</response>
     /// <response code="400">Invalid update data</response>
     /// <response code="401">User must be authenticated</response>
@@ -225,12 +225,12 @@ public class TopicController : ControllerBase
     [HttpPatch("{id}", Name = nameof(PatchTopic))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Topic>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchTopic(Guid id, [FromBody] Topic topic) =>
-        Ok(await _topicApiService.Update(id, topic));
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> PatchTopic(Guid id, [FromBody] UpdateTopicRequest request) =>
+        Ok(await _topicApiService.Update(id, request));
 
     /// <summary>
     /// Delete topic
@@ -248,9 +248,9 @@ public class TopicController : ControllerBase
     [HttpDelete("{id}", Name = nameof(DeleteTopic))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteTopic(Guid id)
     {
         await _topicApiService.Delete(id);
@@ -275,10 +275,10 @@ public class TopicController : ControllerBase
     [HttpPost("{id}/likes", Name = nameof(PostTopicLike))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostTopicLike(Guid id) =>
         CreatedAtRoute(nameof(GetTopic), new {id}, await _likeApiService.LikeTopic(id));
 
@@ -298,10 +298,10 @@ public class TopicController : ControllerBase
     [HttpDelete("{id}/likes", Name = nameof(DeleteTopicLike))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteTopicLike(Guid id)
     {
         await _likeApiService.UnlikeTopic(id);
@@ -322,8 +322,8 @@ public class TopicController : ControllerBase
     [HttpDelete("{id}/comments/unread", Name = nameof(ReadTopicComments))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ReadTopicComments(Guid id)
     {
         await _commentApiService.MarkAsRead(id);
@@ -348,10 +348,10 @@ public class TopicController : ControllerBase
     [HttpPatch("~/v1/boards/{id}/topics/pinned/order", Name = nameof(ReorderPinnedTopics))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ReorderPinnedTopics(string id, [FromBody] ReorderPinnedRequest request)
     {
         await _topicApiService.ReorderPinned(id, request);

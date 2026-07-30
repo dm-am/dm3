@@ -39,7 +39,7 @@ public class ChatRoomController : ControllerBase
     /// <response code="404">Game not found</response>
     [HttpGet("~/v1/games/{id}/chat-rooms", Name = nameof(GetChatRooms))]
     [ProducesResponseType(typeof(ListEnvelope<ChatRoom>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetChatRooms(Guid id) =>
         Ok(await _apiService.GetChatRoomsAsync(id));
 
@@ -56,10 +56,10 @@ public class ChatRoomController : ControllerBase
     [HttpPost("~/v1/games/{id}/chat-rooms", Name = nameof(PostChatRoom))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<ChatRoom>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostChatRoom(Guid id, [FromBody] CreateChatRoom input)
     {
         var result = await _apiService.CreateChatRoomAsync(id, input);
@@ -75,7 +75,7 @@ public class ChatRoomController : ControllerBase
     /// <response code="404">Chat room not found</response>
     [HttpGet("{id}", Name = nameof(GetChatRoom))]
     [ProducesResponseType(typeof(Envelope<ChatRoom>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetChatRoom(Guid id) =>
         Ok(await _apiService.GetChatRoomAsync(id));
 
@@ -92,10 +92,10 @@ public class ChatRoomController : ControllerBase
     [HttpPatch("{id}", Name = nameof(PatchChatRoom))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<ChatRoom>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchChatRoom(Guid id, [FromBody] UpdateChatRoom input) =>
         Ok(await _apiService.UpdateChatRoomAsync(id, input));
 
@@ -110,9 +110,9 @@ public class ChatRoomController : ControllerBase
     [HttpDelete("{id}", Name = nameof(DeleteChatRoom))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteChatRoom(Guid id)
     {
         await _apiService.DeleteChatRoomAsync(id);
@@ -132,9 +132,9 @@ public class ChatRoomController : ControllerBase
     [HttpGet("{id}/messages", Name = nameof(GetChatRoomMessages))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(CursorEnvelope<Message>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetChatRoomMessages(
         Guid id,
         [FromQuery] string? cursor = null,
@@ -154,10 +154,10 @@ public class ChatRoomController : ControllerBase
     [HttpPost("{id}/messages", Name = nameof(PostChatRoomMessage))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Message>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostChatRoomMessage(
         Guid id,
         [FromBody] CreateMessageInput input)
@@ -176,8 +176,8 @@ public class ChatRoomController : ControllerBase
     [HttpDelete("{id}/messages/unread", Name = nameof(MarkChatRoomMessagesAsRead))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkChatRoomMessagesAsRead(Guid id)
     {
         await _apiService.MarkAsReadAsync(id);

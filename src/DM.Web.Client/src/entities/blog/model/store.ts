@@ -6,9 +6,9 @@ import type {
   Paging,
   User,
 } from "@/shared/api/models/common";
+import { markRemoved } from "@/shared/api/models/common";
 import type {
   Blog,
-  BlogNotepadEntry,
   BlogPremoderationTransition,
   BlogRef,
   BlogStatusTransition,
@@ -21,6 +21,12 @@ import { useApiList } from "@/shared/lib/composables/useApiResource";
 import { Api, unwrapResource } from "@/shared/api";
 import { useAuthStore } from "@/shared/stores";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import type { GeneralError } from "@/shared/api/models/common";
+import { requestNotSent } from "@/shared/lib/errors";
+import {
+  createKeyedCache,
+  stableCacheKey,
+} from "@/shared/lib/utils/keyedCache";
 
 /**
  * Search parameters for blogs query (frontend model)
@@ -42,30 +48,7 @@ export interface BlogsSearchParams {
   size?: number;
 }
 
-// Cache configuration
-const CACHE_TTL = 30_000; // 30 seconds
-const searchCache = new Map<
-  string,
-  { data: ListEnvelope<Blog>; timestamp: number }
->();
-
-function createCacheKey(params: BlogsSearchParams): string {
-  return JSON.stringify({
-    search: params.search || "",
-    status: params.status || "",
-    hostUsernames: params.hostUsernames?.slice().sort() || [],
-    createdFromUtc: params.createdFromUtc || "",
-    createdToUtc: params.createdToUtc || "",
-    activatedFromUtc: params.activatedFromUtc || "",
-    activatedToUtc: params.activatedToUtc || "",
-    closedFromUtc: params.closedFromUtc || "",
-    closedToUtc: params.closedToUtc || "",
-    sortBy: params.sortBy || "created",
-    sortOrder: params.sortOrder || "desc",
-    number: params.number || 1,
-    size: params.size || 20,
-  });
-}
+const searchCache = createKeyedCache<ListEnvelope<Blog>>({ ttlMs: 30_000 });
 
 export const useBlogsStore = defineStore("blogs", () => {
   // Sidebar lists with caching (60s TTL by default) - use lightweight BlogRef
@@ -98,20 +81,19 @@ export const useBlogsStore = defineStore("blogs", () => {
     searchError.value = null;
 
     lastSearchParams.value = params;
-    const cacheKey = createCacheKey(params);
-    const cached = searchCache.get(cacheKey);
-    const now = Date.now();
+    const cacheKey = stableCacheKey(params);
+    const fresh = searchCache.get(cacheKey);
 
-    // Return cached data immediately if fresh
-    if (cached && now - cached.timestamp < CACHE_TTL) {
-      searchResult.value = cached.data;
+    if (fresh) {
+      searchResult.value = fresh;
       searchLoading.value = false;
       return;
     }
 
     // Show cached data while revalidating (stale-while-revalidate)
-    if (cached) {
-      searchResult.value = cached.data;
+    const stale = searchCache.getStale(cacheKey);
+    if (stale) {
+      searchResult.value = stale;
     }
 
     searchLoading.value = true;
@@ -192,12 +174,7 @@ export const useBlogsStore = defineStore("blogs", () => {
 
       if (data) {
         searchResult.value = data;
-        searchCache.set(cacheKey, { data, timestamp: now });
-        // Clean old entries (keep last 20)
-        if (searchCache.size > 20) {
-          const firstKey = searchCache.keys().next().value;
-          if (firstKey) searchCache.delete(firstKey);
-        }
+        searchCache.set(cacheKey, data);
       }
     } catch {
       if (requestGuard.isCurrent(requestId)) {
@@ -225,10 +202,11 @@ export const useBlogsStore = defineStore("blogs", () => {
     if (!lastSearchParams.value) return;
 
     const params = { ...lastSearchParams.value, number: page };
-    const cacheKey = createCacheKey(params);
+    const cacheKey = stableCacheKey(params);
 
-    // Skip if already cached
-    if (searchCache.has(cacheKey)) return;
+    // Skip only while the entry is fresh: replacing a stale one is the point of
+    // a prefetch.
+    if (searchCache.get(cacheKey)) return;
 
     // Map params to API params (same as searchBlogs)
     const pageSize = params.size || 20;
@@ -260,12 +238,7 @@ export const useBlogsStore = defineStore("blogs", () => {
 
     const { data } = await Api.get<ListEnvelope<Blog>>("blogs", apiParams);
     if (data) {
-      searchCache.set(cacheKey, { data, timestamp: Date.now() });
-      // Clean old entries (keep last 20)
-      if (searchCache.size > 20) {
-        const firstKey = searchCache.keys().next().value;
-        if (firstKey) searchCache.delete(firstKey);
-      }
+      searchCache.set(cacheKey, data);
     }
   }
 
@@ -296,6 +269,22 @@ export const useBlogsStore = defineStore("blogs", () => {
       active.reset();
       popular.reset();
       participating.reset();
+      clearSearchCache();
+    },
+
+    /**
+     * After a mutation changed which blogs exist. Distinct from resetAllBlogs,
+     * which blanks the lists: that is right for logout and wrong here, because
+     * the sidebar blocks fetch on mount and the shell mounts once per session,
+     * so a blanked list stays blank until a reload.
+     */
+    invalidateBlogLists: async () => {
+      clearSearchCache();
+      await Promise.all([
+        active.invalidate(),
+        popular.invalidate(),
+        participating.invalidate(),
+      ]);
     },
 
     // Search API
@@ -331,11 +320,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
   const commentsPaging = ref<Paging | null>(null);
   const commentsLoading = ref(false);
   const commentsError = ref<string | null>(null);
-
-  // Notepad data
-  const notepad = ref<BlogNotepadEntry[]>([]);
-  const notepadLoading = ref(false);
-  const notepadError = ref<string | null>(null);
 
   // Blacklist data
   const blacklist = ref<User[]>([]);
@@ -480,10 +464,7 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     await blogApi.deleteBlogComment(id);
     const index = comments.value.findIndex((c) => c.id === id);
     if (index !== -1) {
-      comments.value[index] = {
-        ...comments.value[index],
-        isRemoved: true as unknown as Comment["isRemoved"],
-      };
+      comments.value[index] = markRemoved(comments.value[index]);
     }
   }
 
@@ -515,23 +496,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
         ) as Comment["likes"],
       };
     }
-  }
-
-  // Load notepad
-  async function loadNotepad(blogId: string): Promise<void> {
-    notepadLoading.value = true;
-    notepadError.value = null;
-
-    const { data, error } = await blogApi.getNotepad(blogId);
-
-    if (error) {
-      notepadError.value = "Не удалось загрузить заметки";
-      notepad.value = [];
-    } else if (data) {
-      notepad.value = data.resources;
-    }
-
-    notepadLoading.value = false;
   }
 
   // Load blacklist
@@ -586,72 +550,79 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
   }
 
   // === Mutations ===
-  // Each mutation calls the API and re-syncs the affected slices, returning
-  // a boolean success flag so callers surface errors via toasts.
+  // Each mutation calls the API, re-syncs the affected slices on success, and
+  // returns the problem document on failure — null when it worked. A boolean
+  // here threw away what the server said, so every rejection reached the reader
+  // as the caller's own generic sentence.
 
   async function transitionStatus(
     transition: BlogStatusTransition,
-  ): Promise<boolean> {
-    if (!blog.value) return false;
+  ): Promise<GeneralError | null> {
+    if (!blog.value) return requestNotSent;
     const id = blog.value.id;
     const { error } = await blogApi.transitionStatus(id, transition);
-    if (error) return false;
+    if (error) return error;
     await loadBlog(id);
-    return true;
+    return null;
   }
 
   async function changePremoderation(
     transition: BlogPremoderationTransition,
-  ): Promise<boolean> {
-    if (!blog.value) return false;
+  ): Promise<GeneralError | null> {
+    if (!blog.value) return requestNotSent;
     const id = blog.value.id;
     const { error } = await blogApi.changePremoderation(id, transition);
-    if (error) return false;
+    if (error) return error;
     await loadBlog(id);
-    return true;
+    return null;
   }
 
-  async function deleteBlog(): Promise<boolean> {
-    if (!blog.value) return false;
+  async function deleteBlog(): Promise<GeneralError | null> {
+    if (!blog.value) return requestNotSent;
     const { error } = await blogApi.deleteBlog(blog.value.id);
-    return !error;
+    if (error) return error;
+    // Same as games: without this the deleted blog stays in every list.
+    await useBlogsStore().invalidateBlogLists();
+    return null;
   }
 
-  async function createRubric(input: CreateRubricInput): Promise<boolean> {
-    if (!blog.value) return false;
+  async function createRubric(
+    input: CreateRubricInput,
+  ): Promise<GeneralError | null> {
+    if (!blog.value) return requestNotSent;
     const id = blog.value.id;
     const { error } = await blogApi.createRubric(id, input);
-    if (error) return false;
+    if (error) return error;
     await loadBlog(id);
-    return true;
+    return null;
   }
 
-  async function deleteRubric(rubricId: string): Promise<boolean> {
-    if (!blog.value) return false;
+  async function deleteRubric(rubricId: string): Promise<GeneralError | null> {
+    if (!blog.value) return requestNotSent;
     const { error } = await blogApi.deleteRubric(rubricId);
-    if (error) return false;
+    if (error) return error;
     await loadBlog(blog.value.id);
-    return true;
+    return null;
   }
 
   // Subscribe to blog (become a reader)
-  async function subscribe(): Promise<boolean> {
-    if (!blog.value) return false;
+  async function subscribe(): Promise<GeneralError | null> {
+    if (!blog.value) return requestNotSent;
     const id = blog.value.id;
     const { error } = await blogApi.subscribe(id);
-    if (error) return false;
+    if (error) return error;
     await loadReaders(id);
-    return true;
+    return null;
   }
 
   // Unsubscribe from blog
-  async function unsubscribe(): Promise<boolean> {
-    if (!blog.value) return false;
+  async function unsubscribe(): Promise<GeneralError | null> {
+    if (!blog.value) return requestNotSent;
     const id = blog.value.id;
     const { error } = await blogApi.unsubscribe(id);
-    if (error) return false;
+    if (error) return error;
     await loadReaders(id);
-    return true;
+    return null;
   }
 
   // Reset all data (when leaving the blog zone)
@@ -669,10 +640,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     commentsPaging.value = null;
     commentsLoading.value = false;
     commentsError.value = null;
-
-    notepad.value = [];
-    notepadLoading.value = false;
-    notepadError.value = null;
 
     blacklist.value = [];
     blacklistLoading.value = false;
@@ -700,9 +667,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     commentsPaging,
     commentsLoading,
     commentsError,
-    notepad,
-    notepadLoading,
-    notepadError,
     blacklist,
     blacklistLoading,
     blacklistError,
@@ -730,7 +694,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     deleteComment,
     likeComment,
     unlikeComment,
-    loadNotepad,
     loadBlacklist,
     loadUsers,
     loadReaders,

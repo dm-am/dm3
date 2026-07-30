@@ -398,7 +398,7 @@ DELETE FROM "Tags" WHERE "Title" = 'Донабор';
 | Game.Title | Notepad.Title (без "Блокнот") |
 | Game.Info | Notepad.Description |
 | Game.MasterId | Notepad.OwnerId |
-| Room | NotepadCategory |
+| Room | Отбрасывается: записи всех комнат сливаются в один блокнот |
 | Post | NotepadEntry |
 
 ### Checklist

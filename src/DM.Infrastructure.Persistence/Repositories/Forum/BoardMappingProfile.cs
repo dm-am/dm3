@@ -31,26 +31,10 @@ internal class BoardMappingProfile : Profile
                 })))
             .ForMember(d => d.UnreadTopicsCount, opt => opt.Ignore())
             .ForMember(d => d.UnreadCommentsCount, opt => opt.Ignore())
-            .ForMember(d => d.LastComment, s => s.MapFrom(b => b.LastCommentId.HasValue
-                ? new BoardLastComment
-                {
-                    Id = b.LastCommentId.Value,
-                    TopicId = b.LastCommentTopicId!.Value,
-                    TopicTitle = b.LastCommentTopicTitle ?? string.Empty,
-                    TopicNumber = b.LastCommentTopicNumber ?? 0,
-                    CreatedUtc = b.LastCommentUtc!.Value,
-                    Author = b.LastCommentAuthor != null
-                        ? new GeneralUser
-                        {
-                            UserId = b.LastCommentAuthor.UserId,
-                            Username = b.LastCommentAuthor.Username,
-                            Role = b.LastCommentAuthor.Role,
-                            Status = b.LastCommentAuthor.Status,
-                            QuantityRating = b.LastCommentAuthor.QuantityRating
-                        }
-                        : null
-                }
-                : null))
+            // CommentsCount and LastComment are not columns any more: they are
+            // computed on read in BoardRepository, so a counter can never be stale.
+            .ForMember(d => d.CommentsCount, opt => opt.Ignore())
+            .ForMember(d => d.LastComment, opt => opt.Ignore())
             .ForMember(d => d.LastTopic, s => s.MapFrom(b => b.LastTopicId.HasValue
                 ? new BoardLastTopic
                 {

@@ -68,13 +68,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { AccountApi } from "@/shared/api";
+import { accountApi } from "@/entities/user";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import Button from "@/shared/ui/Button/Button.vue";
 import { EmptyState } from "@/shared/ui";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { SessionInfo } from "@/shared/api/models/account";
+import { describeFailure, notifyFailure } from "@/shared/lib/errors";
 
 const toast = useToast();
 
@@ -92,7 +93,7 @@ onMounted(async () => {
 
 async function loadSessions() {
   loading.value = true;
-  const { data, error } = await AccountApi.getSessions();
+  const { data, error } = await accountApi.getSessions();
   loading.value = false;
 
   if (!error && data) {
@@ -102,11 +103,11 @@ async function loadSessions() {
 
 async function terminateSession(sessionId: string) {
   terminatingId.value = sessionId;
-  const { error } = await AccountApi.terminateSession(sessionId);
+  const { error } = await accountApi.terminateSession(sessionId);
   terminatingId.value = null;
 
   if (error) {
-    toast.error("Не удалось завершить сессию");
+    notifyFailure(error, "Не удалось завершить сессию");
   } else {
     sessions.value = sessions.value.filter((s) => s.id !== sessionId);
     toast.success("Сессия завершена");
@@ -118,8 +119,9 @@ const logoutAllAction = useAsyncAction();
 
 const logoutFromAll = () => {
   logoutAllAction.execute(async () => {
-    const { error } = await AccountApi.logoutAll();
-    if (error) throw new Error("Не удалось завершить сессии");
+    const { error } = await accountApi.logoutAll();
+    if (error)
+      throw new Error(describeFailure(error, "Не удалось завершить сессии"));
     // Keep only current session
     sessions.value = sessions.value.filter((s) => s.isCurrent);
     toast.success("Вы вышли со всех других устройств");
@@ -156,7 +158,7 @@ const logoutFromAll = () => {
 
   &--current
     border-color: $link
-    background-color: $link-muted
+    +tint($link, 15%)
 
 .session-info
   display: flex
@@ -174,7 +176,7 @@ const logoutFromAll = () => {
   font-size: $secondary-font-size
   font-weight: normal
   color: $link
-  background-color: $link-muted
+  +tint($link, 15%)
   padding: 2px $tiny
   border-radius: 3px
 
@@ -196,7 +198,7 @@ const logoutFromAll = () => {
   font-size: $secondary-font-size
 
   &:hover:not(:disabled)
-    background-color: $accent-red-muted
+    +tint($accent-red, 15%)
 
   &:disabled
     opacity: 0.5

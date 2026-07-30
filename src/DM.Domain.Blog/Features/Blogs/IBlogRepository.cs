@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
-using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Blog.Features.Blogs;
 
@@ -15,79 +14,34 @@ public interface IBlogRepository
     // === READ ===
 
     /// <summary>
-    /// Count public blogs
+    /// Count public blogs matching the filter. Takes the same filter object as
+    /// <see cref="GetPublicBlogs" /> so the total cannot describe a different
+    /// set than the page does.
     /// </summary>
-    /// <param name="search">Optional text search by title (fuzzy matching)</param>
-    /// <param name="status">Optional status filter</param>
-    /// <param name="hostUserIds">Optional host user IDs (owner or assistant, OR logic)</param>
-    /// <param name="createdFromUtc">Created date range start</param>
-    /// <param name="createdToUtc">Created date range end</param>
-    /// <param name="activatedFromUtc">Activated date range start</param>
-    /// <param name="activatedToUtc">Activated date range end</param>
-    /// <param name="closedFromUtc">Closed date range start</param>
-    /// <param name="closedToUtc">Closed date range end</param>
-    /// <param name="excludeOwnerIds">Optional owner IDs to exclude (for blacklist filtering)</param>
-    /// <param name="premoderationStatus">Explicit premoderation filter (already role-gated by the service);
-    /// when set it replaces the default premoderation visibility restriction</param>
-    /// <param name="currentUserId">Current user id for premoderation visibility (Guid.Empty for guests)</param>
+    /// <param name="filter">Filter (host ids and current user already resolved by the service)</param>
     /// <param name="ct">Cancellation token</param>
-    Task<int> CountPublicBlogs(
-        string? search = null,
-        ModuleStatus? status = null,
-        IReadOnlyCollection<Guid>? hostUserIds = null,
-        DateTimeOffset? createdFromUtc = null,
-        DateTimeOffset? createdToUtc = null,
-        DateTimeOffset? activatedFromUtc = null,
-        DateTimeOffset? activatedToUtc = null,
-        DateTimeOffset? closedFromUtc = null,
-        DateTimeOffset? closedToUtc = null,
-        IReadOnlyCollection<Guid>? excludeOwnerIds = null,
-        PremoderationStatus? premoderationStatus = null,
-        Guid currentUserId = default,
-        CancellationToken ct = default);
+    Task<int> CountPublicBlogs(BlogFilter filter, CancellationToken ct = default);
 
     /// <summary>
     /// Get public blogs with paging
     /// </summary>
     /// <param name="paging">Paging data</param>
-    /// <param name="search">Optional text search by title (fuzzy matching)</param>
-    /// <param name="status">Optional status filter</param>
-    /// <param name="hostUserIds">Optional host user IDs (owner or assistant, OR logic)</param>
-    /// <param name="sortBy">Sort field: title, status, popularity, created (default), activated, closed</param>
-    /// <param name="sortOrder">Sort direction: asc or desc (default: desc)</param>
-    /// <param name="createdFromUtc">Created date range start</param>
-    /// <param name="createdToUtc">Created date range end</param>
-    /// <param name="activatedFromUtc">Activated date range start</param>
-    /// <param name="activatedToUtc">Activated date range end</param>
-    /// <param name="closedFromUtc">Closed date range start</param>
-    /// <param name="closedToUtc">Closed date range end</param>
-    /// <param name="excludeOwnerIds">Optional owner IDs to exclude (for blacklist filtering)</param>
-    /// <param name="premoderationStatus">Explicit premoderation filter (already role-gated by the service);
-    /// when set it replaces the default premoderation visibility restriction</param>
-    /// <param name="currentUserId">Current user id for premoderation visibility (Guid.Empty for guests)</param>
+    /// <param name="filter">Filter and sort (host ids and current user already resolved by the service)</param>
     /// <param name="ct">Cancellation token</param>
     Task<IEnumerable<Blog>> GetPublicBlogs(
-        PagingData paging,
-        string? search = null,
-        ModuleStatus? status = null,
-        IReadOnlyCollection<Guid>? hostUserIds = null,
-        string? sortBy = null,
-        string? sortOrder = null,
-        DateTimeOffset? createdFromUtc = null,
-        DateTimeOffset? createdToUtc = null,
-        DateTimeOffset? activatedFromUtc = null,
-        DateTimeOffset? activatedToUtc = null,
-        DateTimeOffset? closedFromUtc = null,
-        DateTimeOffset? closedToUtc = null,
-        IReadOnlyCollection<Guid>? excludeOwnerIds = null,
-        PremoderationStatus? premoderationStatus = null,
-        Guid currentUserId = default,
-        CancellationToken ct = default);
+        PagingData paging, BlogFilter filter, CancellationToken ct = default);
 
     /// <summary>
     /// Get blogs where user is owner or assistant
     /// </summary>
-    Task<IEnumerable<Blog>> GetUserBlogs(Guid userId, CancellationToken ct = default);
+    /// <param name="ownerId">Whose blogs to list</param>
+    /// <param name="viewerId">
+    /// Who is reading, for <see cref="Blog.IsViewerSubscriber" />
+    /// (<see cref="Guid.Empty" /> for a guest). Not the same person as
+    /// <paramref name="ownerId" /> on any page but the user's own.
+    /// </param>
+    /// <param name="ct">Cancellation token</param>
+    Task<IEnumerable<Blog>> GetUserBlogs(Guid ownerId, Guid viewerId, CancellationToken ct = default);
 
     /// <summary>
     /// Get blog by ID
@@ -142,10 +96,11 @@ public interface IBlogRepository
     /// Get popular blogs ordered by subscriber count
     /// </summary>
     /// <param name="count">Number of blogs to return</param>
+    /// <param name="viewerId">Who is reading, for <see cref="Blog.IsViewerSubscriber" /></param>
     /// <param name="excludeOwnerIds">Optional owner IDs to exclude (for blacklist filtering)</param>
     /// <param name="ct">Cancellation token</param>
     Task<IEnumerable<Blog>> GetPopularBlogs(
-        int count, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default);
+        int count, Guid viewerId, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default);
 
     /// <summary>
     /// Get blog readers (subscribers from Subscriptions table)
@@ -165,10 +120,15 @@ public interface IBlogRepository
     /// <summary>
     /// Get blogs by IDs
     /// </summary>
-    Task<IEnumerable<Blog>> GetByIds(IEnumerable<Guid> blogIds, CancellationToken ct = default);
+    /// <param name="blogIds">Blogs to load</param>
+    /// <param name="viewerId">Who is reading, for <see cref="Blog.IsViewerSubscriber" /></param>
+    /// <param name="ct">Cancellation token</param>
+    Task<IEnumerable<Blog>> GetByIds(IEnumerable<Guid> blogIds, Guid viewerId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get blogs where user is owner, mentor, or assistant
+    /// Get blogs where user is owner, mentor, or assistant.
+    /// The user is the reader here, so they are also who
+    /// <see cref="Blog.IsViewerSubscriber" /> is filled for.
     /// </summary>
     Task<IEnumerable<Blog>> GetOwnBlogs(Guid userId, CancellationToken ct = default);
 

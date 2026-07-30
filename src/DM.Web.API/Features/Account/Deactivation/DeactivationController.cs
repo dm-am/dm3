@@ -1,9 +1,9 @@
 using System.Threading.Tasks;
 using DM.Web.API.Shared.Authentication;
-using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Account.Deactivation;
 
@@ -20,7 +20,7 @@ namespace DM.Web.API.Features.Account.Deactivation;
 [ApiExplorerSettings(GroupName = "Account")]
 [Tags("Deactivation")]
 [AuthenticationRequired]
-[EnableRateLimiting("auth")]
+[EnableRateLimiting(RateLimitPolicies.Auth)]
 public class DeactivationController : ControllerBase
 {
     private readonly IDeactivationApiService _deactivationService;
@@ -55,9 +55,9 @@ public class DeactivationController : ControllerBase
     /// <response code="429">Too many requests</response>
     [HttpPost("deactivate", Name = nameof(DeactivateAccount))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> DeactivateAccount([FromBody] DeactivationRequest request)
     {
         await _deactivationService.Deactivate(request);

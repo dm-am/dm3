@@ -1,19 +1,20 @@
 <script setup lang="ts">
+import { formatDate } from "@/shared/lib/utils/datetime";
 import { computed, ref, onMounted, watch } from "vue";
 import type { Username } from "@/shared/api/models/community";
 // The public warnings/bans endpoints return bare `UserWarningsInfo` /
 // `PublicUserBanStatus` payloads (NOT a ListEnvelope). `moderationApi`
 // already declares those exact trimmed-public shapes, so we consume it
-// here — `communityApi`'s ListEnvelope-typed pair never matched the wire
+// here — the old ListEnvelope-typed pair on the user client never matched the
 // contract and always produced empty results.
-import moderationApi, {
+import {
+  moderationApi,
   BanType,
   type UserWarningsInfo,
   type PublicUserBanStatus,
   type PublicBan,
-} from "@/shared/api/moderationApi";
+} from "@/entities/moderation";
 import { StatLine } from "@/shared/ui/StatLine";
-import dayjs from "dayjs";
 
 // Mirrors the backend warning policy (6+ points in 30 days triggers an
 // automatic ban — see WarningController.cs remarks). Not exposed by the
@@ -59,14 +60,12 @@ const warningPoints = computed(() => warningsInfo.value?.totalPoints ?? 0);
 
 function formatActiveBan(ban: PublicBan): string {
   if (ban.type === BanType.Permanent) return "полный бессрочный";
-  if (ban.expiresUtc) return `до ${dayjs(ban.expiresUtc).format("DD.MM.YYYY")}`;
+  if (ban.expiresUtc) return `до ${formatDate(ban.expiresUtc)}`;
   return "активный";
 }
 
 function formatLastBan(ban: PublicBan, ordinal: number): string {
-  const start = ban.startedUtc
-    ? dayjs(ban.startedUtc).format("DD.MM.YYYY")
-    : "";
+  const start = ban.startedUtc ? formatDate(ban.startedUtc) : "";
   return `${ordinal}-й${start ? ` с ${start}` : ""}`;
 }
 </script>
@@ -100,7 +99,7 @@ function formatLastBan(ban: PublicBan, ordinal: number): string {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 // Reserve height for the inline "Нарушения" line while it loads, so the
 // identity column doesn't jump once the fetch resolves (one StatLine ==

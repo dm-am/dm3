@@ -3,7 +3,7 @@ import { ref, computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
-import { useUserStore, userIsModerator } from "@/entities/user";
+import { useAuthStore, userIsModerator } from "@/entities/user";
 import { useUiStore } from "@/shared/stores/ui";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useScrollToElement } from "@/shared/lib/composables/useScrollToElement";
@@ -15,12 +15,11 @@ import { CommentSkeleton } from "@/shared/ui/Skeleton";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import Button from "@/shared/ui/Button/Button.vue";
 import { gameApi } from "@/entities/game";
-import { AccessPolicy } from "@/shared/api/models/community";
-import { CommentariesAccessMode, GameRole } from "@/entities/game";
+import { CommentariesAccessMode, GameParticipation } from "@/entities/game";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 const { isCompactLayout } = storeToRefs(useUiStore());
 const { game, comments, commentsPaging, commentsLoading, commentsError } =
   storeToRefs(gameStore);
@@ -76,23 +75,15 @@ const newComment = ref("");
 const sending = ref(false);
 const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 
-const isBanned = computed(() => {
-  if (!user.value?.accessPolicy) return false;
-  const policy = user.value.accessPolicy;
-  return (
-    policy === AccessPolicy.DemocraticBan || policy === AccessPolicy.FullBan
-  );
-});
-
 const isModerator = computed(() => userIsModerator(user.value));
 
 const isParticipant = computed(() => {
   if (!game.value?.participation) return false;
   return (
-    game.value.participation.includes(GameRole.Player) ||
-    game.value.participation.includes(GameRole.Mentor) ||
-    game.value.participation.includes(GameRole.Master) ||
-    game.value.participation.includes(GameRole.Reader)
+    game.value.participation.includes(GameParticipation.Player) ||
+    game.value.participation.includes(GameParticipation.Moderator) ||
+    game.value.participation.includes(GameParticipation.Owner) ||
+    game.value.participation.includes(GameParticipation.Reader)
   );
 });
 
@@ -101,7 +92,7 @@ const commentsAccessMode = computed(
 );
 
 const canComment = computed(() => {
-  if (!user.value || isBanned.value) return false;
+  if (!user.value) return false;
   if (commentsAccessMode.value === CommentariesAccessMode.Readonly)
     return false;
   if (
@@ -149,12 +140,24 @@ async function handleSend() {
   editorRef.value?.clear();
   sending.value = true;
 
+  let failed = false;
   try {
-    await gameApi.createGameComment(game.value.id, { text });
-    // Reload comments
-    await gameStore.loadComments(game.value.id, getPage());
+    const { error } = await gameApi.createGameComment(game.value.id, { text });
+    failed = Boolean(error);
+    if (!failed) {
+      // Reload comments
+      await gameStore.loadComments(game.value.id, getPage());
+    }
+  } catch {
+    failed = true;
   } finally {
     sending.value = false;
+  }
+  // Give the text back on failure. Clearing before the request is what makes
+  // sending feel instant; losing what was written when it fails is not part
+  // of that bargain.
+  if (failed) {
+    newComment.value = text;
   }
 }
 
@@ -255,9 +258,7 @@ useFetchData(
               Отправить
             </Button>
           </template>
-          <secondary-text v-else-if="isBanned" class="comment-banned-hint">
-            Вы не можете отправлять комментарии из-за ограничений аккаунта
-          </secondary-text>
+
           <secondary-text
             v-else-if="commentsAccessMode === 'Readonly'"
             class="comment-hint"
@@ -304,11 +305,7 @@ useFetchData(
   :deep(.bbcode-editor-wrapper)
     width: 100%
 
-.comment-hint,
-.comment-banned-hint
+.comment-hint
   text-align: center
   padding: $small
-
-.comment-banned-hint
-  color: $accent-red
 </style>

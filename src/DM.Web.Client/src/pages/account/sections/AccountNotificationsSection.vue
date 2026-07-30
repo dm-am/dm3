@@ -146,12 +146,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from "vue";
-import { AccountApi } from "@/shared/api";
+import { accountApi } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type {
   NotificationPreferences,
   NotificationCategory,
 } from "@/shared/api/models/account";
+import { notifyFailure } from "@/shared/lib/errors";
 
 defineEmits<{
   (e: "connectTelegram"): void;
@@ -191,7 +192,7 @@ onMounted(async () => {
 
 async function loadPreferences() {
   loading.value = true;
-  const { data, error } = await AccountApi.getNotificationPreferences();
+  const { data, error } = await accountApi.getNotificationPreferences();
   loading.value = false;
 
   if (!error && data) {
@@ -208,13 +209,13 @@ async function loadPreferences() {
 
 async function updateTelegramEnabled() {
   saving.value = true;
-  const { error } = await AccountApi.updateNotificationPreferences({
+  const { error } = await accountApi.updateNotificationPreferences({
     telegram: { enabled: telegramEnabled.value },
   });
   saving.value = false;
 
   if (error) {
-    toast.error("Не удалось сохранить настройки");
+    notifyFailure(error, "Не удалось сохранить настройки");
     telegramEnabled.value = !telegramEnabled.value;
   }
 }
@@ -228,13 +229,13 @@ async function toggleTelegramCategory(category: NotificationCategory) {
   }
 
   saving.value = true;
-  const { error } = await AccountApi.updateNotificationPreferences({
+  const { error } = await accountApi.updateNotificationPreferences({
     telegram: { enabledCategories: [...telegramCategories.value] },
   });
   saving.value = false;
 
   if (error) {
-    toast.error("Не удалось сохранить настройки");
+    notifyFailure(error, "Не удалось сохранить настройки");
     // Revert
     if (idx >= 0) {
       telegramCategories.value.push(category);
@@ -249,13 +250,13 @@ async function toggleTelegramCategory(category: NotificationCategory) {
 
 async function updateDiscordEnabled() {
   saving.value = true;
-  const { error } = await AccountApi.updateNotificationPreferences({
+  const { error } = await accountApi.updateNotificationPreferences({
     discord: { enabled: discordEnabled.value },
   });
   saving.value = false;
 
   if (error) {
-    toast.error("Не удалось сохранить настройки");
+    notifyFailure(error, "Не удалось сохранить настройки");
     discordEnabled.value = !discordEnabled.value;
   }
 }
@@ -269,13 +270,13 @@ async function toggleDiscordCategory(category: NotificationCategory) {
   }
 
   saving.value = true;
-  const { error } = await AccountApi.updateNotificationPreferences({
+  const { error } = await accountApi.updateNotificationPreferences({
     discord: { enabledCategories: [...discordCategories.value] },
   });
   saving.value = false;
 
   if (error) {
-    toast.error("Не удалось сохранить настройки");
+    notifyFailure(error, "Не удалось сохранить настройки");
     // Revert
     if (idx >= 0) {
       discordCategories.value.push(category);
@@ -290,11 +291,11 @@ async function toggleDiscordCategory(category: NotificationCategory) {
 
 async function disconnectTelegram() {
   disconnecting.value = "telegram";
-  const { error } = await AccountApi.disconnectBot("telegram");
+  const { error } = await accountApi.disconnectBot("telegram");
   disconnecting.value = null;
 
   if (error) {
-    toast.error("Не удалось отключить Telegram");
+    notifyFailure(error, "Не удалось отключить Telegram");
   } else {
     preferences.telegram = undefined;
     toast.success("Telegram отключен");
@@ -303,11 +304,11 @@ async function disconnectTelegram() {
 
 async function disconnectDiscord() {
   disconnecting.value = "discord";
-  const { error } = await AccountApi.disconnectBot("discord");
+  const { error } = await accountApi.disconnectBot("discord");
   disconnecting.value = null;
 
   if (error) {
-    toast.error("Не удалось отключить Discord");
+    notifyFailure(error, "Не удалось отключить Discord");
   } else {
     preferences.discord = undefined;
     toast.success("Discord отключен");
@@ -319,7 +320,7 @@ defineExpose({ loadPreferences });
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 @import "../AccountPage.styles"
 
 .notifications-content
@@ -364,11 +365,11 @@ defineExpose({ loadPreferences });
 
   &--connected
     color: $accent-green
-    background-color: $accent-green-muted
+    +tint($accent-green, 15%)
 
   &--disconnected
-    color: $text-muted
-    background-color: $text-muted-muted
+    color: $text
+    +tint($text-muted, 15%)
 
 .channel-settings
   display: flex
@@ -433,12 +434,12 @@ defineExpose({ loadPreferences });
     color: $link
 
     &:hover:not(:disabled)
-      background-color: $link-muted
+      +tint($link, 15%)
 
   &--disconnect
     border: 1px solid $border
-    color: $text-muted
+    color: $text
 
     &:hover:not(:disabled)
-      background-color: $text-muted-muted
+      +tint($text-muted, 15%)
 </style>

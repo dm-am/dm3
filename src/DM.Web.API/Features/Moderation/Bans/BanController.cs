@@ -6,6 +6,8 @@ using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.Net;
+using DM.Domain.Core.Exceptions;
 
 namespace DM.Web.API.Features.Moderation.Bans;
 
@@ -50,7 +52,7 @@ public class BanController : ControllerBase
     /// <response code="404">User not found</response>
     [HttpGet("~/v1/users/{username}/bans", Name = nameof(GetUserBans))]
     [ProducesResponseType(typeof(PublicUserBanStatus), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserBans(string username) =>
         Ok(await _banApiService.GetPublicUserBanStatus(username));
 
@@ -67,13 +69,13 @@ public class BanController : ControllerBase
     /// <response code="404">User not found or not banned</response>
     [HttpGet("~/v1/users/{username}/bans/active", Name = nameof(GetActiveBan))]
     [ProducesResponseType(typeof(Envelope<PublicBan>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetActiveBan(string username)
     {
         var ban = await _banApiService.GetActiveBan(username);
         if (ban == null)
         {
-            return NotFound(new GeneralError("User is not currently banned"));
+            throw new HttpException(HttpStatusCode.NotFound, "User is not currently banned");
         }
         return Ok(ban);
     }
@@ -91,8 +93,8 @@ public class BanController : ControllerBase
     [HttpGet(Name = nameof(GetAllBans))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(typeof(ListEnvelope<Ban>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetAllBans([FromQuery] BanType? type = null) =>
         Ok(await _banApiService.GetAllActiveBans(type));
 
@@ -111,9 +113,9 @@ public class BanController : ControllerBase
     [HttpGet("history", Name = nameof(GetBanHistory))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(typeof(ListEnvelope<Ban>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetBanHistory([FromQuery] PagingQuery q) =>
         Ok(await _banApiService.GetBanHistory(q));
 
@@ -140,15 +142,15 @@ public class BanController : ControllerBase
     [HttpPost(Name = nameof(CreateBan))]
     [RequireRole(UserRole.SeniorModerator)]
     [ProducesResponseType(typeof(Envelope<Ban>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateBan([FromBody] CreateBanRequest request)
     {
         var result = await _banApiService.CreateBan(request);
-        return CreatedAtRoute(nameof(GetUserBans), new { username = request.Username }, result);
+        return CreatedAtRoute(nameof(GetActiveBan), new { username = request.Username }, result);
     }
 
     /// <summary>
@@ -167,9 +169,9 @@ public class BanController : ControllerBase
     [HttpDelete("{id}", Name = nameof(LiftBan))]
     [RequireRole(UserRole.SeniorModerator)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> LiftBan(Guid id, [FromBody] LiftBanRequest? request = null)
     {
         await _banApiService.LiftBan(id, request);

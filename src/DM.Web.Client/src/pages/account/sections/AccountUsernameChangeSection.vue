@@ -116,7 +116,7 @@
 import { ref, computed, onMounted } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
 import { formatDate } from "@/shared/lib/utils/datetime";
-import { AccountApi } from "@/shared/api";
+import { accountApi } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
 import { FormField } from "@/shared/ui/Form";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -153,7 +153,7 @@ onMounted(async () => {
 
 async function loadExistingRequest() {
   loading.value = true;
-  const { data } = await AccountApi.getUsernameChangeRequest();
+  const { data } = await accountApi.getUsernameChangeRequest();
   loading.value = false;
 
   if (data) {
@@ -167,14 +167,14 @@ async function submitRequest() {
   submitting.value = true;
   submitError.value = null;
 
-  const { data, error } = await AccountApi.createUsernameChangeRequest({
+  const { data, error } = await accountApi.createUsernameChangeRequest({
     reason: reason.value.trim(),
   });
 
   submitting.value = false;
 
   if (error) {
-    submitError.value = error.message || "Не удалось отправить заявку";
+    submitError.value = error.title || "Не удалось отправить заявку";
     return;
   }
 
@@ -187,7 +187,7 @@ async function submitRequest() {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 @import "../AccountPage.styles"
 
 .username-change-content
@@ -214,15 +214,15 @@ async function submitRequest() {
   margin-bottom: $medium
 
   &--pending
-    background-color: $link-muted
+    +tint($link, 15%)
     border: 1px solid $link
 
   &--rejected
-    background-color: $accent-red-muted
+    +tint($accent-red, 15%)
     border: 1px solid $accent-red
 
   &--approved
-    background-color: $accent-green-muted
+    +tint($accent-green, 15%)
     border: 1px solid $accent-green
 
 .status-header

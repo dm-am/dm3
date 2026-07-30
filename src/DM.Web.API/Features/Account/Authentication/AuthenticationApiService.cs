@@ -13,6 +13,7 @@ using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Personal.Preferences;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Authentication.Credentials;
+using DM.Web.API.Shared.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using User = DM.Web.API.Features.Community.Users.User;
@@ -130,7 +131,7 @@ internal class AuthenticationApiService : IAuthenticationApiService
             if (!userId.HasValue)
                 return;
 
-            var ipAddress = ExtractClientIp(httpContext);
+            var ipAddress = httpContext.GetClientAddress();
             var userAgent = httpContext.Request.Headers.UserAgent.ToString();
 
             await _loginRecordRepository.Record(new UserLoginRecord
@@ -145,28 +146,15 @@ internal class AuthenticationApiService : IAuthenticationApiService
         }
         catch (Exception ex)
         {
-            // Login recording is non-critical — never block the login flow
-            _logger.LogWarning(ex, "Failed to record login attempt for {Email}", email);
+            // Login recording is non-critical — never block the login flow.
+            // The address is not in the message: it identifies a person and the log store
+            // has no retention. The trace id and the security audit log carry the rest.
+            _logger.LogWarning(ex, "Failed to record login attempt");
         }
     }
 
     private Task<Guid?> TryResolveUserId(string email) =>
         _loginRecordRepository.TryResolveUserId(email);
-
-    private static string ExtractClientIp(HttpContext httpContext)
-    {
-        // X-Forwarded-For for reverse proxy (nginx, cloudflare)
-        var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(forwardedFor))
-        {
-            // Take the first IP (client), the rest are proxies
-            var clientIp = forwardedFor.Split(',', StringSplitOptions.TrimEntries).First();
-            if (IPAddress.TryParse(clientIp, out _))
-                return clientIp;
-        }
-
-        return httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-    }
 
     /// <inheritdoc />
     public Task Logout(HttpContext httpContext) => _authenticationService.Logout(httpContext);

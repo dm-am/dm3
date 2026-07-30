@@ -21,7 +21,13 @@ namespace DM.Web.API.Swagger;
 /// </summary>
 public static class SwaggerExtensions
 {
-    private static readonly IEnumerable<string> ApiGroups = Assembly.GetExecutingAssembly().GetTypes()
+    /// <summary>
+    /// Every OpenAPI group the API publishes, derived from the controllers
+    /// themselves. Public because the contract artifact is produced by iterating
+    /// it: a hard-coded list in the generator would drift from the code the
+    /// moment a group is added.
+    /// </summary>
+    public static readonly IEnumerable<string> ApiGroups = Assembly.GetExecutingAssembly().GetTypes()
         .Where(t => t.IsSubclassOf(typeof(ControllerBase)))
         .Select(t => t.GetCustomAttribute<ApiExplorerSettingsAttribute>())
         .Where(t => t is {IgnoreApi: false})

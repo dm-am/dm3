@@ -1,3 +1,5 @@
+using Npgsql;
+using DM.Domain.Core.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -160,7 +162,18 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
         };
 
         _dbContext.UserEndorsements.Add(dbEndorsement);
-        await _dbContext.SaveChangesAsync();
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        {
+            // The caller pre-checks for an existing endorsement; this is the race
+            // where two concurrent requests both pass that check. Translated here
+            // so the domain does not have to know the storage engine's error codes.
+            _dbContext.ChangeTracker.Clear();
+            throw new DuplicateEntityException("Duplicate endorsement", ex);
+        }
 
         return await _dbContext.UserEndorsements
             .Where(e => e.UserEndorsementId == dbEndorsement.UserEndorsementId)

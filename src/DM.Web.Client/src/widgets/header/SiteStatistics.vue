@@ -58,7 +58,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from "vue";
 import { storeToRefs } from "pinia";
-import { useStatisticsStore } from "@/shared/stores/statistics";
+import { useStatisticsStore } from "@/entities/statistics";
 
 const store = useStatisticsStore();
 const {
@@ -111,7 +111,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Skeleton"
 
 .site-stats
   font-size: $secondary-font-size

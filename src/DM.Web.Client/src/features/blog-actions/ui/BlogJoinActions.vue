@@ -15,7 +15,7 @@
 import { onMounted, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useBlogDetailsStore } from "@/entities/blog";
-import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 withDefaults(defineProps<{ variant?: "strip" | "button" }>(), {
   variant: "strip",
@@ -23,7 +23,6 @@ withDefaults(defineProps<{ variant?: "strip" | "button" }>(), {
 
 const store = useBlogDetailsStore();
 const { blog, isSubscribed, readers, readersLoading } = storeToRefs(store);
-const toast = useToast();
 
 onMounted(() => {
   if (blog.value && !readers.value.length && !readersLoading.value) {
@@ -35,11 +34,11 @@ const busy = ref(false);
 
 async function toggleSubscribe() {
   busy.value = true;
-  const ok = isSubscribed.value
+  const error = isSubscribed.value
     ? await store.unsubscribe()
     : await store.subscribe();
   busy.value = false;
-  if (!ok) toast.error("Не удалось изменить подписку");
+  if (error) notifyFailure(error, "Не удалось изменить подписку");
 }
 </script>
 
@@ -73,7 +72,7 @@ async function toggleSubscribe() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .link
   display: block

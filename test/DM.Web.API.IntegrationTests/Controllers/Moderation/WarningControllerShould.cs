@@ -108,7 +108,7 @@ public class WarningControllerShould : IntegrationTestBase
         };
 
         // Act
-        var response = await Client.PostAsJsonAsync("/v1/warnings", warningData);
+        var response = await Client.PostAsJsonAsync("/v1/moderation/warnings", warningData);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -121,7 +121,7 @@ public class WarningControllerShould : IntegrationTestBase
         var warningId = Guid.NewGuid();
 
         // Act
-        var response = await Client.DeleteAsync($"/v1/warnings/{warningId}");
+        var response = await Client.DeleteAsync($"/v1/moderation/warnings/{warningId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

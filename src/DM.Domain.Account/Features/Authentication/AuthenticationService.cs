@@ -1,15 +1,17 @@
-using System;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Collections.Generic;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System;
 using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace DM.Domain.Account.Features.Authentication;
 
@@ -29,9 +31,6 @@ internal class AuthenticationService : IAuthenticationService
 
     private const string UserIdKey = "userId";
     private const string SessionIdKey = "sessionId";
-    private const string TimestampKey = "ts";
-    private const string TransferKey = "transfer";
-    private const int TransferTokenValidityMinutes = 5;
 
     /// <inheritdoc />
     public AuthenticationService(
@@ -65,16 +64,18 @@ internal class AuthenticationService : IAuthenticationService
         // Pending registrations have no password to brute-force
         if (await _repository.IsPendingRegistration(email))
         {
-            _logger.LogInformation("Login failed: pending registration. Email={Email}", email);
+            _logger.LogInformation("Login failed: pending registration");
             return Identity.Fail(AuthenticationError.PendingRegistration);
         }
 
-        // 2. THROTTLING - only for actual login attempts
-        if (await _loginAttemptTracker.IsAccountLocked(email))
+        // 2. THROTTLING - only for actual login attempts.
+        // Counted per account and address, not per account: see LoginAttemptOrigin.
+        var origin = new LoginAttemptOrigin(email, context?.IpAddress);
+        if (await _loginAttemptTracker.IsAccountLocked(origin))
         {
-            var remainingSeconds = await _loginAttemptTracker.GetRemainingLockoutSeconds(email);
-            _logger.LogWarning("Login failed: account locked due to too many failed attempts. Email={Email}, RemainingSeconds={RemainingSeconds}",
-                email, remainingSeconds);
+            var remainingSeconds = await _loginAttemptTracker.GetRemainingLockoutSeconds(origin);
+            _logger.LogWarning("Login failed: account locked due to too many failed attempts. RemainingSeconds={RemainingSeconds}",
+                remainingSeconds);
 
             // Try to find user to log the event (may not exist)
             var (found, lockedUser) = await _repository.TryFindUserByEmail(email);
@@ -88,7 +89,7 @@ internal class AuthenticationService : IAuthenticationService
         }
 
         // Progressive delay for bot protection
-        var delaySeconds = await _loginAttemptTracker.GetDelayForUser(email);
+        var delaySeconds = await _loginAttemptTracker.GetDelayForUser(origin);
         if (delaySeconds > 0)
         {
             await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
@@ -96,24 +97,25 @@ internal class AuthenticationService : IAuthenticationService
 
         // 3. FIND USER BY EMAIL
         var (userFound, user) = await _repository.TryFindUserByEmail(email);
+        ApplyActiveBans(user);
 
         switch (userFound)
         {
             case false:
-                await _loginAttemptTracker.RecordFailedAttempt(email);
-                _logger.LogWarning("Login failed: user not found. Email={Email}", email);
+                await _loginAttemptTracker.RecordFailedAttempt(origin);
+                _logger.LogWarning("Login failed: user not found");
                 return Identity.Fail(AuthenticationError.WrongLogin);
             case true when user!.IsRemoved:
-                _logger.LogWarning("Login failed: account removed. UserId={UserId}, Email={Email}", user.UserId, email);
+                _logger.LogWarning("Login failed: account removed. UserId={UserId}", user.UserId);
                 return Identity.Fail(AuthenticationError.Removed);
             case true when user.AccessPolicy.HasFlag(AccessPolicy.FullBan):
-                _logger.LogWarning("Login failed: account banned. UserId={UserId}, Email={Email}", user.UserId, email);
+                _logger.LogWarning("Login failed: account banned. UserId={UserId}", user.UserId);
                 return Identity.Fail(AuthenticationError.Banned);
             case true when !_securityManager.ComparePasswords(password, user.Salt, user.PasswordHash):
-                await _loginAttemptTracker.RecordFailedAttempt(email);
+                await _loginAttemptTracker.RecordFailedAttempt(origin);
                 await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
                     context?.IpAddress, context?.UserAgent, "Wrong password");
-                _logger.LogWarning("Login failed: wrong password. UserId={UserId}, Email={Email}", user.UserId, email);
+                _logger.LogWarning("Login failed: wrong password. UserId={UserId}", user.UserId);
                 return Identity.Fail(AuthenticationError.WrongPassword);
 
             default:
@@ -131,8 +133,7 @@ internal class AuthenticationService : IAuthenticationService
                 await _auditService.LogAsync(user.UserId, SecurityEventType.LoginSuccess,
                     context?.IpAddress, context?.UserAgent);
 
-                _logger.LogInformation("User authenticated successfully. UserId={UserId}, Email={Email}",
-                    user.UserId, email);
+                _logger.LogInformation("User authenticated successfully. UserId={UserId}", user.UserId);
                 return await CreateAuthenticationResult(user, session, settings);
         }
     }
@@ -157,7 +158,7 @@ internal class AuthenticationService : IAuthenticationService
         }
 
         var fetchUser = _repository.FindUser(userId);
-        var fetchSession = _repository.FindUserSession(sessionId);
+        var fetchSession = _repository.FindUserSession(userId, sessionId);
         var fetchSettings = _repository.FindUserSettings(userId);
 
         await Task.WhenAll(fetchUser, fetchSession, fetchSettings);
@@ -165,6 +166,7 @@ internal class AuthenticationService : IAuthenticationService
         var user = await fetchUser;
         var session = await fetchSession;
         var settings = await fetchSettings;
+        ApplyActiveBans(user);
 
         // Validate user state (could have changed since token was issued)
         if (user == null)
@@ -225,6 +227,24 @@ internal class AuthenticationService : IAuthenticationService
             return Identity.Guest();
         }
 
+        // This overload mints a real session without a password, so it needs the
+        // same account-state gates as the other two: it is authentication, not a
+        // lookup. Today only the activation auto-login reaches it, but nothing
+        // about the signature says so.
+        ApplyActiveBans(user);
+
+        if (user.IsRemoved)
+        {
+            _logger.LogWarning("Direct authentication failed: user removed. UserId={UserId}", userId);
+            return Identity.Fail(AuthenticationError.Removed);
+        }
+
+        if (user.AccessPolicy.HasFlag(AccessPolicy.FullBan))
+        {
+            _logger.LogWarning("Direct authentication failed: user banned. UserId={UserId}", userId);
+            return Identity.Fail(AuthenticationError.Banned);
+        }
+
         var session = _sessionFactory.Create(false, true);
         var settings = await _repository.FindUserSettings(userId);
         return await CreateAuthenticationResult(user, session, settings);
@@ -280,7 +300,11 @@ internal class AuthenticationService : IAuthenticationService
         // Cannot terminate current session - use Logout instead
         if (identity.Session?.Id == sessionId)
         {
-            throw new InvalidOperationException("Cannot terminate current session. Use logout instead.");
+            // A plain InvalidOperationException reaches the client as 500: the error
+            // middleware maps only HttpException and its kin. Terminating one's own
+            // session is a caller mistake, not a server fault.
+            throw new HttpException(HttpStatusCode.BadRequest,
+                "Cannot terminate current session. Use logout instead.");
         }
 
         await _repository.RemoveSession(userId, sessionId);
@@ -312,104 +336,26 @@ internal class AuthenticationService : IAuthenticationService
         return Identity.Success(user, newSession, settings, token);
     }
 
-    /// <inheritdoc />
-    public async Task<string?> CreateTransferToken()
+    /// <summary>
+    /// Fold the bans that are in force right now into the policy every
+    /// authorization check reads.
+    /// </summary>
+    /// <remarks>
+    /// Bans live in their own table and nothing writes the user's own
+    /// AccessPolicy column, so without this fold no ban restricts anything: not
+    /// the ordinary ban at the content surfaces, not even the full ban at login.
+    /// Doing it here, at the single point where an identity is built, is also
+    /// what makes a ban start and stop by itself — an expired ban stops being in
+    /// force on the next request with no job to run, and a ban issued mid-session
+    /// takes effect on the next request rather than at session expiry.
+    /// </remarks>
+    private void ApplyActiveBans(AuthenticatedUser? user)
     {
-        var identity = _identityProvider.Current;
-        if (!identity.User.IsAuthenticated || identity.Session == null)
+        if (user == null)
         {
-            return null;
+            return;
         }
 
-        var transferData = new Dictionary<string, string>
-        {
-            [TransferKey] = "1",
-            [UserIdKey] = identity.User.UserId.ToString(),
-            [SessionIdKey] = identity.Session.Id.ToString(),
-            [TimestampKey] = _dateTimeProvider.Now.ToUnixTimeSeconds().ToString()
-        };
-
-        return await _cryptoService.Encrypt(JsonSerializer.Serialize(transferData));
-    }
-
-    /// <inheritdoc />
-    public async Task<IIdentity> AuthenticateWithTransferToken(string transferToken)
-    {
-        try
-        {
-            var decrypted = await _cryptoService.Decrypt(transferToken);
-            var transferData = JsonSerializer.Deserialize<Dictionary<string, string>>(decrypted);
-
-            if (transferData == null ||
-                !transferData.ContainsKey(TransferKey) ||
-                !transferData.TryGetValue(UserIdKey, out var userIdStr) ||
-                !transferData.TryGetValue(SessionIdKey, out var sessionIdStr) ||
-                !transferData.TryGetValue(TimestampKey, out var timestampStr))
-            {
-                _logger.LogWarning("Transfer token authentication failed: invalid format");
-                return Identity.Fail(AuthenticationError.ForgedToken);
-            }
-
-            if (!Guid.TryParse(userIdStr, out var userId) ||
-                !Guid.TryParse(sessionIdStr, out var sessionId) ||
-                !long.TryParse(timestampStr, out var timestamp))
-            {
-                _logger.LogWarning("Transfer token authentication failed: invalid data");
-                return Identity.Fail(AuthenticationError.ForgedToken);
-            }
-
-            // Check if token has expired
-            var tokenTime = DateTimeOffset.FromUnixTimeSeconds(timestamp);
-            if (_dateTimeProvider.Now - tokenTime > TimeSpan.FromMinutes(TransferTokenValidityMinutes))
-            {
-                _logger.LogWarning("Transfer token authentication failed: token expired. UserId={UserId}", userId);
-                return Identity.Fail(AuthenticationError.SessionExpired);
-            }
-
-            // Verify user and session exist
-            var user = await _repository.FindUser(userId);
-            var session = await _repository.FindUserSession(sessionId);
-            var settings = await _repository.FindUserSettings(userId);
-
-            if (user == null)
-            {
-                _logger.LogWarning("Transfer token authentication failed: user not found. UserId={UserId}", userId);
-                return Identity.Fail(AuthenticationError.SessionExpired);
-            }
-
-            if (user.IsRemoved)
-            {
-                _logger.LogWarning("Transfer token authentication failed: user removed. UserId={UserId}", userId);
-                return Identity.Fail(AuthenticationError.Removed);
-            }
-
-            if (user.AccessPolicy.HasFlag(AccessPolicy.FullBan))
-            {
-                _logger.LogWarning("Transfer token authentication failed: user banned. UserId={UserId}", userId);
-                return Identity.Fail(AuthenticationError.Banned);
-            }
-
-            if (session == null || session.ExpirationUtc < _dateTimeProvider.Now)
-            {
-                _logger.LogWarning("Transfer token authentication failed: session expired. UserId={UserId}", userId);
-                return Identity.Fail(AuthenticationError.SessionExpired);
-            }
-
-            // Create a new auth token for this mirror
-            var authData = new Dictionary<string, Guid>
-            {
-                [UserIdKey] = userId,
-                [SessionIdKey] = sessionId
-            };
-            var newAuthToken = await _cryptoService.Encrypt(JsonSerializer.Serialize(authData));
-
-            _logger.LogInformation("User authenticated via mirror transfer. UserId={UserId}", userId);
-            return Identity.Success(user, session, settings, newAuthToken);
-        }
-        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or FormatException or CryptographicException)
-        {
-            _logger.LogWarning(ex, "Transfer token authentication failed: invalid token");
-            return Identity.Fail(AuthenticationError.ForgedToken);
-        }
+        user.AccessPolicy = user.EffectiveAccessPolicyAt(_dateTimeProvider.Now);
     }
 }

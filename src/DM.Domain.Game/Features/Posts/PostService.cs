@@ -176,7 +176,8 @@ internal class PostService : IPostService
 
     public async Task<(IEnumerable<Post> Posts, PagingResult Paging)> GetRatedAsync(PostsQuery query)
     {
-        var (posts, totalCount) = await _repository.GetRated(query);
+        var (posts, totalCount) = await _repository.GetRated(query,
+            _identityProvider.Current.User.UserId);
         var paging = new PagingData(query, query.Take, totalCount);
         return (posts, paging.Result);
     }
@@ -200,14 +201,17 @@ internal class PostService : IPostService
         // Check text edit permission
         if (_intentionManager.IsAllowed(PostIntention.EditText, (post, room)))
         {
-            entity.GameText = updatePost.GameText.Trim();
+            // PATCH semantics: an absent field keeps its value, an empty string
+            // clears it. Without the null check, editing only the in-game text
+            // wiped the out-of-character text, and omitting the in-game text threw.
+            entity.GameText = updatePost.GameText?.Trim() ?? post.GameText;
             var metaText = updatePost.MetagameText?.Trim();
             // MetagameText (OOC) renders on the Comment surface where [mod] is
             // a green mod block; strip it when the editor is a non-moderator.
             if (!string.IsNullOrEmpty(metaText))
                 metaText = ModBlockSanitizer.SanitizeForAuthor(
                     metaText, _identityProvider.Current.User.Role);
-            entity.MetagameText = metaText;
+            entity.MetagameText = updatePost.MetagameText == null ? post.MetagameText : metaText;
         }
         else
         {

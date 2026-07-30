@@ -348,8 +348,12 @@ public partial class BbParserWrapper : IBbParser
                         altAttr = $" alt=\"{encodedAlt}\" data-alt=\"{encodedAlt}\"";
                     }
 
+                    // loading/decoding: a page carries up to twenty posts, and images below
+                    // the fold cost first paint for nothing. Both attributes are inert
+                    // for anything already on screen.
                     var imgTag = $"<img src=\"{encodedUrl}\" class=\"bb-image\" " +
-                                 $"data-bb-tag=\"img\" referrerpolicy=\"no-referrer\"{altAttr} />";
+                                 $"data-bb-tag=\"img\" loading=\"lazy\" decoding=\"async\" " +
+                                 $"referrerpolicy=\"no-referrer\"{altAttr} />";
 
                     if (!width.HasValue && !height.HasValue)
                     {
@@ -384,7 +388,11 @@ public partial class BbParserWrapper : IBbParser
                 {
                     var (text, url) = _linkList[index];
                     var safeUrl = SanitizeUrl(url);
-                    if (safeUrl == "#") return text ?? ""; // Remove dangerous link, keep text if any
+                    // Dangerous URL: drop the anchor but keep the text — encoded
+                    // exactly like the accepted branch below. The text comes from
+                    // [link=TEXT] and is attacker-controlled, so returning it raw
+                    // turns a rejected URL into stored XSS.
+                    if (safeUrl == "#") return System.Web.HttpUtility.HtmlEncode(text ?? "");
                     var encodedUrl = System.Web.HttpUtility.HtmlAttributeEncode(safeUrl);
                     var displayText = text ?? DefaultLinkText;
                     var encodedText = System.Web.HttpUtility.HtmlEncode(displayText);

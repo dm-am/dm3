@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
@@ -67,6 +68,18 @@ internal class PublicationCommentService : IPublicationCommentService
         if (blog.BlacklistedUserIds.Contains(currentUser.UserId))
         {
             throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this blog");
+        }
+
+        // Ban check lives here rather than in PublicationIntentionResolver: the
+        // rule is about whose blog this is, and the publication carries no blog
+        // ownership. The blog is loaded above anyway. The rule itself is not
+        // duplicated — AccessRestrictions.MaySpeak owns it.
+        var isOwnBlog = blog.Author.UserId == currentUser.UserId ||
+            blog.Assistants.Any(a => a.UserId == currentUser.UserId) ||
+            blog.Mentor?.UserId == currentUser.UserId;
+        if (!currentUser.MaySpeak(inOwnSpace: isOwnBlog))
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, "Commenting is not available while you are banned");
         }
 
         // Strip [mod] authored by a non-moderator (it renders as a green mod

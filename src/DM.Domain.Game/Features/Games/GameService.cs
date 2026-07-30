@@ -363,6 +363,16 @@ internal class GameService : IGameService
         return game;
     }
 
+    public async Task<Guid> ResolveIdByPublicIdAsync(string publicId)
+    {
+        var currentUserId = _identityProvider.Current.User.UserId;
+        var gameId = await _repository.FindGameIdByPublicId(publicId, currentUserId);
+
+        // Same answer as the aggregate read gives for an id that addresses
+        // nothing visible, so a caller cannot tell which path it took.
+        return gameId ?? throw new HttpException(HttpStatusCode.Gone, "Game not found");
+    }
+
     public async Task<Game> GetByPublicIdAsync(string publicId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
@@ -441,7 +451,7 @@ internal class GameService : IGameService
             return Array.Empty<Game>();
         }
 
-        var games = (await _repository.GetByIds(gameIdList, currentUserId)).ToArray();
+        var games = (await _repository.GetByIds(gameIdList, currentUserId, currentUserId)).ToArray();
         if (games.Length > 0)
         {
             await _unreadCountersRepository.FillEntityCounters(games, currentUserId,
@@ -483,6 +493,12 @@ internal class GameService : IGameService
 
         var invokedEvents = new List<EventType> { EventType.ChangedGame };
 
+        // Only a status transition out of Closed clears the closing date. It cannot
+        // be inferred from ClosedUtc being null: the API never sends that field
+        // (the mapping ignores it), so "null" meant "not provided" on every request
+        // and any edit of a closed game erased when it was closed.
+        var reopened = false;
+
         if (updateGame.Status.HasValue && updateGame.Status != game.Status)
         {
             var (intention, eventType) = _intentionConverter.Convert(updateGame.Status.Value);
@@ -503,6 +519,7 @@ internal class GameService : IGameService
 
                 if (game.Status == ModuleStatus.Closed && updateGame.Status != ModuleStatus.Closed)
                 {
+                    reopened = true;
                     updateGame.ClosedUtc = null;
                     updateGame.ClosedReason = ClosedReason.None;
                 }
@@ -560,7 +577,7 @@ internal class GameService : IGameService
             UpdatedUtc = _dateTimeProvider.Now,
             ActivatedUtc = updateGame.ActivatedUtc,
             ClosedUtc = updateGame.ClosedUtc,
-            ClearClosedUtc = updateGame.ClosedUtc == null && game.ClosedUtc.HasValue
+            ClearClosedUtc = reopened
         };
 
         var result = await _repository.Update(updateEntity);

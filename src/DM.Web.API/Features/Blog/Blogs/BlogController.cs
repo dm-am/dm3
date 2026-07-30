@@ -43,11 +43,11 @@ public class BlogController : ControllerBase
     [HttpGet(Name = nameof(GetBlogs))]
     [ProducesResponseType(typeof(ListEnvelope<Blog>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ListEnvelope<BlogRef>), StatusCodes.Status200OK)]
+    // Response carries per-caller unread counts, so it must not be cached
+    // anywhere. Declared, not assigned by hand: one mechanism for cache policy.
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> GetBlogs([FromQuery] BlogsQuery q)
     {
-        // Response contains user-specific unread counts, cannot use public cache
-        Response.Headers.CacheControl = "private, no-store";
-
         // Return lightweight refs for sidebars, full blogs for detail views
         if (string.Equals(q.Projection, "ref", StringComparison.OrdinalIgnoreCase))
         {
@@ -65,7 +65,7 @@ public class BlogController : ControllerBase
     /// <response code="404">Blog not found</response>
     [HttpGet("{id}", Name = nameof(GetBlog))]
     [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlog(string id)
     {
         if (Guid.TryParse(id, out var guid))
@@ -81,7 +81,7 @@ public class BlogController : ControllerBase
     /// <response code="404">Blog not found</response>
     [HttpGet("owner/{login}", Name = nameof(GetBlogByOwner))]
     [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogByOwner(string login) =>
         Ok(await _apiService.GetByOwnerLogin(login));
 
@@ -95,8 +95,8 @@ public class BlogController : ControllerBase
     [HttpPost(Name = nameof(PostBlog))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> PostBlog([FromBody] CreateBlogRequest request)
     {
         var result = await _apiService.Create(request);
@@ -116,15 +116,13 @@ public class BlogController : ControllerBase
     [HttpPatch("{id}", Name = nameof(PatchBlog))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchBlog(string id, [FromBody] UpdateBlogRequest request)
     {
-        var blogId = Guid.TryParse(id, out var guid)
-            ? guid
-            : (await _apiService.GetByPublicId(id)).Resource.Id;
+        var blogId = await _apiService.ResolveId(id);
         return Ok(await _apiService.Update(blogId, request));
     }
 
@@ -139,14 +137,12 @@ public class BlogController : ControllerBase
     [HttpDelete("{id}", Name = nameof(DeleteBlog))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteBlog(string id)
     {
-        var blogId = Guid.TryParse(id, out var guid)
-            ? guid
-            : (await _apiService.GetByPublicId(id)).Resource.Id;
+        var blogId = await _apiService.ResolveId(id);
         await _apiService.Delete(blogId);
         return NoContent();
     }
@@ -171,10 +167,10 @@ public class BlogController : ControllerBase
     [HttpPost("{id}/status", Name = nameof(PostBlogStatus))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostBlogStatus(string id, [FromBody] BlogStatusChangeRequest request)
     {
         // Pass the raw id through: the domain resolves the public id via the
@@ -204,10 +200,10 @@ public class BlogController : ControllerBase
     [HttpPost("{id}/premoderation", Name = nameof(PostBlogPremoderation))]
     [RequireRole(UserRole.Mentor)]
     [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostBlogPremoderation(string id, [FromBody] BlogPremoderationChangeRequest request)
     {
         // Pass the raw id through: the domain resolves the public id via the
@@ -230,15 +226,13 @@ public class BlogController : ControllerBase
     [HttpPost("{id}/rubrics", Name = nameof(PostRubric))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Rubric>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostRubric(string id, [FromBody] CreateRubricRequest request)
     {
-        var blogId = Guid.TryParse(id, out var guid)
-            ? guid
-            : (await _apiService.GetByPublicId(id)).Resource.Id;
+        var blogId = await _apiService.ResolveId(id);
         var result = await _apiService.CreateRubric(blogId, request);
         return Created("", result);
     }
@@ -257,10 +251,10 @@ public class BlogController : ControllerBase
     [HttpPatch("{id}/rubrics/{rubricId:guid}", Name = nameof(PatchRubric))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Rubric>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchRubric(string id, Guid rubricId, [FromBody] UpdateRubricRequest request)
     {
         // The rubric id alone identifies the rubric; the blog {id} is kept in
@@ -286,15 +280,13 @@ public class BlogController : ControllerBase
     [HttpPut("{id}/rubrics/order", Name = nameof(PutRubricsOrder))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(ListEnvelope<Rubric>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PutRubricsOrder(string id, [FromBody] ReorderRubricsRequest request)
     {
-        var blogId = Guid.TryParse(id, out var guid)
-            ? guid
-            : (await _apiService.GetByPublicId(id)).Resource.Id;
+        var blogId = await _apiService.ResolveId(id);
         return Ok(await _apiService.ReorderRubrics(blogId, request));
     }
 
@@ -309,9 +301,9 @@ public class BlogController : ControllerBase
     [HttpDelete("rubrics/{rubricId:guid}", Name = nameof(DeleteRubric))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteRubric(Guid rubricId)
     {
         await _apiService.DeleteRubric(rubricId);

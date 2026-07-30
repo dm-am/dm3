@@ -5,13 +5,14 @@ import { DataTable, type Column, type SortState } from "@/shared/ui/DataTable";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import Paging from "@/shared/ui/Paging/Paging.vue";
+import { formatDate } from "@/shared/lib/utils/datetime";
 import {
   UserLink,
   UserRating,
   useCommunityStore,
   useUserDisplay,
 } from "@/entities/user";
-import { createCacheKey } from "@/entities/user/model/communityStore";
+import { stableCacheKey } from "@/shared/lib/utils/keyedCache";
 import { UsersFilter, useUsersFilter } from "@/features/user-filter";
 import { buildStatusLines } from "@/shared/lib/utils/tooltipBuilders";
 
@@ -32,12 +33,8 @@ const emptyText = computed(() =>
     ? "Пользователей по заданным фильтрам не найдено"
     : "Пользователей пока нет",
 );
-const {
-  isOnline,
-  buildOnlineTooltip,
-  buildRegistrationTooltip,
-  formatDateShort,
-} = useUserDisplay();
+const { isOnline, buildOnlineTooltip, buildRegistrationTooltip } =
+  useUserDisplay();
 
 // Map column keys to sort field names (only for sortable columns)
 const columnToSortKey: Record<string, string> = {
@@ -122,7 +119,7 @@ const users = computed(() => searchResult.value?.resources ?? []);
 
 // Refetch whenever the cache key (covering every filter param) changes.
 // Shares the store's key builder so the widget and store never diverge.
-const paramsKey = computed(() => createCacheKey(searchParams.value));
+const paramsKey = computed(() => stableCacheKey(searchParams.value));
 
 watch(
   paramsKey,
@@ -267,7 +264,7 @@ function buildBlogsTooltip(row: {
       <!-- Registration date column -->
       <template #cell-registered="{ row }">
         <Tooltip :text="buildRegistrationTooltip(row)" focusable>
-          <span>{{ formatDateShort(row.registeredUtc) }}</span>
+          <span>{{ formatDate(row.registeredUtc) }}</span>
         </Tooltip>
       </template>
 

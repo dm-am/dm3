@@ -1,26 +1,13 @@
 import { test, expect, APIRequestContext } from "@playwright/test";
-import { loginWithCookies } from "../../fixtures/auth";
+import { authenticatedContext } from "../../fixtures/auth";
 
 const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
-
-const TEST_USER = {
-  username: "Alice",
-  password: "Xk9#mQz2$vL7nW",
-};
 
 let authContext: APIRequestContext;
 let createdEntryId: string | null = null;
 
-test.beforeAll(async ({ request }) => {
-  try {
-    authContext = await loginWithCookies(
-      request,
-      TEST_USER.username,
-      TEST_USER.password,
-    );
-  } catch (e) {
-    console.error("Failed to login:", e);
-  }
+test.beforeAll(async () => {
+  authContext = await authenticatedContext();
 });
 
 test.afterAll(async () => {
@@ -35,8 +22,6 @@ test.afterAll(async () => {
 
 test.describe("Notepad API", () => {
   test("should get my notepad entries", async () => {
-    test.skip(!authContext, "Auth failed");
-
     const response = await authContext.get(`${API_URL}/v1/users/me/notepad`);
 
     expect(response.ok()).toBeTruthy();
@@ -46,8 +31,6 @@ test.describe("Notepad API", () => {
   });
 
   test("should create notepad entry", async () => {
-    test.skip(!authContext, "Auth failed");
-
     const response = await authContext.post(`${API_URL}/v1/users/me/notepad`, {
       headers: { "Content-Type": "application/json" },
       data: {
@@ -57,28 +40,29 @@ test.describe("Notepad API", () => {
     });
 
     expect(response.status()).toBe(201);
-    const data = await response.json();
-    expect(data).toHaveProperty("id");
-    expect(data).toHaveProperty("title", "E2E Test Entry");
-    createdEntryId = data.id;
+    // Одиночный ресурс приходит в конверте — см. API_DESIGN.md.
+    const { resource } = await response.json();
+    expect(resource).toHaveProperty("id");
+    expect(resource).toHaveProperty("title", "E2E Test Entry");
+    createdEntryId = resource.id;
   });
 
   test("should get notepad entry by id", async () => {
-    test.skip(!authContext || !createdEntryId, "No entry to get");
+    test.skip(!createdEntryId, "No entry to get");
 
     const response = await authContext.get(
       `${API_URL}/v1/users/me/notepad/${createdEntryId}`,
     );
 
     expect(response.ok()).toBeTruthy();
-    const data = await response.json();
-    expect(data).toHaveProperty("id", createdEntryId);
-    expect(data).toHaveProperty("title");
-    expect(data).toHaveProperty("content");
+    const { resource } = await response.json();
+    expect(resource).toHaveProperty("id", createdEntryId);
+    expect(resource).toHaveProperty("title");
+    expect(resource).toHaveProperty("content");
   });
 
   test("should update notepad entry", async () => {
-    test.skip(!authContext || !createdEntryId, "No entry to update");
+    test.skip(!createdEntryId, "No entry to update");
 
     const response = await authContext.patch(
       `${API_URL}/v1/users/me/notepad/${createdEntryId}`,
@@ -91,12 +75,12 @@ test.describe("Notepad API", () => {
     );
 
     expect(response.ok()).toBeTruthy();
-    const data = await response.json();
-    expect(data).toHaveProperty("title", "Updated E2E Entry");
+    const { resource } = await response.json();
+    expect(resource).toHaveProperty("title", "Updated E2E Entry");
   });
 
   test("should delete notepad entry", async () => {
-    test.skip(!authContext || !createdEntryId, "No entry to delete");
+    test.skip(!createdEntryId, "No entry to delete");
 
     const response = await authContext.delete(
       `${API_URL}/v1/users/me/notepad/${createdEntryId}`,

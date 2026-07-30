@@ -64,7 +64,7 @@ public class StatisticsController : ControllerBase
     /// <response code="400">Year out of range</response>
     [HttpGet("v1/leaderboards/{year:int}", Name = nameof(GetYearlyLeaderboards))]
     [ProducesResponseType(typeof(Envelope<Leaderboards>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetYearlyLeaderboards(int year)
     {
         ValidatePeriod(year, null);
@@ -80,7 +80,7 @@ public class StatisticsController : ControllerBase
     /// <response code="400">Year or month out of range</response>
     [HttpGet("v1/leaderboards/{year:int}/{month:int}", Name = nameof(GetMonthlyLeaderboards))]
     [ProducesResponseType(typeof(Envelope<Leaderboards>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetMonthlyLeaderboards(int year, int month)
     {
         ValidatePeriod(year, month);

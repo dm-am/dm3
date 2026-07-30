@@ -84,10 +84,6 @@ public class CreateTopicCommentEntity
     /// </summary>
     public string Text { get; set; } = null!;
 
-    /// <summary>
-    /// New comment count for the topic
-    /// </summary>
-    public int NewCommentCount { get; set; }
 }
 
 /// <summary>
@@ -122,11 +118,6 @@ public class TopicCommentToDelete : Comment
     public Guid TopicId => EntityId;
 
     /// <summary>
-    /// Current comment count of the topic
-    /// </summary>
-    public int TopicCommentCount { get; set; }
-
-    /// <summary>
     /// Tells if the comment is last comment of the topic
     /// </summary>
     public bool IsLastComment { get; set; }
@@ -146,11 +137,6 @@ public class DeleteTopicCommentEntity
     /// Topic identifier
     /// </summary>
     public Guid TopicId { get; set; }
-
-    /// <summary>
-    /// New comment count after deletion
-    /// </summary>
-    public int NewCommentCount { get; set; }
 
     /// <summary>
     /// New last comment ID (if this was the last comment)

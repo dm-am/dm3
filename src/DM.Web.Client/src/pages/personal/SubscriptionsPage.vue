@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { useSubscriptionsStore } from "@/shared/stores/subscriptions";
+import { useSubscriptionsStore } from "@/entities/subscription";
 import {
   SubscriptionTargetType,
   type Subscription,
 } from "@/shared/api/models/subscriptions";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const store = useSubscriptionsStore();
 const activeTab = ref<"all" | "games" | "blogs" | "topics" | "users">("all");
@@ -59,7 +60,8 @@ const getTargetLink = (subscription: Subscription): string => {
 };
 
 const handleUnsubscribe = async (subscription: Subscription) => {
-  await store.unsubscribe(subscription.id);
+  const error = await store.unsubscribe(subscription.id);
+  if (error) notifyFailure(error, "Не удалось отписаться");
 };
 </script>
 
@@ -198,7 +200,8 @@ const handleUnsubscribe = async (subscription: Subscription) => {
   cursor: pointer
   font-size: 0.85rem
 
+  // Тинт вместо сплошной заливки: $text-on-red рассчитан на светлую
+  // подложку, на $accent-red его контраст 1.5.
   &:hover
-    background: $accent-red
-    color: $text-on-red
+    +tint($accent-red, 15%)
 </style>

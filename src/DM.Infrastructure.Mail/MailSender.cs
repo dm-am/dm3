@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Mail;
@@ -9,49 +8,24 @@ using Jamq.Client.Rabbit.Producing;
 namespace DM.Infrastructure.Mail;
 
 /// <summary>
-/// Mail sender implementation that sends emails through RabbitMQ queue.
-/// Implements both <see cref="DM.Domain.Core.Mail.IMailSender"/> and legacy <see cref="IMailSender"/>.
+/// Sends emails through the RabbitMQ queue the mail worker consumes.
 /// </summary>
-internal class MailSender : DM.Domain.Core.Mail.IMailSender, IMailSender
+internal class MailSender : IMailSender
 {
-    private readonly IValidator<MailLetter> validator;
-    private readonly IProducer<string, MailLetter> producer;
+    private readonly IValidator<EmailLetter> validator;
+    private readonly IProducer<string, EmailLetter> producer;
 
     /// <inheritdoc />
     public MailSender(
-        IValidator<MailLetter> validator,
+        IValidator<EmailLetter> validator,
         IProducerBuilder producerBuilder)
     {
         this.validator = validator;
-        producer = producerBuilder.BuildRabbit<MailLetter>(new RabbitProducerParameters("dm.mail.sending"));
-    }
-
-    /// <summary>
-    /// Sends an email using EmailLetter DTO from Domain.Core.
-    /// Maps to internal MailLetter for queue processing.
-    /// </summary>
-    async Task DM.Domain.Core.Mail.IMailSender.SendAsync(EmailLetter letter)
-    {
-        var mailLetter = new MailLetter
-        {
-            Address = letter.Address,
-            Subject = letter.Subject,
-            Body = letter.Body,
-            LinkedResources = letter.LinkedResources
-                .Select(r => new LinkedResource
-                {
-                    ContentId = r.ContentId,
-                    MimeType = r.MimeType,
-                    Content = r.Content
-                })
-                .ToList()
-        };
-
-        await SendAsync(mailLetter);
+        producer = producerBuilder.BuildRabbit<EmailLetter>(new RabbitProducerParameters("dm.mail.sending"));
     }
 
     /// <inheritdoc />
-    public async Task SendAsync(MailLetter letter)
+    public async Task SendAsync(EmailLetter letter)
     {
         await validator.ValidateAndThrowAsync(letter);
         await producer.Send(string.Empty, letter, CancellationToken.None);

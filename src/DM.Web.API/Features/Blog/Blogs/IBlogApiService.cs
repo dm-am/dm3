@@ -32,24 +32,17 @@ public interface IBlogApiService
     Task<Envelope<Blog>> GetByPublicId(string publicId);
 
     /// <summary>
-    /// Get blog details by ID (full, with subscribers and assistants)
-    /// </summary>
-    Task<Envelope<BlogDetails>> GetDetails(Guid id);
-
-    /// <summary>
-    /// Get blog details by public ID (5 letters)
-    /// </summary>
-    Task<Envelope<BlogDetails>> GetDetailsByPublicId(string publicId);
-
-    /// <summary>
     /// Get blog by owner login (lightweight)
     /// </summary>
     Task<Envelope<Blog>> GetByOwnerLogin(string login);
 
     /// <summary>
-    /// Get blog details by owner login (full)
+    /// Resolve a route identifier of a blog, given either form.
+    /// Every blog-scoped route accepts both, so without a shared resolver
+    /// each controller carries its own copy of the branch.
     /// </summary>
-    Task<Envelope<BlogDetails>> GetDetailsByOwnerLogin(string login);
+    /// <param name="idOrPublicId">Blog public id (5 letters) or GUID</param>
+    Task<Guid> ResolveId(string idOrPublicId);
 
     /// <summary>
     /// Create a new blog

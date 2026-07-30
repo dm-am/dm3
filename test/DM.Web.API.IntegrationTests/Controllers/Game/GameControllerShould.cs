@@ -2,6 +2,8 @@ using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
 using FluentAssertions;
 using Xunit;
 
@@ -28,31 +30,26 @@ public class GameControllerShould : IntegrationTestBase
         var response = await Client.GetAsync("/v1/games");
         var content = await response.Content.ReadAsStringAsync();
 
-        // Assert - log content if not OK for debugging
-        if (response.StatusCode != HttpStatusCode.OK)
-        {
-            throw new Exception($"Expected OK but got {response.StatusCode}. Content: {content}");
-        }
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "body was: {0}", content);
         content.Should().Contain("resources");
     }
 
     /// <summary>
-    /// Get list of games with query parameters should return OK
+    /// Paging parameters should be echoed back in the paging envelope
     /// </summary>
     [Fact]
-    public async Task GetGames_WithQueryParameters_ReturnsOk()
+    public async Task GetGames_WithPaging_EchoesSkipAndTake()
     {
         // Act
-        var response = await Client.GetAsync("/v1/games?size=10&number=1");
+        var response = await Client.GetAsync("/v1/games?skip=0&take=10");
         var content = await response.Content.ReadAsStringAsync();
 
-        // Assert - log content if not OK for debugging
-        if (response.StatusCode != HttpStatusCode.OK)
-        {
-            throw new Exception($"Expected OK but got {response.StatusCode}. Content: {content}");
-        }
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "body was: {0}", content);
+        var paging = JsonDocument.Parse(content).RootElement.GetProperty("paging");
+        paging.GetProperty("skip").GetInt32().Should().Be(0);
+        paging.GetProperty("take").GetInt32().Should().Be(10);
     }
 
     #endregion
@@ -67,9 +64,12 @@ public class GameControllerShould : IntegrationTestBase
     {
         // Act - participating=true for anonymous returns empty list
         var response = await Client.GetAsync("/v1/games?participating=true");
+        var content = await response.Content.ReadAsStringAsync();
 
         // Assert - API returns empty list for anonymous users
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "body was: {0}", content);
+        JsonDocument.Parse(content).RootElement
+            .GetProperty("resources").EnumerateArray().Should().BeEmpty();
     }
 
     #endregion
@@ -373,7 +373,11 @@ public class GameControllerShould : IntegrationTestBase
     [Fact]
     public async Task GetRatedPosts_ReturnsFullGameRefOnPostRoomGame()
     {
-        var response = await Client.GetAsync("/v1/posts?take=10");
+        // Scoped to the seeded game. Unscoped, this took the first row of a
+        // global rating-ordered list and assumed it was the seed's — true only
+        // while nothing else in the database had a rated post, which is not a
+        // property of the endpoint under test.
+        var response = await Client.GetAsync($"/v1/posts?gameId={TestConstants.TestGameId}&take=10");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var json = await response.Content.ReadAsStringAsync();
@@ -422,6 +426,144 @@ public class GameControllerShould : IntegrationTestBase
             .ToArray();
         owners.Should().Contain(TestConstants.TestUserLogin);
         owners.Should().Contain(TestConstants.SecondUserLogin);
+    }
+
+    /// <summary>
+    /// One endpoint, two ways to address the game, one payload.
+    /// </summary>
+    /// <remarks>
+    /// GET /v1/games/{id} accepts either the five-letter alias or the GUID and
+    /// takes a different repository path for each. The alias path skipped the
+    /// enrichment step, so it answered subscribersCount 0, no active characters
+    /// and pcCount 0 for a game whose GUID form reported all three — and it
+    /// decided GameIntention.Read on an empty pending-invitation set.
+    ///
+    /// Asserted as an equality between the two responses rather than against
+    /// fixed numbers: the point is that the address cannot change the answer,
+    /// and fixed numbers would drift with the seed.
+    /// </remarks>
+    [Fact]
+    public async Task GetGame_AnswerTheSameWhetherAddressedByAliasOrByGuid()
+    {
+        var byGuid = await ReadGameAsync($"/v1/games/{TestConstants.TestGameId}");
+        var byAlias = await ReadGameAsync($"/v1/games/{TestConstants.TestGamePublicId}");
+
+        byAlias.GetProperty("id").GetString()
+            .Should().Be(byGuid.GetProperty("id").GetString(),
+                "the two addresses must resolve to the same game");
+
+        foreach (var field in new[] { "subscribersCount", "gameReviewsCount", "postReviewsCount" })
+        {
+            byAlias.GetProperty(field).GetInt32()
+                .Should().Be(byGuid.GetProperty(field).GetInt32(), field);
+        }
+
+        byAlias.GetProperty("activeCharacters").GetArrayLength()
+            .Should().Be(byGuid.GetProperty("activeCharacters").GetArrayLength());
+        byAlias.GetProperty("recruitment").GetProperty("pcCount").GetInt32()
+            .Should().Be(byGuid.GetProperty("recruitment").GetProperty("pcCount").GetInt32());
+    }
+
+    /// <summary>The `resource` of a single-game read, as a JSON element.</summary>
+    private async Task<JsonElement> ReadGameAsync(string url)
+    {
+        var response = await Client.GetAsync(url);
+        response.StatusCode.Should().Be(HttpStatusCode.OK, url);
+
+        // Parsed into a document that outlives the using: cloning is what makes
+        // the element safe to read after the reader is disposed.
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return doc.RootElement.GetProperty("resource").Clone();
+    }
+
+    /// <summary>
+    /// The reader bit on `post.room.game.participation`, over the wire.
+    /// </summary>
+    /// <remarks>
+    /// A separate test from the structural one above rather than an assertion
+    /// added to it: that one is deliberately anonymous, and this bit is the one
+    /// field on the attached game that depends on who is asking.
+    ///
+    /// It guards the whole chain and nothing less than the whole chain: the feed
+    /// loads the attached game anonymously — its accessibility is fixed by the
+    /// feed's own filters — and fills the viewer's subscription separately, then
+    /// GameParticipationResolver turns that flag into the Reader bit and the
+    /// serializer writes it out. A repository test covers the flag
+    /// (PostRepositoryShould), so what is new here is the last two steps.
+    ///
+    /// "Reader" is capitalised because JsonConfiguration registers
+    /// JsonStringEnumConverter with no naming policy: the camelCase policy next
+    /// to it applies to property names, not to enum values. The client mirrors
+    /// the string literally, so the casing is the contract.
+    /// </remarks>
+    [Fact]
+    public async Task GetRatedPosts_ReportsTheViewerAsAReaderOfTheGameTheySubscribeTo()
+    {
+        // No arrange: the fixture already subscribes InactiveUser1 to TestGame.
+        var subscriber = new GeneralUser
+        {
+            UserId = TestConstants.InactiveUser1Id,
+            Username = TestConstants.InactiveUser1Username,
+            Role = UserRole.RegularUser,
+            AccessPolicy = AccessPolicy.NotSpecified,
+        };
+
+        var participation = await ReadRatedPostParticipationAsync(
+            CreateAuthenticatedRequest(
+                HttpMethod.Get,
+                $"/v1/posts?gameId={TestConstants.TestGameId}&take=10",
+                subscriber));
+
+        participation.Should().Contain("Reader");
+    }
+
+    /// <summary>
+    /// The same read for somebody who subscribes to nothing. Without it the
+    /// assertion above passes on a resolver that returns every bit for everyone.
+    /// </summary>
+    [Fact]
+    public async Task GetRatedPosts_DoesNotReportAStrangerAsAReader()
+    {
+        var stranger = new GeneralUser
+        {
+            UserId = TestConstants.InactiveUser2Id,
+            Username = TestConstants.InactiveUser2Username,
+            Role = UserRole.RegularUser,
+            AccessPolicy = AccessPolicy.NotSpecified,
+        };
+
+        var participation = await ReadRatedPostParticipationAsync(
+            CreateAuthenticatedRequest(
+                HttpMethod.Get,
+                $"/v1/posts?gameId={TestConstants.TestGameId}&take=10",
+                stranger));
+
+        // InactiveUser2 subscribes to SecondGame, not to this one — so the read
+        // also shows the flag is filled per game and not per subscriber.
+        participation.Should().NotContain("Reader");
+    }
+
+    /// <summary>
+    /// `participation` off the first rated post of the seeded game, as strings.
+    /// </summary>
+    private async Task<string[]> ReadRatedPostParticipationAsync(HttpRequestMessage request)
+    {
+        var response = await Client.SendAsync(request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var resources = doc.RootElement.GetProperty("resources");
+        resources.GetArrayLength().Should().BeGreaterThan(0,
+            "the seed includes one reviewed post in TestGame");
+
+        var game = resources.EnumerateArray().First()
+            .GetProperty("room")
+            .GetProperty("game");
+
+        return game.GetProperty("participation")
+            .EnumerateArray()
+            .Select(value => value.GetString()!)
+            .ToArray();
     }
 
     /// <summary>

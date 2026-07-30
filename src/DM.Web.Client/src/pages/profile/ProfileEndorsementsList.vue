@@ -30,7 +30,7 @@
  */
 import { ref, computed, watch, type Ref } from "vue";
 import { useRoute } from "vue-router";
-import { communityApi } from "@/shared/api";
+import { userApi } from "@/entities/user";
 import type {
   UserEndorsement,
   Username,
@@ -56,7 +56,7 @@ const props = defineProps<{
   /**
    * "received" — endorsements received by this user (they are the recipient).
    * "written"  — endorsements written by this user (they are the author).
-   * Determines which of communityApi.getUserEndorsements /
+   * Determines which of userApi.getUserEndorsements /
    * getWrittenUserEndorsements is called, and (via `routeName` below)
    * where the pagination links lead.
    */
@@ -93,7 +93,7 @@ async function fetch() {
   try {
     // Do not detach the method — `getUserEndorsements`/`getWrittenUserEndorsements`
     // call `this.buildEndorsementParams(q)`, and a detached `const fn =
-    // communityApi.getX` loses `this` and crashes with a TypeError that is silently
+    // userApi.getX` loses `this` and crashes with a TypeError that is silently
     // swallowed by the catch block below.
     const params = {
       search: searchParams.value.search,
@@ -104,11 +104,8 @@ async function fetch() {
     };
     const { data, error } =
       props.mode === "received"
-        ? await communityApi.getUserEndorsements(
-            props.username as Username,
-            params,
-          )
-        : await communityApi.getWrittenUserEndorsements(
+        ? await userApi.getUserEndorsements(props.username as Username, params)
+        : await userApi.getWrittenUserEndorsements(
             props.username as Username,
             params,
           );

@@ -1,13 +1,11 @@
 using System;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Features.Community.Awards;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using IAwardService = DM.Domain.Community.Features.Awards.IAwardService;
 
 namespace DM.Web.API.Features.Moderation.Awards;
 
@@ -27,14 +25,12 @@ namespace DM.Web.API.Features.Moderation.Awards;
 [RequireRole(UserRole.SeniorModerator)]
 public class UserAwardController : ControllerBase
 {
-    private readonly IAwardService _awardService;
-    private readonly IMapper _mapper;
+    private readonly IUserAwardApiService _userAwardApiService;
 
     /// <inheritdoc />
-    public UserAwardController(IAwardService awardService, IMapper mapper)
+    public UserAwardController(IUserAwardApiService userAwardApiService)
     {
-        _awardService = awardService;
-        _mapper = mapper;
+        _userAwardApiService = userAwardApiService;
     }
 
     /// <summary>Grant an award to a user.</summary>
@@ -47,19 +43,12 @@ public class UserAwardController : ControllerBase
     /// <response code="404">User, type or series not found.</response>
     [HttpPost("users/{username}/awards", Name = nameof(GrantUserAward))]
     [ProducesResponseType(typeof(Envelope<UserAward>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GrantUserAward(string username, [FromBody] GrantUserAwardRequest request)
-    {
-        var granted = await _awardService.GrantAsync(username, request.AwardTypeId, request.ContestSeriesId, request.WorkUrl);
-        var api = _mapper.Map<UserAward>(granted);
-        return CreatedAtRoute(
-            nameof(AwardController.GetUserAwards),
-            new { username },
-            new Envelope<UserAward>(api));
-    }
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GrantUserAward(string username, [FromBody] GrantUserAwardRequest request) =>
+        StatusCode(StatusCodes.Status201Created, await _userAwardApiService.Grant(username, request));
 
     /// <summary>Revoke a previously granted award (soft-delete).</summary>
     /// <param name="username">Username (for URL consistency).</param>
@@ -70,13 +59,13 @@ public class UserAwardController : ControllerBase
     /// <response code="404">Record not found.</response>
     [HttpDelete("users/{username}/awards/{awardId:guid}", Name = nameof(RevokeUserAward))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RevokeUserAward(string username, Guid awardId)
     {
         _ = username; // route param for URL consistency, validation is by awardId
-        await _awardService.RevokeAsync(awardId);
+        await _userAwardApiService.Revoke(awardId);
         return NoContent();
     }
 }

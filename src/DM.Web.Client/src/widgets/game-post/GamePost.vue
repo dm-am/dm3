@@ -20,12 +20,7 @@ import {
 } from "@/shared/ui";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
-import {
-  UserLink,
-  AvatarImg,
-  useUserStore,
-  userIsModerator,
-} from "@/entities/user";
+import { UserLink, AvatarImg, userIsModerator } from "@/entities/user";
 import { trimHtmlWhitespace } from "@/shared/lib/utils/bbcodeInteractive";
 import { useAuthStore } from "@/shared/stores/auth";
 import {
@@ -35,6 +30,7 @@ import {
 import { symbols } from "@/shared/lib/utils/icons";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const props = withDefaults(
   defineProps<{
@@ -73,7 +69,7 @@ const emit = defineEmits<{
 }>();
 
 const authStore = useAuthStore();
-const { user: currentUser } = storeToRefs(useUserStore());
+const { user: currentUser } = storeToRefs(useAuthStore());
 const toast = useToast();
 
 // 15-minute author edit window — a client-side affordance matching the
@@ -387,7 +383,7 @@ async function saveEditPost() {
   });
   savingPost.value = false;
   if (error) {
-    toast.error("Не удалось сохранить пост");
+    notifyFailure(error, "Не удалось сохранить пост");
     return;
   }
   // Reflect the server-rendered result in place.
@@ -413,7 +409,7 @@ async function confirmDeletePost() {
   deletingPost.value = false;
   showDeleteConfirm.value = false;
   if (error) {
-    toast.error("Не удалось удалить пост");
+    notifyFailure(error, "Не удалось удалить пост");
     return;
   }
   isDeleted.value = true;
@@ -479,7 +475,7 @@ async function submitReview() {
       // for the cases it does not cover.
       const status = (error as { status?: number }).status;
       if (status === 409) {
-        toast.error("Вы уже оценили этот пост");
+        notifyFailure(error, "Вы уже оценили этот пост");
       } else if (status !== 403 && status !== 429) {
         toast.error("Не удалось отправить отзыв");
       }
@@ -822,8 +818,8 @@ async function submitReview() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/Animations"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/Animations"
 
 // ============================================================================
 // Game Post — layout dimensions matching DM2

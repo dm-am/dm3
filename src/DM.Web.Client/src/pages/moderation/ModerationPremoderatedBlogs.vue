@@ -5,10 +5,11 @@
  * twin of ModerationPremoderatedGames (same filter/merge behavior).
  */
 import { computed, onMounted, ref } from "vue";
-import ModerationApi, {
+import {
+  moderationApi,
   type PremoderatedBlog,
   type PremoderationStatus,
-} from "@/shared/api/moderationApi";
+} from "@/entities/moderation";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { Select, type SelectOption } from "@/shared/ui/Select";
@@ -47,7 +48,7 @@ const columns: Column[] = [
 ];
 
 async function fetchQueue(status: QueueStatus): Promise<BlogRow[]> {
-  const { data, error } = await ModerationApi.getPremoderatedBlogs(status);
+  const { data, error } = await moderationApi.getPremoderatedBlogs(status);
   if (error) throw error;
   return (data?.resources ?? []).map((b) => ({
     ...b,

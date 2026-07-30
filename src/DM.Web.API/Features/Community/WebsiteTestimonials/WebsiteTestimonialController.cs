@@ -1,7 +1,5 @@
 using System;
-using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Community.Features.WebsiteTestimonials;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
@@ -19,16 +17,12 @@ namespace DM.Web.API.Features.Community.WebsiteTestimonials;
 [Tags("Website Testimonials")]
 public class WebsiteTestimonialController : ControllerBase
 {
-    private readonly IWebsiteTestimonialService _testimonialService;
-    private readonly IMapper _mapper;
+    private readonly IWebsiteTestimonialApiService _testimonialApiService;
 
     /// <inheritdoc />
-    public WebsiteTestimonialController(
-        IWebsiteTestimonialService testimonialService,
-        IMapper mapper)
+    public WebsiteTestimonialController(IWebsiteTestimonialApiService testimonialApiService)
     {
-        _testimonialService = testimonialService;
-        _mapper = mapper;
+        _testimonialApiService = testimonialApiService;
     }
 
     /// <summary>
@@ -51,12 +45,8 @@ public class WebsiteTestimonialController : ControllerBase
     /// <response code="200">List of website testimonials</response>
     [HttpGet(Name = nameof(GetWebsiteTestimonials))]
     [ProducesResponseType(typeof(ListEnvelope<WebsiteTestimonialDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetWebsiteTestimonials([FromQuery] WebsiteTestimonialsQuery q)
-    {
-        var (testimonials, paging) = await _testimonialService.GetListAsync(q);
-        var apiTestimonials = testimonials.Select(_mapper.Map<WebsiteTestimonialDto>);
-        return Ok(new ListEnvelope<WebsiteTestimonialDto>(apiTestimonials, new PagingInfo(paging)));
-    }
+    public async Task<IActionResult> GetWebsiteTestimonials([FromQuery] WebsiteTestimonialsQuery q) =>
+        Ok(await _testimonialApiService.GetList(q));
 
     /// <summary>
     /// Get single testimonial by ID
@@ -66,13 +56,9 @@ public class WebsiteTestimonialController : ControllerBase
     /// <response code="404">Testimonial not found</response>
     [HttpGet("{id:guid}", Name = nameof(GetWebsiteTestimonial))]
     [ProducesResponseType(typeof(Envelope<WebsiteTestimonialDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetWebsiteTestimonial(Guid id)
-    {
-        var testimonial = await _testimonialService.GetAsync(id);
-        var apiTestimonial = _mapper.Map<WebsiteTestimonialDto>(testimonial);
-        return Ok(new Envelope<WebsiteTestimonialDto>(apiTestimonial));
-    }
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetWebsiteTestimonial(Guid id) =>
+        Ok(await _testimonialApiService.Get(id));
 
     /// <summary>
     /// Create website testimonial
@@ -91,18 +77,13 @@ public class WebsiteTestimonialController : ControllerBase
     [HttpPost(Name = nameof(CreateWebsiteTestimonial))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<WebsiteTestimonialDto>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateWebsiteTestimonial([FromBody] CreateWebsiteTestimonialRequest request)
     {
-        var createTestimonial = new CreateWebsiteTestimonial
-        {
-            Text = request.Text
-        };
-        var testimonial = await _testimonialService.CreateAsync(createTestimonial);
-        var apiTestimonial = _mapper.Map<WebsiteTestimonialDto>(testimonial);
-        return CreatedAtRoute(nameof(GetWebsiteTestimonial), new { id = testimonial.Id }, new Envelope<WebsiteTestimonialDto>(apiTestimonial));
+        var result = await _testimonialApiService.Create(request);
+        return CreatedAtRoute(nameof(GetWebsiteTestimonial), new { id = result.Resource.Id }, result);
     }
 
     /// <summary>
@@ -122,21 +103,13 @@ public class WebsiteTestimonialController : ControllerBase
     [HttpPatch("{id:guid}", Name = nameof(UpdateWebsiteTestimonial))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<WebsiteTestimonialDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UpdateWebsiteTestimonial(Guid id, [FromBody] UpdateWebsiteTestimonialRequest request)
-    {
-        var updateTestimonial = new UpdateWebsiteTestimonial
-        {
-            Id = id,
-            Text = request.Text ?? string.Empty
-        };
-        var testimonial = await _testimonialService.UpdateAsync(updateTestimonial);
-        var apiTestimonial = _mapper.Map<WebsiteTestimonialDto>(testimonial);
-        return Ok(new Envelope<WebsiteTestimonialDto>(apiTestimonial));
-    }
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateWebsiteTestimonial(
+        Guid id, [FromBody] UpdateWebsiteTestimonialRequest request) =>
+        Ok(await _testimonialApiService.Update(id, request));
 
     /// <summary>
     /// Delete website testimonial
@@ -153,12 +126,12 @@ public class WebsiteTestimonialController : ControllerBase
     [HttpDelete("{id:guid}", Name = nameof(DeleteWebsiteTestimonial))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteWebsiteTestimonial(Guid id)
     {
-        await _testimonialService.DeleteAsync(id);
+        await _testimonialApiService.Delete(id);
         return NoContent();
     }
 }

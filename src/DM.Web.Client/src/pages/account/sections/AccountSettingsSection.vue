@@ -82,8 +82,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import { useUserStore } from "@/entities/user";
-import { PersonalApi } from "@/shared/api";
+import { personalApi, fetchUser } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
 import { FormField } from "@/shared/ui/Form";
 import { Select, type SelectOption } from "@/shared/ui/Select";
@@ -92,12 +91,12 @@ import { useToast } from "@/shared/lib/composables/useToast";
 import { Theme, type Preferences } from "@/shared/api/models/personal";
 import type { User } from "@/shared/api/models/community/users";
 import { useUiStore } from "@/shared/stores/ui";
+import { describeFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{
   user: User;
 }>();
 
-const userStore = useUserStore();
 const uiStore = useUiStore();
 const toast = useToast();
 
@@ -155,20 +154,21 @@ const saveSettings = () => {
       paging: settingsForm.value.paging,
     };
 
-    const { error } = await PersonalApi.updateMyPreferences(preferences);
-    if (error) throw new Error("Не удалось сохранить настройки");
+    const { error } = await personalApi.updateMyPreferences(preferences);
+    if (error)
+      throw new Error(describeFailure(error, "Не удалось сохранить настройки"));
 
     // Apply theme immediately
     uiStore.updateTheme(settingsForm.value.theme);
 
-    await userStore.fetchUser();
+    await fetchUser();
     toast.success("Настройки успешно сохранены");
   });
 };
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 @import "../AccountPage.styles"
 
 .settings-content

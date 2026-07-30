@@ -36,12 +36,20 @@ export default defineConfig({
         "env.d.ts",
       ],
       thresholds: {
-        // Minimum coverage thresholds (can be gradually increased)
-        // Current coverage is ~7.65%, threshold set slightly below
-        lines: 7,
-        functions: 5,
-        branches: 5,
-        statements: 7,
+        // Ratchet, not a floor to duck under. These sit just below the measured
+        // numbers so the gate fails on a real loss — deleted tests, or a sizable
+        // new file with none. They were once lowered to make CI pass, which is
+        // the one thing that must never happen to them: raise after a gain,
+        // never lower after a miss.
+        //
+        // The denominator is the whole source tree (include: **/*.{ts,vue}), so
+        // one uncovered 500-line component costs about 0.6 points of lines.
+        // Branches reads high because files with no tests contribute few branch
+        // counters — lines and statements are the load-bearing numbers here.
+        lines: 16,
+        functions: 26,
+        branches: 66,
+        statements: 16,
       },
     },
   },
@@ -53,6 +61,7 @@ export default defineConfig({
           @import "@/assets/styles/Breakpoints"
           @import "@/assets/styles/Layout"
           @import "@/assets/styles/Themes"
+          @import "@/assets/styles/Surfaces"
         `,
       },
     },

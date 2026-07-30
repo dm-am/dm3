@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useUserStore, userIsModerator } from "@/entities/user";
+import { useAuthStore, userIsModerator } from "@/entities/user";
 import { useCreateTestimonial } from "../model";
 import TextArea from "@/shared/ui/TextArea/TextArea.vue";
 import Button from "@/shared/ui/Button/Button.vue";
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 
 // Single policy owner: testimonials are a moderator-curated review barrier —
 // regular users post feedback in the forum topic instead. See
@@ -63,7 +63,7 @@ const {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .toggle-link
   display: inline-block

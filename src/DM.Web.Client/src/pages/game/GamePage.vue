@@ -24,6 +24,13 @@ useFetchData(async () => {
   {
     param: (p) => p.id,
     callback: async (id) => {
+      // Wipe first. The detail store is a single bag for "the current game", not
+      // keyed by id, and /game/A/... and /game/B/... share one route record, so
+      // the shell never unmounts and the onUnmounted reset never fires on a
+      // sidebar click. Without this, posts, characters, comments, notepad and
+      // blacklist of the previous game stayed on screen under the new title
+      // until each sub-page happened to refetch.
+      gameStore.reset();
       await gameStore.loadGame(id as string);
       await gameStore.loadRooms(id as string);
     },
@@ -58,7 +65,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Skeleton"
 
 .game-header
   margin-bottom: $medium

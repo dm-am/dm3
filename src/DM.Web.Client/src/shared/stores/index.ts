@@ -6,12 +6,11 @@
  */
 
 // Auth store - user session and authentication
-export { useAuthStore, useUserStore } from "./auth";
+export { useAuthStore } from "./auth";
 
 // UI store - theme, notifications
 export { useUiStore } from "./ui";
 
-// Data stores
-export { useTestimonialStore } from "./testimonials";
-export { useStatisticsStore } from "./statistics";
-export { useSubscriptionsStore } from "./subscriptions";
+// Domain stores are NOT here: they belong to their entity slice
+// (entities/testimonial, entities/subscription, entities/statistics).
+// shared/stores keeps only what is genuinely global — the session and the UI.

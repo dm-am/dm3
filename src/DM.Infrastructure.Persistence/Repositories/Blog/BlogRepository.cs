@@ -1,3 +1,4 @@
+using DM.Domain.Core.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,7 +26,6 @@ namespace DM.Infrastructure.Persistence.Repositories.Blog;
 /// <inheritdoc cref="IBlogRepository" />
 internal class BlogRepository : IBlogRepository
 {
-    private static readonly TimeSpan ActivePeriod = TimeSpan.FromDays(30);
 
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
@@ -48,54 +48,20 @@ internal class BlogRepository : IBlogRepository
     // ═══ READ ═══
 
     /// <inheritdoc />
-    public Task<int> CountPublicBlogs(
-        string? search = null,
-        ModuleStatus? status = null,
-        IReadOnlyCollection<Guid>? hostUserIds = null,
-        DateTimeOffset? createdFromUtc = null,
-        DateTimeOffset? createdToUtc = null,
-        DateTimeOffset? activatedFromUtc = null,
-        DateTimeOffset? activatedToUtc = null,
-        DateTimeOffset? closedFromUtc = null,
-        DateTimeOffset? closedToUtc = null,
-        IReadOnlyCollection<Guid>? excludeOwnerIds = null,
-        PremoderationStatus? premoderationStatus = null,
-        Guid currentUserId = default,
-        CancellationToken ct = default)
-    {
-        var query = GetFilteredQuery(search, status, hostUserIds, createdFromUtc, createdToUtc,
-            activatedFromUtc, activatedToUtc, closedFromUtc, closedToUtc, excludeOwnerIds,
-            premoderationStatus, currentUserId);
-        return query.CountAsync(ct);
-    }
+    public Task<int> CountPublicBlogs(BlogFilter filter, CancellationToken ct = default) =>
+        GetFilteredQuery(filter).CountAsync(ct);
 
     /// <inheritdoc />
     public async Task<IEnumerable<BlogDto>> GetPublicBlogs(
-        PagingData paging,
-        string? search = null,
-        ModuleStatus? status = null,
-        IReadOnlyCollection<Guid>? hostUserIds = null,
-        string? sortBy = null,
-        string? sortOrder = null,
-        DateTimeOffset? createdFromUtc = null,
-        DateTimeOffset? createdToUtc = null,
-        DateTimeOffset? activatedFromUtc = null,
-        DateTimeOffset? activatedToUtc = null,
-        DateTimeOffset? closedFromUtc = null,
-        DateTimeOffset? closedToUtc = null,
-        IReadOnlyCollection<Guid>? excludeOwnerIds = null,
-        PremoderationStatus? premoderationStatus = null,
-        Guid currentUserId = default,
-        CancellationToken ct = default)
+        PagingData paging, BlogFilter filter, CancellationToken ct = default)
     {
-        var query = GetFilteredQuery(search, status, hostUserIds, createdFromUtc, createdToUtc,
-            activatedFromUtc, activatedToUtc, closedFromUtc, closedToUtc, excludeOwnerIds,
-            premoderationStatus, currentUserId);
+        var query = GetFilteredQuery(filter);
 
         // Apply ordering. The BlogId tiebreaker makes the order unique so
         // split-query pagination stays deterministic (each collection subquery
         // re-runs the same ORDER BY + OFFSET/FETCH and must hit the same page).
-        var orderedQuery = ApplySorting(query, search, sortBy, sortOrder).ThenBy(b => b.BlogId);
+        var orderedQuery = ApplySorting(query, filter.Search, filter.SortBy, filter.SortOrder)
+            .ThenBy(b => b.BlogId);
 
         var blogs = await orderedQuery
             .Page(paging)
@@ -106,24 +72,16 @@ internal class BlogRepository : IBlogRepository
             .AsSplitQuery()
             .ToListAsync(ct);
 
-        await FillBlogSubscriberIds(blogs, ct);
+        await FillSubscriberSummary(blogs, filter.CurrentUserId, ct);
         return blogs;
     }
 
-    private IQueryable<DbBlog> GetFilteredQuery(
-        string? search,
-        ModuleStatus? status,
-        IReadOnlyCollection<Guid>? hostUserIds,
-        DateTimeOffset? createdFromUtc,
-        DateTimeOffset? createdToUtc,
-        DateTimeOffset? activatedFromUtc,
-        DateTimeOffset? activatedToUtc,
-        DateTimeOffset? closedFromUtc,
-        DateTimeOffset? closedToUtc,
-        IReadOnlyCollection<Guid>? excludeOwnerIds,
-        PremoderationStatus? premoderationStatus,
-        Guid currentUserId)
+    private IQueryable<DbBlog> GetFilteredQuery(BlogFilter filter)
     {
+        var excludeOwnerIds = filter.ExcludeOwnerIds;
+        var currentUserId = filter.CurrentUserId;
+        var premoderationStatus = filter.PremoderationStatus;
+
         // Show Active, Closed, and Draft blogs with public visibility (like games)
         var query = _dbContext.Blogs
             .TagWith("DM.Blog.ListPublic")
@@ -148,12 +106,14 @@ internal class BlogRepository : IBlogRepository
                      t.Type == TokenType.BlogReaderInvitation)));
 
         // Status filter
-        if (status.HasValue)
+        if (filter.Status.HasValue)
         {
-            query = query.Where(b => b.Status == status.Value);
+            var status = filter.Status.Value;
+            query = query.Where(b => b.Status == status);
         }
 
         // Host filter (owner OR assistant, OR logic)
+        var hostUserIds = filter.HostUserIds;
         if (hostUserIds?.Count > 0)
         {
             var assistantBlogIds = _dbContext.BlogAssistants
@@ -164,6 +124,7 @@ internal class BlogRepository : IBlogRepository
         }
 
         // Text search with fuzzy matching
+        var search = filter.Search;
         if (!string.IsNullOrWhiteSpace(search))
         {
             var searchPattern = "%" + search.Replace("%", "\\%").Replace("_", "\\_") + "%";
@@ -174,40 +135,43 @@ internal class BlogRepository : IBlogRepository
         }
 
         // Created date range
-        if (createdFromUtc.HasValue)
+        if (filter.CreatedFromUtc.HasValue)
         {
-            query = query.Where(b => b.CreatedUtc >= createdFromUtc.Value);
+            var createdFromUtc = filter.CreatedFromUtc.Value;
+            query = query.Where(b => b.CreatedUtc >= createdFromUtc);
         }
-        if (createdToUtc.HasValue)
+        if (filter.CreatedToUtc.HasValue)
         {
-            query = query.WhereAtOrBefore(b => b.CreatedUtc, createdToUtc.Value);
+            query = query.WhereAtOrBefore(b => b.CreatedUtc, filter.CreatedToUtc.Value);
         }
 
         // Activated date range (excludes blogs without ActivatedUtc)
-        if (activatedFromUtc.HasValue || activatedToUtc.HasValue)
+        if (filter.ActivatedFromUtc.HasValue || filter.ActivatedToUtc.HasValue)
         {
             query = query.Where(b => b.ActivatedUtc.HasValue);
-            if (activatedFromUtc.HasValue)
+            if (filter.ActivatedFromUtc.HasValue)
             {
-                query = query.Where(b => b.ActivatedUtc >= activatedFromUtc.Value);
+                var activatedFromUtc = filter.ActivatedFromUtc.Value;
+                query = query.Where(b => b.ActivatedUtc >= activatedFromUtc);
             }
-            if (activatedToUtc.HasValue)
+            if (filter.ActivatedToUtc.HasValue)
             {
-                query = query.WhereAtOrBefore(b => b.ActivatedUtc, activatedToUtc.Value);
+                query = query.WhereAtOrBefore(b => b.ActivatedUtc, filter.ActivatedToUtc.Value);
             }
         }
 
         // Closed date range (excludes blogs without ClosedUtc)
-        if (closedFromUtc.HasValue || closedToUtc.HasValue)
+        if (filter.ClosedFromUtc.HasValue || filter.ClosedToUtc.HasValue)
         {
             query = query.Where(b => b.ClosedUtc.HasValue);
-            if (closedFromUtc.HasValue)
+            if (filter.ClosedFromUtc.HasValue)
             {
-                query = query.Where(b => b.ClosedUtc >= closedFromUtc.Value);
+                var closedFromUtc = filter.ClosedFromUtc.Value;
+                query = query.Where(b => b.ClosedUtc >= closedFromUtc);
             }
-            if (closedToUtc.HasValue)
+            if (filter.ClosedToUtc.HasValue)
             {
-                query = query.WhereAtOrBefore(b => b.ClosedUtc, closedToUtc.Value);
+                query = query.WhereAtOrBefore(b => b.ClosedUtc, filter.ClosedToUtc.Value);
             }
         }
 
@@ -266,12 +230,12 @@ internal class BlogRepository : IBlogRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<BlogDto>> GetUserBlogs(Guid userId, CancellationToken ct = default)
+    public async Task<IEnumerable<BlogDto>> GetUserBlogs(Guid ownerId, Guid viewerId, CancellationToken ct = default)
     {
         // Note: Include not needed with ProjectTo - AutoMapper generates SQL subqueries
         var blogs = await _dbContext.Blogs
             .TagWith("DM.Blog.ListByUser")
-            .Where(b => !b.IsRemoved && b.AuthorId == userId)
+            .Where(b => !b.IsRemoved && b.AuthorId == ownerId)
             .OrderByDescending(b => b.ActivatedUtc ?? b.CreatedUtc)
             // BlogDto's Rubrics/Assistants/Tokens collections cartesian-explode
             // on a single query; split them (no row limiting here, so EF orders
@@ -280,7 +244,7 @@ internal class BlogRepository : IBlogRepository
             .AsSplitQuery()
             .ToListAsync(ct);
 
-        await FillBlogSubscriberIds(blogs, ct);
+        await FillSubscriberSummary(blogs, viewerId, ct);
         return blogs;
     }
 
@@ -375,10 +339,6 @@ internal class BlogRepository : IBlogRepository
     {
         return await _dbContext.Publications
             .TagWith("DM.Blog.GetPublication")
-            .Include(p => p.Blog)
-            .ThenInclude(b => b.Author)
-            .Include(p => p.Author)
-            .Include(p => p.Rubric)
             .Where(p => p.PublicationId == publicationId)
             .ProjectTo<Publication>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
@@ -393,10 +353,6 @@ internal class BlogRepository : IBlogRepository
         // out so the profile widget can never surface drafts.
         return await _dbContext.Publications
             .TagWith("DM.Blog.GetBestUserPublication")
-            .Include(p => p.Blog)
-            .ThenInclude(b => b.Author)
-            .Include(p => p.Author)
-            .Include(p => p.Rubric)
             .Where(p => !p.IsRemoved && p.IsPublished && p.AuthorId == authorId)
             .OrderByDescending(p => _dbContext.Likes.Count(l =>
                 !l.IsRemoved &&
@@ -441,7 +397,7 @@ internal class BlogRepository : IBlogRepository
 
     /// <inheritdoc />
     public async Task<IEnumerable<BlogDto>> GetPopularBlogs(
-        int count, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default)
+        int count, Guid viewerId, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default)
     {
         // Use pre-computed PopularityScore for efficient sorting (updated by PopularityScoreService)
         // Show Active, Closed, and Draft blogs with public visibility (like games)
@@ -465,7 +421,7 @@ internal class BlogRepository : IBlogRepository
             .AsSplitQuery()
             .ToListAsync(ct);
 
-        await FillBlogSubscriberIds(blogs, ct);
+        await FillSubscriberSummary(blogs, viewerId, ct);
         return blogs;
     }
 
@@ -499,7 +455,6 @@ internal class BlogRepository : IBlogRepository
     {
         return await _dbContext.BlogAssistants
             .TagWith("DM.Blog.Assistants")
-            .Include(a => a.User)
             .Where(a => a.BlogId == blogId)
             .Select(a => new GeneralUser
             {
@@ -537,7 +492,8 @@ internal class BlogRepository : IBlogRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<BlogDto>> GetByIds(IEnumerable<Guid> blogIds, CancellationToken ct = default)
+    public async Task<IEnumerable<BlogDto>> GetByIds(
+        IEnumerable<Guid> blogIds, Guid viewerId, CancellationToken ct = default)
     {
         var blogIdList = blogIds.ToList();
         if (blogIdList.Count == 0)
@@ -553,7 +509,7 @@ internal class BlogRepository : IBlogRepository
             .AsSplitQuery()
             .ToListAsync(ct);
 
-        await FillBlogSubscriberIds(blogs, ct);
+        await FillSubscriberSummary(blogs, viewerId, ct);
         return blogs;
     }
 
@@ -577,7 +533,8 @@ internal class BlogRepository : IBlogRepository
             .AsSplitQuery()
             .ToListAsync(ct);
 
-        await FillBlogSubscriberIds(blogs, ct);
+        // The user whose blogs these are is the one asking for them.
+        await FillSubscriberSummary(blogs, userId, ct);
         return blogs;
     }
 
@@ -905,32 +862,51 @@ internal class BlogRepository : IBlogRepository
 
     // ═══ HELPERS ═══
 
-    private async Task FillBlogSubscriberIds(IList<BlogDto> blogs, CancellationToken ct)
+    /// <summary>
+    /// Fill the subscriber summary — total, whether this viewer subscribes, the
+    /// capped name preview, and the active-subscriber count — on blogs the
+    /// projection cannot produce it for.
+    /// </summary>
+    /// <param name="blogs">Blogs to hydrate</param>
+    /// <param name="userId">
+    /// The user the read is on behalf of; only
+    /// <see cref="BlogDto.IsViewerSubscriber" /> depends on it.
+    /// <see cref="Guid.Empty" /> for an anonymous read.
+    /// </param>
+    /// <param name="ct">Cancellation token</param>
+    private async Task FillSubscriberSummary(IList<BlogDto> blogs, Guid userId, CancellationToken ct)
     {
         if (blogs.Count == 0) return;
 
         var blogIdSet = blogs.Select(b => b.Id).ToHashSet();
-        var activeThreshold = _dateTimeProvider.Now - ActivePeriod;
+        var activeThreshold = _dateTimeProvider.Now - ActivityPolicy.ActivePeriod;
 
-        // Load subscriber IDs (for participation detection) - same pattern as GameRepository
-        var subscriptionMap = await _dbContext.Subscriptions
+        // Total, viewer flag and name preview in one statement — see the twin
+        // block in GameRepository.EnrichGamesAsync for the SQL this produces and
+        // why the preview needs an explicit order at all.
+        var summaries = await _dbContext.Subscriptions
             .Where(s => s.TargetType == SubscriptionTargetType.Blog && blogIdSet.Contains(s.TargetId))
             .GroupBy(s => s.TargetId)
-            .ToDictionaryAsync(g => g.Key, g => g.Select(s => s.SubscriberId).ToHashSet(), ct);
+            .Select(g => new
+            {
+                BlogId = g.Key,
+                // Distinct subscribers, not subscription rows — see the same count in
+                // GameRepository.EnrichGamesAsync for why the two differ.
+                Count = g.Select(s => s.SubscriberId).Distinct().Count(),
+                ViewerSubscribed = g.Any(s => s.SubscriberId == userId),
+                Preview = g.OrderByDescending(s => s.Subscriber.LastActivityUtc != null)
+                    .ThenByDescending(s => s.Subscriber.LastActivityUtc)
+                    .ThenBy(s => s.SubscriptionId)
+                    .Take(SubscriptionPolicy.PreviewCap)
+                    .Select(s => s.Subscriber.Username)
+                    .ToList(),
+            })
+            .ToDictionaryAsync(x => x.BlogId, ct);
 
-        // Batch load subscriber usernames for tooltip (limit to first 20)
-        var subscriberData = await _dbContext.Subscriptions
-            .Where(s => s.TargetType == SubscriptionTargetType.Blog && blogIdSet.Contains(s.TargetId))
-            .Select(s => new { s.TargetId, Username = s.Subscriber.Username })
-            .ToListAsync(ct);
-
-        var subscriberUsernamesMap = subscriberData
-            .GroupBy(s => s.TargetId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Select(s => s.Username).Take(20).ToList());
-
-        // Load active subscribers count (subscribers active in last 30 days)
+        // The active count stays its own GROUP BY. Folded into the group above as
+        // a conditional Count it degenerates: the predicate is on the subscriber's
+        // last activity, so EF emits a correlated subquery that re-joins Users for
+        // every blog on the page instead of the single flat scan below.
         var activeSubscribersData = await _dbContext.Subscriptions
             .Where(s => s.TargetType == SubscriptionTargetType.Blog &&
                        blogIdSet.Contains(s.TargetId) &&
@@ -942,8 +918,10 @@ internal class BlogRepository : IBlogRepository
 
         foreach (var blog in blogs)
         {
-            blog.SubscriberIds = subscriptionMap.GetValueOrDefault(blog.Id, []);
-            blog.SubscriberUsernames = subscriberUsernamesMap.GetValueOrDefault(blog.Id, []);
+            var summary = summaries.GetValueOrDefault(blog.Id);
+            blog.SubscribersCount = summary?.Count ?? 0;
+            blog.IsViewerSubscriber = summary?.ViewerSubscribed ?? false;
+            blog.SubscriberUsernames = summary?.Preview ?? [];
             blog.ActiveSubscribersCount = activeSubscribersData.GetValueOrDefault(blog.Id, 0);
         }
     }

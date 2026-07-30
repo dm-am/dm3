@@ -7,6 +7,7 @@ using DM.Web.API.Shared.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Account.Authentication;
 
@@ -22,7 +23,7 @@ namespace DM.Web.API.Features.Account.Authentication;
 [Route("v1/account")]
 [ApiExplorerSettings(GroupName = "Account")]
 [Tags("Authentication")]
-[EnableRateLimiting("auth")]
+[EnableRateLimiting(RateLimitPolicies.Auth)]
 public class AuthenticationController : ControllerBase
 {
     private readonly IAuthenticationApiService _authenticationApiService;
@@ -57,9 +58,9 @@ public class AuthenticationController : ControllerBase
     /// <response code="429">Too many login attempts, try again later</response>
     [HttpPost("login", Name = nameof(Login))]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         // Honeypot validation - reject if the Website field is filled
@@ -87,8 +88,8 @@ public class AuthenticationController : ControllerBase
     [HttpDelete("login", Name = nameof(Logout))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Logout()
     {
         await _authenticationApiService.Logout(HttpContext);
@@ -107,7 +108,7 @@ public class AuthenticationController : ControllerBase
     [HttpGet("sessions", Name = nameof(GetSessions))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(ListEnvelope<Session>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetSessions()
     {
         var sessions = await _authenticationApiService.GetSessions();
@@ -128,8 +129,8 @@ public class AuthenticationController : ControllerBase
     [HttpDelete("sessions/{id:guid}", Name = nameof(TerminateSession))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> TerminateSession(Guid id)
     {
         await _authenticationApiService.TerminateSession(id);
@@ -150,8 +151,8 @@ public class AuthenticationController : ControllerBase
     [HttpDelete("sessions/others", Name = nameof(TerminateOtherSessions))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> TerminateOtherSessions()
     {
         await _authenticationApiService.LogoutAll(HttpContext);

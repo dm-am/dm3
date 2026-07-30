@@ -36,6 +36,43 @@ internal class MessageRepository : IMessageRepository
     private IQueryable<DbMessage> ChatMessages(Guid chatId) =>
         _dbContext.Messages.Where(m => !m.IsRemoved && m.ChatId == chatId);
 
+    // Messages are paged by the total order (CreatedUtc, MessageId). CreatedUtc
+    // alone is not an order: two messages can share a timestamp, and then the
+    // page boundary — which is what becomes the cursor — is whichever row the
+    // plan happened to return, so the next page repeats or skips rows.
+    //
+    // The leading CreatedUtc bound is redundant as a predicate and load-bearing
+    // as an index range: PostgreSQL cannot turn the OR form alone into one, and
+    // without it every page scans the whole chat and sorts it. With it the
+    // cursor lands in the index condition of IX_Messages_ChatId_CreatedUtc_MessageId
+    // and the scan stops at the page.
+    private static IQueryable<DbMessage> Older(IQueryable<DbMessage> messages,
+        DateTimeOffset timestampUtc, Guid messageId) => messages
+        .Where(m => m.CreatedUtc <= timestampUtc &&
+            (m.CreatedUtc < timestampUtc || m.MessageId.CompareTo(messageId) < 0));
+
+    private static IQueryable<DbMessage> Newer(IQueryable<DbMessage> messages,
+        DateTimeOffset timestampUtc, Guid messageId) => messages
+        .Where(m => m.CreatedUtc >= timestampUtc &&
+            (m.CreatedUtc > timestampUtc || m.MessageId.CompareTo(messageId) > 0));
+
+    private static IQueryable<DbMessage> OldestLast(IQueryable<DbMessage> messages) => messages
+        .OrderByDescending(m => m.CreatedUtc).ThenByDescending(m => m.MessageId);
+
+    private static IQueryable<DbMessage> OldestFirst(IQueryable<DbMessage> messages) => messages
+        .OrderBy(m => m.CreatedUtc).ThenBy(m => m.MessageId);
+
+    private Task<Anchor?> ChatMessageAnchor(Guid chatId, Guid messageId, CancellationToken ct) =>
+        ChatMessages(chatId)
+            .Where(m => m.MessageId == messageId)
+            .Select(m => new Anchor(m.MessageId, m.CreatedUtc))
+            .FirstOrDefaultAsync(ct);
+
+    /// <summary>
+    /// Position of a message in the total page order
+    /// </summary>
+    private sealed record Anchor(Guid MessageId, DateTimeOffset CreatedUtc);
+
     // ═══ READ ═══
 
     /// <inheritdoc />
@@ -76,42 +113,40 @@ internal class MessageRepository : IMessageRepository
 
     private async Task<CursorResult<Message>> GetLatest(Guid chatId, int limit, CancellationToken ct)
     {
-        var messages = await ChatMessages(chatId)
-            .OrderByDescending(m => m.CreatedUtc)
+        var messages = await OldestLast(ChatMessages(chatId))
             .Take(limit + 1) // +1 to check if there are more
             .ProjectTo<Message>(_mapper.ConfigurationProvider)
             .ToArrayAsync(ct);
 
         var hasMore = messages.Length > limit;
-        var result = messages.Take(limit).OrderBy(m => m.CreatedUtc).ToArray();
 
-        return CreateCursorResult(result, hasPrev: hasMore, hasNext: false);
+        return CreateCursorResult(ForDisplay(messages, limit), hasPrev: hasMore, hasNext: false);
     }
+
+    // The page arrives newest first and is displayed oldest first. Reversing it
+    // keeps the exact order the database produced; re-sorting by CreatedUtc alone
+    // would throw the tie-break away again, this time in memory.
+    private static Message[] ForDisplay(Message[] newestFirst, int limit) =>
+        newestFirst.Take(limit).Reverse().ToArray();
 
     private async Task<CursorResult<Message>> GetBefore(Guid chatId, Guid messageId, DateTimeOffset timestampUtc, int limit, CancellationToken ct)
     {
-        var messages = await ChatMessages(chatId)
-            .Where(m => m.CreatedUtc < timestampUtc || (m.CreatedUtc == timestampUtc && m.MessageId != messageId))
-            .OrderByDescending(m => m.CreatedUtc)
+        var messages = await OldestLast(Older(ChatMessages(chatId), timestampUtc, messageId))
             .Take(limit + 1)
             .ProjectTo<Message>(_mapper.ConfigurationProvider)
             .ToArrayAsync(ct);
 
         var hasMore = messages.Length > limit;
-        var result = messages.Take(limit).OrderBy(m => m.CreatedUtc).ToArray();
 
         // Check if there are messages after
-        var hasNext = await ChatMessages(chatId)
-            .AnyAsync(m => m.CreatedUtc > timestampUtc || (m.CreatedUtc == timestampUtc && m.MessageId != messageId), ct);
+        var hasNext = await Newer(ChatMessages(chatId), timestampUtc, messageId).AnyAsync(ct);
 
-        return CreateCursorResult(result, hasPrev: hasMore, hasNext: hasNext);
+        return CreateCursorResult(ForDisplay(messages, limit), hasPrev: hasMore, hasNext: hasNext);
     }
 
     private async Task<CursorResult<Message>> GetAfter(Guid chatId, Guid messageId, DateTimeOffset timestampUtc, int limit, CancellationToken ct)
     {
-        var messages = await ChatMessages(chatId)
-            .Where(m => m.CreatedUtc > timestampUtc || (m.CreatedUtc == timestampUtc && m.MessageId != messageId))
-            .OrderBy(m => m.CreatedUtc)
+        var messages = await OldestFirst(Newer(ChatMessages(chatId), timestampUtc, messageId))
             .Take(limit + 1)
             .ProjectTo<Message>(_mapper.ConfigurationProvider)
             .ToArrayAsync(ct);
@@ -120,8 +155,7 @@ internal class MessageRepository : IMessageRepository
         var result = messages.Take(limit).ToArray();
 
         // Check if there are messages before
-        var hasPrev = await ChatMessages(chatId)
-            .AnyAsync(m => m.CreatedUtc < timestampUtc || (m.CreatedUtc == timestampUtc && m.MessageId != messageId), ct);
+        var hasPrev = await Older(ChatMessages(chatId), timestampUtc, messageId).AnyAsync(ct);
 
         return CreateCursorResult(result, hasPrev: hasPrev, hasNext: hasMore);
     }
@@ -129,22 +163,27 @@ internal class MessageRepository : IMessageRepository
     /// <inheritdoc />
     public async Task<CursorResult<Message>> GetAround(Guid chatId, Guid messageId, int limit, CancellationToken ct = default)
     {
-        var referenceMessage = await ChatMessages(chatId)
-            .Where(m => m.MessageId == messageId)
-            .Select(m => new { m.MessageId, m.CreatedUtc })
-            .FirstOrDefaultAsync(ct);
+        var referenceMessage = await ChatMessageAnchor(chatId, messageId, ct);
 
         if (referenceMessage == null)
         {
             return CreateCursorResult(Array.Empty<Message>(), false, false);
         }
 
-        var halfCount = limit / 2;
+        // The anchor takes one of the limit slots, so the halves share limit - 1.
+        // Two halves of limit / 2 plus the anchor returned limit + 1 for every even
+        // limit — 51 messages on the default page, past the documented maximum of
+        // 100 at the top. The remainder goes to the newer side: jumping to a message
+        // is a jump into a conversation you then read forward.
+        var beforeCount = (limit - 1) / 2;
+        var afterCount = limit - 1 - beforeCount;
 
-        var before = await ChatMessages(chatId)
-            .Where(m => m.CreatedUtc < referenceMessage.CreatedUtc)
-            .OrderByDescending(m => m.CreatedUtc)
-            .Take(halfCount + 1)
+        // Relative to the whole anchor, not to its timestamp: comparing timestamps
+        // alone dropped every message sharing the target's timestamp out of both
+        // halves, so they vanished from the window entirely.
+        var before = await OldestLast(
+                Older(ChatMessages(chatId), referenceMessage.CreatedUtc, referenceMessage.MessageId))
+            .Take(beforeCount + 1)
             .ProjectTo<Message>(_mapper.ConfigurationProvider)
             .ToArrayAsync(ct);
 
@@ -153,20 +192,19 @@ internal class MessageRepository : IMessageRepository
             .ProjectTo<Message>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
 
-        var after = await ChatMessages(chatId)
-            .Where(m => m.CreatedUtc > referenceMessage.CreatedUtc)
-            .OrderBy(m => m.CreatedUtc)
-            .Take(halfCount + 1)
+        var after = await OldestFirst(
+                Newer(ChatMessages(chatId), referenceMessage.CreatedUtc, referenceMessage.MessageId))
+            .Take(afterCount + 1)
             .ProjectTo<Message>(_mapper.ConfigurationProvider)
             .ToArrayAsync(ct);
 
-        var hasPrev = before.Length > halfCount;
-        var hasNext = after.Length > halfCount;
+        var hasPrev = before.Length > beforeCount;
+        var hasNext = after.Length > afterCount;
 
         var result = new List<Message>();
-        result.AddRange(before.Take(halfCount).OrderBy(m => m.CreatedUtc));
+        result.AddRange(ForDisplay(before, beforeCount));
         if (target != null) result.Add(target);
-        result.AddRange(after.Take(halfCount));
+        result.AddRange(after.Take(afterCount));
 
         return CreateCursorResult(result.ToArray(), hasPrev, hasNext);
     }
@@ -174,57 +212,25 @@ internal class MessageRepository : IMessageRepository
     /// <inheritdoc />
     public async Task<CursorResult<Message>> GetNearTimestamp(Guid chatId, DateTimeOffset timestampUtc, int limit, CancellationToken ct = default)
     {
-        // Find the first message on or after the timestamp
-        var nearestMessage = await ChatMessages(chatId)
-            .Where(m => m.CreatedUtc >= timestampUtc)
-            .OrderBy(m => m.CreatedUtc)
-            .Select(m => m.MessageId)
+        // Find the first message on or after the timestamp. The tie-break makes the
+        // anchor deterministic: ordered by timestamp alone, the same request could
+        // pick a different message of a same-instant group and return a different
+        // window each time.
+        var nearestMessage = await OldestFirst(ChatMessages(chatId).Where(m => m.CreatedUtc >= timestampUtc))
+            .Select(m => (Guid?)m.MessageId)
             .FirstOrDefaultAsync(ct);
 
-        if (nearestMessage == default)
-        {
-            // No messages after, get the last message before
-            nearestMessage = await ChatMessages(chatId)
-                .Where(m => m.CreatedUtc < timestampUtc)
-                .OrderByDescending(m => m.CreatedUtc)
-                .Select(m => m.MessageId)
-                .FirstOrDefaultAsync(ct);
-        }
+        // No messages after, get the last message before
+        nearestMessage ??= await OldestLast(ChatMessages(chatId).Where(m => m.CreatedUtc < timestampUtc))
+            .Select(m => (Guid?)m.MessageId)
+            .FirstOrDefaultAsync(ct);
 
-        if (nearestMessage == default)
+        if (nearestMessage == null)
         {
             return CreateCursorResult(Array.Empty<Message>(), false, false);
         }
 
-        return await GetAround(chatId, nearestMessage, limit, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task<bool> HasMessagesBefore(Guid chatId, Guid messageId, CancellationToken ct = default)
-    {
-        var referenceMessage = await ChatMessages(chatId)
-            .Where(m => m.MessageId == messageId)
-            .Select(m => m.CreatedUtc)
-            .FirstOrDefaultAsync(ct);
-
-        if (referenceMessage == default) return false;
-
-        return await ChatMessages(chatId)
-            .AnyAsync(m => m.CreatedUtc < referenceMessage, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task<bool> HasMessagesAfter(Guid chatId, Guid messageId, CancellationToken ct = default)
-    {
-        var referenceMessage = await ChatMessages(chatId)
-            .Where(m => m.MessageId == messageId)
-            .Select(m => m.CreatedUtc)
-            .FirstOrDefaultAsync(ct);
-
-        if (referenceMessage == default) return false;
-
-        return await ChatMessages(chatId)
-            .AnyAsync(m => m.CreatedUtc > referenceMessage, ct);
+        return await GetAround(chatId, nearestMessage.Value, limit, ct);
     }
 
     private CursorResult<Message> CreateCursorResult(Message[] messages, bool hasPrev, bool hasNext)
@@ -334,9 +340,12 @@ internal class MessageRepository : IMessageRepository
         // If this was the last message in chat, update LastMessageId
         if (messageInfo?.LastMessageId == messageId)
         {
-            var newLastMessageId = await _dbContext.Messages
-                .Where(m => m.ChatId == messageInfo.ChatId)
-                .OrderByDescending(m => m.CreatedUtc)
+            // The tie-break is what matters here: ordered by CreatedUtc alone, two
+            // messages sharing the chat's last timestamp made LastMessageId whichever
+            // one the plan returned. Removed messages were already excluded — the
+            // global soft-delete filter applies to _dbContext.Messages too, so the
+            // message flagged just above was never a candidate.
+            var newLastMessageId = await OldestLast(ChatMessages(messageInfo.ChatId))
                 .Select(m => (Guid?)m.MessageId)
                 .FirstOrDefaultAsync(ct);
 

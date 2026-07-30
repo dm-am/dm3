@@ -2,7 +2,7 @@
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Domain.Community.Authorization;
-using DM.Domain.Community.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Domain.Core.Enums;
 using DM.Domain.Community.Features.Polls;
 using DM.Domain.Core.Abstractions;

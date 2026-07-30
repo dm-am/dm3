@@ -293,7 +293,7 @@ function onContactChange(
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 // Within-group row-gap = $minor (4px), synchronized with .stats-group /
 // .endorsement-stats / .contacts-subgroup in the profile. On top of line-height

@@ -46,7 +46,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { AccountApi } from "@/shared/api";
+import { accountApi } from "@/entities/user";
 import { EmptyState } from "@/shared/ui";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import type {
@@ -63,7 +63,7 @@ onMounted(async () => {
 
 async function loadEvents() {
   loading.value = true;
-  const { data, error } = await AccountApi.getSecurityHistory(30);
+  const { data, error } = await accountApi.getSecurityHistory(30);
   loading.value = false;
 
   if (!error && data) {

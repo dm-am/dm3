@@ -1,3 +1,4 @@
+using DM.Domain.Core.Identity;
 using System;
 using DM.Domain.Core.Enums;
 
@@ -36,7 +37,7 @@ public class PendingRegistration
     /// <summary>
     /// Password hash algorithm version
     /// </summary>
-    public int PasswordHashVersion { get; set; } = 4;
+    public int PasswordHashVersion { get; set; } = PasswordHashing.CurrentVersion;
 
     /// <summary>
     /// Original registration time
@@ -87,7 +88,7 @@ public class CreateUser
     /// <summary>
     /// Password hash algorithm version
     /// </summary>
-    public int PasswordHashVersion { get; set; } = 4;
+    public int PasswordHashVersion { get; set; } = PasswordHashing.CurrentVersion;
 
     /// <summary>
     /// Registration moment (UTC)

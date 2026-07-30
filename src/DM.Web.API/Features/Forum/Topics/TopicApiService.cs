@@ -4,10 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Forum.Features.Topics;
-using DM.Infrastructure.Persistence;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Forum.Boards;
-using Microsoft.EntityFrameworkCore;
 using DomainCreateTopic = DM.Domain.Forum.Features.Topics.CreateTopic;
 using DomainUpdateTopic = DM.Domain.Forum.Features.Topics.UpdateTopic;
 using DomainTopicsQuery = DM.Domain.Forum.Features.Topics.TopicsQuery;
@@ -19,17 +17,14 @@ internal class TopicApiService : ITopicApiService
 {
     private readonly ITopicService _topicService;
     private readonly IMapper _mapper;
-    private readonly DmDbContext _dbContext;
 
     /// <inheritdoc />
     public TopicApiService(
         ITopicService topicService,
-        IMapper mapper,
-        DmDbContext dbContext)
+        IMapper mapper)
     {
         _topicService = topicService;
         _mapper = mapper;
-        _dbContext = dbContext;
     }
 
     /// <inheritdoc />
@@ -89,12 +84,8 @@ internal class TopicApiService : ITopicApiService
     {
         if (topics.Count == 0) return;
         var ids = topics.Select(t => t.Id).ToList();
-        var markers = await _dbContext.PeriodDigestTopics
-            .Where(d => ids.Contains(d.TopicId))
-            .Select(d => new { d.TopicId, d.Year, d.Month })
-            .ToListAsync();
-        if (markers.Count == 0) return;
-        var byTopic = markers.ToDictionary(m => m.TopicId);
+        var byTopic = await _topicService.GetPeriodDigestsAsync(ids);
+        if (byTopic.Count == 0) return;
         foreach (var topic in topics)
         {
             if (byTopic.TryGetValue(topic.Id, out var marker))
@@ -118,9 +109,9 @@ internal class TopicApiService : ITopicApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Topic>> Update(Guid topicId, Topic topic)
+    public async Task<Envelope<Topic>> Update(Guid topicId, UpdateTopicRequest request)
     {
-        var updateTopic = _mapper.Map<DomainUpdateTopic>(topic);
+        var updateTopic = _mapper.Map<DomainUpdateTopic>(request);
         updateTopic.TopicId = topicId;
         var updatedTopic = await _topicService.UpdateAsync(updateTopic);
         var mapped = _mapper.Map<Topic>(updatedTopic);

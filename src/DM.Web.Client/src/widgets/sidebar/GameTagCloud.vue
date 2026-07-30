@@ -36,7 +36,7 @@ import { Tooltip, TooltipContent } from "@/shared/ui/Tooltip";
 import SidebarBlock from "./SidebarBlock.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { useGamesStore } from "@/entities/game/model/store";
+import { useGamesStore } from "@/entities/game";
 import type { Tag } from "@/entities/game";
 
 const gamesStore = useGamesStore();
@@ -85,7 +85,7 @@ onMounted(() => {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .tag-cloud
   display: flex

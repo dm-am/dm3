@@ -17,6 +17,8 @@ namespace DM.Web.API.Middleware;
 /// </summary>
 internal class ErrorHandlingMiddleware
 {
+    private const string ProblemJsonContentType = "application/problem+json";
+
     private readonly RequestDelegate _next;
 
     /// <inheritdoc />
@@ -30,12 +32,12 @@ internal class ErrorHandlingMiddleware
     /// </summary>
     /// <param name="httpContext">HTTP context</param>
     /// <param name="logger">Logger</param>
-    /// <param name="identitySetter">Identity setter for Serilog issue fix</param>
+    /// <param name="identityProvider">Caller identity, named explicitly in the two log calls below</param>
     /// <param name="correlationTokenProvider">Correlation token for support assistance</param>
     /// <param name="problemDetailsFactory">Problem details factory</param>
     public async Task InvokeAsync(HttpContext httpContext,
         ILogger<ErrorHandlingMiddleware> logger,
-        IIdentitySetter identitySetter,
+        IIdentityProvider identityProvider,
         ICorrelationTokenProvider correlationTokenProvider,
         ProblemDetailsFactory problemDetailsFactory)
     {
@@ -43,33 +45,42 @@ internal class ErrorHandlingMiddleware
         {
             await _next(httpContext);
         }
+        catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
+        {
+            // The caller hung up — their 30-second timeout fired, or they closed the
+            // tab. There is no one to answer and nothing went wrong, so this is not
+            // an error: writing a body into a dead socket throws again, and letting
+            // it fall through to the default branch below files a LogCritical for
+            // every dropped connection.
+            logger.LogDebug("Request aborted by the client: {Path}", httpContext.Request.Path);
+        }
         catch (Exception e)
         {
-            identitySetter.Refresh();
+            // This middleware wraps authentication, so by the time an exception
+            // reaches it the request-scoped "User" enricher pushed downstream has
+            // already been popped by the unwinding stack. The two log calls that
+            // care who the caller was therefore name them as a parameter instead
+            // of relying on ambient context.
+            var user = identityProvider.Current?.User?.Username ?? "anonymous";
             object error;
             switch (e)
             {
                 case HttpBadRequestException badRequestException:
                     error = problemDetailsFactory.CreateFrom(badRequestException, httpContext);
                     break;
-                case HttpValidationException validationException:
-                    error = problemDetailsFactory.CreateFrom(validationException, httpContext);
-                    break;
                 case IntentionManagerException securityException:
-                    logger.LogWarning(securityException, "Security breach attempt: {Message}", e.Message);
+                    logger.LogWarning(securityException,
+                        "Security breach attempt by {User}: {Message}", user, e.Message);
                     error = problemDetailsFactory.CreateFrom(securityException, httpContext);
                     break;
                 case HttpException httpException:
                     error = problemDetailsFactory.CreateFrom(httpException, httpContext);
                     break;
-                case NotImplementedException notImplementedException:
-                    error = problemDetailsFactory.CreateFrom(notImplementedException, httpContext);
-                    break;
                 case ValidationException validationException:
                     error = problemDetailsFactory.CreateFrom(validationException, httpContext);
                     break;
                 default:
-                    logger.LogCritical(e, "Unhandled server error: {Message}", e.Message);
+                    logger.LogCritical(e, "Unhandled server error for {User}: {Message}", user, e.Message);
                     error = problemDetailsFactory.CreateFrom(e, httpContext, correlationTokenProvider.Current);
                     break;
             }
@@ -77,8 +88,10 @@ internal class ErrorHandlingMiddleware
             httpContext.Response.StatusCode = error is ProblemDetails { Status: not null } problemDetails
                 ? problemDetails.Status.Value
                 : StatusCodes.Status500InternalServerError;
-            httpContext.Response.ContentType = "application/problem+json";
-            await httpContext.Response.WriteAsJsonAsync(error);
+            // Через перегрузку с contentType: присваивание ContentType до
+            // WriteAsJsonAsync перетиралось им на application/json, и клиент не мог
+            // отличить ошибку по типу содержимого.
+            await httpContext.Response.WriteAsJsonAsync(error, error.GetType(), options: null, ProblemJsonContentType);
         }
     }
 }

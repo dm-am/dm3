@@ -8,6 +8,7 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Personal.Subscriptions;
 
@@ -23,7 +24,7 @@ namespace DM.Web.API.Features.Personal.Subscriptions;
 [ApiExplorerSettings(GroupName = "Personal")]
 [Tags("Subscriptions")]
 [AuthenticationRequired]
-[EnableRateLimiting("default")]
+[EnableRateLimiting(RateLimitPolicies.Default)]
 public class SubscriptionController : ControllerBase
 {
     private readonly ISubscriptionApiService _apiService;
@@ -46,14 +47,14 @@ public class SubscriptionController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     [HttpGet(Name = nameof(GetMySubscriptions))]
     [ProducesResponseType(typeof(ListEnvelope<Subscription>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetMySubscriptions([FromQuery] SubscriptionTargetType? type = null)
     {
         if (type.HasValue)
         {
-            return Ok(await _apiService.GetMySubscriptionsAsync(type.Value));
+            return Ok(new ListEnvelope<Subscription>(await _apiService.GetMySubscriptionsAsync(type.Value)));
         }
-        return Ok(await _apiService.GetMySubscriptionsAsync());
+        return Ok(new ListEnvelope<Subscription>(await _apiService.GetMySubscriptionsAsync()));
     }
 
     /// <summary>
@@ -65,8 +66,8 @@ public class SubscriptionController : ControllerBase
     /// <response code="404">Subscription not found</response>
     [HttpGet("{id:guid}", Name = nameof(GetSubscription))]
     [ProducesResponseType(typeof(Subscription), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetSubscription(Guid id)
     {
         var result = await _apiService.GetByIdAsync(id);
@@ -90,8 +91,8 @@ public class SubscriptionController : ControllerBase
     /// <response code="404">Not subscribed to this target</response>
     [HttpGet("check", Name = nameof(CheckSubscription))]
     [ProducesResponseType(typeof(Subscription), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> CheckSubscription(
         [FromQuery] SubscriptionTargetType type,
         [FromQuery] Guid targetId)
@@ -117,7 +118,7 @@ public class SubscriptionController : ControllerBase
     [HttpPost(Name = nameof(Subscribe))]
     [ProducesResponseType(typeof(Subscription), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(Subscription), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Subscribe([FromBody] SubscribeRequest request)
     {
         var result = await _apiService.SubscribeAsync(request.TargetType, request.TargetId, request);
@@ -138,9 +139,9 @@ public class SubscriptionController : ControllerBase
     /// <response code="404">Subscription not found</response>
     [HttpPatch("{id:guid}", Name = nameof(UpdateSubscription))]
     [ProducesResponseType(typeof(Subscription), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateSubscription(
         Guid id,
         [FromBody] UpdateSubscriptionRequest request) =>
@@ -159,9 +160,9 @@ public class SubscriptionController : ControllerBase
     /// <response code="404">Subscription not found</response>
     [HttpDelete("{id:guid}", Name = nameof(Unsubscribe))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Unsubscribe(Guid id)
     {
         await _apiService.UnsubscribeAsync(id);

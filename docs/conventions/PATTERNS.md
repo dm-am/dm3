@@ -14,7 +14,7 @@
 
 Паттерн из DDD. Domain.Core содержит общие контракты для всех модулей:
 - Интерфейсы системных абстракций (`IDateTimeProvider`, `IGuidFactory`)
-- Интерфейсы cross-module фич (`ICommentService`, `INotepadRepository`)
+- Интерфейсы cross-module фич (`IUserLookupService`, `INotepadRepository`)
 - Общие DTO, enums, exceptions
 
 **Правило:** Domain.* НЕ импортирует другие Domain.* — только через Domain.Core.
@@ -38,6 +38,8 @@ public interface IGameService
 
 **Где применяется:** Domain.* (`IGameService`), Web.API (`IGameApiService`).
 
+**Граница между двумя слоями сервисов.** Доменный сервис владеет правилами: авторизация, инварианты, работа с репозиториями, публикация событий. API-сервис владеет формой HTTP-ответа: маппинг в DTO, конверт, сборка ответа из нескольких доменных вызовов, разрешение публичного идентификатора. Правило одностороннее: правило предметной области в API-сервисе — дефект, а знание о конверте и DTO в доменном сервисе — тоже дефект. Если API-сервису нечего делать кроме прямого проброса, он все равно нужен: он держит форму ответа стабильной, когда доменная сигнатура меняется. Граница проверяется архитектурным тестом, а не на ревью: контроллер не вправе зависеть ни от одной абстракции `DM.Domain.*` и от `IMapper`, а API-сервис — от `DmDbContext`.
+
 ### Infrastructure.* — Technical Concerns
 
 **Зачем:** Четкое разделение технических ответственностей. Легко найти где реализован кэш, где парсинг, где репозитории.
@@ -45,27 +47,12 @@ public interface IGameService
 Организация по **техническому назначению**, НЕ по бизнес-фичам:
 
 ```
-Infrastructure.Core/
-├── Authorization/    # IntentionManager
-├── Caching/          # Реализация ICache
-├── Correlation/      # Реализация ICorrelationTokenProvider
-├── Logging/          # Конфигурация логирования
-└── Parsing/          # BBCode parser
-
-Infrastructure.Persistence/
-├── Entities/         # EF Core entities (группировка по модулям)
-├── Repositories/     # Реализации IXxxRepository (группировка по модулям)
-├── Shared/           # Cross-module реализации
-└── Migrations/
-
-Infrastructure.Mail/
-├── Rendering/        # Email templates
-└── Assets/
-
-Infrastructure.Messaging/
-├── GeneralBus/       # MassTransit
-└── Outbox/           # Transactional outbox
+Infrastructure.{Name}/
+└── {Concern}/            # одна техническая ответственность на папку
+    └── {Module}/         # если реализаций много — группировка по модулям внутри
 ```
+
+Группировка по модулям допустима только **внутри** технической папки, не вместо нее.
 
 ### Repository Pattern
 
@@ -100,18 +87,11 @@ Features/{Module}/{Feature}/
 
 ### Workers — Event Handlers
 
-**Зачем:** Асинхронная обработка событий. Отправка email, уведомления, индексация — не блокируют HTTP-ответ.
+**Зачем:** Асинхронная обработка событий. Отправка email и уведомления не блокируют HTTP-ответ.
 
-Минимальная структура — workers это тонкий слой оркестрации:
+Worker — отдельный процесс: consumer, подписанный на очередь, хост-бутстрап и собственная политика повторов. Обработка события организуется по техническому назначению, как в Infrastructure.*.
 
-```
-Workers.{Name}/
-├── {Name}Consumer.cs     # MassTransit consumer
-├── Program.cs
-└── Startup.cs
-```
-
-**Workers DM3:** `Mail`, `NotificationDispatcher`, `SearchIndexer`.
+**Правило:** политика повторов объявляется в самом worker'е. Общей на все workers нет.
 
 ### Frontend — Feature-Sliced Design (FSD)
 
@@ -134,6 +114,8 @@ app → pages → widgets → features → entities → shared
 
 **Правила импортов:** Верхние слои → нижние. Слои одного уровня НЕ импортируют друг друга.
 
+**Где живет API-клиент:** транспорт и кросс-доменные примитивы — в `shared/api`, доменный клиент — в `entities/{x}/api`.
+
 #### Публичный API слайса
 
 - Каждый слайс (`entities/{x}`, `features/{x}`, `widgets/{x}`, `pages/{x}`) экспортирует наружу **только через свой barrel** `index.ts`. Deep-import мимо barrel во внутренние файлы слайса запрещен — потребитель не знает внутреннюю раскладку.
@@ -151,6 +133,15 @@ entities/user/@x/testimonial.ts # что entities/testimonial имеет пра�
 
 Потребитель импортирует из `@/entities/user/@x/game`, а не из корня чужого слайса. Всякий same-layer импорт вне `@x` — нарушение. `@x` создается точечно и держится узким (реэкспорт только реально нужных символов).
 
+Дверь адресная: файл называется именем слайса-потребителя, и брать из нее вправе
+только он. Это и есть разница между дверью и вторым публичным API.
+
+**Правила слоев проверяются линтером, а не на ревью.** `boundaries/dependencies`
+в `.eslintrc.cjs` — исполняемая копия этого раздела: направление импортов, запрет
+deep-import мимо barrel и адресность `@x`. Динамический `import()` считается таким
+же импортом, как статический. Гейт `npm run lint:ci` идет в CI и падает на первом
+нарушении.
+
 #### Suffix `*Page` — только у route-target
 
 - Компонент, на который **напрямую указывает роут** верхнего уровня, несет суффикс `*Page` (`CreateGamePage`, `PulsePage`).
@@ -158,7 +149,7 @@ entities/user/@x/testimonial.ts # что entities/testimonial имеет пра�
 
 #### Модалки — общий примитив `Dialog`
 
-Модальные окна строятся на общем примитиве `Dialog` (`shared/ui/Layout/Dialog.vue`) + `DialogTitle`; конкретные модалки именуются `*Dialog`. **Самокатные оверлеи запрещены** — не разворачивать собственный backdrop/focus-trap/teleport в обход примитива (единственное задокументированное исключение — `MobileDrawer`, см. UI_STANDARDS).
+Конкретные модалки именуются `*Dialog`. Диалог с формой, открываемый из кода и возвращающий результат, строится на общем примитиве `Dialog` (`shared/ui/Layout/Dialog.vue`) + `DialogTitle`. Диалоги-примитивы дизайн-системы, встраиваемые в разметку потребителя, берут поведение оболочки — ловушку фокуса, возврат фокуса, Escape, клик по бэкдропу — из общего композабла. **Заводить новый самокатный оверлей нельзя**: собственный backdrop/focus-trap/teleport в обход обоих ярусов расходится с ними при первой же правке. Выбор яруса и его границы — в UI_STANDARDS.
 
 #### Размещение пикеров и редакторов
 
@@ -249,19 +240,6 @@ Blacklist
 | Публичная информация о пользователях? | Community |
 | Данные для модераторов? | Moderation |
 | Данные конкретного контента? | Messaging / Game / Blog / Forum |
-
-**Карта сущностей:**
-
-| Модуль | Сущности | Примечание |
-|--------|----------|------------|
-| **Account** | Session, Token, Credentials, LoginAttempt | Аутентификация |
-| **Personal** | PersonalProfile, UserProfileNote, UserSettings, Notification, Subscription, UserBlacklist | Данные текущего пользователя |
-| **Community** | User, UserProfile, Poll, UserEndorsement, WebsiteTestimonial | Публичные данные |
-| **Moderation** | ModeratedProfile, ModeratedProfileNote, Warning, Ban, Ticket, Mentorship | Данные для модераторов |
-| **Messaging** | Chat, Message, GlobalChatEvent | — |
-| **Game** | Game, Room, Post, Character, GameComment, GameBlacklist, GameNotepad, GameInvitation | — |
-| **Blog** | Blog, Publication, BlogComment, PublicationComment, BlogBlacklist, BlogInvitation | — |
-| **Forum** | Board, Topic, TopicComment | — |
 
 ### 5. Правила для папок Features
 
@@ -411,29 +389,13 @@ BlogRef → Blog → BlogDetails
 
 ```
 DM.Domain.Core/
-├── Abstractions/         # IDateTimeProvider, IGuidFactory, etc.
-├── Authorization/        # IIntentionManager, CommentIntention
-├── Blacklists/           # IUserBlacklistChecker, IContentBlacklistService
-├── Caching/              # ICache, CachePolicy
-├── Comments/             # ICommentService, Comment (cross-module)
-├── Configuration/        # Shared configs
-├── Dto/                  # PagingResult, CursorResult, GeneralUser
-├── Enums/                # UserRole, GameRole, EventType, etc.
-├── Events/               # IEventProducer, DomainEvent
-├── Exceptions/           # HttpException, ValidationError
-├── Extensions/           # QueryableExtensions, etc.
-├── Identity/             # IIdentity, Session, UserSettings
-├── Likes/                # ILikable, ILikeOperations (cross-module)
-├── Mail/                 # IMailSender, ITemplateRenderer
-├── Notepads/             # INotepadRepository (cross-module)
-├── Parsing/              # UserAgentParser
-├── Search/               # ISearchService (cross-module)
-├── Subscriptions/        # ISubscriptionRepository (cross-module)
-├── Tokens/               # Token, CreateToken (shared DTO)
-├── UnreadCounters/       # IUnreadCountersRepository (cross-module)
-├── Uploads/              # IImageProcessingService, IUploadGarbageCollector (cross-module)
-└── Users/                # IUserLookupService (cross-module)
+└── {Concern}/            # интерфейсы, DTO и enums одной cross-module области
 ```
+
+Одна папка — одна область контракта. Реализаций и бизнес-логики здесь нет.
+
+Enum, который называет сущности нескольких модулей, принадлежит ядру; enum
+одного модуля объявляется в этом модуле.
 
 ### DM.Domain.{Module}
 
@@ -453,61 +415,15 @@ DM.Domain.{Module}/
 └── Configuration/
 ```
 
-### DM.Infrastructure.Core
+### DM.Infrastructure.{Name}
 
 ```
-DM.Infrastructure.Core/
-├── Authorization/
-├── Caching/
-├── Configuration/
-├── Correlation/
-├── Extensions/
-├── Logging/
-├── Parsing/
-├── Search/
-├── Storage/
-├── Tracing/
-└── CoreModule.cs
-```
-
-### DM.Infrastructure.Persistence
-
-```
-DM.Infrastructure.Persistence/
-├── Entities/
-│   └── {Module}/
-├── Repositories/
-│   └── {Module}/
-│       └── {Feature}Repository.cs
+DM.Infrastructure.{Name}/
+├── {Concern}/
+│   └── {Module}/         # группировка по модулям — внутри технической папки
 ├── Shared/
-│   ├── Comments/
-│   ├── Likes/
-│   ├── Notepads/
-│   ├── Subscriptions/
-│   ├── UnreadCounters/
-│   └── Users/
-├── Migrations/
-├── Design/
-├── DmDbContext.cs
-└── PersistenceModule.cs
-```
-
-### DM.Infrastructure.Mail
-
-```
-DM.Infrastructure.Mail/
-├── Rendering/
-├── Assets/
-└── MailModule.cs
-```
-
-### DM.Infrastructure.Messaging
-
-```
-DM.Infrastructure.Messaging/
-├── GeneralBus/
-├── Outbox/
-└── MessagingModule.cs
+│   └── {Concern}/        # реализации cross-module контрактов Domain.Core
+└── {Name}Module.cs       # DI-регистрации проекта
 ```
 
 ### DM.Web.API
@@ -516,27 +432,10 @@ DM.Infrastructure.Messaging/
 DM.Web.API/
 ├── Features/
 │   └── {Module}/
-│       └── {Feature}/
-│           ├── {Feature}Controller.cs
-│           ├── I{Feature}ApiService.cs
-│           ├── {Feature}ApiService.cs
-│           ├── {Feature}Request.cs
-│           └── {Feature}Response.cs
+│       └── {Feature}/    # состав папки — см. "Web.API — Feature Folders"
 ├── Shared/
-│   ├── Authentication/
-│   ├── BackgroundServices/
-│   ├── BbRendering/
-│   ├── Binding/
-│   ├── Comments/
-│   ├── Configuration/
-│   └── Dto/
-├── HostedServices/
-├── Middleware/
-├── Notifications/
-├── Realtime/
-├── Swagger/
-├── Validation/
-├── Warmup/
+│   └── {Concern}/        # cross-feature код API-слоя
+├── {Concern}/            # техническая обвязка хоста
 ├── Program.cs
 └── Startup.cs
 ```
@@ -545,36 +444,20 @@ DM.Web.API/
 
 ```
 DM.Web.Client/src/
-├── app/
-│   ├── providers/
-│   ├── styles/
-│   ├── App.vue
-│   └── main.ts
-├── pages/
-│   └── {domain}/
-├── widgets/
-│   └── {Widget}/
-├── features/
-│   └── {feature}/
-├── entities/
-│   └── {entity}/
-│       ├── model/
-│       ├── api/
-│       └── ui/
-├── shared/
-│   ├── ui/
-│   ├── api/
-│   ├── lib/
-│   ├── stores/        # Auth, UI state (used by all layers)
-│   └── config/
-└── assets/
+└── {layer}/              # слои и их порядок — см. "Frontend — Feature-Sliced Design (FSD)"
+    └── {slice}/
+        ├── model/        # store, composables
+        ├── api/          # запросы
+        ├── ui/           # компоненты
+        └── index.ts      # barrel: публичный API слайса
 ```
 
 ### DM.Workers.{Name}
 
 ```
 DM.Workers.{Name}/
-├── {Name}Consumer.cs
+├── {Name}Consumer.cs     # подписка на очередь
+├── {Concern}/            # обработка события
 ├── Program.cs
 └── Startup.cs
 ```
@@ -583,21 +466,54 @@ DM.Workers.{Name}/
 
 ```
 test/
-├── DM.Domain.{Module}.Tests/
-│   ├── Authorization/
-│   ├── Features/
-│   │   └── {Feature}/
-│   └── Dsl/
-├── DM.Infrastructure.{Name}.Tests/
-├── DM.Web.API.IntegrationTests/
-│   └── Controllers/
-│       └── {Module}/
-└── DM.Testing/
+└── {Project}.Tests/      # зеркало структуры {Project}
+    └── Dsl/              # билдеры и фикстуры тестов этого проекта
 ```
 
 ---
 
+### Словарь ошибок домена — коды HTTP, и это осознанно
+
+Доменные сервисы бросают `HttpException` со статусом, а не собственную таксономию
+(`NotFound`/`Conflict`/`Forbidden`). Это делает домен неполностью транспортно-нейтральным:
+воркеры, которые ловят эти исключения, живут без HTTP-запроса, и «429» там не значит
+ничего.
+
+Плата принята сознательно: единственный потребитель домена, который отвечает
+кому-то снаружи, — это HTTP-хост, а перевод статуса в тело ответа собран в одном
+месте (`ErrorHandlingMiddleware`). Заводить вторую таксономию и таблицу
+соответствия между ней и статусами — работа, которая окупается ровно тогда,
+когда у домена появляется второй транспорт. Это и есть триггер пересмотра.
+
+---
+
 ## Частые ошибки
+
+### ❌ "Запрос к удаленным записям пишется как обычный"
+
+Нет. Мягкое удаление скрыто глобальным фильтром запросов: любой запрос, которому нужны удаленные строки (сборка мусора, отличие 404 от 410, восстановление), обязан явно отключить фильтр. Без этого условие превращается во взаимоисключающее и не находит ничего — молча, без ошибки.
+
+### ❌ "Порядок регистрации middleware — дело вкуса"
+
+Нет. Компонент, читающий метаданные эндпоинта, обязан стоять после маршрутизации, иначе он не видит ничего и работает вхолостую. Заголовки безопасности, наоборот, регистрируются первыми — иначе они не попадут на ответы, отданные более ранними обработчиками (статика, документация). Оба класса ошибок не проявляются ни в сборке, ни в тестах, ни на глаз.
+
+### ❌ "Курсорную страницу достаточно отсортировать по дате"
+
+Нет. Курсор — это граничная строка страницы, поэтому сортировка обязана быть тотальной: дата плюс id. По одной дате порядок внутри группы одновременных записей выбирает план запроса, и следующая страница дублирует или теряет строки. Предикат курсора — отношение порядка (`id < курсор`), а не `id != курсор`: неравенство втягивает в страницу соседей по обе стороны от границы. Окно вокруг записи сравнивается с курсором целиком, иначе одновременные соседи цели не попадают ни в одну половину.
+
+Форма предиката влияет и на план: `дата < X OR (дата = X AND id < Y)` PostgreSQL в диапазон индекса не превращает и сканирует всю выборку. Избыточная граница `дата <= X` рядом с этим условием возвращает курсор в `Index Cond`.
+
+### ❌ "Порядковый номер можно выдать через MAX+1"
+
+Нет. `MAX+1` читается вне блокировки, поэтому два одновременных создания получают один номер, а инкремент счетчика в памяти теряет одно из значений. Номер, который попадает в постоянный URL, обязан иметь уникальный индекс в БД, а выдача — сериализоваться блокировкой строки-владельца (`FOR UPDATE`) в той же транзакции, что и запись. Номера мягко удаленных записей не переиспользуются: их ссылки должны оставаться 410, а не начинать вести на другую запись.
+
+### ❌ "Один scope может отдать несколько экземпляров DbContext"
+
+Нет. Один scope — ровно один контекст, и это проверяется тестом. Следствие: внутри одного scope нельзя выполнять запросы к БД параллельно (`Task.WhenAll` над двумя репозиториями) — контекст не потокобезопасен. Нужна параллельность — нужен отдельный scope на ветку.
+
+### ❌ "Сканирование сборок может переопределять явную регистрацию"
+
+Нет. Автоматическая регистрация по соглашению только заполняет пробелы и никогда не побеждает явную: иначе настройки пула, фабрики типизированных клиентов и время жизни молча заменяются на дефолтные.
 
 ### ❌ "Модули могут вызывать сервисы друг друга"
 
@@ -631,9 +547,9 @@ test/
 
 Нет. Feature Folders в Web.API — это только организация API-слоя. Бизнес-логика остается в Domain.
 
-### ❌ "Workers содержат бизнес-логику"
+### ❌ "Раз worker обрабатывает событие, правила можно писать в нем"
 
-Нет. Workers — тонкий слой оркестрации. Вся бизнес-логика в Domain.*.
+Нет. Worker владеет обработкой своего технического назначения — рендерингом письма, генерацией текста уведомления, построением документа для индекса. Правила предметной области (кто что может, что считается активным, когда начисляется награда) остаются в `Domain.*`, и worker их только вызывает.
 
 ### ❌ "Сервисы надо разбивать на CreateGameService, UpdateGameService"
 

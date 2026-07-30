@@ -42,8 +42,8 @@ public class UsernameChangeRequestController : ControllerBase
     /// <response code="403">Senior moderator role required</response>
     [HttpGet(Name = nameof(GetPendingUsernameChangeRequests))]
     [ProducesResponseType(typeof(ListEnvelope<UsernameChangeRequest>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetPendingUsernameChangeRequests()
     {
         var requests = await _usernameChangeApiService.GetPendingRequestsAsync();
@@ -64,9 +64,9 @@ public class UsernameChangeRequestController : ControllerBase
     /// <response code="404">Request not found</response>
     [HttpGet("{id:guid}", Name = nameof(GetUsernameChangeRequest))]
     [ProducesResponseType(typeof(Envelope<UsernameChangeRequest>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUsernameChangeRequest(Guid id)
     {
         var request = await _usernameChangeApiService.GetByIdAsync(id);
@@ -91,10 +91,10 @@ public class UsernameChangeRequestController : ControllerBase
     /// <response code="404">Request not found</response>
     [HttpPatch("{id:guid}", Name = nameof(ResolveUsernameChangeRequest))]
     [ProducesResponseType(typeof(Envelope<UsernameChangeRequest>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ResolveUsernameChangeRequest(Guid id, [FromBody] ResolveUsernameChangeRequest resolve)
     {
         var request = await _usernameChangeApiService.ResolveAsync(id, resolve);

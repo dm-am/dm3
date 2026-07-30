@@ -8,32 +8,36 @@ volumes:
   backups:
   pgdata:
   mongodata:
-  osdata:
+  lokidata:
   miniodata:
 
 # Переменные с дефолтами для локальной разработки
 # Для зеркала: переопределить в .env.mirror
 x-workload-env: &workload-env
   # === ASP.NET Core ===
-  ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+  # Production unless explicitly overridden. Development unlocks the dev-only
+  # seed and role endpoints, so an unset variable on a server must not be the
+  # thing that opens them; docker/.env.example sets Development for local work.
+  ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
 
   # === Базы данных ===
   DM_ConnectionStrings__Rdb: Host=${DB_HOST:-dm-pg};Port=5432;User ID=postgres;Password=${POSTGRES_PASSWORD};Database=dm3;Pooling=true;MinPoolSize=0;MaxPoolSize=100;Connection Idle Lifetime=60;${DB_SSL_MODE:-}
-  DM_ConnectionStrings__Mongo: mongodb://${MONGO_HOST:-dm-mongo}:27017/dm3?maxPoolSize=1000${MONGO_TLS:-}
-  DM_ConnectionStrings__Logs: http://${LOGS_HOST:-dm-es}:9200
+  DM_ConnectionStrings__Mongo: mongodb://${MONGO_USER:-dm}:${MONGO_PASSWORD}@${MONGO_HOST:-dm-mongo}:27017/dm3?authSource=dm3&maxPoolSize=1000${MONGO_TLS:-}
+  DM_ConnectionStrings__Logs: http://${LOGS_HOST:-dm-loki}:3100
   DM_ConnectionStrings__TracingEndpoint: http://${TRACING_HOST:-dm-jaeger}:4317
+
+  # === Криптография ===
+  # Дефолта нет: пустое значение валит старт приложения. Так и задумано - ключ,
+  # унаследованный из репозитория, секретом не является. Все зеркала должны
+  # получать одно и то же значение, иначе ссылка из письма, выданная одним
+  # зеркалом, не расшифруется другим.
+  DM_CryptoConfiguration__KeyBase64: ${DM_CryptoConfiguration__KeyBase64:?DM_CryptoConfiguration__KeyBase64 is required, generate with openssl rand -base64 32}
 
   # === RabbitMQ ===
   DM_RabbitMqConfiguration__Endpoint: amqp://${RABBITMQ_HOST:-dm-rmq}:5672
   DM_RabbitMqConfiguration__VirtualHost: /
   DM_RabbitMqConfiguration__Username: guest
   DM_RabbitMqConfiguration__Password: ${RABBITMQ_DEFAULT_PASS}
-
-  # === Search ===
-  DM_SearchEngineConfiguration__Endpoint: http://${SEARCH_HOST:-dm-es}:9200
-  DM_SearchEngineConfiguration__UserName: admin
-  DM_SearchEngineConfiguration__Password: admin
-  DM_SearchServiceConfiguration__GrpcEndpoint: http://${SEARCH_GRPC_HOST:-dm-search-engine-consumer}:5000
 
   # === CDN (MinIO) ===
   DM_CdnConfiguration__Url: http://${MINIO_HOST:-dm-minio}:9000
@@ -75,10 +79,6 @@ x-workload-env: &workload-env
   # === Зеркало ===
   DM_MirrorConfiguration__CurrentMirrorId: ${MIRROR_ID:-main}
 
-  # === Криптография (только для production/mirror — в .env) ===
-  # Для локальной разработки используется дефолт из appsettings.json
-  # КРИТИЧНО: на всех зеркалах должен быть ОДИНАКОВЫЙ ключ!
-
 x-docker-context: &docker-context
   context: ./..
   dockerfile: ./docker/app.Dockerfile
@@ -90,7 +90,7 @@ services:
     container_name: 'dm-pg'
     image: 'postgres:16'
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
@@ -115,12 +115,22 @@ services:
     container_name: 'dm-mongo'
     image: 'mongo:7'
     ports:
-      - '27017:27017'
+      - '127.0.0.1:27017:27017'
+    environment:
+      # Authentication is on. The store holds sessions, the security audit log
+      # and login attempts: without it everything on the compose network reads
+      # and writes all of that with no credential at all.
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}
+      MONGO_INITDB_DATABASE: dm3
+      # Consumed by mongo-init.js to create the least-privilege application user
+      DM_MONGO_USER: ${MONGO_USER:-dm}
+      DM_MONGO_PASSWORD: ${MONGO_PASSWORD:?MONGO_PASSWORD is required}
     volumes:
       - mongodata:/data/db
       - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--quiet", "-u", "${MONGO_ROOT_USER:-root}", "-p", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -134,59 +144,27 @@ services:
         reservations:
           memory: 256M
 
-  opensearch:
-    container_name: 'dm-es'
-    image: 'opensearchproject/opensearch:2'
+  loki:
+    container_name: 'dm-loki'
+    image: 'grafana/loki:3.1.1'
+    command: '-config.file=/etc/loki/loki.yaml'
     ports:
-      - '9200:9200'
-      - '9600:9600'
-    environment:
-      discovery.type: 'single-node'
-      plugins.security.disabled: 'true'
-      OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${OPENSEARCH_PASSWORD:-changeme_opensearch}
+      - '127.0.0.1:3100:3100'
     volumes:
-      - osdata:/usr/share/opensearch/data
+      - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - lokidata:/loki
     healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3100/ready || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 5
-      start_period: 60s
+      start_period: 30s
     restart: unless-stopped
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: '1.0'
-        reservations:
-          memory: 512M
-
-  opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:2
-    container_name: 'dm-kibana'
-    ports:
-      - '5601:5601'
-    environment:
-      OPENSEARCH_HOSTS: '["http://dm-es:9200"]'
-      DISABLE_SECURITY_DASHBOARDS_PLUGIN: 'true'
-    depends_on:
-      opensearch:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 512M
+          memory: 256M
           cpus: '0.5'
-    profiles:
-      - dashboards
-      - full
 
   # --- Infrastructure: Message Broker ---
 
@@ -195,8 +173,8 @@ services:
     image: 'rabbitmq:3-management'
     hostname: 'dm-rmq'
     ports:
-      - '15672:15672'
-      - '5672:5672'
+      - '127.0.0.1:15672:15672'
+      - '127.0.0.1:5672:5672'
     environment:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
     healthcheck:
@@ -220,8 +198,8 @@ services:
     container_name: 'dm-mailhog'
     image: 'mailhog/mailhog'
     ports:
-      - '1025:1025'
-      - '8025:8025'
+      - '127.0.0.1:1025:1025'
+      - '127.0.0.1:8025:8025'
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://localhost:8025/ || exit 1"]
       interval: 15s
@@ -241,8 +219,8 @@ services:
     image: 'quay.io/minio/minio:RELEASE.2024-06-13T22-53-53Z'
     command: server --console-address ':9001' /data/
     ports:
-      - '9000:9000'
-      - '9001:9001'
+      - '127.0.0.1:9000:9000'
+      - '127.0.0.1:9001:9001'
     environment:
       MINIO_ROOT_USER: 'minio'
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -270,7 +248,7 @@ services:
     container_name: 'dm-imgproxy'
     image: 'darthsim/imgproxy:v3.27'
     ports:
-      - '8080:8080'
+      - '127.0.0.1:8080:8080'
     environment:
       IMGPROXY_KEY: ${IMGPROXY_KEY}
       IMGPROXY_SALT: ${IMGPROXY_SALT}
@@ -311,8 +289,9 @@ services:
     container_name: 'dm-jaeger'
     image: jaegertracing/all-in-one:1.56
     ports:
-      - '16686:16686'
-      - '4318:4318'
+      - '127.0.0.1:16686:16686'
+      - '127.0.0.1:4317:4317'
+      - '127.0.0.1:4318:4318'
     environment:
       COLLECTOR_OTLP_ENABLED: 'true'
     healthcheck:
@@ -333,7 +312,7 @@ services:
     container_name: 'dm-prometheus'
     image: 'prom/prometheus:v2.51.0'
     ports:
-      - '9090:9090'
+      - '127.0.0.1:9090:9090'
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
       - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml
@@ -353,7 +332,7 @@ services:
     container_name: 'dm-grafana'
     image: 'grafana/grafana:10.4.0'
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-admin}
     volumes:
@@ -387,9 +366,6 @@ services:
         limits:
           memory: 64M
           cpus: '0.1'
-    profiles:
-      - monitoring
-      - full
 
   node-exporter:
     image: prom/node-exporter:v1.7.0
@@ -409,9 +385,6 @@ services:
         limits:
           memory: 64M
           cpus: '0.1'
-    profiles:
-      - monitoring
-      - full
 
   # --- Application: Migration ---
 
@@ -444,7 +417,7 @@ services:
       args:
         PROJECT_NAME: DM.Workers.Mail
     ports:
-      - '5003:5000'
+      - '127.0.0.1:5003:5000'
     environment: *workload-env
     depends_on:
       rabbitmq:
@@ -452,35 +425,7 @@ services:
       mailhog:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "test -d /proc/1 || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-
-  dm-search-worker:
-    container_name: 'dm-search-worker'
-    image: 'dm-worker-search:local'
-    build:
-      <<: *docker-context
-      args:
-        PROJECT_NAME: DM.Workers.SearchIndexer
-    ports:
-      - '5001:5000'
-    environment: *workload-env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      opensearch:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "test -d /proc/1 || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/_health || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -500,7 +445,7 @@ services:
       args:
         PROJECT_NAME: DM.Workers.NotificationDispatcher
     ports:
-      - '5002:5000'
+      - '127.0.0.1:5002:5000'
     environment: *workload-env
     depends_on:
       rabbitmq:
@@ -508,7 +453,7 @@ services:
       mongo:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "test -d /proc/1 || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/_health || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -555,6 +500,32 @@ services:
           cpus: '1.0'
         reservations:
           memory: 256M
+
+  # --- Application: Tools ---
+
+  # Сидер тестовых данных. Профиль "tools" держит его в стороне от обычного
+  # docker compose up: это разовая задача, а не сервис.
+  # Запуск: docker compose run --rm seeder [all|users|content]
+  seeder:
+    image: 'dm-seeder:local'
+    build:
+      <<: *docker-context
+      args:
+        PROJECT_NAME: DM.Tools.Seeder
+    # Entrypoint образа запускает приложение через sh -c и аргументы до него не
+    # доходят, а команда сидера передается именно аргументом.
+    entrypoint: ["dotnet", "DM.Tools.Seeder.dll"]
+    environment: *workload-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: "no"
+    profiles:
+      - tools
 
   # --- Infrastructure: Auto-update ---
 

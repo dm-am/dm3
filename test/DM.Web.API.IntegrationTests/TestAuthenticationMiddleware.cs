@@ -16,6 +16,9 @@ namespace DM.Web.API.IntegrationTests;
 /// - X-Test-User-Id: User ID (GUID) to authenticate as
 /// - X-Test-User-Username: Username
 /// - X-Test-User-Role: User role (RegularUser, Admin, Moderator, etc.)
+/// - X-Test-User-Access-Policy: Access policy (FullBan, DemocraticBan). Without
+///   it the injected identity carries no restriction, which is why a banned
+///   subject used to be impossible to express in an integration test.
 /// </remarks>
 public class TestAuthenticationMiddleware
 {
@@ -24,6 +27,7 @@ public class TestAuthenticationMiddleware
     public const string TestUserIdHeader = "X-Test-User-Id";
     public const string TestUserUsernameHeader = "X-Test-User-Username";
     public const string TestUserRoleHeader = "X-Test-User-Role";
+    public const string TestUserAccessPolicyHeader = "X-Test-User-Access-Policy";
 
     public TestAuthenticationMiddleware(RequestDelegate next)
     {
@@ -47,13 +51,20 @@ public class TestAuthenticationMiddleware
                 role = parsedRole;
             }
 
+            var accessPolicy = AccessPolicy.NotSpecified;
+            if (httpContext.Request.Headers.TryGetValue(TestUserAccessPolicyHeader, out var policyHeader) &&
+                Enum.TryParse<AccessPolicy>(policyHeader.FirstOrDefault(), out var parsedPolicy))
+            {
+                accessPolicy = parsedPolicy;
+            }
+
             // Create authenticated user
             var authenticatedUser = new AuthenticatedUser
             {
                 UserId = userId,
                 Username = username,
                 Role = role,
-                AccessPolicy = AccessPolicy.NotSpecified,
+                AccessPolicy = accessPolicy,
                 Salt = "testsalt",
                 PasswordHash = "testhash",
                 PasswordHashVersion = 3

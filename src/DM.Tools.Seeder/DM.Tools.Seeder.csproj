@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <OutputType>Exe</OutputType>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Autofac" />
+        <PackageReference Include="Autofac.Extensions.DependencyInjection" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\DM.Domain.Account\DM.Domain.Account.csproj" />
+        <ProjectReference Include="..\DM.Domain.Community\DM.Domain.Community.csproj" />
+        <ProjectReference Include="..\DM.Domain.Core\DM.Domain.Core.csproj" />
+        <ProjectReference Include="..\DM.Domain.Personal\DM.Domain.Personal.csproj" />
+        <ProjectReference Include="..\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
+        <ProjectReference Include="..\DM.Infrastructure.Persistence\DM.Infrastructure.Persistence.csproj" />
+    </ItemGroup>
+
+    <!-- None, not Content: outside the Web SDK appsettings.json is not a Content
+         item by default, so a Content Update matches nothing and the file never
+         reaches the output. -->
+    <ItemGroup>
+        <None Update="appsettings.json">
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="Assets\Seed\diopside.jpg" />
+        <EmbeddedResource Include="Assets\Seed\Chuck.png" />
+        <EmbeddedResource Include="Assets\Seed\SolohinLex.jpg" />
+        <EmbeddedResource Include="Assets\Seed\SolohinLex.bbcode" />
+    </ItemGroup>
+
+</Project>

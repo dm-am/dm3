@@ -40,7 +40,7 @@ public class FundraisingController : ControllerBase
     /// <response code="404">Fundraising progress not found</response>
     [HttpGet(Name = nameof(GetFundraising))]
     [ProducesResponseType(typeof(Envelope<Fundraising>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetFundraising() => Ok(await _apiService.Get());
 
     /// <summary>
@@ -58,9 +58,9 @@ public class FundraisingController : ControllerBase
     [HttpPut(Name = nameof(PutFundraising))]
     [RequireRole(UserRole.Admin)]
     [ProducesResponseType(typeof(Envelope<Fundraising>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> PutFundraising([FromBody] UpdateFundraisingRequest request) =>
         Ok(await _apiService.Update(request));
 }

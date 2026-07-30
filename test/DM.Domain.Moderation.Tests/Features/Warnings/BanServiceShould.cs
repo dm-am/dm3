@@ -1,3 +1,5 @@
+using FluentValidation.Results;
+using FluentValidation;
 using System;
 using System.Net;
 using System.Threading;
@@ -43,12 +45,18 @@ public class BanServiceShould : UnitTestBase
         _dateTimeProvider.Setup(d => d.Now).Returns(_now);
         _guidFactory.Setup(g => g.Create()).Returns(_banId);
 
+        var createValidator = Mock<IValidator<CreateBan>>();
+        createValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreateBan>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ValidationResult());
+
         _service = new BanService(
             _banRepository.Object,
             _userLookupService.Object,
             _identityProvider.Object,
             _guidFactory.Object,
-            _dateTimeProvider.Object);
+            _dateTimeProvider.Object,
+            createValidator.Object);
     }
 
     private void SetCurrentUser(UserRole role)
@@ -151,7 +159,8 @@ public class BanServiceShould : UnitTestBase
         var createBan = new CreateBan { Username = "Target", DurationHours = 24 };
         var act = () => _service.CreateBan(createBan);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Conflict)
             .Where(e => e.Message.Contains("already banned"));
     }
 
@@ -255,7 +264,7 @@ public class BanServiceShould : UnitTestBase
             Username = "Target",
             DurationHours = 24,
             Comment = "Spam",
-            AccessRestrictionPolicy = AccessPolicy.GlobalChatBan
+            AccessRestrictionPolicy = AccessPolicy.NotSpecified
         };
 
         await _service.CreateBan(createBan);
@@ -342,7 +351,7 @@ public class BanServiceShould : UnitTestBase
 
         await _service.LiftBan(_banId);
 
-        _banRepository.Verify(r => r.Remove(_banId, It.IsAny<CancellationToken>()), Times.Once);
+        _banRepository.Verify(r => r.Remove(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -356,7 +365,7 @@ public class BanServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        _banRepository.Verify(r => r.Remove(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        _banRepository.Verify(r => r.Remove(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -368,7 +377,7 @@ public class BanServiceShould : UnitTestBase
 
         await _service.LiftBan(_banId);
 
-        _banRepository.Verify(r => r.Remove(_banId, It.IsAny<CancellationToken>()), Times.Once);
+        _banRepository.Verify(r => r.Remove(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -379,6 +388,100 @@ public class BanServiceShould : UnitTestBase
 
         await _service.LiftBan(_banId);
 
-        _banRepository.Verify(r => r.Remove(_banId, It.IsAny<CancellationToken>()), Times.Once);
+        _banRepository.Verify(r => r.Remove(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+    // --- Кто кого может банить (BE-18, BE-19) ---
+
+    private void ArrangeTarget(UserRole targetRole)
+    {
+        _userLookupService.Setup(s => s.GetAsync("Target"))
+            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target", Role = targetRole });
+        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Ban?)null);
+        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Ban());
+    }
+
+    private static CreateBan BanRequest() => new()
+    {
+        Username = "Target", DurationHours = 24, Comment = "Spam", IsVoluntary = false
+    };
+
+    [Theory]
+    [InlineData(UserRole.RegularUser)]
+    [InlineData(UserRole.Mentor)]
+    [InlineData(UserRole.Moderator)]
+    public async Task BanAUserWhoseRoleIsBelowYours(UserRole targetRole)
+    {
+        ArrangeTarget(targetRole);
+
+        var act = () => _service.CreateBan(BanRequest());
+
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task RefuseToBanAnEqualRole()
+    {
+        // Otherwise two senior moderators can ban each other in turn.
+        ArrangeTarget(UserRole.SeniorModerator);
+
+        var act = () => _service.CreateBan(BanRequest());
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task RefuseToBanAnAdministrator()
+    {
+        // An administrator is a site owner: no in-app authority over one, and a
+        // senior moderator locking the only admin out would be unrecoverable.
+        SetCurrentUser(UserRole.Admin);
+        ArrangeTarget(UserRole.Admin);
+
+        var act = () => _service.CreateBan(BanRequest());
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task StillAllowAVoluntarySelfBan()
+    {
+        // The role comparison must not catch the one legitimate self-ban.
+        ArrangeTarget(UserRole.SeniorModerator);
+        var request = BanRequest();
+        request.IsVoluntary = true;
+
+        var act = () => _service.CreateBan(request);
+
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task RefuseToLiftYourOwnBan()
+    {
+        // A democratic ban leaves the role and authentication intact, so without
+        // this a banned senior moderator simply lifts it from himself.
+        _banRepository.Setup(r => r.Get(_banId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Ban { BanId = _banId, TargetUserId = _moderatorUserId, EndedUtc = _now.AddDays(7) });
+
+        var act = () => _service.LiftBan(_banId);
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task RecordWhoLiftedTheBanAndWhy()
+    {
+        _banRepository.Setup(r => r.Get(_banId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Ban { BanId = _banId, TargetUserId = _targetUserId, EndedUtc = _now.AddDays(7) });
+
+        await _service.LiftBan(_banId, "Разобрались");
+
+        _banRepository.Verify(r => r.Remove(_banId, _moderatorUserId, _now, "Разобрались",
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 }

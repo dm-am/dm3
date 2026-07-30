@@ -1,6 +1,11 @@
 ﻿<script setup lang="ts">
 import { computed, ref } from "vue";
-import { useUserStore, userIsModerator } from "@/entities/user";
+import {
+  useAuthStore,
+  userIsModerator,
+  signOut,
+  signOutAll,
+} from "@/entities/user";
 import { useMessagingStore } from "@/entities/message";
 import { useNotificationStore } from "@/entities/notification";
 import { useUiStore } from "@/shared/stores/ui";
@@ -11,9 +16,8 @@ import GuestActions from "./GuestActions.vue";
 import SiteStatistics from "./SiteStatistics.vue";
 
 const uiStore = useUiStore();
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const { user } = storeToRefs(userStore);
-const { signOut, signOutAll } = userStore;
 
 const messagingStore = useMessagingStore();
 const { totalUnreadCount } = storeToRefs(messagingStore);
@@ -226,7 +230,7 @@ async function handleSignOutAll() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 // Bottom padding that aligns the three header columns on a shared baseline.
 $baseline-pad: 9px

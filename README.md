@@ -21,6 +21,9 @@
 
 # Frontend (отдельно)
 cd src/DM.Web.Client && npm install && npm run dev
+
+# Гейты CI перед пушем — один раз на клон
+git config core.hooksPath scripts/hooks
 ```
 
 | Сервис | URL |
@@ -57,6 +60,9 @@ cd src/DM.Web.Client && npm install && npm run dev
 | [SECURITY](./docs/conventions/SECURITY.md) | "Какие требования к безопасности?" |
 | [DATA_STORAGE](./docs/conventions/DATA_STORAGE.md) | "Когда PostgreSQL, когда MongoDB?" |
 | [USERNAME_POLICY](./docs/conventions/USERNAME_POLICY.md) | "Какие символы разрешены в именах?" |
+| [UI_STANDARDS](./docs/conventions/UI_STANDARDS.md) | "Какие правила верстки, токенов, диалогов?" |
+| [URL_STRUCTURE](./docs/conventions/URL_STRUCTURE.md) | "Как устроены адреса страниц?" |
+| [PERFORMANCE](./docs/conventions/PERFORMANCE.md) | "Какие правила оптимизации? Что нельзя делать?" |
 
 ### guides/ — Как делать
 
@@ -72,7 +78,8 @@ cd src/DM.Web.Client && npm install && npm run dev
 
 | Документ | User Story |
 |----------|------------|
-| [ROADMAP](./docs/plans/ROADMAP.md) | "Что готово? Что в работе? Что планируется?" |
+| [PROGRESS](./docs/PROGRESS.md) | "Что уже готово?" |
+| [ROADMAP](./docs/plans/ROADMAP.md) | "Что планируется? Что рассматривается? Какой техдолг?" |
 | [DM2_MIGRATION](./docs/plans/DM2_MIGRATION.md) | "Как мигрировать данные со старого сайта?" |
 | [ERROR_PAGES_AND_LORE](./docs/plans/ERROR_PAGES_AND_LORE.md) | "Как оформлены страницы ошибок? Какой лор и достижения?" |
 

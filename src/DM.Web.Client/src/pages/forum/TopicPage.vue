@@ -3,7 +3,7 @@ import { ref, computed, reactive, inject, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useModal } from "vue-final-modal";
 import { useBoardsStore } from "@/entities/forum";
-import { useUserStore, userIsModerator } from "@/entities/user";
+import { useAuthStore, userIsModerator } from "@/entities/user";
 import { storeToRefs } from "pinia";
 import { TopicView as TopicDisplay } from "@/features/topic";
 import { LoginPrompt } from "@/features/auth";
@@ -14,18 +14,18 @@ import { useToast } from "@/shared/lib/composables/useToast";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { forumApi } from "@/entities/forum";
-import { AccessPolicy } from "@/shared/api/models/community";
 import { CommentsFilter, useCommentsFilter } from "@/features/comment-filter";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { reportForumShellError } from "./forumShell";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const router = useRouter();
 const boardsStore = useBoardsStore();
 const { trySelectTopicByNumber, searchComments, createComment } = boardsStore;
 const { selectedTopic: topic } = storeToRefs(boardsStore);
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 const { commentsPerPage } = usePaging();
 
 // Filter setup - get search params from URL
@@ -51,18 +51,10 @@ const newComment = ref("");
 const sending = ref(false);
 const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 
-const isBanned = computed(() => {
-  if (!user.value?.accessPolicy) return false;
-  const policy = user.value.accessPolicy;
-  return (
-    policy === AccessPolicy.DemocraticBan || policy === AccessPolicy.FullBan
-  );
-});
-
 const isModerator = computed(() => userIsModerator(user.value));
 
 const canComment = computed(
-  () => user.value && !isBanned.value && topic.value && !topic.value.isClosed,
+  () => user.value && topic.value && !topic.value.isClosed,
 );
 
 async function handleSend() {
@@ -71,8 +63,15 @@ async function handleSend() {
   newComment.value = "";
   editorRef.value?.clear();
   sending.value = true;
-  await createComment(text);
+  const result = await createComment(text);
   sending.value = false;
+  const failed = Boolean(result?.error);
+  // Give the text back on failure. Clearing before the request is what makes
+  // sending feel instant; losing what was written when it fails is not part
+  // of that bargain.
+  if (failed) {
+    newComment.value = text;
+  }
 }
 
 async function markAsReadIfNeeded() {
@@ -201,13 +200,13 @@ async function handleSaveEdit(
   patch: { title: string; description: string },
 ) {
   const { error } = await boardsStore.updateTopicContent(id, patch);
-  if (error) toast.error("Не удалось сохранить тему");
+  if (error) notifyFailure(error, "Не удалось сохранить тему");
 }
 
 async function handleToggleClose(id: string) {
   const closing = !topic.value?.isClosed;
   const { error } = await boardsStore.setTopicClosed(id, closing);
-  if (error) toast.error("Не удалось изменить статус темы");
+  if (error) notifyFailure(error, "Не удалось изменить статус темы");
 }
 
 const showDeleteConfirm = ref(false);
@@ -225,7 +224,7 @@ async function confirmDeleteTopic() {
   deletingTopic.value = false;
   showDeleteConfirm.value = false;
   if (error) {
-    toast.error("Не удалось удалить тему");
+    notifyFailure(error, "Не удалось удалить тему");
     return;
   }
   toast.success("Тема удалена");
@@ -331,9 +330,7 @@ function handleWarn(id: string) {
           Отправить
         </button>
       </template>
-      <secondary-text v-else-if="isBanned" class="comment-banned-hint">
-        Вы не можете отправлять комментарии из-за ограничений аккаунта
-      </secondary-text>
+
       <secondary-text v-else-if="topic?.isClosed" class="comment-closed-hint">
         Топик закрыт для комментариев
       </secondary-text>
@@ -355,7 +352,7 @@ function handleWarn(id: string) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .topic-filter
   margin-top: $medium
@@ -379,11 +376,7 @@ function handleWarn(id: string) {
   align-self: flex-start
   +button
 
-.comment-banned-hint,
 .comment-closed-hint
   text-align: center
   padding: $small
-
-.comment-banned-hint
-  color: $accent-red
 </style>

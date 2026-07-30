@@ -26,7 +26,7 @@
  *    coordinates the tab-level empty state with the awards block.
  */
 import { computed, onMounted, ref, watch } from "vue";
-import { achievementApi } from "@/shared/api";
+import { achievementApi } from "@/entities/achievement";
 import type {
   AchievementType,
   UserAchievement,
@@ -36,11 +36,11 @@ import { GameIcon } from "@/shared/ui/Icon";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { Tooltip } from "@/shared/ui/Tooltip";
-import { getMetricValue } from "@/shared/lib/achievements/getMetricValue";
 import {
+  getMetricValue,
   formatThreshold,
   metricDisplayNumber,
-} from "@/shared/lib/achievements/formatThreshold";
+} from "@/entities/achievement";
 
 const props = defineProps<{
   username: string;
@@ -479,7 +479,9 @@ function progressLabel(chain: Chain): string {
   border: 2px solid $bg-page
   border-radius: $minor
   font-variant-numeric: tabular-nums
-  text-shadow: 0 0 1px rgba(0, 0, 0, 0.4)
+  // Светлый ореол под темной цифрой — зеркало прежней темной обводки
+  // под белой.
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.5)
 
 // Thematic title of the earned tier, centered under the icon. Smaller than
 // the award caption ($tertiary vs $secondary) — achievements are the lighter

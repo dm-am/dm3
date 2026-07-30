@@ -7,17 +7,6 @@ namespace DM.Web.API.Tests.Features.Game;
 
 public class UnreadMappingProfileShould : UnitTestBase
 {
-    private readonly IMapper _mapper;
-
-    public UnreadMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UnreadMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
-
     [Fact]
     public void HaveValidConfiguration()
     {

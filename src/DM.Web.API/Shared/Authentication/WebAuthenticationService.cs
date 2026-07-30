@@ -1,10 +1,9 @@
 using System;
-using System.Linq;
-using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Web.API.Shared.Authentication.Credentials;
+using DM.Web.API.Shared.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -55,24 +54,9 @@ internal class WebAuthenticationService : IWebAuthenticationService
 
         return new SessionContext
         {
-            IpAddress = ExtractClientIp(httpContext),
+            IpAddress = httpContext.GetClientAddress(),
             UserAgent = httpContext.Request.Headers.UserAgent.ToString()
         };
-    }
-
-    private static string ExtractClientIp(HttpContext httpContext)
-    {
-        // X-Forwarded-For for reverse proxy (nginx, cloudflare)
-        var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(forwardedFor))
-        {
-            // Take the first IP (client), the rest are proxies
-            var clientIp = forwardedFor.Split(',', System.StringSplitOptions.TrimEntries).First();
-            if (IPAddress.TryParse(clientIp, out _))
-                return clientIp;
-        }
-
-        return httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     }
 
     /// <inheritdoc />

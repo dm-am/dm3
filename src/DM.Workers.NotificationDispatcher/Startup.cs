@@ -10,7 +10,6 @@ using DM.Infrastructure.Core.Logging;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Mail;
 using DM.Infrastructure.Messaging;
-using DM.Infrastructure.Messaging.Outbox;
 using DM.Workers.NotificationDispatcher.Implementation.Bot;
 using DM.Workers.NotificationDispatcher.Implementation.Email;
 using Jamq.Client.Abstractions.Consuming;
@@ -20,6 +19,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using DM.Domain.Account;
 
 namespace DM.Workers.NotificationDispatcher;
 
@@ -45,13 +45,16 @@ public class Startup
     /// <param name="services"></param>
     public void ConfigureServices(IServiceCollection services)
     {
+        // AddDmAccountConfiguration is here because ConfigureContainer registers
+        // the whole account domain below. Its types read four option sections
+        // that this host bound none of, and IOptions of an unbound type hands
+        // out a default instead of throwing.
         services
             .AddOptions()
-            .Configure<ConnectionStrings>(_configuration.GetSection(nameof(ConnectionStrings)).Bind)
-            .Configure<RabbitMqConfiguration>(_configuration.GetSection(nameof(RabbitMqConfiguration)).Bind)
-            .Configure<BotConfiguration>(_configuration.GetSection(nameof(BotConfiguration)).Bind)
-            .Configure<OutboxConfiguration>(_configuration.GetSection(nameof(OutboxConfiguration)).Bind)
-            .Configure<EmailConfiguration>(_configuration.GetSection(nameof(EmailConfiguration)).Bind)
+            .AddDmCoreConfiguration(_configuration)
+            .AddDmMessageQueuing(_configuration)
+            .AddDmMailConfiguration(_configuration)
+            .AddDmAccountConfiguration(_configuration)
             .AddDmLogging("DM.Notifications.Consumer", _configuration);
 
         services.AddJamqClient(
@@ -59,7 +62,7 @@ public class Startup
             consumerBuilderDefaults: builder => builder.WithMiddleware<NotificationConsumerRetryMiddleware>());
         services.AddHostedService<NotificationDispatcherConsumer>();
 
-        services.AddHealthChecks();
+        services.AddDmBrokerHealthCheck(_configuration);
 
         services
             .AddDbContext<DmDbContext>(options => options
@@ -96,11 +99,7 @@ public class Startup
         var accountAssembly = typeof(DM.Domain.Account.Authorization.AccountIntention).Assembly;
         builder.RegisterDefaultTypes(accountAssembly);
         builder.RegisterMapper(accountAssembly);
-        var identityProviderType = accountAssembly.GetType("DM.Domain.Account.Features.Identity.IdentityProvider")!;
-        builder.RegisterType(identityProviderType)
-            .AsSelf()
-            .AsImplementedInterfaces()
-            .InstancePerLifetimeScope();
+        builder.RegisterModuleOnce<DM.Domain.Account.AccountModule>();
 
         builder.RegisterModuleOnce<MailModule>();
 
@@ -121,9 +120,6 @@ public class Startup
     /// <param name="applicationBuilder"></param>
     public void Configure(IApplicationBuilder applicationBuilder)
     {
-        applicationBuilder
-            .UseRouting()
-            .UseHealthChecks("/_health")
-            .UseEndpoints(route => route.MapControllers());
+        applicationBuilder.UseDmWorkerEndpoints(route => route.MapControllers());
     }
 }

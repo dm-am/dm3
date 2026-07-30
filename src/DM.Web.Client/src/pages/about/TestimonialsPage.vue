@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useRoute } from "vue-router";
-import { useTestimonialStore } from "@/shared/stores/testimonials";
+import { useTestimonialStore } from "@/entities/testimonial";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { storeToRefs } from "pinia";
 import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
@@ -168,7 +168,7 @@ function pagingAnchor(): HTMLElement | null {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 // Paging blocks sit at the same tight $tiny rhythm the rows keep between
 // themselves and their dash separators (COMM-1: пагинация→строки =

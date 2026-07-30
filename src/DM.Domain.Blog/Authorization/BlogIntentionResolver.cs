@@ -15,7 +15,12 @@ internal class BlogIntentionResolver : IIntentionResolver<BlogIntention, BlogDto
         var isOwner = user.UserId == target.Author.UserId;
         var isMentor = target.Mentor?.UserId == user.UserId;
         var isAssistant = target.Assistants.Any(a => a.UserId == user.UserId);
-        var isSubscriber = target.SubscriberIds.Contains(user.UserId);
+        // Filled by the list-shaped reads only. Every intention below is decided
+        // on a blog that came from a single-blog read, where it is false — so the
+        // branches that mention it have never actually fired. Left as it was:
+        // making them fire is a change of who may read a private draft and who may
+        // comment, not a performance fix.
+        var isSubscriber = target.IsViewerSubscriber;
         var hasPendingInvitation = target.PendingInvitedUserIds.Contains(user.UserId);
 
         return intention switch
@@ -95,11 +100,15 @@ internal class BlogIntentionResolver : IIntentionResolver<BlogIntention, BlogDto
                 user.Role >= UserRole.SeniorModerator,
 
             // Anyone who can view the blog can comment (if comments enabled and not blacklisted)
+            // An ordinary ban silences discussion of other people's blogs; the
+            // user's own blog stays open. Publications themselves are a
+            // different intention and are not affected.
             BlogIntention.CreateComment =>
                 target.CommentsEnabled &&
                 user.IsAuthenticated &&
                 !target.BlacklistedUserIds.Contains(user.UserId) &&
-                (target.DraftVisibility == DraftVisibility.Public || isOwner || isAssistant || isSubscriber || isMentor || user.Role >= UserRole.Admin),
+                (target.DraftVisibility == DraftVisibility.Public || isOwner || isAssistant || isSubscriber || isMentor || user.Role >= UserRole.Admin) &&
+                user.MaySpeak(inOwnSpace: isOwner || isAssistant || isMentor),
 
             _ => false
         };

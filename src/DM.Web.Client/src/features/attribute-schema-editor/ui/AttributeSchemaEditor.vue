@@ -23,6 +23,7 @@ import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { Select } from "@/shared/ui/Select";
 import Button from "@/shared/ui/Button/Button.vue";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { SvgIcon } from "@/shared/ui/Icon";
 import AttributeEditForm from "./AttributeEditForm.vue";
 import CharacterFormPreview from "./CharacterFormPreview.vue";
@@ -33,7 +34,7 @@ import {
   cloneSchema,
   cloneSpecsWithNewIds,
   isBbCode,
-} from "../model";
+} from "@/entities/game";
 
 const props = withDefaults(
   defineProps<{
@@ -208,10 +209,6 @@ function commitSave() {
   emit("save", cloneSchema(draft.value));
 }
 
-function handleModalKeydown(e: KeyboardEvent) {
-  if (e.key === "Escape") showDataLossModal.value = false;
-}
-
 defineExpose({ validate, requestSave });
 </script>
 
@@ -352,41 +349,18 @@ defineExpose({ validate, requestSave });
     </div>
 
     <!-- Data-loss confirmation -->
-    <Teleport to="body">
-      <Transition name="dialog">
-        <div
-          v-if="showDataLossModal"
-          class="dialog-backdrop"
-          @click.self="showDataLossModal = false"
-          @keydown="handleModalKeydown"
-        >
-          <div
-            class="dialog-container"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Подтверждение изменения схемы"
-          >
-            <div class="dialog-header">Изменение схемы атрибутов</div>
-            <div class="dialog-body">
-              В игре уже есть персонажи. Изменение схемы может затронуть
-              заполненные анкеты. Сохранить изменения?
-            </div>
-            <div class="dialog-footer">
-              <Button type="button" @click="commitSave"> Сохранить </Button>
-              <Button type="button" @click="showDataLossModal = false">
-                Отмена
-              </Button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <ConfirmDialog
+      v-model:show="showDataLossModal"
+      title="Изменение схемы атрибутов"
+      message="В игре уже есть персонажи. Изменение схемы может затронуть заполненные анкеты. Сохранить изменения?"
+      confirm-label="Сохранить"
+      @confirm="commitSave"
+    />
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/ZIndex"
+@import "@/assets/styles/Inputs"
 
 .schema-editor
   display: flex
@@ -499,45 +473,4 @@ input[type="radio"]
   margin-top: $small
 
 // --- Modal ---
-.dialog-backdrop
-  position: fixed
-  inset: 0
-  z-index: $z-modal
-  display: flex
-  align-items: center
-  justify-content: center
-  background-color: $overlay-bg
-  backdrop-filter: blur(2px)
-
-.dialog-container
-  width: 100%
-  max-width: 420px
-  margin: $medium
-  border-radius: $border-radius
-  box-shadow: 0 8px 32px var(--shadow-color)
-  background-color: $bg-element
-  border: 1px solid $border
-
-.dialog-header
-  padding: $medium
-  font-weight: 600
-  border-bottom: 1px solid $border
-
-.dialog-body
-  padding: $medium
-  line-height: 1.5
-
-.dialog-footer
-  display: flex
-  gap: $small
-  padding: $medium
-  border-top: 1px solid $border
-
-.dialog-enter-active,
-.dialog-leave-active
-  transition: opacity 0.2s ease
-
-.dialog-enter-from,
-.dialog-leave-to
-  opacity: 0
 </style>

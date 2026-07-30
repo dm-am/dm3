@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-alpine as build
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
@@ -12,8 +12,10 @@ RUN npm ci
 # Copy source
 COPY . .
 
-# Build with empty API host (will use relative URLs through nginx)
-ENV VITE_API_HOST=""
+# The API host is empty by default so the SPA calls relative URLs and nginx
+# routes them; a deployment that serves the API from another origin overrides it.
+ARG VITE_API_HOST=""
+ENV VITE_API_HOST=$VITE_API_HOST
 RUN npm run build
 
 # Production stage

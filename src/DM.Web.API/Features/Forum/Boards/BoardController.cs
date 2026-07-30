@@ -87,7 +87,7 @@ public class BoardController : ControllerBase
     /// <response code="404">Board not found</response>
     [HttpGet("{id}", Name = nameof(GetBoard))]
     [ProducesResponseType(typeof(Envelope<Board>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBoard(string id) => Ok(await _boardApiService.GetBoard(id));
 
     /// <summary>
@@ -104,8 +104,8 @@ public class BoardController : ControllerBase
     [HttpDelete("{id}/comments/unread", Name = nameof(ReadBoardComments))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ReadBoardComments(string id)
     {
         await _commentApiService.MarkAsRead(id);
@@ -124,7 +124,7 @@ public class BoardController : ControllerBase
     /// <response code="404">Board not found</response>
     [HttpGet("{id}/moderators", Name = nameof(GetBoardModerators))]
     [ProducesResponseType(typeof(ListEnvelope<User>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBoardModerators(string id) => Ok(await _moderatorsApiService.GetModerators(id));
 
     /// <summary>
@@ -146,14 +146,14 @@ public class BoardController : ControllerBase
     [AuthenticationRequired]
     [RequireRole(UserRole.SeniorModerator)]
     [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AddBoardModerator(string id, string username)
     {
         var result = await _moderatorsApiService.AddModerator(id, username);
-        return CreatedAtRoute(nameof(GetBoardModerators), new { id }, result);
+        return StatusCode(StatusCodes.Status201Created, result);
     }
 
     /// <summary>
@@ -173,9 +173,9 @@ public class BoardController : ControllerBase
     [AuthenticationRequired]
     [RequireRole(UserRole.SeniorModerator)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveBoardModerator(string id, string username)
     {
         await _moderatorsApiService.RemoveModerator(id, username);

@@ -24,10 +24,12 @@ public interface IGameRoleResolver
     /// Get user's highest role from an already-loaded game DTO
     /// </summary>
     /// <remarks>
-    /// For accurate Reader detection, ensure game.SubscriberIds is populated from Subscriptions
+    /// Reader detection reads <see cref="Game.IsViewerSubscriber" />, which the
+    /// repository fills for the user the game was read for. Pass that same user;
+    /// use <see cref="GetRoleAsync" /> to ask about anybody else.
     /// </remarks>
     /// <param name="game">Game DTO with participation data</param>
-    /// <param name="userId">User identifier</param>
+    /// <param name="userId">User identifier the game was read for</param>
     /// <returns>Highest role the user has in the game</returns>
     GameRole GetRole(Game game, Guid userId);
 }

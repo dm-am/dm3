@@ -6,9 +6,7 @@
  * highest role first). Moderator+ (server-enforced via RequireRole).
  */
 import { onMounted, ref } from "vue";
-import ModerationApi, {
-  type ModeratorOverview,
-} from "@/shared/api/moderationApi";
+import { moderationApi, type ModeratorOverview } from "@/entities/moderation";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
@@ -35,7 +33,7 @@ const rows = ref<ModeratorRow[]>([]);
 
 async function fetch() {
   loading.value = true;
-  const { data, error } = await ModerationApi.getModerators();
+  const { data, error } = await moderationApi.getModerators();
   loading.value = false;
   if (error) {
     loadError.value = "Не удалось загрузить список модераторов";

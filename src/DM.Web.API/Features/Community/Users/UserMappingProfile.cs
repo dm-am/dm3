@@ -41,6 +41,20 @@ internal class UserMappingProfile : Profile
         // Domain SubscriberInfo -> API SubscriberRef (1:1 fields)
         CreateMap<DomainSubscriberInfo, SubscriberRef>();
 
+        // Domain SubscribersByCategory -> API SubscriberCounts (1:1 fields). One
+        // map covers the member on User, UserProfile, PersonalProfile and
+        // ModeratedProfile — they all inherit it.
+        CreateMap<DM.Domain.Core.Dto.SubscribersByCategory, SubscriberCounts>();
+
+        // Query string to domain filter. Mapped by name rather than by hand so a
+        // filter added to both sides needs no third edit here, and so the two
+        // members that do not line up have to be named to be handled: the search
+        // term is Q on the wire, and the direction is derived from SortOrder by
+        // CommunityUserApiService, which knows the per-field default.
+        CreateMap<UsersQuery, UserFilter>()
+            .ForMember(d => d.Search, o => o.MapFrom(s => s.Q))
+            .ForMember(d => d.SortAscending, o => o.Ignore());
+
         // GeneralUser (domain) -> User (API)
         CreateMap<GeneralUser, User>()
             .ForMember(d => d.Id, o => o.MapFrom(s => s.UserId))

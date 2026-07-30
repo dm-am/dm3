@@ -1397,4 +1397,27 @@ describe("cleanPastedHtml", () => {
       expect(bbcode).not.toContain("font-size");
     });
   });
+
+  /**
+   * The same image markup is emitted from three places — the server renderer,
+   * this client renderer and the TipTap node — and they have drifted before:
+   * one grew a data-alt the others never had. Freeze the attribute SET, not
+   * the byte order, because the three legitimately order attributes
+   * differently and a byte comparison would fail for the wrong reason.
+   */
+  describe("image attributes", () => {
+    it("carries the attributes every emitter must agree on", () => {
+      const html = bbcodeToHtml("[img]https://example.com/a.png[/img]");
+
+      for (const attribute of [
+        'class="bb-image"',
+        'data-bb-tag="img"',
+        'loading="lazy"',
+        'decoding="async"',
+        'referrerpolicy="no-referrer"',
+      ]) {
+        expect(html).toContain(attribute);
+      }
+    });
+  });
 });

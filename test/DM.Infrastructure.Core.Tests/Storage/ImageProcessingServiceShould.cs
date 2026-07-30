@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
@@ -26,13 +27,28 @@ public class ImageProcessingServiceShould
 {
     private readonly ImageProcessingService _sut = new();
 
+    /// <summary>
+    /// Every upload type goes through the validating pipeline. A type answering
+    /// false here is routed around magic-byte detection and the format allow-list,
+    /// and its object lands in the public bucket with a client-chosen Content-Type.
+    /// </summary>
     [Theory]
-    [InlineData(UploadType.UserAvatar, true)]
-    [InlineData(UploadType.CharacterAvatar, true)]
-    [InlineData(UploadType.PostAttachment, false)]
-    public void DetectImageTypes_CorrectlyClassifies(UploadType type, bool expected)
+    [InlineData(UploadType.UserAvatar)]
+    [InlineData(UploadType.CharacterAvatar)]
+    [InlineData(UploadType.PostAttachment)]
+    public void ClassifyEveryUploadTypeAsAnImage(UploadType type)
     {
-        _sut.IsImageType(type).Should().Be(expected);
+        _sut.IsImageType(type).Should().BeTrue();
+    }
+
+    [Fact]
+    public void LeaveNoUploadTypeOutsideTheValidatingPipeline()
+    {
+        var unvalidated = Enum.GetValues<UploadType>().Where(type => !_sut.IsImageType(type));
+
+        unvalidated.Should().BeEmpty(
+            "a new upload type must either pass this pipeline or bring its own validation — " +
+            "there is no unvalidated path any more");
     }
 
     [Fact]

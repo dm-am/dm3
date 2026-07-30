@@ -4,7 +4,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Enums;
 using DM.Domain.Forum.Authorization;
 using DM.Domain.Forum.Features.Boards;
-using DM.Domain.Forum.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using Moq;
@@ -71,6 +71,22 @@ public class ForumIntentionResolverShould : UnitTestBase
                 CreateTopicPolicy = BoardAccessPolicy.Administrator | BoardAccessPolicy.SeniorModerator
             });
         actual.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ForbidCreateTopicUnderTheOrdinaryBan()
+    {
+        policyConverter
+            .Setup(c => c.Convert(UserRole.RegularUser))
+            .Returns(BoardAccessPolicy.RegularUser);
+
+        var actual = resolver.IsAllowed(
+            Create.User().WithRole(UserRole.RegularUser).WithAccessPolicy(AccessPolicy.DemocraticBan).Please(),
+            ForumIntention.CreateTopic,
+            new Board { CreateTopicPolicy = BoardAccessPolicy.RegularUser });
+
+        // The board policy admits the role; the ban is what refuses
+        actual.Should().BeFalse();
     }
 
     [Fact]

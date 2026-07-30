@@ -6,6 +6,7 @@ using DM.Domain.Core.Enums;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.General.Upload;
 
@@ -49,8 +50,8 @@ public class UploadController : ControllerBase
     [HttpGet(Name = nameof(GetUploads))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(ListEnvelope<Shared.Dto.Upload>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetUploads(
         [FromQuery] UploadsQuery query,
         [FromQuery] string? scope = null,
@@ -77,9 +78,9 @@ public class UploadController : ControllerBase
     [HttpGet("{id:guid}", Name = nameof(GetUpload))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Shared.Dto.Upload), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUpload(Guid id)
     {
         var result = await _uploadApiService.GetUpload(id);
@@ -97,9 +98,9 @@ public class UploadController : ControllerBase
     [HttpDelete("{id:guid}", Name = nameof(DeleteUpload))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteUpload(Guid id)
     {
         await _uploadApiService.DeleteUpload(id);
@@ -124,12 +125,12 @@ public class UploadController : ControllerBase
     /// <response code="401">User not authenticated</response>
     [HttpPost(Name = nameof(DirectUpload))]
     [AuthenticationRequired]
-    [EnableRateLimiting("uploads")]
+    [EnableRateLimiting(RateLimitPolicies.Uploads)]
     [RequestSizeLimit(10 * 1024 * 1024)]
     [ProducesResponseType(typeof(Shared.Dto.Upload), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> DirectUpload(
         IFormFile file,
         [FromQuery] UploadType type,

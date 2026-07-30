@@ -284,7 +284,7 @@ function getPageLink(page: number) {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Paging"
+@import "@/assets/styles/Paging"
 
 +paging
 </style>

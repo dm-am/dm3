@@ -24,8 +24,6 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
     public async Task<UsernameChangeRequest?> GetPendingByUserId(Guid userId, CancellationToken ct = default)
     {
         return await _dbContext.UsernameChangeRequests
-            .Include(r => r.User)
-            .Include(r => r.ResolvedBy)
             .Where(r => r.UserId == userId && r.Status == UsernameChangeRequestStatus.Pending)
             .Select(r => new UsernameChangeRequest
             {
@@ -51,8 +49,6 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
     public async Task<UsernameChangeRequest?> GetLatestByUserId(Guid userId, CancellationToken ct = default)
     {
         return await _dbContext.UsernameChangeRequests
-            .Include(r => r.User)
-            .Include(r => r.ResolvedBy)
             .Where(r => r.UserId == userId)
             .OrderByDescending(r => r.CreatedUtc)
             .Select(r => new UsernameChangeRequest
@@ -79,8 +75,6 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
     public async Task<UsernameChangeRequest?> GetById(Guid requestId, CancellationToken ct = default)
     {
         return await _dbContext.UsernameChangeRequests
-            .Include(r => r.User)
-            .Include(r => r.ResolvedBy)
             .Where(r => r.RequestId == requestId)
             .Select(r => new UsernameChangeRequest
             {
@@ -106,7 +100,6 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
     public async Task<IReadOnlyCollection<UsernameChangeRequestEntry>> GetPendingRequests(CancellationToken ct = default)
     {
         return await _dbContext.UsernameChangeRequests
-            .Include(r => r.User)
             .Where(r => r.Status == UsernameChangeRequestStatus.Pending)
             .OrderBy(r => r.CreatedUtc)
             .Select(r => new UsernameChangeRequestEntry
@@ -126,8 +119,6 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
     public async Task<UsernameChangeRequest?> GetByApprovalToken(Guid token, CancellationToken ct = default)
     {
         return await _dbContext.UsernameChangeRequests
-            .Include(r => r.User)
-            .Include(r => r.ResolvedBy)
             .Where(r => r.ApprovalToken == token)
             .Select(r => new UsernameChangeRequest
             {

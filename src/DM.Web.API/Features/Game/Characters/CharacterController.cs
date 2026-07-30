@@ -40,9 +40,6 @@ public class CharacterController : ControllerBase
         _gameApiService = gameApiService;
     }
 
-    private async Task<Guid> ResolveGameId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _gameApiService.GetByPublicId(id)).Resource.Id;
-
     /// <summary>
     /// Get list of characters in game
     /// </summary>
@@ -51,10 +48,10 @@ public class CharacterController : ControllerBase
     /// <response code="404">Game not found</response>
     [HttpGet("~/v1/games/{id}/characters", Name = nameof(GetCharacters))]
     [ProducesResponseType(typeof(ListEnvelope<Character>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetCharacters(string id)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         return Ok(await _characterApiService.GetAll(gameId));
     }
 
@@ -68,11 +65,11 @@ public class CharacterController : ControllerBase
     [HttpDelete("~/v1/games/{id}/characters/unread", Name = nameof(MarkCharactersAsRead))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkCharactersAsRead(string id)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         await _characterApiService.MarkAsRead(gameId);
         return NoContent();
     }
@@ -90,13 +87,13 @@ public class CharacterController : ControllerBase
     [HttpPost("~/v1/games/{id}/characters", Name = nameof(PostCharacter))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<CharacterDetails>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostCharacter(string id, [FromBody] CharacterDetails character)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         var result = await _characterApiService.Create(gameId, character);
         return CreatedAtRoute(nameof(GetCharacter),
             new {id = result.Resource.Id}, result);
@@ -110,7 +107,7 @@ public class CharacterController : ControllerBase
     /// <response code="404">Character not found</response>
     [HttpGet("{id}", Name = nameof(GetCharacter))]
     [ProducesResponseType(typeof(Envelope<CharacterDetails>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetCharacter(Guid id) => Ok(await _characterApiService.Get(id));
 
     /// <summary>
@@ -126,10 +123,10 @@ public class CharacterController : ControllerBase
     [HttpPatch("{id}", Name = nameof(PutCharacter))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<CharacterDetails>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PutCharacter(Guid id, [FromBody] CharacterDetails character) =>
         Ok(await _characterApiService.Update(id, character));
 
@@ -144,9 +141,9 @@ public class CharacterController : ControllerBase
     [HttpDelete("{id}", Name = nameof(DeleteCharacter))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteCharacter(Guid id)
     {
         await _characterApiService.Delete(id);
@@ -166,9 +163,9 @@ public class CharacterController : ControllerBase
     [HttpGet("{id}/notepad", Name = nameof(GetCharacterNotepad))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(ListEnvelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetCharacterNotepad(Guid id) =>
         Ok(await _notepadApiService.GetCharacterNotepadEntries(id));
 
@@ -184,9 +181,9 @@ public class CharacterController : ControllerBase
     [HttpPost("{id}/notepad", Name = nameof(CreateCharacterNotepadEntry))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> CreateCharacterNotepadEntry(Guid id, [FromBody] CreateNotepadEntryRequest request)
     {
         var result = await _notepadApiService.CreateCharacterNotepadEntry(id, request);
@@ -204,10 +201,10 @@ public class CharacterController : ControllerBase
     /// <response code="404">Entry not found</response>
     [HttpGet("{id}/notepad/{entryId:guid}", Name = nameof(GetCharacterNotepadEntry))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(NotepadEntryResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetCharacterNotepadEntry(Guid id, Guid entryId) =>
         Ok(await _notepadApiService.GetEntry(entryId));
 
@@ -223,10 +220,10 @@ public class CharacterController : ControllerBase
     /// <response code="404">Entry not found</response>
     [HttpPatch("{id}/notepad/{entryId:guid}", Name = nameof(UpdateCharacterNotepadEntry))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(NotepadEntryResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateCharacterNotepadEntry(Guid id, Guid entryId, [FromBody] UpdateNotepadEntryRequest request) =>
         Ok(await _notepadApiService.UpdateEntry(entryId, request));
 
@@ -242,9 +239,9 @@ public class CharacterController : ControllerBase
     [HttpDelete("{id}/notepad/{entryId:guid}", Name = nameof(DeleteCharacterNotepadEntry))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteCharacterNotepadEntry(Guid id, Guid entryId)
     {
         await _notepadApiService.DeleteEntry(entryId);

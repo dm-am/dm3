@@ -1,3 +1,4 @@
+using DM.Domain.Core.Identity;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -68,7 +69,7 @@ public class User : IUser, IRemovable
     /// <summary>
     /// Password hash algorithm version (4 = Argon2id)
     /// </summary>
-    public int PasswordHashVersion { get; set; } = 4;
+    public int PasswordHashVersion { get; set; } = PasswordHashing.CurrentVersion;
 
     /// <inheritdoc />
     public bool RatingDisabled { get; set; }
@@ -121,6 +122,18 @@ public class User : IUser, IRemovable
     /// Whether to show birthday to other users
     /// </summary>
     public bool ShowBirthday { get; set; } = true;
+
+    /// <summary>
+    /// What the personal blacklist actually does: which surfaces hide a blocked
+    /// user's content, and whether direct messages from them are refused.
+    /// </summary>
+    /// <remarks>
+    /// Lives here rather than in the Mongo settings document because the entries
+    /// it governs are rows in Postgres with a foreign key: keeping the switch in
+    /// the other store made "is this user blocked, and does it apply here" two
+    /// reads across two databases with no way to make them agree.
+    /// </remarks>
+    public UserBlacklistSettings BlacklistSettings { get; set; } = UserBlacklistSettings.Default;
 
     /// <summary>
     /// Full user information
@@ -387,12 +400,6 @@ public class User : IUser, IRemovable
     /// </summary>
     [InverseProperty(nameof(NotepadEntry.Author))]
     public virtual ICollection<NotepadEntry> NotepadEntries { get; set; } = [];
-
-    /// <summary>
-    /// Notepad categories authored by user
-    /// </summary>
-    [InverseProperty(nameof(NotepadCategory.Author))]
-    public virtual ICollection<NotepadCategory> NotepadCategories { get; set; } = [];
 
     /// <summary>
     /// User's personal blacklist (users this user has blocked)

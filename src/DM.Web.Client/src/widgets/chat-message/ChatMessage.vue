@@ -8,6 +8,7 @@
 import { ref, computed, watch } from "vue";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { TruncatedContent } from "@/shared/ui/TruncatedContent";
+import { ContentText } from "@/shared/ui/Content";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import {
   initBbcodeInteractive,
@@ -255,7 +256,10 @@ function initMessageBbcode(el: HTMLElement) {
             </template>
           </div>
           <div class="msg-content">
-            <div class="msg-text bbcode-content" v-html="message.text" />
+            <!-- The SSOT component, not a hand-rolled div: this body appears on
+                 "показать удаленное", long after the container-wide interactive
+                 init ran, so spoilers inside it would never bind. -->
+            <ContentText class="msg-text" :html="message.text" />
           </div>
         </div>
       </div>
@@ -514,7 +518,7 @@ function initMessageBbcode(el: HTMLElement) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 // ============================================================================
 // ChatMessage — shared message styles for global chat and messenger

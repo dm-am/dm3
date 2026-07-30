@@ -5,7 +5,7 @@
  * modal in ModerationAchievements.vue. Code is only editable on create.
  */
 import { ref, computed } from "vue";
-import { achievementApi } from "@/shared/api";
+import { achievementApi } from "@/entities/achievement";
 import type { AchievementType } from "@/shared/api/models/achievements";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";

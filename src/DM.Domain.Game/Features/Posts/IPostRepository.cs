@@ -33,7 +33,15 @@ public interface IPostRepository
     /// To fetch a single user's best post, filter via <see cref="PostsQuery"/>
     /// (author username + rating sort + take=1).
     /// </summary>
-    Task<(IEnumerable<Post> Posts, int TotalCount)> GetRated(PostsQuery query);
+    /// <param name="query">Filters, sort and paging</param>
+    /// <param name="viewerId">
+    /// Who is reading. Does NOT widen or narrow the feed — that is fixed by the
+    /// query itself, which admits only open rooms of approved, non-draft games.
+    /// It decides one thing: whether each attached game reports the reader as a
+    /// subscriber, which is what puts "reader" in its participation list.
+    /// <see cref="Guid.Empty" /> for a guest, and then no lookup is made.
+    /// </param>
+    Task<(IEnumerable<Post> Posts, int TotalCount)> GetRated(PostsQuery query, Guid viewerId);
 
     #endregion
 

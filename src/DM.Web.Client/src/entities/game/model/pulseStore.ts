@@ -6,6 +6,7 @@ import type { Post } from "./types";
 import type { ListEnvelope, Paging } from "@/shared/api/models/common";
 import gameApi from "../api/gameApi";
 import { getWeekStartUtc } from "@/shared/lib/utils/datetime";
+import { createKeyedCache } from "@/shared/lib/utils/keyedCache";
 
 // Re-export for entities/game public API consumers — the implementation
 // moved to the shared datetime utils (SSOT).
@@ -83,21 +84,7 @@ export const usePulseStore = defineStore("pulse", () => {
   // Last requested params — used by prefetchPage to derive the next page
   let lastParams: PulseSearchParams | null = null;
 
-  // Page cache: key → { data, timestamp } (same pattern as games store)
-  const CACHE_TTL = 30_000; // 30 seconds
-  const pageCache = new Map<
-    string,
-    { data: ListEnvelope<Post>; timestamp: number }
-  >();
-
-  function cachePage(key: string, data: ListEnvelope<Post>): void {
-    pageCache.set(key, { data, timestamp: Date.now() });
-    // Clean old entries (keep last 20)
-    if (pageCache.size > 20) {
-      const firstKey = pageCache.keys().next().value;
-      if (firstKey) pageCache.delete(firstKey);
-    }
-  }
+  const pageCache = createKeyedCache<ListEnvelope<Post>>({ ttlMs: 30_000 });
 
   /**
    * Fetch rated posts for the current week
@@ -109,10 +96,10 @@ export const usePulseStore = defineStore("pulse", () => {
 
     // Serve from cache when fresh (warmed by prefetchPage)
     const cached = pageCache.get(requestKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    if (cached) {
       currentRequestKey = requestKey;
-      posts.value = cached.data.resources ?? [];
-      paging.value = cached.data.paging ?? null;
+      posts.value = cached.resources ?? [];
+      paging.value = cached.paging ?? null;
       error.value = null;
       loading.value = false;
       return;
@@ -139,7 +126,7 @@ export const usePulseStore = defineStore("pulse", () => {
     } else {
       posts.value = data?.resources ?? [];
       paging.value = data?.paging ?? null;
-      if (data) cachePage(requestKey, data);
+      if (data) pageCache.set(requestKey, data);
     }
 
     loading.value = false;
@@ -156,11 +143,12 @@ export const usePulseStore = defineStore("pulse", () => {
     const requestKey = JSON.stringify(apiParams);
 
     // Skip if already cached
-    if (pageCache.has(requestKey)) return;
+    // Fresh only: a stale entry is exactly what the prefetch should replace.
+    if (pageCache.get(requestKey)) return;
 
     // Fetch in background without updating UI
     const { data } = await gameApi.getRatedPosts(apiParams);
-    if (data) cachePage(requestKey, data);
+    if (data) pageCache.set(requestKey, data);
   }
 
   /**

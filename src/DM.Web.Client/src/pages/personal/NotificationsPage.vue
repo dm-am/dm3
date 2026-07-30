@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
-import notificationApi from "@/shared/api/notificationApi";
+import { notificationApi } from "@/entities/notification";
 import {
   NotificationType,
   type UserNotification,
@@ -9,6 +9,7 @@ import {
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const toast = useToast();
 const notifications = ref<UserNotification[]>([]);
@@ -163,35 +164,41 @@ const fetchNotifications = async (reset = false) => {
 
   loading.value = true;
   try {
-    const { data } = await notificationApi.getNotifications(skip.value, take);
+    const { data, error } = await notificationApi.getNotifications(
+      skip.value,
+      take,
+    );
+    if (error) {
+      // hasMore is left alone: a failed page is not the end of the list, and
+      // clearing it would turn a transient error into "больше ничего нет".
+      notifyFailure(error, "Не удалось загрузить уведомления");
+      return;
+    }
     const newItems = data?.resources || [];
     notifications.value = [...notifications.value, ...newItems];
     hasMore.value = newItems.length === take;
     skip.value += newItems.length;
-  } catch (error) {
-    toast.error("Не удалось загрузить уведомления");
   } finally {
     loading.value = false;
   }
 };
 
 const markAllAsRead = async () => {
-  try {
-    await notificationApi.markAsRead();
-    toast.success("Все уведомления отмечены как прочитанные");
-  } catch (error) {
-    toast.error("Не удалось отметить уведомления");
+  const { error } = await notificationApi.markAsRead();
+  if (error) {
+    notifyFailure(error, "Не удалось отметить уведомления");
+    return;
   }
+  toast.success("Все уведомления отмечены как прочитанные");
 };
 
 const markAsRead = async (id: string) => {
-  try {
-    await notificationApi.markAsRead(id);
-    // Remove from list or mark as read in UI
-    notifications.value = notifications.value.filter((n) => n.id !== id);
-  } catch (error) {
-    toast.error("Не удалось отметить уведомление");
+  const { error } = await notificationApi.markAsRead(id);
+  if (error) {
+    notifyFailure(error, "Не удалось отметить уведомление");
+    return;
   }
+  notifications.value = notifications.value.filter((n) => n.id !== id);
 };
 
 onMounted(() => fetchNotifications());
@@ -289,9 +296,10 @@ onMounted(() => fetchNotifications());
   cursor: pointer
   font-size: 0.85rem
 
+  // Заливка тинтом, а не сплошным акцентом: в темной теме $text-on-green и
+  // $accent-green — один и тот же hex, текст исчезал.
   &:hover
-    background: $accent-green
-    color: $text-on-green
+    +tint($accent-green, 20%)
 
 .notification-list
   list-style: none
@@ -320,19 +328,19 @@ onMounted(() => fetchNotifications());
   flex-shrink: 0
 
   &.blog
-    background: rgba($accent-green, 0.1)
+    +tint($accent-green, 10%)
     color: $accent-green
 
   &.comment
-    background: rgba($link, 0.1)
+    +tint($link, 10%)
     color: $link
 
   &.dice
-    background: rgba($accent-yellow, 0.1)
+    +tint($accent-yellow, 10%)
     color: $accent-yellow
 
   &.bell
-    background: rgba($link, 0.1)
+    +tint($link, 10%)
     color: $link
 
 .notification-content

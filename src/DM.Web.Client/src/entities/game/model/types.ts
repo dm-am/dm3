@@ -9,14 +9,13 @@ import type {
   UserRef,
 } from "@/shared/api/models/common";
 import type { Id, Served } from "@/shared/api/models";
+import { ModuleStatus } from "@/shared/api/models/common";
 
 // === Game Status & Roles ===
 
-export enum GameStatus {
-  Draft = "Draft",
-  Active = "Active",
-  Closed = "Closed",
-}
+/** Game lifecycle status — an alias of the shared {@link ModuleStatus}. */
+export const GameStatus = ModuleStatus;
+export type GameStatus = ModuleStatus;
 
 export enum ClosedReason {
   None = "None",
@@ -29,15 +28,30 @@ export enum DraftVisibility {
   Public = "Public",
 }
 
-export enum GameRole {
-  None = "None",
-  Reader = "Reader",
-  Applicant = "Applicant",
-  Player = "Player",
-  Mentor = "Mentor",
-  Assistant = "Assistant",
-  Master = "Master",
-}
+/**
+ * How the current user takes part in a game.
+ *
+ * Mirrors the API's GameParticipation flags, which is what the wire actually
+ * carries. The client used to mirror the domain's site-level GameRole instead —
+ * only Player and Reader overlap between the two, so a master's own games
+ * matched no bucket at all and the sidebar block came out empty.
+ */
+export const GameParticipation = {
+  /** Game master. */
+  Owner: "Owner",
+  /** Master or assistant. */
+  Authority: "Authority",
+  /** Invited as assistant, not yet accepted. */
+  PendingAssistant: "PendingAssistant",
+  Player: "Player",
+  /** Subscribed reader. */
+  Reader: "Reader",
+  /** Game mentor. */
+  Moderator: "Moderator",
+} as const;
+
+export type GameParticipation =
+  (typeof GameParticipation)[keyof typeof GameParticipation];
 
 // === Tags ===
 
@@ -102,7 +116,7 @@ export type GameRef = {
   master: Served<UserRef>;
   assistants: Served<UserRef[]>;
   /** User participation flags */
-  participation: Served<GameRole[]>;
+  participation: Served<GameParticipation[]>;
   subscribersCount: number;
   recruitment: Served<GameRecruitment>;
   unreadPostsCount: Served<number>;
@@ -167,7 +181,6 @@ export interface PlayerCharacterInfo {
 export interface Game extends GameRef {
   system: string;
   setting: string;
-  draftVisibility?: DraftVisibility;
   closedUtc?: string;
   createdUtc: string;
 
@@ -175,7 +188,6 @@ export interface Game extends GameRef {
   fullAssistants?: Served<User[]>;
   pendingAssistant: Served<UserRef | null>;
   mentor: Served<UserRef | null>;
-  notes: string;
   info: string;
 
   /** Full tags (only for single game details, null for lists) */
@@ -223,9 +235,6 @@ export interface Game extends GameRef {
   playerCharacters?: PlayerCharacterInfo[];
 
   unreadCharactersCount: Served<number>;
-
-  // Used only at creation time
-  copyBlacklist?: boolean;
 }
 
 export interface GamesQuery extends PagingQuery {
@@ -349,18 +358,6 @@ export interface AttributeSchema {
 }
 
 // === Characters ===
-
-export enum Alignment {
-  LawfulGood = "LawfulGood",
-  NeutralGood = "NeutralGood",
-  ChaoticGood = "ChaoticGood",
-  LawfulNeutral = "LawfulNeutral",
-  TrueNeutral = "TrueNeutral",
-  ChaoticNeutral = "ChaoticNeutral",
-  LawfulEvil = "LawfulEvil",
-  NeutralEvil = "NeutralEvil",
-  ChaoticEvil = "ChaoticEvil",
-}
 
 export type CharacterPrivacySettings = {
   isNpc: boolean;
@@ -685,41 +682,10 @@ export interface UpdateChatRoomInput {
 }
 
 // === Game master notepad ===
-
-/**
- * Notepad type discriminator (mirrors backend NotepadType). Game master
- * notepad entries are always of the game-master kind.
- */
-export type NotepadType = "User" | "GameMaster" | "Character" | "Blog";
-
-/** A single game-master notepad entry */
-export interface NotepadEntry {
-  id: string;
-  notepadType: NotepadType;
-  containerId: string;
-  ownerId?: string | null;
-  categoryId?: string | null;
-  title: string;
-  content: string;
-  sortOrder: number;
-  createdUtc: string;
-  modifiedUtc?: string | null;
-}
-
-/** Payload for creating a notepad entry */
-export interface CreateNotepadEntryInput {
-  categoryId?: string | null;
-  title: string;
-  content: string;
-}
-
-/** Payload for updating a notepad entry */
-export interface UpdateNotepadEntryInput {
-  categoryId?: string | null;
-  title: string;
-  content: string;
-  sortOrder?: number | null;
-}
+// The entry shape is not declared here: all three notepads (personal, game,
+// blog) are served by one API DTO and are declared once in
+// shared/api/models/notepads. A local copy is how this one drifted into a
+// notepadType union with members the server has never sent.
 
 // === Room mutations ===
 

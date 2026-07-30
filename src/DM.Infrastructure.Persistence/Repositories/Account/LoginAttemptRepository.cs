@@ -21,37 +21,38 @@ internal class LoginAttemptRepository : MongoCollectionRepository<LoginAttempt>,
         _dateTimeProvider = dateTimeProvider;
     }
 
-    private static string NormalizeEmail(string email) => email.ToLowerInvariant();
-
     /// <inheritdoc />
-    public async Task<int> GetFailedAttemptCount(string email)
+    public async Task<int> GetFailedAttemptCount(LoginAttemptOrigin origin)
     {
         var record = await Collection
-            .Find(Filter.Eq(x => x.Id, NormalizeEmail(email)))
+            .Find(Filter.Eq(x => x.Id, origin.Key))
             .FirstOrDefaultAsync();
         return record?.FailedAttempts ?? 0;
     }
 
     /// <inheritdoc />
-    public async Task<DateTime?> GetLockoutStart(string email)
+    public async Task<DateTime?> GetLockoutStart(LoginAttemptOrigin origin)
     {
         var record = await Collection
-            .Find(Filter.Eq(x => x.Id, NormalizeEmail(email)))
+            .Find(Filter.Eq(x => x.Id, origin.Key))
             .FirstOrDefaultAsync();
         return record?.LockoutStartUtc;
     }
 
     /// <inheritdoc />
-    public async Task<int> RecordFailedAttempt(string email)
+    public async Task<int> RecordFailedAttempt(LoginAttemptOrigin origin)
     {
-        var normalizedEmail = NormalizeEmail(email);
         var now = _dateTimeProvider.Now.UtcDateTime;
 
         var result = await Collection.FindOneAndUpdateAsync(
-            Filter.Eq(x => x.Id, normalizedEmail),
+            Filter.Eq(x => x.Id, origin.Key),
             Update
                 .Inc(x => x.FailedAttempts, 1)
-                .Set(x => x.LastAttemptUtc, now),
+                .Set(x => x.LastAttemptUtc, now)
+                // Denormalized out of the composite id so a successful login can
+                // clear every address at once, and so the record stays readable.
+                .SetOnInsert(x => x.Email, origin.NormalizedEmail)
+                .SetOnInsert(x => x.IpAddress, origin.IpAddress),
             new FindOneAndUpdateOptions<LoginAttempt>
             {
                 IsUpsert = true,
@@ -62,19 +63,24 @@ internal class LoginAttemptRepository : MongoCollectionRepository<LoginAttempt>,
     }
 
     /// <inheritdoc />
-    public Task SetLockout(string email, DateTime lockoutStart)
+    public Task SetLockout(LoginAttemptOrigin origin, DateTime lockoutStart)
     {
         return Collection.UpdateOneAsync(
-            Filter.Eq(x => x.Id, NormalizeEmail(email)),
-            Update.Set(x => x.LockoutStartUtc, lockoutStart),
+            Filter.Eq(x => x.Id, origin.Key),
+            Update
+                .Set(x => x.LockoutStartUtc, lockoutStart)
+                .SetOnInsert(x => x.Email, origin.NormalizedEmail)
+                .SetOnInsert(x => x.IpAddress, origin.IpAddress),
             new UpdateOptions { IsUpsert = true });
     }
 
     /// <inheritdoc />
     public Task ResetAttempts(string email)
     {
-        return Collection.DeleteOneAsync(
-            Filter.Eq(x => x.Id, NormalizeEmail(email)));
+        // Every address, not only the one that succeeded: proving you know the
+        // password clears the account's whole history of failed attempts.
+        return Collection.DeleteManyAsync(
+            Filter.Eq(x => x.Email, email.ToLowerInvariant()));
     }
 
     /// <inheritdoc />

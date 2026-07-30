@@ -23,7 +23,16 @@ public static class GameRoleExtensions
     /// Gets all roles a user has in a game
     /// </summary>
     /// <param name="game">Mapped game</param>
-    /// <param name="userId">User identifier</param>
+    /// <param name="userId">
+    /// User identifier. Must be the user the game was read for.
+    /// <see cref="GameRole.Reader" /> is taken from
+    /// <see cref="Game.IsViewerSubscriber" />, which the repository fills for
+    /// the viewer and which this method does not compare against
+    /// <paramref name="userId" /> at all — so asking about anybody else answers
+    /// the other four roles correctly and reports the VIEWER's readership as
+    /// theirs. That is a false positive, not a missing role, which is why there
+    /// is no call site passing a foreign id.
+    /// </param>
     /// <returns>Collection of game roles</returns>
     public static IReadOnlyCollection<GameRole> GetRoles(this Game game, Guid userId)
     {
@@ -49,7 +58,7 @@ public static class GameRoleExtensions
             roles.Add(GameRole.Player);
         }
 
-        if (game.SubscriberIds.Contains(userId))
+        if (game.IsViewerSubscriber)
         {
             roles.Add(GameRole.Reader);
         }
@@ -71,6 +80,26 @@ public static class GameRoleExtensions
     public static bool HasAnyRole(this IEnumerable<GameRole> roles)
     {
         return roles.Any();
+    }
+
+    /// <summary>
+    /// Whether the game is the user's own — the predicate behind the ordinary
+    /// ban's exemption.
+    /// </summary>
+    /// <remarks>
+    /// Master, assistant, a player with an accepted character, and the mentor
+    /// curating the game. Everything except a plain Reader: a subscription is
+    /// self-service, anyone may subscribe to any public game in one request, so
+    /// it would undo the ban by a button press. An application in review is not
+    /// here either — it puts nobody into Players, which only holds authors of
+    /// accepted characters.
+    ///
+    /// Narrower than <see cref="HasAnyRole" />, which answers the different
+    /// question of whether the user is connected to the game at all.
+    /// </remarks>
+    public static bool IsOwnGame(this IEnumerable<GameRole> roles)
+    {
+        return roles.Any(r => r is not GameRole.Reader);
     }
 
     /// <summary>

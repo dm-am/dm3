@@ -1,7 +1,10 @@
-using System;
-using System.Threading;
+using FluentValidation;
+using System.Net;
 using System.Threading.Tasks;
+using System.Threading;
+using System;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.Profiles;
 
@@ -15,6 +18,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IValidator<CreateUserProfileNote> _validator;
 
     /// <inheritdoc />
     public UserProfileNoteService(
@@ -22,13 +26,15 @@ internal class UserProfileNoteService : IUserProfileNoteService
         IUserRepository userRepository,
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IValidator<CreateUserProfileNote> validator)
     {
         _repository = repository;
         _userRepository = userRepository;
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
+        _validator = validator;
     }
 
     /// <inheritdoc />
@@ -52,6 +58,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
     /// <inheritdoc />
     public async Task<UserProfileNote?> UpsertNote(CreateUserProfileNote createNote, CancellationToken ct = default)
     {
+        await _validator.ValidateAndThrowAsync(createNote, ct);
         var currentUser = _identityProvider.Current.User;
         if (!currentUser.IsAuthenticated)
         {
@@ -61,12 +68,14 @@ internal class UserProfileNoteService : IUserProfileNoteService
         var subjectUser = await _userRepository.GetUserAsync(createNote.SubjectUsername);
         if (subjectUser == null)
         {
-            throw new ArgumentException($"User {createNote.SubjectUsername} not found");
+            throw new HttpException(HttpStatusCode.NotFound,
+                $"User {createNote.SubjectUsername} not found");
         }
 
         if (subjectUser.UserId == currentUser.UserId)
         {
-            throw new InvalidOperationException("Cannot create a note about yourself");
+            throw new HttpException(HttpStatusCode.BadRequest,
+                "Cannot create a note about yourself");
         }
 
         var existingNote = await _repository.Get(currentUser.UserId, subjectUser.UserId, ct);
@@ -118,7 +127,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
         var subjectUser = await _userRepository.GetUserAsync(subjectUsername);
         if (subjectUser == null)
         {
-            throw new ArgumentException($"User {subjectUsername} not found");
+            throw new HttpException(HttpStatusCode.NotFound, $"User {subjectUsername} not found");
         }
 
         var note = await _repository.Get(currentUser.UserId, subjectUser.UserId, ct);

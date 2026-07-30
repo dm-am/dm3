@@ -13,8 +13,8 @@ import { computed, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useRouter } from "vue-router";
 import { useGameDetailsStore } from "@/entities/game";
-import { useUserStore } from "@/entities/user";
-import { useToast } from "@/shared/lib/composables/useToast";
+import { useAuthStore } from "@/entities/user";
+import { notifyFailure } from "@/shared/lib/errors";
 
 withDefaults(defineProps<{ variant?: "strip" | "button" }>(), {
   variant: "strip",
@@ -22,9 +22,8 @@ withDefaults(defineProps<{ variant?: "strip" | "button" }>(), {
 
 const store = useGameDetailsStore();
 const { game, isSubscribed, characters } = storeToRefs(store);
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 const router = useRouter();
-const toast = useToast();
 
 const publicId = computed(() => game.value?.publicId ?? "");
 const isRecruiting = computed(() => game.value?.recruitment?.isOpen ?? false);
@@ -44,11 +43,11 @@ const busy = ref(false);
 
 async function toggleSubscribe() {
   busy.value = true;
-  const ok = isSubscribed.value
+  const error = isSubscribed.value
     ? await store.unsubscribe()
     : await store.subscribe();
   busy.value = false;
-  if (!ok) toast.error("Не удалось изменить подписку");
+  if (error) notifyFailure(error, "Не удалось изменить подписку");
 }
 
 function applyToJoin() {
@@ -124,7 +123,7 @@ function applyToJoin() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .link
   display: block

@@ -223,7 +223,8 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.Assistants, s => s.MapFrom(g => g.Assistants))
             .ForMember(d => d.PendingAssistant, s => s.Ignore()) // Populated via batch query in repository
             .ForMember(d => d.Players, s => s.Ignore()) // Populated in repository for efficiency
-            .ForMember(d => d.SubscriberIds, s => s.Ignore())
+            .ForMember(d => d.SubscribersCount, s => s.Ignore()) // Populated via batch query in repository
+            .ForMember(d => d.IsViewerSubscriber, s => s.Ignore()) // Populated via batch query in repository
             .ForMember(d => d.PendingInvitedUserIds, s => s.Ignore()) // Populated via batch query in repository
             .ForMember(d => d.PendingPlayerInvitedUserIds, s => s.Ignore()) // Populated via batch query in repository
             .ForMember(d => d.BlacklistedUsers, s => s.MapFrom(g => g.BlackList))
@@ -254,7 +255,6 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.Subscribers, s => s.Ignore())
             .ForMember(d => d.FullAssistants, s => s.MapFrom(g => g.Assistants.Select(a => a.User)))
             .ForMember(d => d.Characters, s => s.MapFrom(g => g.Characters))
-            .ForMember(d => d.Notepad, opt => opt.Ignore())
             .ForMember(d => d.AttributeSchema, opt => opt.Ignore())
             .ForMember(d => d.Pendencies, opt => opt.Ignore())
             .ForMember(d => d.UnreadPostsCount, opt => opt.Ignore())

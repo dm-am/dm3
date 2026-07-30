@@ -4,7 +4,7 @@ using DM.Web.API.Features.Blog.Publications;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Shared.BbRendering;
 using SvcBlog = DM.Domain.Blog.Features.Blogs.Blog;
-using SvcBlogDetails = DM.Domain.Blog.Features.Blogs.BlogDetails;
+using SvcBlogFilter = DM.Domain.Blog.Features.Blogs.BlogFilter;
 using SvcRubric = DM.Domain.Blog.Features.Blogs.Rubric;
 using SvcPublication = DM.Domain.Blog.Features.Blogs.Publication;
 using SvcCreateBlog = DM.Domain.Blog.Features.Blogs.CreateBlog;
@@ -28,7 +28,7 @@ internal class BlogMappingProfile : Profile
         // BlogRef mapping (BASE - for sidebars/menus)
         CreateMap<SvcBlog, BlogRef>()
             .ForMember(d => d.Author, s => s.MapFrom(b => b.Author))
-            .ForMember(d => d.SubscribersCount, s => s.MapFrom(b => b.SubscriberIds.Count))
+            .ForMember(d => d.SubscribersCount, s => s.MapFrom(b => b.SubscribersCount))
             .ForMember(d => d.SubscriberUsernames, s => s.MapFrom(b => b.SubscriberUsernames))
             .ForMember(d => d.ActiveSubscribersCount, s => s.MapFrom(b => b.ActiveSubscribersCount))
             .ForMember(d => d.Assistants, s => s.MapFrom(b => b.Assistants));
@@ -55,14 +55,16 @@ internal class BlogMappingProfile : Profile
                 }
             });
 
-        // BlogDetails mapping (extends Blog with subscribers and full assistants)
-        CreateMap<SvcBlogDetails, BlogDetails>()
-            .IncludeBase<SvcBlog, Blog>()
-            .ForMember(d => d.Subscribers, s => s.MapFrom(b => b.Subscribers))
-            .ForMember(d => d.FullAssistants, s => s.MapFrom(b => b.FullAssistants.Select(a => a.User)));
-
         CreateMap<SvcRubric, Rubric>();
         CreateMap<SvcPublication, Publication>();
+
+        // Query string to domain filter. Mapped by name rather than by hand so
+        // a filter added to both sides needs no third edit here, and so the
+        // three fields the domain fills itself have to be named to be skipped.
+        CreateMap<BlogsQuery, SvcBlogFilter>()
+            .ForMember(d => d.HostUserIds, opt => opt.Ignore())
+            .ForMember(d => d.CurrentUserId, opt => opt.Ignore())
+            .ForMember(d => d.ExcludeOwnerIds, opt => opt.Ignore());
 
         // API Request to Service DTO
         CreateMap<CreateBlogRequest, SvcCreateBlog>();

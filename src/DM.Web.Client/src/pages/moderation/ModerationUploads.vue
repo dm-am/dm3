@@ -10,7 +10,7 @@
  */
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import ModerationApi from "@/shared/api/moderationApi";
+import { moderationApi } from "@/entities/moderation";
 import type { Upload } from "@/shared/api/models/common/upload";
 import type { Paging as PagingModel } from "@/shared/api/models/common";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
@@ -28,6 +28,7 @@ import {
 } from "@/shared/lib/utils/upload";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useRoleGate } from "./lib/useRoleGate";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const PAGE_SIZE = 25;
 
@@ -60,7 +61,7 @@ const columns: Column[] = [
 
 async function fetch() {
   loading.value = true;
-  const { data, error } = await ModerationApi.getAllUploads({
+  const { data, error } = await moderationApi.getAllUploads({
     username: usernameFilter.value || undefined,
     number: pageNumber.value,
     size: PAGE_SIZE,
@@ -89,10 +90,10 @@ const deleting = ref(false);
 async function confirmDelete() {
   if (!deleteTarget.value || deleting.value) return;
   deleting.value = true;
-  const { error } = await ModerationApi.deleteUpload(deleteTarget.value.id);
+  const { error } = await moderationApi.deleteUpload(deleteTarget.value.id);
   deleting.value = false;
   if (error) {
-    toast.error("Не удалось удалить файл");
+    notifyFailure(error, "Не удалось удалить файл");
     return;
   }
   toast.success("Файл удален");
@@ -207,7 +208,7 @@ async function confirmDelete() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .filters
   display: flex

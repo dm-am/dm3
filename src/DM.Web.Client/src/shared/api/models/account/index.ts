@@ -198,9 +198,7 @@ export type UpdateNotificationSettingsRequest = {
 };
 
 // Backwards compatibility aliases
-export type ChannelPreferences = BotConnection;
 export type NotificationPreferences = NotificationSettings;
-export type UpdateChannelPreferences = UpdateBotConnection;
 export type UpdateNotificationPreferences = UpdateNotificationSettingsRequest;
 
 // === Bot Links ===

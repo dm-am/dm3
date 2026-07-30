@@ -8,25 +8,23 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="DM.Web.API.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
         <PackageReference Include="AspNetCore.HealthChecks.MongoDb" />
         <PackageReference Include="AspNetCore.HealthChecks.Npgsql" />
         <PackageReference Include="AspNetCore.HealthChecks.Rabbitmq" />
         <PackageReference Include="AspNetCore.HealthChecks.UI.Client" />
         <PackageReference Include="AspNetCore.HealthChecks.Uris" />
         <PackageReference Include="Autofac.Extensions.DependencyInjection" />
-        <PackageReference Include="Grpc.AspNetCore" />
-        <PackageReference Include="Grpc.Net.Client" />
-        <PackageReference Include="Grpc.Net.ClientFactory" />
-        <PackageReference Include="Grpc.Tools">
-          <PrivateAssets>all</PrivateAssets>
-          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
         <PackageReference Include="Jamq.Client.Rabbit.DependencyInjection" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
           <PrivateAssets>all</PrivateAssets>
         </PackageReference>
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+        <PackageReference Include="Serilog" />
         <PackageReference Include="Swashbuckle.AspNetCore" />
         <PackageReference Include="Swashbuckle.AspNetCore.Swagger" />
         <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
@@ -44,23 +42,13 @@
         <ProjectReference Include="..\DM.Domain.Personal\DM.Domain.Personal.csproj" />
         <ProjectReference Include="..\DM.Infrastructure.Mail\DM.Infrastructure.Mail.csproj" />
         <ProjectReference Include="..\DM.Infrastructure.Persistence\DM.Infrastructure.Persistence.csproj" />
-        <ProjectReference Include="..\DM.Workers.SearchIndexer\DM.Workers.SearchIndexer.csproj" />
     </ItemGroup>
-    
-    <!-- Proto types are provided by DM.Workers.SearchIndexer reference -->
 
     <ItemGroup>
         <Content Update="appsettings.json">
             <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </Content>
-    </ItemGroup>
-
-    <ItemGroup>
-        <EmbeddedResource Include="Assets\Seed\diopside.jpg" />
-        <EmbeddedResource Include="Assets\Seed\Chuck.png" />
-        <EmbeddedResource Include="Assets\Seed\SolohinLex.jpg" />
-        <EmbeddedResource Include="Assets\Seed\SolohinLex.bbcode" />
     </ItemGroup>
 
 </Project>

@@ -7,10 +7,11 @@
  * so "Все" issues the two queries in parallel and merges by createdUtc).
  */
 import { computed, onMounted, ref } from "vue";
-import ModerationApi, {
+import {
+  moderationApi,
   type PremoderatedGame,
   type PremoderationStatus,
-} from "@/shared/api/moderationApi";
+} from "@/entities/moderation";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { Select, type SelectOption } from "@/shared/ui/Select";
@@ -49,7 +50,7 @@ const columns: Column[] = [
 ];
 
 async function fetchQueue(status: QueueStatus): Promise<GameRow[]> {
-  const { data, error } = await ModerationApi.getPremoderatedGames(status);
+  const { data, error } = await moderationApi.getPremoderatedGames(status);
   if (error) throw error;
   return (data?.resources ?? []).map((g) => ({
     ...g,

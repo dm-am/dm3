@@ -73,7 +73,7 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.Participation, s => s.MapFrom<GameParticipationResolver>())
             .ForMember(d => d.Master, s => s.MapFrom(g => g.Master))
             .ForMember(d => d.Assistants, s => s.MapFrom(g => g.Assistants))
-            .ForMember(d => d.SubscribersCount, s => s.MapFrom(g => g.SubscriberIds.Count()))
+            .ForMember(d => d.SubscribersCount, s => s.MapFrom(g => g.SubscribersCount))
             .ForMember(d => d.ActiveCharacters, s => s.MapFrom(g => g.ActiveCharacters))
             .ForMember(d => d.SubscriberUsernames, s => s.MapFrom(g => g.SubscriberUsernames))
             .ForMember(d => d.Recruitment, s => s.MapFrom(g => g.Recruitment))

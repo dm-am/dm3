@@ -15,7 +15,7 @@
  * no collapsed state to offer and stay unregistered.
  */
 import { ref, computed, onMounted } from "vue";
-import communityApi from "@/shared/api/communityApi";
+import { statisticsApi } from "@/entities/statistics";
 import { unwrapResource } from "@/shared/api";
 import type { Leaderboards } from "@/shared/api/models/community";
 import { useExpandableSection } from "@/shared/lib/composables";
@@ -50,7 +50,7 @@ const { isExpanded, toggle, zoneBindings } = useExpandableSection({
 });
 
 onMounted(async () => {
-  const { data, error } = await communityApi.getLeaderboards(
+  const { data, error } = await statisticsApi.getLeaderboards(
     props.year,
     props.month ?? undefined,
   );
@@ -99,7 +99,7 @@ const boardList = computed(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 // The reveal animation lives on the global .expand-zone class (Reset.sass),
 // driven by useExpandableSection.

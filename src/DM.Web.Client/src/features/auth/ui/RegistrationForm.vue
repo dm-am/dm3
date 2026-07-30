@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import type { RegisterCredentials } from "@/shared/api/models/account";
-import { useUserStore } from "@/entities/user";
+
 import { useNewPasswordField } from "@/shared/lib/composables/useNewPasswordField";
 import {
   useValidatedField,
@@ -14,7 +14,7 @@ import {
   PasswordStrengthIndicator,
 } from "@/shared/ui/PasswordInput";
 import { Tooltip } from "@/shared/ui/Tooltip";
-import { AccountApi } from "@/shared/api";
+import { accountApi, register } from "@/entities/user";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 
 const router = useRouter();
@@ -48,7 +48,7 @@ const emailPending = ref(false);
 const emailField = useValidatedField({
   validate: validators.combine(validators.required(), validators.email()),
   asyncValidate: async (value) => {
-    const { data, error } = await AccountApi.checkEmail(value);
+    const { data, error } = await accountApi.checkEmail(value);
     if (error || !data) return null; // Silent fail
 
     if (data.isAvailable) {
@@ -111,7 +111,7 @@ const submitEmail = async () => {
 };
 
 // Step 2: Submit registration
-const { register } = useUserStore();
+
 const passwordError = ref("");
 
 const submitPassword = async () => {
@@ -368,7 +368,7 @@ const handleRecovery = () => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 a
   font-weight: bold

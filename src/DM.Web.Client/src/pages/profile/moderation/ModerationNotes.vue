@@ -19,12 +19,13 @@
 import { ref } from "vue";
 import type { ModNote } from "@/shared/api/models/moderation";
 import type { Username } from "@/shared/api/models/community";
-import { moderationApi } from "@/shared/api";
+import { moderationApi } from "@/entities/moderation";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import Button from "@/shared/ui/Button/Button.vue";
-import { useToast } from "@/shared/lib/composables/useToast";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{
   notes: ModNote[];
@@ -35,8 +36,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "updated"): void;
 }>();
-
-const toast = useToast();
 
 const newNoteText = ref("");
 const creating = ref(false);
@@ -53,7 +52,7 @@ async function createNote() {
   );
   creating.value = false;
   if (error) {
-    toast.error("Не удалось создать заметку");
+    notifyFailure(error, "Не удалось создать заметку");
     return;
   }
   newNoteText.value = "";
@@ -77,20 +76,27 @@ async function saveEdit(noteId: string) {
     editText.value.trim(),
   );
   if (error) {
-    toast.error("Не удалось сохранить заметку");
+    notifyFailure(error, "Не удалось сохранить заметку");
     return;
   }
   cancelEdit();
   emit("updated");
 }
 
-async function deleteNote(noteId: string) {
-  if (!confirm("Удалить заметку?")) return;
-  const { error } = await moderationApi.deleteModNote(noteId);
+// --- Delete note (ConfirmDialog-gated) ---
+const deleteTarget = ref<ModNote | null>(null);
+const deleting = ref(false);
+
+async function confirmDelete() {
+  if (!deleteTarget.value || deleting.value) return;
+  deleting.value = true;
+  const { error } = await moderationApi.deleteModNote(deleteTarget.value.id);
+  deleting.value = false;
   if (error) {
-    toast.error("Не удалось удалить заметку");
+    notifyFailure(error, "Не удалось удалить заметку");
     return;
   }
+  deleteTarget.value = null;
   emit("updated");
 }
 </script>
@@ -123,7 +129,7 @@ async function deleteNote(noteId: string) {
             v-if="note.canDelete"
             type="button"
             class="mod-action mod-action-danger"
-            @click="deleteNote(note.id)"
+            @click="deleteTarget = note"
           >
             Удалить
           </button>
@@ -168,6 +174,17 @@ async function deleteNote(noteId: string) {
         Добавить заметку
       </Button>
     </div>
+
+    <ConfirmDialog
+      :show="deleteTarget !== null"
+      title="Удаление заметки"
+      message="Удалить заметку?"
+      confirm-label="Удалить"
+      danger
+      :loading="deleting"
+      @update:show="(v) => !v && (deleteTarget = null)"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>
 

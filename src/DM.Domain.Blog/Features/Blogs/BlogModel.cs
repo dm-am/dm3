@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 
@@ -121,12 +122,25 @@ public class Blog
     public IEnumerable<BlogAssistantInfo> Assistants { get; set; } = [];
 
     /// <summary>
-    /// Blog subscriber (reader) IDs from Subscriptions table
+    /// How many subscribers (readers) the blog has
     /// </summary>
-    public IReadOnlySet<Guid> SubscriberIds { get; set; } = new HashSet<Guid>();
+    public int SubscribersCount { get; set; }
 
     /// <summary>
-    /// Subscriber usernames for tooltip display (first 5)
+    /// Whether the user this blog was read for subscribes to it.
+    /// </summary>
+    /// <remarks>
+    /// Viewer-scoped: only the list-shaped reads fill it, exactly as the
+    /// subscriber id set it replaces was only filled there. The single-blog reads
+    /// (<c>Get</c>, <c>GetByPublicId</c>, <c>GetByOwnerUsernameAsync</c>) leave it
+    /// false, which is why <c>BlogIntentionResolver</c>'s subscriber branch has
+    /// never fired — see the note on that resolver.
+    /// </remarks>
+    public bool IsViewerSubscriber { get; set; }
+
+    /// <summary>
+    /// Subscriber usernames for tooltip display, capped and ordered per
+    /// <see cref="SubscriptionPolicy.PreviewCap" />
     /// </summary>
     public IEnumerable<string> SubscriberUsernames { get; set; } = [];
 
@@ -180,22 +194,6 @@ public class BlogAssistantInfo
     /// Whether user is a newbie (less than 100 posts) - affects name color
     /// </summary>
     public bool IsNewbie { get; set; }
-}
-
-/// <summary>
-/// Extended DTO model for blog (full details, for detail pages)
-/// </summary>
-public class BlogDetails : Blog
-{
-    /// <summary>
-    /// Blog subscribers (full user information)
-    /// </summary>
-    public IEnumerable<GeneralUser> Subscribers { get; set; } = [];
-
-    /// <summary>
-    /// Blog assistants with role information (full user details)
-    /// </summary>
-    public IEnumerable<BlogUser> FullAssistants { get; set; } = [];
 }
 
 /// <summary>

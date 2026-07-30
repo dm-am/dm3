@@ -1,5 +1,7 @@
+using DM.Domain.Core.Identity;
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace DM.Infrastructure.Persistence.Entities.Account;
 
@@ -7,6 +9,7 @@ namespace DM.Infrastructure.Persistence.Entities.Account;
 /// Pending registration waiting for email confirmation and username selection.
 /// After confirmation, converted to User and deleted.
 /// </summary>
+[Table("PendingRegistrations")]
 public class PendingRegistration
 {
     /// <summary>
@@ -45,7 +48,7 @@ public class PendingRegistration
     /// <summary>
     /// Password hash algorithm version (4 = Argon2id)
     /// </summary>
-    public int PasswordHashVersion { get; set; } = 4;
+    public int PasswordHashVersion { get; set; } = PasswordHashing.CurrentVersion;
 
     /// <summary>
     /// Original registration time (for cleanup after 7 days)

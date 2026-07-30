@@ -5,7 +5,7 @@
  * hand-rolled modal in ModerationAwardTypes.vue.
  */
 import { ref, computed } from "vue";
-import { achievementApi } from "@/shared/api";
+import { achievementApi } from "@/entities/achievement";
 import type { AwardType } from "@/shared/api/models/achievements";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";

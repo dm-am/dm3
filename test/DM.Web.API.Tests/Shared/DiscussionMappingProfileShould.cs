@@ -9,19 +9,6 @@ namespace DM.Web.API.Tests.Shared;
 
 public class DiscussionMappingProfileShould : UnitTestBase
 {
-    private readonly IMapper _mapper;
-
-    public DiscussionMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UserMappingProfile>();
-            cfg.AddProfile<BbTextMappingProfile>();
-            cfg.AddProfile<DiscussionMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
-
     [Fact]
     public void HaveValidConfiguration()
     {

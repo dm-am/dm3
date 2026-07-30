@@ -74,13 +74,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # The example file ships the encryption key empty, and compose declares
+      # it with ${...:?} — which rejects an empty value, not just a missing
+      # one. Copying the example alone left every step below dead. A throwaway
+      # key is generated here because this stack is torn down with the job.
+      #
+      # Through the environment rather than by rewriting the line in .env:
+      # compose prefers the environment over the file, so this keeps working if
+      # the example ever gains a value, a comment or trailing whitespace — the
+      # anchored sed it replaces would have silently matched nothing.
+      - name: Generate a throwaway encryption key
+        run: echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
       - name: Create .env for Docker Compose
-        run: cp docker/.env.example docker/.env
+        run: |
+          cp docker/.env.example docker/.env
+          cd docker && docker compose config --quiet
 
       - name: Start infrastructure with Docker Compose
         run: |
           cd docker
-          docker compose up -d postgres mongo rabbitmq minio mailhog opensearch jaeger
+          docker compose up -d postgres mongo rabbitmq minio mailhog jaeger
           docker compose up -d --wait migration
 
       - name: Build and start API

@@ -10,6 +10,5 @@ internal class NotepadMappingProfile : Profile
     public NotepadMappingProfile()
     {
         CreateMap<NotepadEntry, NotepadEntryResponse>();
-        CreateMap<NotepadCategory, NotepadCategoryResponse>();
     }
 }

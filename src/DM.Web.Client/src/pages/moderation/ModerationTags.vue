@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from "vue";
 import { useModal } from "vue-final-modal";
-import ModerationApi, {
+import {
+  gameTagApi,
   type ModerationTagGroup,
   type ModerationTag,
-} from "@/shared/api/moderationApi";
+} from "@/entities/game";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { EmptyState } from "@/shared/ui";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { describeFailure, notifyFailure } from "@/shared/lib/errors";
 import TagGroupDialog from "./dialogs/TagGroupDialog.vue";
 import TagDialog from "./dialogs/TagDialog.vue";
 
@@ -42,14 +44,18 @@ async function loadData() {
   error.value = null;
   try {
     const [groupsRes, tagsRes] = await Promise.all([
-      ModerationApi.getTagGroups(),
-      ModerationApi.getTags(),
+      gameTagApi.getTagGroups(),
+      gameTagApi.getTags(),
     ]);
+    // A failed load is the page's own state, not a toast: there is nothing on
+    // screen to go back to, so the message belongs where the table would be.
+    const failure = groupsRes.error ?? tagsRes.error;
+    if (failure) {
+      error.value = describeFailure(failure, "Не удалось загрузить данные");
+      return;
+    }
     groups.value = groupsRes.data?.resources ?? [];
     tags.value = tagsRes.data?.resources ?? [];
-  } catch (e) {
-    error.value = "Не удалось загрузить данные";
-    console.error(e);
   } finally {
     loading.value = false;
   }
@@ -101,15 +107,18 @@ async function confirmDeleteGroup() {
   if (!deleteGroupTarget.value || deletingGroup.value) return;
   deletingGroup.value = true;
   try {
-    await ModerationApi.deleteTagGroup(deleteGroupTarget.value.id);
+    const { error } = await gameTagApi.deleteTagGroup(
+      deleteGroupTarget.value.id,
+    );
+    if (error) {
+      notifyFailure(error, "Не удалось удалить группу тегов");
+      return;
+    }
     if (selectedGroupId.value === deleteGroupTarget.value.id) {
       selectedGroupId.value = null;
     }
     deleteGroupTarget.value = null;
     await loadData();
-  } catch (e) {
-    console.error(e);
-    toast.error("Ошибка при удалении группы");
   } finally {
     deletingGroup.value = false;
   }
@@ -163,12 +172,13 @@ async function confirmDeleteTag() {
   if (!deleteTagTarget.value || deletingTag.value) return;
   deletingTag.value = true;
   try {
-    await ModerationApi.deleteTag(deleteTagTarget.value.id);
+    const { error } = await gameTagApi.deleteTag(deleteTagTarget.value.id);
+    if (error) {
+      notifyFailure(error, "Не удалось удалить тег");
+      return;
+    }
     deleteTagTarget.value = null;
     await loadData();
-  } catch (e) {
-    console.error(e);
-    toast.error("Ошибка при удалении тега");
   } finally {
     deletingTag.value = false;
   }
@@ -326,7 +336,7 @@ onMounted(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .moderation-tags
   display: grid
@@ -488,7 +498,7 @@ onMounted(() => {
     cursor: default
 
   &.btn-danger:hover:not(:disabled)
-    background: rgba($accent-red, 0.1)
+    +tint($accent-red, 10%)
     color: $accent-red
 
   svg

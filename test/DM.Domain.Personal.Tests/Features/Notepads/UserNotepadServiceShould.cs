@@ -7,7 +7,7 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Notepads;
 using DM.Domain.Personal.Features.Notepads;
-using DM.Domain.Personal.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using Moq;
@@ -24,7 +24,6 @@ public class UserNotepadServiceShould : UnitTestBase
     private readonly UserNotepadService _service;
     private readonly Guid _currentUserId = Guid.NewGuid();
     private readonly Guid _entryId = Guid.NewGuid();
-    private readonly Guid _categoryId = Guid.NewGuid();
     private readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
 
     public UserNotepadServiceShould()
@@ -34,7 +33,7 @@ public class UserNotepadServiceShould : UnitTestBase
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
 
-        var identity = Identity.Authenticated(_currentUserId, "CurrentUser", UserRole.RegularUser);
+        var identity = Identities.User(_currentUserId, "CurrentUser", UserRole.RegularUser);
         _identityProvider.Setup(p => p.Current).Returns(identity);
         _dateTimeProvider.Setup(d => d.Now).Returns(_now);
         _guidFactory.Setup(g => g.Create()).Returns(_entryId);
@@ -97,7 +96,6 @@ public class UserNotepadServiceShould : UnitTestBase
 
         var createEntry = new CreateNotepadEntry
         {
-            CategoryId = _categoryId,
             Title = "Test Entry",
             Content = "Test Content"
         };
@@ -109,7 +107,6 @@ public class UserNotepadServiceShould : UnitTestBase
         capturedEntity.NotepadType.Should().Be(NotepadType.User);
         capturedEntity.ContainerId.Should().Be(_currentUserId);
         capturedEntity.AuthorId.Should().Be(_currentUserId);
-        capturedEntity.CategoryId.Should().Be(_categoryId);
         capturedEntity.Title.Should().Be("Test Entry");
         capturedEntity.Content.Should().Be("Test Content");
         capturedEntity.CreatedUtc.Should().Be(_now);
@@ -136,7 +133,6 @@ public class UserNotepadServiceShould : UnitTestBase
         {
             Title = "Updated Title",
             Content = "Updated Content",
-            CategoryId = _categoryId,
             SortOrder = 5
         };
 
@@ -175,56 +171,5 @@ public class UserNotepadServiceShould : UnitTestBase
         await _service.DeleteEntry(_entryId);
 
         _repository.Verify(r => r.DeleteEntryAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task GetCategoriesForCurrentUser()
-    {
-        _repository.Setup(r => r.GetCategoriesAsync(NotepadType.User, _currentUserId, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync([]);
-
-        await _service.GetCategories();
-
-        _repository.Verify(r => r.GetCategoriesAsync(NotepadType.User, _currentUserId, null, It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task CreateCategoryWithCorrectData()
-    {
-        CreateNotepadCategoryInternal? capturedEntity = null;
-        _repository.Setup(r => r.CreateCategoryAsync(It.IsAny<CreateNotepadCategoryInternal>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateNotepadCategoryInternal, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new NotepadCategory());
-
-        var createCategory = new CreateNotepadCategory { Name = "Test Category" };
-
-        await _service.CreateCategory(createCategory);
-
-        capturedEntity.Should().NotBeNull();
-        capturedEntity!.CategoryId.Should().Be(_entryId);
-        capturedEntity.NotepadType.Should().Be(NotepadType.User);
-        capturedEntity.ContainerId.Should().Be(_currentUserId);
-        capturedEntity.AuthorId.Should().Be(_currentUserId);
-        capturedEntity.Name.Should().Be("Test Category");
-        capturedEntity.CreatedUtc.Should().Be(_now);
-    }
-
-    [Fact]
-    public async Task ThrowWhenAccessingCategoryBelongingToAnotherUser()
-    {
-        var category = new NotepadCategory
-        {
-            Id = _categoryId,
-            NotepadType = NotepadType.User,
-            ContainerId = Guid.NewGuid()
-        };
-        _repository.Setup(r => r.GetCategoryAsync(_categoryId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(category);
-
-        var updateCategory = new UpdateNotepadCategory { Name = "Updated" };
-        var act = () => _service.UpdateCategory(_categoryId, updateCategory);
-
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("Access denied"));
     }
 }

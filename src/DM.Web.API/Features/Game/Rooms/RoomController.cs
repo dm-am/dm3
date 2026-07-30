@@ -45,9 +45,6 @@ public class RoomController : ControllerBase
         _gameApiService = gameApiService;
     }
 
-    private async Task<Guid> ResolveGameId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _gameApiService.GetByPublicId(id)).Resource.Id;
-
     /// <summary>
     /// Get list of rooms in game
     /// </summary>
@@ -56,10 +53,10 @@ public class RoomController : ControllerBase
     /// <response code="404">Game not found</response>
     [HttpGet("~/v1/games/{id}/rooms", Name = nameof(GetRooms))]
     [ProducesResponseType(typeof(ListEnvelope<Room>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetRooms(string id)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         return Ok(await _roomApiService.GetAll(gameId));
     }
 
@@ -76,13 +73,13 @@ public class RoomController : ControllerBase
     [HttpPost("~/v1/games/{id}/rooms", Name = nameof(PostRoom))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Room>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostRoom(string id, [FromBody] CreateRoomRequest room)
     {
-        var gameId = await ResolveGameId(id);
+        var gameId = await _gameApiService.ResolveId(id);
         var result = await _roomApiService.Create(gameId, room);
         return CreatedAtRoute(nameof(GetRoom),
             new {id = result.Resource.Id}, result);
@@ -111,10 +108,10 @@ public class RoomController : ControllerBase
     [HttpPatch("{id}", Name = nameof(PatchRoom))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Room>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchRoom(Guid id, [FromBody] Room room) =>
         Ok(await _roomApiService.Update(id, room));
 
@@ -129,9 +126,9 @@ public class RoomController : ControllerBase
     [HttpDelete("{id}", Name = nameof(DeleteRoom))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteRoom(Guid id)
     {
         await _roomApiService.Delete(id);
@@ -152,11 +149,11 @@ public class RoomController : ControllerBase
     [HttpPost("{id}/accesses", Name = nameof(PostAccess))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<RoomAccess>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostAccess(Guid id, [FromBody] RoomAccess access)
     {
         var result = await _accessApiService.Create(id, access);
@@ -177,10 +174,10 @@ public class RoomController : ControllerBase
     [HttpPatch("accesses/{id}", Name = nameof(PatchAccess))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<RoomAccess>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchAccess(Guid id, [FromBody] RoomAccess access) =>
         Ok(await _accessApiService.Update(id, access));
 
@@ -195,9 +192,9 @@ public class RoomController : ControllerBase
     [HttpDelete("accesses/{id}", Name = nameof(DeleteAccess))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteAccess(Guid id)
     {
         await _accessApiService.Delete(id);
@@ -218,11 +215,11 @@ public class RoomController : ControllerBase
     [HttpPost("{id}/pendencies", Name = nameof(CreatePostPendency))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<PostPendency>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreatePostPendency(Guid id, [FromBody] PostPendency postPendency)
     {
         var result = await _postPendencyApiService.Create(id, postPendency);
@@ -240,9 +237,9 @@ public class RoomController : ControllerBase
     [HttpDelete("pendencies/{id}", Name = nameof(DeletePostPendency))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeletePostPendency(Guid id)
     {
         await _postPendencyApiService.Delete(id);
@@ -259,8 +256,8 @@ public class RoomController : ControllerBase
     [HttpDelete("{id}/posts/unread", Name = nameof(MarkPostsAsRead))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkPostsAsRead(Guid id)
     {
         await _postApiService.MarkAsRead(id);

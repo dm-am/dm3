@@ -199,6 +199,39 @@ public class ChatIntentionResolverShould
     }
 
     [Fact]
+    public void DenyGlobalChatMessageUnderTheOrdinaryBan()
+    {
+        var user = new AuthenticatedUser
+        {
+            UserId = _testUserId,
+            Role = UserRole.RegularUser,
+            AccessPolicy = AccessPolicy.DemocraticBan
+        };
+        var chat = new Chat { Type = ChatType.Global, Participants = Array.Empty<GeneralUser>() };
+
+        _resolver.IsAllowed(user, ChatIntention.CreateMessage, chat).Should().BeFalse();
+    }
+
+    [Fact]
+    public void StillAllowDirectMessagesUnderTheOrdinaryBan()
+    {
+        var user = new AuthenticatedUser
+        {
+            UserId = _testUserId,
+            Role = UserRole.RegularUser,
+            AccessPolicy = AccessPolicy.DemocraticBan
+        };
+        var chat = new Chat
+        {
+            Type = ChatType.Direct,
+            Participants = new[] { new GeneralUser { UserId = _testUserId } }
+        };
+
+        // Private correspondence is outside the ordinary ban by design
+        _resolver.IsAllowed(user, ChatIntention.CreateMessage, chat).Should().BeTrue();
+    }
+
+    [Fact]
     public void DenyDeleteGlobalChat()
     {
         var user = CreateUser(_testUserId);

@@ -39,12 +39,12 @@ import { SvgIcon } from "@/shared/ui/Icon";
 import SidebarBlock from "./SidebarBlock.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import fundraisingApi, { type Fundraising } from "@/shared/api/fundraisingApi";
+import { fundraisingApi, type Fundraising } from "@/entities/fundraising";
 import { useApiResource } from "@/shared/lib/composables/useApiResource";
-import { useUserStore, userIsAdmin } from "@/entities/user";
+import { useAuthStore, userIsAdmin } from "@/entities/user";
 import type { Envelope } from "@/shared/api/models/common";
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 
 // Admin-only edit affordance: guests and regular users never see it,
 // so the guest visual stays unchanged.
@@ -65,7 +65,7 @@ void fetch();
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .fetch-error
   display: block

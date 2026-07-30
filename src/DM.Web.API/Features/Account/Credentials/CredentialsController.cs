@@ -3,12 +3,12 @@ using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Exceptions;
 using DM.Web.API.Shared.Authentication;
-using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Account.Credentials;
 
@@ -25,7 +25,7 @@ namespace DM.Web.API.Features.Account.Credentials;
 [ApiExplorerSettings(GroupName = "Account")]
 [Tags("Credentials")]
 [AuthenticationRequired]
-[EnableRateLimiting("auth")]
+[EnableRateLimiting(RateLimitPolicies.Auth)]
 public class CredentialsController : ControllerBase
 {
     private readonly ICredentialsApiService _credentialsService;
@@ -54,9 +54,9 @@ public class CredentialsController : ControllerBase
     /// <response code="429">Too many requests</response>
     [HttpPost("password", Name = nameof(ChangePassword))]
     [ProducesResponseType(typeof(User), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> ChangePassword([FromBody] PasswordChangeRequest request) =>
         Ok(await _credentialsService.ChangePassword(request));
 
@@ -79,9 +79,9 @@ public class CredentialsController : ControllerBase
     /// <response code="429">Too many requests</response>
     [HttpPost("email-change", Name = nameof(RequestEmailChange))]
     [ProducesResponseType(typeof(User), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> RequestEmailChange([FromBody] EmailChangeRequest request) =>
         Ok(await _credentialsService.RequestEmailChange(request));
 
@@ -99,8 +99,8 @@ public class CredentialsController : ControllerBase
     [HttpPost("email-change/{token:guid}", Name = nameof(ConfirmEmailChange))]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> ConfirmEmailChange(Guid token)
     {
         await _credentialsService.ConfirmEmailChange(token);
@@ -130,8 +130,8 @@ public class CredentialsController : ControllerBase
     /// <response code="401">User not authenticated</response>
     [HttpPost("username-change", Name = nameof(RequestUsernameChange))]
     [ProducesResponseType(typeof(UsernameChangeResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> RequestUsernameChange([FromBody] UsernameChangeCreateRequest request) =>
         Ok(await _credentialsService.RequestUsernameChangeAsync(request));
 
@@ -148,7 +148,7 @@ public class CredentialsController : ControllerBase
     [HttpGet("username-change", Name = nameof(GetUsernameChangeStatus))]
     [ProducesResponseType(typeof(UsernameChangeResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetUsernameChangeStatus()
     {
         var result = await _credentialsService.GetUsernameChangeStatusAsync();
@@ -168,7 +168,7 @@ public class CredentialsController : ControllerBase
     [HttpGet("username-change/{token:guid}", Name = nameof(GetUsernameChangeApproval))]
     [AllowAnonymous]
     [ProducesResponseType(typeof(UsernameChangeResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUsernameChangeApproval(Guid token)
     {
         var result = await _credentialsService.GetUsernameChangeApprovalAsync(token);
@@ -193,8 +193,8 @@ public class CredentialsController : ControllerBase
     [HttpPost("username-change/{token:guid}", Name = nameof(CompleteUsernameChange))]
     [AllowAnonymous]
     [ProducesResponseType(typeof(UsernameChangeResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> CompleteUsernameChange(Guid token, [FromBody] UsernameChangeCompletionRequest request) =>
         Ok(await _credentialsService.CompleteUsernameChangeAsync(token, request));
 

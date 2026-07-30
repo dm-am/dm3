@@ -16,10 +16,10 @@ import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { DISCORD_INVITE_URL } from "@/shared/config/contacts";
 import { SupportTicketForm } from "@/features/support-ticket";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 
 const route = useRoute();
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 
 // The ?action=recovery CTA below is consumed by the guest-only GuestActions
 // widget — for an already authenticated user it would be a silent no-op, so
@@ -77,8 +77,8 @@ const isAccessRecoveryAuthenticated = computed(
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
+@import "@/assets/styles/Variables"
+@import "@/assets/styles/Themes"
 
 .recovery-card
   display: flex

@@ -36,6 +36,7 @@ using DM.Domain.Core.Likes;
 using DM.Domain.Core.Notepads;
 using DM.Domain.Community.Features.Fundraising;
 using DM.Domain.Community.Features.Polls;
+using DM.Domain.Community.Features.Statistics;
 using DM.Domain.Community.Features.UserEndorsements;
 using DM.Domain.Community.Features.WebsiteTestimonials;
 using DM.Domain.Messaging.Features.Chats;
@@ -112,7 +113,11 @@ public class PersistenceModule : Module
                 return new DmMongoClient(settings, connectionString);
             })
             .AsSelf()
-            .AsImplementedInterfaces();
+            .AsImplementedInterfaces()
+            // MongoClient owns the connection pool and the cluster monitor and is
+            // built to be shared; per-dependency construction handed every consumer
+            // its own, which is the one way to defeat pooling.
+            .SingleInstance();
 
         builder.RegisterType<UpdateBuilderFactory>()
             .AsSelf()
@@ -139,6 +144,10 @@ public class PersistenceModule : Module
             .As<IFundraisingGoalRepository>()
             .InstancePerLifetimeScope();
 
+        builder.RegisterType<CommunityStatsRepository>()
+            .As<ICommunityStatsRepository>()
+            .InstancePerLifetimeScope();
+
         // Forum repositories
         builder.RegisterType<BoardRepository>()
             .As<IBoardRepository>()
@@ -154,6 +163,10 @@ public class PersistenceModule : Module
 
         builder.RegisterType<TopicCommentRepository>()
             .As<ITopicCommentRepository>()
+            .InstancePerLifetimeScope();
+
+        builder.RegisterType<Repositories.Search.ForumSearchRepository>()
+            .As<DM.Domain.Forum.Features.Search.IForumSearchRepository>()
             .InstancePerLifetimeScope();
 
         // Messaging repositories

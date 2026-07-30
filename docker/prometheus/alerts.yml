@@ -12,9 +12,9 @@ groups:
 
       - alert: HighErrorRate
         expr: |
-          sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m]))
+          sum(rate(http_server_request_duration_seconds_count{job="dm-api",http_response_status_code=~"5.."}[5m]))
           /
-          sum(rate(http_server_request_duration_seconds_count[5m]))
+          sum(rate(http_server_request_duration_seconds_count{job="dm-api"}[5m]))
           > 0.05
         for: 5m
         labels:
@@ -25,7 +25,7 @@ groups:
 
       - alert: HighLatency
         expr: |
-          histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le))
+          histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{job="dm-api"}[5m])) by (le))
           > 2
         for: 5m
         labels:
@@ -37,13 +37,26 @@ groups:
   - name: dm-consumers
     rules:
       - alert: ConsumerDown
-        expr: up{job=~"dm-(notifications|search-engine|email-sender)-consumer"} == 0
+        expr: up{job=~"dm-(notification|mail)-worker"} == 0
         for: 2m
         labels:
           severity: critical
         annotations:
           summary: "Consumer {{ $labels.job }} is down"
           description: "{{ $labels.job }} has been unreachable for more than 2 minutes."
+
+      # A renamed or removed scrape target produces no `up` series at all, so
+      # ConsumerDown stays silent on exactly the change that breaks it.
+      - alert: ConsumerScrapeTargetMissing
+        expr: |
+          absent(up{job="dm-notification-worker"})
+          or absent(up{job="dm-mail-worker"})
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A consumer scrape target is not configured"
+          description: "Prometheus has no target for one of the consumers — check the job names against the container names."
 
   - name: dm-infrastructure
     rules:

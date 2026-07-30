@@ -4,6 +4,10 @@ import Api from "./client";
 export { Api };
 export default Api;
 
+// Installed by the app layer: the client reports an expired session, the app
+// decides where that takes the user.
+export { setSessionExpiredHandler } from "./client";
+
 // BBCode render audience — semantic intent for server-rendered content
 export {
   RENDER_AUDIENCE,
@@ -14,37 +18,20 @@ export {
 // Envelope unwrap helper (single-resource responses)
 export { unwrapResource } from "./envelope";
 
-// API Services (PascalCase)
-export { default as AccountApi } from "./accountApi";
-export { default as AchievementApi } from "./achievementApi";
-export { default as BlacklistApi } from "./blacklistApi";
-export { default as CommunityApi } from "./communityApi";
-export { default as ModerationApi } from "./moderationApi";
-export { default as NotepadApi } from "./notepadApi";
-export { default as NotificationApi } from "./notificationApi";
+// Mirror list — deployment topology, not a domain concept
 export {
-  default as PersonalApi,
-  type UpdateProfilePayload,
-} from "./personalApi";
-export { default as SubscriptionApi } from "./subscriptionApi";
-export {
-  default as SupportApi,
-  type TicketSubtype,
-  type CreateTicketIntake,
-  type Ticket,
-  type TicketStatus,
-} from "./supportApi";
-export { default as UploadApi } from "./uploadApi";
+  default as mirrorApi,
+  type Mirror,
+  type MirrorList,
+} from "./mirrorApi";
 
-// API Services (camelCase aliases for backward compatibility)
-export { default as accountApi } from "./accountApi";
-export { default as achievementApi } from "./achievementApi";
-export { default as blacklistApi } from "./blacklistApi";
-export { default as communityApi } from "./communityApi";
-export { default as moderationApi } from "./moderationApi";
-export { default as notepadApi } from "./notepadApi";
-export { default as notificationApi } from "./notificationApi";
-export { default as personalApi } from "./personalApi";
+// Uploading a binary with progress and an idempotency key is transport, and the
+// two consumers belong to different domains — so this one client stays here
+// while every domain client lives in its entity slice
+// (docs/conventions/PATTERNS.md). The singleton is exported under a camelCase
+// name: a parallel PascalCase set used to exist "for backward compatibility"
+// with nothing, and both halves accumulated real consumers.
+export { default as uploadApi } from "./uploadApi";
 
 // Re-export models
 export * from "./models";

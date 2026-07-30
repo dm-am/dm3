@@ -53,6 +53,16 @@ jobs:
         name: coverage-reports
         path: TestResults/**/coverage.cobertura.xml
         if-no-files-found: error
+    # The contract only existed inside a running Development container: Swagger
+    # is not served in production. The integration suite writes it out so it can
+    # be diffed between builds and consumed outside the process.
+    - name: Upload OpenAPI contract
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: openapi-contract
+        path: artifacts/openapi/*.json
+        if-no-files-found: error
 
   frontend:
     runs-on: ubuntu-latest
@@ -80,6 +90,116 @@ jobs:
         path: src/DM.Web.Client/coverage/
         if-no-files-found: warn
 
+  # The end-to-end tier, which until now ran nowhere: 32 spec files and 258 tests
+  # that only ever executed on the owner's machine, so nothing stopped a merge
+  # from breaking them and nobody found out until the next manual run.
+  #
+  # It needs a real stack, not a mock — the suite talks to the API over HTTP and
+  # asserts on what a browser renders — so the shape below is the one zap-scan
+  # already uses, plus a seed.
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      # Every compose invocation in this job means the pair, and repeating the
+      # flags five times is how one of them ends up missing the overlay.
+      COMPOSE_FILE: docker-compose.yml:docker-compose.e2e.yml
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: src/DM.Web.Client/package-lock.json
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    # docker/.env.example ships the encryption key empty and compose declares it
+    # with ${...:?}, which rejects an empty value as hard as a missing one.
+    # The key goes into the job environment rather than into .env: compose
+    # prefers the environment over the file, so no step has to edit a line of a
+    # file it does not own, and the value dies with the runner.
+    - name: Generate a throwaway encryption key
+      run: echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
+    - name: Create .env for Docker Compose
+      run: cp docker/.env.example docker/.env
+
+    # Load-bearing, not a convenience. One /games load is 17 API requests — 3 for
+    # the page and 14 for the site shell — against a global budget of 100 per
+    # address per minute, so a 38-test spec file burns the whole minute in three
+    # tests and every test after that fails on a data-loading error that looks
+    # exactly like a stale selector. RateLimiting:Enabled=false registers every
+    # policy as a no-op, which is what a single-address test runner needs.
+    #
+    # Generated here rather than committed: docker-compose.yml and
+    # docker-compose.preview.yml are the combination that gets deployed and the
+    # compose-topology job validates exactly that pair. A knob that must never
+    # reach a server does not belong in that set.
+    - name: Overlay that turns rate limiting off for the run
+      run: |
+        cat > docker/docker-compose.e2e.yml <<'YAML'
+        services:
+          dmapi:
+            environment:
+              DM_RateLimiting__Enabled: "false"
+        YAML
+
+    - name: Start the stack
+      working-directory: docker
+      run: |
+        docker compose config --quiet
+        docker compose up -d postgres mongo rabbitmq minio mailhog jaeger
+        docker compose up -d --wait migration
+        docker compose up -d --build --wait dmapi
+
+    - name: Wait for API health
+      run: timeout 60 bash -c 'until curl -sf http://localhost:5000/_health; do sleep 2; done'
+
+    # The suite asserts against seeded accounts and content: global setup logs in
+    # as admin@test.local before the first spec, and an unseeded database fails
+    # the whole run in that one step.
+    - name: Seed the database
+      working-directory: docker
+      run: docker compose run --rm -T --build seeder all
+
+    - name: Install dependencies
+      working-directory: src/DM.Web.Client
+      run: npm ci
+
+    # Chromium only. The config declares nine projects; the other eight would
+    # multiply both the wall clock and the request count by nine to re-verify the
+    # same assertions against engines whose behaviour differences this suite does
+    # not test for. Cross-browser belongs on a schedule, where a two-hour matrix
+    # costs nobody a review cycle — not on a pull request.
+    - name: Install Chromium
+      working-directory: src/DM.Web.Client
+      run: npx playwright install --with-deps chromium
+
+    # playwright.config.ts builds the bundle and serves it with vite preview on
+    # port 5174, which is the only free choice: the API validates Origin twice
+    # and its allowlist holds 5173, 5174 and 8080.
+    - name: Run the suite
+      working-directory: src/DM.Web.Client
+      run: npx playwright test --project=chromium
+
+    - name: Upload Playwright report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-report
+        path: src/DM.Web.Client/playwright-report/
+        if-no-files-found: warn
+
+    # A red run whose only evidence is a browser-side timeout is not diagnosable.
+    # Half the failure modes here are server-side: a migration that did not
+    # apply, a rejected Origin, a 500 behind a spinner.
+    - name: API logs on failure
+      if: failure()
+      working-directory: docker
+      run: docker compose logs --tail=300 dmapi migration
+
   dependency-scan:
     runs-on: ubuntu-latest
     steps:
@@ -105,7 +225,7 @@ jobs:
       run: cd src/DM.Web.Client && npm ci && npm audit --omit=dev --audit-level=high
 
   publish:
-    needs: [build, frontend, dependency-scan]
+    needs: [build, frontend, e2e, dependency-scan]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
     permissions:
@@ -118,8 +238,6 @@ jobs:
             image_suffix: api
           - project: DM.Workers.Mail
             image_suffix: worker-mail
-          - project: DM.Workers.SearchIndexer
-            image_suffix: worker-search
           - project: DM.Workers.NotificationDispatcher
             image_suffix: worker-notification
     steps:
@@ -162,3 +280,102 @@ jobs:
           PROJECT_NAME=${{ matrix.project }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+
+  # The frontend has its own context and Dockerfile, so it cannot ride the
+  # publish matrix without conditionals in every step. Until this job existed the
+  # SPA image was never built by CI at all: the only thing that referenced it was
+  # a compose service pointing at a directory that does not exist.
+  publish-frontend:
+    needs: [build, frontend, e2e, dependency-scan]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-front
+        tags: |
+          type=sha,prefix=
+          type=ref,event=branch
+          type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+    - name: Build and push image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./src/DM.Web.Client
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # A build context that does not exist, an overlay that no longer parses or a
+  # service renamed out from under the installer must fail here, not on the
+  # server. This is the check that would have caught the frontend context
+  # pointing at a directory removed long ago.
+  compose-topology:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Validate the deployed overlay combination
+      working-directory: docker
+      env:
+        DM_CryptoConfiguration__KeyBase64: ci-validation-placeholder
+        MONGO_ROOT_PASSWORD: ci-validation-placeholder
+        MONGO_PASSWORD: ci-validation-placeholder
+        POSTGRES_PASSWORD: ci-validation-placeholder
+        RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
+        MINIO_ROOT_PASSWORD: ci-validation-placeholder
+        GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
+        IMGPROXY_KEY: ci-validation-placeholder
+        IMGPROXY_SALT: ci-validation-placeholder
+      run: |
+        docker compose --env-file /dev/null -f docker-compose.yml config --quiet
+        docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.preview.yml config --quiet
+
+    - name: Every build context the overlay names must exist
+      working-directory: docker
+      env:
+        DM_CryptoConfiguration__KeyBase64: ci-validation-placeholder
+        MONGO_ROOT_PASSWORD: ci-validation-placeholder
+        MONGO_PASSWORD: ci-validation-placeholder
+        POSTGRES_PASSWORD: ci-validation-placeholder
+        RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
+        MINIO_ROOT_PASSWORD: ci-validation-placeholder
+        GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
+        IMGPROXY_KEY: ci-validation-placeholder
+        IMGPROXY_SALT: ci-validation-placeholder
+      run: |
+        # Take everything after the key rather than a whitespace-split field:
+        # compose resolves contexts to absolute paths, and a path may contain
+        # spaces.
+        docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.preview.yml config \
+          | sed -n 's/^[[:space:]]*context:[[:space:]]*//p' | sort -u | while read -r ctx; do
+              echo "checking build context: $ctx"
+              test -d "$ctx" || { echo "::error::build context does not exist: $ctx"; exit 1; }
+            done
+
+    - name: The unit systemd runs must name the same files as the installer
+      run: |
+        installer=$(grep -oE '\-f [a-z.-]+\.yml' docker/setup-server.sh | sort -u)
+        unit=$(grep -oE '\-f [a-z.-]+\.yml' docker/dm3.service | sort -u)
+        echo "installer: $installer"
+        echo "unit:      $unit"
+        test "$installer" = "$unit" || { echo "::error::dm3.service and setup-server.sh disagree on the compose files"; exit 1; }

@@ -35,10 +35,6 @@ export type {
   ChatRoomAccess,
   CreateChatRoomInput,
   UpdateChatRoomInput,
-  NotepadEntry,
-  NotepadType,
-  CreateNotepadEntryInput,
-  UpdateNotepadEntryInput,
   CreateRoomInput,
   PostPendencyInput,
   CreatePostInput,
@@ -55,12 +51,11 @@ export type {
 // Enums (exported as values, can also be used as types)
 export {
   GameStatus,
-  GameRole,
+  GameParticipation,
   ClosedReason,
   CommentariesAccessMode,
   AttributeSchemaType,
   AttributeSpecificationType,
-  Alignment,
   RoomType,
   RoomAccessType,
   RoomAccessPolicy,
@@ -78,8 +73,33 @@ export type { PulseSearchParams } from "./model/pulseStore";
 // Composables
 export { useGameDisplay } from "./model/useGameDisplay";
 
+// Attribute-schema helpers: pure functions over the schema shape declared
+// above, framework-free and shared by every embed site of the editor.
+export {
+  SPEC_TYPE_LABELS,
+  SPEC_TYPE_OPTIONS,
+  usesMaxLength,
+  usesValues,
+  usesModifier,
+  isBbCode,
+  newSpecId,
+  createEmptySchema,
+  createEmptySpec,
+  cloneSpecsWithNewIds,
+  cloneSchema,
+  normalizeSpecForType,
+} from "./model/schemaHelpers";
+
 // API
-export { gameApi } from "./api";
+export { gameApi, gameTagApi } from "./api";
+export type {
+  ModerationTagGroup,
+  ModerationTag,
+  CreateTagGroupRequest,
+  UpdateTagGroupRequest,
+  CreateTagRequest,
+  UpdateTagRequest,
+} from "./api";
 
 // UI Components
 export {

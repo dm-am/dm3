@@ -55,11 +55,14 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
     }
 
     /// <inheritdoc />
-    public async Task<Session?> FindUserSession(Guid sessionId)
+    public async Task<Session?> FindUserSession(Guid userId, Guid sessionId)
     {
+        // Scoped to the owning document by _id, not searched across every user's
+        // session array: a token whose userId and sessionId belong to different
+        // people must not authenticate. It also turns the hottest query on the
+        // site into a primary-key lookup.
         var userSessions = await Collection<UserSession>()
-            .Find(Filter<UserSession>()
-                .ElemMatch(u => u.Sessions, s => s.Id == sessionId))
+            .Find(Filter<UserSession>().Eq(u => u.Id, userId))
             .FirstOrDefaultAsync();
         var matchingSession = userSessions?.Sessions.FirstOrDefault(s => s.Id == sessionId);
         return matchingSession == null
@@ -82,14 +85,22 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
         {
             Id = dbSettings.UserId,
             Theme = dbSettings.Theme,
-            Paging = new PagingSettings
-            {
-                PostsPerPage = dbSettings.Paging.PostsPerPage,
-                CommentsPerPage = dbSettings.Paging.CommentsPerPage,
-                MessagesPerPage = dbSettings.Paging.MessagesPerPage,
-                TopicsPerPage = dbSettings.Paging.TopicsPerPage,
-                EntitiesPerPage = dbSettings.Paging.EntitiesPerPage
-            }
+            // Mongo has no schema, so a settings document can exist without the
+            // Paging sub-document — an older document, or a partial write. This
+            // used to dereference it unconditionally and throw
+            // NullReferenceException inside authentication, turning every
+            // request from that user into a 500 with no way back short of
+            // deleting the document.
+            Paging = dbSettings.Paging == null
+                ? UserSettings.Default.Paging
+                : new PagingSettings
+                {
+                    PostsPerPage = dbSettings.Paging.PostsPerPage,
+                    CommentsPerPage = dbSettings.Paging.CommentsPerPage,
+                    MessagesPerPage = dbSettings.Paging.MessagesPerPage,
+                    TopicsPerPage = dbSettings.Paging.TopicsPerPage,
+                    EntitiesPerPage = dbSettings.Paging.EntitiesPerPage
+                }
         };
     }
 

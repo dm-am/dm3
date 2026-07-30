@@ -11,19 +11,14 @@ scrape_configs:
       - targets: ['dm-api:5000']
     metrics_path: '/metrics'
 
-  - job_name: 'dm-notifications-consumer'
+  - job_name: 'dm-notification-worker'
     static_configs:
-      - targets: ['dm-notifications-consumer:5000']
+      - targets: ['dm-notification-worker:5000']
     metrics_path: '/metrics'
 
-  - job_name: 'dm-search-engine-consumer'
+  - job_name: 'dm-mail-worker'
     static_configs:
-      - targets: ['dm-search-engine-consumer:5000']
-    metrics_path: '/metrics'
-
-  - job_name: 'dm-email-sender-consumer'
-    static_configs:
-      - targets: ['dm-email-sender-consumer:5000']
+      - targets: ['dm-mail-worker:5000']
     metrics_path: '/metrics'
 
   - job_name: 'postgres'

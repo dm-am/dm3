@@ -16,7 +16,7 @@ import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
 import { gameApi, type AttributeSchema } from "@/entities/game";
 import { AttributeSchemaEditor } from "@/features/attribute-schema-editor";
-import { createEmptySchema } from "@/features/attribute-schema-editor/model";
+import { createEmptySchema } from "@/entities/game";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
@@ -27,6 +27,7 @@ import RoomsSection from "./settings/RoomsSection.vue";
 import RolesSection from "./settings/RolesSection.vue";
 import BlacklistSection from "./settings/BlacklistSection.vue";
 import InvitationsSection from "./settings/InvitationsSection.vue";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const router = useRouter();
@@ -67,7 +68,7 @@ async function saveSchema(schema: AttributeSchema) {
   savingSchema.value = false;
 
   if (error) {
-    toast.error("Не удалось сохранить систему атрибутов");
+    notifyFailure(error, "Не удалось сохранить систему атрибутов");
     return;
   }
   toast.success("Система атрибутов сохранена");
@@ -85,13 +86,13 @@ const confirmDelete = ref(false);
 
 async function deleteGame() {
   confirmDelete.value = false;
-  const ok = await gameStore.deleteGame();
-  if (ok) {
-    toast.success("Игра удалена");
-    router.push({ name: "games" });
-  } else {
-    toast.error("Не удалось удалить игру");
+  const error = await gameStore.deleteGame();
+  if (error) {
+    notifyFailure(error, "Не удалось удалить игру");
+    return;
   }
+  toast.success("Игра удалена");
+  router.push({ name: "games" });
 }
 </script>
 
@@ -172,5 +173,5 @@ async function deleteGame() {
   font: inherit
 
   &:hover
-    background-color: rgba($accent-red, 0.1)
+    +tint($accent-red, 10%)
 </style>

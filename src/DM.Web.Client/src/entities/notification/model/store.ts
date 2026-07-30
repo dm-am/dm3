@@ -1,6 +1,6 @@
 import { defineStore, storeToRefs } from "pinia";
 import { ref } from "vue";
-import notificationApi from "@/shared/api/notificationApi";
+import { notificationApi } from "../api";
 import { useAuthStore } from "@/shared/stores";
 
 export const useNotificationStore = defineStore("notification", () => {

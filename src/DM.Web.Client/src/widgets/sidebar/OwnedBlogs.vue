@@ -42,10 +42,10 @@ import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlogLink from "./BlogLink.vue";
 import { useBlogsStore } from "@/entities/blog";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { onMounted, watch } from "vue";
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const store = useBlogsStore();
 
 // Initial fetch on mount. Gated by `v-if="userStore.user"` in

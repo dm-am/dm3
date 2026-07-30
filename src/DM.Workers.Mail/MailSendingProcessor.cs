@@ -13,11 +13,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeKit;
 using MimeKit.Text;
+using DM.Domain.Core.Mail;
 
 namespace DM.Workers.Mail;
 
 /// <inheritdoc />
-internal class MailSendingProcessor : IProcessor<string, MailLetter>
+internal class MailSendingProcessor : IProcessor<string, EmailLetter>
 {
     private readonly ILogger<MailSendingProcessor> _logger;
     private readonly ICorrelationTokenProvider _correlationTokenProvider;
@@ -45,7 +46,7 @@ internal class MailSendingProcessor : IProcessor<string, MailLetter>
     }
 
     /// <inheritdoc />
-    public async Task<ProcessResult> Process(string key, MailLetter message, CancellationToken cancellationToken)
+    public async Task<ProcessResult> Process(string key, EmailLetter message, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Sending letter to {Address}", message.Address.Obfuscate());
 
@@ -64,7 +65,7 @@ internal class MailSendingProcessor : IProcessor<string, MailLetter>
         return ProcessResult.Success;
     }
 
-    private static MimeEntity BuildMessageBody(MailLetter message)
+    private static MimeEntity BuildMessageBody(EmailLetter message)
     {
         var htmlPart = new TextPart(TextFormat.Html) { Text = message.Body };
 

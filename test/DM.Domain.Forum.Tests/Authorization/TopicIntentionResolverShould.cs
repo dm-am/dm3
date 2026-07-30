@@ -5,7 +5,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Forum.Authorization;
 using DM.Domain.Forum.Features.Boards;
 using DM.Domain.Forum.Features.Topics;
-using DM.Domain.Forum.Tests.Dsl;
+using DM.Testing.Dsl;
 using FluentAssertions;
 using Xunit;
 
@@ -34,6 +34,19 @@ public class TopicIntentionResolverShould
             {
                 IsClosed = true
             });
+        actual.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ForbidCreateCommentUnderTheOrdinaryBan()
+    {
+        var actual = resolver.IsAllowed(
+            Create.User().WithRole(UserRole.RegularUser).WithAccessPolicy(AccessPolicy.DemocraticBan).Please(),
+            TopicIntention.CreateComment,
+            new Topic { IsClosed = false });
+
+        // Forum discussion is public speech and there is no own-space exemption
+        // on the forum
         actual.Should().BeFalse();
     }
 

@@ -7,11 +7,11 @@ import { mount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import UserMultiSelect from "./UserMultiSelect.vue";
 
-// Mock communityApi
+// Mock userApi
 const mockSearchUsers = vi.fn();
 
-vi.mock("@/shared/api", () => ({
-  communityApi: {
+vi.mock("../api", () => ({
+  userApi: {
     searchUsers: (...args: unknown[]) => mockSearchUsers(...args),
   },
 }));

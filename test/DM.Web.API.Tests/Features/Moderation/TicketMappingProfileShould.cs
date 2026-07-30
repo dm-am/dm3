@@ -8,18 +8,6 @@ namespace DM.Web.API.Tests.Features.Moderation;
 
 public class TicketMappingProfileShould : UnitTestBase
 {
-    private readonly IMapper _mapper;
-
-    public TicketMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UserRefMappingProfile>();
-            cfg.AddProfile<TicketMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
-
     [Fact]
     public void HaveValidConfiguration()
     {

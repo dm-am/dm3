@@ -1,7 +1,31 @@
-bin/
-obj/
+# Build context for the .NET images. The context is the repository root
+# (docker-compose sets context: ./..), so every pattern here is written for that
+# root.
+#
+# Patterns without ** are anchored at the context root: a plain "obj/" matched
+# only ./obj and left all 18 src/**/obj trees in the context. That is not just
+# weight — the cache key of the "COPY src/ src/" layer includes them, so a
+# Windows dotnet build or an npm install invalidated the .NET source layer and
+# forced a full recompile, and Windows-produced project.assets.json landed
+# inside a Linux SDK image, where it is a confusing source of restore failures.
+
+**/bin/
+**/obj/
+**/node_modules/
+
+# The SPA is built by its own image from its own context (src/DM.Web.Client);
+# the backend images never touch it. Excluding the directory outright is what
+# keeps the context small — it is 290 MB of the 1.1 GB src/ tree.
+src/DM.Web.Client/
+
 test/
-node_modules/
+docs/
+.git/
+.github/
+.claude/
+.vs/
+.idea/
+*.user
 docker-compose.yml
 Dockerfile
 README.md

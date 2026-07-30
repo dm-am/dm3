@@ -68,22 +68,6 @@ public class Blog : BlogRef
 }
 
 /// <summary>
-/// Blog detailed information (for blog page)
-/// </summary>
-public class BlogDetails : Blog
-{
-    /// <summary>
-    /// Blog subscribers (lightweight references)
-    /// </summary>
-    public IEnumerable<UserRef> Subscribers { get; set; } = [];
-
-    /// <summary>
-    /// Blog assistants (lightweight references)
-    /// </summary>
-    public IEnumerable<UserRef> FullAssistants { get; set; } = [];
-}
-
-/// <summary>
 /// Blog rubric (category)
 /// </summary>
 public class Rubric

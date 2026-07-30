@@ -6,6 +6,7 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Messaging.Chats;
 
@@ -33,9 +34,6 @@ public class ChatController : ControllerBase
         _apiService = apiService;
     }
 
-    private async Task<Guid> ResolveChatId(string id) =>
-        Guid.TryParse(id, out var guid) ? guid : (await _apiService.GetChatByPublicIdAsync(id)).Id;
-
     /// <summary>
     /// Get list of chats of current user
     /// </summary>
@@ -45,7 +43,7 @@ public class ChatController : ControllerBase
     [HttpGet(Name = nameof(GetChats))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(ListEnvelope<Chat>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetChats([FromQuery] PagingQuery q)
     {
         var (chats, paging) = await _apiService.GetChatsAsync(q);
@@ -66,8 +64,8 @@ public class ChatController : ControllerBase
     [HttpPost("direct/{username}", Name = nameof(GetOrCreateDirectChat))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Chat), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetOrCreateDirectChat(string username) =>
         Ok(await _apiService.GetDirectChatAsync(username));
 
@@ -81,8 +79,8 @@ public class ChatController : ControllerBase
     [HttpGet("{id}", Name = nameof(GetChat))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Chat), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetChat(string id)
     {
         if (Guid.TryParse(id, out var guid))
@@ -100,11 +98,11 @@ public class ChatController : ControllerBase
     [HttpDelete("{id}/messages/unread", Name = nameof(MarkChatAsRead))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkChatAsRead(string id)
     {
-        var chatId = await ResolveChatId(id);
+        var chatId = await _apiService.ResolveChatIdAsync(id);
         await _apiService.MarkAsReadAsync(chatId);
         return NoContent();
     }
@@ -119,8 +117,8 @@ public class ChatController : ControllerBase
     [HttpPost(Name = nameof(CreateChat))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Chat), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CreateChat([FromBody] CreateChat createChat)
     {
         var result = await _apiService.CreateChatAsync(createChat);
@@ -140,13 +138,13 @@ public class ChatController : ControllerBase
     [HttpPatch("{id}", Name = nameof(UpdateChat))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Chat), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateChat(string id, [FromBody] UpdateChat updateChat)
     {
-        var chatId = await ResolveChatId(id);
+        var chatId = await _apiService.ResolveChatIdAsync(id);
         return Ok(await _apiService.UpdateChatAsync(chatId, updateChat));
     }
 
@@ -169,11 +167,11 @@ public class ChatController : ControllerBase
     /// <response code="429">Too many requests</response>
     [HttpGet("can-start/{username}", Name = nameof(CanStartChat))]
     [AuthenticationRequired]
-    [EnableRateLimiting("sliding")]
+    [EnableRateLimiting(RateLimitPolicies.Sliding)]
     [ProducesResponseType(typeof(ChatAvailability), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> CanStartChat(string username)
     {
         var result = await _apiService.CanStartChatAsync(username);

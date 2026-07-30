@@ -12,6 +12,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 using DM.Testing;
+using FluentAssertions;
 using Moq;
 using Xunit;
 
@@ -119,25 +120,49 @@ public class CommunityProfileServiceShould : UnitTestBase
     public async Task AuthorizeViewPendingUsersAction()
     {
         var query = new PagingQuery();
-        _userRepository.Setup(r => r.CountUsersAsync(
-                It.IsAny<UserActivityFilter>(), It.IsAny<string?>(), It.IsAny<UserRole?>(),
-                It.IsAny<bool?>(), It.IsAny<bool?>(),
-                It.IsAny<int?>(), It.IsAny<int?>(),
-                It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(),
-                It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>()))
-            .ReturnsAsync(0);
-        _userRepository.Setup(r => r.GetUsersAsync(
-                It.IsAny<PagingData>(), It.IsAny<UserActivityFilter>(), It.IsAny<string?>(),
-                It.IsAny<UserRole?>(), It.IsAny<UserSort>(), It.IsAny<bool>(),
-                It.IsAny<bool?>(), It.IsAny<bool?>(),
-                It.IsAny<int?>(), It.IsAny<int?>(),
-                It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(),
-                It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>()))
+        _userRepository.Setup(r => r.CountUsersAsync(It.IsAny<UserFilter>())).ReturnsAsync(0);
+        _userRepository.Setup(r => r.GetUsersAsync(It.IsAny<PagingData>(), It.IsAny<UserFilter>()))
             .ReturnsAsync(Array.Empty<GeneralUser>());
 
-        await _service.GetUsers(query, UserActivityFilter.Pending);
+        await _service.GetUsers(query, new UserFilter { Activity = UserActivityFilter.Pending });
 
         _intentionManager.Verify(m => m.ThrowIfForbidden(CommunityIntention.ViewPendingUsers), Times.Once);
+    }
+
+    /// <summary>
+    /// The count and the page must be told the same thing. They used to be handed
+    /// fourteen and sixteen separate arguments, eight of them adjacent nullable
+    /// ints, with the two lists three slots out of step.
+    /// </summary>
+    [Fact]
+    public async Task FilterTheCountAndThePageByTheSameCriteria()
+    {
+        UserFilter? countedWith = null;
+        UserFilter? pagedWith = null;
+        _userRepository.Setup(r => r.CountUsersAsync(It.IsAny<UserFilter>()))
+            .Callback<UserFilter>(f => countedWith = f)
+            .ReturnsAsync(0);
+        _userRepository.Setup(r => r.GetUsersAsync(It.IsAny<PagingData>(), It.IsAny<UserFilter>()))
+            .Callback<PagingData, UserFilter>((_, f) => pagedWith = f)
+            .ReturnsAsync(Array.Empty<GeneralUser>());
+
+        var filter = new UserFilter
+        {
+            Activity = UserActivityFilter.Active,
+            MinRating = 1,
+            MaxRating = 2,
+            MinGamesHosting = 3,
+            MaxGamesHosting = 4,
+            MinGamesPlaying = 5,
+            MaxGamesPlaying = 6,
+            MinBlogsHosting = 7,
+            MaxBlogsHosting = 8
+        };
+
+        await _service.GetUsers(new PagingQuery(), filter);
+
+        countedWith.Should().BeSameAs(filter);
+        pagedWith.Should().BeSameAs(filter);
     }
 
     [Fact]

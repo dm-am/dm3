@@ -31,6 +31,7 @@
 
 <script setup lang="ts">
 import { computed, inject } from "vue";
+import { VALIDATION_MESSAGES } from "@/shared/lib/errors/validationErrors";
 
 const props = defineProps<{
   label?: string;
@@ -44,22 +45,14 @@ const displayErrors = computed(
   () => props.errors?.filter((e) => e?.trim()) || [],
 );
 
-// Default translations for error codes
-const defaultTranslations: Record<string, string> = {
-  Empty: "Обязательное поле",
-  Short: "Слишком короткое значение",
-  Long: "Слишком длинное значение",
-  Taken: "Уже занято",
-  NotFound: "Не найдено",
-  Invalid: "Некорректное значение",
-};
-
-// Allow overriding translations via provide/inject
+// The vocabulary is the server's, so it is shared rather than declared here.
+// This copy held six of the thirteen codes, which is why a password failing the
+// digit rule showed the reader "RequiresDigit".
 const injectedTranslations = inject<Record<string, string>>(
   "formFieldTranslations",
   {},
 );
-const errorMessages = { ...defaultTranslations, ...injectedTranslations };
+const errorMessages = { ...VALIDATION_MESSAGES, ...injectedTranslations };
 
 const translateError = (error: string): string => {
   return errorMessages[error] || error;

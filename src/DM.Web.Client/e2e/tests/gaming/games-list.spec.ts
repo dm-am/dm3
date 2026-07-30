@@ -1,4 +1,174 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type APIRequestContext } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
+import { API_BASE_URL, primaryUser } from "../../fixtures/auth";
+
+/**
+ * /games — table, filter control, sorting, paging.
+ *
+ * Two habits this file keeps, both of them reactions to how it read before:
+ *
+ * - Locators are scoped to a region instead of disambiguated with .first().
+ *   The filter control repeats the table's own words ("Статус игры" and
+ *   "Ведущие" each label both a filter and a column), so a page-wide
+ *   getByText matched two elements and died of strict mode. Scoping says
+ *   which of the two the test means; .first() only says "either".
+ * - No assertion is guarded by an `if`. Half the tests here used to run their
+ *   assertions inside `if (await x.isVisible())`, so they reported green on a
+ *   page that rendered nothing at all.
+ *
+ * Written against a desktop viewport. Two columns (Теги, Отзывы) are hidden
+ * below 768px by design (Column.hideOnMobile), which the column test reads
+ * from the same media query the CSS uses.
+ */
+
+/** The filter control: search field, "Фильтры" dropdown, sort, bubbles. */
+const filters = (page: Page): Locator => page.locator(".games-filter");
+
+/** The games table. One table on the page, addressed by role. */
+const table = (page: Page): Locator => page.getByRole("table");
+
+/** The row of active-filter chips. Absent when no filter is applied. */
+const bubbles = (page: Page): Locator => page.locator(".bubbles-row");
+
+/** A data row. The loading skeleton uses .skeleton-row, so this counts none. */
+const rows = (page: Page): Locator => table(page).locator("tr.table-row");
+
+/**
+ * Hold until the table has rendered its data rows.
+ *
+ * Anything that reads text out of the table in bulk — allTextContents,
+ * evaluateAll — resolves against whatever the DOM holds at that instant and
+ * does not retry. While the request is in flight DataTable renders skeleton
+ * rows under a different class, so those reads come back empty, and the caller
+ * then fails on its own emptiness check rather than on a locator timeout: the
+ * message says no value occurs exactly once, which reads like a data problem
+ * and is really a timing one. Only for reads that expect rows; a test asserting
+ * an empty result uses toHaveCount(0), which retries on its own.
+ */
+async function rowsRendered(page: Page): Promise<void> {
+  await expect(rows(page).first()).toBeVisible();
+}
+
+/** The sort trigger. Its label is the active sort, so it has no fixed name. */
+const sortTrigger = (page: Page): Locator =>
+  filters(page).locator(".sort-section").getByRole("button");
+
+const searchField = (page: Page): Locator =>
+  filters(page).getByRole("textbox", { name: "Поиск по названию" });
+
+async function openFilterDropdown(page: Page): Promise<Locator> {
+  const region = filters(page);
+  await region.getByRole("button", { name: "Фильтры" }).click();
+  return region;
+}
+
+async function openSortMenu(page: Page): Promise<Locator> {
+  await sortTrigger(page).click();
+  return filters(page).locator(".sort-section").getByRole("menu");
+}
+
+/**
+ * The one value that occurs exactly once, so a text locator built from it
+ * resolves to a single element. Rows and tag links are otherwise
+ * indistinguishable, and a positional locator would quietly follow whatever
+ * the current sort order puts first.
+ */
+function onlyOccurrence(values: string[], what: string): string {
+  const seen = values.filter((value) => value.length > 0);
+  const unique = seen.find(
+    (value) => seen.filter((other) => other === value).length === 1,
+  );
+  if (!unique) {
+    throw new Error(
+      `No ${what} occurs exactly once on the page, so no test can address one.`,
+    );
+  }
+  return unique;
+}
+
+/** A table row addressed by the title of the game in it. */
+function rowOfGame(page: Page, title: string): Locator {
+  return table(page)
+    .getByRole("row")
+    .filter({ has: page.getByRole("link", { name: title, exact: true }) });
+}
+
+async function anyGameTitle(page: Page): Promise<string> {
+  await rowsRendered(page);
+  const titles = await table(page).locator("a.game-link").allTextContents();
+  return onlyOccurrence(
+    titles.map((title) => title.trim()),
+    "game title",
+  );
+}
+
+interface CatalogTag {
+  id: number;
+  title: string;
+}
+
+/**
+ * A tag whose title no other tag title contains. Typing it into the tag
+ * search leaves exactly one item in the list, which is what makes the item
+ * locator unambiguous. Read from the catalog rather than hardcoded so the
+ * test states "some tag" and not "tag #1".
+ */
+async function unambiguousTag(request: APIRequestContext): Promise<CatalogTag> {
+  const response = await request.get(`${API_BASE_URL}/v1/games/tags`);
+  await expect(response, "the tag catalog must load").toBeOK();
+  const body = (await response.json()) as { resources?: CatalogTag[] };
+  const tags = body.resources ?? [];
+  const tag = tags.find(
+    (candidate) =>
+      tags.filter((other) =>
+        other.title.toLowerCase().includes(candidate.title.toLowerCase()),
+      ).length === 1,
+  );
+  if (!tag) {
+    throw new Error("Every tag title is a substring of another one.");
+  }
+  return tag;
+}
+
+/** The requests this page's table and filter make. Everything else is shell. */
+function isGamesListRequest(url: URL): boolean {
+  if (url.pathname === "/v1/games") return !url.searchParams.has("projection");
+  return url.pathname === "/v1/games/tags" || url.pathname === "/v1/users";
+}
+
+/**
+ * Keep the run inside the API's request budget.
+ *
+ * One load of /games costs seventeen API requests, of which three belong to
+ * the table, its tag catalog and its host lookup; the rest is the site shell —
+ * sidebar lists, stats, mirrors, chats, notifications, SignalR negotiate. The
+ * API allows 100 requests per address per minute (GlobalPermitLimit), so a
+ * 38-test file burns the whole budget in its first three tests and everything
+ * after that measures 429s. That failure is indistinguishable from the one
+ * this file was accused of: the games request fails, the table is not rendered
+ * at all (DataTable is hidden when a request failed and no stale rows exist),
+ * and every selector "goes missing".
+ *
+ * So the shell's requests never leave the browser. Nothing under test is
+ * stubbed — the three requests above reach the real API untouched — and the
+ * widgets that lose their data show their own error state, which no assertion
+ * here reads.
+ *
+ * The tier-wide fix is not in this file: the API already takes
+ * RateLimiting:Enabled=false, and an e2e stack should be started with it.
+ */
+test.beforeEach(async ({ page }) => {
+  await page.route(
+    (url) => url.origin === API_BASE_URL,
+    async (route) => {
+      if (isGamesListRequest(new URL(route.request().url()))) {
+        await route.continue();
+        return;
+      }
+      await route.abort();
+    },
+  );
+});
 
 test.describe("Games List Page", () => {
   test.describe("Page Structure", () => {
@@ -7,52 +177,52 @@ test.describe("Games List Page", () => {
     }) => {
       await page.goto("/games");
 
-      // Verify table exists
-      const table = page.locator("#results");
-      await expect(table).toBeVisible();
+      await expect(page.locator(".games-data-table")).toBeVisible();
 
-      // Verify column headers
-      await expect(
-        page.getByRole("columnheader", { name: "Название" }),
-      ).toBeVisible();
-      await expect(
-        page.getByRole("columnheader", { name: "Ведущие" }),
-      ).toBeVisible();
-      await expect(
-        page.getByRole("columnheader", { name: "Статус игры" }),
-      ).toBeVisible();
-      await expect(
-        page.getByRole("columnheader", { name: "Участники" }),
-      ).toBeVisible();
+      // The exact set, in order. There is no "Участники" column: the columns
+      // are an owner decision and this spec predates it, so it demanded one.
+      // An exact list states the decision instead of merely omitting it.
+      const compact = await page.evaluate(
+        () => window.matchMedia("(max-width: 768px)").matches,
+      );
+      await expect(table(page).getByRole("columnheader")).toHaveText(
+        compact
+          ? ["#", "Название", "Ведущие", "Статус игры", "Читатели"]
+          : [
+              "#",
+              "Название",
+              "Ведущие",
+              "Теги",
+              "Статус игры",
+              "Отзывы",
+              "Читатели",
+            ],
+      );
     });
 
     test("should display filter bar", async ({ page }) => {
       await page.goto("/games");
 
-      // Search input
+      await expect(searchField(page)).toBeVisible();
       await expect(
-        page.locator(".games-filter .search-container"),
+        filters(page).getByRole("button", { name: "Фильтры" }),
       ).toBeVisible();
-      await expect(page.getByPlaceholder("Поиск")).toBeVisible();
-
-      // Filter button
-      await expect(page.getByRole("button", { name: "Фильтры" })).toBeVisible();
-
-      // Sort button
-      await expect(page.locator(".sort-btn")).toBeVisible();
+      // The sort trigger carries the active sort as its label, and the default
+      // sort is "created desc".
+      await expect(sortTrigger(page)).toHaveText("Дата создания");
     });
 
-    test("should display pagination when games exist", async ({ page }) => {
+    test("shows pagination under the table", async ({ page }) => {
       await page.goto("/games");
 
-      // Wait for table to load
-      await page.waitForSelector("#results");
-
-      // Check if paging exists (may not if few games)
-      const paging = page.locator(".paging-top, .paging-bottom");
-      const count = await paging.count();
-      // Just verify paging components are rendered (may be empty if no pagination needed)
-      expect(count).toBeGreaterThanOrEqual(0);
+      // The seed holds more games than fit on one page, so the pager is there.
+      // The previous version asserted count >= 0, which is true of every
+      // possible outcome including a page that failed to render.
+      const pager = page.getByRole("navigation", { name: "Пагинация" });
+      await expect(pager).toBeVisible();
+      await expect(
+        pager.getByRole("link", { name: "2", exact: true }),
+      ).toBeVisible();
     });
   });
 
@@ -60,48 +230,47 @@ test.describe("Games List Page", () => {
     test("should filter games by text search", async ({ page }) => {
       await page.goto("/games");
 
-      // Type search query
-      const searchInput = page.getByPlaceholder("Поиск");
-      await searchInput.fill("тест");
-      await searchInput.press("Enter");
+      // Applied on a 300ms debounce (and on blur). There is no Enter handler:
+      // the old test pressed Enter and passed on the debounce behind its back.
+      await searchField(page).fill("тест");
 
-      // URL should update with search parameter
-      await expect(page).toHaveURL(/search=тест/);
+      // Read the decoded parameter — the browser reports the Cyrillic value
+      // percent-encoded, so /search=тест/ against the raw URL never matches.
+      await expect(page).toHaveURL(
+        (url) => url.searchParams.get("search") === "тест",
+      );
     });
 
     test("should clear search input", async ({ page }) => {
       await page.goto("/games?search=тест");
 
-      // Verify search input has value
-      const searchInput = page.getByPlaceholder("Поиск");
-      await expect(searchInput).toHaveValue("тест");
+      const input = searchField(page);
+      await expect(input).toHaveValue("тест");
 
-      // Click clear button
-      await page.locator(".clear-input-btn").click();
+      await filters(page)
+        .getByRole("button", { name: "Очистить поиск" })
+        .click();
 
-      // Search should be cleared
-      await expect(searchInput).toHaveValue("");
+      await expect(input).toHaveValue("");
+      await expect(page).toHaveURL((url) => !url.searchParams.has("search"));
     });
 
     test("should preserve search when navigating back", async ({ page }) => {
       await page.goto("/games");
 
-      // Enter search
-      const searchInput = page.getByPlaceholder("Поиск");
-      await searchInput.fill("поиск");
-      await searchInput.press("Enter");
+      // Search for a title that is on the page, so the game to open is one the
+      // test named rather than whichever row happens to be first.
+      const title = await anyGameTitle(page);
+      await searchField(page).fill(title);
+      await expect(page).toHaveURL(
+        (url) => url.searchParams.get("search") === title,
+      );
 
-      await expect(page).toHaveURL(/search=поиск/);
+      await table(page).getByRole("link", { name: title, exact: true }).click();
+      await expect(page).toHaveURL(/\/game\/[^/?]+/);
 
-      // Navigate to a game (if any exists) and back
-      const gameLink = page.locator(".game-link").first();
-      if (await gameLink.isVisible()) {
-        await gameLink.click();
-        await page.goBack();
-
-        // Search should be preserved
-        await expect(searchInput).toHaveValue("поиск");
-      }
+      await page.goBack();
+      await expect(searchField(page)).toHaveValue(title);
     });
   });
 
@@ -109,89 +278,105 @@ test.describe("Games List Page", () => {
     test("should open sort dropdown", async ({ page }) => {
       await page.goto("/games");
 
-      // Click sort button
-      await page.locator(".sort-btn").click();
+      const menu = await openSortMenu(page);
+      await expect(menu).toBeVisible();
 
-      // Dropdown should appear
-      await expect(page.locator(".sort-dropdown")).toBeVisible();
-
-      // Should have sort options
-      await expect(page.getByText("Дата создания")).toBeVisible();
-      await expect(page.getByText("Название")).toBeVisible();
-      await expect(page.getByText("Популярность")).toBeVisible();
+      // Scoped to the menu: "Дата создания" is also the trigger's own label
+      // and "Название" is a column header, so the page-wide lookups this test
+      // used to make resolved to two elements each.
+      await expect(
+        menu.getByRole("menuitem", { name: "Дата создания" }),
+      ).toBeVisible();
+      await expect(
+        menu.getByRole("menuitem", { name: "Название" }),
+      ).toBeVisible();
+      await expect(
+        menu.getByRole("menuitem", { name: "Популярность" }),
+      ).toBeVisible();
     });
 
     test("should sort by popularity", async ({ page }) => {
       await page.goto("/games");
 
-      // Open sort dropdown
-      await page.locator(".sort-btn").click();
+      const menu = await openSortMenu(page);
+      await menu.getByRole("menuitem", { name: "Популярность" }).click();
 
-      // Select "Популярность" option
-      await page
-        .locator(".sort-option")
-        .filter({ hasText: "Популярность" })
-        .click();
-
-      // URL should have sortBy=popularity
-      await expect(page).toHaveURL(/sortBy=popularity/);
-      // Default order is desc
-      await expect(page).toHaveURL(/sortOrder=desc/);
+      await expect(page).toHaveURL(
+        (url) => url.searchParams.get("sortBy") === "popularity",
+      );
+      // The URL carries non-default state only. Popularity's default direction
+      // is desc, so sortOrder stays out of it; the old test demanded
+      // sortOrder=desc and failed on a canonical URL.
+      await expect(page).toHaveURL((url) => !url.searchParams.has("sortOrder"));
+      await expect(sortTrigger(page)).toHaveText("Популярность");
     });
 
     test("should show popularity sort hint", async ({ page }) => {
       await page.goto("/games");
 
-      // Open sort dropdown
-      await page.locator(".sort-btn").click();
+      const menu = await openSortMenu(page);
+      const popularity = menu.getByRole("menuitem", { name: "Популярность" });
 
-      // Popularity option should have hint about active readers
-      const popularityOption = page
-        .locator(".sort-option")
-        .filter({ hasText: "Популярность" });
-      await expect(popularityOption.locator(".sort-option-hint")).toContainText(
-        "активных читателей",
+      // The hint names players and readers, not "активных читателей" as the
+      // old expectation had it: the sort counts active users among both.
+      await expect(popularity.locator(".sort-option-hint")).toHaveText(
+        "По количеству активных пользователей среди текущих игроков и читателей",
       );
     });
 
     test("should sort by title ascending", async ({ page }) => {
       await page.goto("/games");
 
-      // Open sort dropdown
-      await page.locator(".sort-btn").click();
+      const menu = await openSortMenu(page);
+      await menu.getByRole("menuitem", { name: "Название" }).click();
 
-      // Select "Название" option
-      await page
-        .locator(".sort-option")
-        .filter({ hasText: "Название" })
-        .click();
+      await expect(page).toHaveURL(
+        (url) => url.searchParams.get("sortBy") === "title",
+      );
 
-      // URL should have sortBy parameter
-      await expect(page).toHaveURL(/sortBy=title/);
+      // SORT_OPTIONS gives "title" defaultDirection: "asc", so picking
+      // "Название" must sort А→Я. This once read desc: SortButton reported the
+      // field and the direction as two events, and the filter handled the
+      // second one while its own state still held the pre-click direction, so
+      // it flipped the asc it had just been given. One event now carries both.
+      await expect(page).toHaveURL(
+        (url) => url.searchParams.get("sortOrder") === "asc",
+      );
     });
 
     test("should toggle sort order", async ({ page }) => {
       await page.goto("/games?sortBy=title&sortOrder=desc");
 
-      // Open sort dropdown
-      await page.locator(".sort-btn").click();
+      const menu = await openSortMenu(page);
+      // The direction row is labelled with the order in effect.
+      await menu.getByRole("menuitem", { name: "По убыванию" }).click();
 
-      // Click direction toggle
-      await page.locator(".sort-direction").click();
-
-      // Order should change to asc
-      await expect(page).toHaveURL(/sortOrder=asc/);
+      await expect(page).toHaveURL(
+        (url) => url.searchParams.get("sortOrder") === "asc",
+      );
     });
 
     test("should sort by column header click", async ({ page }) => {
-      await page.goto("/games");
+      await page.goto("/games?sortBy=title&sortOrder=asc");
 
-      // Click on "Название" column header
-      const titleHeader = page.getByRole("columnheader", { name: "Название" });
-      await titleHeader.click();
+      const header = table(page).getByRole("columnheader", {
+        name: "Название",
+        exact: true,
+      });
 
-      // Should sort by title
-      await expect(page).toHaveURL(/sortBy=title/);
+      // Headers are presentational labels; sorting is driven solely by the
+      // sort control (product decision, recorded in DataTable.vue). What a
+      // header owes the user is the announcement of the active sort, and a
+      // click on it must change nothing — the old expectation of
+      // click-to-sort was written against a table that never had it.
+      await expect(header).toHaveAttribute("aria-sort", "ascending");
+      await header.click();
+      await expect(page).toHaveURL(
+        (url) =>
+          url.searchParams.get("sortBy") === "title" &&
+          url.searchParams.get("sortOrder") === "asc",
+      );
+      await expect(header.getByRole("button")).toHaveCount(0);
     });
   });
 
@@ -199,43 +384,34 @@ test.describe("Games List Page", () => {
     test("should open filter dropdown", async ({ page }) => {
       await page.goto("/games");
 
-      // Click filter button
-      await page.getByRole("button", { name: "Фильтры" }).click();
+      const region = await openFilterDropdown(page);
 
-      // Dropdown should appear
-      await expect(page.locator(".dropdown")).toBeVisible();
-
-      // Should show filter categories
-      await expect(page.getByText("Статус игры")).toBeVisible();
-      await expect(page.getByText("Ведущие")).toBeVisible();
-      await expect(page.getByText("Тег")).toBeVisible();
+      await expect(
+        region.getByRole("button", { name: "Фильтры" }),
+      ).toHaveAttribute("aria-expanded", "true");
+      // Each item is a button whose accessible name is its label plus its
+      // hint, so the names are anchored. Plain "Тег" would also match
+      // "Без тега".
+      await expect(
+        region.getByRole("button", { name: /^Статус игры / }),
+      ).toBeVisible();
+      await expect(
+        region.getByRole("button", { name: /^Ведущие / }),
+      ).toBeVisible();
+      await expect(region.getByRole("button", { name: /^Тег / })).toBeVisible();
     });
 
     test("should filter by Draft status", async ({ page }) => {
       await page.goto("/games");
 
-      // Open filter dropdown
-      await page.getByRole("button", { name: "Фильтры" }).click();
+      const region = await openFilterDropdown(page);
+      await region.getByRole("button", { name: /^Статус игры / }).click();
+      await region.getByRole("button", { name: /^Оформляется / }).click();
 
-      // Select "Статус игры"
-      await page
-        .locator(".dropdown-item")
-        .filter({ hasText: "Статус игры" })
-        .click();
-
-      // Select "Оформляется" (Draft)
-      await page
-        .locator(".dropdown-item")
-        .filter({ hasText: "Оформляется" })
-        .click();
-
-      // URL should update
-      await expect(page).toHaveURL(/status=Draft/);
-
-      // Bubble should appear
-      await expect(
-        page.locator(".bubble").filter({ hasText: "Оформляется" }),
-      ).toBeVisible();
+      await expect(page).toHaveURL(
+        (url) => url.searchParams.get("status") === "Draft",
+      );
+      await expect(bubbles(page)).toContainText("Статус игры: Оформляется");
     });
 
     test("should filter by Active status with recruitment", async ({
@@ -243,81 +419,54 @@ test.describe("Games List Page", () => {
     }) => {
       await page.goto("/games");
 
-      // Open filter dropdown
-      await page.getByRole("button", { name: "Фильтры" }).click();
+      const region = await openFilterDropdown(page);
+      await region.getByRole("button", { name: /^Статус игры / }).click();
+      await region.getByRole("button", { name: /^Идет игра / }).click();
+      await region.getByRole("button", { name: /^Набор игроков / }).click();
+      await region.getByRole("button", { name: /^Первый набор / }).click();
 
-      // Select "Статус игры"
-      await page
-        .locator(".dropdown-item")
-        .filter({ hasText: "Статус игры" })
-        .click();
-
-      // Select "Идет игра" (Active - navigation)
-      await page
-        .locator(".dropdown-item")
-        .filter({ hasText: "Идет игра" })
-        .click();
-
-      // Select "Набор игроков" to see sub-options
-      await page
-        .locator(".dropdown-item")
-        .filter({ hasText: "Набор игроков" })
-        .click();
-
-      // Select "Первый набор"
-      await page
-        .locator(".dropdown-item")
-        .filter({ hasText: "Первый набор" })
-        .click();
-
-      // URL should update
-      await expect(page).toHaveURL(/status=Active/);
-      await expect(page).toHaveURL(/recruitmentFilter=initial/);
+      await expect(page).toHaveURL(
+        (url) =>
+          url.searchParams.get("status") === "Active" &&
+          url.searchParams.get("recruitmentFilter") === "initial",
+      );
+      await expect(bubbles(page)).toContainText(
+        "Статус игры: Идет игра (первый набор)",
+      );
     });
 
     test("should filter by Closed status with reason", async ({ page }) => {
       await page.goto("/games");
 
-      // Open filter dropdown
-      await page.getByRole("button", { name: "Фильтры" }).click();
+      const region = await openFilterDropdown(page);
+      await region.getByRole("button", { name: /^Статус игры / }).click();
+      await region.getByRole("button", { name: /^Закрыта / }).click();
+      await region.getByRole("button", { name: /^Заморожена / }).click();
 
-      // Select "Статус игры"
-      await page
-        .locator(".dropdown-item")
-        .filter({ hasText: "Статус игры" })
-        .click();
-
-      // Select "Закрыта" (Closed - navigation)
-      await page
-        .locator(".dropdown-item")
-        .filter({ hasText: /^Закрыта$/ })
-        .click();
-
-      // Select "Заморожена" (Frozen)
-      await page
-        .locator(".dropdown-item")
-        .filter({ hasText: "Заморожена" })
-        .click();
-
-      // URL should update
-      await expect(page).toHaveURL(/status=Closed/);
-      await expect(page).toHaveURL(/closedReasonFilter=Frozen/);
+      await expect(page).toHaveURL(
+        (url) =>
+          url.searchParams.get("status") === "Closed" &&
+          url.searchParams.get("closedReasonFilter") === "Frozen",
+      );
+      await expect(bubbles(page)).toContainText(
+        "Статус игры: Закрыта (заморожена)",
+      );
     });
 
     test("should remove status filter via bubble", async ({ page }) => {
       await page.goto("/games?status=Active");
 
-      // Status bubble should be visible
-      const statusBubble = page
-        .locator(".bubble")
-        .filter({ hasText: "Статус игры" });
-      await expect(statusBubble).toBeVisible();
+      // The chip's remove control carries the filter value in its accessible
+      // name, which is a sharper handle than the chip's own text.
+      const remove = bubbles(page).getByRole("button", {
+        name: "Убрать фильтр: Идет игра",
+      });
+      await expect(remove).toBeVisible();
 
-      // Click remove button on bubble
-      await statusBubble.locator(".bubble-remove-btn").click();
+      await remove.click();
 
-      // URL should not have status
-      await expect(page).not.toHaveURL(/status=/);
+      await expect(page).toHaveURL((url) => !url.searchParams.has("status"));
+      await expect(bubbles(page)).toBeHidden();
     });
   });
 
@@ -325,93 +474,77 @@ test.describe("Games List Page", () => {
     test("should navigate to tag groups", async ({ page }) => {
       await page.goto("/games");
 
-      // Open filter dropdown
-      await page.getByRole("button", { name: "Фильтры" }).click();
+      const region = await openFilterDropdown(page);
+      await region.getByRole("button", { name: /^Тег / }).click();
 
-      // Select "Тег"
-      await page.locator(".dropdown-item").filter({ hasText: /^Тег$/ }).click();
-
-      // Should show tag groups (e.g., "Жанр", "Система")
-      // Wait for groups to load
-      await page.waitForSelector(".dropdown-item");
-
-      // Dropdown should still be visible with tag groups
-      await expect(page.locator(".dropdown")).toBeVisible();
-    });
-
-    test("should add required tag filter", async ({ page }) => {
-      await page.goto("/games");
-
-      // Open filter dropdown
-      await page.getByRole("button", { name: "Фильтры" }).click();
-
-      // Select "Тег"
-      await page.locator(".dropdown-item").filter({ hasText: /^Тег$/ }).click();
-
-      // Wait for groups to load and click first available group
-      await page.waitForSelector(".dropdown-item");
-      const firstGroup = page.locator(".dropdown-item").first();
-      await firstGroup.click();
-
-      // Select first tag in group
-      await page.waitForSelector(".dropdown-item");
-      const firstTag = page.locator(".dropdown-item").first();
-      await firstTag.click();
-
-      // URL should have requiredTags
-      await expect(page).toHaveURL(/requiredTags=/);
-
-      // Bubble should appear
+      // Level two of the tag branch: a search field over the whole catalog
+      // plus the groups it is divided into.
       await expect(
-        page.locator(".bubble").filter({ hasText: "Тег:" }),
+        region.getByPlaceholder("Поиск тега", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        region.getByRole("button", { name: /^Система / }),
+      ).toBeVisible();
+      await expect(
+        region.getByRole("button", { name: /^Жанр / }),
       ).toBeVisible();
     });
 
-    test("should add excluded tag filter", async ({ page }) => {
+    test("should add required tag filter", async ({ page, request }) => {
+      const tag = await unambiguousTag(request);
       await page.goto("/games");
 
-      // Open filter dropdown
-      await page.getByRole("button", { name: "Фильтры" }).click();
+      const region = await openFilterDropdown(page);
+      await region.getByRole("button", { name: /^Тег / }).click();
+      // Searching gives a flat list, so the tag that gets clicked is the one
+      // the test named — walking into a group would only offer "whichever
+      // group came first".
+      await region
+        .getByPlaceholder("Поиск тега", { exact: true })
+        .fill(tag.title);
+      await region.getByRole("button", { name: tag.title }).click();
 
-      // Select "Без тега"
-      await page
-        .locator(".dropdown-item")
-        .filter({ hasText: "Без тега" })
-        .click();
+      await expect(page).toHaveURL(
+        (url) => url.searchParams.get("requiredTags") === String(tag.id),
+      );
+      await expect(bubbles(page)).toContainText(`Тег: ${tag.title}`);
+    });
 
-      // Wait for groups to load and click first available group
-      await page.waitForSelector(".dropdown-item");
-      const firstGroup = page.locator(".dropdown-item").first();
-      await firstGroup.click();
+    test("should add excluded tag filter", async ({ page, request }) => {
+      const tag = await unambiguousTag(request);
+      await page.goto("/games");
 
-      // Select first tag in group
-      await page.waitForSelector(".dropdown-item");
-      const firstTag = page.locator(".dropdown-item").first();
-      await firstTag.click();
+      const region = await openFilterDropdown(page);
+      await region.getByRole("button", { name: /^Без тега / }).click();
+      await region
+        .getByPlaceholder("Поиск тега", { exact: true })
+        .fill(tag.title);
+      await region.getByRole("button", { name: tag.title }).click();
 
-      // URL should have excludedTags
-      await expect(page).toHaveURL(/excludedTags=/);
-
-      // Bubble should appear
-      await expect(
-        page.locator(".bubble").filter({ hasText: "Без тега:" }),
-      ).toBeVisible();
+      await expect(page).toHaveURL(
+        (url) => url.searchParams.get("excludedTags") === String(tag.id),
+      );
+      await expect(bubbles(page)).toContainText(`Без тега: ${tag.title}`);
     });
 
     test("should click tag in game row to filter by it", async ({ page }) => {
       await page.goto("/games");
 
-      // Wait for table to load
-      await page.waitForSelector("#results");
+      await rowsRendered(page);
+      const tagTitles = await table(page)
+        .locator("a.tag-link")
+        .allTextContents();
+      const title = onlyOccurrence(
+        tagTitles.map((tagTitle) => tagTitle.trim()),
+        "tag title",
+      );
 
-      // Find a tag link in the table
-      const tagLink = page.locator(".tag-link").first();
-      if (await tagLink.isVisible()) {
-        await tagLink.click();
+      await table(page).getByRole("link", { name: title, exact: true }).click();
 
-        // URL should have requiredTags
-        await expect(page).toHaveURL(/requiredTags=/);
-      }
+      await expect(page).toHaveURL((url) =>
+        /^\d+$/.test(url.searchParams.get("requiredTags") ?? ""),
+      );
+      await expect(bubbles(page)).toContainText(`Тег: ${title}`);
     });
   });
 
@@ -419,46 +552,37 @@ test.describe("Games List Page", () => {
     test("should open owner search", async ({ page }) => {
       await page.goto("/games");
 
-      // Open filter dropdown
-      await page.getByRole("button", { name: "Фильтры" }).click();
+      const region = await openFilterDropdown(page);
+      await region.getByRole("button", { name: /^Ведущие / }).click();
 
-      // Select "Ведущие"
-      await page
-        .locator(".dropdown-item")
-        .filter({ hasText: "Ведущие" })
-        .click();
-
-      // Should show search input for owners
-      await expect(page.locator(".dropdown-search-input")).toBeVisible();
-      await expect(page.getByPlaceholder("Поиск ведущего...")).toBeVisible();
+      // The placeholder has no trailing ellipsis; the old expectation did.
+      await expect(region.getByPlaceholder("Поиск ведущего")).toBeVisible();
     });
 
     test("should add owner filter by search", async ({ page }) => {
       await page.goto("/games");
 
-      // Open filter dropdown and navigate to owners
-      await page.getByRole("button", { name: "Фильтры" }).click();
-      await page
-        .locator(".dropdown-item")
-        .filter({ hasText: "Ведущие" })
+      const region = await openFilterDropdown(page);
+      await region.getByRole("button", { name: /^Ведущие / }).click();
+      // Suggestions are a search result, not a preloaded list: with an empty
+      // query the API is never called, which is why waiting for an item
+      // without typing timed out.
+      await region
+        .getByPlaceholder("Поиск ведущего")
+        .fill(primaryUser.username);
+      await region
+        .getByRole("button", { name: primaryUser.username, exact: true })
         .click();
 
-      // Wait for owner suggestions to load
-      await page.waitForSelector(".dropdown-item");
-
-      // Select first owner suggestion
-      const firstOwner = page.locator(".dropdown-item").first();
-      if (await firstOwner.isVisible()) {
-        await firstOwner.click();
-
-        // URL should have ownerUsernames
-        await expect(page).toHaveURL(/ownerUsernames=/);
-
-        // Bubble should appear
-        await expect(
-          page.locator(".bubble").filter({ hasText: "Ведущие:" }),
-        ).toBeVisible();
-      }
+      // The URL parameter is "hosts" (the API field is hostUsernames). The old
+      // "ownerUsernames" predates owner→host.
+      await expect(page).toHaveURL(
+        (url) => url.searchParams.get("hosts") === primaryUser.username,
+      );
+      // Singular prefix for a single host; "Ведущие:" appears from the second.
+      await expect(bubbles(page)).toContainText(
+        `Ведущий: ${primaryUser.username}`,
+      );
     });
   });
 
@@ -466,66 +590,68 @@ test.describe("Games List Page", () => {
     test("should open date filter options", async ({ page }) => {
       await page.goto("/games");
 
-      // Open filter dropdown
-      await page.getByRole("button", { name: "Фильтры" }).click();
+      const region = await openFilterDropdown(page);
+      await region.getByRole("button", { name: /^Даты / }).click();
 
-      // Select "Даты"
-      await page.locator(".dropdown-item").filter({ hasText: "Даты" }).click();
-
-      // Should show date type options
-      await expect(page.getByText("Создание игры")).toBeVisible();
-      await expect(page.getByText("Начало игры")).toBeVisible();
-      await expect(page.getByText("Закрытие игры")).toBeVisible();
+      await expect(
+        region.getByRole("button", { name: /^Создание игры / }),
+      ).toBeVisible();
+      await expect(
+        region.getByRole("button", { name: /^Начало игры / }),
+      ).toBeVisible();
+      await expect(
+        region.getByRole("button", { name: /^Начало последнего набора / }),
+      ).toBeVisible();
+      await expect(
+        region.getByRole("button", { name: /^Закрытие игры / }),
+      ).toBeVisible();
     });
 
     test("should show date range inputs", async ({ page }) => {
       await page.goto("/games");
 
-      // Open filter dropdown
-      await page.getByRole("button", { name: "Фильтры" }).click();
+      const region = await openFilterDropdown(page);
+      await region.getByRole("button", { name: /^Даты / }).click();
+      await region.getByRole("button", { name: /^Создание игры / }).click();
 
-      // Navigate to dates
-      await page.locator(".dropdown-item").filter({ hasText: "Даты" }).click();
-
-      // Select "Создание игры"
-      await page
-        .locator(".dropdown-item")
-        .filter({ hasText: "Создание игры" })
-        .click();
-
-      // Should show date inputs
-      await expect(page.locator(".date-input").first()).toBeVisible();
-      await expect(page.locator(".date-apply-btn")).toBeVisible();
+      // Each field is a DateInput: the ".date-input" class the old test filled
+      // sits on the component's wrapper div, not on the text field inside it.
+      await expect(
+        region.getByRole("textbox", { name: "Дата: От" }),
+      ).toBeVisible();
+      await expect(
+        region.getByRole("textbox", { name: "Дата: До" }),
+      ).toBeVisible();
+      await expect(
+        region.getByRole("button", { name: "Применить" }),
+      ).toBeVisible();
     });
 
     test("should apply date range filter", async ({ page }) => {
       await page.goto("/games");
 
-      // Open filter dropdown
-      await page.getByRole("button", { name: "Фильтры" }).click();
+      const region = await openFilterDropdown(page);
+      await region.getByRole("button", { name: /^Даты / }).click();
+      await region.getByRole("button", { name: /^Создание игры / }).click();
 
-      // Navigate to dates
-      await page.locator(".dropdown-item").filter({ hasText: "Даты" }).click();
-      await page
-        .locator(".dropdown-item")
-        .filter({ hasText: "Создание игры" })
-        .click();
+      await region
+        .getByRole("textbox", { name: "Дата: От" })
+        .fill("2024-01-01");
+      await region
+        .getByRole("textbox", { name: "Дата: До" })
+        .fill("2024-12-31");
+      await region.getByRole("button", { name: "Применить" }).click();
 
-      // Fill date inputs
-      await page.locator(".date-input").first().fill("2024-01-01");
-      await page.locator(".date-input").last().fill("2024-12-31");
-
-      // Apply
-      await page.locator(".date-apply-btn").click();
-
-      // URL should have date params
-      await expect(page).toHaveURL(/createdFromUtc=2024-01-01/);
-      await expect(page).toHaveURL(/createdToUtc=2024-12-31/);
-
-      // Bubble should appear
-      await expect(
-        page.locator(".bubble").filter({ hasText: "Создание игры:" }),
-      ).toBeVisible();
+      await expect(page).toHaveURL(
+        (url) =>
+          url.searchParams.get("createdFromUtc") === "2024-01-01" &&
+          url.searchParams.get("createdToUtc") === "2024-12-31",
+      );
+      // The chip is prefixed "Создание:" and shows the dates as typed by a
+      // reader, not in the ISO form the URL carries.
+      await expect(bubbles(page)).toContainText(
+        "Создание: 01.01.2024 — 31.12.2024",
+      );
     });
   });
 
@@ -533,65 +659,68 @@ test.describe("Games List Page", () => {
     test("should clear all filters", async ({ page }) => {
       await page.goto("/games?status=Active&sortBy=title");
 
-      // Wait for filters to be applied
-      await expect(page.locator(".bubble")).toBeVisible();
+      await expect(bubbles(page)).toContainText("Статус игры: Идет игра");
 
-      // Click "Сбросить" link
-      await page.locator(".clear-all-link").click();
+      await bubbles(page).getByRole("button", { name: "Сбросить" }).click();
 
-      // All bubbles should be gone
-      await expect(page.locator(".bubbles-row .bubble")).toHaveCount(0);
+      // "Сбросить" resets sorting along with the filters, so the canonical URL
+      // it lands on carries no parameters at all.
+      await expect(bubbles(page)).toBeHidden();
+      await expect(page).toHaveURL(
+        (url) => [...url.searchParams.keys()].length === 0,
+      );
     });
 
     test("should navigate back in filter dropdown", async ({ page }) => {
       await page.goto("/games");
 
-      // Open filter dropdown
-      await page.getByRole("button", { name: "Фильтры" }).click();
+      const region = await openFilterDropdown(page);
+      await region.getByRole("button", { name: /^Статус игры / }).click();
 
-      // Navigate to status
-      await page
-        .locator(".dropdown-item")
-        .filter({ hasText: "Статус игры" })
-        .click();
+      const header = region.locator(".dropdown-nav-header");
+      await expect(header).toBeVisible();
+      await expect(header).toContainText("Статус игры");
 
-      // Should show nav header
-      await expect(page.locator(".dropdown-nav-header")).toBeVisible();
+      // Addressed by class because the control has no accessible name: an
+      // icon-only button with an aria-hidden icon and no aria-label. Reported
+      // separately; a role locator becomes possible once it is labelled.
+      await header.locator(".nav-back-btn").click();
 
-      // Click back button
-      await page.locator(".nav-back-btn").click();
-
-      // Should be back at root level
-      await expect(page.getByText("Статус игры")).toBeVisible();
-      await expect(page.getByText("Ведущие")).toBeVisible();
+      await expect(
+        region.getByRole("button", { name: /^Статус игры / }),
+      ).toBeVisible();
+      await expect(
+        region.getByRole("button", { name: /^Ведущие / }),
+      ).toBeVisible();
     });
 
     test("should close dropdown on click outside", async ({ page }) => {
       await page.goto("/games");
 
-      // Open filter dropdown
-      await page.getByRole("button", { name: "Фильтры" }).click();
-      await expect(page.locator(".dropdown")).toBeVisible();
+      const region = await openFilterDropdown(page);
+      const dropdown = region.locator(".filter-dropdown-container");
+      await expect(dropdown).toBeVisible();
 
-      // Click outside
-      await page.locator("h1").click();
+      await page.getByRole("heading", { level: 1 }).click();
 
-      // Dropdown should close
-      await expect(page.locator(".dropdown")).not.toBeVisible();
+      // The old test watched ".dropdown", which matches nothing in this app —
+      // so its closing assertion held for a dropdown that stayed open.
+      await expect(dropdown).toBeHidden();
+      await expect(
+        region.getByRole("button", { name: "Фильтры" }),
+      ).toHaveAttribute("aria-expanded", "false");
     });
 
     test("should combine multiple filters", async ({ page }) => {
-      // Start with status filter
       await page.goto("/games?status=Active");
 
-      // Add a search
-      const searchInput = page.getByPlaceholder("Поиск");
-      await searchInput.fill("тест");
-      await searchInput.press("Enter");
+      await searchField(page).fill("тест");
 
-      // Both filters should be in URL
-      await expect(page).toHaveURL(/status=Active/);
-      await expect(page).toHaveURL(/search=тест/);
+      await expect(page).toHaveURL(
+        (url) =>
+          url.searchParams.get("status") === "Active" &&
+          url.searchParams.get("search") === "тест",
+      );
     });
   });
 
@@ -599,33 +728,30 @@ test.describe("Games List Page", () => {
     test("should navigate to next page", async ({ page }) => {
       await page.goto("/games");
 
-      // Wait for table
-      await page.waitForSelector("#results");
+      await page
+        .getByRole("navigation", { name: "Пагинация" })
+        .getByRole("link", { name: "2", exact: true })
+        .click();
 
-      // Check if pagination exists
-      const nextPageLink = page.locator(".paging-bottom a").last();
-      if (await nextPageLink.isVisible()) {
-        await nextPageLink.click();
-
-        // URL should have page number
-        await expect(page).toHaveURL(/number=2/);
-      }
+      await expect(page).toHaveURL(
+        (url) => url.searchParams.get("number") === "2",
+      );
     });
 
     test("should preserve filters when paginating", async ({ page }) => {
+      // Active games span more than one page in the seed.
       await page.goto("/games?status=Active");
 
-      // Wait for table
-      await page.waitForSelector("#results");
+      await page
+        .getByRole("navigation", { name: "Пагинация" })
+        .getByRole("link", { name: "2", exact: true })
+        .click();
 
-      // Check if pagination exists
-      const nextPageLink = page.locator(".paging-bottom a").last();
-      if (await nextPageLink.isVisible()) {
-        await nextPageLink.click();
-
-        // Status filter should still be in URL
-        await expect(page).toHaveURL(/status=Active/);
-      }
+      await expect(page).toHaveURL(
+        (url) =>
+          url.searchParams.get("status") === "Active" &&
+          url.searchParams.get("number") === "2",
+      );
     });
   });
 
@@ -635,27 +761,24 @@ test.describe("Games List Page", () => {
         "/games?status=Active&search=тест&sortBy=title&sortOrder=asc",
       );
 
-      // Search input should have value
-      await expect(page.getByPlaceholder("Поиск")).toHaveValue("тест");
-
-      // Status bubble should be visible
-      await expect(
-        page.locator(".bubble").filter({ hasText: "Статус игры" }),
-      ).toBeVisible();
-
-      // Sort button should show "Название"
-      await expect(page.locator(".sort-btn")).toContainText("Название");
+      await expect(searchField(page)).toHaveValue("тест");
+      await expect(bubbles(page)).toContainText("Статус игры: Идет игра");
+      await expect(sortTrigger(page)).toHaveText("Название");
     });
 
-    test("should restore tag filters from URL", async ({ page }) => {
-      // Need a valid tag ID - this test assumes tags exist
-      await page.goto("/games?requiredTags=1");
+    test("should restore tag filters from URL", async ({ page, request }) => {
+      // The old version of this test asserted nothing at all: it waited 500ms
+      // and left a comment about what might have happened.
+      const tag = await unambiguousTag(request);
 
-      // Wait for tags to load
-      await page.waitForTimeout(500);
+      await page.goto(`/games?requiredTags=${tag.id}`);
 
-      // If tag exists, a "Тег:" bubble should appear - may or may not be
-      // visible depending on whether tag ID 1 exists
+      await expect(bubbles(page)).toContainText(`Тег: ${tag.title}`);
+      // A tag id the catalog does not know is dropped from the URL on load
+      // (validateTagFilters); a known one must survive.
+      await expect(page).toHaveURL(
+        (url) => url.searchParams.get("requiredTags") === String(tag.id),
+      );
     });
   });
 
@@ -663,66 +786,93 @@ test.describe("Games List Page", () => {
     test("should show empty message when no games match filters", async ({
       page,
     }) => {
-      // Use a very specific search that likely won't match anything
       await page.goto("/games?search=xyznonexistentgame123456789");
 
-      // Wait for table to load
-      await page.waitForSelector("#results");
-
-      // Should show empty message
-      await expect(
-        page.getByText("Нет игр по заданным фильтрам"),
-      ).toBeVisible();
+      await expect(rows(page)).toHaveCount(0);
+      await expect(table(page)).toContainText(
+        "Игр по заданным фильтрам не найдено",
+      );
     });
   });
 
-  test.describe("Participants Column", () => {
-    test("should display participants with reader count", async ({ page }) => {
+  // Was "Participants Column". There is no participants column — the columns
+  // are an owner decision — so these cover the two cells that do carry the
+  // numbers the old tests were reaching for: the slots indicator next to the
+  // status badge, and the readers count.
+  test.describe("Status and Readers Cells", () => {
+    test("shows taken and total player slots next to the status", async ({
+      page,
+    }) => {
       await page.goto("/games");
 
-      // Wait for table to load
-      await page.waitForSelector("#results");
+      const title = await anyGameTitle(page);
 
-      // Participants column should show slots and reader count
-      const participantsCell = page.locator(".participants").first();
-      if (await participantsCell.isVisible()) {
-        // Should have slots display (e.g., "2/4" or "3/∞")
-        await expect(participantsCell.locator(".slots")).toBeVisible();
-        // Should have readers count in brackets (e.g., "[+5]")
-        await expect(participantsCell.locator(".readers-count")).toBeVisible();
-      }
+      // "[2/4]" with a limit, "[3/∞]" without one.
+      await expect(
+        rowOfGame(page, title).locator(".slots-indicator"),
+      ).toHaveText(/^\[\d+\/(\d+|∞)\]$/);
     });
 
-    test("should show readers tooltip on hover", async ({ page }) => {
+    test("shows readers tooltip on hover", async ({ page }) => {
       await page.goto("/games");
 
-      // Wait for table to load
-      await page.waitForSelector("#results");
+      // A row whose readers count is not zero, so the tooltip lists readers
+      // instead of saying there are none. The tooltip is the site's own
+      // component, not a title attribute as the old test assumed.
+      await rowsRendered(page);
+      const titles = await rows(page).evaluateAll((rendered) =>
+        rendered
+          .filter(
+            (row) =>
+              (
+                row.querySelector(".readers-count")?.textContent ?? "0"
+              ).trim() !== "0",
+          )
+          .map((row) =>
+            (row.querySelector("a.game-link")?.textContent ?? "").trim(),
+          ),
+      );
+      const title = onlyOccurrence(titles, "game with readers");
 
-      // Find reader count element
-      const readersCount = page.locator(".readers-count").first();
-      if (await readersCount.isVisible()) {
-        // Should have title attribute with reader info
-        const title = await readersCount.getAttribute("title");
-        expect(title).toContain("Читатели:");
-      }
+      await rowOfGame(page, title).locator(".readers-count").hover();
+
+      const tooltip = page.getByRole("tooltip");
+      await expect(tooltip).toBeVisible();
+      await expect(tooltip).toContainText("Читатели:");
     });
   });
 
   test.describe("Loading States", () => {
     test("should show loading state during data fetch", async ({ page }) => {
-      // Slow down network to see loading
-      await page.route("**/v1/games**", async (route) => {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        await route.continue();
-      });
+      // Only the table's own search is delayed. A "**/v1/games**" pattern
+      // would also take over the sidebar's game lists, which the run above
+      // deliberately keeps off the API.
+      await page.route(
+        (url) =>
+          url.origin === API_BASE_URL &&
+          url.pathname === "/v1/games" &&
+          !url.searchParams.has("projection"),
+        async (route) => {
+          // Four seconds, not one and a half. This is the one test here that has
+          // to catch a state on its way past instead of waiting for a settled
+          // one, so the window has to outlast a slow boot: on a loaded machine
+          // the first assertion has been seen starting after a 1500ms window had
+          // already closed, and it then polls for its whole timeout against an
+          // attribute that is never coming back. Four seconds still fits inside
+          // the 5s expect timeout.
+          await new Promise((resolve) => setTimeout(resolve, 4000));
+          await route.continue();
+        },
+      );
 
       await page.goto("/games");
 
-      // Table should show loading state
-      // Note: exact selector depends on DataTable implementation
-      const table = page.locator("#results");
-      await expect(table).toBeVisible();
+      // aria-busy is the loading contract: the table is there from the start,
+      // marked busy while the request is in flight and unmarked once rows
+      // arrive. The old test only checked that the wrapper existed.
+      await expect(table(page)).toHaveAttribute("aria-busy", "true");
+      await expect(rows(page)).not.toHaveCount(0);
+      await expect(table(page)).not.toHaveAttribute("aria-busy", "true");
     });
   });
 });

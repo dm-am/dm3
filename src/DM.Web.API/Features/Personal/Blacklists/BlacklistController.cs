@@ -5,6 +5,7 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Personal.Blacklists;
 
@@ -19,7 +20,7 @@ namespace DM.Web.API.Features.Personal.Blacklists;
 [ApiExplorerSettings(GroupName = "Personal")]
 [Tags("Blacklist")]
 [AuthenticationRequired]
-[EnableRateLimiting("default")]
+[EnableRateLimiting(RateLimitPolicies.Default)]
 public class BlacklistController : ControllerBase
 {
     private readonly IUserBlacklistApiService _apiService;
@@ -41,7 +42,7 @@ public class BlacklistController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     [HttpGet(Name = nameof(GetMyBlacklist))]
     [ProducesResponseType(typeof(ListEnvelope<BlacklistEntry>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetMyBlacklist([FromQuery] PagingQuery query)
     {
         var (entries, paging) = await _apiService.GetMyBlacklist(query);
@@ -58,7 +59,7 @@ public class BlacklistController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     [HttpGet("settings", Name = nameof(GetBlacklistSettings))]
     [ProducesResponseType(typeof(BlacklistSettings), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetBlacklistSettings() =>
         Ok(await _apiService.GetSettings());
 
@@ -68,14 +69,14 @@ public class BlacklistController : ControllerBase
     /// <remarks>
     /// Updates behavior settings for blocked users.
     /// </remarks>
-    /// <param name="settings">New settings</param>
+    /// <param name="request">Flags to change</param>
     /// <response code="200">Updated settings</response>
     /// <response code="401">User must be authenticated</response>
     [HttpPatch("settings", Name = nameof(UpdateBlacklistSettings))]
     [ProducesResponseType(typeof(BlacklistSettings), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> UpdateBlacklistSettings([FromBody] BlacklistSettings settings) =>
-        Ok(await _apiService.UpdateSettings(settings));
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> UpdateBlacklistSettings([FromBody] UpdateBlacklistSettingsRequest request) =>
+        Ok(await _apiService.UpdateSettings(request));
 
     /// <summary>
     /// Block a user
@@ -90,13 +91,13 @@ public class BlacklistController : ControllerBase
     /// <response code="404">User not found</response>
     [HttpPost(Name = nameof(BlockUser))]
     [ProducesResponseType(typeof(BlacklistEntry), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> BlockUser([FromBody] BlockUserRequest request)
     {
         var result = await _apiService.BlockUser(request);
-        return CreatedAtRoute(nameof(GetMyBlacklist), result);
+        return StatusCode(StatusCodes.Status201Created, result);
     }
 
     /// <summary>
@@ -111,8 +112,8 @@ public class BlacklistController : ControllerBase
     /// <response code="404">User not found in blacklist</response>
     [HttpDelete("{username}", Name = nameof(UnblockUser))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UnblockUser(string username)
     {
         await _apiService.UnblockUser(username);

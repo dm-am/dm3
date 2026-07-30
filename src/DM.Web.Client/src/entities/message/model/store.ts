@@ -81,6 +81,11 @@ export const useMessagingStore = defineStore("messaging", () => {
   const messagesList = ref<Message[]>([]);
   const loadingMessages = ref(false);
   const loadingBefore = ref(false);
+  /** Failure of the last "load older" page, kept apart from `error` (the whole
+   * view's failure) so a refused page-2 request leaves the rendered messages
+   * alone; surfaced at the top sentinel with a retry, same as the global
+   * chat's errorBefore. */
+  const errorBefore = ref<string | null>(null);
   const hasMoreBefore = ref(false);
   const hasMoreAfter = ref(false);
   const currentCursor = ref<CursorPaging | null>(null);
@@ -98,6 +103,9 @@ export const useMessagingStore = defineStore("messaging", () => {
   // Fetch initial messages (latest messages)
   async function fetchMessages(chatId: ChatId) {
     loadingMessages.value = true;
+    // A fresh window carries no failed page with it: the error belongs to the
+    // window it happened in, and keeping it would park the new one's sentinel.
+    errorBefore.value = null;
     try {
       const { data } = await messagingApi.getMessages(chatId, {
         limit: PAGE_SIZE,
@@ -123,12 +131,23 @@ export const useMessagingStore = defineStore("messaging", () => {
       return;
 
     loadingBefore.value = true;
+    errorBefore.value = null;
     try {
-      const { data } = await messagingApi.getMessagesBefore(
+      const { data, error: apiError } = await messagingApi.getMessagesBefore(
         selectedChat.value.id,
         currentCursor.value.prevCursor,
         PAGE_SIZE,
       );
+
+      if (apiError) {
+        // hasMoreBefore stays as it was. Clearing it on a failure would tell
+        // the list the history had ended: the sentinel unmounts, and the rest
+        // of the correspondence is unreachable until the chat is reopened —
+        // with nothing on screen saying why. The sentinel keeps its place and
+        // offers the retry instead.
+        errorBefore.value = "Не удалось загрузить сообщения";
+        return;
+      }
 
       if (data && data.resources.length > 0) {
         // Prepend older messages
@@ -165,6 +184,7 @@ export const useMessagingStore = defineStore("messaging", () => {
   // scroll/highlight.
   async function navigateToMessage(chatId: ChatId, messageId: MessageId) {
     loadingMessages.value = true;
+    errorBefore.value = null;
     try {
       const { data } = await messagingApi.getMessages(chatId, {
         aroundMessageId: messageId,
@@ -372,6 +392,7 @@ export const useMessagingStore = defineStore("messaging", () => {
     currentCursor.value = null;
     hasMoreBefore.value = false;
     hasMoreAfter.value = false;
+    errorBefore.value = null;
     highlightedMessageId.value = null;
   }
 
@@ -400,6 +421,7 @@ export const useMessagingStore = defineStore("messaging", () => {
     messagesList,
     loadingMessages,
     loadingBefore,
+    errorBefore,
     hasMoreBefore,
     hasMoreAfter,
     highlightedMessageId,

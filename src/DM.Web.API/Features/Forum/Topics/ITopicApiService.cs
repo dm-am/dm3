@@ -59,9 +59,9 @@ public interface ITopicApiService
     /// Updates topic
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
-    /// <param name="topic">Topic model</param>
+    /// <param name="request">Fields to change</param>
     /// <returns>Envelop of updated topic</returns>
-    Task<Envelope<Topic>> Update(Guid topicId, Topic topic);
+    Task<Envelope<Topic>> Update(Guid topicId, UpdateTopicRequest request);
 
     /// <summary>
     /// Removes topic

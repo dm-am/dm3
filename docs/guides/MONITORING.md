@@ -7,9 +7,9 @@
 ## Обзор стека
 
 ```
-Serilog ────► OpenSearch ────► Kibana (:5601)
-OpenTelemetry ────► Jaeger (:16686)
-/metrics ────► Prometheus (:9090) ────► Grafana (:3000)
+Serilog ────────► Loki (:3100) ──────┐
+OpenTelemetry ──► Jaeger (:16686)    ├──► Grafana (:3000)
+/metrics ───────► Prometheus (:9090) ┘
 ```
 
 ---
@@ -19,29 +19,39 @@ OpenTelemetry ────► Jaeger (:16686)
 ### Конфигурация
 
 ```
-Sinks: OpenSearch (dm_logstash-{date}), Console
+Sinks: Loki (push напрямую из приложения), Console
 Enrichers: Application, Environment, LogContext, ActivityEnricher (TraceId, SpanId)
 ```
 
+**Метки против содержимого.** Loki индексирует метки, а не текст строки, поэтому
+меток ровно две — `app` и `env`. Все остальное (пользователь, корреляционный
+токен, длительность) остается в теле строки и отбирается фильтром LogQL. Метка на
+величину с большим числом значений размножает потоки без предела — это
+единственный способ сделать Loki медленным, и правило это, а не деталь настройки.
+
+Агента-сборщика нет: Serilog отправляет пакеты по HTTP сам, файлов на диске не
+возникает.
+
 ### Где смотреть
 
-| Что | URL |
-|-----|-----|
-| OpenSearch Dashboard | http://localhost:5601 |
-| Индекс | `dm_logstash-{date}` |
+Grafana → Explore → датасорс Loki. Отдельного UI у логов нет намеренно: метрики,
+трейсы и логи смотрятся из одного места, а `TraceId` в строке лога — кликабельная
+ссылка в трейс Jaeger (derived field датасорса).
 
-### Полезные запросы
+### Полезные запросы (LogQL)
 
 ```
-# Ошибки за последний час
-level: "Error" AND @timestamp:[now-1h TO now]
+# Ошибки API за последний час (интервал задается в UI)
+{app="DM.API"} | json | level = "Error"
 
-# Запросы конкретного пользователя
-userId: "12345"
+# Все, что писалось про конкретный корреляционный токен
+{app=~"DM.+"} |= "1b2c3d4e"
 
-# Медленные запросы (> 1s)
-duration: >1000
+# Поток одного воркера
+{app="DM.Notifications.Consumer"}
 ```
+
+Ретеншен — 30 дней, задан в `docker/loki/loki.yaml` и применяется компактором.
 
 ---
 
@@ -75,18 +85,16 @@ duration: >1000
 
 ### Endpoint
 
-`/metrics` на всех .NET сервисах
+`/metrics` и `/_health` — на каждом .NET сервисе. Хост, отдающий gRPC, слушает
+cleartext HTTP/2 и не отвечает HTTP/1.1-клиенту, поэтому health и метрики у него
+на отдельном порту.
 
 ### Scrape targets
 
-| Сервис | Порт |
-|--------|------|
-| dm-api | 5000 |
-| consumer-mail | 5003 |
-| consumer-search | 5001 |
-| consumer-notification | 5002 |
-| postgres-exporter | 9187 |
-| node-exporter | 9100 |
+**Источник истины:** [`docker/prometheus.yml`](../../docker/prometheus.yml).
+Имя job обязано совпадать с `container_name` из compose: при расхождении target
+просто отсутствует, а алерт на `up == 0` молчит — именно поэтому рядом стоит
+`ConsumerScrapeTargetMissing` на `absent()`.
 
 ### Где смотреть
 
@@ -94,6 +102,17 @@ duration: >1000
 |-----|-----|
 | Prometheus | http://localhost:9090 |
 | Targets | http://localhost:9090/targets |
+
+> **Доступ только с самой машины.** Все служебные интерфейсы — Prometheus,
+> Grafana, Loki, Jaeger, консоль MinIO, порты воркеров —
+> публикуются на `127.0.0.1`, а не наружу. Правила брандмауэра тут не помощник:
+> опубликованный докером порт идет через цепочки nat/DOCKER и FORWARD, минуя
+> INPUT, поэтому единственная надежная граница — сам адрес привязки. С удаленной
+> машины смотреть через SSH-туннель:
+>
+> ```bash
+> ssh -N -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 user@server
+> ```
 
 ### Полезные запросы PromQL
 
@@ -167,11 +186,12 @@ receivers:
 
 ## Troubleshooting
 
-### Логи не появляются в OpenSearch
+### Логи не появляются в Loki
 
-1. Проверить что OpenSearch запущен: `docker ps | grep opensearch`
-2. Проверить подключение: `curl http://localhost:9200`
-3. Проверить индекс: `curl http://localhost:9200/_cat/indices`
+1. Проверить что Loki запущен и готов: `curl http://localhost:3100/ready`
+2. Проверить, что поток вообще создан: `curl -s http://localhost:3100/loki/api/v1/label/app/values`
+3. Если потока нет — смотреть консольный sink (`docker logs dm-api`): он пишет
+   всегда, и ошибка отправки в Loki видна там же
 
 ### Jaeger не показывает traces
 

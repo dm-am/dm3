@@ -15,6 +15,7 @@ namespace DM.Infrastructure.Core.Extensions;
 public static class ModuleRegistrationExtensions
 {
     private const string RegisteredModulesKey = nameof(RegisteredModulesKey);
+    private const string MapperRegisteredKey = nameof(MapperRegisteredKey);
 
     /// <summary>
     /// Register module, but only if not registered
@@ -130,9 +131,29 @@ public static class ModuleRegistrationExtensions
             .Where(t => t.IsClass && t.IsSubclassOf(typeof(Profile)))
             .As<Profile>();
 
+        // Profiles accumulate per assembly; the mapper itself is one object built
+        // from all of them. Registering it inside this method registered it once
+        // per call — ten times in the API — and only the last registration was
+        // ever resolved. The marker keeps the plumbing to exactly one.
+        if (builder.Properties.ContainsKey(MapperRegisteredKey))
+        {
+            return builder;
+        }
+
+        builder.Properties[MapperRegisteredKey] = true;
+
         builder
             .Register<IConfigurationProvider>(ctx =>
-                new MapperConfiguration(cfg => cfg.AddProfiles(ctx.Resolve<IEnumerable<Profile>>())))
+                new MapperConfiguration(cfg =>
+                {
+                    // A null source collection stays null instead of becoming an
+                    // empty one. Domain code reads that difference as "the caller
+                    // did not send this field": without it a PATCH that omits a
+                    // collection arrived as an empty collection, passed the
+                    // `!= null` guard, and replaced the stored value with nothing.
+                    cfg.AllowNullCollections = true;
+                    cfg.AddProfiles(ctx.Resolve<IEnumerable<Profile>>());
+                }))
             .SingleInstance();
 
         builder

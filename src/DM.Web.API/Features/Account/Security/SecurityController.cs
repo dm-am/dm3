@@ -48,7 +48,7 @@ public class SecurityController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     [HttpGet("logs", Name = nameof(GetSecurityLogs))]
     [ProducesResponseType(typeof(ListEnvelope<SecurityEvent>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetSecurityLogs([FromQuery] string? type = null, [FromQuery] int limit = 50)
     {
         var effectiveLimit = limit > 100 ? 100 : limit;

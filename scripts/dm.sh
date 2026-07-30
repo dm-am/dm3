@@ -91,44 +91,31 @@ reset_services() {
 run_seed() {
     echo -e "\033[36mSeeding test data...\033[0m"
 
-    # Check if API is running
+    # The seeder is a console tool, not an HTTP endpoint: it writes straight to
+    # Postgres, Mongo and the object storage, so it must not be reachable over
+    # the network. It runs under the "tools" compose profile, which never starts
+    # with a plain "docker compose up". The API still has to be up, because the
+    # upload bucket is created by its storage initializer.
     if ! curl -s --max-time 5 "http://localhost:5000/v1/boards" > /dev/null; then
         echo -e "\033[31mError: API is not available at http://localhost:5000\033[0m"
         echo "Start services first: ./scripts/dm.sh start"
         exit 1
     fi
 
-    # Call seed endpoint directly
-    response=$(curl -s -X POST "http://localhost:5000/v1/moderation/seed" -H "Content-Type: application/json")
+    cd "$(dirname "$0")/../docker" || exit 1
 
-    if [ $? -ne 0 ]; then
-        echo -e "\033[31mError: Failed to call seed endpoint\033[0m"
+    if ! docker compose run --rm -T --build seeder users; then
+        echo -e "\033[31mError: user seeding failed\033[0m"
         exit 1
     fi
 
-    # Parse and display results (requires jq)
-    if command -v jq &> /dev/null; then
-        created=$(echo "$response" | jq -r '.created')
-        skipped=$(echo "$response" | jq -r '.skipped')
-        echo ""
-        echo -e "\033[32mCreated: $created\033[0m"
-        echo -e "\033[33mSkipped: $skipped (already exist)\033[0m"
-
-        createdLogins=$(echo "$response" | jq -r '.createdLogins[]?' 2>/dev/null)
-        if [ -n "$createdLogins" ]; then
-            echo ""
-            echo -e "\033[32mCreated users:\033[0m"
-            echo "$createdLogins" | while read -r login; do
-                echo "  + $login"
-            done
-        fi
-    else
-        echo "$response"
+    if ! docker compose run --rm -T --build seeder content; then
+        echo -e "\033[31mError: content seeding failed\033[0m"
+        exit 1
     fi
 
     echo ""
     echo -e "\033[36mPassword: Test123!\033[0m"
-    echo "All users are newbies (0 posts)"
 }
 
 show_status() {

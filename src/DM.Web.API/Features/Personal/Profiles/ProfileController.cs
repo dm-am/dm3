@@ -4,6 +4,7 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Personal.Profiles;
 
@@ -20,7 +21,7 @@ namespace DM.Web.API.Features.Personal.Profiles;
 [ApiExplorerSettings(GroupName = "Personal")]
 [Tags("Profiles")]
 [AuthenticationRequired]
-[EnableRateLimiting("default")]
+[EnableRateLimiting(RateLimitPolicies.Default)]
 public class ProfileController : ControllerBase
 {
     private readonly IPersonalProfileApiService _profileApiService;
@@ -42,7 +43,7 @@ public class ProfileController : ControllerBase
     /// <response code="401">Authentication required</response>
     [HttpGet(Name = nameof(GetMyProfile))]
     [ProducesResponseType(typeof(PersonalProfile), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetMyProfile() =>
         Ok(await _profileApiService.GetMyProfile());
 
@@ -70,8 +71,8 @@ public class ProfileController : ControllerBase
     /// <response code="401">Authentication required</response>
     [HttpPatch(Name = nameof(UpdateMyProfile))]
     [ProducesResponseType(typeof(PersonalProfile), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(BadRequestError), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateProfile profile) =>
         Ok(await _profileApiService.UpdateMyProfile(profile));
 
@@ -86,7 +87,7 @@ public class ProfileController : ControllerBase
     /// <response code="401">Authentication required.</response>
     [HttpDelete("avatar", Name = nameof(RemoveMyAvatar))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> RemoveMyAvatar()
     {
         await _profileApiService.RemoveMyAvatar();

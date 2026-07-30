@@ -7,6 +7,7 @@ using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
@@ -77,8 +78,8 @@ public class AuthenticationServiceShould : UnitTestBase
     {
         var email = "test@example.com";
         _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(email)).ReturnsAsync(true);
-        _loginAttemptTracker.Setup(t => t.GetRemainingLockoutSeconds(email)).ReturnsAsync(300);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(true);
+        _loginAttemptTracker.Setup(t => t.GetRemainingLockoutSeconds(new LoginAttemptOrigin(email, null))).ReturnsAsync(300);
 
         var result = await _service.Authenticate(email, "password");
 
@@ -91,15 +92,15 @@ public class AuthenticationServiceShould : UnitTestBase
     {
         var email = "test@example.com";
         _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(email)).ReturnsAsync(0);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
         _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync(((bool, AuthenticatedUser?))(false, null));
 
         var result = await _service.Authenticate(email, "password");
 
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.WrongLogin);
-        _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(email), Times.Once);
+        _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(new LoginAttemptOrigin(email, null)), Times.Once);
     }
 
     [Fact]
@@ -117,8 +118,8 @@ public class AuthenticationServiceShould : UnitTestBase
         };
 
         _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(email)).ReturnsAsync(0);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
         _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
         _securityManager.Setup(s => s.ComparePasswords("wrongpassword", user.Salt, user.PasswordHash))
             .Returns(false);
@@ -127,7 +128,7 @@ public class AuthenticationServiceShould : UnitTestBase
 
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.WrongPassword);
-        _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(email), Times.Once);
+        _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(new LoginAttemptOrigin(email, null)), Times.Once);
         _auditService.Verify(a => a.LogAsync(user.UserId, SecurityEventType.LoginFailure,
             It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()), Times.Once);
     }
@@ -154,8 +155,8 @@ public class AuthenticationServiceShould : UnitTestBase
         var settings = UserSettings.Default;
 
         _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(email)).ReturnsAsync(0);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
         _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
         _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
             .Returns(true);
@@ -172,6 +173,186 @@ public class AuthenticationServiceShould : UnitTestBase
         _repository.Verify(r => r.UpdateActivity(userId, It.IsAny<DateTimeOffset>()), Times.Once);
         _auditService.Verify(a => a.LogAsync(userId, SecurityEventType.LoginSuccess,
             It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RefuseLoginForFullyBannedUser()
+    {
+        var email = "banned@example.com";
+        var user = Create.User()
+            .WithRole(UserRole.RegularUser)
+            .WithAccessPolicy(AccessPolicy.FullBan)
+            .WithCredentials("salt", "hash")
+            .Please();
+
+        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
+        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
+        _securityManager.Setup(s => s.ComparePasswords("password", "salt", "hash")).Returns(true);
+
+        var result = await _service.Authenticate(email, "password");
+
+        result.User.IsAuthenticated.Should().BeFalse();
+        result.Error.Should().Be(AuthenticationError.Banned);
+        // The ban decides before the password is even consulted, and no session
+        // is minted
+        _repository.Verify(r => r.AddSession(It.IsAny<Guid>(), It.IsAny<CreateSession>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RefuseTokenOfFullyBannedUser()
+    {
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var user = Create.User(userId)
+            .WithRole(UserRole.RegularUser)
+            .WithAccessPolicy(AccessPolicy.FullBan)
+            .Please();
+
+        _cryptoService.Setup(c => c.Decrypt("token"))
+            .ReturnsAsync($"{{\"userId\":\"{userId}\",\"sessionId\":\"{sessionId}\"}}");
+        _repository.Setup(r => r.FindUser(userId)).ReturnsAsync(user);
+        _repository.Setup(r => r.FindUserSession(userId, sessionId))
+            .ReturnsAsync(new Session { Id = sessionId, ExpirationUtc = DateTime.UtcNow.AddDays(1) });
+        _repository.Setup(r => r.FindUserSettings(userId)).ReturnsAsync(UserSettings.Default);
+
+        var result = await _service.Authenticate("token");
+
+        // A ban applied after the cookie was issued must take effect on the very
+        // next request, not at session expiry
+        result.User.IsAuthenticated.Should().BeFalse();
+        result.Error.Should().Be(AuthenticationError.Banned);
+    }
+
+    [Fact]
+    public async Task LookUpTheSessionUnderTheUserFromTheToken()
+    {
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var user = Create.User(userId).WithRole(UserRole.RegularUser).Please();
+
+        _cryptoService.Setup(c => c.Decrypt("token"))
+            .ReturnsAsync($"{{\"userId\":\"{userId}\",\"sessionId\":\"{sessionId}\"}}");
+        _repository.Setup(r => r.FindUser(userId)).ReturnsAsync(user);
+        _repository.Setup(r => r.FindUserSettings(userId)).ReturnsAsync(UserSettings.Default);
+        _repository.Setup(r => r.FindUserSession(userId, sessionId))
+            .ReturnsAsync(new Session { Id = sessionId, ExpirationUtc = DateTime.UtcNow.AddDays(1) });
+
+        var result = await _service.Authenticate("token");
+
+        result.User.IsAuthenticated.Should().BeTrue();
+        // Both halves of the token are used together. Looking the session up by
+        // its id alone would authenticate a token whose userId and sessionId
+        // belong to different people.
+        _repository.Verify(r => r.FindUserSession(userId, sessionId), Times.Once);
+    }
+
+    [Fact]
+    public async Task RefuseTokenWhoseSessionBelongsToSomebodyElse()
+    {
+        var userId = Guid.NewGuid();
+        var foreignSessionId = Guid.NewGuid();
+        var user = Create.User(userId).WithRole(UserRole.RegularUser).Please();
+
+        _cryptoService.Setup(c => c.Decrypt("token"))
+            .ReturnsAsync($"{{\"userId\":\"{userId}\",\"sessionId\":\"{foreignSessionId}\"}}");
+        _repository.Setup(r => r.FindUser(userId)).ReturnsAsync(user);
+        _repository.Setup(r => r.FindUserSettings(userId)).ReturnsAsync(UserSettings.Default);
+        // The session exists in the store, but not under this user
+        _repository.Setup(r => r.FindUserSession(userId, foreignSessionId))
+            .ReturnsAsync((Session?)null);
+
+        var result = await _service.Authenticate("token");
+
+        result.User.IsAuthenticated.Should().BeFalse();
+        result.Error.Should().Be(AuthenticationError.SessionExpired);
+    }
+
+    [Fact]
+    public async Task ApplyABanRowToTheIdentityItBuilds()
+    {
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+
+        var user = Create.User(userId).WithRole(UserRole.RegularUser).Please();
+        // The ban lives in its own table and reaches the identity as a restriction
+        // with a window; the user's own column stays NotSpecified forever
+        user.AccessRestrictions = [
+            new AccessRestriction(AccessPolicy.DemocraticBan, now.AddDays(-1), now.AddDays(1))
+        ];
+
+        _cryptoService.Setup(c => c.Decrypt("token"))
+            .ReturnsAsync($"{{\"userId\":\"{userId}\",\"sessionId\":\"{sessionId}\"}}");
+        _repository.Setup(r => r.FindUser(userId)).ReturnsAsync(user);
+        _repository.Setup(r => r.FindUserSettings(userId)).ReturnsAsync(UserSettings.Default);
+        _repository.Setup(r => r.FindUserSession(userId, sessionId))
+            .ReturnsAsync(new Session { Id = sessionId, ExpirationUtc = now.AddDays(1).UtcDateTime });
+
+        var result = await _service.Authenticate("token");
+
+        result.User.IsAuthenticated.Should().BeTrue();
+        // Every authorization resolver reads AccessPolicy. Without the fold the
+        // ban would be invisible to all of them.
+        result.User.AccessPolicy.Should().HaveFlag(AccessPolicy.DemocraticBan);
+    }
+
+    [Theory]
+    [InlineData(-10, -5)] // ban already served
+    [InlineData(5, 10)]   // ban scheduled but not started
+    public async Task IgnoreABanThatIsNotInForce(int startsInDays, int endsInDays)
+    {
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+
+        var user = Create.User(userId).WithRole(UserRole.RegularUser).Please();
+        user.AccessRestrictions = [
+            new AccessRestriction(AccessPolicy.DemocraticBan, now.AddDays(startsInDays), now.AddDays(endsInDays))
+        ];
+
+        _cryptoService.Setup(c => c.Decrypt("token"))
+            .ReturnsAsync($"{{\"userId\":\"{userId}\",\"sessionId\":\"{sessionId}\"}}");
+        _repository.Setup(r => r.FindUser(userId)).ReturnsAsync(user);
+        _repository.Setup(r => r.FindUserSettings(userId)).ReturnsAsync(UserSettings.Default);
+        _repository.Setup(r => r.FindUserSession(userId, sessionId))
+            .ReturnsAsync(new Session { Id = sessionId, ExpirationUtc = now.AddDays(1).UtcDateTime });
+
+        var result = await _service.Authenticate("token");
+
+        // The row stays for the moderation history; it must stop restricting the
+        // moment it stops being in force, with no job to run
+        result.User.AccessPolicy.Should().Be(AccessPolicy.NotSpecified);
+    }
+
+    [Fact]
+    public async Task RefuseLoginWhenTheFullBanComesFromABanRow()
+    {
+        var email = "banned@example.com";
+        var now = DateTimeOffset.UtcNow;
+        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+
+        var user = Create.User()
+            .WithRole(UserRole.RegularUser)
+            .WithCredentials("salt", "hash")
+            .Please();
+        user.AccessRestrictions = [
+            new AccessRestriction(AccessPolicy.FullBan, now.AddHours(-1), now.AddHours(1))
+        ];
+
+        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
+        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
+        _securityManager.Setup(s => s.ComparePasswords("password", "salt", "hash")).Returns(true);
+
+        var result = await _service.Authenticate(email, "password");
+
+        result.User.IsAuthenticated.Should().BeFalse();
+        result.Error.Should().Be(AuthenticationError.Banned);
     }
 
     [Fact]

@@ -7,7 +7,7 @@
  * "от {Имя}, dd.MM.yyyy HH:mm", delete button (Moderator+).
  */
 import { computed, onMounted, ref } from "vue";
-import ModerationApi, { type Warning } from "@/shared/api/moderationApi";
+import { moderationApi, type Warning } from "@/entities/moderation";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
@@ -16,6 +16,7 @@ import { useToast } from "@/shared/lib/composables/useToast";
 import { UserLink } from "@/entities/user";
 import { useRoleGate } from "./lib/useRoleGate";
 import { warningTypeLabel } from "./lib/labels";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const toast = useToast();
 const { hasAccess } = useRoleGate("Moderator");
@@ -26,7 +27,7 @@ const loadError = ref<string | null>(null);
 
 async function fetch() {
   loading.value = true;
-  const { data, error } = await ModerationApi.getAllWarnings();
+  const { data, error } = await moderationApi.getAllWarnings();
   loading.value = false;
   if (error) {
     loadError.value = "Не удалось загрузить предупреждения";
@@ -49,10 +50,10 @@ const removing = ref(false);
 async function confirmRemove() {
   if (!removeTarget.value || removing.value) return;
   removing.value = true;
-  const { error } = await ModerationApi.removeWarning(removeTarget.value.id);
+  const { error } = await moderationApi.removeWarning(removeTarget.value.id);
   removing.value = false;
   if (error) {
-    toast.error("Не удалось удалить предупреждение");
+    notifyFailure(error, "Не удалось удалить предупреждение");
     return;
   }
   toast.success("Предупреждение удалено");
@@ -144,8 +145,8 @@ const isEmpty = computed(() => !loading.value && warnings.value.length === 0);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/Skeleton"
 
 .warning-list
   display: flex
@@ -153,10 +154,7 @@ const isEmpty = computed(() => !loading.value && warnings.value.length === 0);
   gap: $medium
 
 .warning-card
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
   &.is-inactive
     opacity: 0.6

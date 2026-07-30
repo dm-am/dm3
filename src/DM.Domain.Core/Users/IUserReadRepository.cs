@@ -24,6 +24,17 @@ public interface IUserReadRepository
     Task<GeneralUser?> GetUserAsync(string username);
 
     /// <summary>
+    /// Identifier of a live user by username, or null when there is none.
+    /// </summary>
+    /// <remarks>
+    /// A single scalar SELECT. <see cref="GetUserAsync(string)"/> hydrates the
+    /// achievement counters, which costs twenty-one further queries, and every
+    /// caller that only needed to answer "does this user exist, and what is
+    /// their id" was paying that price.
+    /// </remarks>
+    Task<Guid?> FindUserIdAsync(string username);
+
+    /// <summary>
     /// Get user by ID
     /// </summary>
     Task<GeneralUser?> GetUserAsync(Guid userId);
@@ -41,47 +52,16 @@ public interface IUserReadRepository
     // ═══ LIST USERS ═══
 
     /// <summary>
-    /// Count users matching filter criteria
+    /// Count users matching the filter. Takes the same filter object as
+    /// <see cref="GetUsersAsync(PagingData, UserFilter)" /> so the total cannot
+    /// describe a different set than the page does.
     /// </summary>
-    Task<int> CountUsersAsync(
-        UserActivityFilter filter,
-        string? search = null,
-        UserRole? role = null,
-        bool? isNewbie = null,
-        bool? isOnline = null,
-        int? minRating = null,
-        int? maxRating = null,
-        int? minGamesHosting = null,
-        int? maxGamesHosting = null,
-        int? minGamesPlaying = null,
-        int? maxGamesPlaying = null,
-        int? minBlogsHosting = null,
-        int? maxBlogsHosting = null,
-        DateTimeOffset? registeredFromUtc = null,
-        DateTimeOffset? registeredToUtc = null);
+    Task<int> CountUsersAsync(UserFilter filter);
 
     /// <summary>
     /// Get users list with pagination
     /// </summary>
-    Task<IEnumerable<GeneralUser>> GetUsersAsync(
-        PagingData paging,
-        UserActivityFilter filter,
-        string? search = null,
-        UserRole? role = null,
-        UserSort sort = UserSort.Name,
-        bool sortAscending = true,
-        bool? isNewbie = null,
-        bool? isOnline = null,
-        int? minRating = null,
-        int? maxRating = null,
-        int? minGamesHosting = null,
-        int? maxGamesHosting = null,
-        int? minGamesPlaying = null,
-        int? maxGamesPlaying = null,
-        int? minBlogsHosting = null,
-        int? maxBlogsHosting = null,
-        DateTimeOffset? registeredFromUtc = null,
-        DateTimeOffset? registeredToUtc = null);
+    Task<IEnumerable<GeneralUser>> GetUsersAsync(PagingData paging, UserFilter filter);
 
     /// <summary>
     /// Get users by role
@@ -91,5 +71,22 @@ public interface IUserReadRepository
     /// <summary>
     /// Get users by IDs
     /// </summary>
+    /// <remarks>
+    /// Hydrates the achievement counters, which costs twenty-one further queries.
+    /// A caller that only renders names and badges wants
+    /// <see cref="GetUserReferencesAsync" /> instead.
+    /// </remarks>
     Task<IEnumerable<GeneralUser>> GetUsersAsync(IEnumerable<Guid> userIds);
+
+    /// <summary>
+    /// Get the display-level essentials of users by IDs: one projection, no
+    /// counter hydration.
+    /// </summary>
+    /// <remarks>
+    /// A separate method rather than a flag on <see cref="GetUsersAsync(IEnumerable{Guid})" />
+    /// so the return type cannot promise fields nobody filled: a
+    /// <see cref="GeneralUser" /> with twenty-one zeroed counters is
+    /// indistinguishable from a user who really has none.
+    /// </remarks>
+    Task<IEnumerable<UserReference>> GetUserReferencesAsync(IEnumerable<Guid> userIds);
 }

@@ -26,22 +26,23 @@ import {
   type Character,
   type ApiCharacterStatus,
 } from "@/entities/game";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { CharacterForm } from "@/features/edit-character";
-import { createEmptySchema } from "@/features/attribute-schema-editor/model";
+import { createEmptySchema } from "@/entities/game";
 import { Select } from "@/shared/ui/Select";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
 const store = useGameDetailsStore();
 const { game, characters, isMaster, isAssistant } = storeToRefs(store);
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 
 const gameId = computed(() => route.params.id as string);
 const routeCharacterId = computed(() => route.params.characterId as string);
@@ -182,7 +183,7 @@ async function applyStatus(
   );
   busy.value = false;
   if (error) {
-    toast.error("Не удалось изменить статус персонажа");
+    notifyFailure(error, "Не удалось изменить статус персонажа");
     return;
   }
   toast.success("Статус персонажа изменен");
@@ -196,7 +197,7 @@ async function doDelete() {
   const { error } = await gameApi.deleteCharacter(c.id as unknown as string);
   busy.value = false;
   if (error) {
-    toast.error("Не удалось удалить персонажа");
+    notifyFailure(error, "Не удалось удалить персонажа");
     return;
   }
   toast.success(c.isNpc ? "NPC удален" : "Персонаж удален");
@@ -380,7 +381,7 @@ function onCancel() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .character-edit
   max-width: $grid-step * 200

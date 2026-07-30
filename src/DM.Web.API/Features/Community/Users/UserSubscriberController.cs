@@ -39,9 +39,9 @@ public class UserSubscriberController : ControllerBase
     /// <response code="404">User not found</response>
     [HttpGet("{username}/subscribers", Name = nameof(GetUserSubscribers))]
     [ProducesResponseType(typeof(ListEnvelope<User>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserSubscribers(string username) =>
-        Ok(await _userSubscriberApiService.GetSubscribersAsync(username));
+        Ok(new ListEnvelope<User>(await _userSubscriberApiService.GetSubscribersAsync(username)));
 
     /// <summary>
     /// Subscribe to a user
@@ -57,11 +57,11 @@ public class UserSubscriberController : ControllerBase
     [HttpPost("{username}/subscribers", Name = nameof(SubscribeToUser))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Subscription), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SubscribeToUser(string username) =>
-        CreatedAtRoute(nameof(GetUserSubscribers), new { username }, await _userSubscriberApiService.SubscribeAsync(username));
+        CreatedAtRoute(nameof(GetMySubscriptionStatus), new { username }, await _userSubscriberApiService.SubscribeAsync(username));
 
     /// <summary>
     /// Unsubscribe from a user
@@ -76,8 +76,8 @@ public class UserSubscriberController : ControllerBase
     [HttpDelete("{username}/subscribers", Name = nameof(UnsubscribeFromUser))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UnsubscribeFromUser(string username)
     {
         await _userSubscriberApiService.UnsubscribeAsync(username);
@@ -97,7 +97,7 @@ public class UserSubscriberController : ControllerBase
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Subscription), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMySubscriptionStatus(string username)
     {
         var subscription = await _userSubscriberApiService.GetSubscriptionStatusAsync(username);

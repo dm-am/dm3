@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import { useTestimonialStore } from "@/shared/stores/testimonials";
+import { useTestimonialStore } from "@/entities/testimonial";
 
 export function useCreateTestimonial() {
   const testimonialStore = useTestimonialStore();

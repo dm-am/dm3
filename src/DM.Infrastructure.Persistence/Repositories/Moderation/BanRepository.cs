@@ -42,7 +42,7 @@ internal class BanRepository : IBanRepository
     {
         var now = _dateTimeProvider.Now;
         return await _dbContext.Bans
-            .Where(b => b.TargetUserId == userId && !b.IsRemoved && b.EndedUtc > now)
+            .Where(b => b.TargetUserId == userId && !b.IsRemoved && b.StartedUtc <= now && b.EndedUtc > now)
             .OrderByDescending(b => b.EndedUtc)
             .ProjectTo<Ban>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
@@ -80,12 +80,18 @@ internal class BanRepository : IBanRepository
     }
 
     /// <inheritdoc />
-    public async Task Remove(Guid banId, CancellationToken ct = default)
+    public async Task Remove(Guid banId, Guid liftedByUserId, DateTimeOffset liftedUtc, string? reason,
+        CancellationToken ct = default)
     {
         var ban = await _dbContext.Bans.FindAsync(new object[] { banId }, ct);
         if (ban != null)
         {
             ban.IsRemoved = true;
+            // Lifting a ban used to leave no trace at all: the reason reached the
+            // service and was dropped, so nobody could tell who had lifted what.
+            ban.LiftedByUserId = liftedByUserId;
+            ban.LiftedUtc = liftedUtc;
+            ban.LiftReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
             await _dbContext.SaveChangesAsync(ct);
         }
     }
@@ -95,7 +101,7 @@ internal class BanRepository : IBanRepository
     {
         var now = _dateTimeProvider.Now;
         return await _dbContext.Bans
-            .AnyAsync(b => b.TargetUserId == userId && !b.IsRemoved && b.EndedUtc > now, ct);
+            .AnyAsync(b => b.TargetUserId == userId && !b.IsRemoved && b.StartedUtc <= now && b.EndedUtc > now, ct);
     }
 
     /// <inheritdoc />
@@ -103,7 +109,7 @@ internal class BanRepository : IBanRepository
     {
         var now = _dateTimeProvider.Now;
         return await _dbContext.Bans
-            .Where(b => !b.IsRemoved && b.EndedUtc > now)
+            .Where(b => !b.IsRemoved && b.StartedUtc <= now && b.EndedUtc > now)
             .OrderByDescending(b => b.StartedUtc)
             .ProjectTo<Ban>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);

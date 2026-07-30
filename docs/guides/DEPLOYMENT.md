@@ -10,7 +10,7 @@ Internet → Nginx → Frontend (Vue.js)
                        ↓
               PostgreSQL / MongoDB / RabbitMQ
                        ↓
-              Consumer Services (Email, Search, Notifications)
+              Consumer Services (Email, Notifications)
 ```
 
 ---
@@ -21,10 +21,10 @@ Internet → Nginx → Frontend (Vue.js)
 
 | Workflow | Файл | Триггеры | Действия |
 |----------|------|----------|----------|
-| Build & Test | `dotnet.yml` | push/PR в main, dev | 4 jobs: Build+Test, Frontend CI (type-check + build), Dependency Scanning (dotnet+npm audit), Publish (matrix: 4 Docker images: dm-api, consumer-mail, consumer-search, consumer-notification) |
+| Build & Test | `dotnet.yml` | push/PR в main, dev | 4 jobs: Build+Test, Frontend CI (type-check + build), Dependency Scanning (dotnet+npm audit), Publish (matrix: 3 Docker images: dm-api, consumer-mail, consumer-notification) |
 | Security | `security.yml` | push/PR + weekly | OWASP ZAP scan (full docker compose) |
 
-**Образы публикуются в:** `ghcr.io/<username>/dm3` (4 образа: dm-api, consumer-mail, consumer-search, consumer-notification)
+**Образы публикуются в:** `ghcr.io/<username>/dm3` (3 образа: dm-api, consumer-mail, consumer-notification)
 
 **Теги:** `sha-<commit>`, `main`, `dev`, `latest` (только main)
 
@@ -50,7 +50,7 @@ Internet → Nginx → Frontend (Vue.js)
 curl -sSL https://raw.githubusercontent.com/dm-am/dm3/dev/docker/setup-server.sh | bash
 ```
 
-Результат: http://<IP> (Basic Auth: `preview` / `dm2026preview`)
+Результат: http://<IP> за Basic Auth. Учетные данные лежат в [`docker/nginx/.htpasswd`](../../docker/nginx/.htpasswd) и в документации не публикуются — задать свои командой из [Смена пароля](#preview-окружение).
 
 ### Ручная установка
 
@@ -61,6 +61,17 @@ docker compose -f docker-compose.yml -f docker-compose.preview.yml up -d  # Prev
 ```
 
 ### Preview окружение
+
+**Правило:** сайт целиком живет в оверлее, а не в базовом compose. Базовый дает
+инфраструктуру и API, оверлей добавляет nginx и контейнер SPA. Поэтому **любая**
+команда, поднимающая или гасящая боевой стенд, называет оба файла — и инсталлятор,
+и юнит systemd. Расхождение между ними означает, что перезапуск подменяет сайт
+голым API, и его ловит отдельный гейт в CI.
+
+**Образы, а не сборка на сервере.** И API, и фронтенд по умолчанию тянутся из
+реестра; сборка на месте включается только переменной `API_IMAGE` / `FRONT_IMAGE`
+с локальным тегом. Образ, который CI публикует, но никто не тянет, — это то же
+самое, что отсутствие доставки.
 
 **Файлы:**
 - [`docker/docker-compose.preview.yml`](../../docker/docker-compose.preview.yml)
@@ -142,17 +153,28 @@ Watchtower каждые 5 минут проверяет новые образы 
 
 ## Масштабирование
 
-**Горизонтальное:** `deploy.replicas: 3` в docker-compose + nginx `upstream` с `least_conn`
+**Вертикальное:** `deploy.resources.limits` (cpus, memory) — настроено для всех сервисов.
 
-**Вертикальное:** `deploy.resources.limits` (cpus, memory) — уже настроено для всех сервисов
+**Горизонтальное — API в одном экземпляре, и это ограничение, а не недоделка.**
+Внутри процесса API живут периодические задания (чистки, дайджесты, напоминания),
+и выборов лидера между экземплярами нет: второй экземпляр выполнит ту же работу
+второй раз. Часть заданий идемпотентна, часть нет, и разбирать это по одному
+дешевле не станет. Поэтому `container_name` фиксирует единственность на уровне
+compose — поднять реплики нельзя даже случайно.
 
-**БД:** Connection pooling (`MaxPoolSize=200`), read replicas
+Снимается это одним из двух способов, и оба — отдельная работа:
+вынести задания в собственный процесс (как уже сделано с почтой и уведомлениями),
+либо завести распределенную блокировку и брать ее перед каждым запуском.
+Пока ни того ни другого нет, `deploy.replicas` для API — заявка, которую нечем
+обеспечить.
+
+**БД:** Connection pooling (`MaxPoolSize=200`).
 
 ---
 
 ## Мониторинг
 
-**Prometheus:** http://localhost:9090 — метрики всех сервисов (API + 3 consumers + PostgreSQL + Node)
+**Prometheus:** http://localhost:9090 — метрики всех сервисов (API + consumers + PostgreSQL + Node)
 
 **Grafana:** http://localhost:3000 — 3 dashboard'а (API Overview, Infrastructure, Consumers) настроены автоматически
 
@@ -177,7 +199,7 @@ Watchtower каждые 5 минут проверяет новые образы 
 | Endpoint | Назначение |
 |----------|-----------|
 | `/_health` | Liveness (Docker health check) |
-| `/_ready` | Readiness (PostgreSQL + MongoDB + RabbitMQ) |
+| `/_ready` | Readiness (PostgreSQL + MongoDB) |
 | `/_health/detail` | Детальная информация обо всех проверках |
 
 ---

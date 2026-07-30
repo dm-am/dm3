@@ -16,6 +16,7 @@ import { Form, FormField } from "@/shared/ui/Form";
 import { Select } from "@/shared/ui/Select";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const store = useBlogDetailsStore();
 const { blog } = storeToRefs(store);
@@ -55,7 +56,7 @@ async function save() {
   });
   saving.value = false;
   if (error) {
-    toast.error("Не удалось сохранить информацию блога");
+    notifyFailure(error, "Не удалось сохранить информацию блога");
     return;
   }
   toast.success("Информация блога сохранена");

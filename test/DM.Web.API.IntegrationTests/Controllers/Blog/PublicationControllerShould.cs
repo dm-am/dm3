@@ -15,16 +15,16 @@ public class PublicationControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetPublications_WithValidBlog_ReturnsOkOrNotFound()
+    public async Task GetPublications_WithUnknownBlog_ReturnsNotFound()
     {
-        // Arrange - use a random blog ID (may not exist)
+        // Arrange - a blog id that is guaranteed not to exist
         var blogId = Guid.NewGuid();
 
         // Act
         var response = await Client.GetAsync($"/v1/blogs/{blogId}/publications");
 
-        // Assert - Either OK (empty list) or NotFound (blog doesn't exist)
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.NotFound);
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]

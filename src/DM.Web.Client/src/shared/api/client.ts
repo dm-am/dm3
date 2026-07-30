@@ -6,8 +6,8 @@ import type {
   AxiosResponse,
   AxiosProgressEvent,
 } from "axios";
-import { HubConnection, HubConnectionBuilder } from "@microsoft/signalr";
-import type { ApiResult } from "./models/common";
+import type { HubConnection } from "@microsoft/signalr";
+import type { ApiResult, GeneralError } from "./models/common";
 import {
   RENDER_AUDIENCE,
   X_DM_AUDIENCE,
@@ -28,7 +28,53 @@ const defaultHeaders: { [key: string]: string } = {
   [X_DM_AUDIENCE]: RENDER_AUDIENCE.Display,
 };
 
+/**
+ * Where to send the user when the server says their session is gone.
+ *
+ * The HTTP client is a `shared` module and must not know the router, which
+ * lives in `app` — the layer above. It used to reach for it with a dynamic
+ * import, which hid the inverted dependency rather than removing it. The app
+ * installs its own handler at startup; until it does, an expired session only
+ * clears local state and shows the toast.
+ */
+let onSessionExpired: (() => void) | null = null;
+
+/** Installed once by the app layer, which owns navigation. */
+export function setSessionExpiredHandler(handler: () => void): void {
+  onSessionExpired = handler;
+}
+
 const apiHost = import.meta.env.VITE_API_HOST ?? "http://localhost:5000"; // Config - use ?? to allow empty string
+
+/**
+ * A failed response as a problem document, whatever the server actually sent.
+ *
+ * The middleware answers every error it handles with one, but not every error
+ * reaches the middleware: an unrouted path and a wrong method are answered by
+ * the framework with a zero-length body. Axios then sets `response.data` to the
+ * empty string, and returning that as `error` handed every call site a falsy
+ * value — so `if (error)` read a 404 as success with no data, and a store that
+ * checks it went down its "there is nothing more" branch instead of reporting
+ * the failure.
+ *
+ * The title is left empty for a synthesised one on purpose: call sites read
+ * `error.title || "не удалось ..."`, and the page knows what it was doing
+ * better than a generic sentence here would.
+ */
+function asProblem(response: AxiosResponse): GeneralError {
+  const body = response.data;
+
+  if (body && typeof body === "object") {
+    return body as GeneralError;
+  }
+
+  return {
+    type: "",
+    title: "",
+    status: response.status,
+    traceId: "",
+  };
+}
 
 const configuration: AxiosRequestConfig = {
   baseURL: `${apiHost}/v1`,
@@ -57,9 +103,7 @@ class Api {
           localStorage.removeItem("user");
           const { warning } = useToast();
           warning("Сессия истекла. Пожалуйста, войдите снова.");
-          // Lazy import to avoid circular dependency
-          const router = (await import("@/app/providers/router")).default;
-          router.push({ name: "home" });
+          onSessionExpired?.();
         }
 
         // Handle 403 Forbidden
@@ -185,13 +229,18 @@ class Api {
       };
     } catch (err: unknown) {
       if (err instanceof AxiosError && err.response) {
-        return { data: null, error: err.response.data };
+        return { data: null, error: asProblem(err.response) };
       }
+      // No response at all: the request never reached the API, or the browser
+      // cut it. The title is left empty on purpose — call sites read
+      // `error.title || "не удалось ..."`, and any English placeholder here is
+      // truthy, so it won that fallback and shipped "Unknown error" to the
+      // reader instead of the message the page wrote for exactly this case.
       return {
         data: null,
         error: {
           type: "Unknown",
-          title: "Unknown error",
+          title: "",
           status: 0,
           traceId: "",
         },
@@ -206,10 +255,17 @@ class Api {
   }
 
   /**
-   * Establish SignalR hub connection
-   * Cookies are sent automatically with withCredentials
+   * Establish SignalR hub connection.
+   * Cookies are sent automatically with withCredentials.
+   *
+   * The client is imported here rather than at the top of the file so it stays
+   * out of the entry bundle: a static import put 56 kB raw on the critical path
+   * of every visit, including the guest ones that never open a socket. The
+   * connection is negotiated asynchronously in any case, so the extra request
+   * costs nothing that was not already being awaited.
    */
-  public establishHubConnection(path: string): HubConnection {
+  public async establishHubConnection(path: string): Promise<HubConnection> {
+    const { HubConnectionBuilder } = await import("@microsoft/signalr");
     return new HubConnectionBuilder()
       .withAutomaticReconnect()
       .withUrl(`${apiHost}/${path}`, {

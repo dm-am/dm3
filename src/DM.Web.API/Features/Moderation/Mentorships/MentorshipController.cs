@@ -2,7 +2,6 @@ using System;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Authentication;
-using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -46,10 +45,10 @@ public class MentorshipController : ControllerBase
     /// <response code="409">Game already has a mentor</response>
     [HttpPost("games/{gameId:guid}/mentor", Name = nameof(AssignGameMentor))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AssignGameMentor(Guid gameId)
     {
         await _mentorshipApiService.AssignGameMentor(gameId);
@@ -70,9 +69,9 @@ public class MentorshipController : ControllerBase
     /// <response code="404">Game not found</response>
     [HttpDelete("games/{gameId:guid}/mentor", Name = nameof(RemoveGameMentor))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveGameMentor(Guid gameId)
     {
         await _mentorshipApiService.RemoveGameMentor(gameId);
@@ -94,10 +93,10 @@ public class MentorshipController : ControllerBase
     /// <response code="409">Blog already has a mentor</response>
     [HttpPost("blogs/{blogId:guid}/mentor", Name = nameof(AssignBlogMentor))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AssignBlogMentor(Guid blogId)
     {
         await _mentorshipApiService.AssignBlogMentor(blogId);
@@ -118,9 +117,9 @@ public class MentorshipController : ControllerBase
     /// <response code="404">Blog not found</response>
     [HttpDelete("blogs/{blogId:guid}/mentor", Name = nameof(RemoveBlogMentor))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveBlogMentor(Guid blogId)
     {
         await _mentorshipApiService.RemoveBlogMentor(blogId);

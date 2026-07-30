@@ -47,10 +47,12 @@ internal class TicketCreatedNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
-        // Get all moderators and admins to notify
+        // Staff, by the ordinal comparison every other role check in the codebase
+        // uses. The enumerated form it replaces had to be edited by hand for every
+        // new role, and System is excluded because the robot account cannot read.
         var moderatorIds = await _dbContext.Users
             .Where(u => !u.IsRemoved)
-            .Where(u => u.Role == UserRole.Moderator || u.Role == UserRole.Admin || u.Role == UserRole.SeniorModerator)
+            .Where(u => u.Role >= UserRole.Moderator && u.Role < UserRole.System)
             .Select(u => u.UserId)
             .ToArrayAsync();
 

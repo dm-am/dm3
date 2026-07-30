@@ -1,3 +1,7 @@
+using DM.Domain.Core.Exceptions;
+using System.Net;
+using FluentValidation.Results;
+using FluentValidation;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,7 +11,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.ProfileNotes;
 using DM.Domain.Personal.Features.Profiles;
-using DM.Domain.Personal.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using Moq;
@@ -36,23 +40,29 @@ public class UserProfileNoteServiceShould : UnitTestBase
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
 
-        var identity = Identity.Authenticated(_currentUserId, "CurrentUser", UserRole.RegularUser);
+        var identity = Identities.User(_currentUserId, "CurrentUser", UserRole.RegularUser);
         _identityProvider.Setup(p => p.Current).Returns(identity);
         _dateTimeProvider.Setup(d => d.Now).Returns(_now);
         _guidFactory.Setup(g => g.Create()).Returns(_noteId);
+
+        var validator = Mock<IValidator<CreateUserProfileNote>>();
+        validator
+            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreateUserProfileNote>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ValidationResult());
 
         _service = new UserProfileNoteService(
             _repository.Object,
             _userRepository.Object,
             _identityProvider.Object,
             _guidFactory.Object,
-            _dateTimeProvider.Object);
+            _dateTimeProvider.Object,
+            validator.Object);
     }
 
     [Fact]
     public async Task ThrowWhenGettingNoteWithoutAuthentication()
     {
-        var guestIdentity = Identity.Guest();
+        var guestIdentity = Identities.Guest();
         _identityProvider.Setup(p => p.Current).Returns(guestIdentity);
 
         var act = () => _service.GetNote("Subject");
@@ -90,7 +100,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenUpsertingNoteWithoutAuthentication()
     {
-        var guestIdentity = Identity.Guest();
+        var guestIdentity = Identities.Guest();
         _identityProvider.Setup(p => p.Current).Returns(guestIdentity);
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "Subject", Text = "Note" };
@@ -109,7 +119,8 @@ public class UserProfileNoteServiceShould : UnitTestBase
         var createNote = new CreateUserProfileNote { SubjectUsername = "Unknown", Text = "Note" };
         var act = () => _service.UpsertNote(createNote);
 
-        await act.Should().ThrowAsync<ArgumentException>()
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.NotFound)
             .Where(e => e.Message.Contains("not found"));
     }
 
@@ -122,7 +133,8 @@ public class UserProfileNoteServiceShould : UnitTestBase
         var createNote = new CreateUserProfileNote { SubjectUsername = "CurrentUser", Text = "Note" };
         var act = () => _service.UpsertNote(createNote);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.BadRequest)
             .WithMessage("Cannot create a note about yourself");
     }
 
@@ -209,7 +221,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenDeletingNoteWithoutAuthentication()
     {
-        var guestIdentity = Identity.Guest();
+        var guestIdentity = Identities.Guest();
         _identityProvider.Setup(p => p.Current).Returns(guestIdentity);
 
         var act = () => _service.DeleteNote("Subject");

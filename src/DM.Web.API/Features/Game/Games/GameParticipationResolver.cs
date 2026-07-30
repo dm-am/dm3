@@ -56,7 +56,10 @@ internal class GameParticipationResolver :
         if (game.Players?.Any(p => p.UserId == userId) == true)
             participation |= GameParticipation.Player;
 
-        if (game.SubscriberIds?.Contains(userId) == true)
+        // Reader is the one bit the repository resolved rather than this method:
+        // the flag is filled for the user the game was read for, and that is the
+        // same current user this resolver asks about.
+        if (game.IsViewerSubscriber)
             participation |= GameParticipation.Reader;
 
         if (game.Mentor?.UserId == userId)

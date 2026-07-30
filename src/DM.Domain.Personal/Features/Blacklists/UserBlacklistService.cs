@@ -60,20 +60,20 @@ internal class UserBlacklistService : IUserBlacklistService
     public async Task<BlacklistEntry> Block(OperateUserBlacklistLink dto, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
-        var userToBlock = await _userRepository.GetUserAsync(dto.Username);
+        var userToBlockId = await _userRepository.FindUserIdAsync(dto.Username);
 
-        if (userToBlock == null)
+        if (userToBlockId == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, "User not found");
         }
 
-        if (userToBlock.UserId == userId)
+        if (userToBlockId.Value == userId)
         {
             throw new HttpException(HttpStatusCode.BadRequest, "Cannot block yourself");
         }
 
         // Check if already blocked
-        var existing = await _repository.Find(userId, userToBlock.UserId, ct);
+        var existing = await _repository.Find(userId, userToBlockId.Value, ct);
         if (existing != null)
         {
             return existing;
@@ -83,7 +83,7 @@ internal class UserBlacklistService : IUserBlacklistService
         {
             EntryId = _guidFactory.Create(),
             OwnerId = userId,
-            BlockedUserId = userToBlock.UserId,
+            BlockedUserId = userToBlockId.Value,
             CreatedUtc = _dateTimeProvider.Now
         };
 
@@ -94,14 +94,14 @@ internal class UserBlacklistService : IUserBlacklistService
     public async Task Unblock(OperateUserBlacklistLink dto, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
-        var userToUnblock = await _userRepository.GetUserAsync(dto.Username);
+        var userToUnblockId = await _userRepository.FindUserIdAsync(dto.Username);
 
-        if (userToUnblock == null)
+        if (userToUnblockId == null)
         {
             return; // User doesn't exist, nothing to unblock
         }
 
-        var existing = await _repository.Find(userId, userToUnblock.UserId, ct);
+        var existing = await _repository.Find(userId, userToUnblockId.Value, ct);
         if (existing != null)
         {
             await _repository.Delete(existing.Id, ct);
@@ -112,14 +112,14 @@ internal class UserBlacklistService : IUserBlacklistService
     public async Task<bool> IsBlocked(string username, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
-        var user = await _userRepository.GetUserAsync(username);
+        var blockedUserId = await _userRepository.FindUserIdAsync(username);
 
-        if (user == null)
+        if (blockedUserId == null)
         {
             return false;
         }
 
-        return await _repository.IsBlockedAsync(userId, user.UserId, ct);
+        return await _repository.IsBlockedAsync(userId, blockedUserId.Value, ct);
     }
 
     /// <inheritdoc />

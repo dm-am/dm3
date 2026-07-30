@@ -3,11 +3,16 @@
 
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import type { ListEnvelope } from "@/shared/api/models/common";
+import type { GeneralError, ListEnvelope } from "@/shared/api/models/common";
 import type { User, Username } from "./types";
 import { UserActivityFilter } from "./types";
-import { CommunityApi, unwrapResource } from "@/shared/api";
+import { unwrapResource } from "@/shared/api";
+import { userApi } from "../api";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import {
+  createKeyedCache,
+  stableCacheKey,
+} from "@/shared/lib/utils/keyedCache";
 
 /**
  * Search parameters for users query (frontend model).
@@ -38,40 +43,7 @@ export interface UsersSearchParams {
   size?: number;
 }
 
-// Cache configuration
-const CACHE_TTL = 30_000; // 30 seconds
-const searchCache = new Map<
-  string,
-  { data: ListEnvelope<User>; timestamp: number }
->();
-
-/**
- * Stable cache key covering every filter param. Also reused by the widget to
- * trigger refetches, so it is exported as the single source of truth.
- */
-export function createCacheKey(params: UsersSearchParams): string {
-  return JSON.stringify({
-    search: params.search || "",
-    activity: params.activity || "active",
-    isOnline: params.isOnline,
-    role: params.role || "",
-    isNewbie: params.isNewbie,
-    minRating: params.minRating,
-    maxRating: params.maxRating,
-    minGamesHosting: params.minGamesHosting,
-    maxGamesHosting: params.maxGamesHosting,
-    minGamesPlaying: params.minGamesPlaying,
-    maxGamesPlaying: params.maxGamesPlaying,
-    minBlogsHosting: params.minBlogsHosting,
-    maxBlogsHosting: params.maxBlogsHosting,
-    registeredFromUtc: params.registeredFromUtc || "",
-    registeredToUtc: params.registeredToUtc || "",
-    sortBy: params.sortBy || "lastActivity",
-    sortOrder: params.sortOrder || "desc",
-    number: params.number || 1,
-    size: params.size || 20,
-  });
-}
+const searchCache = createKeyedCache<ListEnvelope<User>>({ ttlMs: 30_000 });
 
 const SORT_MAP: Record<string, string> = {
   username: "Name",
@@ -167,25 +139,24 @@ export const useCommunityStore = defineStore("community", () => {
     searchError.value = null;
 
     lastSearchParams.value = params;
-    const cacheKey = createCacheKey(params);
-    const cached = searchCache.get(cacheKey);
-    const now = Date.now();
+    const cacheKey = stableCacheKey(params);
+    const fresh = searchCache.get(cacheKey);
 
-    // Return cached data immediately if fresh
-    if (cached && now - cached.timestamp < CACHE_TTL) {
-      searchResult.value = cached.data;
+    if (fresh) {
+      searchResult.value = fresh;
       searchLoading.value = false;
       return;
     }
 
     // Show cached data while revalidating (stale-while-revalidate)
-    if (cached) {
-      searchResult.value = cached.data;
+    const stale = searchCache.getStale(cacheKey);
+    if (stale) {
+      searchResult.value = stale;
     }
 
     searchLoading.value = true;
 
-    const { data, error } = await CommunityApi.getUsers(buildApiParams(params));
+    const { data, error } = await userApi.getUsers(buildApiParams(params));
 
     // Ignore stale responses
     if (!requestGuard.isCurrent(requestId)) {
@@ -201,7 +172,7 @@ export const useCommunityStore = defineStore("community", () => {
 
     if (data) {
       searchResult.value = data;
-      searchCache.set(cacheKey, { data, timestamp: now });
+      searchCache.set(cacheKey, data);
     }
   }
 
@@ -219,31 +190,39 @@ export const useCommunityStore = defineStore("community", () => {
     if (!lastSearchParams.value) return;
 
     const params = { ...lastSearchParams.value, number: page };
-    const cacheKey = createCacheKey(params);
+    const cacheKey = stableCacheKey(params);
 
-    // Skip if already cached
-    if (searchCache.has(cacheKey)) return;
+    // Skip only while the entry is fresh: replacing a stale one is the point of
+    // a prefetch.
+    if (searchCache.get(cacheKey)) return;
 
-    const { data } = await CommunityApi.getUsers(buildApiParams(params));
+    const { data } = await userApi.getUsers(buildApiParams(params));
     if (data) {
-      searchCache.set(cacheKey, { data, timestamp: Date.now() });
+      searchCache.set(cacheKey, data);
     }
   }
 
   const selectedUser = ref<User | null>(null);
   const loadingProfile = ref(false);
 
-  async function trySelectProfile(username: Username) {
+  /**
+   * Loads the profile. Returns the error instead of a boolean: the caller
+   * needs the status to tell "no such user" from "server is down", and a
+   * boolean forced the profile page into a second request for exactly that.
+   */
+  async function trySelectProfile(
+    username: Username,
+  ): Promise<GeneralError | null> {
     loadingProfile.value = true;
     selectedUser.value = null;
 
     // Profile page needs the rich UserProfile DTO (status, name, gender,
     // birthday, location, contacts, info, mediumUrl picture) — not the
     // truncated User DTO from /v1/users/{username} which is meant for lists.
-    const { data, error } = await CommunityApi.getUserProfile(username);
+    const { data, error } = await userApi.getUserProfile(username);
     loadingProfile.value = false;
 
-    if (error) return false;
+    if (error) return error;
 
     // Backend returns a `{ resource: UserProfile }` envelope. The API client
     // doesn't unwrap automatically (typed lie), so we extract here. Fall
@@ -252,7 +231,7 @@ export const useCommunityStore = defineStore("community", () => {
     // structural superset of User, so the User read is safe even when
     // /profile returns the richer DTO.
     selectedUser.value = unwrapResource<User>(data);
-    return true;
+    return null;
   }
 
   return {

@@ -44,12 +44,28 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     }
   }
 
-  /** Trim messages to MAX_MESSAGES, keeping the most recent. Adjusts cursors accordingly. */
+  /** Message to re-anchor "load older" on after a trim dropped the page it pointed at */
+  const reanchorBefore = ref<string | null>(null);
+
+  /**
+   * Trim messages to MAX_MESSAGES, keeping the most recent.
+   *
+   * The cursor the server handed out points before the oldest message we HELD,
+   * and trimming drops exactly those — so after a trim it would fetch a page
+   * older than what stays on screen and leave a gap. A message id is not a
+   * cursor either: the cursor is an opaque server value, and the id put here
+   * before failed to decode, which the server answers by returning the latest
+   * page — 50 newest messages prepended to the top of the scrollback.
+   *
+   * So the cursor is dropped and the new first message is remembered instead:
+   * the next scroll up re-anchors on it.
+   */
   function trimOldMessages() {
     if (messages.value.length > MAX_MESSAGES) {
       messages.value = messages.value.slice(-MAX_MESSAGES);
       hasMoreBefore.value = true; // There are definitely older messages now
-      prevCursor.value = messages.value[0]?.id ?? null;
+      prevCursor.value = null;
+      reanchorBefore.value = messages.value[0]?.id ?? null;
       syncMessagesMap();
     }
   }
@@ -79,15 +95,14 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
 
   // Load older messages (scroll up)
   async function fetchMoreBefore() {
-    if (loadingBefore.value || !hasMoreBefore.value || !prevCursor.value)
-      return;
+    if (loadingBefore.value || !hasMoreBefore.value) return;
+    if (!prevCursor.value && !reanchorBefore.value) return;
     loadingBefore.value = true;
     errorBefore.value = null;
     try {
-      const { data, error: apiError } = await globalChatApi.getMessagesBefore(
-        prevCursor.value,
-        50,
-      );
+      const { data, error: apiError } = prevCursor.value
+        ? await globalChatApi.getMessagesBefore(prevCursor.value, 50)
+        : await globalChatApi.getMessagesAround(reanchorBefore.value!, 50);
       if (apiError) {
         // Network/server failure — keep hasMoreBefore as-is so the sentinel
         // stays mounted and the user can retry, instead of silently
@@ -95,10 +110,17 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
         errorBefore.value = "Не удалось загрузить сообщения";
         return;
       }
-      if (data && data.resources.length > 0) {
-        messages.value = [...data.resources, ...messages.value];
-        prevCursor.value = data.paging?.prevCursor ?? null;
-        hasMoreBefore.value = data.paging?.hasPrev ?? false;
+      // The re-anchored page is a window centred on a message that is already on
+      // screen, so its newer half has to go; a cursor page is entirely older.
+      const older = data
+        ? data.resources.filter((message) => !messagesById.has(message.id))
+        : [];
+
+      if (older.length > 0) {
+        messages.value = [...older, ...messages.value];
+        prevCursor.value = data?.paging?.prevCursor ?? null;
+        hasMoreBefore.value = data?.paging?.hasPrev ?? false;
+        reanchorBefore.value = null;
         syncMessagesMap();
       } else {
         hasMoreBefore.value = false;
@@ -136,25 +158,22 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     }
   }
 
-  // Poll for messages newer than the last loaded one, regardless of
+  // Poll for messages that arrived after the last load, regardless of
   // hasMoreAfter/nextCursor — those reflect the initial page load's cursor
   // (which is null/false once we're caught up to "latest"), so they can't be
   // reused to detect messages that arrived afterwards. Used by guest polling
   // (no SignalR access) as a fallback for realtime updates. No-ops silently
   // on failure — this runs unattended on a timer, not user-initiated.
   //
-  // The raw message GUID passed as `lastMessage.id` is not a valid opaque
-  // cursor for the backend CursorService — when it fails to decode it, it
-  // falls back to returning the latest page instead of erroring. That
-  // fallback response's paging metadata describes the latest page, not
-  // "after lastMessage.id", so it must not overwrite nextCursor/hasMoreAfter
-  // (those stay owned by fetchMessages/fetchMoreAfter). Only genuinely new
-  // messages (not already in messagesById) are appended.
+  // Asks for the latest page outright. It used to pass the last message's raw
+  // GUID as a cursor and rely on the server failing to decode it and answering
+  // with the latest page anyway — the same result, resting on an error path.
+  // Its paging metadata describes the latest page rather than a position, so it
+  // still must not touch nextCursor/hasMoreAfter (owned by fetchMessages and
+  // fetchMoreAfter), and only messages not already held are appended.
   async function pollForNewer() {
-    const lastMessage = messages.value[messages.value.length - 1];
-    if (!lastMessage) return;
     try {
-      const { data } = await globalChatApi.getMessagesAfter(lastMessage.id, 50);
+      const { data } = await globalChatApi.getMessages({ limit: 50 });
       if (data && data.resources.length > 0) {
         const fresh = data.resources.filter((m) => !messagesById.has(m.id));
         if (fresh.length > 0) {
@@ -273,11 +292,13 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     highlightedMessageId.value = null;
   }
 
+  /** Returns the error when the send failed, so the caller can restore the text. */
   async function sendMessage(text: string) {
-    if (!text.trim()) return;
+    if (!text.trim()) return { error: null };
     sending.value = true;
     try {
-      const { data } = await globalChatApi.sendMessage(text);
+      const { data, error } = await globalChatApi.sendMessage(text);
+      if (error) return { error };
       if (data) {
         // If we're not at the latest, jump to latest first
         if (hasMoreAfter.value) {
@@ -289,6 +310,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     } finally {
       sending.value = false;
     }
+    return { error: null };
   }
 
   function addMessage(message: GlobalChatMessage) {

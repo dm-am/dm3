@@ -79,17 +79,15 @@ test.describe("Sidebars", () => {
       await expect(section).toBeVisible();
     });
 
-    test("should categorize owned games by role", async ({
+    test("lists the games the signed-in user takes part in", async ({
       authenticatedPage,
     }) => {
+      await authenticatedPage.goto("/");
       const ownedGames = authenticatedPage.locator(".owned-games");
 
-      // At least one role category (Наставник / Мастер / Игрок / Читатель)
-      // should exist, or the empty state
-      const hasContent = await ownedGames
-        .locator(".game-link, .empty-state")
-        .count();
-      expect(hasContent).toBeGreaterThanOrEqual(0);
+      // The seeded account hosts and plays games, so the block has entries.
+      // Asserting count >= 0 passed even when the block rendered nothing.
+      await expect(ownedGames.locator(".game-link").first()).toBeVisible();
     });
   });
 
@@ -456,11 +454,10 @@ test.describe("Sidebars", () => {
 
     test("should display progress bar", async ({ page }) => {
       const section = page.locator(".support-us");
-      const progressBar = section.locator(".progress-bar, .progress");
 
-      if (await progressBar.isVisible().catch(() => false)) {
-        await expect(progressBar).toBeVisible();
-      }
+      // No visibility guard around the assertion: the guard repeated the
+      // assertion word for word, so the test passed by skipping itself.
+      await expect(section.locator(".progress-bar, .progress")).toBeVisible();
     });
 
     test("should have donation link", async ({ page }) => {
@@ -534,12 +531,10 @@ test.describe("Sidebars", () => {
     });
 
     test("should display blog title", async ({ page }) => {
-      const section = page.locator(".active-blogs, .popular-blogs");
-      const blogLink = section.locator(".blog-link, a").first();
+      const section = page.locator(".active-blogs, .popular-blogs").first();
 
-      if (await blogLink.isVisible().catch(() => false)) {
-        await expect(blogLink).toBeVisible();
-      }
+      // Same as above: the guard was the assertion.
+      await expect(section.locator(".blog-link, a").first()).toBeVisible();
     });
 
     test("should navigate to blog on click", async ({ page }) => {

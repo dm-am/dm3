@@ -20,7 +20,14 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  "update:sortBy": [value: string];
+  /**
+   * Picking an option carries the direction with it. Consumers whose sort state
+   * lands asynchronously (URL-synced filters) would otherwise handle a second,
+   * separate direction event while still reading their pre-click direction, and
+   * undo the field event they had just been given.
+   */
+  "sort-select": [sortBy: string, sortOrder?: "asc" | "desc"];
+  /** Flipping the direction is its own action, so it stays its own event. */
   "update:sortOrder": [value: "asc" | "desc"];
 }>();
 
@@ -54,11 +61,8 @@ function closeDropdownAndReturnFocus() {
 
 function selectSort(value: string) {
   const option = props.options.find((o) => o.value === value);
-  emit("update:sortBy", value);
-  // Apply default direction if defined
-  if (option?.defaultDirection) {
-    emit("update:sortOrder", option.defaultDirection);
-  }
+  // An option that declares no direction leaves the choice to the consumer.
+  emit("sort-select", value, option?.defaultDirection);
   closeDropdown();
 }
 
@@ -141,8 +145,8 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/Filters"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/Filters"
 
 +sort-control
 

@@ -5,10 +5,11 @@
  * ModerationTags.vue.
  */
 import { ref, computed } from "vue";
-import ModerationApi, {
+import {
+  gameTagApi,
   type ModerationTag,
   type ModerationTagGroup,
-} from "@/shared/api/moderationApi";
+} from "@/entities/game";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";
@@ -53,14 +54,14 @@ async function submit() {
   error.value = null;
   try {
     if (props.tag) {
-      await ModerationApi.updateTag(props.tag.id, {
+      await gameTagApi.updateTag(props.tag.id, {
         groupId: groupId.value,
         title: title.value,
         description: description.value || undefined,
         sortOrder: sortOrder.value,
       });
     } else {
-      await ModerationApi.createTag({
+      await gameTagApi.createTag({
         groupId: groupId.value,
         title: title.value,
         description: description.value || undefined,

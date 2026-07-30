@@ -1515,8 +1515,8 @@ defineExpose({
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/BbcodeContent"
-@import "src/assets/styles/ZIndex"
+@import "@/assets/styles/BbcodeContent"
+@import "@/assets/styles/ZIndex"
 
 .bbcode-editor-wrapper
   position: relative
@@ -1725,14 +1725,16 @@ defineExpose({
     color: $accent-red
     font-weight: 600
 
+// -muted-варианты акцентов не проходят AA как цвет текста (2.82 и 3.00
+// на карточке в светлой теме). Статус черновика — обычный мелкий текст.
 .draft-available
-  color: $accent-red-muted
+  color: $accent-red
 
 .draft-status
   display: flex
   align-items: center
   gap: 4px
-  color: $accent-green-muted
+  color: $accent-green
 
   &.saving
     color: $text-muted

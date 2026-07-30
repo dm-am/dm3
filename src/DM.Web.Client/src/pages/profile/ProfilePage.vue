@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from "@/shared/lib/utils/datetime";
 import { computed, onMounted, reactive, ref, toRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { LocationQueryRaw } from "vue-router";
@@ -8,19 +9,21 @@ import dayjs from "dayjs";
 
 import {
   useCommunityStore,
-  useUserStore,
+  useAuthStore,
   UserRole,
   AvatarImg,
-  useModeratedProfile,
   useProfileEdit,
+  userApi,
+  blacklistApi,
+  accountApi,
   type Username,
   type UsernameHistoryEntry,
 } from "@/entities/user";
+import { useModeratedProfile } from "@/entities/moderation";
 import { Gender } from "@/shared/api/models/community";
-import { communityApi, blacklistApi, accountApi } from "@/shared/api";
 import type { BlacklistEntry } from "@/shared/api/models/personal";
 import type { UserProfileNote } from "@/shared/api/models/community";
-import { useSubscriptionsStore } from "@/shared/stores/subscriptions";
+import { useSubscriptionsStore } from "@/entities/subscription";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useExpandableSection } from "@/shared/lib/composables";
@@ -56,6 +59,8 @@ import ModerationNotes from "./moderation/ModerationNotes.vue";
 import ModerationViolations from "./moderation/ModerationViolations.vue";
 import { BlockUserDialog } from "@/features/block-user";
 import { ErrorPage } from "@/shared/ui/ErrorPage";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import { notifyFailure } from "@/shared/lib/errors";
 
 // Tab vocabulary. Each content tab (games / blogs / topics) is the
 // home for THREE pieces: the canonical listing, the user's best-of for
@@ -70,16 +75,15 @@ const router = useRouter();
 const toast = useToast();
 const communityStore = useCommunityStore();
 const subscriptionsStore = useSubscriptionsStore();
-const { user: currentUser } = storeToRefs(useUserStore());
+const { user: currentUser } = storeToRefs(useAuthStore());
 const { selectedUser: user, loadingProfile } = storeToRefs(communityStore);
 
 const usernameParam = computed(() => route.params.username as string);
 
-// HTTP status of the last profile load failure, mapped to an ErrorPage
-// code. The store collapses every failure to a boolean, so on a miss we
-// do one cheap follow-up call to learn whether it was a true 404 (user
-// doesn't exist) or a server/network error — those must look different
-// (404 "не найден" vs 500 "попробуйте позже"), never a fake "not found".
+// HTTP status of the last profile load failure, mapped to an ErrorPage code.
+// A true 404 (no such user) and a server error must look different — "не
+// найден" against "попробуйте позже" — and the store hands the error over, so
+// the status is read from it directly.
 const errorCode = ref<number | null>(null);
 
 function mapErrorStatus(status: number | undefined): number {
@@ -90,11 +94,8 @@ function mapErrorStatus(status: number | undefined): number {
 
 async function loadProfile(name: Username) {
   errorCode.value = null;
-  const success = await communityStore.trySelectProfile(name);
-  if (!success) {
-    const { error } = await communityApi.getUserProfile(name);
-    errorCode.value = mapErrorStatus(error?.status);
-  }
+  const error = await communityStore.trySelectProfile(name);
+  if (error) errorCode.value = mapErrorStatus(error.status);
 }
 
 useFetchData(
@@ -221,7 +222,7 @@ async function submitUsernameChangeRequest() {
   });
   isChangeFormSubmitting.value = false;
   if (error) {
-    toast.error(error.message || "Не удалось отправить заявку");
+    notifyFailure(error, "Не удалось отправить заявку");
     return;
   }
   if (data) {
@@ -246,7 +247,7 @@ const lastActivityFormatted = computed(() =>
 
 const registrationDate = computed(() => {
   const value = user.value?.registeredUtc ?? user.value?.registrationUtc;
-  return value ? dayjs(value).format("DD.MM.YYYY") : "";
+  return formatDate(value, "");
 });
 
 const ratingEnabled = computed(() => user.value?.rating?.isEnabled ?? false);
@@ -305,6 +306,13 @@ const gamePostsCount = computed<number>(
 // downstream.
 const subscribers = computed(() => user.value?.subscribers ?? []);
 
+// The per-category totals. The preview above is capped and activity-ranked
+// before the categories are considered, so a line drawn from it can be short or
+// empty while the category is full; these say how many there really are.
+const subscriberCounts = computed(
+  () => user.value?.subscribersByCategory ?? { games: 0, blogs: 0, topics: 0 },
+);
+
 // Subscribe / unsubscribe / settings are owned by <UserSubscribeButton>
 // — it reads/writes through the subscriptions store directly.
 
@@ -334,17 +342,20 @@ async function checkIfBlocked() {
   }
 }
 
+// Unblock is ConfirmDialog-gated; `confirmingUnblock` doubles as the dialog
+// open flag.
+const confirmingUnblock = ref(false);
+
 async function unblockUser() {
-  if (!user.value) return;
-  const confirmed = window.confirm(`Разблокировать ${user.value.username}?`);
-  if (!confirmed) return;
+  if (!user.value || isBlockLoading.value) return;
   isBlockLoading.value = true;
   const { error } = await blacklistApi.unblockUser(user.value.username);
   isBlockLoading.value = false;
   if (error) {
-    toast.error("Не удалось разблокировать пользователя");
+    notifyFailure(error, "Не удалось разблокировать пользователя");
   } else {
     isBlocked.value = false;
+    confirmingUnblock.value = false;
     toast.success(`${user.value.username} разблокирован`);
   }
 }
@@ -357,7 +368,7 @@ const noteVisible = computed(() => !!currentUser.value && !isOwnProfile.value);
 
 async function fetchNote() {
   if (!noteVisible.value) return;
-  const { data } = await communityApi.getUserProfileNote(
+  const { data } = await userApi.getUserProfileNote(
     usernameParam.value as Username,
   );
   note.value = data ?? null;
@@ -378,7 +389,7 @@ function cancelEditNote() {
 async function saveNote() {
   if (!noteEditText.value.trim()) return deleteNote();
   isNoteSaving.value = true;
-  const { data } = await communityApi.upsertUserProfileNote(
+  const { data } = await userApi.upsertUserProfileNote(
     usernameParam.value as Username,
     noteEditText.value,
   );
@@ -389,7 +400,7 @@ async function saveNote() {
 
 async function deleteNote() {
   isNoteSaving.value = true;
-  await communityApi.deleteUserProfileNote(usernameParam.value as Username);
+  await userApi.deleteUserProfileNote(usernameParam.value as Username);
   note.value = null;
   noteEditText.value = "";
   isNoteSaving.value = false;
@@ -504,8 +515,13 @@ watch(tabs, (next) => {
   if (current?.hidden) onTabChange(DEFAULT_TAB);
 });
 
+// The profile itself loads asynchronously, so at mount `user` is still null
+// and the check would return having done nothing — the block state has to
+// follow the loaded profile, not the mount. Watching the username also covers
+// navigation from one profile to another.
+watch(() => user.value?.username, checkIfBlocked, { immediate: true });
+
 onMounted(async () => {
-  await checkIfBlocked();
   await fetchNote();
   await checkPendingUsernameChange();
   if (currentUser.value && !isOwnProfile.value) {
@@ -517,7 +533,6 @@ watch(usernameParam, async () => {
   // Another profile is a fresh page — the tab choice does not carry over.
   activeTab.value = DEFAULT_TAB;
   await fetchNote();
-  await checkIfBlocked();
 });
 </script>
 
@@ -553,7 +568,7 @@ watch(usernameParam, async () => {
             >
               <span class="history-old">{{ entry.oldUsername }}</span>
               <span class="history-when">{{
-                dayjs(entry.changedUtc).format("DD.MM.YYYY")
+                formatDate(entry.changedUtc)
               }}</span>
             </div>
           </div>
@@ -729,7 +744,7 @@ watch(usernameParam, async () => {
             <Button
               v-if="isBlocked"
               :disabled="isBlockLoading"
-              @click="unblockUser"
+              @click="confirmingUnblock = true"
             >
               {{ isBlockLoading ? "…" : "Разблокировать" }}
             </Button>
@@ -882,6 +897,7 @@ watch(usernameParam, async () => {
           :subscribers="subscribers"
           label="Подписаны на игры"
           :flag="SubscriptionSettings.AuthorGameEvents"
+          :total="subscriberCounts.games"
         />
       </template>
 
@@ -898,6 +914,7 @@ watch(usernameParam, async () => {
           :subscribers="subscribers"
           label="Подписаны на блоги"
           :flag="SubscriptionSettings.AuthorBlogEvents"
+          :total="subscriberCounts.blogs"
         />
       </template>
 
@@ -910,6 +927,7 @@ watch(usernameParam, async () => {
           :subscribers="subscribers"
           label="Подписаны на топики"
           :flag="SubscriptionSettings.AuthorTopicEvents"
+          :total="subscriberCounts.topics"
         />
       </template>
 
@@ -933,12 +951,21 @@ watch(usernameParam, async () => {
         </Button>
       </div>
     </Transition>
+
+    <ConfirmDialog
+      v-model:show="confirmingUnblock"
+      title="Разблокировка пользователя"
+      :message="`Разблокировать ${user?.username ?? ''}?`"
+      confirm-label="Разблокировать"
+      :loading="isBlockLoading"
+      @confirm="unblockUser"
+    />
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/_ZIndex"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/_ZIndex"
 
 // gap=$small (8) is the base — for the H1→identity and identity→"Контакты" pairs,
 // which perceptually work better tighter. Between "Контакты" and Tabs,

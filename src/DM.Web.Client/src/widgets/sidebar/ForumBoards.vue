@@ -4,14 +4,14 @@ import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { useBoardsStore } from "@/entities/forum";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import { onMounted, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useRoute } from "vue-router";
 
 const store = useBoardsStore();
 const { boards, boardsError } = storeToRefs(store);
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const route = useRoute();
 
 // Fetch on mount (uses cache with stale-while-revalidate)
@@ -80,7 +80,7 @@ function commentsTooltip(count: number): string {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .muted
   color: $text-muted

@@ -1,10 +1,12 @@
 import type { UserRef } from "@/shared/api/models/common";
+import { ModuleStatus } from "@/shared/api/models/common";
 
 export type BlogId = string & { readonly __brand: unique symbol };
 export type PublicationId = string & { readonly __brand: unique symbol };
 
-/** Blog status (same as game status) */
-export type BlogStatus = "Draft" | "Active" | "Closed";
+/** Blog lifecycle status — an alias of the shared {@link ModuleStatus}. */
+export const BlogStatus = ModuleStatus;
+export type BlogStatus = ModuleStatus;
 
 /**
  * Premoderation status for newbie blogs (mirrors backend PremoderationStatus).
@@ -76,9 +78,6 @@ export interface Blog extends BlogRef {
   publicationCount: number;
   commentsCount: number;
   rubrics?: Rubric[];
-
-  // Used only at creation time
-  copyBlacklist?: boolean;
 }
 
 export interface Rubric {
@@ -218,34 +217,10 @@ export interface UpdatePublicationInput {
   commentsEnabled?: boolean;
 }
 
-// === Blog notepad (mirrors the game NotepadEntry shape — both are served
-// by the shared NotepadEntryResponse API DTO) ===
-
-export interface BlogNotepadEntry {
-  id: string;
-  containerId: string;
-  categoryId?: string | null;
-  title: string;
-  content: string;
-  sortOrder: number;
-  createdUtc: string;
-  modifiedUtc?: string | null;
-}
-
-/** Payload for creating a blog notepad entry */
-export interface CreateBlogNotepadEntryInput {
-  categoryId?: string | null;
-  title: string;
-  content: string;
-}
-
-/** Payload for updating a blog notepad entry */
-export interface UpdateBlogNotepadEntryInput {
-  categoryId?: string | null;
-  title: string;
-  content: string;
-  sortOrder?: number | null;
-}
+// === Blog notepad ===
+// The entry shape is not declared here: all three notepads (personal, game,
+// blog) are served by one API DTO and are declared once in
+// shared/api/models/notepads.
 
 // === Blog state-machine transitions (mirror the game enums) ===
 

@@ -1,77 +1,80 @@
-import { test as base, Page, APIRequestContext } from "@playwright/test";
+import {
+  test as base,
+  expect,
+  request as playwrightRequest,
+  Page,
+  APIRequestContext,
+} from "@playwright/test";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 
-const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
-
-// Test credentials - loaded from environment variables for security
-// Set these in your .env.local or CI/CD environment:
-// E2E_TEST_USERNAME, E2E_TEST_PASSWORD
-const TEST_USER = {
-  username: process.env.E2E_TEST_USERNAME || "Alice",
-  password: process.env.E2E_TEST_PASSWORD || "",
-};
-
-// Validate credentials are set
-if (!TEST_USER.password) {
-  console.warn(
-    "Warning: E2E_TEST_PASSWORD environment variable not set. " +
-      "E2E tests requiring authentication will fail.",
-  );
-}
+export const API_BASE_URL = process.env.VITE_API_URL || "http://localhost:5000";
 
 /**
- * Helper function to login via cookie-based API
- * Returns a new request context with the session cookie
+ * Seeded dev accounts. Not secrets: DM.Tools.Seeder writes exactly these into
+ * a throwaway local database and the same pairs live in the seeder source.
+ * Overridable through the environment for a differently seeded stack.
+ *
+ * What was here before: a user named "Alice" with an empty password, plus ten
+ * spec files each carrying their own hardcoded copy of a password for that
+ * same non-existent user. Login therefore always failed; every authenticated
+ * test skipped itself through `test.skip(!authContext, "Auth failed")` and the
+ * suite reported green while 37 tests had not run in a long time. A second,
+ * independent break hid underneath: loginWithCookies called `newContext()` on
+ * the injected APIRequestContext, which has no such method.
  */
-export async function loginWithCookies(
-  request: APIRequestContext,
-  username: string,
-  password: string,
+export const primaryUser = {
+  username: process.env.E2E_TEST_USERNAME || "SolohinLex",
+  email: process.env.E2E_TEST_EMAIL || "admin@test.local",
+  password: process.env.E2E_TEST_PASSWORD || "Test123!",
+};
+
+/** A second seeded account, for tests that need two distinct users. */
+export const secondaryUser = {
+  username: process.env.E2E_SECOND_USERNAME || "TestUser",
+  email: process.env.E2E_SECOND_EMAIL || "user@test.local",
+  password: process.env.E2E_SECOND_PASSWORD || "Test123!",
+};
+
+/** Kept for call sites that read the primary account's name. */
+export const seededUser = primaryUser;
+
+// ESM: __dirname отсутствует, путь берется из import.meta.url.
+const AUTH_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", ".auth");
+export const PRIMARY_STORAGE_STATE = join(AUTH_DIR, "primary.json");
+export const SECONDARY_STORAGE_STATE = join(AUTH_DIR, "secondary.json");
+
+/**
+ * A request context carrying a session saved by global setup. No login call,
+ * so the 5-per-minute auth rate limit is never a factor no matter how many
+ * workers run.
+ */
+export function authenticatedContext(
+  storageState: string = PRIMARY_STORAGE_STATE,
 ): Promise<APIRequestContext> {
-  // Create a new context to isolate cookies
-  const context = await request.newContext();
-
-  const response = await context.post(`${API_URL}/v1/account/login`, {
-    headers: {
-      "Content-Type": "application/json",
-    },
-    data: {
-      email: username,
-      password: password,
-    },
-  });
-
-  if (!response.ok()) {
-    const error = await response.text();
-    throw new Error(
-      `Auth failed for ${username}: ${response.status()} - ${error}`,
-    );
-  }
-
-  // Cookie is automatically stored in the context
-  return context;
+  return playwrightRequest.newContext({ storageState });
 }
 
-export const test = base.extend<{ authenticatedPage: Page }>({
-  authenticatedPage: async ({ page }, use) => {
-    // Login via cookie-based API
-    const response = await page.request.post(`${API_URL}/v1/account/login`, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-      data: {
-        email: TEST_USER.username,
-        password: TEST_USER.password,
-      },
+export const test = base.extend<{
+  authenticatedPage: Page;
+  /** API request context signed in as the primary seeded account. */
+  authContext: APIRequestContext;
+}>({
+  authenticatedPage: async ({ browser }, use) => {
+    const context = await browser.newContext({
+      storageState: PRIMARY_STORAGE_STATE,
     });
-
-    if (!response.ok()) {
-      const error = await response.text();
-      throw new Error(`Auth failed: ${response.status()} - ${error}`);
-    }
-
-    // Cookie is automatically stored and will be sent with subsequent requests
+    const page = await context.newPage();
     await use(page);
+    await context.close();
+  },
+
+  // eslint-disable-next-line no-empty-pattern -- фикстура не зависит ни от одной другой
+  authContext: async ({}, use) => {
+    const context = await authenticatedContext();
+    await use(context);
+    await context.dispose();
   },
 });
 
-export { expect } from "@playwright/test";
+export { expect };

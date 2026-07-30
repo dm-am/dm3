@@ -11,18 +11,19 @@ import type {
   Post,
   Tag,
   ChatRoom,
-  NotepadEntry,
   GameUser,
   CreateRoomInput,
   GameStatusTransition,
   GamePremoderationTransition,
 } from "./types";
+import { GameParticipation } from "./types";
 import type {
   ListEnvelope,
   Paging,
   Comment,
   User,
 } from "@/shared/api/models/common";
+import { markRemoved } from "@/shared/api/models/common";
 import gameApi, { type GamesSearchParams } from "../api/gameApi";
 import {
   useApiList,
@@ -31,6 +32,13 @@ import {
 import { unwrapResource } from "@/shared/api";
 import { useAuthStore } from "@/shared/stores";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import {
+  createKeyedCache,
+  stableCacheKey,
+} from "@/shared/lib/utils/keyedCache";
+import { describeFailure } from "@/shared/lib/errors";
+import type { GeneralError } from "@/shared/api/models/common";
+import { requestNotSent } from "@/shared/lib/errors";
 
 /**
  * Store for game lists (menu/sidebar, pagination)
@@ -72,33 +80,7 @@ export const useGamesStore = defineStore("games", () => {
   const searchError = ref<string | null>(null);
   const lastSearchParams = ref<GamesSearchParams | null>(null);
 
-  // Search cache: key → { data, timestamp }
-  const CACHE_TTL = 30_000; // 30 seconds
-  const searchCache = new Map<
-    string,
-    { data: ListEnvelope<Game>; timestamp: number }
-  >();
-
-  /**
-   * Create stable cache key from search params
-   */
-  function createCacheKey(params: GamesSearchParams): string {
-    // Sort keys for stable ordering
-    const sorted: Record<string, unknown> = {};
-    const keys = Object.keys(params).sort();
-    for (const key of keys) {
-      const value = params[key as keyof GamesSearchParams];
-      if (value !== undefined && value !== null && value !== "") {
-        // Sort arrays for stable keys
-        if (Array.isArray(value)) {
-          sorted[key] = [...value].sort().join(",");
-        } else {
-          sorted[key] = value;
-        }
-      }
-    }
-    return JSON.stringify(sorted);
-  }
+  const searchCache = createKeyedCache<ListEnvelope<Game>>({ ttlMs: 30_000 });
 
   // Request guard to discard stale out-of-order responses
   const requestGuard = createRequestGuard();
@@ -113,21 +95,20 @@ export const useGamesStore = defineStore("games", () => {
     // a cache-hit navigation.
     searchError.value = null;
 
-    const cacheKey = createCacheKey(params);
-    const cached = searchCache.get(cacheKey);
-    const now = Date.now();
+    const cacheKey = stableCacheKey(params);
+    const fresh = searchCache.get(cacheKey);
 
-    // Return cached if fresh
-    if (cached && now - cached.timestamp < CACHE_TTL) {
-      searchResult.value = cached.data;
+    if (fresh) {
+      searchResult.value = fresh;
       lastSearchParams.value = params;
       searchLoading.value = false;
       return;
     }
 
     // Show stale while revalidating
-    if (cached) {
-      searchResult.value = cached.data;
+    const stale = searchCache.getStale(cacheKey);
+    if (stale) {
+      searchResult.value = stale;
     }
 
     searchLoading.value = true;
@@ -141,20 +122,14 @@ export const useGamesStore = defineStore("games", () => {
     }
 
     if (error) {
-      searchError.value = "Не удалось загрузить игры";
+      searchError.value = describeFailure(error, "Не удалось загрузить игры");
       // Keep stale data on error if available
-      if (!cached) {
+      if (!stale) {
         searchResult.value = null;
       }
     } else if (data) {
       searchResult.value = data;
-      // Update cache
-      searchCache.set(cacheKey, { data, timestamp: now });
-      // Clean old entries (keep last 20)
-      if (searchCache.size > 20) {
-        const firstKey = searchCache.keys().next().value;
-        if (firstKey) searchCache.delete(firstKey);
-      }
+      searchCache.set(cacheKey, data);
     }
 
     searchLoading.value = false;
@@ -185,20 +160,16 @@ export const useGamesStore = defineStore("games", () => {
     if (!lastSearchParams.value) return;
 
     const params = { ...lastSearchParams.value, number: page };
-    const cacheKey = createCacheKey(params);
+    const cacheKey = stableCacheKey(params);
 
-    // Skip if already cached
-    if (searchCache.has(cacheKey)) return;
+    // Skip if already cached and still fresh — a stale entry is worth replacing
+    // here, since the point of the prefetch is that the next page is ready.
+    if (searchCache.get(cacheKey)) return;
 
     // Fetch in background without updating UI
     const { data } = await gameApi.searchGames(params);
     if (data) {
-      searchCache.set(cacheKey, { data, timestamp: Date.now() });
-      // Clean old entries (keep last 20)
-      if (searchCache.size > 20) {
-        const firstKey = searchCache.keys().next().value;
-        if (firstKey) searchCache.delete(firstKey);
-      }
+      searchCache.set(cacheKey, data);
     }
   }
 
@@ -282,6 +253,24 @@ export const useGamesStore = defineStore("games", () => {
       resetSearch();
     },
 
+    /**
+     * After a mutation changed which games exist. Distinct from resetAllGames,
+     * which blanks the lists: that is right for logout and wrong here, because
+     * the sidebar blocks fetch on mount and the shell mounts once per session,
+     * so a blanked list stays blank until a reload.
+     */
+    invalidateGameLists: async () => {
+      searchCache.clear();
+      await Promise.all([
+        participating.invalidate(),
+        moderation.invalidate(),
+        popular.invalidate(),
+        activePage.invalidate(),
+        recruitingPage.invalidate(),
+        finishedPage.invalidate(),
+      ]);
+    },
+
     // Search with filters
     searchResult,
     searchLoading,
@@ -330,11 +319,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   const chatRoomsLoading = ref(false);
   const chatRoomsError = ref<string | null>(null);
 
-  // Master notepad data
-  const notepad = ref<NotepadEntry[]>([]);
-  const notepadLoading = ref(false);
-  const notepadError = ref<string | null>(null);
-
   // Blacklist data
   const blacklist = ref<User[]>([]);
   const blacklistLoading = ref(false);
@@ -354,18 +338,26 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   // which serializes the API's GameParticipation flags (see DM.Web.API
   // Game.cs), NOT GameRole names: Owner (master), Authority (master or
   // assistant), PendingAssistant, Player, Reader, Moderator (game mentor).
-  const participation = computed<string[]>(
-    () => (game.value?.participation as unknown as string[]) ?? [],
+  const participation = computed<GameParticipation[]>(
+    () => game.value?.participation ?? [],
   );
-  const isMaster = computed(() => participation.value.includes("Owner"));
+  const isMaster = computed(() =>
+    participation.value.includes(GameParticipation.Owner),
+  );
   const isAssistant = computed(
-    () => participation.value.includes("Authority") && !isMaster.value,
+    () =>
+      participation.value.includes(GameParticipation.Authority) &&
+      !isMaster.value,
   );
-  const isMentor = computed(() => participation.value.includes("Moderator"));
-  const isSubscribed = computed(() => participation.value.includes("Reader"));
+  const isMentor = computed(() =>
+    participation.value.includes(GameParticipation.Moderator),
+  );
+  const isSubscribed = computed(() =>
+    participation.value.includes(GameParticipation.Reader),
+  );
   const isPlayer = computed(
     () =>
-      participation.value.includes("Player") ||
+      participation.value.includes(GameParticipation.Player) ||
       isMentor.value ||
       isMaster.value,
   );
@@ -533,10 +525,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     await gameApi.deleteGameComment(id);
     const index = comments.value.findIndex((c) => c.id === id);
     if (index !== -1) {
-      comments.value[index] = {
-        ...comments.value[index],
-        isRemoved: true as unknown as Comment["isRemoved"],
-      };
+      comments.value[index] = markRemoved(comments.value[index]);
     }
   }
 
@@ -588,23 +577,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     chatRoomsLoading.value = false;
   }
 
-  // Load master notepad
-  async function loadNotepad(gameId: string): Promise<void> {
-    notepadLoading.value = true;
-    notepadError.value = null;
-
-    const { data, error } = await gameApi.getNotepad(gameId);
-
-    if (error) {
-      notepadError.value = "Не удалось загрузить блокнот";
-      notepad.value = [];
-    } else if (data) {
-      notepad.value = data.resources;
-    }
-
-    notepadLoading.value = false;
-  }
-
   // Load blacklist
   async function loadBlacklist(gameId: string): Promise<void> {
     blacklistLoading.value = true;
@@ -647,67 +619,62 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
 
   async function transitionStatus(
     transition: GameStatusTransition,
-  ): Promise<boolean> {
-    if (!game.value) return false;
+  ): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
     const id = game.value.id;
     const { error } = await gameApi.transitionStatus(id, transition);
-    if (error) return false;
+    if (error) return error;
     await loadGame(id);
-    return true;
+    return null;
   }
 
   async function changePremoderation(
     transition: GamePremoderationTransition,
-  ): Promise<boolean> {
-    if (!game.value) return false;
+  ): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
     const id = game.value.id;
     const { error } = await gameApi.changePremoderation(id, transition);
-    if (error) return false;
+    if (error) return error;
     await loadGame(id);
-    return true;
+    return null;
   }
 
-  async function resetRecruitment(): Promise<boolean> {
-    if (!game.value) return false;
+  async function resetRecruitment(): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
     const id = game.value.id;
     const { error } = await gameApi.resetRecruitment(id);
-    if (error) return false;
+    if (error) return error;
     await loadGame(id);
-    return true;
+    return null;
   }
 
-  async function deleteGame(): Promise<boolean> {
-    if (!game.value) return false;
+  async function deleteGame(): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
     const { error } = await gameApi.deleteGame(game.value.id);
-    return !error;
+    if (error) return error;
+    // Refresh the list caches: otherwise the game the user just deleted keeps
+    // showing in /games and in the sidebar until the entries expire.
+    await useGamesStore().invalidateGameLists();
+    return null;
   }
 
-  async function createRoom(room: CreateRoomInput): Promise<boolean> {
-    if (!game.value) return false;
+  async function createRoom(
+    room: CreateRoomInput,
+  ): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
     const id = game.value.id;
     const { error } = await gameApi.createRoom(id, room);
-    if (error) return false;
+    if (error) return error;
     await loadRooms(id);
-    return true;
+    return null;
   }
 
-  async function updateRoom(
-    roomId: string,
-    patch: Partial<Room>,
-  ): Promise<boolean> {
-    if (!game.value) return false;
-    const { error } = await gameApi.updateRoom(roomId, patch);
-    if (error) return false;
-    await loadRooms(game.value.id);
-    return true;
-  }
-
-  async function archiveRoom(roomId: string): Promise<boolean> {
-    if (!game.value) return false;
+  async function archiveRoom(roomId: string): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
     const { error } = await gameApi.archiveRoom(roomId);
-    if (error) return false;
+    if (error) return error;
     await loadRooms(game.value.id);
-    return true;
+    return null;
   }
 
   // Reset all data (when leaving game page)
@@ -739,10 +706,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     chatRoomsLoading.value = false;
     chatRoomsError.value = null;
 
-    notepad.value = [];
-    notepadLoading.value = false;
-    notepadError.value = null;
-
     blacklist.value = [];
     blacklistLoading.value = false;
     blacklistError.value = null;
@@ -753,29 +716,29 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   }
 
   // Subscribe to game
-  async function subscribe(): Promise<boolean> {
-    if (!game.value) return false;
+  async function subscribe(): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
 
     const { error } = await gameApi.subscribe(game.value.id);
     if (error) {
-      return false;
+      return error;
     }
     // Reload game to update roles
     await loadGame(game.value.id);
-    return true;
+    return null;
   }
 
   // Unsubscribe from game
-  async function unsubscribe(): Promise<boolean> {
-    if (!game.value) return false;
+  async function unsubscribe(): Promise<GeneralError | null> {
+    if (!game.value) return requestNotSent;
 
     const { error } = await gameApi.unsubscribe(game.value.id);
     if (error) {
-      return false;
+      return error;
     }
     // Reload game to update roles
     await loadGame(game.value.id);
-    return true;
+    return null;
   }
 
   return {
@@ -801,9 +764,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     chatRooms,
     chatRoomsLoading,
     chatRoomsError,
-    notepad,
-    notepadLoading,
-    notepadError,
     blacklist,
     blacklistLoading,
     blacklistError,
@@ -835,7 +795,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     likeComment,
     unlikeComment,
     loadChatRooms,
-    loadNotepad,
     loadBlacklist,
     loadUsers,
     transitionStatus,
@@ -843,7 +802,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     resetRecruitment,
     deleteGame,
     createRoom,
-    updateRoom,
     archiveRoom,
     reset,
     subscribe,

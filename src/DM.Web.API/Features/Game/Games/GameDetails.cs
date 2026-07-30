@@ -17,11 +17,6 @@ public class GameDetails : Game
     public InfoBbText Info { get; set; } = null!;
 
     /// <summary>
-    /// Game private notes content (for GM)
-    /// </summary>
-    public string? Notepad { get; set; }
-
-    /// <summary>
     /// Game privacy settings
     /// </summary>
     public GamePrivacySettings PrivacySettings { get; set; } = null!;

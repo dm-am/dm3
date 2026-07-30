@@ -2,13 +2,14 @@
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
+import { useGamesStore } from "@/entities/game";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import Button from "@/shared/ui/Button/Button.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { Select } from "@/shared/ui/Select";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
-import { AttributeSchemaEditor } from "@/features/attribute-schema-editor";
+import { AttributeSchemaEditor } from "@/features/attribute-schema-editor/@x/create-game";
 import TagSelector from "./TagSelector.vue";
 import AssistantSelector from "./AssistantSelector.vue";
 import { gameApi } from "@/entities/game";
@@ -22,7 +23,8 @@ import type { BadRequestError } from "@/shared/api/models/common";
 import { useToast } from "@/shared/lib/composables/useToast";
 
 const router = useRouter();
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
+const gamesStore = useGamesStore();
 const toast = useToast();
 
 const commentariesAccessOptions = [
@@ -122,6 +124,9 @@ async function handleSubmit() {
     }
 
     if (data) {
+      // The lists are cached; without refreshing them the game the user just
+      // created is missing from /games and from the sidebar until they expire.
+      await gamesStore.invalidateGameLists();
       router.push({ name: "game", params: { id: data.resource.id } });
     }
   } finally {
@@ -263,7 +268,7 @@ async function handleSubmit() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .create-game-form
   max-width: $grid-step * 150

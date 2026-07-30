@@ -8,7 +8,7 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.Blacklists;
 using DM.Domain.Personal.Features.Profiles;
-using DM.Domain.Personal.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using Moq;
@@ -37,7 +37,7 @@ public class UserBlacklistServiceShould : UnitTestBase
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
 
-        var identity = Identity.Authenticated(_currentUserId, "CurrentUser", UserRole.RegularUser);
+        var identity = Identities.User(_currentUserId, "CurrentUser", UserRole.RegularUser);
         _identityProvider.Setup(p => p.Current).Returns(identity);
         _dateTimeProvider.Setup(d => d.Now).Returns(_now);
         _guidFactory.Setup(g => g.Create()).Returns(_entryId);
@@ -64,8 +64,8 @@ public class UserBlacklistServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenBlockingNonexistentUser()
     {
-        _userRepository.Setup(r => r.GetUserAsync("Unknown"))
-            .ReturnsAsync((GeneralUser?)null);
+        _userRepository.Setup(r => r.FindUserIdAsync("Unknown"))
+            .ReturnsAsync((Guid?)null);
 
         var act = () => _service.Block(new OperateUserBlacklistLink { Username = "Unknown" });
 
@@ -76,9 +76,8 @@ public class UserBlacklistServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenUserTriesToBlockThemselves()
     {
-        var currentUser = new GeneralUser { UserId = _currentUserId, Username = "CurrentUser" };
-        _userRepository.Setup(r => r.GetUserAsync("CurrentUser"))
-            .ReturnsAsync(currentUser);
+        _userRepository.Setup(r => r.FindUserIdAsync("CurrentUser"))
+            .ReturnsAsync(_currentUserId);
 
         var act = () => _service.Block(new OperateUserBlacklistLink { Username = "CurrentUser" });
 
@@ -89,10 +88,9 @@ public class UserBlacklistServiceShould : UnitTestBase
     [Fact]
     public async Task ReturnExistingEntryWhenAlreadyBlocked()
     {
-        var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
         var existingEntry = new BlacklistEntry { Id = Guid.NewGuid() };
 
-        _userRepository.Setup(r => r.GetUserAsync("Target")).ReturnsAsync(targetUser);
+        _userRepository.Setup(r => r.FindUserIdAsync("Target")).ReturnsAsync(_targetUserId);
         _repository.Setup(r => r.Find(_currentUserId, _targetUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(existingEntry);
 
@@ -105,8 +103,7 @@ public class UserBlacklistServiceShould : UnitTestBase
     [Fact]
     public async Task CreateNewBlacklistEntry()
     {
-        var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userRepository.Setup(r => r.GetUserAsync("Target")).ReturnsAsync(targetUser);
+        _userRepository.Setup(r => r.FindUserIdAsync("Target")).ReturnsAsync(_targetUserId);
         _repository.Setup(r => r.Find(_currentUserId, _targetUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((BlacklistEntry?)null);
 
@@ -127,10 +124,9 @@ public class UserBlacklistServiceShould : UnitTestBase
     [Fact]
     public async Task UnblockUserSuccessfully()
     {
-        var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
         var existingEntry = new BlacklistEntry { Id = _entryId };
 
-        _userRepository.Setup(r => r.GetUserAsync("Target")).ReturnsAsync(targetUser);
+        _userRepository.Setup(r => r.FindUserIdAsync("Target")).ReturnsAsync(_targetUserId);
         _repository.Setup(r => r.Find(_currentUserId, _targetUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(existingEntry);
 
@@ -142,8 +138,8 @@ public class UserBlacklistServiceShould : UnitTestBase
     [Fact]
     public async Task DoNothingWhenUnblockingNonexistentUser()
     {
-        _userRepository.Setup(r => r.GetUserAsync("Unknown"))
-            .ReturnsAsync((GeneralUser?)null);
+        _userRepository.Setup(r => r.FindUserIdAsync("Unknown"))
+            .ReturnsAsync((Guid?)null);
 
         await _service.Unblock(new OperateUserBlacklistLink { Username = "Unknown" });
 
@@ -153,8 +149,7 @@ public class UserBlacklistServiceShould : UnitTestBase
     [Fact]
     public async Task CheckIfUserIsBlocked()
     {
-        var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userRepository.Setup(r => r.GetUserAsync("Target")).ReturnsAsync(targetUser);
+        _userRepository.Setup(r => r.FindUserIdAsync("Target")).ReturnsAsync(_targetUserId);
         _repository.Setup(r => r.IsBlockedAsync(_currentUserId, _targetUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 

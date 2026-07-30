@@ -12,7 +12,7 @@
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
-import { useUserStore } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import Button from "@/shared/ui/Button/Button.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
@@ -20,6 +20,7 @@ import { Select } from "@/shared/ui/Select";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import {
   blogApi,
+  useBlogsStore,
   DraftVisibility,
   type CreateBlogInput,
 } from "@/entities/blog";
@@ -28,8 +29,9 @@ import type { BadRequestError } from "@/shared/api/models/common";
 import { useToast } from "@/shared/lib/composables/useToast";
 
 const router = useRouter();
-const { user } = storeToRefs(useUserStore());
+const { user } = storeToRefs(useAuthStore());
 const toast = useToast();
+const blogsStore = useBlogsStore();
 
 const visibilityOptions = [
   { value: DraftVisibility.Public, label: "Превью видно всем" },
@@ -85,6 +87,9 @@ async function handleSubmit() {
     }
 
     if (data) {
+      // Same as game creation: the lists are cached, so without refreshing
+      // them the new blog is missing from /blogs and from the sidebar.
+      await blogsStore.invalidateBlogLists();
       router.push({
         name: "blog",
         params: { id: data.resource.publicId ?? data.resource.id },
@@ -180,7 +185,7 @@ async function handleSubmit() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .create-blog-form
   max-width: $grid-step * 150

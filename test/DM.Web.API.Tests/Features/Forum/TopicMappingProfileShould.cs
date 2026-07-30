@@ -11,21 +11,6 @@ namespace DM.Web.API.Tests.Features.Forum;
 
 public class TopicMappingProfileShould : UnitTestBase
 {
-    private readonly IMapper _mapper;
-
-    public TopicMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UserMappingProfile>();
-            cfg.AddProfile<UserRefMappingProfile>();
-            cfg.AddProfile<BbTextMappingProfile>();
-            cfg.AddProfile<BoardMappingProfile>();
-            cfg.AddProfile<TopicMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
-
     [Fact]
     public void HaveValidConfiguration()
     {

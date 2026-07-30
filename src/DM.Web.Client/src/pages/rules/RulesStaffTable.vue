@@ -10,7 +10,7 @@ import { ref, onMounted } from "vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { UserLink } from "@/entities/user";
 import { UserRole, type User } from "@/shared/api/models/community";
-import { communityApi } from "@/shared/api";
+import { userApi } from "@/entities/user";
 import { ROLE_INFO, STAFF_ROLES } from "@/shared/config/roles";
 import { ADMIN_LINKS } from "@/shared/config/helpLinks";
 
@@ -31,7 +31,7 @@ async function loadRoleGroups() {
   loading.value = true;
   error.value = false;
   const results = await Promise.all(
-    STAFF_ROLES.map((role) => communityApi.getUsersByRole(role)),
+    STAFF_ROLES.map((role) => userApi.getUsersByRole(role)),
   );
   loading.value = false;
   if (results.some(({ error: reqError }) => reqError)) {
@@ -110,9 +110,9 @@ onMounted(loadRoleGroups);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Tables"
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Tables"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/Skeleton"
 
 .admin-section
   margin: $big 0

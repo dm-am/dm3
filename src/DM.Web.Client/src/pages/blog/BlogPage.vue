@@ -50,7 +50,13 @@ useFetchData(
   [
     {
       param: (p) => p.id,
-      callback: (id) => blogStore.loadBlog(id as string),
+      callback: (id) => {
+        // Same as the game shell: the detail store is not keyed by id and the
+        // route record is shared, so without wiping first the previous blog's
+        // publications and comments stay under the new title.
+        blogStore.reset();
+        return blogStore.loadBlog(id as string);
+      },
     },
   ],
 );
@@ -117,18 +123,18 @@ onUnmounted(() => {
   color: $text-muted
 
   &.status-active
-    background-color: rgba($accent-green, 0.2)
+    +tint($accent-green, 20%)
     color: $accent-green
 
   &.status-finished
-    background-color: rgba($text-muted, 0.2)
+    +tint($text-muted, 20%)
     color: $text-muted
 
 .blog-premod
   font-size: $secondary-font-size
   padding: 2px $small
   border-radius: $border-radius
-  background-color: rgba($accent-red, 0.15)
+  +tint($accent-red, 15%)
   color: $accent-red
 
 .blog-meta

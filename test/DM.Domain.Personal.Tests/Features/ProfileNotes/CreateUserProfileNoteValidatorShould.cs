@@ -38,8 +38,10 @@ public class CreateUserProfileNoteValidatorShould : UnitTestBase
     }
 
     [Fact]
-    public void FailWhenTextIsEmpty()
+    public void AllowEmptyTextBecauseThatIsHowANoteIsDeleted()
     {
+        // UpsertNote treats an empty text as "remove the note"; a NotEmpty rule
+        // here would make that documented path unreachable.
         var input = new CreateUserProfileNote
         {
             SubjectUsername = "someone",
@@ -47,8 +49,7 @@ public class CreateUserProfileNoteValidatorShould : UnitTestBase
         };
 
         var result = validator.TestValidate(input);
-        result.ShouldHaveValidationErrorFor(x => x.Text)
-            .WithErrorMessage(ValidationError.Empty);
+        result.ShouldNotHaveValidationErrorFor(x => x.Text);
     }
 
     [Fact]
@@ -57,7 +58,7 @@ public class CreateUserProfileNoteValidatorShould : UnitTestBase
         var input = new CreateUserProfileNote
         {
             SubjectUsername = "someone",
-            Text = new string('a', 5001)
+            Text = new string('a', 2001)
         };
 
         var result = validator.TestValidate(input);

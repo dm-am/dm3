@@ -10,9 +10,11 @@
 import { computed, onMounted, reactive } from "vue";
 import { useRouter } from "vue-router";
 import { useModal } from "vue-final-modal";
-import { achievementApi } from "@/shared/api";
-import { useContestSeries } from "@/shared/lib/achievements/useContestSeries";
-import { formatContestSeriesTitle } from "@/shared/lib/achievements/formatThreshold";
+import {
+  achievementApi,
+  useContestSeries,
+  formatContestSeriesTitle,
+} from "@/entities/achievement";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import ContestSeriesCreateDialog from "./dialogs/ContestSeriesCreateDialog.vue";
 
@@ -131,8 +133,8 @@ function openSeries(id: string) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/Tables"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/Tables"
 
 .awards-admin
   display: flex

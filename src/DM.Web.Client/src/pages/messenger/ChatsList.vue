@@ -3,11 +3,11 @@ import { ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useRoute, useRouter } from "vue-router";
 import { useMessagingStore } from "@/entities/message";
-import { useUserStore, AvatarImg } from "@/entities/user";
+import { useAuthStore, AvatarImg } from "@/entities/user";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import ChatPreview from "./ChatPreview.vue";
 import Paging from "@/shared/ui/Paging/Paging.vue";
-import communityApi from "@/shared/api/communityApi";
+import { userApi } from "@/entities/user";
 import type { User } from "@/shared/api/models/community";
 import { symbols } from "@/shared/lib/utils/icons";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
@@ -18,7 +18,7 @@ const route = useRoute();
 const router = useRouter();
 const messagingStore = useMessagingStore();
 const { chats } = storeToRefs(messagingStore);
-const { user: currentUser } = storeToRefs(useUserStore());
+const { user: currentUser } = storeToRefs(useAuthStore());
 
 const searchQuery = ref("");
 const searchResults = ref<User[]>([]);
@@ -67,7 +67,7 @@ async function searchUsers(query: string) {
   }
   isSearching.value = true;
   try {
-    const { data } = await communityApi.searchUsers(query, 6);
+    const { data } = await userApi.searchUsers(query, 6);
     searchResults.value = data?.resources ?? [];
   } finally {
     isSearching.value = false;
@@ -197,8 +197,8 @@ function clearSearch() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Filters"
-@import "src/assets/styles/ZIndex"
+@import "@/assets/styles/Filters"
+@import "@/assets/styles/ZIndex"
 
 .messenger-list
   display: flex

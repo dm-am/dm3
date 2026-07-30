@@ -44,8 +44,8 @@ public class ModeratorsController : ControllerBase
     [HttpGet("moderators", Name = nameof(GetModerators))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(typeof(ListEnvelope<ModeratorOverview>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetModerators() =>
         Ok(await _moderatorsApiService.GetModerators());
 }

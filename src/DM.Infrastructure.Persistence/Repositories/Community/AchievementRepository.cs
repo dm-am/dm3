@@ -79,7 +79,6 @@ internal class AchievementRepository : IAchievementRepository
     public async Task<AchievementType?> GetTypeAsync(Guid id, CancellationToken ct = default) =>
         await _db.AchievementTypes
             .AsNoTracking()
-            .Include(t => t.Category)
             .Where(t => t.AchievementTypeId == id)
             .ProjectTo<AchievementType>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
@@ -87,7 +86,6 @@ internal class AchievementRepository : IAchievementRepository
     public async Task<AchievementType?> GetTypeByCodeAsync(string code, CancellationToken ct = default) =>
         await _db.AchievementTypes
             .AsNoTracking()
-            .Include(t => t.Category)
             .Where(t => t.Code == code)
             .ProjectTo<AchievementType>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
@@ -131,7 +129,6 @@ internal class AchievementRepository : IAchievementRepository
     public async Task<IReadOnlyCollection<UserAchievement>> GetUserAchievementsAsync(Guid userId, CancellationToken ct = default) =>
         await _db.UserAchievements
             .AsNoTracking()
-            .Include(a => a.AchievementType).ThenInclude(t => t.Category)
             .Where(a => a.UserId == userId)
             .OrderByDescending(a => a.EarnedUtc)
             .ProjectTo<UserAchievement>(_mapper.ConfigurationProvider)

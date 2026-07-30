@@ -53,6 +53,21 @@ public class Ban : IAdministrated
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
 
+    /// <summary>
+    /// Moderator who lifted the ban early (null while the ban runs its course)
+    /// </summary>
+    public Guid? LiftedByUserId { get; set; }
+
+    /// <summary>
+    /// When the ban was lifted early
+    /// </summary>
+    public DateTimeOffset? LiftedUtc { get; set; }
+
+    /// <summary>
+    /// Why the ban was lifted early
+    /// </summary>
+    public string? LiftReason { get; set; }
+
     /// <inheritdoc />
     [ForeignKey(nameof(TargetUserId))]
     public virtual User TargetUser { get; set; } = null!;

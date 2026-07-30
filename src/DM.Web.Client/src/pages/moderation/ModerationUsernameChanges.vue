@@ -2,11 +2,13 @@
 import { ref, onMounted, computed, reactive, type Ref } from "vue";
 import { useModal } from "vue-final-modal";
 import { useToast } from "@/shared/lib/composables/useToast";
-import moderationApi, {
+import { notifyFailure } from "@/shared/lib/errors";
+import {
+  moderationApi,
   UsernameChangeRequestStatus,
   type UsernameChangeRequest,
   type ResolveUsernameChangeRequest,
-} from "@/shared/api/moderationApi";
+} from "@/entities/moderation";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
@@ -60,10 +62,13 @@ const pendingRequests = computed(() =>
 const fetchRequests = async () => {
   loading.value = true;
   try {
-    const { data } = await moderationApi.getPendingUsernameChangeRequests();
+    const { data, error } =
+      await moderationApi.getPendingUsernameChangeRequests();
+    if (error) {
+      notifyFailure(error, "Не удалось загрузить запросы");
+      return;
+    }
     requests.value = data?.resources || [];
-  } catch (error) {
-    toast.error("Не удалось загрузить запросы");
   } finally {
     loading.value = false;
   }
@@ -81,15 +86,17 @@ const confirmApprove = async () => {
     const resolve: ResolveUsernameChangeRequest = {
       status: UsernameChangeRequestStatus.Approved,
     };
-    await moderationApi.resolveUsernameChangeRequest(
+    const { error } = await moderationApi.resolveUsernameChangeRequest(
       approveTarget.value.id,
       resolve,
     );
+    if (error) {
+      notifyFailure(error, "Не удалось одобрить запрос");
+      return;
+    }
     toast.success(`Запрос от ${approveTarget.value.currentUsername} одобрен`);
     approveTarget.value = null;
     await fetchRequests();
-  } catch (error) {
-    toast.error("Не удалось одобрить запрос");
   } finally {
     approving.value = false;
     processing.value = null;
@@ -198,7 +205,7 @@ onMounted(() => fetchRequests());
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .username-changes
   h3
@@ -211,10 +218,7 @@ onMounted(() => fetchRequests());
   gap: $medium
 
 .request-card
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
 .request-header
   display: flex
@@ -235,23 +239,23 @@ onMounted(() => fetchRequests());
   font-weight: 500
 
   &.pending
-    background: rgba($accent-yellow, 0.2)
+    +tint($accent-yellow, 20%)
     color: $accent-yellow
 
   &.approved
-    background: rgba($accent-green, 0.2)
+    +tint($accent-green, 20%)
     color: $accent-green
 
   &.rejected
-    background: rgba($accent-red, 0.2)
+    +tint($accent-red, 20%)
     color: $accent-red
 
   &.completed
-    background: rgba($link, 0.2)
+    +tint($link, 20%)
     color: $link
 
   &.expired
-    background: rgba($text-muted, 0.2)
+    +tint($text-muted, 20%)
     color: $text-muted
 
 .request-date

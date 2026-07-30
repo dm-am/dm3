@@ -60,6 +60,17 @@ public interface IGameRepository
     Task<Game?> GetGame(Guid gameId, Guid userId, CancellationToken ct = default);
 
     /// <summary>
+    /// Identifier of the game a public id addresses, or null when it addresses
+    /// nothing the user may see.
+    /// </summary>
+    /// <remarks>
+    /// For the callers that need the id and nothing else — every route that
+    /// accepts either address form and then goes on to do something with the
+    /// game. Applies the same visibility filter as the aggregate read.
+    /// </remarks>
+    Task<Guid?> FindGameIdByPublicId(string publicId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
     /// Get game by public ID
     /// </summary>
     Task<Game?> GetGameByPublicId(string publicId, Guid userId, CancellationToken ct = default);
@@ -77,7 +88,23 @@ public interface IGameRepository
     /// <summary>
     /// Get games by IDs
     /// </summary>
-    Task<IEnumerable<Game>> GetByIds(IEnumerable<Guid> gameIds, Guid userId, CancellationToken ct = default);
+    /// <param name="gameIds">Game identifiers</param>
+    /// <param name="userId">
+    /// Whose accessibility decides which of the ids resolve: a game this user
+    /// may not see is simply absent from the result.
+    /// </param>
+    /// <param name="viewerId">
+    /// Who the viewer-scoped fields are filled for —
+    /// <see cref="Game.IsViewerSubscriber" /> and nothing else today. The same
+    /// as <paramref name="userId" /> for an ordinary read; the two differ only
+    /// where the caller has already fixed visibility by other means and wants
+    /// the accessibility filter to stay out of it, which is the rated-post feed.
+    /// Two parameters rather than one so that a caller in that position does not
+    /// have to re-query the subscriptions this method already reads.
+    /// </param>
+    /// <param name="ct">Cancellation token</param>
+    Task<IEnumerable<Game>> GetByIds(
+        IEnumerable<Guid> gameIds, Guid userId, Guid viewerId, CancellationToken ct = default);
 
     // === WRITE ===
 

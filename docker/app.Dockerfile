@@ -24,11 +24,11 @@ COPY src/DM.Infrastructure.Mail/DM.Infrastructure.Mail.csproj src/DM.Infrastruct
 COPY src/DM.Infrastructure.Messaging/DM.Infrastructure.Messaging.csproj src/DM.Infrastructure.Messaging/
 COPY src/DM.Infrastructure.Persistence/DM.Infrastructure.Persistence.csproj src/DM.Infrastructure.Persistence/
 
-# Web and Workers
+# Web, Workers and Tools
 COPY src/DM.Web.API/DM.Web.API.csproj src/DM.Web.API/
 COPY src/DM.Workers.Mail/DM.Workers.Mail.csproj src/DM.Workers.Mail/
 COPY src/DM.Workers.NotificationDispatcher/DM.Workers.NotificationDispatcher.csproj src/DM.Workers.NotificationDispatcher/
-COPY src/DM.Workers.SearchIndexer/DM.Workers.SearchIndexer.csproj src/DM.Workers.SearchIndexer/
+COPY src/DM.Tools.Seeder/DM.Tools.Seeder.csproj src/DM.Tools.Seeder/
 
 # 2. Restore packages
 RUN dotnet restore src/${PROJECT_NAME}/${PROJECT_NAME}.csproj
@@ -36,13 +36,7 @@ RUN dotnet restore src/${PROJECT_NAME}/${PROJECT_NAME}.csproj
 # 3. Copy source code AFTER restore (only code changes invalidate this layer)
 COPY src/ src/
 
-# 4. Remove conflicting appsettings.json from worker projects when building Web.API
-# (prevents NETSDK1152 error with duplicate files)
-RUN if [ "${PROJECT_NAME}" = "DM.Web.API" ]; then \
-    rm -f src/DM.Workers.SearchIndexer/appsettings*.json; \
-    fi
-
-# 5. Publish
+# 4. Publish
 RUN dotnet publish src/${PROJECT_NAME}/${PROJECT_NAME}.csproj -c Release -o out
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime

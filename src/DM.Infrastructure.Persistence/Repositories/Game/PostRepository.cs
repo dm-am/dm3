@@ -85,7 +85,7 @@ internal class PostRepository : IPostRepository
         return post;
     }
 
-    public async Task<(IEnumerable<Post> Posts, int TotalCount)> GetRated(PostsQuery query)
+    public async Task<(IEnumerable<Post> Posts, int TotalCount)> GetRated(PostsQuery query, Guid viewerId)
     {
         // Read-only query path feeding the home-page widgets (best of week,
         // latest featured, Pulse). AsNoTracking drops EF Core's change
@@ -355,8 +355,25 @@ internal class PostRepository : IPostRepository
             .ToArray();
         if (uniqueGameIds.Length > 0)
         {
-            var gamesById = (await _gameRepository.GetByIds(uniqueGameIds, Guid.Empty))
+            // Two different ids on purpose. Accessibility is Guid.Empty because
+            // this feed has already fixed its own visibility above — open rooms
+            // of approved, non-draft games — and the real viewer could only
+            // narrow that, dropping a game they are blacklisted from out of the
+            // dictionary and leaving a live post with a null Room.Game. The
+            // viewer-scoped fields are filled for the real viewer, because
+            // otherwise a subscriber loses "reader" from the attached game's
+            // participation: the whole subscriber set used to travel in the DTO
+            // and the resolver found them in it.
+            //
+            // Note what the accessibility choice does NOT do: it is not what
+            // lets a blacklisted user read this feed. The feed's own filter has
+            // no blacklist term at all, unlike every other post read, which goes
+            // through GameAccessibilityFilters.RoomAvailable. Closing that is a
+            // decision about what a blacklist means for reading, not a choice of
+            // sentinel here.
+            var gamesById = (await _gameRepository.GetByIds(uniqueGameIds, Guid.Empty, viewerId))
                 .ToDictionary(g => g.Id);
+
             var rawByPostId = rawData.ToDictionary(x => x.PostId);
             foreach (var post in posts)
             {
@@ -425,25 +442,49 @@ internal class PostRepository : IPostRepository
             MetagameText = createPost.MetagameText,
             IsRemoved = false
         };
-        _dbContext.Posts.Add(dbPost);
-
-        // Increment author's post count (QuantityRating)
-        await _dbContext.Users
-            .Where(u => u.UserId == createPost.AuthorId)
-            .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, x => x.QuantityRating + 1));
-
-        // Update game's LastPostCreatedUtc and reset inactivity warning if any
-        var room = await _dbContext.Rooms.FindAsync(createPost.RoomId);
-        if (room != null)
+        // ExecuteUpdate runs and commits immediately while Add is deferred to
+        // SaveChanges, so without a transaction a failure between them left the
+        // author's QuantityRating incremented and the game's activity stamp moved
+        // for a post that does not exist. QuantityRating feeds the user rating and
+        // the stored IsNewbie column, so that drift is user-visible and nothing
+        // recomputes it. The strategy wrapper is required because the API host
+        // configures EnableRetryOnFailure.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
+        await strategy.ExecuteAsync(async () =>
         {
-            await _dbContext.Games
-                .Where(g => g.GameId == room.GameId)
-                .ExecuteUpdateAsync(g => g
-                    .SetProperty(x => x.LastPostCreatedUtc, createPost.CreatedUtc)
-                    .SetProperty(x => x.InactivityWarningUtc, (DateTimeOffset?)null));
-        }
+            if (attempted)
+            {
+                // A retry replays this block; the post the failed attempt left
+                // tracked would otherwise be inserted twice or not at all.
+                _dbContext.ChangeTracker.Clear();
+            }
 
-        await _dbContext.SaveChangesAsync();
+            attempted = true;
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+            _dbContext.Posts.Add(dbPost);
+            await _dbContext.SaveChangesAsync();
+
+            // Increment author's post count (QuantityRating)
+            await _dbContext.Users
+                .Where(u => u.UserId == createPost.AuthorId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, x => x.QuantityRating + 1));
+
+            // Update game's LastPostCreatedUtc and reset inactivity warning if any
+            var room = await _dbContext.Rooms.FindAsync(createPost.RoomId);
+            if (room != null)
+            {
+                await _dbContext.Games
+                    .Where(g => g.GameId == room.GameId)
+                    .ExecuteUpdateAsync(g => g
+                        .SetProperty(x => x.LastPostCreatedUtc, createPost.CreatedUtc)
+                        .SetProperty(x => x.InactivityWarningUtc, (DateTimeOffset?)null));
+            }
+
+            await transaction.CommitAsync();
+        });
+
         return await _dbContext.Posts
             .Where(p => p.PostId == createPost.PostId)
             .ProjectTo<Post>(_mapper.ConfigurationProvider)

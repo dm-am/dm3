@@ -49,7 +49,6 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 |--------|------|-------------|
 | Frontend (Vite) | 5173 | — |
 | API (Swagger) | 5000 | — |
-| Search Consumer | 5001 | — |
 | Notification Consumer | 5002 | — |
 | Email Consumer | 5003 | — |
 | PostgreSQL | 5432 | из `docker/.env` |
@@ -58,7 +57,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 | MinIO | 9000, 9001 | из `docker/.env` |
 | imgproxy | 8080 | HMAC key/salt из `docker/.env` |
 | MailHog | 1025, 8025 | — |
-| OpenSearch | 9200, 5601 | — |
+| Loki | 3100 | — |
 | Jaeger | 16686 | — |
 | Prometheus | 9090 | — |
 | Grafana | 3000 | из `docker/.env` |
@@ -86,7 +85,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 
 **Требования:** API запущен (порт 5000).
 
-Скрипт вызывает `POST /v1/moderation/seed` напрямую через curl (доступен только в Development).
+Сид — отдельный консольный инструмент, а не эндпоинт: он пишет напрямую в Postgres, Mongo и объектное хранилище, поэтому по сети он недоступен вовсе. Скрипт запускает его разовым контейнером под compose-профилем `tools`, который не поднимается обычным `docker compose up`. API при этом должен быть запущен: бакет для загрузок создает его инициализатор хранилища.
 
 **Тестовые аккаунты (пароль: `Test123!`):**
 
@@ -208,7 +207,6 @@ dotnet ef migrations add InitialCreate -p src/DM.Infrastructure.Persistence -s s
 | Файл | Назначение |
 |------|------------|
 | [`src/DM.Workers.Mail/appsettings.json`](../../src/DM.Workers.Mail/appsettings.json) | Email: SMTP настройки |
-| [`src/DM.Workers.SearchIndexer/appsettings.json`](../../src/DM.Workers.SearchIndexer/appsettings.json) | Search: OpenSearch подключение |
 | [`src/DM.Workers.NotificationDispatcher/appsettings.json`](../../src/DM.Workers.NotificationDispatcher/appsettings.json) | Notifications: MongoDB, RabbitMQ |
 
 ### Основные секции appsettings.json
@@ -263,7 +261,7 @@ cd docker
 docker compose -f docker-compose.yml -f docker-compose.preview.yml up -d --build
 ```
 
-URL: http://localhost:80 (Basic Auth: `preview` / `dm2026preview`)
+URL: http://localhost:80 за Basic Auth. Пароль в документации не публикуется: он лежит в `docker/nginx/.htpasswd`, задать свой — [DEPLOYMENT.md](./DEPLOYMENT.md#preview-окружение).
 
 ---
 

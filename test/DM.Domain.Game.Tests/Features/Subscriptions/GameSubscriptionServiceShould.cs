@@ -10,7 +10,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Subscriptions;
 using DM.Domain.Core.Users;
 using DM.Domain.Game.Features.Subscriptions;
-using DM.Domain.Game.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using Moq;
@@ -33,7 +33,7 @@ public class GameSubscriptionServiceShould : UnitTestBase
         _identityProvider = Mock<IIdentityProvider>();
 
         _currentUserId = Guid.NewGuid();
-        var identity = Identity.User(_currentUserId, "testuser");
+        var identity = Identities.User(_currentUserId, "testuser");
         _identityProvider.Setup(p => p.Current).Returns(identity);
 
         var guidFactory = Mock<IGuidFactory>();

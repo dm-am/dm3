@@ -1,3 +1,4 @@
+using DM.Domain.Core.Identity;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,14 +23,17 @@ internal class ChatRepository : IChatRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IPublicIdService _publicIdService;
 
     /// <inheritdoc />
     public ChatRepository(
         DmDbContext dbContext,
-        IMapper mapper)
+        IMapper mapper,
+        IPublicIdService publicIdService)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _publicIdService = publicIdService;
     }
 
     /// <summary>
@@ -103,7 +107,9 @@ internal class ChatRepository : IChatRepository
         {
             ChatId = chat.ChatId,
             Type = chat.Type,
-            Title = chat.Title
+            Title = chat.Title,
+            // Unique placeholder until the serial exists; replaced below.
+            PublicId = $"t{chat.ChatId:N}"[..10]
         };
 
         var dbChatLinks = chatLinks.Select(l => new UserChatLink
@@ -116,6 +122,11 @@ internal class ChatRepository : IChatRepository
 
         _dbContext.Chats.Add(dbChat);
         _dbContext.UserChatLinks.AddRange(dbChatLinks);
+        await _dbContext.SaveChangesAsync();
+
+        // SerialNumber is database-generated, so the readable id can only be
+        // produced after the insert — same two-phase shape as games and blogs.
+        dbChat.PublicId = _publicIdService.Encode(dbChat.SerialNumber);
         await _dbContext.SaveChangesAsync();
 
         return await _dbContext.Chats
@@ -182,10 +193,14 @@ internal class ChatRepository : IChatRepository
             ChatId = chat.ChatId,
             Type = chat.Type,
             Title = chat.Title,
-            RoomId = chat.RoomId
+            RoomId = chat.RoomId,
+            PublicId = $"t{chat.ChatId:N}"[..10]
         };
 
         _dbContext.Chats.Add(dbChat);
+        await _dbContext.SaveChangesAsync();
+
+        dbChat.PublicId = _publicIdService.Encode(dbChat.SerialNumber);
         await _dbContext.SaveChangesAsync();
 
         return await _dbContext.Chats

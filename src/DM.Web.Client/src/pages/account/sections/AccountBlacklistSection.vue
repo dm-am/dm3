@@ -93,7 +93,7 @@
             <button
               class="unblock-btn"
               :disabled="unblockingUsername === entry.username"
-              @click="unblock(entry.username)"
+              @click="pendingUnblock = entry.username"
             >
               {{
                 unblockingUsername === entry.username ? "..." : "Разблокировать"
@@ -105,6 +105,16 @@
         <button class="add-btn" @click="openBlockModal">+ Заблокировать</button>
       </div>
     </div>
+
+    <ConfirmDialog
+      :show="pendingUnblock !== null"
+      title="Разблокировка пользователя"
+      :message="`Разблокировать ${pendingUnblock ?? ''}?`"
+      confirm-label="Разблокировать"
+      :loading="unblockingUsername !== null"
+      @update:show="(v) => !v && (pendingUnblock = null)"
+      @confirm="confirmUnblock"
+    />
   </section>
 </template>
 
@@ -112,15 +122,17 @@
 import { ref, reactive, onMounted } from "vue";
 import { RouterLink } from "vue-router";
 import { useModal } from "vue-final-modal";
-import { BlacklistApi } from "@/shared/api";
+import { blacklistApi } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { EmptyState } from "@/shared/ui";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { BlockUserDialog } from "@/features/block-user";
 import type {
   BlacklistEntry,
   BlacklistSettings,
 } from "@/shared/api/models/personal";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const toast = useToast();
 
@@ -160,7 +172,7 @@ onMounted(async () => {
 
 async function loadSettings() {
   settingsLoading.value = true;
-  const { data, error } = await BlacklistApi.getSettings();
+  const { data, error } = await blacklistApi.getSettings();
   settingsLoading.value = false;
 
   if (!error && data) {
@@ -170,11 +182,11 @@ async function loadSettings() {
 
 async function saveSettings() {
   settingsSaving.value = true;
-  const { error } = await BlacklistApi.updateSettings({ ...settings });
+  const { error } = await blacklistApi.updateSettings({ ...settings });
   settingsSaving.value = false;
 
   if (error) {
-    toast.error("Не удалось сохранить настройки");
+    notifyFailure(error, "Не удалось сохранить настройки");
     // Reload to restore correct state
     await loadSettings();
   }
@@ -182,7 +194,7 @@ async function saveSettings() {
 
 async function loadBlockedUsers() {
   listLoading.value = true;
-  const { data, error } = await BlacklistApi.getBlacklist();
+  const { data, error } = await blacklistApi.getBlacklist();
   listLoading.value = false;
 
   if (!error && data) {
@@ -190,17 +202,22 @@ async function loadBlockedUsers() {
   }
 }
 
-async function unblock(username: string) {
-  const confirmed = window.confirm(`Разблокировать ${username}?`);
-  if (!confirmed) return;
+// Unblock is ConfirmDialog-gated: `pendingUnblock` holds the username the
+// dialog is asking about.
+const pendingUnblock = ref<string | null>(null);
+
+async function confirmUnblock() {
+  const username = pendingUnblock.value;
+  if (!username || unblockingUsername.value) return;
 
   unblockingUsername.value = username;
-  const { error } = await BlacklistApi.unblockUser(username);
+  const { error } = await blacklistApi.unblockUser(username);
   unblockingUsername.value = null;
 
   if (error) {
-    toast.error("Не удалось разблокировать пользователя");
+    notifyFailure(error, "Не удалось разблокировать пользователя");
   } else {
+    pendingUnblock.value = null;
     blockedUsers.value = blockedUsers.value.filter(
       (u) => u.username !== username,
     );
@@ -210,7 +227,7 @@ async function unblock(username: string) {
 </script>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 @import "../AccountPage.styles"
 
 .blacklist-content
@@ -302,7 +319,7 @@ async function unblock(username: string) {
   flex-shrink: 0
 
   &:hover:not(:disabled)
-    background-color: $text-muted-muted
+    +tint($text-muted, 15%)
 
   &:disabled
     opacity: 0.5

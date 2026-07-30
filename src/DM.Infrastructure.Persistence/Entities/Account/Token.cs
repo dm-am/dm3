@@ -11,6 +11,7 @@ namespace DM.Infrastructure.Persistence.Entities.Account;
 /// <summary>
 /// DAL model for authorization token
 /// </summary>
+[Table("Tokens")]
 public class Token : ISoftDeletable
 {
     /// <summary>
@@ -70,6 +71,19 @@ public class Token : ISoftDeletable
     /// </summary>
     [ForeignKey(nameof(DeletedByUserId))]
     public virtual User? DeletedBy { get; set; }
+
+    // ── IMPORTANT for migration regeneration ──
+    // EntityId is polymorphic: depending on Type it holds a GameId, a BlogId or
+    // nothing. Both navigations below are mapped on that one column, so EF
+    // generates FK_Tokens_Games_EntityId AND FK_Tokens_Blogs_EntityId. Those
+    // constraints are FALSE — PostgreSQL requires a non-null value to satisfy
+    // every FK on a column, so an EntityId would have to exist in Games and in
+    // Blogs at the same time and no invitation can be inserted at all.
+    // Both `table.ForeignKey` blocks must be removed from the generated
+    // migration by hand (see the NOTE in InitialCreate.cs); the navigations stay
+    // mapped because repository queries project through them. Referential
+    // integrity is maintained by application logic. Same arrangement as
+    // Comment.EntityId — see DmDbContext.
 
     /// <summary>
     /// Related game

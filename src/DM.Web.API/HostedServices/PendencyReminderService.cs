@@ -94,7 +94,7 @@ internal class PendencyReminderService : BackgroundService
             var stalePendencies = await dbContext.PostPendencies
                 .Include(p => p.Room)
                 .ThenInclude(r => r.Game)
-                .Where(p => !p.IsRemoved &&
+                .Where(p =>
                             p.FulfilledUtc == null &&
                             p.CreatedUtc < oldestAllowed &&
                             (p.LastReminderUtc == null || p.LastReminderUtc < lastReminderCutoff) &&

@@ -10,7 +10,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Core.Users;
 using DM.Domain.Forum.Features.Boards;
-using DM.Domain.Forum.Tests.Dsl;
+using DM.Testing.Dsl;
 using DM.Testing;
 using FluentAssertions;
 using Moq;
@@ -32,7 +32,7 @@ public class BoardServiceShould : UnitTestBase
     public BoardServiceShould()
     {
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
+        _identityProvider.Setup(p => p.Current).Returns(Identities.Guest());
 
         _accessPolicyConverter = Mock<IAccessPolicyConverter>();
         _accessPolicyConverter.Setup(c => c.Convert(It.IsAny<UserRole>()))
@@ -74,7 +74,7 @@ public class BoardServiceShould : UnitTestBase
     public async Task FillUnreadCountersForAuthenticatedUser()
     {
         var userId = Guid.NewGuid();
-        var identity = Identity.User(userId, UserRole.RegularUser);
+        var identity = Identities.User(userId, UserRole.RegularUser);
         _identityProvider.Setup(p => p.Current).Returns(identity);
 
         var boards = new[]
@@ -107,7 +107,7 @@ public class BoardServiceShould : UnitTestBase
     {
         var userId = Guid.NewGuid();
         var boardId = Guid.NewGuid();
-        var identity = Identity.User(userId, UserRole.RegularUser);
+        var identity = Identities.User(userId, UserRole.RegularUser);
         _identityProvider.Setup(p => p.Current).Returns(identity);
 
         var board = new Board { Id = boardId, Title = "General" };

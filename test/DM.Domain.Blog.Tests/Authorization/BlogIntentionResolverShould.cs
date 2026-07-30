@@ -20,12 +20,16 @@ public class BlogIntentionResolverShould
     private readonly Guid _assistantId = Guid.NewGuid();
     private readonly Guid _mentorId = Guid.NewGuid();
 
-    private AuthenticatedUser CreateUser(Guid userId, UserRole role = UserRole.RegularUser)
+    private AuthenticatedUser CreateUser(
+        Guid userId,
+        UserRole role = UserRole.RegularUser,
+        AccessPolicy accessPolicy = AccessPolicy.NotSpecified)
     {
         return new AuthenticatedUser
         {
             UserId = userId,
-            Role = role
+            Role = role,
+            AccessPolicy = accessPolicy
         };
     }
 
@@ -33,7 +37,7 @@ public class BlogIntentionResolverShould
         DraftVisibility draftVisibility = DraftVisibility.Public,
         bool commentsEnabled = true,
         IEnumerable<BlogAssistantInfo>? assistants = null,
-        IReadOnlySet<Guid>? subscriberIds = null,
+        bool viewerIsSubscriber = false,
         GeneralUser? mentor = null)
     {
         return new BlogDto
@@ -44,7 +48,7 @@ public class BlogIntentionResolverShould
             DraftVisibility = draftVisibility,
             CommentsEnabled = commentsEnabled,
             Assistants = assistants ?? Array.Empty<BlogAssistantInfo>(),
-            SubscriberIds = subscriberIds ?? new HashSet<Guid>(),
+            IsViewerSubscriber = viewerIsSubscriber,
             PendingInvitedUserIds = Array.Empty<Guid>()
         };
     }
@@ -177,7 +181,7 @@ public class BlogIntentionResolverShould
     public void AllowSubscriberToViewPrivateDraftBlog()
     {
         var user = CreateUser(_otherUserId);
-        var blog = CreateBlog(draftVisibility: DraftVisibility.Private, subscriberIds: new HashSet<Guid> { _otherUserId });
+        var blog = CreateBlog(draftVisibility: DraftVisibility.Private, viewerIsSubscriber: true);
 
         var result = _resolver.IsAllowed(user, BlogIntention.ViewDraft, blog);
 
@@ -323,6 +327,71 @@ public class BlogIntentionResolverShould
 
         result.Should().BeFalse();
     }
+
+    [Fact]
+    public void DenyCommentingSomebodyElsesBlogUnderTheOrdinaryBan()
+    {
+        var user = CreateUser(_otherUserId, accessPolicy: AccessPolicy.DemocraticBan);
+        var blog = CreateBlog(draftVisibility: DraftVisibility.Public, commentsEnabled: true);
+
+        _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AllowCommentingOwnBlogUnderTheOrdinaryBan()
+    {
+        var user = CreateUser(_ownerId, accessPolicy: AccessPolicy.DemocraticBan);
+        var blog = CreateBlog(draftVisibility: DraftVisibility.Public, commentsEnabled: true);
+
+        _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AllowAnAssistantToCommentTheirBlogUnderTheOrdinaryBan()
+    {
+        var user = CreateUser(_assistantId, accessPolicy: AccessPolicy.DemocraticBan);
+        var blog = CreateBlog(
+            draftVisibility: DraftVisibility.Public,
+            commentsEnabled: true,
+            assistants: new[] { new BlogAssistantInfo { UserId = _assistantId } });
+
+        _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AllowTheCuratorToCommentInTheBlogTheyMentorUnderTheOrdinaryBan()
+    {
+        var user = CreateUser(_mentorId, accessPolicy: AccessPolicy.DemocraticBan);
+        var blog = CreateBlog(
+            draftVisibility: DraftVisibility.Public,
+            commentsEnabled: true,
+            mentor: new GeneralUser { UserId = _mentorId });
+
+        // Curating is a job in the blog, the same as in a game
+        _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeTrue();
+    }
+
+    [Fact]
+    public void DenyASubscriberToCommentUnderTheOrdinaryBan()
+    {
+        var user = CreateUser(_otherUserId, accessPolicy: AccessPolicy.DemocraticBan);
+        var blog = CreateBlog(
+            draftVisibility: DraftVisibility.Public,
+            commentsEnabled: true,
+            viewerIsSubscriber: true);
+
+        // Reading somebody else's blog is not the same as belonging to it
+        _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeFalse();
+    }
+
+    [Fact]
+    public void DenyCommentingOwnBlogUnderAFullBan()
+    {
+        var user = CreateUser(_ownerId, accessPolicy: AccessPolicy.FullBan);
+        var blog = CreateBlog(draftVisibility: DraftVisibility.Public, commentsEnabled: true);
+
+        _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeFalse();
+    }
 }
 
 public class BlogIntentionResolverWithoutTargetShould
@@ -354,6 +423,62 @@ public class BlogIntentionResolverWithoutTargetShould
         var user = CreateUser(Guid.Empty, UserRole.Guest);
 
         var result = _resolver.IsAllowed(user, BlogIntention.Create);
+
+        result.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(UserRole.Mentor)]
+    [InlineData(UserRole.Moderator)]
+    [InlineData(UserRole.SeniorModerator)]
+    [InlineData(UserRole.Admin)]
+    public void AllowMentorAndAboveToMoveABlogThroughPremoderation(UserRole role)
+    {
+        var user = CreateUser(Guid.NewGuid(), role);
+
+        var result = _resolver.IsAllowed(user, BlogIntention.SetStatusModeration);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DenyRegularUserToMoveABlogThroughPremoderation()
+    {
+        var user = CreateUser(Guid.NewGuid());
+
+        // Premoderation is what holds a newbie's blog back until somebody
+        // experienced has looked at it. A user who could release their own blog
+        // would be waving themselves through.
+        var result = _resolver.IsAllowed(user, BlogIntention.SetStatusModeration);
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DenyGuestToMoveABlogThroughPremoderation()
+    {
+        var user = CreateUser(Guid.Empty, UserRole.Guest);
+
+        var result = _resolver.IsAllowed(user, BlogIntention.SetStatusModeration);
+
+        result.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(BlogIntention.Edit)]
+    [InlineData(BlogIntention.Delete)]
+    [InlineData(BlogIntention.ViewDraft)]
+    [InlineData(BlogIntention.CreatePublication)]
+    [InlineData(BlogIntention.ApprovePublications)]
+    [InlineData(BlogIntention.SetStatusActive)]
+    [InlineData(BlogIntention.SetStatusClosed)]
+    public void DenyIntentionsThatNeedABlogWhenAskedWithoutOne(BlogIntention intention)
+    {
+        var user = CreateUser(Guid.NewGuid(), UserRole.Admin);
+
+        // Every remaining arm of BlogIntention is a question about one blog. Asked
+        // without a blog they must fall through, not answer from the role alone.
+        var result = _resolver.IsAllowed(user, intention);
 
         result.Should().BeFalse();
     }

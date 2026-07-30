@@ -9,6 +9,7 @@ import { storeToRefs } from "pinia";
 import { useBlogDetailsStore, blogApi } from "@/entities/blog";
 import { BlacklistEditor } from "@/features/roster";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const store = useBlogDetailsStore();
 const { blog, blacklist, blacklistLoading } = storeToRefs(store);
@@ -24,7 +25,7 @@ async function add(username: string): Promise<boolean> {
   if (!blog.value) return false;
   const { error } = await blogApi.addToBlacklist(blog.value.id, username);
   if (error) {
-    toast.error("Не удалось добавить в черный список");
+    notifyFailure(error, "Не удалось добавить в черный список");
     return false;
   }
   toast.success("Пользователь добавлен в черный список");
@@ -36,7 +37,7 @@ async function remove(username: string) {
   if (!blog.value) return;
   const { error } = await blogApi.removeFromBlacklist(blog.value.id, username);
   if (error) {
-    toast.error("Не удалось удалить из черного списка");
+    notifyFailure(error, "Не удалось удалить из черного списка");
     return;
   }
   toast.success("Пользователь удален из черного списка");

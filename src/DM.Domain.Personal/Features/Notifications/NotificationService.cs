@@ -57,7 +57,16 @@ internal class NotificationService : INotificationService
             .Select(n => _factory.Create(n, createDate))
             .ToArray();
 
-        await _repository.Create(notifications);
+        // A notification with no recipients is not stored: nobody can ever read
+        // it, so the row is unreachable by construction. Global chat produces
+        // exactly this — its fan-out goes to every connected client through the
+        // realtime hub, not through a per-user notification. The entity is still
+        // returned so the caller can broadcast it: it needs the assigned id.
+        var addressed = notifications.Where(n => n.UsersInterested.Any()).ToArray();
+        if (addressed.Length > 0)
+        {
+            await _repository.Create(addressed);
+        }
 
         return notifications;
     }

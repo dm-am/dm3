@@ -6,9 +6,8 @@
  */
 import { onMounted, ref, reactive, type Ref } from "vue";
 import { useModal } from "vue-final-modal";
-import { achievementApi } from "@/shared/api";
+import { achievementApi, useContestSeries } from "@/entities/achievement";
 import type { AwardType } from "@/shared/api/models/achievements";
-import { useContestSeries } from "@/shared/lib/achievements/useContestSeries";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { GameIcon } from "@/shared/ui/Icon";
 import AwardTypeEditDialog from "./dialogs/AwardTypeEditDialog.vue";
@@ -92,7 +91,7 @@ async function toggleActive(t: AwardType) {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .award-types-admin
   display: flex

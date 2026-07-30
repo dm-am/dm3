@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { BlacklistApi } from "@/shared/api";
+import { blacklistApi } from "@/entities/user";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";
@@ -29,14 +29,14 @@ async function submit() {
   loading.value = true;
   error.value = null;
 
-  const { data, error: apiError } = await BlacklistApi.blockUser({
+  const { data, error: apiError } = await blacklistApi.blockUser({
     username: username.value.trim(),
   });
 
   loading.value = false;
 
   if (apiError) {
-    error.value = apiError.message || "Не удалось заблокировать пользователя";
+    error.value = apiError.title || "Не удалось заблокировать пользователя";
     return;
   }
 

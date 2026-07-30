@@ -66,10 +66,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { RouterLink } from "vue-router";
-import { AccountApi } from "@/shared/api";
+import { accountApi } from "@/entities/user";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { Invitation, InvitationType } from "@/entities/game";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const toast = useToast();
 
@@ -83,7 +84,7 @@ onMounted(async () => {
 
 async function loadInvitations() {
   loading.value = true;
-  const { data, error } = await AccountApi.getMyInvitations();
+  const { data, error } = await accountApi.getMyInvitations();
   loading.value = false;
 
   if (!error && data) {
@@ -104,11 +105,11 @@ function typeLabel(type: InvitationType): string {
 
 async function accept(invitationId: string) {
   processingId.value = invitationId;
-  const { error } = await AccountApi.acceptInvitation(invitationId);
+  const { error } = await accountApi.acceptInvitation(invitationId);
   processingId.value = null;
 
   if (error) {
-    toast.error("Не удалось принять приглашение");
+    notifyFailure(error, "Не удалось принять приглашение");
   } else {
     invitations.value = invitations.value.filter((i) => i.id !== invitationId);
     toast.success("Приглашение принято");
@@ -117,11 +118,11 @@ async function accept(invitationId: string) {
 
 async function reject(invitationId: string) {
   processingId.value = invitationId;
-  const { error } = await AccountApi.rejectInvitation(invitationId);
+  const { error } = await accountApi.rejectInvitation(invitationId);
   processingId.value = null;
 
   if (error) {
-    toast.error("Не удалось отклонить приглашение");
+    notifyFailure(error, "Не удалось отклонить приглашение");
   } else {
     invitations.value = invitations.value.filter((i) => i.id !== invitationId);
     toast.success("Приглашение отклонено");
@@ -233,12 +234,12 @@ async function reject(invitationId: string) {
     color: $accent-green
 
     &:hover:not(:disabled)
-      background-color: $accent-green-muted
+      +tint($accent-green, 15%)
 
   &--reject
     border: 1px solid $border
-    color: $text-muted
+    color: $text
 
     &:hover:not(:disabled)
-      background-color: $text-muted-muted
+      +tint($text-muted, 15%)
 </style>

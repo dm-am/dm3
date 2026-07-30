@@ -46,7 +46,7 @@ internal class BlogInvitationNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
-        var role = invitationData.Type == TokenType.BlogAssistantInvitation ? "?????????" : "?????????";
+        var role = invitationData.Type == TokenType.BlogAssistantInvitation ? "Ассистент" : "Читатель";
 
         yield return new CreateNotification
         {

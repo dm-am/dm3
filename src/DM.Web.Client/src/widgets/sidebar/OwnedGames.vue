@@ -115,29 +115,38 @@ import SidebarBlock from "./SidebarBlock.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import SidebarGameLink from "./SidebarGameLink.vue";
-import { useUserStore } from "@/entities/user";
-import { useGamesStore, GameRole, type GameRef } from "@/entities/game";
+import { useAuthStore } from "@/entities/user";
+import {
+  useGamesStore,
+  GameParticipation,
+  type GameRef,
+} from "@/entities/game";
 import { computed, watch } from "vue";
 
 import { onMounted } from "vue";
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const store = useGamesStore();
 
-// Owner roles (without Mentor - handled separately)
-const ownerRoles = [GameRole.Master, GameRole.Assistant];
+// Owner participation (without the mentor flag - handled separately).
+// Authority covers master and assistant; Owner is the master alone.
+const ownerFlags: GameParticipation[] = [
+  GameParticipation.Owner,
+  GameParticipation.Authority,
+];
 
-// Role check helpers with null safety
-const hasRole = (game: GameRef, role: GameRole) =>
-  game.participation?.includes(role) ?? false;
+// Participation check helpers with null safety
+const hasRole = (game: GameRef, flag: GameParticipation) =>
+  game.participation?.includes(flag) ?? false;
 const hasAnyOwnerRole = (game: GameRef) =>
-  game.participation?.some((p) => ownerRoles.includes(p)) ?? false;
+  game.participation?.some((p) => ownerFlags.includes(p)) ?? false;
 
 // Mentored (Mentor, but not Master/Assistant)
 const mentorGames = computed(
   () =>
     store.participatingGames?.filter(
-      (game) => hasRole(game, GameRole.Mentor) && !hasAnyOwnerRole(game),
+      (game) =>
+        hasRole(game, GameParticipation.Moderator) && !hasAnyOwnerRole(game),
     ) ?? [],
 );
 
@@ -150,7 +159,8 @@ const ownedGames = computed(
 const playingGames = computed(
   () =>
     store.participatingGames?.filter(
-      (game) => hasRole(game, GameRole.Player) && !hasAnyOwnerRole(game),
+      (game) =>
+        hasRole(game, GameParticipation.Player) && !hasAnyOwnerRole(game),
     ) ?? [],
 );
 
@@ -159,8 +169,8 @@ const readingGames = computed(
   () =>
     store.participatingGames?.filter(
       (game) =>
-        hasRole(game, GameRole.Reader) &&
-        !hasRole(game, GameRole.Player) &&
+        hasRole(game, GameParticipation.Reader) &&
+        !hasRole(game, GameParticipation.Player) &&
         !hasAnyOwnerRole(game),
     ) ?? [],
 );

@@ -64,17 +64,4 @@ public interface IAuthenticationService
     /// </summary>
     /// <param name="userId">User identifier</param>
     Task LogoutAll(Guid userId);
-
-    /// <summary>
-    /// Create a short-lived transfer token for mirror switching
-    /// </summary>
-    /// <returns>Transfer token or null if not authenticated</returns>
-    Task<string?> CreateTransferToken();
-
-    /// <summary>
-    /// Authenticate using a transfer token from another mirror
-    /// </summary>
-    /// <param name="transferToken">Transfer token from source mirror</param>
-    /// <returns>Authentication identity</returns>
-    Task<IIdentity> AuthenticateWithTransferToken(string transferToken);
 }

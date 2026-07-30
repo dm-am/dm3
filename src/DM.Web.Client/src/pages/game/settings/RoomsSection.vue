@@ -29,6 +29,7 @@ import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const store = useGameDetailsStore();
 const { game, rooms, activeRooms, archivedRooms, characters } =
@@ -86,10 +87,10 @@ async function createRoom() {
     viewDiceResults: create.viewDiceResults,
     diceEnabled: create.diceEnabled,
   };
-  const ok = await store.createRoom(payload);
+  const error = await store.createRoom(payload);
   creating.value = false;
-  if (!ok) {
-    toast.error("Не удалось создать комнату");
+  if (error) {
+    notifyFailure(error, "Не удалось создать комнату");
     return;
   }
   toast.success("Комната создана");
@@ -149,7 +150,7 @@ async function saveRoom(room: Room) {
   } as Partial<Room>);
   savingRoom.value = false;
   if (error) {
-    toast.error("Не удалось сохранить комнату");
+    notifyFailure(error, "Не удалось сохранить комнату");
     return;
   }
   toast.success("Комната сохранена");
@@ -157,14 +158,14 @@ async function saveRoom(room: Room) {
 }
 
 async function archive(room: Room) {
-  const ok = await store.archiveRoom(roomId(room));
-  if (!ok) toast.error("Не удалось архивировать комнату");
+  const error = await store.archiveRoom(roomId(room));
+  if (error) notifyFailure(error, "Не удалось архивировать комнату");
 }
 
 async function unarchive(room: Room) {
   const { error } = await gameApi.unarchiveRoom(roomId(room));
   if (error) {
-    toast.error("Не удалось вернуть комнату из архива");
+    notifyFailure(error, "Не удалось вернуть комнату из архива");
     return;
   }
   await reloadRooms();
@@ -176,7 +177,7 @@ async function confirmDelete() {
   if (!room) return;
   const { error } = await gameApi.deleteRoom(roomId(room));
   if (error) {
-    toast.error("Не удалось удалить комнату");
+    notifyFailure(error, "Не удалось удалить комнату");
     return;
   }
   toast.success("Комната удалена");
@@ -192,7 +193,7 @@ async function addReader(room: Room) {
     user: { username: newReader.value.trim() },
   } as unknown as Partial<RoomAccess>);
   if (error) {
-    toast.error("Не удалось добавить читателя");
+    notifyFailure(error, "Не удалось добавить читателя");
     return;
   }
   newReader.value = "";
@@ -206,7 +207,7 @@ async function addCharacterGrant(room: Room) {
     policy: grantPolicy.value,
   } as unknown as Partial<RoomAccess>);
   if (error) {
-    toast.error("Не удалось добавить доступ персонажу");
+    notifyFailure(error, "Не удалось добавить доступ персонажу");
     return;
   }
   grantCharacterId.value = "";
@@ -216,7 +217,7 @@ async function addCharacterGrant(room: Room) {
 async function removeAccess(access: RoomAccess) {
   const { error } = await gameApi.deleteRoomAccess(access.id);
   if (error) {
-    toast.error("Не удалось удалить доступ");
+    notifyFailure(error, "Не удалось удалить доступ");
     return;
   }
   await reloadRooms();

@@ -21,9 +21,22 @@
 
 | Файл | Назначение |
 |------|------------|
-| `docker/.env` | Секреты Docker (пароли БД, MinIO, RabbitMQ) |
+| `docker/.env` | Секреты Docker (пароли БД, Mongo, MinIO, RabbitMQ, ключ шифрования) |
 | `src/DM.Web.API/appsettings.json` | Главный конфиг API |
 | `src/DM.Workers.*/appsettings.json` | Конфиги workers |
+
+**Что где лежит.** `appsettings.json` отслеживается гитом и содержит только
+значения по умолчанию для localhost, чтобы свежий клон собирался и запускался.
+Настоящие учетные данные приходят переменными `DM_*`, и у них нет дефолта в
+репозитории: отсутствие валит старт, а не подставляет значение, которое может
+прочитать кто угодно. Полное правило — в [SECURITY.md](../conventions/SECURITY.md).
+
+**Обязательные переменные без дефолта:**
+
+| Переменная | Как получить |
+|------------|--------------|
+| `DM_CryptoConfiguration__KeyBase64` | `openssl rand -base64 32`. Одно значение на все зеркала. `dm.ps1` генерирует локальный ключ сам |
+| `MONGO_ROOT_PASSWORD`, `MONGO_PASSWORD` | Задать в `docker/.env`. Меняются только вместе с пересозданием тома Mongo |
 
 ### Frontend
 
@@ -62,7 +75,7 @@
 | Endpoint | Назначение |
 |----------|-----------|
 | `/_health` | Liveness (Docker health check) |
-| `/_ready` | Readiness (PostgreSQL + MongoDB + RabbitMQ) |
+| `/_ready` | Readiness (PostgreSQL + MongoDB) |
 | `/_health/detail` | Детальная информация |
 
 ---

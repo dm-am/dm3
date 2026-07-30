@@ -128,7 +128,6 @@ const createMockGame = (id: string, title: string): Game => ({
   createdUtc: "2024-01-01T00:00:00Z",
   pendingAssistant: asServed(null),
   mentor: asServed(null),
-  notes: "",
   info: "",
   tagIds: [],
   privacySettings: createMockPrivacySettings(),
@@ -512,6 +511,47 @@ describe("useGameDetailsStore", () => {
   // LOAD ROOMS
   // ============================================================================
 
+  describe("participation flags", () => {
+    // The wire carries GameParticipation names (Owner/Authority/Moderator), not
+    // the site-level GameRole names the client used to mirror. Only Player and
+    // Reader overlapped between the two, so a master matched nothing at all.
+    it.each([
+      [
+        ["Owner", "Authority"],
+        { isMaster: true, isAssistant: false, isPlayer: true },
+      ],
+      [["Authority"], { isMaster: false, isAssistant: true, isPlayer: false }],
+      [["Moderator"], { isMaster: false, isAssistant: false, isPlayer: true }],
+      [["Player"], { isMaster: false, isAssistant: false, isPlayer: true }],
+      [["Reader"], { isMaster: false, isAssistant: false, isPlayer: false }],
+    ])("reads %j", async (participation, expected) => {
+      const mockGame = {
+        ...createMockGame("game-1", "Test Game"),
+        participation: asServed(participation),
+      };
+      mockGetGame.mockResolvedValue({ data: mockGame, error: null });
+
+      const store = useGameDetailsStore();
+      await store.loadGame("game-1");
+
+      expect(store.isMaster).toBe(expected.isMaster);
+      expect(store.isAssistant).toBe(expected.isAssistant);
+      expect(store.isPlayer).toBe(expected.isPlayer);
+    });
+
+    it("treats the master as subscribed only when Reader is present", async () => {
+      const mockGame = {
+        ...createMockGame("game-1", "Test Game"),
+        participation: asServed(["Owner", "Authority"]),
+      };
+      mockGetGame.mockResolvedValue({ data: mockGame, error: null });
+
+      const store = useGameDetailsStore();
+      await store.loadGame("game-1");
+
+      expect(store.isSubscribed).toBe(false);
+    });
+  });
   describe("loadRooms", () => {
     it("loads rooms for game", async () => {
       const mockRooms: Room[] = [
@@ -609,14 +649,34 @@ describe("useGameDetailsStore", () => {
       const result = await store.subscribe();
 
       expect(mockSubscribe).toHaveBeenCalledWith("game-1");
-      expect(result).toBe(true);
+      // Null is success: the mutators return the problem document on failure.
+      expect(result).toBeNull();
     });
 
-    it("returns false if no game loaded", async () => {
+    it("reports a failure when there is no game to subscribe to", async () => {
       const store = useGameDetailsStore();
       const result = await store.subscribe();
 
-      expect(result).toBe(false);
+      // Not null, so the caller shows its message instead of silently
+      // reporting success.
+      expect(result).not.toBeNull();
+      expect(mockSubscribe).not.toHaveBeenCalled();
+    });
+
+    it("hands back what the server said", async () => {
+      const refused = {
+        type: "",
+        title: "Вы в черном списке",
+        status: 403,
+        traceId: "t",
+      };
+      const mockGame = createMockGame("game-1", "Game");
+      mockSubscribe.mockResolvedValue({ error: refused });
+
+      const store = useGameDetailsStore();
+      store.game = mockGame;
+
+      expect(await store.subscribe()).toBe(refused);
     });
   });
 
@@ -632,7 +692,7 @@ describe("useGameDetailsStore", () => {
       const result = await store.unsubscribe();
 
       expect(mockUnsubscribe).toHaveBeenCalledWith("game-1");
-      expect(result).toBe(true);
+      expect(result).toBeNull();
     });
   });
 

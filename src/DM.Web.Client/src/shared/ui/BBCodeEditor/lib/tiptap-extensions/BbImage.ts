@@ -46,6 +46,8 @@ export const BbImage = Node.create<BbImageOptions>({
       HTMLAttributes: {
         class: "bb-image",
         "data-bb-tag": "img",
+        loading: "lazy",
+        decoding: "async",
         referrerpolicy: "no-referrer",
       },
     };

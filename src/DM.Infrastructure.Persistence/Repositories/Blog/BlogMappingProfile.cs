@@ -23,19 +23,10 @@ internal class BlogMappingProfile : Profile
     /// <inheritdoc />
     public BlogMappingProfile()
     {
-        // Comment mappings
-        CreateMap<DbComment, Comment>()
-            .ForMember(d => d.Id, s => s.MapFrom(c => c.CommentId))
-            .ForMember(d => d.EntityId, s => s.MapFrom(c => c.EntityId))
-            .ForMember(d => d.Author, s => s.MapFrom(c => c.Author))
-            .ForMember(d => d.Text, s => s.MapFrom(c => c.Text))
-            .ForMember(d => d.CreatedUtc, s => s.MapFrom(c => c.CreatedUtc))
-            .ForMember(d => d.ModifiedUtc, s => s.MapFrom(c => c.Edits
-                .OrderByDescending(e => e.EditedUtc)
-                .Select(e => (DateTimeOffset?)e.EditedUtc)
-                .FirstOrDefault()))
-            .ForMember(d => d.Likes, s => s.Ignore());
-
+        // Comment mappings. The comment itself is mapped by
+        // CommentMappingProfile — every module's comments share one entity and
+        // one DTO, so the pair belongs there and not once per module. The two
+        // deletion shapes below are blog-specific.
         CreateMap<DbComment, BlogCommentToDelete>()
             .ForMember(d => d.Id, s => s.MapFrom(c => c.CommentId))
             .ForMember(d => d.EntityId, s => s.MapFrom(c => c.EntityId))
@@ -85,7 +76,8 @@ internal class BlogMappingProfile : Profile
                     .Where(p => !p.IsRemoved && p.IsPublished)
                     .Sum(p => p.CommentCount)))
             .ForMember(d => d.Assistants, s => s.MapFrom(b => b.Assistants))
-            .ForMember(d => d.SubscriberIds, s => s.Ignore()) // Populated separately via SubscriptionService
+            .ForMember(d => d.SubscribersCount, s => s.Ignore()) // Populated in repository
+            .ForMember(d => d.IsViewerSubscriber, s => s.Ignore()) // Populated in repository
             .ForMember(d => d.SubscriberUsernames, s => s.Ignore()) // Populated in repository
             .ForMember(d => d.ActiveSubscribersCount, s => s.Ignore()) // Populated in repository
             .ForMember(d => d.BlacklistedUserIds, s => s.Ignore()) // Populated separately

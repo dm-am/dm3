@@ -37,6 +37,14 @@ public interface IMessagingApiService
     Task<Chat> GetChatByPublicIdAsync(string publicId);
 
     /// <summary>
+    /// Resolve a route identifier of a chat, given either form.
+    /// Every chat-scoped route accepts both, so without a shared resolver
+    /// each controller carries its own copy of the branch.
+    /// </summary>
+    /// <param name="idOrPublicId">Chat public id (5 letters) or GUID</param>
+    Task<Guid> ResolveChatIdAsync(string idOrPublicId);
+
+    /// <summary>
     /// Create a new group chat
     /// </summary>
     Task<Chat> CreateChatAsync(CreateChat createChat);

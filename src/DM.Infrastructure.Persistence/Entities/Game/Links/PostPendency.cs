@@ -10,6 +10,7 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Links;
 /// <summary>
 /// DAL model for post pendency (when someone is expected to post in a room)
 /// </summary>
+[Table("PostPendencies")]
 public class PostPendency
 {
     /// <summary>
@@ -52,11 +53,6 @@ public class PostPendency
     /// Moment when the last reminder was sent (null = never reminded)
     /// </summary>
     public DateTimeOffset? LastReminderUtc { get; set; }
-
-    /// <summary>
-    /// Soft delete flag
-    /// </summary>
-    public bool IsRemoved { get; set; }
 
     /// <summary>
     /// Room

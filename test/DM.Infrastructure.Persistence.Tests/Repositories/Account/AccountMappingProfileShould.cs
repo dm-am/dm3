@@ -9,26 +9,17 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Account;
 
 public class AccountMappingProfileShould : UnitTestBase
 {
+    private readonly MapperConfiguration _configuration = new(cfg =>
+    {
+        cfg.AddProfile<AccountMappingProfile>();
+    });
+
     private readonly IMapper _mapper;
 
-    public AccountMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<AccountMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
+    public AccountMappingProfileShould() => _mapper = _configuration.CreateMapper();
 
     [Fact]
-    public void HaveValidConfiguration()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<AccountMappingProfile>();
-        });
-        configuration.AssertConfigurationIsValid();
-    }
+    public void HaveValidConfiguration() => _configuration.AssertConfigurationIsValid();
 
     [Fact]
     public void MapSessionEntityToSession()

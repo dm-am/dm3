@@ -1,5 +1,5 @@
 import { ref, onUnmounted } from "vue";
-import { communityApi } from "@/shared/api";
+import { userApi } from "../api";
 import type { User, UserActivityFilter } from "@/shared/api/models/community";
 
 export interface UseUserSearchOptions {
@@ -40,8 +40,8 @@ export function useUserSearch(options: UseUserSearchOptions = {}) {
       // backend default (Active-only) applies unchanged.
       const { data } =
         activity !== undefined
-          ? await communityApi.searchUsers(query, limit, activity)
-          : await communityApi.searchUsers(query, limit);
+          ? await userApi.searchUsers(query, limit, activity)
+          : await userApi.searchUsers(query, limit);
       results.value = data?.resources ?? [];
     } catch (error) {
       console.error("User search failed:", error);

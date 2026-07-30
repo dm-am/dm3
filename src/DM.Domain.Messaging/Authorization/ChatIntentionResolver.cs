@@ -13,11 +13,13 @@ internal class ChatIntentionResolver : IIntentionResolver<ChatIntention, Chat>
         intention switch
         {
             // Global chat: any authenticated user can send messages
-            // (active event restrictions are checked separately in MessageCreatingService)
+            // (active event restrictions are checked separately in MessageCreatingService).
+            // The global chat is public speech, so an ordinary ban silences it.
             ChatIntention.CreateMessage when target.Type == ChatType.Global =>
-                user.IsAuthenticated,
+                user.IsAuthenticated && user.MaySpeak(),
 
-            // Direct/Group: only participants can send messages
+            // Direct/Group: only participants can send messages. Private
+            // correspondence is deliberately outside the ordinary ban.
             ChatIntention.CreateMessage =>
                 target.Participants?.Any(p => p.UserId == user.UserId) ?? false,
 

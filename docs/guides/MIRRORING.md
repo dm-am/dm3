@@ -14,7 +14,7 @@ Users ─────────┬────────>│  nginx → dm-a
                │         │                      ├───> MinIO (dm-uploads, source)       │
                │         │                      └───> imgproxy (transform layer)       │
                │         │                                                             │
-               │         │  Consumers: mail, search, notifications                     │
+               │         │  Consumers: mail, notifications                             │
                │         └─────────────────────────────────────────────────────────────┘
                │                                    ▲
                │                                    │ SSL connections
@@ -34,7 +34,6 @@ Users ──────────────────>│  nginx → dm-a
 1. **Единая база данных** — все данные синхронизированы
 2. **Географическая близость** — меньше задержка для пользователей
 3. **Автоматическое обновление** — Watchtower следит за новыми образами
-4. **Session transfer** — пользователи могут переходить между зеркалами
 
 ## Требования
 
@@ -85,7 +84,7 @@ cp .env.example .env.mirror
 | imgproxy | `IMGPROXY_KEY`, `IMGPROXY_SALT` | Те же, что на main |
 | Криптография | `DM_CryptoConfiguration__KeyBase64` | **КРИТИЧНО: тот же, что на main!** |
 | Идентификатор | `MIRROR_ID` | Уникальный ID зеркала — ключ из `appsettings.json` → `MirrorConfiguration` → `Mirrors` |
-| Хосты main-сервера | `DB_HOST`, `MONGO_HOST`, `RABBITMQ_HOST`, `MINIO_HOST`, `SEARCH_HOST`, `SEARCH_GRPC_HOST`, `LOGS_HOST`, `TRACING_HOST` | IP/домен основного сервера |
+| Хосты main-сервера | `DB_HOST`, `MONGO_HOST`, `RABBITMQ_HOST`, `MINIO_HOST`, `LOGS_HOST`, `TRACING_HOST` | IP/домен основного сервера |
 | SSL к БД | `DB_SSL_MODE`, `MONGO_TLS` | См. шаг 3 |
 | Публичные URL зеркала | `WEB_URL`, `API_URL`, `CDN_PUBLIC_URL`, `IMGPROXY_PUBLIC_URL`, `CORS_URL_0` | Домен этого зеркала |
 | Окружение | `ASPNETCORE_ENVIRONMENT` | `Production` |
@@ -114,11 +113,11 @@ MONGO_TLS=&tls=true
 docker compose --env-file .env.mirror --profile mirror up -d
 ```
 
-## Session Transfer
+## Сессии и зеркала
 
-Пользователи могут авторизоваться на любом зеркале и их сессия будет работать везде.
+**Сессия между зеркалами не переносится.** Кука привязана к домену, поэтому браузер не отдает ее другому зеркалу, и вход выполняется на каждом отдельно. Переключатель региона переводит на тот же путь другого зеркала, не более.
 
-**Критически важно:** Все зеркала должны использовать **одинаковый криптографический ключ** (`DM_CryptoConfiguration__KeyBase64`).
+**Критически важно:** все зеркала должны использовать **одинаковый криптографический ключ** (`DM_CryptoConfiguration__KeyBase64`). Причина не в сессиях, а в одноразовых токенах: ссылка активации или сброса пароля, выданная одним зеркалом, должна расшифровываться тем, на которое пользователь по ней придет.
 
 Генерация ключа:
 ```bash

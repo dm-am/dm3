@@ -19,7 +19,7 @@
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import communityApi from "@/shared/api/communityApi";
+import { statisticsApi } from "@/entities/statistics";
 import { unwrapResource } from "@/shared/api";
 import type { Leaderboards } from "@/shared/api/models/community";
 import { LeadText } from "@/shared/ui/Layout";
@@ -30,6 +30,8 @@ import { SegmentedControl } from "@/shared/ui/SegmentedControl";
 import { StatBoard, LEADERBOARD_BOARDS } from "@/features/leaderboard";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 import { SITE_FOUNDED_YEAR } from "@/shared/config/site";
+import { createKeyedCache } from "@/shared/lib/utils/keyedCache";
+import { describeFailure } from "@/shared/lib/errors";
 
 type Granularity = "month" | "year" | "all";
 
@@ -130,16 +132,12 @@ const granularityOptions: { value: Granularity; label: string }[] = [
 ];
 
 // --- Data: per-period client cache ---
-// Closed calendar periods are immutable — cache for the whole session.
-// The current (open) period keeps changing, so its entry expires quickly.
-const CURRENT_PERIOD_TTL = 60_000;
-
-interface CacheEntry {
-  boards: Leaderboards;
-  fetchedAt: number;
-}
-
-const periodCache = new Map<string, CacheEntry>();
+// Two caches rather than one with a per-entry rule: a closed calendar period is
+// finished history and never has to be read again, while the running one keeps
+// changing. The distinction was a condition at the read site; here it is which
+// cache the answer went into.
+const closedPeriods = createKeyedCache<Leaderboards>({ ttlMs: Infinity });
+const openPeriod = createKeyedCache<Leaderboards>({ ttlMs: 60_000 });
 
 const boards = ref<Leaderboards | null>(null);
 const loading = ref(false);
@@ -165,12 +163,9 @@ function isClosedPeriod(): boolean {
 
 async function fetchStats() {
   const key = periodKey();
-  const cached = periodCache.get(key);
-  if (
-    cached &&
-    (isClosedPeriod() || Date.now() - cached.fetchedAt < CURRENT_PERIOD_TTL)
-  ) {
-    boards.value = cached.boards;
+  const cached = closedPeriods.get(key) ?? openPeriod.get(key);
+  if (cached) {
+    boards.value = cached;
     loadError.value = null;
     return;
   }
@@ -181,17 +176,17 @@ async function fetchStats() {
   const year = granularity.value === "all" ? 0 : selYear.value;
   const month = granularity.value === "month" ? selMonth.value : undefined;
 
-  const { data, error } = await communityApi.getLeaderboards(year, month);
+  const { data, error } = await statisticsApi.getLeaderboards(year, month);
   if (!guard.isCurrent(requestId)) return;
   loading.value = false;
 
   if (error) {
-    loadError.value = "Не удалось загрузить статистику";
+    loadError.value = describeFailure(error, "Не удалось загрузить статистику");
     return;
   }
   const resource = unwrapResource<Leaderboards>(data);
   if (resource) {
-    periodCache.set(key, { boards: resource, fetchedAt: Date.now() });
+    (isClosedPeriod() ? closedPeriods : openPeriod).set(key, resource);
   }
   boards.value = resource;
 }
@@ -294,7 +289,7 @@ const allEmpty = computed(
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .site-statistics-page
   width: 100%

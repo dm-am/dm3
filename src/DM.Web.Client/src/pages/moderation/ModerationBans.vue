@@ -8,7 +8,7 @@
  */
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import ModerationApi, { type Ban } from "@/shared/api/moderationApi";
+import { moderationApi, type Ban } from "@/entities/moderation";
 import type { Paging as PagingModel } from "@/shared/api/models/common";
 import { Paging } from "@/shared/ui/Paging";
 import { ErrorState } from "@/shared/ui/ErrorState";
@@ -18,6 +18,7 @@ import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useRoleGate } from "./lib/useRoleGate";
 import { BAN_TYPE_LABELS, banTermLabel } from "./lib/labels";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const PAGE_SIZE = 20;
 
@@ -37,7 +38,7 @@ const pageNumber = computed(() => {
 
 async function fetch() {
   loading.value = true;
-  const { data, error } = await ModerationApi.getBanHistory({
+  const { data, error } = await moderationApi.getBanHistory({
     skip: (pageNumber.value - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
   });
@@ -67,10 +68,10 @@ const lifting = ref(false);
 async function confirmLift() {
   if (!liftTarget.value || lifting.value) return;
   lifting.value = true;
-  const { error } = await ModerationApi.liftBan(liftTarget.value.id);
+  const { error } = await moderationApi.liftBan(liftTarget.value.id);
   lifting.value = false;
   if (error) {
-    toast.error("Не удалось снять бан");
+    notifyFailure(error, "Не удалось снять бан");
     return;
   }
   toast.success("Бан снят");
@@ -175,8 +176,8 @@ const isEmpty = computed(() => !loading.value && bans.value.length === 0);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/Skeleton"
 
 .ban-list
   display: flex
@@ -185,10 +186,7 @@ const isEmpty = computed(() => !loading.value && bans.value.length === 0);
   margin-bottom: $medium
 
 .ban-card
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
 .ban-header
   display: flex

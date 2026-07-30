@@ -25,7 +25,7 @@ namespace DM.Web.API.Tests.Features.General;
 /// transactions never spanned service and repository, and identity
 /// resolution hid other consumers' writes.
 /// </summary>
-public class DbContextScopeResolutionShould : UnitTestBase
+public class DbContextScopeResolutionShould : UnitTestBase, IDisposable
 {
     private readonly AutofacServiceProvider _provider;
 
@@ -109,9 +109,5 @@ public class DbContextScopeResolutionShould : UnitTestBase
             .OfType<DmDbContext>()
             .Single();
 
-    public override void Dispose()
-    {
-        _provider.Dispose();
-        base.Dispose();
-    }
+    public void Dispose() => _provider.Dispose();
 }

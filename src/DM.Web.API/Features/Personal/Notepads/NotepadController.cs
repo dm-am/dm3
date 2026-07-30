@@ -35,7 +35,7 @@ public class NotepadController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     [HttpGet(Name = nameof(GetMyNotepad))]
     [ProducesResponseType(typeof(ListEnvelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetMyNotepad() =>
         Ok(await _notepadApiService.GetEntries());
 
@@ -46,8 +46,8 @@ public class NotepadController : ControllerBase
     /// <response code="201">Entry created</response>
     /// <response code="401">User must be authenticated</response>
     [HttpPost(Name = nameof(CreateNotepadEntry))]
-    [ProducesResponseType(typeof(NotepadEntryResponse), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CreateNotepadEntry([FromBody] CreateNotepadEntryRequest request)
     {
         var result = await _notepadApiService.CreateEntry(request);
@@ -63,10 +63,10 @@ public class NotepadController : ControllerBase
     /// <response code="403">User doesn't have access to this entry</response>
     /// <response code="404">Entry not found</response>
     [HttpGet("{id:guid}", Name = nameof(GetMyNotepadEntry))]
-    [ProducesResponseType(typeof(NotepadEntryResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMyNotepadEntry(Guid id) =>
         Ok(await _notepadApiService.GetEntry(id));
 
@@ -80,10 +80,10 @@ public class NotepadController : ControllerBase
     /// <response code="403">User doesn't have access to this entry</response>
     /// <response code="404">Entry not found</response>
     [HttpPatch("{id:guid}", Name = nameof(UpdateMyNotepadEntry))]
-    [ProducesResponseType(typeof(NotepadEntryResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateMyNotepadEntry(Guid id, [FromBody] UpdateNotepadEntryRequest request) =>
         Ok(await _notepadApiService.UpdateEntry(id, request));
 
@@ -97,9 +97,9 @@ public class NotepadController : ControllerBase
     /// <response code="404">Entry not found</response>
     [HttpDelete("{id:guid}", Name = nameof(DeleteMyNotepadEntry))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteMyNotepadEntry(Guid id)
     {
         await _notepadApiService.DeleteEntry(id);

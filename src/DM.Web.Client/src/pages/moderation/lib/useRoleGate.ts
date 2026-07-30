@@ -3,7 +3,7 @@
 // enforces roles again with [RequireRole], this is purely presentational).
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
-import { useUserStore } from "@/shared/stores";
+import { useAuthStore } from "@/shared/stores";
 import {
   userIsAdmin,
   userIsModerator,
@@ -13,7 +13,7 @@ import {
 export type RequiredRole = "Moderator" | "SeniorModerator" | "Admin";
 
 export function useRoleGate(required: RequiredRole = "Moderator") {
-  const { user } = storeToRefs(useUserStore());
+  const { user } = storeToRefs(useAuthStore());
 
   const hasAccess = computed(() => {
     switch (required) {

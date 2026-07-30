@@ -35,61 +35,29 @@ internal class BlogApiService : IBlogApiService
     /// <inheritdoc />
     public async Task<ListEnvelope<Blog>> GetBlogs(BlogsQuery query)
     {
-        // Route to appropriate domain method based on query parameters
-        // Priority: participating > default with filters
-
-        if (query.Participating == true)
-        {
-            // Get blogs where user participates (owner, mentor, assistant, reader)
-            var ownedBlogs = await _blogService.GetOwnBlogsAsync();
-            var subscriptions = await _subscriptionService.GetMySubscriptionsAsync(SubscriptionTargetType.Blog);
-            var subscribedBlogIds = subscriptions.Select(s => s.TargetId).ToHashSet();
-
-            // Combine owned and subscribed, avoiding duplicates
-            var subscribedBlogs = subscribedBlogIds.Count > 0
-                ? await _blogService.GetSubscribedBlogs(subscribedBlogIds.ToList())
-                : Enumerable.Empty<DM.Domain.Blog.Features.Blogs.Blog>();
-
-            var allBlogs = ownedBlogs
-                .Concat(subscribedBlogs.Where(b => !ownedBlogs.Any(o => o.Id == b.Id)))
-                .ToList();
-
-            // Apply pagination manually (since we're combining results)
-            var skip = query.Skip;
-            var take = query.Take;
-            var pagedBlogs = allBlogs.Skip(skip).Take(take);
-
-            return new ListEnvelope<Blog>(
-                pagedBlogs.Select(_mapper.Map<Blog>),
-                new PagingInfo(PagingResult.Create(allBlogs.Count, skip + 1, take)));
-        }
-
-        // Default: public blogs with all filters
-        var (publicBlogs, paging) = await _blogService.GetPublicBlogs(
-            query,
-            query.Search,
-            query.Status,
-            query.HostUsernames,
-            query.SortBy,
-            query.SortOrder,
-            query.CreatedFromUtc,
-            query.CreatedToUtc,
-            query.ActivatedFromUtc,
-            query.ActivatedToUtc,
-            query.ClosedFromUtc,
-            query.ClosedToUtc,
-            premoderationStatus: query.PremoderationStatus);
-
-        return new ListEnvelope<Blog>(publicBlogs.Select(_mapper.Map<Blog>), new PagingInfo(paging));
+        var (blogs, paging) = await QueryBlogs(query);
+        return new ListEnvelope<Blog>(blogs.Select(_mapper.Map<Blog>), new PagingInfo(paging));
     }
 
     /// <inheritdoc />
     public async Task<ListEnvelope<BlogRef>> GetBlogRefs(BlogsQuery query)
     {
-        // Same logic as GetBlogs but maps to lightweight BlogRef
+        var (blogs, paging) = await QueryBlogs(query);
+        return new ListEnvelope<BlogRef>(blogs.Select(_mapper.Map<BlogRef>), new PagingInfo(paging));
+    }
 
+    /// <summary>
+    /// One page of blogs for a query. The full and the lightweight endpoints
+    /// differ only in the final projection; keeping the selection here means a
+    /// filter added to one cannot go missing from the other, which is what the
+    /// two verbatim copies of this block invited.
+    /// </summary>
+    private async Task<(IEnumerable<DM.Domain.Blog.Features.Blogs.Blog> Blogs, PagingResult Paging)>
+        QueryBlogs(BlogsQuery query)
+    {
         if (query.Participating == true)
         {
+            // Blogs the caller takes part in: owner, mentor, assistant, reader.
             var ownedBlogs = await _blogService.GetOwnBlogsAsync();
             var subscriptions = await _subscriptionService.GetMySubscriptionsAsync(SubscriptionTargetType.Blog);
             var subscribedBlogIds = subscriptions.Select(s => s.TargetId).ToHashSet();
@@ -102,32 +70,15 @@ internal class BlogApiService : IBlogApiService
                 .Concat(subscribedBlogs.Where(b => !ownedBlogs.Any(o => o.Id == b.Id)))
                 .ToList();
 
+            // Paged in memory because the two sources are combined here rather
+            // than in SQL. The set is one caller's blogs, so it is small.
             var skip = query.Skip;
             var take = query.Take;
-            var pagedBlogs = allBlogs.Skip(skip).Take(take);
-
-            return new ListEnvelope<BlogRef>(
-                pagedBlogs.Select(_mapper.Map<BlogRef>),
-                new PagingInfo(PagingResult.Create(allBlogs.Count, skip + 1, take)));
+            return (allBlogs.Skip(skip).Take(take),
+                PagingResult.Create(allBlogs.Count, skip + 1, take));
         }
 
-        // Default: public blogs with all filters
-        var (publicBlogs, paging) = await _blogService.GetPublicBlogs(
-            query,
-            query.Search,
-            query.Status,
-            query.HostUsernames,
-            query.SortBy,
-            query.SortOrder,
-            query.CreatedFromUtc,
-            query.CreatedToUtc,
-            query.ActivatedFromUtc,
-            query.ActivatedToUtc,
-            query.ClosedFromUtc,
-            query.ClosedToUtc,
-            premoderationStatus: query.PremoderationStatus);
-
-        return new ListEnvelope<BlogRef>(publicBlogs.Select(_mapper.Map<BlogRef>), new PagingInfo(paging));
+        return await _blogService.GetPublicBlogs(query, _mapper.Map<BlogFilter>(query));
     }
 
     /// <inheritdoc />
@@ -145,23 +96,6 @@ internal class BlogApiService : IBlogApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<BlogDetails>> GetDetails(Guid id)
-    {
-        var blog = await _blogService.GetDetailsAsync(id);
-        return new Envelope<BlogDetails>(_mapper.Map<BlogDetails>(blog));
-    }
-
-    /// <inheritdoc />
-    public async Task<Envelope<BlogDetails>> GetDetailsByPublicId(string publicId)
-    {
-        // First get the blog to find its ID
-        var blogModel = await _blogService.GetByPublicIdAsync(publicId);
-        // Then get full details
-        var blog = await _blogService.GetDetailsAsync(blogModel.Id);
-        return new Envelope<BlogDetails>(_mapper.Map<BlogDetails>(blog));
-    }
-
-    /// <inheritdoc />
     public async Task<Envelope<Blog>> GetByOwnerLogin(string login)
     {
         var blog = await _blogService.GetByOwnerUsernameAsync(login);
@@ -169,14 +103,10 @@ internal class BlogApiService : IBlogApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<BlogDetails>> GetDetailsByOwnerLogin(string login)
-    {
-        // First get the blog to find its ID
-        var blogModel = await _blogService.GetByOwnerUsernameAsync(login);
-        // Then get full details
-        var blog = await _blogService.GetDetailsAsync(blogModel.Id);
-        return new Envelope<BlogDetails>(_mapper.Map<BlogDetails>(blog));
-    }
+    public async Task<Guid> ResolveId(string idOrPublicId) =>
+        Guid.TryParse(idOrPublicId, out var guid)
+            ? guid
+            : (await GetByPublicId(idOrPublicId)).Resource.Id;
 
     /// <inheritdoc />
     public async Task<Envelope<Blog>> Create(CreateBlogRequest request)

@@ -4,12 +4,11 @@ import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useMessagingStore } from "@/entities/message";
 import {
-  useUserStore,
+  useAuthStore,
   useMessagePermissions,
   AvatarImg,
 } from "@/entities/user";
 import { useUiStore } from "@/shared/stores/ui";
-import { AccessPolicy } from "@/shared/api/models/community";
 import {
   groupMessagesWithSeparators,
   isDateSeparator,
@@ -26,11 +25,16 @@ import { SvgIcon } from "@/shared/ui/Icon";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { messagingApi } from "@/entities/message";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
+import { useMessageToolbar } from "@/shared/lib/composables/useMessageToolbar";
+import {
+  useAnchoredInfiniteScroll,
+  LANDING_SCROLL_MS,
+} from "@/shared/lib/composables/useAnchoredInfiniteScroll";
 
 const route = useRoute();
 const router = useRouter();
 const messagingStore = useMessagingStore();
-const { user: currentUser } = storeToRefs(useUserStore());
+const { user: currentUser } = storeToRefs(useAuthStore());
 const { isCompactLayout } = storeToRefs(useUiStore());
 const {
   selectedChat,
@@ -39,17 +43,10 @@ const {
   interlocutor,
   hasMoreBefore,
   hasMoreAfter,
+  errorBefore,
 } = storeToRefs(messagingStore);
 
 const MAX_MESSAGE_HEIGHT = 200;
-
-const isBanned = computed(() => {
-  if (!currentUser.value?.accessPolicy) return false;
-  const policy = currentUser.value.accessPolicy;
-  return (
-    policy === AccessPolicy.DemocraticBan || policy === AccessPolicy.FullBan
-  );
-});
 
 // Message permissions (shared composable)
 const {
@@ -59,18 +56,37 @@ const {
   canLike: canLikeMsg,
 } = useMessagePermissions(currentUser);
 
-const canSendMessages = computed(() => currentUser.value && !isBanned.value);
+// Private correspondence is deliberately outside the ordinary ban, so the only
+// condition here is being signed in. The server agrees: the ban check in
+// ChatIntentionResolver applies to the global chat branch alone.
+const canSendMessages = computed(() => !!currentUser.value);
 
 const newMessage = ref("");
 const messagesContainer = ref<HTMLElement | null>(null);
 const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 const topSentinel = ref<HTMLElement | null>(null);
-let topObserver: IntersectionObserver | null = null;
 
 // Scroll position tracking
-let isLoadingOlder = false;
 let isScrolling = false;
 let scrollEndTimeout: ReturnType<typeof setTimeout> | null = null;
+
+// Infinite scroll: shared with the global chat. Only the older direction
+// exists here — this list ends at the newest message, so there is nothing
+// below to page into.
+const {
+  loadOlder,
+  setupInfiniteScroll,
+  suspend: suspendInfiniteScroll,
+  resume: resumeInfiniteScroll,
+} = useAnchoredInfiniteScroll({
+  container: messagesContainer,
+  older: {
+    sentinel: topSentinel,
+    hasMore: () => hasMoreBefore.value,
+    load: () => messagingStore.fetchMoreBefore(),
+    failed: () => Boolean(errorBefore.value),
+  },
+});
 
 // Group messages with date separators (shared utility)
 const messagesWithSeparators = computed((): MessageOrSeparator[] =>
@@ -93,13 +109,30 @@ const editingId = ref<string | null>(null);
 const editText = ref("");
 
 // Delete confirmation state
-const confirmingDeleteId = ref<string | null>(null);
+const toolbarEl = ref<HTMLElement | null>(null);
 
 // Hover toolbar state
-const hoveredMessageId = ref<string | null>(null);
-const toolbarPosition = ref({ top: 0, right: 0 });
-const isToolbarHovered = ref(false);
-let hideToolbarTimeout: ReturnType<typeof setTimeout> | null = null;
+// Shared with the global chat. The keyboard path below arrives with it: this
+// view had hover only, so a keyboard user could reach every message action in
+// one chat and none in the other.
+const {
+  hoveredMessageId,
+  toolbarPosition,
+  isToolbarHovered,
+  confirmingDeleteId,
+  handleMessageMouseEnter,
+  handleMessageFocusIn,
+  handleMessageMouseLeave,
+  handleMessageFocusOut,
+  handleToolbarMouseEnter,
+  handleToolbarMouseLeave,
+  handleToolbarFocusIn,
+  handleToolbarFocusOut,
+  handleScrollStart,
+} = useMessageToolbar({
+  toolbar: toolbarEl,
+  isScrolling: () => isScrolling,
+});
 
 const hoveredMessage = computed(() => {
   if (!hoveredMessageId.value) return null;
@@ -110,54 +143,6 @@ const hoveredMessage = computed(() => {
 
 // Expanded messages
 const expandedDeletedMessages = ref<Set<string>>(new Set());
-
-function setupInfiniteScroll() {
-  if (!messagesContainer.value) return;
-
-  // Top sentinel - load older messages
-  if (topSentinel.value) {
-    topObserver = new IntersectionObserver(
-      async (entries) => {
-        if (
-          !entries[0].isIntersecting ||
-          isLoadingOlder ||
-          !hasMoreBefore.value
-        )
-          return;
-        isLoadingOlder = true;
-
-        const container = messagesContainer.value;
-        if (!container) {
-          isLoadingOlder = false;
-          return;
-        }
-
-        const scrollHeightBefore = container.scrollHeight;
-        await messagingStore.fetchMoreBefore();
-
-        nextTick(() => {
-          if (container) {
-            const scrollHeightAfter = container.scrollHeight;
-            const heightDiff = scrollHeightAfter - scrollHeightBefore;
-            container.scrollTop = heightDiff;
-          }
-          isLoadingOlder = false;
-        });
-      },
-      {
-        root: messagesContainer.value,
-        rootMargin: "100px 0px 0px 0px",
-        threshold: 0,
-      },
-    );
-    topObserver.observe(topSentinel.value);
-  }
-}
-
-function cleanupInfiniteScroll() {
-  topObserver?.disconnect();
-  topObserver = null;
-}
 
 // Scroll the virtualized list to a message and flash it (jump-to-context).
 function scrollToMessage(msgId: string) {
@@ -190,11 +175,16 @@ async function loadChat() {
     const jumpMsgId =
       typeof route.query.msg === "string" ? route.query.msg : null;
     if (jumpMsgId) {
+      // Landing in the middle of the history sweeps the list past the top
+      // sentinel; the observers stay off until that scroll has settled, or the
+      // landing itself pages in history the reader never asked for.
+      suspendInfiniteScroll();
       await messagingStore.navigateToMessage(id, jumpMsgId as MessageId);
       await messagingStore.markAsRead(id);
       nextTick(() => {
         setupInfiniteScroll();
         scrollToMessage(jumpMsgId);
+        setTimeout(resumeInfiniteScroll, LANDING_SCROLL_MS);
       });
       return;
     }
@@ -215,60 +205,9 @@ function scrollToBottom() {
   });
 }
 
-function handleMessageMouseEnter(event: MouseEvent, msgId: string) {
-  if (isScrolling) return;
-  if (hideToolbarTimeout) {
-    clearTimeout(hideToolbarTimeout);
-    hideToolbarTimeout = null;
-  }
-
-  const target = event.currentTarget as HTMLElement;
-  const rect = target.getBoundingClientRect();
-
-  toolbarPosition.value = {
-    top: rect.top - 16,
-    right: window.innerWidth - rect.right + 8,
-  };
-  hoveredMessageId.value = msgId;
-}
-
-function handleMessageMouseLeave() {
-  if (hideToolbarTimeout) {
-    clearTimeout(hideToolbarTimeout);
-  }
-  hideToolbarTimeout = setTimeout(() => {
-    if (!isToolbarHovered.value) {
-      hoveredMessageId.value = null;
-      confirmingDeleteId.value = null;
-    }
-    hideToolbarTimeout = null;
-  }, 150);
-}
-
-function handleToolbarMouseEnter() {
-  if (hideToolbarTimeout) {
-    clearTimeout(hideToolbarTimeout);
-    hideToolbarTimeout = null;
-  }
-  isToolbarHovered.value = true;
-}
-
-function handleToolbarMouseLeave() {
-  isToolbarHovered.value = false;
-  hideToolbarTimeout = setTimeout(() => {
-    hoveredMessageId.value = null;
-    confirmingDeleteId.value = null;
-    hideToolbarTimeout = null;
-  }, 100);
-}
-
 function handleWheel() {
   isScrolling = true;
-  if (hoveredMessageId.value) {
-    hoveredMessageId.value = null;
-    confirmingDeleteId.value = null;
-    isToolbarHovered.value = false;
-  }
+  handleScrollStart();
   if (scrollEndTimeout) {
     clearTimeout(scrollEndTimeout);
   }
@@ -456,11 +395,9 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  cleanupInfiniteScroll();
   messagingStore.clearSelection();
   messagesContainer.value?.removeEventListener("wheel", handleWheel);
   messagesContainer.value?.removeEventListener("scroll", handleScroll);
-  if (hideToolbarTimeout) clearTimeout(hideToolbarTimeout);
   if (scrollEndTimeout) clearTimeout(scrollEndTimeout);
 });
 </script>
@@ -511,7 +448,18 @@ onUnmounted(() => {
               v-if="hasMoreBefore"
               ref="topSentinel"
               class="scroll-sentinel top-sentinel"
-            ></div>
+            >
+              <secondary-text v-if="errorBefore" class="sentinel-error">
+                {{ errorBefore }}
+                <button
+                  type="button"
+                  class="sentinel-retry"
+                  @click="loadOlder()"
+                >
+                  Повторить
+                </button>
+              </secondary-text>
+            </div>
 
             <!-- Virtual scroll container -->
             <div
@@ -556,6 +504,7 @@ onUnmounted(() => {
                   <div
                     :id="`msg-${(messagesWithSeparators[virtualRow.index] as any).id}`"
                     class="pm-message"
+                    tabindex="0"
                     :class="{
                       removed: (messagesWithSeparators[virtualRow.index] as any)
                         .isRemoved,
@@ -573,6 +522,13 @@ onUnmounted(() => {
                       )
                     "
                     @mouseleave="handleMessageMouseLeave"
+                    @focusin="
+                      handleMessageFocusIn(
+                        $event,
+                        (messagesWithSeparators[virtualRow.index] as any).id,
+                      )
+                    "
+                    @focusout="handleMessageFocusOut"
                   >
                     <ChatMessage
                       :message="messagesWithSeparators[virtualRow.index] as any"
@@ -687,9 +643,6 @@ onUnmounted(() => {
               Отправить
             </button>
           </template>
-          <secondary-text v-else-if="isBanned" class="banned-hint">
-            Вы не можете отправлять сообщения из-за ограничений аккаунта
-          </secondary-text>
         </div>
       </div>
 
@@ -701,6 +654,7 @@ onUnmounted(() => {
             !hoveredMessage.isRemoved &&
             !isEditing(hoveredMessage.id)
           "
+          ref="toolbarEl"
           class="msg-toolbar-fixed"
           :style="{
             top: toolbarPosition.top + 'px',
@@ -708,6 +662,8 @@ onUnmounted(() => {
           }"
           @mouseenter="handleToolbarMouseEnter"
           @mouseleave="handleToolbarMouseLeave"
+          @focusin="handleToolbarFocusIn"
+          @focusout="handleToolbarFocusOut"
         >
           <!-- Delete confirmation mode -->
           <template v-if="confirmingDeleteId === hoveredMessage.id">
@@ -767,9 +723,9 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/BbcodeContent"
-@import "src/assets/styles/Inputs"
-@import "src/assets/styles/ZIndex"
+@import "@/assets/styles/BbcodeContent"
+@import "@/assets/styles/Inputs"
+@import "@/assets/styles/ZIndex"
 
 .chat-view
   display: flex
@@ -838,16 +794,30 @@ onUnmounted(() => {
   padding: $big
 
 .scroll-sentinel
-  height: 1px
   width: 100%
 
 .top-sentinel
   display: flex
   justify-content: center
   align-items: center
-  min-height: 30px
-  &:empty
-    min-height: 1px
+  min-height: 1px
+  // Grows to fit the retry banner when a history-pagination request fails;
+  // otherwise stays a hairline intersection target. Keyed off the banner's
+  // presence rather than :empty — a v-if that renders nothing still leaves a
+  // comment node behind, so the sentinel is never empty in the CSS sense.
+  &:has(.sentinel-error)
+    min-height: 30px
+    padding: $small 0
+
+.sentinel-error
+  display: flex
+  align-items: center
+  gap: $small
+  color: $accent-red
+
+.sentinel-retry
+  flex-shrink: 0
+  +button
 
 .date-separator
   display: flex
@@ -892,6 +862,19 @@ onUnmounted(() => {
   &.hovered
     background-color: $bg-element
     border-radius: 0 $border-radius $border-radius 0
+
+  &:focus-visible
+    background-color: $bg-element
+    border-radius: 0 $border-radius $border-radius 0
+
+  // tabindex="0" makes the whole row focusable so keyboard users can reach
+  // the hover-only toolbar (focusin -> handleMessageFocusIn); outline only
+  // on :focus-visible so mouse clicks don't leave a visible ring.
+  &:focus
+    outline: none
+  &:focus-visible
+    outline: 2px solid $border-focus
+    outline-offset: -2px
 
 .pm-message.highlighted
   animation: highlight-pulse 1.5s ease-out forwards
@@ -968,11 +951,6 @@ onUnmounted(() => {
   align-self: flex-start
   +button
 
-.banned-hint
-  flex: 1
-  text-align: center
-  padding: $small
-  color: $accent-red
 
 // Compact display — wrapper overrides only (own elements). The compact
 // header/content layout itself is handled by ChatMessage's `compact` prop.

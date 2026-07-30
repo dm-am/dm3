@@ -373,8 +373,8 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/ZIndex"
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/ZIndex"
+@import "@/assets/styles/Inputs"
 
 // Inline-block (not flex): a selection then copies in one line.
 // position: relative stays — the popover anchors to this box.

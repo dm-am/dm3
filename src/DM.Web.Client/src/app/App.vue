@@ -57,7 +57,7 @@
               type="button"
               class="action-link"
               data-testid="drawer-logout-button"
-              @click="userStore.signOut"
+              @click="signOut"
             >
               Выйти
             </button>
@@ -65,7 +65,7 @@
               type="button"
               class="action-link"
               data-testid="drawer-logout-all-button"
-              @click="userStore.signOutAll"
+              @click="signOutAll"
             >
               Выйти со всех устройств
             </button>
@@ -130,7 +130,13 @@
 
 <script setup lang="ts">
 import { useUiStore } from "@/shared/stores/ui";
-import { useUserStore, userIsModerator } from "@/entities/user";
+import {
+  useAuthStore,
+  userIsModerator,
+  signOut,
+  signOutAll,
+  fetchUser,
+} from "@/entities/user";
 import { useMessagingStore } from "@/entities/message";
 import { useNotificationStore } from "@/entities/notification";
 import { setScrollContainer } from "@/shared/lib/scroll";
@@ -148,7 +154,7 @@ import { EventType } from "@/shared/api/models/notifications/signalr";
 import type { SignalRNotification } from "@/shared/api/models/notifications/signalr";
 
 const uiStore = useUiStore();
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const messagingStore = useMessagingStore();
 const notificationStore = useNotificationStore();
 const route = useRoute();
@@ -238,7 +244,7 @@ function handleAvatarChanged(payload: Record<string, unknown>) {
   if (currentUserId === userId) {
     // Re-fetch current user — guarantees settings/visibility
     // are picked up too, not only the picture.
-    userStore.fetchUser();
+    fetchUser();
   }
 }
 
@@ -263,7 +269,7 @@ onMounted(async () => {
 
   // The user is already initialized from localStorage in the store
   // Refresh data from the server in parallel
-  userStore.fetchUser();
+  fetchUser();
   messagingStore.fetchUnreadCount(true); // immediate on app start
   notificationStore.fetchUnreadCount(true); // immediate on app start
 
@@ -279,7 +285,7 @@ onMounted(async () => {
 
 <style scoped lang="sass">
 // Variables from Layout and Themes are injected globally via vite.config.ts additionalData
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .main
   height: 100%

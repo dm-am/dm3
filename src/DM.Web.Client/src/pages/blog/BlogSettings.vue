@@ -24,6 +24,7 @@ import RubricsSection from "./settings/RubricsSection.vue";
 import RolesSection from "./settings/RolesSection.vue";
 import BlacklistSection from "./settings/BlacklistSection.vue";
 import InvitationsSection from "./settings/InvitationsSection.vue";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const router = useRouter();
 const toast = useToast();
@@ -38,13 +39,13 @@ const confirmDelete = ref(false);
 
 async function deleteBlog() {
   confirmDelete.value = false;
-  const ok = await blogStore.deleteBlog();
-  if (ok) {
-    toast.success("Блог удален");
-    router.push({ name: "blogs" });
-  } else {
-    toast.error("Не удалось удалить блог");
+  const error = await blogStore.deleteBlog();
+  if (error) {
+    notifyFailure(error, "Не удалось удалить блог");
+    return;
   }
+  toast.success("Блог удален");
+  router.push({ name: "blogs" });
 }
 </script>
 
@@ -113,5 +114,5 @@ async function deleteBlog() {
   font: inherit
 
   &:hover
-    background-color: rgba($accent-red, 0.1)
+    +tint($accent-red, 10%)
 </style>

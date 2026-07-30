@@ -1,0 +1,1 @@
+export { useTestimonialStore } from "./store";

@@ -10,20 +10,6 @@ namespace DM.Web.API.Tests.Features.Blog;
 
 public class BlogMappingProfileShould : UnitTestBase
 {
-    private readonly IMapper _mapper;
-
-    public BlogMappingProfileShould()
-    {
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UserMappingProfile>();
-            cfg.AddProfile<UserRefMappingProfile>();
-            cfg.AddProfile<BbTextMappingProfile>();
-            cfg.AddProfile<BlogMappingProfile>();
-        });
-        _mapper = configuration.CreateMapper();
-    }
-
     [Fact]
     public void HaveValidConfiguration()
     {

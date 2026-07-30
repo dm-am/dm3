@@ -18,19 +18,16 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Uploads;
 using DM.Domain.Personal.Features.Profiles;
 using DM.Infrastructure.Core.Tracing;
-using DM.Infrastructure.Persistence;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
 
 namespace DM.Web.API.Features.General.Upload;
 
 /// <inheritdoc />
 internal class UploadApiService : IUploadApiService
 {
-    private readonly DmDbContext _dbContext;
+    private readonly IUploadRepository _uploadRepository;
     private readonly IIdentityProvider _identityProvider;
     private readonly IIntentionManager _intentionManager;
     private readonly IUserService _userService;
@@ -54,7 +51,7 @@ internal class UploadApiService : IUploadApiService
 
     /// <inheritdoc />
     public UploadApiService(
-        DmDbContext dbContext,
+        IUploadRepository uploadRepository,
         IIdentityProvider identityProvider,
         IIntentionManager intentionManager,
         IUserService userService,
@@ -65,7 +62,7 @@ internal class UploadApiService : IUploadApiService
         IHttpContextAccessor httpContext,
         IOptions<CdnConfiguration> cdnOptions)
     {
-        _dbContext = dbContext;
+        _uploadRepository = uploadRepository;
         _identityProvider = identityProvider;
         _intentionManager = intentionManager;
         _userService = userService;
@@ -106,10 +103,7 @@ internal class UploadApiService : IUploadApiService
     public async Task<Shared.Dto.Upload> GetUpload(Guid id)
     {
         var userId = _identityProvider.Current.User.UserId;
-        var upload = await _dbContext.Uploads
-            .Include(u => u.Owner)
-            .Where(u => u.UploadId == id)
-            .FirstOrDefaultAsync();
+        var upload = await _uploadRepository.GetAsync(id);
 
         if (upload == null)
         {
@@ -130,9 +124,7 @@ internal class UploadApiService : IUploadApiService
     public async Task DeleteUpload(Guid id)
     {
         var userId = _identityProvider.Current.User.UserId;
-        var upload = await _dbContext.Uploads
-            .Where(u => u.UploadId == id)
-            .FirstOrDefaultAsync();
+        var upload = await _uploadRepository.GetAsync(id);
 
         if (upload == null)
         {
@@ -145,8 +137,7 @@ internal class UploadApiService : IUploadApiService
             throw new HttpException(System.Net.HttpStatusCode.Forbidden, "Access denied");
         }
 
-        upload.IsRemoved = true;
-        await _dbContext.SaveChangesAsync();
+        await _uploadRepository.SoftDeleteAsync(id, _dateTimeProvider.Now);
     }
 
     /// <inheritdoc />
@@ -215,7 +206,7 @@ internal class UploadApiService : IUploadApiService
             activity?.SetStatus(ActivityStatusCode.Error, "S3 failure");
             throw;
         }
-        catch (DbUpdateException)
+        catch (StorageException)
         {
             UploadMetrics.Failure.Add(1, typeTag, new("reason", "db"));
             activity?.SetStatus(ActivityStatusCode.Error, "DB failure");
@@ -252,12 +243,6 @@ internal class UploadApiService : IUploadApiService
             });
         }
 
-        if (!_imageProcessingService.IsImageType(type))
-        {
-            // Non-image uploads (PostAttachment): a simple single PUT without processing.
-            return await UploadNonImageAsync(file, type, targetId, userId, now);
-        }
-
         // 1. Buffer + validate + process (in-memory; magic-byte, EXIF strip,
         //    decompression-bomb guard, downscale to 1024 px). A single file —
         //    thumbnails are generated on-the-fly via imgproxy at serving time.
@@ -267,35 +252,34 @@ internal class UploadApiService : IUploadApiService
             processed = await _imageProcessingService.ProcessAsync(fileStream, file.ContentType);
         }
 
-        // 2. Generate the object key (the extension is NORMALIZED from the validated
+        // 2. Resolve and check the target BEFORE anything reaches the bucket.
+        // For UserAvatar an unset targetId means the uploader themselves; for
+        // CharacterAvatar and PostAttachment it is required. This check used to
+        // sit after the PUT and outside the rollback, so a valid image with a
+        // missing targetId left an object in the bucket that nothing would ever
+        // collect: the orphan sweeper walks rows, and the failed request never
+        // wrote one.
+        var effectiveTarget = targetId ?? (type == UploadType.UserAvatar ? userId : (Guid?)null);
+        RequireTarget(type, effectiveTarget);
+
+        // 3. Generate the object key (the extension is NORMALIZED from the validated
         //    content-type, NOT from the user filename — anti-extension-spoofing).
         var objectKey = GenerateObjectKey(type, userId, processed.Extension);
 
-        // 3. A single S3 PUT (no batch + rollback list — one step,
-        //    either success or failure → the next block does the rollback).
-        try
-        {
-            await PutToS3Async(objectKey, processed.Bytes, processed.ContentType);
-        }
-        catch
-        {
-            // Nothing was PUT yet — just rethrow.
-            throw;
-        }
+        // 4. A single S3 PUT. Everything after it that can fail is wrapped in
+        //    the rollback below.
+        await PutToS3Async(objectKey, processed.Bytes, processed.ContentType);
 
         Activity.Current?.SetTag("upload.output_size_bytes", processed.Bytes.LongLength);
 
-        // 4. DB record. If SaveChangesAsync fails — roll back the S3 PUT.
-        // Effective target: for UserAvatar, when targetId is not set explicitly,
-        // the owner uploader = self (uploading one's own avatar). For CharacterAvatar
-        // and PostAttachment, targetId is required.
-        var effectiveTarget = targetId ?? (type == UploadType.UserAvatar ? userId : (Guid?)null);
-        var upload = new DbUpload
+        // 5. DB record. If the write fails — roll back the S3 PUT.
+        var newUpload = new NewUpload
         {
-            UploadId = Guid.NewGuid(),
+            Id = Guid.NewGuid(),
             UserId = userId,
             Type = type,
             Status = UploadStatus.Confirmed,
+            TargetId = effectiveTarget,
             // Filename is NORMALIZED: the extension comes from the content-type, the original name
             // (if provided) is for UI display purposes only.
             FileName = SanitizeFileName(file.FileName, processed.Extension),
@@ -303,100 +287,51 @@ internal class UploadApiService : IUploadApiService
             SizeBytes = processed.Bytes.LongLength,
             ObjectKey = objectKey,
             Original = true,
-            FilePath = GeneratePublicUrl(objectKey),
+            Url = GeneratePublicUrl(objectKey),
             CreatedUtc = now,
             ConfirmedUtc = now,
         };
-        AssignTypedTarget(upload, type, effectiveTarget);
 
+        StoredUpload stored;
         try
         {
-            await _dbContext.Uploads.AddAsync(upload);
-            await _dbContext.SaveChangesAsync();
+            stored = await _uploadRepository.AddAsync(newUpload);
         }
         catch
         {
+            // Compensation for the PUT above. The object is in the bucket and the
+            // only row that would ever have named it does not exist: the orphan
+            // sweeper walks rows, so nothing else will ever find this key. The
+            // catch has to stay on this side of the repository call — that is
+            // where the S3 write happened and where the key is still known.
             await RollbackS3PutsAsync(new[] { objectKey });
             throw;
         }
 
-        return MapToDto(upload);
-    }
-
-    private async Task<Shared.Dto.Upload> UploadNonImageAsync(
-        IFormFile file, UploadType type, Guid? targetId, Guid userId, DateTimeOffset now)
-    {
-        var extension = Path.GetExtension(file.FileName) ?? string.Empty;
-        var objectKey = GenerateObjectKey(type, userId, extension);
-        await using (var stream = file.OpenReadStream())
-        {
-            await PutToS3Async(objectKey, stream, file.ContentType);
-        }
-
-        var upload = new DbUpload
-        {
-            UploadId = Guid.NewGuid(),
-            UserId = userId,
-            Type = type,
-            Status = UploadStatus.Confirmed,
-            FileName = SanitizeFileName(file.FileName, extension),
-            ContentType = file.ContentType,
-            SizeBytes = file.Length,
-            ObjectKey = objectKey,
-            Original = true,
-            FilePath = GeneratePublicUrl(objectKey),
-            CreatedUtc = now,
-            ConfirmedUtc = now,
-        };
-        AssignTypedTarget(upload, type, targetId);
-        try
-        {
-            await _dbContext.Uploads.AddAsync(upload);
-            await _dbContext.SaveChangesAsync();
-        }
-        catch
-        {
-            await RollbackS3PutsAsync(new[] { objectKey });
-            throw;
-        }
-        return MapToDto(upload);
+        return MapToDto(stored);
     }
 
     /// <summary>
-    /// Fills one of TargetUserId / TargetCharacterId / TargetPostId
-    /// depending on <paramref name="type"/>. Throws <see cref="HttpBadRequestException"/>
-    /// if a target is required but not provided.
+    /// Rejects an upload whose target is missing. Every type points at exactly one
+    /// entity, and a request that names none cannot be stored — this answers 400
+    /// instead of letting the DB CHECK constraint answer 500.
     /// </summary>
-    private static void AssignTypedTarget(DbUpload upload, UploadType type, Guid? target)
+    private static void RequireTarget(UploadType type, Guid? target)
     {
-        switch (type)
+        var requirement = type switch
         {
-            case UploadType.UserAvatar:
-                if (target == null)
-                    throw new HttpBadRequestException(new Dictionary<string, string>
-                    {
-                        ["targetId"] = "User avatar requires a target user ID",
-                    });
-                upload.TargetUserId = target;
-                break;
-            case UploadType.CharacterAvatar:
-                if (target == null)
-                    throw new HttpBadRequestException(new Dictionary<string, string>
-                    {
-                        ["targetId"] = "Character avatar requires a target character ID",
-                    });
-                upload.TargetCharacterId = target;
-                break;
-            case UploadType.PostAttachment:
-                if (target == null)
-                    throw new HttpBadRequestException(new Dictionary<string, string>
-                    {
-                        ["targetId"] = "Post attachment requires a target post ID",
-                    });
-                upload.TargetPostId = target;
-                break;
-            default:
-                throw new InvalidOperationException($"Unknown UploadType {type}");
+            UploadType.UserAvatar => "User avatar requires a target user ID",
+            UploadType.CharacterAvatar => "Character avatar requires a target character ID",
+            UploadType.PostAttachment => "Post attachment requires a target post ID",
+            _ => throw new InvalidOperationException($"Unknown UploadType {type}"),
+        };
+
+        if (target == null)
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                ["targetId"] = requirement,
+            });
         }
     }
 
@@ -459,32 +394,15 @@ internal class UploadApiService : IUploadApiService
     private async Task<(IEnumerable<Shared.Dto.Upload> Uploads, PagingInfo Paging)> GetUploadsInternal(
         UploadsQuery query, Guid? userId)
     {
-        // Owner is loaded so the moderation "Загрузил" column can render the
-        // uploader username/profile link for every file (doc 4.2.3.8.9).
-        var queryable = _dbContext.Uploads.Include(u => u.Owner).AsQueryable();
-
-        if (userId.HasValue)
-        {
-            queryable = queryable.Where(u => u.UserId == userId.Value);
-        }
-
-        if (query.Type.HasValue)
-        {
-            queryable = queryable.Where(u => u.Type == query.Type.Value);
-        }
-
-        if (query.Status.HasValue)
-        {
-            queryable = queryable.Where(u => u.Status == query.Status.Value);
-        }
-
-        var totalCount = await queryable.CountAsync();
-
-        var uploads = await queryable
-            .OrderByDescending(u => u.CreatedUtc)
-            .Skip((query.Number - 1) * query.Size)
-            .Take(query.Size)
-            .ToListAsync();
+        var (uploads, totalCount) = await _uploadRepository.GetPageAsync(
+            new UploadFilter
+            {
+                UserId = userId,
+                Type = query.Type,
+                Status = query.Status,
+            },
+            skip: (query.Number - 1) * query.Size,
+            take: query.Size);
 
         var paging = new PagingInfo(PagingResult.Create(totalCount, query.Number, query.Size));
         return (uploads.Select(MapToDto), paging);
@@ -521,23 +439,22 @@ internal class UploadApiService : IUploadApiService
         }.ToString();
     }
 
-    private static Shared.Dto.Upload MapToDto(DbUpload upload)
+    private static Shared.Dto.Upload MapToDto(StoredUpload upload)
     {
         return new Shared.Dto.Upload
         {
-            Id = upload.UploadId,
+            Id = upload.Id,
             UserId = upload.UserId,
-            // Only populated when the Owner navigation was Include()d (the
-            // moderation list queries); null on the DirectUpload/self paths.
-            UploaderUsername = upload.Owner?.Username,
+            // Only populated when the store resolved the owner (the moderation
+            // list and single-upload queries); null right after DirectUpload.
+            UploaderUsername = upload.OwnerUsername,
             Type = upload.Type,
-            // Deduce TargetId from the corresponding typed column.
-            TargetId = upload.TargetUserId ?? upload.TargetCharacterId ?? upload.TargetPostId,
-            OriginalFileName = upload.FileName ?? string.Empty,
-            ContentType = upload.ContentType ?? string.Empty,
+            TargetId = upload.TargetId,
+            OriginalFileName = upload.FileName,
+            ContentType = upload.ContentType,
             SizeBytes = upload.SizeBytes,
             Status = upload.Status,
-            Url = upload.FilePath,
+            Url = upload.Url,
             CreatedUtc = upload.CreatedUtc,
             ConfirmedUtc = upload.ConfirmedUtc,
         };

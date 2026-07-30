@@ -1,3 +1,4 @@
+using DM.Domain.Core.Configuration;
 using System;
 using System.Linq;
 using System.Threading;
@@ -26,7 +27,6 @@ internal class PopularityScoreService : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<PopularityScoreService> _logger;
     private readonly TimeSpan _updateInterval = TimeSpan.FromHours(1);
-    private static readonly TimeSpan ActivePeriod = TimeSpan.FromDays(30);
 
     public PopularityScoreService(
         IServiceProvider serviceProvider,
@@ -69,7 +69,7 @@ internal class PopularityScoreService : BackgroundService
         var dateTimeProvider = scope.ServiceProvider.GetRequiredService<IDateTimeProvider>();
 
         var now = dateTimeProvider.Now;
-        var activeThreshold = now - ActivePeriod;
+        var activeThreshold = now - ActivityPolicy.ActivePeriod;
 
         await UpdateGameScores(dbContext, now, activeThreshold, cancellationToken);
         await UpdateBlogScores(dbContext, now, activeThreshold, cancellationToken);
@@ -97,7 +97,6 @@ internal class PopularityScoreService : BackgroundService
 
             // Calculate active players per game (unique authors of active non-NPC characters who were active on site)
             var playerCounts = await dbContext.Characters
-                .Include(c => c.Author)
                 .Where(c => gameIds.Contains(c.GameId) &&
                            c.Status == CharacterStatus.Active &&
                            !c.IsNpc &&

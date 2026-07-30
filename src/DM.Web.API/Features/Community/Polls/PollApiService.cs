@@ -110,6 +110,12 @@ internal class PollApiService : IPollApiService
     /// <summary>
     /// Map multiple domain polls to API polls with batch-loaded voters (avoids DbContext concurrency)
     /// </summary>
+    /// <remarks>
+    /// Voters render as UserRef: id, name, last activity, role, newbie flag. That
+    /// is what the reference read returns, and none of it comes from the counter
+    /// hydration a full user read performs — so every public poll render used to
+    /// pay twenty-one aggregate queries to fill fields the response never carried.
+    /// </remarks>
     private async Task<IEnumerable<Poll>> MapPollsAsync(IEnumerable<DomainPoll> polls)
     {
         var pollsList = polls.ToList();
@@ -121,10 +127,10 @@ internal class PollApiService : IPollApiService
             .Distinct()
             .ToList();
 
-        Dictionary<Guid, Domain.Core.Dto.GeneralUser> usersDict = new();
+        Dictionary<Guid, Domain.Core.Dto.UserReference> usersDict = new();
         if (allUserIds.Count > 0)
         {
-            var users = await userRepository.GetUsersAsync(allUserIds);
+            var users = await userRepository.GetUserReferencesAsync(allUserIds);
             usersDict = users.ToDictionary(u => u.UserId);
         }
 
@@ -135,7 +141,7 @@ internal class PollApiService : IPollApiService
     /// <summary>
     /// Map domain poll to API poll with pre-loaded users dictionary
     /// </summary>
-    private Poll MapPollWithUsers(DomainPoll poll, Dictionary<Guid, Domain.Core.Dto.GeneralUser> usersDict)
+    private Poll MapPollWithUsers(DomainPoll poll, Dictionary<Guid, Domain.Core.Dto.UserReference> usersDict)
     {
         Dictionary<Guid, List<UserRef>>? votersByOptionId = null;
 
@@ -175,7 +181,7 @@ internal class PollApiService : IPollApiService
 
             if (allUserIds.Count > 0)
             {
-                var users = await userRepository.GetUsersAsync(allUserIds);
+                var users = await userRepository.GetUserReferencesAsync(allUserIds);
                 var usersDict = users.ToDictionary(u => u.UserId);
 
                 votersByOptionId = poll.Options.ToDictionary(

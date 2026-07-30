@@ -1,10 +1,12 @@
 import { computed, onMounted, onUnmounted, ref, type Ref } from "vue";
 import type { AxiosProgressEvent } from "axios";
-import { PersonalApi, UploadApi } from "@/shared/api";
-import { useUserStore } from "@/entities/user";
+import { uploadApi } from "@/shared/api";
+import { personalApi } from "../api";
+import { fetchUser } from "../lib/session";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { compressImage } from "@/shared/lib/utils/imageCompression";
 import type { User } from "@/shared/api/models/community/users";
+import { notifyFailure } from "@/shared/lib/errors";
 
 /**
  * Supported formats: must match the server whitelist
@@ -23,15 +25,14 @@ const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
  * - Client-side resize to 1024×1024 (Canvas, no deps) — saves bandwidth.
  * - Drag-drop via handleDrop / clipboard paste via a document-level listener.
  * - Progress via axios onUploadProgress.
- * - Idempotency via `crypto.randomUUID()` in UploadApi (under the hood).
- * - After a successful upload/reset — userStore.fetchUser(), plus a SignalR
+ * - Idempotency via `crypto.randomUUID()` in uploadApi (under the hood).
+ * - After a successful upload/reset — fetchUser(), plus a SignalR
  *   `UserAvatarChanged` broadcast to open tabs.
  *
  * @param user — a reactive ref to the User (.id is needed for targetId and to
  *   determine "is there anything to reset").
  */
 export function useAvatarUpload(user: Ref<User | null | undefined>) {
-  const userStore = useUserStore();
   const toast = useToast();
 
   const uploading = ref(false);
@@ -69,24 +70,28 @@ export function useAvatarUpload(user: Ref<User | null | undefined>) {
       };
 
       const { data: uploadData, error: uploadError } =
-        await UploadApi.directUpload(file, "UserAvatar", {
+        await uploadApi.directUpload(file, "UserAvatar", {
           targetId: user.value.id,
           onProgress,
         });
-      if (uploadError || !uploadData) {
+      if (uploadError) {
+        notifyFailure(uploadError, "Не удалось загрузить аватар");
+        return;
+      }
+      if (!uploadData) {
         toast.error("Не удалось загрузить аватар");
         return;
       }
 
-      const { error: profileError } = await PersonalApi.updateMyProfile({
+      const { error: profileError } = await personalApi.updateMyProfile({
         avatarUploadId: uploadData.id,
       });
       if (profileError) {
-        toast.error("Не удалось обновить профиль");
+        notifyFailure(profileError, "Не удалось обновить профиль");
         return;
       }
 
-      await userStore.fetchUser();
+      await fetchUser();
       toast.success("Аватар успешно обновлен");
     } catch {
       toast.error("Не удалось загрузить аватар");
@@ -96,21 +101,24 @@ export function useAvatarUpload(user: Ref<User | null | undefined>) {
     }
   }
 
+  /**
+   * Removes the avatar. Asking first is the caller's job — confirmation is a
+   * UI concern and this composable owns no template.
+   */
   async function resetAvatar() {
     if (!hasAvatar.value || busy.value) return;
-    if (!window.confirm("Сбросить аватар? Текущий аватар будет удален.")) {
-      return;
-    }
     resetting.value = true;
     try {
-      const { error } = await PersonalApi.removeMyAvatar();
+      const { error } = await personalApi.removeMyAvatar();
       if (error) {
-        toast.error("Не удалось сбросить аватар");
+        notifyFailure(error, "Не удалось сбросить аватар");
         return;
       }
-      await userStore.fetchUser();
+      await fetchUser();
       toast.success("Аватар сброшен");
     } catch {
+      // A throw means the request never produced a problem document, so there
+      // is nothing to defer to the interceptor and nothing more specific to say.
       toast.error("Не удалось сбросить аватар");
     } finally {
       resetting.value = false;

@@ -2,14 +2,14 @@
 import { ref, onMounted, onUnmounted, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useToast } from "@/shared/lib/composables/useToast";
-import { useUserStore } from "@/entities/user";
-import { AccountApi } from "@/shared/api";
+import { useAuthStore, UsernameInput, accountApi } from "@/entities/user";
+
 import type { User } from "@/shared/api/models/community";
 import Button from "@/shared/ui/Button/Button.vue";
-import { UsernameInput } from "@/shared/ui/UsernameInput";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import StatusIcon from "@/shared/ui/Icon/StatusIcon.vue";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
+import { notifyFailure } from "@/shared/lib/errors";
 
 // State machine for activation flow
 type ActivationPhase =
@@ -24,7 +24,7 @@ type ActivationPhase =
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
-const userStore = useUserStore();
+const userStore = useAuthStore();
 
 // State
 const phase = ref<ActivationPhase>("loading");
@@ -98,7 +98,7 @@ onUnmounted(() => {
 async function checkTokenStatus() {
   phase.value = "loading";
 
-  const { data, error: apiError } = await AccountApi.getActivationInfo(
+  const { data, error: apiError } = await accountApi.getActivationInfo(
     token.value,
   );
 
@@ -134,7 +134,7 @@ async function submitActivation() {
 
   phase.value = "submitting";
 
-  const { data, error: apiError } = await AccountApi.activate(token.value, {
+  const { data, error: apiError } = await accountApi.activate(token.value, {
     username: username.value,
     expectedEmail: pendingEmail.value,
   });
@@ -185,10 +185,12 @@ async function resend() {
   resendLoading.value = true;
 
   try {
-    await AccountApi.recover(resendEmail.value);
+    const { error } = await accountApi.recover(resendEmail.value);
+    if (error) {
+      notifyFailure(error, "Не удалось отправить письмо");
+      return;
+    }
     resendSuccess.value = true;
-  } catch {
-    toast.error("Не удалось отправить письмо");
   } finally {
     resendLoading.value = false;
   }

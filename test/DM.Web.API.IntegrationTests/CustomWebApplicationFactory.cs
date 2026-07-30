@@ -56,11 +56,6 @@ internal class TestIdentityProvider : IIdentityProvider, IIdentitySetter
         get => _identity;
         set => _identity = value;
     }
-
-    public void Refresh()
-    {
-        // No-op for tests
-    }
 }
 
 /// <summary>
@@ -147,6 +142,10 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["RateLimiting:Enabled"] = "false",
                 // Point MongoDB to the test container
                 ["ConnectionStrings:Mongo"] = _databaseFixture.MongoConnectionString,
+                // The encryption key has no default in the repository, so the host
+                // refuses to start without one. A fixed throwaway key keeps the
+                // tests deterministic and is never a deployment's key.
+                ["CryptoConfiguration:KeyBase64"] = "ZG0zLWludGVncmF0aW9uLXRlc3RzLXRocm93YXdheS0=",
                 // Lower lockout threshold and disable progressive delays for faster tests
                 ["AuthenticationConfiguration:AccountLockoutThreshold"] = "5",
                 ["AuthenticationConfiguration:LoginDelaySchedule:0:0"] = "1000",
@@ -207,10 +206,17 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             }
             services.AddSingleton<ICompromisedPasswordChecker, TestCompromisedPasswordChecker>();
 
-            // Register DbContext with PostgreSQL connection string from Testcontainers
+            // Register DbContext with PostgreSQL connection string from Testcontainers.
+            // EnableRetryOnFailure mirrors Startup: with a retrying execution strategy
+            // EF refuses a user-initiated transaction, so code that opens one without
+            // going through CreateExecutionStrategy fails in production and nowhere else.
             services.AddDbContext<DmDbContext>(options =>
             {
-                options.UseNpgsql(_databaseFixture.ConnectionString)
+                options.UseNpgsql(_databaseFixture.ConnectionString,
+                        npgsql => npgsql.EnableRetryOnFailure(
+                            maxRetryCount: 3,
+                            maxRetryDelay: TimeSpan.FromSeconds(5),
+                            errorCodesToAdd: null))
                     .EnableSensitiveDataLogging()
                     .EnableDetailedErrors();
             }, ServiceLifetime.Scoped, ServiceLifetime.Scoped);

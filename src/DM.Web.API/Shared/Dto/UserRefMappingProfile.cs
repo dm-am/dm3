@@ -22,6 +22,11 @@ internal class UserRefMappingProfile : Profile
             .ForMember(d => d.Role, s => s.MapFrom(u => u.Role))
             .ForMember(d => d.IsNewbie, s => s.MapFrom(u => u.IsNewbie));
 
+        // UserReference (Domain DTO) → UserRef (API DTO). The two carry the same
+        // five fields by design, so only the id rename needs saying.
+        CreateMap<UserReference, UserRef>()
+            .ForMember(d => d.Id, s => s.MapFrom(u => u.UserId));
+
         // GameAssistantInfo (Domain DTO) → UserRef (API DTO)
         CreateMap<GameAssistantInfo, UserRef>()
             .ForMember(d => d.Id, s => s.MapFrom(a => a.UserId))

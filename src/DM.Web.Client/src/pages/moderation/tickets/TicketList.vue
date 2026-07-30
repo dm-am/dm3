@@ -9,11 +9,12 @@
  * only splits the visible tickets between the two pages.
  */
 import { computed, onMounted, ref } from "vue";
-import ModerationApi, {
+import {
+  ticketApi,
   type Ticket,
   type TicketStatus,
-} from "@/shared/api/moderationApi";
-import type { TicketSubtype } from "@/shared/api/supportApi";
+  type TicketSubtype,
+} from "@/entities/ticket";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
@@ -57,7 +58,7 @@ const statusOptions: SelectOption[] = [
 
 async function fetch() {
   loading.value = true;
-  const { data, error } = await ModerationApi.getTickets({
+  const { data, error } = await ticketApi.getTickets({
     status: statusFilter.value || undefined,
     subtype: subtypeFilter.value || undefined,
   });
@@ -146,7 +147,7 @@ const isEmpty = computed(() => !loading.value && tickets.value.length === 0);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Skeleton"
+@import "@/assets/styles/Skeleton"
 
 .filters
   display: flex
@@ -163,10 +164,7 @@ const isEmpty = computed(() => !loading.value && tickets.value.length === 0);
 
 // --- Skeleton (mirrors TicketCard: $medium padding, four text lines) ---
 .skeleton-card
-  border: 1px solid $border
-  border-radius: $border-radius
-  padding: $medium
-  background: $bg-element
+  +card()
 
 .skeleton-line
   height: 1em

@@ -9,9 +9,15 @@ namespace DM.Infrastructure.Persistence.Entities.Shared;
 /// <summary>
 /// DAL model for unread entries count
 /// </summary>
+/// <remarks>
+/// IRemovable, not ISoftDeletable: the counter is derived data with no author and
+/// no audit story, and nothing ever wrote the two audit fields the wider contract
+/// promises. Declaring a contract the code does not honor is worse than not
+/// declaring it — a reader trusts the fields and finds them empty.
+/// </remarks>
 [MongoCollectionName("UnreadCounters")]
 [BsonIgnoreExtraElements]
-public class UnreadCounter : ISoftDeletable
+public class UnreadCounter : IRemovable
 {
     /// <summary>
     /// User identifier
@@ -47,10 +53,4 @@ public class UnreadCounter : ISoftDeletable
 
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
-
-    /// <inheritdoc />
-    public Guid? DeletedByUserId { get; set; }
-
-    /// <inheritdoc />
-    public DateTimeOffset? DeletedUtc { get; set; }
 }

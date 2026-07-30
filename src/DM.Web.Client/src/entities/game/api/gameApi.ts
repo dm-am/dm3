@@ -11,6 +11,11 @@ import type {
   User,
 } from "@/shared/api/models/common";
 import type {
+  NotepadEntry,
+  CreateNotepadEntryRequest,
+  UpdateNotepadEntryRequest,
+} from "@/shared/api/models/notepads";
+import type {
   Game,
   GameRef,
   GameUser,
@@ -29,9 +34,6 @@ import type {
   FirstUnreadPostResult,
   FirstUnreadCommentResult,
   ChatRoom,
-  NotepadEntry,
-  CreateNotepadEntryInput,
-  UpdateNotepadEntryInput,
   CreateRoomInput,
   PostPendencyInput,
   CreatePostInput,
@@ -620,16 +622,19 @@ class GameApi {
     return Api.get<ListEnvelope<NotepadEntry>>(`games/${gameId}/notepad`);
   }
 
-  public createNote(gameId: string, input: CreateNotepadEntryInput) {
+  public createNote(gameId: string, input: CreateNotepadEntryRequest) {
     return Api.post<Envelope<NotepadEntry>>(`games/${gameId}/notepad`, input);
   }
 
   public updateNote(
     gameId: string,
     entryId: string,
-    input: UpdateNotepadEntryInput,
+    input: UpdateNotepadEntryRequest,
   ) {
-    return Api.patch<NotepadEntry>(`games/${gameId}/notepad/${entryId}`, input);
+    return Api.patch<Envelope<NotepadEntry>>(
+      `games/${gameId}/notepad/${entryId}`,
+      input,
+    );
   }
 
   public deleteNote(gameId: string, entryId: string) {

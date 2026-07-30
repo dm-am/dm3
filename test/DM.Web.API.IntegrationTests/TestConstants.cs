@@ -20,7 +20,10 @@ public static class TestConstants
     public const string InactiveUser2Username = "inactiveuser2";
 
     // Boards
-    public static readonly Guid TestBoardId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    // Deliberately outside the range InitialCreate seeds: this id used to be
+    // 0...001, which is the shipped "Общий" board, so the fixture was silently
+    // testing against a board that only looked like its own.
+    public static readonly Guid TestBoardId = Guid.Parse("00000000-0000-0000-0000-0000000000b0");
     public const string TestBoardTitle = "Test Board";
 
     // Topics
@@ -33,6 +36,14 @@ public static class TestConstants
     // Games
     public static readonly Guid TestGameId = Guid.Parse("00000000-0000-0000-0000-000000000040");
     public static readonly Guid TestRoomId = Guid.Parse("00000000-0000-0000-0000-000000000041");
+
+    /// <summary>
+    /// The alias TestGame is reachable by. The fixture derives public ids from
+    /// the seeding order ($"game{'a' + index}") and TestGame is first, so this
+    /// name has to agree with that order — it is asserted by the read that
+    /// compares the alias and GUID forms of GET /v1/games/{id}.
+    /// </summary>
+    public const string TestGamePublicId = "gamea";
 
     // Characters (seeded into TestGame so game/room tooltips have content to render)
     public static readonly Guid TestCharacterId = Guid.Parse("00000000-0000-0000-0000-000000000050");

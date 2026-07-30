@@ -57,7 +57,7 @@ public class UserController : ControllerBase
     /// <response code="404">User not found or was deleted</response>
     [HttpGet("{username}", Name = nameof(GetUserByUsername))]
     [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserByUsername(string username) => Ok(await _userApiService.GetUser(username));
 
     /// <summary>
@@ -68,7 +68,7 @@ public class UserController : ControllerBase
     /// <response code="404">User not found or was deleted</response>
     [HttpGet("{username}/profile", Name = nameof(GetUserProfile))]
     [ProducesResponseType(typeof(Envelope<UserProfile>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserProfile(string username) => Ok(await _userApiService.GetUserProfile(username));
 
     /// <summary>
@@ -87,8 +87,8 @@ public class UserController : ControllerBase
     [HttpGet("{username}/login-history", Name = nameof(GetLoginHistory))]
     [RequireRole(UserRole.Admin)]
     [ProducesResponseType(typeof(ListEnvelope<LoginHistoryDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetLoginHistory(string username) => Ok(await _userApiService.GetLoginHistory(username));
 }

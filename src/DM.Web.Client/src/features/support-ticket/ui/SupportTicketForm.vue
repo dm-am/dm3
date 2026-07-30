@@ -10,8 +10,7 @@
  */
 import { computed, ref } from "vue";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
-import { SupportApi } from "@/shared/api";
-import type { TicketSubtype } from "@/shared/api";
+import { ticketApi, type TicketSubtype } from "@/entities/ticket";
 import type { BadRequestError } from "@/shared/api/models/common";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 import { useAuthStore } from "@/shared/stores/auth";
@@ -169,7 +168,7 @@ const submit = async () => {
   if (loading.value || !validate()) return;
 
   loading.value = true;
-  const { data, error } = await SupportApi.createTicket({
+  const { data, error } = await ticketApi.createTicket({
     subtype: subtype.value as TicketSubtype,
     subject: subject.value.trim(),
     text: text.value.trim(),
@@ -326,8 +325,8 @@ const reset = () => {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Variables"
-@import "src/assets/styles/Themes"
+@import "@/assets/styles/Variables"
+@import "@/assets/styles/Themes"
 
 .support-form
   :deep(.form-field-row) input

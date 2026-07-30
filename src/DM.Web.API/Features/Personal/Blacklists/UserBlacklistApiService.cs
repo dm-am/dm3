@@ -52,10 +52,13 @@ internal class UserBlacklistApiService : IUserBlacklistApiService
     }
 
     /// <inheritdoc />
-    public async Task<BlacklistSettings> UpdateSettings(BlacklistSettings settings)
+    public async Task<BlacklistSettings> UpdateSettings(UpdateBlacklistSettingsRequest request)
     {
-        var flags = _mapper.Map<UserBlacklistSettings>(settings);
-        var result = await _blacklistService.UpdateSettings(flags);
+        // The domain stores one flags enum, so a partial update has to be folded
+        // onto the current value — otherwise every flag the request omits is
+        // written as cleared.
+        var current = await _blacklistService.GetSettings();
+        var result = await _blacklistService.UpdateSettings(request.ApplyTo(current));
         return _mapper.Map<BlacklistSettings>(result);
     }
 

@@ -15,6 +15,8 @@ internal class CreateModeratedProfileNoteValidator : AbstractValidator<CreateMod
 
         RuleFor(n => n.Text)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(5000).WithMessage(ValidationError.Long);
+            // 4000 = ModeratedProfileNote.Text column width. Longer input is a
+            // Postgres 22001, which surfaces as a 500.
+            .MaximumLength(4000).WithMessage(ValidationError.Long);
     }
 }

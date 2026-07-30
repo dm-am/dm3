@@ -150,7 +150,7 @@ watch(page, fetchReviews);
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 .game-reviews
   padding: $small 0

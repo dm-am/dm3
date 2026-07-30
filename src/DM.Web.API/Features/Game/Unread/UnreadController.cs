@@ -36,7 +36,7 @@ public class UnreadController : ControllerBase
     /// </remarks>
     [HttpGet("{id}/posts/first-unread", Name = nameof(GetFirstUnreadPost))]
     [ProducesResponseType(typeof(Envelope<FirstUnreadPostResult>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetFirstUnreadPost(Guid id) =>
         Ok(await _unreadApiService.GetFirstUnreadPost(id));
 
@@ -53,7 +53,7 @@ public class UnreadController : ControllerBase
     /// </remarks>
     [HttpGet("{id}/comments/first-unread", Name = nameof(GetFirstUnreadComment))]
     [ProducesResponseType(typeof(Envelope<FirstUnreadCommentResult>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(GeneralError), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetFirstUnreadComment(Guid id) =>
         Ok(await _unreadApiService.GetFirstUnreadComment(id));
 }

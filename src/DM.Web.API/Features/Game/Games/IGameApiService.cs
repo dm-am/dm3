@@ -52,6 +52,17 @@ public interface IGameApiService
     Task<Envelope<GameDetails>> GetDetailsByPublicId(string publicId);
 
     /// <summary>
+    /// Resolve a route identifier of a game, given either form
+    /// </summary>
+    /// <remarks>
+    /// Every game-scoped route accepts both forms, so without a shared
+    /// resolver each controller carries its own copy of the branch.
+    /// </remarks>
+    /// <param name="idOrPublicId">Game public id (5 letters) or GUID</param>
+    /// <returns>Game identifier</returns>
+    Task<Guid> ResolveId(string idOrPublicId);
+
+    /// <summary>
     /// Create new game
     /// </summary>
     /// <param name="request">Game creation request</param>
@@ -101,19 +112,5 @@ public interface IGameApiService
     /// <returns>List envelope containing all game tags</returns>
     Task<ListEnvelope<Tag>> GetTags();
 
-    /// <summary>
-    /// Get game notes (private notepad for GM)
-    /// </summary>
-    /// <param name="gameId">Game identifier</param>
-    /// <returns>Envelope with game notes</returns>
-    Task<Envelope<GameNotes>> GetNotes(Guid gameId);
-
-    /// <summary>
-    /// Update game notes
-    /// </summary>
-    /// <param name="gameId">Game identifier</param>
-    /// <param name="notes">Notes to update</param>
-    /// <returns>Envelope with updated game notes</returns>
-    Task<Envelope<GameNotes>> UpdateNotes(Guid gameId, GameNotes notes);
 
 }

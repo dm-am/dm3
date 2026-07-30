@@ -13,17 +13,16 @@ import { ref, computed } from "vue";
 import type { WebsiteTestimonial } from "@/shared/api/models/community";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { symbols } from "@/shared/lib/utils/icons";
-import { useTestimonialStore } from "@/shared/stores/testimonials";
-import { useUserStore, userIsAdmin } from "@/entities/user";
-import { useToast } from "@/shared/lib/composables/useToast";
+import { useTestimonialStore } from "@/entities/testimonial";
+import { useAuthStore, userIsAdmin } from "@/entities/user";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{
   testimonial: WebsiteTestimonial;
 }>();
 
-const userStore = useUserStore();
+const userStore = useAuthStore();
 const testimonialStore = useTestimonialStore();
-const toast = useToast();
 
 const canAdministrate = computed(() => userIsAdmin(userStore.user));
 const loading = ref(false);
@@ -38,7 +37,7 @@ async function confirmRemove() {
   if (error) {
     // Keep the entry in place (the store only drops it on success) and
     // surface the failure so the delete stays available for a retry.
-    toast.error("Не удалось удалить отзыв");
+    notifyFailure(error, "Не удалось удалить отзыв");
   } else {
     showConfirm.value = false;
   }
@@ -72,7 +71,7 @@ async function confirmRemove() {
 </template>
 
 <style scoped lang="sass">
-@import "src/assets/styles/Inputs"
+@import "@/assets/styles/Inputs"
 
 // Zero-width preserved space: invisible in layout (font-size: 0) but
 // Selection.toString() still emits a real " " before the delete control.

@@ -26,7 +26,13 @@ public class UserSettings
     /// <summary>
     /// Default user settings for a guest or a newbie
     /// </summary>
-    public static readonly UserSettings Default = new()
+    /// <remarks>
+    /// A fresh instance per call, not a shared one: this object is handed to real
+    /// request identities whenever a user has no settings document, and both it and
+    /// its <see cref="PagingSettings"/> are mutable — one request writing to it would
+    /// change the defaults every other request sees.
+    /// </remarks>
+    public static UserSettings Default => new()
     {
         Paging = new PagingSettings
         {

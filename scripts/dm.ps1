@@ -247,6 +247,19 @@ function Start-Services {
         Copy-Item (Join-Path $DockerDir ".env.example") $envFile
     }
 
+    # The encryption key has no default in the repository on purpose, so the
+    # template ships it empty and the app refuses to start without it. Generate a
+    # per-machine key once instead of asking every developer to do it by hand.
+    $envContent = Get-Content $envFile -Raw
+    if ($envContent -match '(?m)^DM_CryptoConfiguration__KeyBase64=\s*$') {
+        $keyBytes = New-Object byte[] 32
+        [System.Security.Cryptography.RandomNumberGenerator]::Fill($keyBytes)
+        $key = [Convert]::ToBase64String($keyBytes)
+        $envContent = $envContent -replace '(?m)^DM_CryptoConfiguration__KeyBase64=\s*$', "DM_CryptoConfiguration__KeyBase64=$key"
+        Set-Content -Path $envFile -Value $envContent -Encoding utf8 -NoNewline
+        Write-Host "  Generated a local encryption key in docker/.env" -ForegroundColor Yellow
+    }
+
     Push-Location $DockerDir
     try {
         # Building (with animation)
@@ -255,7 +268,7 @@ function Start-Services {
         }
 
         # Infrastructure - start containers (with animation)
-        if (-not (Invoke-WithAnimation -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres mongo rabbitmq opensearch minio imgproxy mailhog jaeger prometheus grafana")) {
+        if (-not (Invoke-WithAnimation -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres mongo rabbitmq minio imgproxy mailhog jaeger loki prometheus grafana")) {
             Write-FailedStep -Label "Infrastructure" -Current 0 -Total 5
             exit 1
         }
@@ -265,7 +278,7 @@ function Start-Services {
             @{ Name = "dm-mongo"; Label = "Mongo" },
             @{ Name = "dm-minio"; Label = "MinIO" },
             @{ Name = "dm-imgproxy"; Label = "imgproxy" },
-            @{ Name = "dm-es"; Label = "OpenSearch" },
+            @{ Name = "dm-loki"; Label = "Loki" },
             @{ Name = "dm-rmq"; Label = "RabbitMQ" }
         )
         if (-not (Wait-ServicesHealthy -Label "Infrastructure" -Services $infraServices -TimeoutSeconds 120)) {
@@ -289,7 +302,7 @@ function Start-Services {
         if (-not $migrationOk) { exit 1 }
 
         # Applications - start containers
-        & $script:DockerPath compose up -d dm-mail-worker dm-search-worker dm-notification-worker dmapi 2>&1 | Out-Null
+        & $script:DockerPath compose up -d dm-mail-worker dm-notification-worker dmapi 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) {
             Write-FailedStep -Label "Applications" -Current 0 -Total 4
             exit 1
@@ -298,7 +311,6 @@ function Start-Services {
         $appServices = @(
             @{ Name = "dm-api"; Label = "API" },
             @{ Name = "dm-mail-worker"; Label = "Mail" },
-            @{ Name = "dm-search-worker"; Label = "Search" },
             @{ Name = "dm-notification-worker"; Label = "Notify" }
         )
         if (-not (Wait-ServicesHealthy -Label "Applications" -Services $appServices -TimeoutSeconds 90)) {
@@ -416,6 +428,21 @@ function Invoke-WithAnimationAndOutput {
     }
 }
 
+function Get-SeedSummary {
+    param(
+        [string]$Output,
+        [string]$Prefix
+    )
+
+    # The seeder prints exactly one "<prefix>: ..." summary line per command,
+    # already filtered down to what it actually created
+    $line = ($Output -split "`n" | Where-Object { $_ -match "^${Prefix}:" } | Select-Object -First 1)
+    if ($line) {
+        return ($line -replace "^${Prefix}:\s*", "").Trim()
+    }
+    return "done"
+}
+
 function Invoke-Seed {
     Write-Host ""
     Write-Host "DM3 Seed" -ForegroundColor Cyan
@@ -429,32 +456,22 @@ function Invoke-Seed {
         exit 1
     }
 
-    # Users (with animation)
-    $response = Invoke-WithAnimationAndOutput -Label "Users" -Command "curl.exe" -Arguments '-s -X POST "http://localhost:5000/v1/moderation/seed" -H "Content-Type: application/json"'
-    if ($null -eq $response) { exit 1 }
-    $result = $response | ConvertFrom-Json
-    Write-CompletedStep -Label "Users" -Total 1 -Detail "$($result.created) created"
+    # Seeding runs in its own container (tools profile), not over HTTP.
+    # --build keeps the image in step with the seed data in the sources.
+    Push-Location $DockerDir
+    try {
+        # Users (with animation)
+        $response = Invoke-WithAnimationAndOutput -Label "Users" -Command $script:DockerPath -Arguments "compose run --rm -T --build seeder users"
+        if ($null -eq $response) { exit 1 }
+        Write-CompletedStep -Label "Users" -Total 1 -Detail (Get-SeedSummary -Output $response -Prefix "users")
 
-    # Content (with animation)
-    $compResponse = Invoke-WithAnimationAndOutput -Label "Content" -Command "curl.exe" -Arguments '-s -X POST "http://localhost:5000/v1/moderation/seed/comprehensive" -H "Content-Type: application/json"'
-    if ($null -eq $compResponse) { exit 1 }
-    $compResult = $compResponse | ConvertFrom-Json
-
-    # Build content summary
-    $contentParts = @()
-    if ($compResult.gamesCreated -gt 0) { $contentParts += "$($compResult.gamesCreated) games" }
-    if ($compResult.postsCreated -gt 0) { $contentParts += "$($compResult.postsCreated) posts" }
-    if ($compResult.charactersCreated -gt 0) { $contentParts += "$($compResult.charactersCreated) chars" }
-    if ($compResult.topicsCreated -gt 0) { $contentParts += "$($compResult.topicsCreated) topics" }
-    if ($compResult.commentsCreated -gt 0) { $contentParts += "$($compResult.commentsCreated) comments" }
-    if ($compResult.blogsCreated -gt 0) { $contentParts += "$($compResult.blogsCreated) blogs" }
-    if ($compResult.publicationsCreated -gt 0) { $contentParts += "$($compResult.publicationsCreated) pubs" }
-    if ($compResult.messagesCreated -gt 0) { $contentParts += "$($compResult.messagesCreated) msgs" }
-    if ($compResult.pollsCreated -gt 0) { $contentParts += "$($compResult.pollsCreated) polls" }
-    if ($compResult.reviewsCreated -gt 0) { $contentParts += "$($compResult.reviewsCreated) reviews" }
-
-    $contentSummary = if ($contentParts.Count -gt 0) { $contentParts -join ", " } else { "nothing new (already seeded)" }
-    Write-CompletedStep -Label "Content" -Total 1 -Detail $contentSummary
+        # Content (with animation)
+        $compResponse = Invoke-WithAnimationAndOutput -Label "Content" -Command $script:DockerPath -Arguments "compose run --rm -T --build seeder content"
+        if ($null -eq $compResponse) { exit 1 }
+        Write-CompletedStep -Label "Content" -Total 1 -Detail (Get-SeedSummary -Output $compResponse -Prefix "content")
+    } finally {
+        Pop-Location
+    }
 
     # Restart API (with animation)
     if (-not (Invoke-WithAnimation -Label "Restart API" -Command $script:DockerPath -Arguments "restart dm-api")) {
@@ -493,8 +510,8 @@ function Show-Status {
     }
 
     # Group services
-    $infra = @("pg", "mongo", "rmq", "es", "minio", "imgproxy")
-    $apps = @("api", "mail-worker", "search-worker", "notification-worker", "migration")
+    $infra = @("pg", "mongo", "rmq", "minio", "imgproxy")
+    $apps = @("api", "mail-worker", "notification-worker", "migration")
     $tools = @("mailhog", "grafana", "prometheus", "jaeger")
 
     $all = @{}

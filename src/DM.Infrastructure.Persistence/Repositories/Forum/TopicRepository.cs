@@ -37,9 +37,6 @@ internal class TopicRepository : ITopicRepository
         _dateTimeProvider = dateTimeProvider;
     }
 
-    private static readonly Guid NewsBoardId = Guid.Parse("00000000-0000-0000-0000-000000000008");
-    private static readonly Guid ErrorsBoardId = Guid.Parse("00000000-0000-0000-0000-000000000006");
-
     // --- READ ---
 
     /// <inheritdoc />
@@ -224,6 +221,23 @@ internal class TopicRepository : ITopicRepository
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyDictionary<Guid, PeriodDigest>> GetPeriodDigests(
+        IReadOnlyCollection<Guid> topicIds, CancellationToken ct = default)
+    {
+        if (topicIds.Count == 0) return new Dictionary<Guid, PeriodDigest>();
+
+        var markers = await _dbContext.PeriodDigestTopics
+            .TagWith("DM.Forum.TopicPeriodDigests")
+            .Where(d => topicIds.Contains(d.TopicId))
+            .Select(d => new { d.TopicId, d.Year, d.Month })
+            .ToListAsync(ct);
+
+        return markers.ToDictionary(
+            m => m.TopicId,
+            m => new PeriodDigest { Year = m.Year, Month = m.Month });
+    }
+
+    /// <inheritdoc />
     /// <inheritdoc />
     // IgnoreQueryFilters is the whole point of these two probes: the soft-delete
     // filter is global, so without it they can only ever see rows that are NOT
@@ -321,44 +335,69 @@ internal class TopicRepository : ITopicRepository
         var topicId = _guidFactory.Create();
         var now = _dateTimeProvider.Now;
 
-        // Calculate next TopicNumber for this board
-        var maxTopicNumber = await _dbContext.Topics
-            .TagWith("DM.Forum.MaxTopicNumber")
-            .Where(t => t.BoardId == boardId)
-            .Select(t => (int?)t.TopicNumber)
-            .MaxAsync(ct) ?? 0;
-        var topicNumber = maxTopicNumber + 1;
-
-        var topic = new Entities.Forum.Topic
+        // The API host configures EnableRetryOnFailure, and a retrying execution
+        // strategy refuses a transaction opened by hand — it has no way to replay
+        // one. Everything below therefore runs as a single retriable unit.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
+        await strategy.ExecuteAsync(async () =>
         {
-            TopicId = topicId,
-            BoardId = boardId,
-            TopicNumber = topicNumber,
-            AuthorId = authorId,
-            Title = createTopic.Title.Trim(),
-            Text = createTopic.Text.Trim(),
-            CreatedUtc = now,
-            IsRemoved = false,
-            IsClosed = false,
-            IsAttached = false,
-            CommentCount = 0
-        };
+            if (attempted)
+            {
+                // A retry replays this whole block, so anything the failed attempt
+                // left tracked has to go: still Added it would insert the topic a
+                // second time, already Unchanged it would insert nothing at all.
+                _dbContext.ChangeTracker.Clear();
+            }
 
-        _dbContext.Topics.Add(topic);
+            attempted = true;
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
 
-        // Update board's last topic (denormalized fields)
-        var board = await _dbContext.Boards.FindAsync([boardId], ct);
-        if (board != null)
-        {
-            board.LastTopicId = topicId;
-            board.LastTopicNumber = topicNumber;
-            board.LastTopicTitle = topic.Title;
-            board.LastTopicAuthorId = authorId;
-            board.LastTopicCreatedUtc = now;
-            board.TopicsCount++;
-        }
+            // TopicNumber is allocated as MAX+1 and the board's counters are a
+            // read-modify-write, so both are wrong the moment two topics are created
+            // in one board at once. The board row is written by this method anyway:
+            // locking it first serializes creation per board, which is the smallest
+            // scope that makes the number and the counter correct at the same time.
+            // The unique index on (BoardId, TopicNumber) stays as the invariant — it
+            // is what guarantees a topic URL resolves to one topic no matter who writes.
+            await _dbContext.Database.ExecuteSqlRawAsync(
+                """SELECT "BoardId" FROM "Boards" WHERE "BoardId" = {0} FOR UPDATE""", [boardId], ct);
 
-        await _dbContext.SaveChangesAsync(ct);
+            // IgnoreQueryFilters: a removed topic keeps its number. Counted under the
+            // soft-delete filter, deleting the newest topic handed its number to the
+            // next one, and the deleted topic's permanent URL started resolving to a
+            // different topic.
+            var maxTopicNumber = await _dbContext.Topics
+                .IgnoreQueryFilters()
+                .TagWith("DM.Forum.MaxTopicNumber")
+                .Where(t => t.BoardId == boardId)
+                .Select(t => (int?)t.TopicNumber)
+                .MaxAsync(ct) ?? 0;
+
+            _dbContext.Topics.Add(new Entities.Forum.Topic
+            {
+                TopicId = topicId,
+                BoardId = boardId,
+                TopicNumber = maxTopicNumber + 1,
+                AuthorId = authorId,
+                Title = createTopic.Title.Trim(),
+                Text = createTopic.Text.Trim(),
+                CreatedUtc = now,
+                IsRemoved = false,
+                IsClosed = false,
+                IsAttached = false
+            });
+            await _dbContext.SaveChangesAsync(ct);
+
+            // The board summary is recomputed here too, rather than incremented, so
+            // that creation, deletion and moving share one definition of it. The row
+            // lock above already serializes creation per board, so the extra read
+            // costs a query and buys the guarantee that the three paths cannot drift.
+            await RefreshBoardTopicSummary(boardId, ct);
+
+            await _dbContext.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        });
 
         return await _dbContext.Topics
             .TagWith("DM.Forum.CreatedTopic")
@@ -395,12 +434,22 @@ internal class TopicRepository : ITopicRepository
                 topic.IsAttached = updateTopic.IsAttached.Value;
             }
 
+            // A move changes the summary of both boards: the one losing the topic
+            // and the one gaining it.
+            var previousBoardId = topic.BoardId;
             if (boardId.HasValue)
             {
                 topic.BoardId = boardId.Value;
             }
 
             await _dbContext.SaveChangesAsync();
+
+            if (boardId.HasValue && boardId.Value != previousBoardId)
+            {
+                await RefreshBoardTopicSummary(previousBoardId);
+                await RefreshBoardTopicSummary(boardId.Value);
+                await _dbContext.SaveChangesAsync();
+            }
         }
 
         return await _dbContext.Topics
@@ -418,7 +467,61 @@ internal class TopicRepository : ITopicRepository
         {
             topic.IsRemoved = true;
             await _dbContext.SaveChangesAsync();
+            await RefreshBoardTopicSummary(topic.BoardId);
+            await _dbContext.SaveChangesAsync();
         }
+    }
+
+    /// <summary>
+    /// Recompute a board's denormalized topic summary from the topics themselves.
+    /// </summary>
+    /// <remarks>
+    /// Recomputed, not incremented. An increment is only ever as correct as the
+    /// number of places that remember to apply it, and the count used to be
+    /// raised on creation and adjusted nowhere else: deleting a topic or moving
+    /// one to another board left both boards claiming something untrue, with no
+    /// way back short of touching the database by hand. A recompute is the single
+    /// definition of what the summary means, and it heals a row that is already
+    /// wrong instead of carrying the error forward.
+    ///
+    /// The soft-delete filter applies, so a removed topic drops out of both the
+    /// count and the "last topic" fields, which is what a reader expects to see.
+    /// </remarks>
+    private async Task RefreshBoardTopicSummary(Guid boardId, CancellationToken ct = default)
+    {
+        var board = await _dbContext.Boards.FindAsync([boardId], ct);
+        if (board == null)
+        {
+            return;
+        }
+
+        var summary = await _dbContext.Topics
+            .TagWith("DM.Forum.BoardTopicSummary")
+            .Where(t => t.BoardId == boardId)
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Count = g.Count(),
+                Last = g.OrderByDescending(t => t.CreatedUtc)
+                    .ThenByDescending(t => t.TopicNumber)
+                    .Select(t => new
+                    {
+                        t.TopicId,
+                        t.TopicNumber,
+                        t.Title,
+                        t.AuthorId,
+                        t.CreatedUtc
+                    })
+                    .First()
+            })
+            .FirstOrDefaultAsync(ct);
+
+        board.TopicsCount = summary?.Count ?? 0;
+        board.LastTopicId = summary?.Last.TopicId;
+        board.LastTopicNumber = summary?.Last.TopicNumber;
+        board.LastTopicTitle = summary?.Last.Title;
+        board.LastTopicAuthorId = summary?.Last.AuthorId;
+        board.LastTopicCreatedUtc = summary?.Last.CreatedUtc;
     }
 
     /// <inheritdoc />

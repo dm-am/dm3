@@ -3,9 +3,13 @@
 :root,
 html.theme_Light {
   --text: #333;
-  --text-muted: #999;
+  /* AA на белой странице и на карточке: #999 давал 2.85 при пороге 4.5.
+     #737373 — минимальный шаг, проходящий оба фона (4.74 / 4.50). */
+  --text-muted: #737373;
   --text-meta: #7b532b;
-  --accent-green: #393;
+  /* AA как цвет текста: #393 давал 3.66 на странице. #267326 — тот же
+     зеленый, минимально темнее (5.89 / 5.60 / 4.55 на собственном тинте). */
+  --accent-green: #267326;
   --accent-red: #b22222;
   --accent-yellow: #d4a000;
   --text-on-green: #363;
@@ -16,10 +20,6 @@ html.theme_Light {
   --link-hover: #5090c0;
   --accent-green-hover: #65c265;
   --accent-red-hover: #d33;
-  --accent-green-muted: #8a9a8a;
-  --accent-red-muted: #c08080;
-  --link-muted: #7080a0;
-  --text-muted-muted: #bbb;
   --link-nav: #999;
   --link-nav-hover: #444;
   --bg-page: #fff;
@@ -111,7 +111,10 @@ html.theme_Light {
   --award-bronze: #cd7f32;
   --achievement-platinum: #7fcfd4;
   --award-diamond: var(--achievement-platinum); /* diamond award tier = achievement platinum */
-  --tier-badge-text: #fff;
+  /* Темный, а не белый: белый на всех четырех металлах дает 1.78-3.14 при
+     пороге 4.5, а #2a2a2a проходит на всех (бронза 4.56, платина 8.05).
+     Металлы тема-независимы, поэтому значение одно на обе темы. */
+  --tier-badge-text: #2a2a2a;
 }
 
 html.theme_Dark {
@@ -119,7 +122,9 @@ html.theme_Dark {
   --text-muted: #a0a0a0;
   --text-meta: #d4a574;
   --accent-green: #8fbc8f;
-  --accent-red: #cd5c5c;
+  /* AA как цвет текста в темной теме: #cd5c5c давал 4.00 на странице.
+     #de9292 — тот же красный, минимально светлее (6.54 / 5.90). */
+  --accent-red: #de9292;
   --accent-yellow: #e0b040;
   --text-on-green: #8fbc8f;
   --text-on-red: #d49a9a;
@@ -129,10 +134,6 @@ html.theme_Dark {
   --link-hover: #9cc8f0;
   --accent-green-hover: #a8d4a8;
   --accent-red-hover: #e07070;
-  --accent-green-muted: #7a9a7a;
-  --accent-red-muted: #b08080;
-  --link-muted: #6a90b0;
-  --text-muted-muted: #808080;
   --link-nav: #a0a0a0;
   --link-nav-hover: #ccc;
   --bg-page: #222222;
@@ -218,7 +219,10 @@ html.theme_Dark {
   --award-bronze: #cd7f32;
   --achievement-platinum: #7fcfd4;
   --award-diamond: var(--achievement-platinum); /* diamond award tier = achievement platinum */
-  --tier-badge-text: #fff;
+  /* Темный, а не белый: белый на всех четырех металлах дает 1.78-3.14 при
+     пороге 4.5, а #2a2a2a проходит на всех (бронза 4.56, платина 8.05).
+     Металлы тема-независимы, поэтому значение одно на обе темы. */
+  --tier-badge-text: #2a2a2a;
 }
 
 /* Suppress all transitions during theme switch — toggled synchronously in App.vue */
