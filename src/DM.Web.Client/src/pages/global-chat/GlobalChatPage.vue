@@ -40,8 +40,8 @@ import {
 import { useVirtualScroll } from "@/shared/lib/composables";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useGlobalSignalR } from "@/shared/lib/composables/useSignalR";
-import { EventType } from "@/shared/api/models/notifications/signalr";
-import type { SignalRNotification } from "@/shared/api/models/notifications/signalr";
+import { NotificationType } from "@/shared/api/models/notifications";
+import type { SignalRNotification } from "@/shared/api/models/notifications";
 import { useMessageToolbar } from "@/shared/lib/composables/useMessageToolbar";
 import {
   useAnchoredInfiniteScroll,
@@ -429,7 +429,7 @@ watch(
 // dropped (store.addMessage already no-ops otherwise).
 const isAtLatest = computed(() => !selectedDate.value && !hasMoreAfter.value);
 
-// SignalR push: the backend broadcasts EventType.NewGlobalChatMessage to
+// SignalR push: the backend broadcasts NotificationType.NewGlobalChatMessage to
 // every open connection — guests included (the hub accepts anonymous
 // connections as receive-only broadcast listeners). The payload
 // intentionally omits message text (BBCode rendering stays server-side), so
@@ -462,7 +462,7 @@ async function fetchNewMessages() {
 }
 
 function handleGlobalChatNotification(notification: SignalRNotification) {
-  if (notification.eventType !== EventType.NewGlobalChatMessage) return;
+  if (notification.eventType !== NotificationType.NewGlobalChatMessage) return;
   fetchNewMessages();
 }
 

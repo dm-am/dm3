@@ -150,8 +150,8 @@ import { ToastContainer } from "@/shared/ui/Toast";
 import { ScrollNav } from "@/shared/ui/ScrollNav";
 import { MobileDrawer } from "@/shared/ui/Drawer";
 import { useGlobalSignalR } from "@/shared/lib/composables/useSignalR";
-import { EventType } from "@/shared/api/models/notifications/signalr";
-import type { SignalRNotification } from "@/shared/api/models/notifications/signalr";
+import { NotificationType } from "@/shared/api/models/notifications";
+import type { SignalRNotification } from "@/shared/api/models/notifications";
 
 const uiStore = useUiStore();
 const userStore = useAuthStore();
@@ -212,14 +212,14 @@ watch(
 // Handle SignalR notifications
 function handleNotification(notification: SignalRNotification) {
   switch (notification.eventType) {
-    case EventType.NewMessage:
+    case NotificationType.NewMessage:
       // Refresh the unread messages count when a new message arrives. The push
       // is addressed to the participants of the chat; global chat has its own
       // broadcast event and never arrives here. Nothing is stored behind this
       // event, which is why the notification bell is deliberately left alone.
       messagingStore.fetchUnreadCount();
       break;
-    case EventType.UserAvatarChanged:
+    case NotificationType.UserAvatarChanged:
       // Live avatar update in open tabs. If the current user changed,
       // refresh the user store. Other users' avatars in chat/
       // comments update on the next render when the DOM repaints

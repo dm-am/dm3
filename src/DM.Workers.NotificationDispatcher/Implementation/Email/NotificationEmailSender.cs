@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
@@ -116,7 +115,22 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
         }
     }
 
-    private static string BuildEmailBody(EventType eventType, object metadata)
+    /// <summary>
+    /// The letter as HTML.
+    /// </summary>
+    /// <remarks>
+    /// Metadata carries titles and names their authors typed, and this is where they
+    /// become markup, so this is where they are escaped, through the encoder the Razor
+    /// templates in DM.Infrastructure.Mail render through. A game titled with an
+    /// anchor tag used to arrive as a working link to another site inside a letter
+    /// signed dm.am.
+    ///
+    /// Internal rather than private so that the escaping can be checked without a
+    /// database, a broker and a mailbox.
+    /// </remarks>
+    /// <param name="eventType">Event the letter is about</param>
+    /// <param name="metadata">Metadata bag of the notification</param>
+    internal static string BuildEmailBody(EventType eventType, object metadata)
     {
         var sb = new StringBuilder();
         sb.AppendLine("<!DOCTYPE html>");
@@ -131,44 +145,23 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
         // Content
         sb.AppendLine("<div style=\"padding: 20px; background: #f9f9f9;\">");
 
-        var subject = NotificationText.GetTitle(eventType);
+        var subject = NotificationText.EscapeHtml(NotificationText.GetTitle(eventType));
         sb.AppendLine($"<h2 style=\"color: #333;\">{subject}</h2>");
 
         // Format metadata as readable content
-        if (metadata != null)
+        var fields = NotificationText.ReadMetadata(metadata);
+        if (fields.Count > 0)
         {
-            try
+            sb.AppendLine("<dl style=\"margin: 0;\">");
+            foreach (var (name, value) in fields)
             {
-                var metadataJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions
-                {
-                    WriteIndented = true,
-                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-                });
-
-                // Extract useful fields from metadata
-                using var doc = JsonDocument.Parse(metadataJson);
-                var root = doc.RootElement;
-
-                sb.AppendLine("<dl style=\"margin: 0;\">");
-                foreach (var prop in root.EnumerateObject())
-                {
-                    var name = NotificationText.FormatPropertyName(prop.Name);
-                    var value = NotificationText.FormatPropertyValue(prop.Value);
-                    if (!string.IsNullOrEmpty(value))
-                    {
-                        sb.AppendLine($"<dt style=\"font-weight: bold; color: #555; margin-top: 10px;\">{name}</dt>");
-                        sb.AppendLine($"<dd style=\"margin-left: 0; color: #333;\">{value}</dd>");
-                    }
-                }
-                sb.AppendLine("</dl>");
+                sb.AppendLine(
+                    $"<dt style=\"font-weight: bold; color: #555; margin-top: 10px;\">{NotificationText.EscapeHtml(name)}</dt>");
+                sb.AppendLine(
+                    $"<dd style=\"margin-left: 0; color: #333;\">{NotificationText.EscapeHtml(value)}</dd>");
             }
-            catch
-            {
-                // If metadata parsing fails, just show it as JSON
-                sb.AppendLine("<pre style=\"background: #eee; padding: 10px; overflow: auto;\">");
-                sb.AppendLine(JsonSerializer.Serialize(metadata));
-                sb.AppendLine("</pre>");
-            }
+
+            sb.AppendLine("</dl>");
         }
 
         sb.AppendLine("</div>");

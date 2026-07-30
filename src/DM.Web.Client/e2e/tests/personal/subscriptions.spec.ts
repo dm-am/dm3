@@ -3,23 +3,71 @@ import { authenticatedContext } from "../../fixtures/auth";
 
 const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
 
+/** SubscriptionTargetType.Game. */
+const GAME_TARGET_TYPE = 1;
+
 let authContext: APIRequestContext;
-let testSubscriptionId: string | null = null;
+const createdSubscriptionIds: string[] = [];
 
 test.beforeAll(async () => {
   authContext = await authenticatedContext();
 });
 
 test.afterAll(async () => {
-  // Cleanup: unsubscribe if we created one
-  if (testSubscriptionId && authContext) {
-    await authContext.delete(
-      `${API_URL}/v1/users/me/subscriptions/${testSubscriptionId}`,
-    );
+  // Best-effort cleanup of everything this worker subscribed to; a second
+  // delete of a subscription a test already removed is expected.
+  for (const id of createdSubscriptionIds) {
+    await authContext.delete(`${API_URL}/v1/users/me/subscriptions/${id}`);
   }
 
   if (authContext) await authContext.dispose();
 });
+
+/**
+ * The id of a seeded game at the given position.
+ *
+ * Four checks here used to stand down when the list came back empty or
+ * not-ok — `test.skip(true, "Cannot get games")` — so the subscriptions tier
+ * reported green against a stack whose games endpoint was broken. A seed
+ * without games is an unmet precondition, and an unmet precondition fails.
+ *
+ * Tests that create or remove a subscription take different games: a
+ * subscription is unique per user and target, and fullyParallel puts the tests
+ * of one file in different workers, where two of them sharing one game would
+ * unsubscribe each other. The paging parameter is `take` — `size` was not one
+ * and simply left the default page in place.
+ */
+async function gameId(index: number): Promise<string> {
+  const response = await authContext.get(`${API_URL}/v1/games?take=3`);
+
+  expect(response.ok()).toBeTruthy();
+  const games = await response.json();
+  expect(games).toHaveProperty("resources");
+  expect(games.resources.length).toBeGreaterThan(index);
+  return games.resources[index].id;
+}
+
+/** Subscribes the signed-in user to a game and returns the subscription id. */
+async function subscribeToGame(targetId: string): Promise<string> {
+  const response = await authContext.post(
+    `${API_URL}/v1/users/me/subscriptions`,
+    {
+      headers: { "Content-Type": "application/json" },
+      data: {
+        targetType: GAME_TARGET_TYPE,
+        targetId,
+      },
+    },
+  );
+
+  // Subscribing twice is not an error: the endpoint answers with the existing
+  // subscription, under the same 201.
+  expect(response.status()).toBe(201);
+  const subscription = await response.json();
+  expect(subscription).toHaveProperty("id");
+  createdSubscriptionIds.push(subscription.id);
+  return subscription.id;
+}
 
 test.describe("Subscriptions API", () => {
   test("should get my subscriptions list", async () => {
@@ -34,28 +82,15 @@ test.describe("Subscriptions API", () => {
   });
 
   test("should check subscription status", async () => {
-    // Check subscription to a game (need a valid game ID)
-    // First, get a game to subscribe to
-    const gamesResponse = await authContext.get(`${API_URL}/v1/games?size=1`);
-    if (!gamesResponse.ok()) {
-      test.skip(true, "Cannot get games");
-      return;
-    }
-
-    const games = await gamesResponse.json();
-    if (!games.resources || games.resources.length === 0) {
-      test.skip(true, "No games available");
-      return;
-    }
-
-    const gameId = games.resources[0].id;
+    const targetId = await gameId(0);
 
     // The query parameter is `type`, not `targetType` — the previous spelling
     // silently bound the enum default. And "not subscribed" is a documented
     // 404, not an error: the endpoint answers with the subscription resource
-    // or with nothing.
+    // or with nothing. Which of the two it is depends on whether this worker
+    // has already subscribed to that game, so both are accepted.
     const response = await authContext.get(
-      `${API_URL}/v1/users/me/subscriptions/check?type=Game&targetId=${gameId}`,
+      `${API_URL}/v1/users/me/subscriptions/check?type=Game&targetId=${targetId}`,
     );
 
     expect([200, 404]).toContain(response.status());
@@ -66,51 +101,28 @@ test.describe("Subscriptions API", () => {
   });
 
   test("should subscribe to a game", async () => {
-    // Get a game to subscribe to
-    const gamesResponse = await authContext.get(`${API_URL}/v1/games?size=1`);
-    if (!gamesResponse.ok()) {
-      test.skip(true, "Cannot get games");
-      return;
-    }
+    const targetId = await gameId(1);
+    const subscriptionId = await subscribeToGame(targetId);
 
-    const games = await gamesResponse.json();
-    if (!games.resources || games.resources.length === 0) {
-      test.skip(true, "No games available");
-      return;
-    }
-
-    const gameId = games.resources[0].id;
-
-    // Subscribe
-    const response = await authContext.post(
-      `${API_URL}/v1/users/me/subscriptions`,
-      {
-        headers: { "Content-Type": "application/json" },
-        data: {
-          targetType: 1, // Game
-          targetId: gameId,
-        },
-      },
+    // The subscription this test just created is the one the check endpoint
+    // reports, so here 200 is the only acceptable answer.
+    const checkResponse = await authContext.get(
+      `${API_URL}/v1/users/me/subscriptions/check?type=Game&targetId=${targetId}`,
     );
 
-    // 201 Created or 409 if already subscribed
-    expect([201, 409]).toContain(response.status());
-
-    if (response.status() === 201) {
-      const data = await response.json();
-      testSubscriptionId = data?.id;
-    }
+    expect(checkResponse.status()).toBe(200);
+    const subscription = await checkResponse.json();
+    expect(subscription.id).toBe(subscriptionId);
   });
 
   test("should unsubscribe", async () => {
-    test.skip(!testSubscriptionId, "No subscription to delete");
+    const subscriptionId = await subscribeToGame(await gameId(2));
 
     const response = await authContext.delete(
-      `${API_URL}/v1/users/me/subscriptions/${testSubscriptionId}`,
+      `${API_URL}/v1/users/me/subscriptions/${subscriptionId}`,
     );
 
     expect(response.status()).toBe(204);
-    testSubscriptionId = null;
   });
 
   test("should require authentication", async ({ request }) => {

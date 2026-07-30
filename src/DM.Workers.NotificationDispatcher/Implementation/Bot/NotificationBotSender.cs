@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -67,7 +68,11 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
             .Select(u => new { u.UserId, u.DiscordId, u.TelegramId })
             .ToDictionaryAsync(u => u.UserId, ct);
 
-        var message = BuildMessage(eventType, notification.Metadata);
+        // Two channels, two markup languages: Telegram parses the message as HTML and
+        // Discord prints it as text. One message for both meant one of them was always
+        // wrong.
+        var discordMessage = BuildDiscordMessage(eventType, notification.Metadata);
+        var telegramMessage = BuildTelegramMessage(eventType, notification.Metadata);
 
         foreach (var userId in userIds)
         {
@@ -83,7 +88,7 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
             {
                 if (ShouldSendToChannel(settings?.DiscordPreferences, category.Value))
                 {
-                    await SendDiscordMessage(botIds.DiscordId, message, ct);
+                    await SendDiscordMessage(botIds.DiscordId, discordMessage, ct);
                 }
             }
 
@@ -92,7 +97,7 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
             {
                 if (ShouldSendToChannel(settings?.TelegramPreferences, category.Value))
                 {
-                    await SendTelegramMessage(botIds.TelegramId, message, ct);
+                    await SendTelegramMessage(botIds.TelegramId, telegramMessage, ct);
                 }
             }
         }
@@ -184,37 +189,58 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
         }
     }
 
-    private static string BuildMessage(EventType eventType, object metadata)
+    /// <summary>
+    /// The Telegram message. It is sent with parse_mode HTML, so everything put into
+    /// it is escaped first.
+    /// </summary>
+    /// <remarks>
+    /// parse_mode is kept rather than dropped: bold is the only formatting the channel
+    /// has, and Telegram accepts exactly what the shared encoder produces. Unescaped,
+    /// a title holding an angle bracket made the whole message invalid markup,
+    /// Telegram answered 400, and the notification was lost behind a warning in the
+    /// log.
+    ///
+    /// Internal rather than private so that the escaping can be checked without a
+    /// database, a broker and a bot token.
+    /// </remarks>
+    /// <param name="eventType">Event the message is about</param>
+    /// <param name="metadata">Metadata bag of the notification</param>
+    internal static string BuildTelegramMessage(EventType eventType, object metadata)
     {
-        var title = NotificationText.GetTitle(eventType);
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"<b>Dungeon Master: {title}</b>");
+        var sb = new StringBuilder();
+        sb.AppendLine($"<b>Dungeon Master: {NotificationText.EscapeHtml(NotificationText.GetTitle(eventType))}</b>");
         sb.AppendLine();
 
-        if (metadata != null)
+        foreach (var (name, value) in NotificationText.ReadMetadata(metadata))
         {
-            try
-            {
-                var metadataJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions
-                {
-                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-                });
+            sb.AppendLine($"<b>{NotificationText.EscapeHtml(name)}:</b> {NotificationText.EscapeHtml(value)}");
+        }
 
-                using var doc = JsonDocument.Parse(metadataJson);
-                foreach (var prop in doc.RootElement.EnumerateObject())
-                {
-                    var name = NotificationText.FormatPropertyName(prop.Name);
-                    var value = NotificationText.FormatPropertyValue(prop.Value);
-                    if (!string.IsNullOrEmpty(value))
-                    {
-                        sb.AppendLine($"<b>{name}:</b> {value}");
-                    }
-                }
-            }
-            catch
-            {
-                // Ignore metadata parsing errors
-            }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The Discord message. Discord renders the content as text, so it carries no
+    /// markup and nothing in it is escaped.
+    /// </summary>
+    /// <remarks>
+    /// One message used to be built for both channels in Telegram's HTML, and Discord
+    /// printed it with the tags showing. Escaping that shared string would only have
+    /// moved the damage: an ampersand in a game title would have reached Discord as an
+    /// entity. The two channels do not share a markup language, so they no longer
+    /// share a message.
+    /// </remarks>
+    /// <param name="eventType">Event the message is about</param>
+    /// <param name="metadata">Metadata bag of the notification</param>
+    internal static string BuildDiscordMessage(EventType eventType, object metadata)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Dungeon Master: {NotificationText.GetTitle(eventType)}");
+        sb.AppendLine();
+
+        foreach (var (name, value) in NotificationText.ReadMetadata(metadata))
+        {
+            sb.AppendLine($"{name}: {value}");
         }
 
         return sb.ToString();

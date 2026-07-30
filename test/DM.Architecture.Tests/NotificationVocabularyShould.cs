@@ -22,10 +22,15 @@ namespace DM.Architecture.Tests;
 /// names met.
 ///
 /// Neither tier can import the other, so the pair is held from outside: the
-/// client table is read from its source and put to GetTitle. The second test is
-/// what makes the first one worth having — it keeps the client table single by
-/// keeping the enum it is keyed by inside the notification slice, so there is
-/// nowhere else for the words to appear.
+/// client table is read from its source and put to GetTitle. The rest of the
+/// suite is what makes that pairing worth having. One test keeps the words
+/// inside the notification slice, so there is nowhere else for a second set of
+/// them to appear. Two more hold the vocabulary they are keyed by: the client
+/// spells an event the way the server spells it, and spells it once. That pair
+/// answers a second, numeric copy of the enum that lived in shared/api, where
+/// NewPoll had drifted to 51 — the server's slot for DeletedPublicationComment —
+/// and the wire it was written against, where the hub sent the event as its
+/// number while the list sent its name.
 /// </remarks>
 public class NotificationVocabularyShould
 {
@@ -52,6 +57,16 @@ public class NotificationVocabularyShould
     private static readonly string ClientTitleTable =
         Path.Combine(NotificationSlice, "lib", "notificationTitle.ts");
 
+    /// <summary>The one place the client is allowed to spell the server's events.</summary>
+    private static readonly string ClientEventTable =
+        Path.Combine(ClientSource, "shared", "api", "models", "notifications", "index.ts");
+
+    /// <summary>
+    /// How many of an enum's members have to be server events before it counts as
+    /// a copy of the vocabulary rather than a coincidence of naming.
+    /// </summary>
+    private const int MembersThatMakeACopy = 3;
+
     /// <summary>One row of the client table: [NotificationType.X]: "Y".</summary>
     private static readonly Regex ClientRow = new(
         @"\[NotificationType\.(\w+)\]:\s*""([^""]+)""", RegexOptions.Compiled);
@@ -60,9 +75,25 @@ public class NotificationVocabularyShould
     private static readonly Regex ClientFallback = new(
         @"UNKNOWN_TITLE\s*=\s*""([^""]+)""", RegexOptions.Compiled);
 
-    /// <summary>Any qualified use of the enum the titles are keyed by.</summary>
-    private static readonly Regex NamesAnEvent = new(
-        @"(?<![A-Za-z])NotificationType\.\w+", RegexOptions.Compiled);
+    /// <summary>
+    /// A word given to an event: a table row [NotificationType.X]: "..." or a
+    /// switch arm that answers one with a literal. Both are shapes the drift
+    /// actually took. Naming an event to decide what to do about it is not one of
+    /// them, and a screen reacting to a push does exactly that.
+    /// </summary>
+    private static readonly Regex TitlesAnEvent = new(
+        @"NotificationType\.\w+\s*\]?\s*:\s*(return\s+)?""", RegexOptions.Compiled);
+
+    /// <summary>Any TypeScript enum: its name and its body.</summary>
+    private static readonly Regex TypeScriptEnum = new(
+        @"enum\s+(\w+)\s*\{([^}]*)\}", RegexOptions.Compiled);
+
+    /// <summary>One member of an enum body: the name and the value written for it.</summary>
+    private static readonly Regex EnumMember = new(
+        @"^\s*(\w+)\s*=\s*([^,\r\n]+?),?\s*$", RegexOptions.Compiled | RegexOptions.Multiline);
+
+    /// <summary>A line comment, dropped so a commented-out member is not read as one.</summary>
+    private static readonly Regex LineComment = new(@"//[^\r\n]*", RegexOptions.Compiled);
 
     [Fact]
     public void TitleAnEventTheSameWayInEveryChannel()
@@ -72,9 +103,8 @@ public class NotificationVocabularyShould
         rows.Count.Should().BeGreaterThan(10,
             "a rule that matches nothing passes: the list titles more than ten events");
 
-        var getTitle = Dispatcher.GetType(SharedType, throwOnError: true)!
-            .GetMethod("GetTitle", BindingFlags.Public | BindingFlags.Static)!;
-        var events = getTitle.GetParameters()[0].ParameterType;
+        var getTitle = Titles;
+        var events = ServerEvents;
 
         var drift = new List<string>();
         foreach (Match row in rows)
@@ -114,26 +144,135 @@ public class NotificationVocabularyShould
     }
 
     [Fact]
-    public void NameAnEventOnlyInTheNotificationSlice()
+    public void TitleAnEventOnlyInTheNotificationSlice()
     {
         var root = RepositoryRoot;
         var slice = Path.Combine(root, NotificationSlice);
 
-        var naming = SourceFiles(Path.Combine(root, ClientSource))
-            .Where(file => NamesAnEvent.IsMatch(File.ReadAllText(file)))
+        var titling = SourceFiles(Path.Combine(root, ClientSource))
+            .Where(file => TitlesAnEvent.IsMatch(File.ReadAllText(file)))
             .ToArray();
 
-        naming
+        titling
             .Where(file => file.StartsWith(slice, StringComparison.Ordinal))
             .Should().NotBeEmpty(
                 "a rule that matches nothing passes: the slice keys its titles by the enum");
 
-        naming
+        titling
             .Where(file => !file.StartsWith(slice, StringComparison.Ordinal))
             .Select(file => Path.GetRelativePath(root, file).Replace('\\', '/'))
             .Should().BeEmpty(
-                "a screen that names an event sooner or later names it in words of " +
-                "its own; the words are imported from the notification entity instead");
+                "a screen that puts a word next to an event sooner or later puts its " +
+                "own word there; the words are imported from the notification entity " +
+                "instead");
+    }
+
+    /// <summary>
+    /// The client enum carries names now, not numbers, and every name is one the
+    /// server answers to.
+    /// </summary>
+    /// <remarks>
+    /// Numbers were the drift: one copy of the vocabulary gave NewPoll the value
+    /// 51, which on the server is DeletedPublicationComment, and nothing in either
+    /// tier could notice. With the value spelled as the member's own name the whole
+    /// class of that mistake is gone — a name either exists on the server or it
+    /// does not, and this test is where that is decided.
+    /// </remarks>
+    [Fact]
+    public void SpellAnEventTheWayTheServerSpellsIt()
+    {
+        var source = File.ReadAllText(Path.Combine(RepositoryRoot, ClientEventTable));
+        var members = MembersOf(source, "NotificationType");
+
+        members.Should().HaveCountGreaterThan(10,
+            "a rule that matches nothing passes: the client acts on more than ten events");
+
+        var drift = new List<string>();
+        foreach (var (name, value) in members)
+        {
+            if (!Enum.TryParse(ServerEvents, name, false, out _))
+            {
+                drift.Add($"{name}: the server has no event of that name");
+            }
+            else if (value != $"\"{name}\"")
+            {
+                drift.Add($"{name}: arrives as \"{name}\", read here as {value}");
+            }
+        }
+
+        drift.Should().BeEmpty(
+            "both transports write the event as its name — MVC and the hub share one " +
+            "JsonStringEnumConverter — so a member holding a number, or a name the " +
+            "server never sends, matches nothing that ever arrives");
+    }
+
+    /// <summary>
+    /// The vocabulary is written down once on the client.
+    /// </summary>
+    /// <remarks>
+    /// The rule is stated by content rather than by file name: a copy renamed on
+    /// its way in is still a copy, and the one that existed was called EventType.
+    /// An enum with three or more members the server answers to is the vocabulary,
+    /// whatever it calls itself, and there is one place for it.
+    /// </remarks>
+    [Fact]
+    public void SpellTheServerEventsInOnePlaceOnly()
+    {
+        var root = RepositoryRoot;
+        var copies = new List<string>();
+
+        foreach (var file in SourceFiles(Path.Combine(root, ClientSource)))
+        {
+            foreach (Match declaration in TypeScriptEnum.Matches(File.ReadAllText(file)))
+            {
+                var known = Members(declaration.Groups[2].Value)
+                    .Count(member => Enum.TryParse(ServerEvents, member.Name, false, out _));
+                if (known >= MembersThatMakeACopy)
+                {
+                    copies.Add(Path.GetRelativePath(root, file).Replace('\\', '/'));
+                }
+            }
+        }
+
+        copies.Should().BeEquivalentTo(new[] { ClientEventTable.Replace('\\', '/') },
+            "the vocabulary drifted precisely because it was written twice, and the " +
+            "second copy is where NewPoll came to mean DeletedPublicationComment");
+    }
+
+    /// <summary>The dispatcher's title table, reached by reflection.</summary>
+    private static MethodInfo Titles => Dispatcher.GetType(SharedType, throwOnError: true)!
+        .GetMethod("GetTitle", BindingFlags.Public | BindingFlags.Static)!;
+
+    /// <summary>
+    /// The server's event vocabulary, taken from the signature of the method it
+    /// keys rather than from a reference to the domain.
+    /// </summary>
+    private static Type ServerEvents => Titles.GetParameters()[0].ParameterType;
+
+    /// <summary>Members of the named enum in the given source.</summary>
+    private static List<(string Name, string Value)> MembersOf(string source, string name)
+    {
+        foreach (Match declaration in TypeScriptEnum.Matches(source))
+        {
+            if (declaration.Groups[1].Value == name)
+            {
+                return Members(declaration.Groups[2].Value);
+            }
+        }
+
+        throw new InvalidOperationException($"the client declares no enum {name}");
+    }
+
+    /// <summary>Members of one enum body: the name and the value written for it.</summary>
+    private static List<(string Name, string Value)> Members(string body)
+    {
+        var members = new List<(string, string)>();
+        foreach (Match member in EnumMember.Matches(LineComment.Replace(body, string.Empty)))
+        {
+            members.Add((member.Groups[1].Value, member.Groups[2].Value.Trim()));
+        }
+
+        return members;
     }
 
     /// <summary>

@@ -5,7 +5,7 @@ import { useAuthStore } from "@/shared/stores";
 import type {
   SignalRNotification,
   NotificationHandler,
-} from "@/shared/api/models/notifications/signalr";
+} from "@/shared/api/models/notifications";
 
 /**
  * Singleton instance for app-wide SignalR connection

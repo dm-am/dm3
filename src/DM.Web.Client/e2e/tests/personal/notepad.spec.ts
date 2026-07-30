@@ -4,21 +4,48 @@ import { authenticatedContext } from "../../fixtures/auth";
 const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
 
 let authContext: APIRequestContext;
-let createdEntryId: string | null = null;
+const createdEntryIds: string[] = [];
 
 test.beforeAll(async () => {
   authContext = await authenticatedContext();
 });
 
 test.afterAll(async () => {
-  // Cleanup
-  if (createdEntryId && authContext) {
-    await authContext.delete(
-      `${API_URL}/v1/users/me/notepad/${createdEntryId}`,
-    );
+  // Best-effort cleanup of everything this worker created; a second delete of
+  // an entry a test already removed is expected and its answer is ignored.
+  for (const id of createdEntryIds) {
+    await authContext.delete(`${API_URL}/v1/users/me/notepad/${id}`);
   }
   if (authContext) await authContext.dispose();
 });
+
+/**
+ * Creates an entry and returns it, so every test owns the entry it works on.
+ *
+ * The read, update and delete tests used to share one entry created by the
+ * test before them and opened with `test.skip(!createdEntryId, ...)`. With
+ * fullyParallel the tests of one file can land in different workers, where a
+ * module-level id set elsewhere simply does not exist — so those three
+ * reported green exactly when they had nothing to work on. Both halves are
+ * fixed here: the entry is per test, and a creation that fails fails the test.
+ *
+ * A single resource travels inside an envelope — see API_DESIGN.md.
+ */
+async function createEntry(title: string) {
+  const response = await authContext.post(`${API_URL}/v1/users/me/notepad`, {
+    headers: { "Content-Type": "application/json" },
+    data: {
+      title,
+      content: "[b]Test content[/b] from E2E tests",
+    },
+  });
+
+  expect(response.status()).toBe(201);
+  const { resource } = await response.json();
+  expect(resource).toHaveProperty("id");
+  createdEntryIds.push(resource.id);
+  return resource;
+}
 
 test.describe("Notepad API", () => {
   test("should get my notepad entries", async () => {
@@ -31,41 +58,30 @@ test.describe("Notepad API", () => {
   });
 
   test("should create notepad entry", async () => {
-    const response = await authContext.post(`${API_URL}/v1/users/me/notepad`, {
-      headers: { "Content-Type": "application/json" },
-      data: {
-        title: "E2E Test Entry",
-        content: "[b]Test content[/b] from E2E tests",
-      },
-    });
+    const entry = await createEntry("E2E Test Entry");
 
-    expect(response.status()).toBe(201);
-    // Одиночный ресурс приходит в конверте — см. API_DESIGN.md.
-    const { resource } = await response.json();
-    expect(resource).toHaveProperty("id");
-    expect(resource).toHaveProperty("title", "E2E Test Entry");
-    createdEntryId = resource.id;
+    expect(entry).toHaveProperty("title", "E2E Test Entry");
   });
 
   test("should get notepad entry by id", async () => {
-    test.skip(!createdEntryId, "No entry to get");
+    const entry = await createEntry("E2E Read Entry");
 
     const response = await authContext.get(
-      `${API_URL}/v1/users/me/notepad/${createdEntryId}`,
+      `${API_URL}/v1/users/me/notepad/${entry.id}`,
     );
 
     expect(response.ok()).toBeTruthy();
     const { resource } = await response.json();
-    expect(resource).toHaveProperty("id", createdEntryId);
+    expect(resource).toHaveProperty("id", entry.id);
     expect(resource).toHaveProperty("title");
     expect(resource).toHaveProperty("content");
   });
 
   test("should update notepad entry", async () => {
-    test.skip(!createdEntryId, "No entry to update");
+    const entry = await createEntry("E2E Update Entry");
 
     const response = await authContext.patch(
-      `${API_URL}/v1/users/me/notepad/${createdEntryId}`,
+      `${API_URL}/v1/users/me/notepad/${entry.id}`,
       {
         headers: { "Content-Type": "application/json" },
         data: {
@@ -80,14 +96,13 @@ test.describe("Notepad API", () => {
   });
 
   test("should delete notepad entry", async () => {
-    test.skip(!createdEntryId, "No entry to delete");
+    const entry = await createEntry("E2E Delete Entry");
 
     const response = await authContext.delete(
-      `${API_URL}/v1/users/me/notepad/${createdEntryId}`,
+      `${API_URL}/v1/users/me/notepad/${entry.id}`,
     );
 
     expect(response.status()).toBe(204);
-    createdEntryId = null;
   });
 
   test("should require authentication", async ({ request }) => {

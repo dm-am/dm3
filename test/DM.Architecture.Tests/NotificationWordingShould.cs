@@ -50,11 +50,12 @@ public class NotificationWordingShould
     {
         var formatters = Dispatcher.GetTypes()
             .SelectMany(t => t.GetMethods(DeclaredStatic))
-            .Where(m => m.Name is "FormatPropertyName" or "FormatPropertyValue")
+            .Where(m => m.Name is "FormatPropertyName" or "FormatPropertyValue" or "IsHiddenFromText")
             .ToList();
 
-        formatters.Should().HaveCountGreaterOrEqualTo(2,
-            "a rule that matches nothing passes: there is a formatter for the key and one for the value");
+        formatters.Should().HaveCountGreaterOrEqualTo(3,
+            "a rule that matches nothing passes: there is a formatter for the key, " +
+            "one for the value, and the list of keys no channel prints");
         formatters.Select(m => m.DeclaringType!.FullName).Should().OnlyContain(
             name => name == SharedType,
             "a channel that formats metadata its own way drifts from the others silently");

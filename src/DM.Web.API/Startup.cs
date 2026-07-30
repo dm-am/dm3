@@ -180,7 +180,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         _httpContextAccessor = new HttpContextAccessor();
         _bbParserProvider = new BbParserProvider();
 
-        services.AddSignalR();
+        services.AddDmSignalR();
 
         // Notification settings repository (for user notification preferences)
         services.AddSingleton<DM.Web.API.Notifications.UserSettingsRepository>();

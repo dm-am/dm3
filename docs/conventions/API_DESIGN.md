@@ -316,6 +316,10 @@ GET /v1/posts?sortBy=rating&sortOrder=desc&take=1   # Best post
 - Адресация по connection ID (без групп)
 - Токен в query-строке не принимается: URL попадает в логи прокси, а это
   обесценивает HttpOnly-куку, ради которой существует BFF
+- Формат тот же, что у REST: `eventType` приходит именем события строкой, ключи
+  `payload` — в camelCase. Хаб настраивается тем же JSON-контрактом, что и MVC;
+  одно уведомление доезжает до вкладки двумя путями и не должно иметь двух
+  написаний
 
 ```javascript
 const connection = new signalR.HubConnectionBuilder()
